@@ -73,6 +73,7 @@ int QoreDeleteOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
             LocalVar* lvar = vrn->ref.id;
             if (lvar) {
                 lvar->parseUnassigned();
+                lvar->parseDeleted();
                 lvar->parseResetNarrowedType();
             }
         }

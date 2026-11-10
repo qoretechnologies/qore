@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a module that the trusted host loads by path, outside the module path, whose function sets another module's
+# public variable (qore#5664)
+
+%modern
+
+%requires OurVarMod
+
+module PathMod {
+    version = "1.0";
+    desc = "test module loaded by path";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+
+public namespace PathMod {
+    public sub set_other(int v) {
+        OurVarMod::i = v;
+    }
+}

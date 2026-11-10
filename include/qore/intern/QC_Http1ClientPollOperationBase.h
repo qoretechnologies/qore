@@ -881,7 +881,7 @@ private:
     */
     DLLLOCAL int dbgHookFd() const {
         int fd = dbg_hook_fd.load(std::memory_order_acquire);
-        return fd >= 0 ? fd : (sock_obj ? sock_obj->getSocket() : -1);
+        return fd >= 0 ? fd : (sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
 #endif
 

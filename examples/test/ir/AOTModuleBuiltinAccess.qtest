@@ -35,10 +35,13 @@
     loader binds a recorded no-argument variant, whose signature text is empty.  A call that the parser could not bind
     either (an argument that may be \c NOTHING or has no type) is resolved at runtime in every mode, as in AST.
 
+    Module code now runs with the restrictions of a calling Program only if that Program is sandboxed; the probes run
+    from a lockdown Program restricted only by its parse options and from a sandboxed one.
+
     Each case runs the same scripts with the source module and with the module AOT-compiled with
     <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
-    interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O, and user
-    code in the restricted Program is still refused the builtins its own parse options forbid.
+    interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O,
+    and user code in the restricted Program is still refused the builtins its own parse options forbid.
 */
 class AOTModuleBuiltinAccessTest inherits QUnit::Test {
     private {
@@ -75,7 +78,8 @@ hash_direct: RWLock
 static_init: RWLock
 ";
 
-        #! expected output of the user code that must still be refused
+        #! expected output of the user code that must still be refused: the code of the Program, and for a sandboxed
+        #! Program the module code that it calls as well
         const ExpectedRefusedOutput = "p_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
 p_closure_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
 p_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
@@ -88,34 +92,66 @@ p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow a
 p_module_call_ref: \"RWLock|WaitGroup\"
 p_module_call_function: \"RWLock|WaitGroup\"
 p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
-p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+p_call_ref_to_module_object_method: \"used\"
 p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
 p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'
 p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'
+sandboxed p_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
+sandboxed p_closure_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
+sandboxed p_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+sandboxed p_call_function_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+sandboxed p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+sandboxed p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'
+sandboxed p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+sandboxed p_closure_create_object_through_module: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+sandboxed p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+sandboxed p_module_call_ref: \"RWLock|WaitGroup\"
+sandboxed p_module_call_function: \"RWLock|WaitGroup\"
+sandboxed p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+sandboxed p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+sandboxed p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+sandboxed p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'
+sandboxed p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'
 ";
 
         #! expected output of the calls of overloaded builtins and of constructors with arguments in module code
         /** the parser binds each call to a variant and checks it against the module's parse options; a call whose
             variant it cannot select (\c maybe_nothing, \c untyped) and a call through a call reference to a
             builtin method (\c in_module_call_ref) are resolved when they are evaluated, against the runtime parse
-            options, which include the calling Program's restrictions
+            options, which include the restrictions of a sandboxed calling Program
         */
         const ExpectedCallOutput = "local: local
+sandboxed local: local
 local_default_arg: local
+sandboxed local_default_arg: local
 member: member
+sandboxed member: member
 static: static
+sandboxed static: static
 objects: member|static
+sandboxed objects: member|static
 member_direct: member
+sandboxed member_direct: member
 static_direct: static
+sandboxed static_direct: static
 closure: closure
-in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+sandboxed closure: closure
+in_module_call_ref: call ref
+sandboxed in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
 thread_data: 1|2|gone
+sandboxed thread_data: 1|2|gone
 named_args: 3
+sandboxed named_args: 3
 constructors: 1|0|5|0
+sandboxed constructors: 1|0|5|0
 inherited_local: True|True
+sandboxed inherited_local: True|True
 inherited_via_methods: False|-1|True|True
-maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'
-untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+sandboxed inherited_via_methods: False|-1|True|True
+maybe_nothing: nothing
+sandboxed maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'
+untyped: untyped
+sandboxed untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
 ";
 
         #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection
@@ -439,11 +475,7 @@ public auto sub callIt(code c) {
         return "%modern
 %requires AOTBuiltinCallMod
 
-Program p(PO_NEW_STYLE);
-p.loadModule(\"AOTBuiltinCallMod\");
-p.setParseOptions(PO_LOCKDOWN);
-p.parse(\"
-string sub local() { return AOTBuiltinCallMod::local(); }
+const ProbeCode = \"string sub local() { return AOTBuiltinCallMod::local(); }
 string sub local_default_arg() { return AOTBuiltinCallMod::localDefaultArg(); }
 string sub member() { AOTBuiltinCallMod::Locks lk(); return lk.member(); }
 string sub static() { return AOTBuiltinCallMod::Locks::staticBody(); }
@@ -459,28 +491,45 @@ string sub inherited_local() { return AOTBuiltinCallMod::inheritedLocal(); }
 string sub inherited_via_methods() { return AOTBuiltinCallMod::inheritedViaMethods(); }
 string sub maybe_nothing() { return AOTBuiltinCallMod::maybeNothing(); }
 string sub untyped() { return AOTBuiltinCallMod::untyped(1s); }
-\", \"probe\");
+\";
+
+# a lockdown Program restricted only by its parse options, which restrict its own code, and a sandboxed one, whose
+# restrictions apply to the module code that it calls as well
+hash<string, Program> callers;
+foreach string label in (\"unsandboxed\", \"sandboxed\") {
+    Program p(PO_NEW_STYLE);
+    if (label == \"sandboxed\") {
+        p.setSandboxManager(new SandboxManager());
+    }
+    p.loadModule(\"AOTBuiltinCallMod\");
+    p.setParseOptions(PO_LOCKDOWN);
+    p.parse(ProbeCode, label);
+    callers{label} = p;
+}
 
 # each function runs three times so that tiered execution runs it on more than one tier
 foreach string f in (\"local\", \"local_default_arg\", \"member\", \"static\", \"objects\", \"member_direct\",
         \"static_direct\", \"closure\", \"in_module_call_ref\", \"thread_data\", \"named_args\", \"constructors\",
         \"inherited_local\", \"inherited_via_methods\",
         \"maybe_nothing\", \"untyped\") {
-    *string first;
-    for (int i = 0; i < 3; ++i) {
-        string result;
-        try {
-            result = p.callFunction(f);
-        } catch (hash<ExceptionInfo> ex) {
-            result = sprintf(\"%s: %s\", ex.err, ex.desc);
+    foreach hash<auto> c in (callers.pairIterator()) {
+        string prefix = c.key == \"sandboxed\" ? \"sandboxed \" : \"\";
+        *string first;
+        for (int i = 0; i < 3; ++i) {
+            string result;
+            try {
+                result = c.value.callFunction(f);
+            } catch (hash<ExceptionInfo> ex) {
+                result = sprintf(\"%s: %s\", ex.err, ex.desc);
+            }
+            if (!exists first) {
+                first = result;
+            } else if (result != first) {
+                printf(\"%s%s: call %d differs: %s\\n\", prefix, f, i + 1, result);
+            }
         }
-        if (!exists first) {
-            first = result;
-        } else if (result != first) {
-            printf(\"%s: call %d differs: %s\\n\", f, i + 1, result);
-        }
+        printf(\"%s%s: %s\\n\", prefix, f, first);
     }
-    printf(\"%s: %s\\n\", f, first);
 }
 ";
     }
@@ -611,16 +660,23 @@ hash<string, string> probes = {
         "code c = \\\\save_thread_data(); return c('k', 1); }\",
 };
 
-foreach hash<auto> i in (probes.pairIterator()) {
-    Program p(PO_NEW_STYLE);
-    p.loadModule(\"AOTBuiltinAccessMod\");
-    p.loadModule(\"AOTBuiltinCallMod\");
-    p.setParseOptions(PO_LOCKDOWN);
-    try {
-        p.parse(i.value, i.key);
-        printf(\"%s: %y\\n\", i.key, p.callFunction(i.key));
-    } catch (hash<ExceptionInfo> ex) {
-        printf(\"%s: %s: %s\\n\", i.key, ex.err, ex.desc);
+# each probe runs in a lockdown Program restricted only by its parse options, which restrict its own code, and in a
+# sandboxed one, whose restrictions apply to the module code that it calls as well
+foreach string prefix in (\"\", \"sandboxed \") {
+    foreach hash<auto> i in (probes.pairIterator()) {
+        Program p(PO_NEW_STYLE);
+        if (prefix) {
+            p.setSandboxManager(new SandboxManager());
+        }
+        p.loadModule(\"AOTBuiltinAccessMod\");
+        p.loadModule(\"AOTBuiltinCallMod\");
+        p.setParseOptions(PO_LOCKDOWN);
+        try {
+            p.parse(i.value, i.key);
+            printf(\"%s%s: %y\\n\", prefix, i.key, p.callFunction(i.key));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"%s%s: %s: %s\\n\", prefix, i.key, ex.err, ex.desc);
+        }
     }
 }
 ";

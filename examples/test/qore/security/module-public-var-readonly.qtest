@@ -1,0 +1,265 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - global and static variable writes in JIT and qcc-compiled native code, sandbox governance
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%include module-public-var-readonly/Forms.ql
+
+%exec-class ModulePublicVarReadOnlyTest
+
+#! Restricted code may read but not change the state of a trusted module (qore#5664)
+/** A module's public variable, and a static member of a module's class, is one value that every Program importing
+    the module shares.  Sandboxed code, and code in a Program with PO_NO_PROCESS_CONTROL set, can read it, but every
+    form of write raises MODULE-VARIABLE-READ-ONLY and leaves it unchanged; a child Program that such code creates
+    inherits its restriction.  The rule is decided on the Program whose code writes: the module's own code, the code of
+    other Programs that are not restricted (such as the host's functions called by sandboxed code) and the setters
+    that the module exports keep write access.
+
+    The forms are in module-public-var-readonly/Forms.ql, which the probe scripts include.  Every scenario runs in a
+    child process in each execution mode, with the module from source and compiled with qcc; a restricted script
+    compiled with qcc checks the writes of native code.
+*/
+class ModulePublicVarReadOnlyTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture_dir;
+    }
+
+    #! the execution modes
+    const ExecModes = ("ast", "ir", "jit", "tiered");
+
+    #! the restricted contexts that run every form of write and read
+    const RestrictedContexts = (
+        # a Program with a sandbox manager, set before the code is parsed
+        "sandbox",
+        # the sandbox manager set after the code was parsed and the module imported
+        "sandbox-after",
+        # a Program with PO_NO_PROCESS_CONTROL
+        "no-pc",
+        # PO_NO_PROCESS_CONTROL set after the code was parsed and the module imported
+        "no-pc-after",
+        # a Program with PO_LOCKDOWN, which cannot load modules: the host imports the module's symbols
+        "lockdown",
+    );
+
+    #! the exception code of a reflection access refusal
+    const ReflAccessErr = "REFLECTION-ACCESS-ERROR";
+
+    #! the files of the fixture directory that the probes use
+    const FixtureFiles = ("OurVarMod.qm", "LibMod.qm", "FirstMod.qm", "BinUserMod.qm", "Forms.ql", "probe.q",
+        "bypath/PathMod.qm");
+
+    constructor() : QUnit::Test("restricted code cannot change a trusted module's state", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture_dir = get_script_dir() + "module-public-var-readonly";
+
+        addTestCase("restricted code cannot change a module's state in any execution mode", \sourceTest());
+        addTestCase("restricted code cannot change the state of a module compiled with qcc", \aotModuleTest());
+        addTestCase("qcc-compiled restricted code cannot change a module's state", \aotWriterTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        foreach string mode in (ExecModes) {
+            TmpDir tmp("qore-module-public-var-ro-" + mode + "-");
+            copyFixtures(tmp.path);
+            checkProbe(runProbe(tmp.path, mode), getExpected(), mode);
+        }
+    }
+
+    aotModuleTest() {
+        TmpDir tmp("qore-module-public-var-ro-aot-");
+        copyFixtures(tmp.path);
+        hash<auto> rv = compile(tmp.path, "OurVarMod.qm", "OurVarMod.qmod", True);
+        if (rv.status || !is_file(tmp.path + DirSep + "OurVarMod.qmod")) {
+            testSkip(sprintf("qcc could not compile OurVarMod: %s", rv.out));
+        }
+        # the probe must load the compiled module, not its source
+        unlink(tmp.path + DirSep + "OurVarMod.qm");
+        foreach string mode in (ExecModes) {
+            checkProbe(runProbe(tmp.path, mode), getExpected(), "AOT module " + mode);
+        }
+    }
+
+    aotWriterTest() {
+        TmpDir tmp("qore-module-public-var-ro-aot-writer-");
+        copyFixtures(tmp.path);
+        # a restricted script: PO_NO_PROCESS_CONTROL is set for its own Program
+        write(tmp.path, "writer.q", "%modern\n%no-process-control\n%requires OurVarMod\n"
+            + ReadOnlyFile::readTextFile(fixture_dir + DirSep + "Forms.ql")
+            + ModVarForms::get_writer_source(("module-setter", "static-setter"))
+            + ReadOnlyFile::readTextFile(fixture_dir + DirSep + "writer.q"));
+        hash<auto> rv = compile(tmp.path, "writer.q", "writer", False);
+        if (rv.status || !is_file(tmp.path + DirSep + "writer")) {
+            testSkip(sprintf("qcc could not compile the writer script: %s", rv.out));
+        }
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s 2>&1",
+            libqore_dir, libqore_dir, getModuleDir(tmp.path), tmp.path + DirSep + "writer"), \status);
+        hash<string, string> expected;
+        foreach string form in (keys ModVarForms::WriteForms) {
+            expected{"aot." + form} = ModVarForms::ErrCode;
+        }
+        foreach hash<auto> i in (ModVarForms::ReadForms.pairIterator()) {
+            expected{"aot." + i.key} = i.value[1];
+        }
+        expected += {
+            "aot.state": ModVarForms::InitialState,
+            "aot.state-after-reads": ModVarForms::InitialState,
+            "aot.module-setter": "ok",
+            "aot.module-setter-state": ModVarForms::CalledState."module-setter",
+            "aot.static-setter": "ok",
+            "aot.static-setter-state": ModVarForms::CalledState."static-setter",
+        };
+        checkProbe(out, expected, "AOT writer");
+    }
+
+    #! returns the results that the probe script must print
+    private hash<string, string> getExpected() {
+        hash<string, string> rv;
+        foreach string ctx in (RestrictedContexts) {
+            foreach string form in (keys ModVarForms::WriteForms) {
+                rv{ctx + "." + form} = ModVarForms::ErrCode;
+            }
+            # a closure that the restricted code created cannot write the variable when the trusted host calls it
+            rv{ctx + ".closure-host"} = ModVarForms::ErrCode;
+            # nor can the trusted host write the restricted Program's import
+            rv{ctx + ".set-global-var-value"} = ModVarForms::ErrCode;
+            # no write changed the module's state
+            rv{ctx + ".state"} = ModVarForms::InitialState;
+            foreach hash<auto> i in (ModVarForms::ReadForms.pairIterator()) {
+                rv{ctx + "." + i.key} = i.value[1];
+            }
+            rv{ctx + ".state-after-reads"} = ModVarForms::InitialState;
+            foreach hash<auto> i in (ModVarForms::CalledForms.pairIterator()) {
+                string r = i.value[1];
+                rv{ctx + "." + i.key} = r;
+                rv{ctx + "." + i.key + "-state"} = r == "ok"
+                    ? ModVarForms::CalledState{i.key}
+                    : ModVarForms::CalledRefusedState;
+            }
+        }
+        # a trusted importer: every form of write succeeds, and every form of read gives the value of the AST
+        # interpreter
+        foreach string form in (keys ModVarForms::WriteForms) {
+            rv{"trusted." + form} = "ok";
+        }
+        foreach hash<auto> i in (ModVarForms::ReadForms.pairIterator()) {
+            rv{"trusted." + i.key} = i.value[2];
+        }
+        # the reflection API is refused the same writes and gives the same reads
+        foreach string ctx in (("sandbox", "no-pc")) {
+            rv += {
+                "reflection-" + ctx + ".static-set": ModVarForms::ErrCode,
+                "reflection-" + ctx + ".static-get": "1",
+                "reflection-" + ctx + ".global-set": ModVarForms::ErrCode,
+                "reflection-" + ctx + ".global-get": "1",
+                # through an object that the module created, which binds the class to the module's Program; a Program
+                # with PO_NO_PROCESS_CONTROL has fewer privileges than the Program of a module that the host loaded,
+                # so reflection refuses it access to that Program (see "first-module" for a module that it loaded
+                # first)
+                "reflection-" + ctx + ".obj-static-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-global-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-private-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-global-get": ctx == "sandbox" ? "1" : ReflAccessErr,
+                "reflection-" + ctx + ".state": ModVarForms::InitialState + ":0",
+            };
+        }
+        rv += {
+            # a binary module's static member, which the binary module holds, is not a Qore module's state
+            "binary-static": "ok",
+            "binary-static-state": "5",
+            # the module's Program has PO_NO_PROCESS_CONTROL from the Program that loaded it first
+            "first-module.static-set": ModVarForms::ErrCode,
+            "first-module.global-set": ModVarForms::ErrCode,
+            "first-module.state": "0:1",
+            # the errors name what is written and the module, and say what to do instead
+            "message": "ok",
+            "message-static": "ok",
+            # the host's own writes
+            "host": "ok",
+            # a Program that restricted code creates inherits its PO_NO_PROCESS_CONTROL
+            "no-pc-child": ModVarForms::ErrCode,
+            "no-pc-child-static": ModVarForms::ErrCode,
+            "no-pc-child-state": ModVarForms::InitialState,
+            # a Program that sandboxed code creates is sandboxed (qore#5659)
+            "sandbox-child": ModVarForms::ErrCode,
+            "sandbox-child-static": ModVarForms::ErrCode,
+            "sandbox-child-state": ModVarForms::InitialState,
+            # a Program that the trusted host gives the module variable it imported
+            "import-chain": ModVarForms::ErrCode,
+            "import-chain-ro": "ACCESS-ERROR",
+            # a trusted child of the host keeps write access
+            "trusted-import-chain": "ok",
+            # a sandboxed Program's own variable and static member, which are not a module's
+            "own-var": "ok",
+            "own-static": "ok",
+            # the host's own variable imported into a sandboxed Program by the host
+            "host-var": "ok",
+        };
+        return rv;
+    }
+
+    #! returns the module path of the probes: the fixture directory, then the module path of this test (for the
+    #! reflection module)
+    private string getModuleDir(string dir) {
+        return ENV.QORE_MODULE_DIR ? dir + ":" + ENV.QORE_MODULE_DIR : dir;
+    }
+
+    private hash<auto> compile(string dir, string src, string target, bool module) {
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "%s-o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, getModuleDir(dir), qcc_bin,
+            module ? "--module --strip-source " : "", dir + DirSep + target, dir + DirSep + src), \status);
+        return {"status": status, "out": out};
+    }
+
+    #! returns the results that a probe printed
+    private hash<string, string> getResults(string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-zA-Z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        return results;
+    }
+
+    private checkProbe(string out, hash<auto> expected, string mode) {
+        hash<string, string> results = getResults(out);
+        # one comparison reports every scenario that differs, not only the first one
+        assertEq(expected, results, sprintf("%s probe output:\n%s", mode, out));
+    }
+
+    private string runProbe(string dir, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            libqore_dir, libqore_dir, getModuleDir(dir), qore_bin, mode, dir + DirSep + "probe.q"));
+    }
+
+    private copyFixtures(string dir) {
+        mkdir(dir + DirSep + "bypath");
+        foreach string file in (FixtureFiles) {
+            write(dir, file, ReadOnlyFile::readTextFile(fixture_dir + DirSep + file));
+        }
+    }
+
+    private write(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+}

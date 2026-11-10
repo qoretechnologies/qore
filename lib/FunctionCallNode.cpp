@@ -604,7 +604,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // initialize arguments and setup argument type list (argTypeInfo)
     if (num_args) {
-        // issue #2993: do not initialize args with the "return value ignored" parse flag set
+        // issue #2993: do not initialize args with the "return value ignored" parse flag set; an argument is not the
+        // expression that a background operator runs (PF_BACKGROUND), but it is part of it: PF_BACKGROUND_EXPR stays
+        // set, as an argument may not modify the local variables of the code that starts the thread either (#5698)
         QoreParseContextFlagHelper fh(parse_context);
         fh.unsetFlags(PF_RETURN_VALUE_IGNORED | PF_BACKGROUND);
         {

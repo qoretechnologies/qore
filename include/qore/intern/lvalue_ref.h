@@ -41,6 +41,11 @@ public:
     QoreValue vexp{};
     const QoreTypeInfo* typeInfo;
     QoreObject* self;
+    //! the Program of the lvalue, with a dependency reference (QoreProgram::depRef())
+    /** The dependency reference keeps the Program allocated after it has been deleted, and so its address from being
+        given to another Program, while the reference exists: its use enters the Program, which refuses the entry
+        once it is being deleted (see QoreReferenceProgramHelper)
+    */
     QoreProgram* pgm;
     const void* lvalue_id;
     const qore_class_private* cls;
@@ -56,6 +61,9 @@ public:
         if (self)
             self->tDeref();
         vexp.discard(nullptr);
+        if (pgm) {
+            pgm->depDeref();
+        }
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {

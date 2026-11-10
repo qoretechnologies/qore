@@ -22,8 +22,10 @@
     reference removes the variable's own value, the reference, as Var::remove() and StaticClassVarRefNode::remove()
     do; the compiled modes removed the referenced value
     (LValueHelper::navigatePath() followed the reference), so that the next <tt>tlr = \x</tt> assigned a reference to
-    an int variable.  The script runs twice, in every execution mode, on the IR tier of tiered execution and as a qcc
-    executable (see ExecModeOutputTest).
+    an int variable.  Leaving the scope of a local or closure-bound variable holding a reference read the referenced
+    lvalue in the IR interpreter (the scan of the value slots of the variable's value), which raised an exception if
+    the lvalue was gone, as for a reference to a member of a deleted object.  The script runs twice, in every
+    execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
 */
 class ThreadLocalReferenceReadTest inherits ExecModeOutputTest {
     public {
@@ -113,6 +115,40 @@ for (int i = 0; i < 2; ++i) {
     C::run();
     n1();
 }
+# leaving the scope of a local variable holding a reference does not read the referenced lvalue, which can be gone
+class R {
+    public {
+        int m = 1;
+    }
+    reference<int> get() {
+        return \m;
+    }
+}
+sub leave_scope() {
+    R o();
+    reference<int> r = o.get();
+    delete o;
+}
+sub leave_closure_scope() {
+    R o();
+    reference<int> r = o.get();
+    code c = int sub () { return r; };
+    delete o;
+}
+for (int i = 0; i < 2; ++i) {
+    try {
+        leave_scope();
+        printf("left the scope of a local reference to a deleted object\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("leaving the scope of a local reference: %s\n", ex.err);
+    }
+    try {
+        leave_closure_scope();
+        printf("left the scope of a closure-bound reference to a deleted object\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("leaving the scope of a closure-bound reference: %s\n", ex.err);
+    }
+}
 ';
 
         #! the AST interpreter's output
@@ -141,6 +177,10 @@ for (int i = 0; i < 2; ++i) {
             "static delete: y=2 sr=null",
             "static reassign: x=1 sr=5",
             "ns remove: x=1 ngr=null v=1",
+            "left the scope of a local reference to a deleted object",
+            "left the scope of a closure-bound reference to a deleted object",
+            "left the scope of a local reference to a deleted object",
+            "left the scope of a closure-bound reference to a deleted object",
         );
     }
 

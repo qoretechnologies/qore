@@ -52,14 +52,21 @@ GlobalVariableList::GlobalVariableList(const GlobalVariableList& old, const Qore
     }
 }
 
-void GlobalVariableList::mergePublic(const GlobalVariableList& old) {
-   map_var_t::iterator last = vmap.begin();
-   for (map_var_t::const_iterator i = old.vmap.begin(), e = old.vmap.end(); i != e; ++i) {
-      if (!i->second->isPublic())
-         continue;
-      Var* v = new Var(const_cast<Var*>(i->second));
-      last = vmap.insert(last, map_var_t::value_type(v->getName(), v));
-   }
+void GlobalVariableList::mergePublic(const GlobalVariableList& old, QoreProgram* module_var_importer,
+        const char* module_name, const std::string& ns_path) {
+    map_var_t::iterator last = vmap.begin();
+    for (map_var_t::const_iterator i = old.vmap.begin(), e = old.vmap.end(); i != e; ++i) {
+        if (!i->second->isPublic()) {
+            continue;
+        }
+        Var* v = new Var(const_cast<Var*>(i->second));
+        // recorded before the reference is published in the importer's namespace
+        if (module_var_importer) {
+            const char* mod = i->second->getModuleName();
+            v->setTrustedModuleVarImport(module_var_importer, mod ? mod : module_name, ns_path);
+        }
+        last = vmap.insert(last, map_var_t::value_type(v->getName(), v));
+    }
 }
 
 // adds directly to committed list

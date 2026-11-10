@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the allocator gives a deleted Program's addresses to the next Program's code (glibc does not)
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ClosureCacheProgramReuseTest
+
+#! Regression test: a closure call is not given what was cached for a closure of a Program deleted before
+/** Two thread-local caches keep what a closure call needs between calls:
+    - the IR interpreter's inline closure call (tryExecuteInterpreterInlineIRClosure()) found its entry by the closure,
+      its function and the address of the calling Program, and kept the variant, IR and signature of the function;
+    - native code's call of a closure as a native leaf (tryExecClosureNativeLeaf()) found its entry by the variant and
+      its IR, and kept the analysis of the IR (the leaf's operation) and its return type.
+
+    The variant, IR and signature are freed with their Program, and a Program created after it, its closure function,
+    closure and variant can have the addresses of the deleted ones, so a call in the new Program could find the entry
+    of the deleted Program: the IR interpreter ran the freed IR with the freed signature (a wrong result, a crash, or
+    a reference argument released wrongly: dgc-opaque-object-local-release.qtest saw a cycle collected while its
+    Program lived), and native code computed the deleted closure's operation.  The entries are now found by the serial
+    of the closure function or the variant, which is never reused (the id of the Program did not suffice: an
+    Expression frees its closures while its Program lives; see ClosureCacheExpressionReuse.qtest), and
+    ClosureCacheProgramRounds.qtest varies the heap layout between rounds of Programs.
+
+    The driver creates Programs one after another, each with a closure that computes another operation, calls it and
+    deletes the Program.  Whether a deleted Program's addresses are given to the next one depends on the allocator,
+    and is decided for a process by the layout of its heap: a process that is given them is given them in every
+    iteration.  The driver is therefore run several times in each execution mode; before the fixes, on macOS, nearly
+    every run of the native leaf in JIT execution gave wrong results, and most runs of the inline call in IR execution
+    crashed or gave wrong results.  glibc's allocator did not give the addresses so in any run on Linux, where the test
+    checks the closure calls only.
+*/
+class ClosureCacheProgramReuseTest inherits QUnit::Test {
+    public {
+        #! how many times the driver is run in each execution mode
+        const Runs = 5;
+
+        #! the number of Programs that the driver creates for each kind of closure call
+        const Programs = 30;
+
+        #! the number of calls made in each Program
+        const Calls = 3;
+
+        #! the driver script; ARGV[0] is the execution mode of the Programs it creates
+        const Script = '%%modern
+%%no-child-restrictions
+const Ops = ("+", "*", "-");
+const Code = (
+    # a closure created by the function that calls it, which the IR interpreter calls inline
+    "inline": "%%%%modern\nint sub run(int a, int b) { code c = int sub (int x, int y) { return x %%s y; }; "
+        "return c(a, b); }\n",
+    # a closure held by a global variable and called by native code, which runs its IR as a native leaf
+    "native leaf": "%%%%modern\nour *code c;\nint sub run(int a, int b) { if (!c) { c = int sub (int x, int y) { "
+        "return x %%s y; }; } return c(a, b); }\n",
+);
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+foreach hash<auto> i in (Code.pairIterator()) {
+    int right = 0;
+    int total = 0;
+    for (int n = 0; n < %d; ++n) {
+        string op = Ops[n %% Ops.size()];
+        int expected = op == "+" ? 7 + 3 : (op == "*" ? 7 * 3 : 7 - 3);
+        Program p();
+        p.setExecMode(mode);
+        p.parse(sprintf(i.value, op), i.key);
+        for (int c = 0; c < %d; ++c) {
+            ++total;
+            if (p.callFunction("run", 7, 3) == expected) {
+                ++right;
+            }
+        }
+        delete p;
+    }
+    printf("%%s: %%d of %%d right\n", i.key, right, total);
+}
+# the calls that found an entry made for a closure of a deleted Program at the same addresses; -1 without debugging
+printf("cache entries of deleted Programs: %%d\n", exists_function("dbg_closure_call_cache_program_misses")
+    ? call_function("dbg_closure_call_cache_program_misses") : -1);
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the closure calls of every run that found a cache entry made for a closure of a deleted Program
+        int program_misses = 0;
+        #! true if the library has debugging, so that the driver could count them
+        bool counted = False;
+    }
+
+    constructor() : QUnit::Test("ClosureCacheProgramReuseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("closure calls in Programs created one after another in %s mode", mode),
+                getModeTest(mode));
+        }
+        addTestCase("closure calls in Programs created one after another on the IR tier", \runIrTier());
+        addTestCase("the runs gave the next Program the addresses of a deleted one", \checkReuse());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-closure-cache-program-reuse-");
+        string path = writeScript(tmp);
+        list<string> wrong = ();
+        for (int i = 0; i < Runs; ++i) {
+            string out = takeMisses(ExecModeHarness::run(getCommand(mode, path, mode)));
+            if (out != getExpected()) {
+                wrong += out;
+            }
+        }
+        assertEq((), wrong, mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-closure-cache-program-reuse-");
+        string path = writeScript(tmp);
+        list<string> wrong = ();
+        for (int i = 0; i < Runs; ++i) {
+            string out = takeMisses(ExecModeHarness::run_ir_tier(getCommand("tiered", path, "tiered")));
+            if (out != getExpected()) {
+                wrong += out;
+            }
+        }
+        assertEq((), wrong, ExecModeHarness::IRTierName);
+    }
+
+    #! checks that the runs reproduced what the test is for: a closure call found the entry of a deleted Program
+    /** Whether a deleted Program's addresses are given to the next Program depends on the allocator: macOS's gave
+        them in most runs, so the test fails there if no run of any mode was given them; with glibc's, it is skipped
+    */
+    checkReuse() {
+        if (!counted) {
+            testSkip("the library has no debugging, so the driver cannot count the entries");
+        }
+        if (Qore::PlatformOS != "Darwin") {
+            testSkip(sprintf("the allocator of %s does not give a deleted Program's addresses to the next one "
+                "reliably (%d calls found an entry of a deleted Program)", Qore::PlatformOS, program_misses));
+        }
+        assertGt(0, program_misses);
+    }
+
+    #! returns the output of the driver without its count of the entries of deleted Programs, which it adds up
+    private string takeMisses(string out) {
+        *list<*string> m = (out =~ x/cache entries of deleted Programs: (-?[0-9]+)\n/);
+        if (m) {
+            int n = m[0].toInt();
+            if (n >= 0) {
+                counted = True;
+                program_misses += n;
+            }
+            out = regex_subst(out, "cache entries of deleted Programs: -?[0-9]+\n", "");
+        }
+        return out;
+    }
+
+    #! returns the command running the driver
+    /** @param mode the execution mode of the driver
+        @param path the path of the driver
+        @param arg the execution mode of the Programs that the driver creates
+    */
+    private string getCommand(string mode, string path, string arg) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, path, arg);
+    }
+
+    #! returns the output of the driver: every call computes its own closure's operation
+    private static string getExpected() {
+        return sprintf("inline: %d of %d right\nnative leaf: %d of %d right\n", Programs * Calls, Programs * Calls,
+            Programs * Calls, Programs * Calls);
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "closure-cache-program-reuse-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(sprintf(Script, Programs, Calls));
+        return path;
+    }
+}

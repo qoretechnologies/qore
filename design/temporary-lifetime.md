@@ -14,10 +14,34 @@ When a statement ends, the temporaries that it still holds are released in the r
 A temporary passed to a call as an argument is released when the call returns, as the AST interpreter releases the
 argument list of a call (`CodeEvaluationHelper`): the IR interpreter releases the arguments that a call consumes
 (`releaseConsumedCallArgs()`, `consumeLastUseCallArgSlots()`), native code clears their cleanup slots
-(`QoreIRToLLVM::releaseConsumedCallArgs()`, the `_consume_args` helpers).  Only an argument created by a call (a
-function, method or closure call or an object construction), in the block or the temp scope of the call, is released
-there: a value loaded from a variable or a constant is not a temporary, and a loop invariant is defined in a temp scope of
-its own.
+(`QoreIRToLLVM::releaseConsumedCallArgs()`, the `_consume_args` helpers).  An argument created by a call (a function,
+method or closure call or an object construction) and a value read from a variable that the read gave a reference of
+its own to (see [Values read from variables](#values-read-from-variables)), in the block or the temp scope of the
+call, are released there; a value borrowed from a variable or a constant has no reference of the frame to release.
+
+Only a value defined again for each execution of the call is released by it.  Loop-invariant code motion moves a read
+of a local or a parameter that a loop does not write (`qore_ir_is_hoistable_query_load()`) to the preheader of the
+loop, and the moved instruction keeps the temp scope of the statement in the loop body that it came from, so neither
+the static use count (one use) nor the temp scope tells a hoisted read from an argument defined in an earlier block of
+the statement (a call in a `try` block is an invoke that ends its block).  `qore_ir_find_reused_call_args()` gives the
+call arguments defined in another block than the call whose block can run again without the defining block running
+in between (over the normal and the exception edges, searched within the strongly connected component of the call's
+block; an argument defined outside that component is reused without a search); no call releases them or takes their
+slot.  The IR interpreter counts such an argument one use more in its use counts (`buildValueUseCounts()`), so
+`consumed_call_args`, `consumeLastUseCallArgSlots()` and the moves of a value used once leave it alone with no check at
+run time; native code leaves it out of `releaseConsumedCallArgs()` and of the cleanup array that a `_consume_args`
+helper or `qore_rt_clear_arg_cleanups()` releases (`buildArgCleanupArray()`).  Such a read lives until the end of the
+statement that the preheader belongs to.
+
+The answer is a property of the function, cached for every thread that runs it, so it must not depend on the thread
+that computes it: the IR interpreter runs the analysis without cancellation check points, as its other analyses, and
+native code fails the compilation when it is cancelled.  Before, a cancelled analysis gave every value as reused, and a
+function first called by a thread whose cancellation was pending (one that caught the THREAD-CANCELLED exception) never
+released an argument at the return of its call again, in any thread
+(examples/test/ir/ReusedCallArgumentCancel.qtest).  Before, `foreach string m in (l) { m.find(text); }` (since the
+release of variable reads at call return) and `foreach string m in (l) { toupper(text); }` (before it) released the
+hoisted read of `text` at the first call, and every later iteration gave the call NOTHING in the IR interpreter and
+native code (qore#5638; examples/test/ir/LoopInvariantCallArgument.qtest).
 
 ## Statement boundaries
 
@@ -37,6 +61,7 @@ computed, before the code that follows runs.
 | key or index of an lvalue | `LValueHelper::doHashObjLValue()`, `doListLValue()` | `lowerExpressionInTempScope()` |
 | expression of a `map` or the map expression of a map-select whose value is not used (each element) | `QoreScopedEvalHolder` | per-iteration `PushTempMark` / `DiscardTemps` |
 | expression of a `background` operator, in the new thread | `op_background_thread()` | the same (the thread evaluates the expression) |
+| default value of a parameter, initializer of a class member, of a static class variable and of a hashdecl member, which the callee or the code that creates the object or hash evaluates while the caller's statement runs | `QoreScopedEvalHolder` (`CodeEvaluationHelper::prepareDefaultArgs()`, `qore_class_private::initMember()`, the static variable initializer, `typed_hash_decl_private`) | evaluated without the caller's temp scope |
 
 An expression evaluated again within the same statement - the expression of a `map` whose value is used, of a
 `select`, of `foldl`, also when a `foreach` statement gets the elements of a `map` one by one - keeps one temporary
@@ -57,9 +82,103 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
   `QoreComplexListCastOperatorNode`; a class cast gives its operand itself)
 - `ParseObjectMethodReferenceNode` (`\obj.method()`)
 
-A value read from a variable is not held: it is not a temporary, and the other modes do not keep it after the
-variable is assigned another value in the same statement.  Nor are strings, numbers, binaries and dates, which hold no
-other values, so their lifetime cannot be observed.
+A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
+reference of its own to is held by the variable reference itself (see [Values read from
+variables](#values-read-from-variables)).  Nor are strings, numbers, binaries and dates, which hold no other values,
+so their lifetime cannot be observed.
+
+## Values read from variables
+
+A read of a variable that gives the code a reference of its own to the value gives a temporary of the statement,
+which lives until the statement ends like any other temporary (David, 2026-11-09, qore#5638: "we cannot lose
+expression results needed to execute a statement while the statement is being evaluated").  These reads are:
+
+- a read through a reference: a local or a parameter that holds a reference (`auto v = \o;`, a `reference<T>`
+  parameter, a reference to a member of `self` or to a global), also when the variable that holds the reference is
+  closure-bound or holds a reference to another reference;
+- a read of a closure-bound local, a global or a thread-local variable, which is read under the variable's lock; a
+  local that a reference is taken of (`\o`) anywhere in its function is read this way in the whole function, also by
+  a statement that does not use the reference;
+- a read of a static class variable (`S::s`, `StaticClassVarRefNode`, `LoadStaticVar`) or of a member of `self`
+  (`m`, `SelfVarrefNode`, `LoadSelfMember`), which is read under the lock of the class or the object.
+
+The first change for qore#5638 (033fd1f8cd) said that static class variables and members of `self` already gave
+the same results in every mode: that was so only for a receiver.  As an operand the AST interpreter released such a
+read when the operator returned while the other modes held it, and as an argument native code (JIT, tiered, a qcc
+executable) held it to the end of the statement; both now follow the rule below.
+
+The statement holds the value as long as it uses it, by what it is used for (David, 2026-11-09):
+
+- the receiver of a chain (a method call, a member or element access, a cast, a call reference and the callee of a
+  call through a call reference), the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`,
+  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`, a slice), the source of a functional operator, the
+  value of an assignment, an element of a literal and the value of a `return` statement live until the end of the
+  statement (a `return` statement releases its temporaries before the `on_exit` handlers run).  So in
+  `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after `mark()`
+  has run, also when a call later in the statement throws;
+- an argument of a call - of a function, a static method, a method, a method of `self`, a closure, a call reference,
+  a constructor, a builtin function, also of a builtin conversion that compiled code runs inline (`boolean()`,
+  `int()`, `float()`, `string()`) - is released when the call returns, as every argument is: the call cannot use the
+  value after it returns, and a callee that keeps it holds a reference of its own.  So in
+  `string s = f(v) + (o = NOTHING) + mark();` the object is destroyed by the assignment, before `mark()` runs.
+
+An expression evaluated for each element of a `map` keeps the value that it read last only, as for any other
+temporary.
+
+The IR interpreter and native code keep the result of such a load in the temp scope of the statement until
+`DiscardTemps` (a load through a reference is owned: `qore_local_reference_eval()`, `LoadLocal`).  The AST
+interpreter holds it in the innermost `QoreStatementTempScope` (`VarRefNode::evalImpl()`,
+`SelfVarrefNode::evalImpl()`, `StaticClassVarRefNode::evalImpl()`, `QoreStatementTempScope::holdRead()`), which takes
+a reference of its own: the code that evaluated the variable keeps its reference, so a value that it keeps after the
+scope ends (the scope of a condition, or of an operand that is a statement of its own) stays valid.  Handing the
+read's reference over to the scope instead would make the value borrowed from the scope, which ends before the code
+that evaluated it is done in the scopes that keep their value (a switch value, an lvalue key, an operand of its own,
+the class cast that gave its operand itself, a26c622cb7), so it is not done.  A scope holds its first four values in
+storage of its own (`InlineCapacity`), so a statement allocates no memory for them.
+
+A value that a callee, or the code that creates an object or a hash, evaluates while the caller's statement runs -
+a default argument, a member initializer, a hashdecl member default, a static variable initializer - is evaluated as
+a statement of its own (see [Statement boundaries](#statement-boundaries)): a read that it makes is not a temporary of
+the caller's statement, which it would otherwise be held by (`dflt() + (gd = NOTHING)` with `*E e = gd` destroyed the
+object after the caller's statement in the AST interpreter only).
+
+An argument is released at the return of the call:
+
+- AST interpreter: the argument list of a call reads a variable given as an argument without handing the value to
+  the statement (`evalCallArg()` of `VarRefNode`, `SelfVarrefNode` and `StaticClassVarRefNode`, used by
+  `qore_list_private::eval()`; a declaration that creates an object, `VarRefNewObjectNode`, overrides it with a normal
+  evaluation), so the argument list holds the only reference that the read took and releases it when the call returns
+  (`CodeEvaluationHelper`);
+- IR interpreter: a value read by `LoadLocal`, `LoadArg`, `LoadClosure`, `LoadGlobal`, `LoadThreadLocal`,
+  `LoadSelfMember` or `LoadStaticVar` and used
+  once, as an argument of a call in its block or temp scope, is consumed by the call as a temporary created by a call
+  is (`buildValueUseCounts()`: `consumed_call_args`); only a read that owns its value has a cleanup entry to release;
+- native code: such a read is released by `QoreIRToLLVM::releaseConsumedCallArgs()` when the call returns, or passed
+  to a `_consume_args` helper with its cleanup slot.  A read through a reference keeps its reference in the slot of
+  its read site (`emitReferenceLocalRead()`), which holds the cached value's predecessor when the local holds no
+  reference, so the slot is released only if it holds the value read (`qore_rt_release_reference_read()`).  A read
+  that a later write to the local can release before its last use takes a second reference of its own, in a cleanup
+  slot of the value (`overwritten_local_reads`: `f(v, \x)`, `f(v, (v = x))`), which is released as well;
+- a builtin conversion that the lowering runs inline (`lowerBuiltinTypeConversion()`: `ToBool`, `ToInt`, `ToFloat`,
+  `ToString`) releases its argument after it with `ReleaseOwnedTemp`, as the call it replaces would.
+
+These reads are not held:
+
+- a value borrowed from the variable: a local that holds the value itself, and a variable that holds a weak
+  reference, which reads as its target; no mode keeps such a value after the variable is assigned another value in
+  the same statement (`o.name() + (o = NOTHING)` and `(o && (o = NOTHING))` destroy the object before the rest of the
+  statement runs).  The IR interpreter reads a local's value from its slot cache with a reference of its own, which
+  kept the operand of an operator to the end of the statement; a load of an IR-only local that is used once, as the
+  operand of an operator whose value keeps no reference to it (`ToBool`, `Not`, a comparison, `InstanceOfBool`,
+  `Exists*`, `Elements*`, `IsNullOrNothing`), and that no write to the local can release before it is used, is
+  borrowed as the base of a method call is (`interpreter_borrowed_bases`, `qore_ir_operator_keeps_no_operand()`);
+- the reads made while a reference is resolved: the lvalue expression of a reference is evaluated in the context of
+  the code that created the reference, with the temp scope of the statement suspended
+  (`QoreStatementTempScopeSuspension`, the first member of `RuntimeReferenceHelperBase`), so the variable that it
+  names and the temporaries of its keys and indexes are released when the reference is resolved, and the read through
+  the reference is held as a whole by the variable reference that read it.  The suspension also keeps a reference
+  that compiled code resolves (`qore_local_reference_eval()`, `ClosureVarValue::eval()`) from holding a value in the
+  scope of the AST statement that called the compiled code.
 
 ## IR interpreter and native code
 
@@ -115,4 +234,6 @@ released with the statement's temporaries, before the variable.
 
 `examples/test/qore/vars/temporary-lifetime/` runs every case in `temporary-lifetime-checks.qi` in this program, in a
 worker in each execution mode, as an AOT program and from a compiled module, and compares the traces with the AST
-interpreter's (`temporary-lifetime-results.qi`).
+interpreter's (`temporary-lifetime-results.qi`).  `examples/test/ir/ReferenceReadLifetime.qtest` runs the reads of
+[Values read from variables](#values-read-from-variables) in every execution mode, on the IR tier and as a qcc
+executable.
