@@ -1678,6 +1678,9 @@ private:
     /** A native entry called directly (a fast entry) pushes no call stack frame; the caller pushes it around the
         call (qore_rt_push_native_call_frame()) in storage of its own frame, and pops it when the call returns, with
         or without an exception (native entries report exceptions by returning), before the exception is checked.
+        When the callee is a plain function called from code that can run with an object or a class
+        (nativeCallNeedsFunctionContext()), the call also switches to the function's context
+        (emitPushNativeFunctionContext()).
 
         @param fn the native entry
         @param args the arguments of the call
@@ -1714,6 +1717,25 @@ private:
     llvm::Constant* getAotCallLocation(const QoreIRInstruction* inst, llvm::Module& module);
     //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
     void emitPopNativeCallFrame(llvm::Module& module);
+    //! Returns true if a direct native call of \a callee from the function being lowered must switch to the
+    //! callee's object and class context
+    /** A call of user code runs a plain function's body without an object or a class (UserVariantBase::eval()).
+        The function being lowered runs in that context when it is a plain function, as each call path into its body
+        establishes it; methods, closures (which run in the context they were created in) and top-level code can run
+        with an object or a class.  The callee of a closure runs in the caller's context, as it was created there; AOT
+        code calls the fast entries of methods with the context that they establish, and JIT batches take no method
+        callees.
+    */
+    bool nativeCallNeedsFunctionContext(const AbstractQoreFunctionVariant* callee) const;
+    //! Emits the switch to the context of a plain function for a direct call of its fast entry
+    /** (qore_rt_push_native_function_context_v1()); emitPopNativeFunctionContext() restores the caller's context
+        after the call returns, with or without an exception.
+        @return the call of the switch, which the caller removes if the call is replaced by a summary of the body
+        that does not observe the context
+    */
+    llvm::CallInst* emitPushNativeFunctionContext(llvm::Module& module, llvm::Function* llvm_func);
+    //! Emits the restoration of the context replaced by emitPushNativeFunctionContext()
+    void emitPopNativeFunctionContext(llvm::Module& module);
 
     //! The instructions that push the frame of an AOT call whose callee may run inline, as a body summary
     struct AotInlineCallFrame {
@@ -1758,6 +1780,10 @@ private:
     llvm::AllocaInst* native_call_frame_storage = nullptr;
     //! The current thread's data for the frames of the native calls, got once in the entry block
     llvm::Value* native_call_thread_data = nullptr;
+    //! The storage of the context of the plain functions whose fast entries the function being lowered calls
+    //! directly, created by the first call that switches to it (emitPushNativeFunctionContext())
+    /** One is enough, as for native_call_frame_storage */
+    llvm::AllocaInst* native_function_context_storage = nullptr;
 
     //! The number of background helpers emitted for the function being lowered
     unsigned bg_helper_count = 0;

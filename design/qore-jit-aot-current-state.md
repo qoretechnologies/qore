@@ -47,6 +47,26 @@ Normal method dispatch cannot invoke a copy variant: its calling convention is
 different. `ImplicitCopyDispatch.qtest` exercises polymorphic copies and failing
 copy hooks in all four execution modes.
 
+### Plain-function access context
+
+A call of user code runs a plain function's body without an object or a class
+(`UserVariantBase::eval()`), so a private method reached through an object or a
+private inheritance of the caller's class is not visible in it. Every path that
+runs a plain function's body without that call does the same: the runtime
+fast-call helpers (`qore_rt_call_fast()`, `qore_rt_call_fast_with_target()`,
+`qore_rt_call_direct_aot()`) and the IR interpreter's inline calls bind the
+parameters in the caller's object and class context, then run the body and check
+its return value with neither (`ObjectSubstitutionHelper`, which keeps the
+thread's context and its `RuntimeConfig` in step and restores both on exit).
+Native code calling a plain function's fast entry directly (a JIT batch callee,
+an AOT batch fast entry) switches to that context inside the frame of the call
+(`qore_rt_push_native_function_context_v1()`) when the caller can run with an
+object or a class (`QoreIRToLLVM::nativeCallNeedsFunctionContext()`: methods,
+closures and top-level code); a plain function calling another needs no switch.
+Closures keep the context they were created in. `JITStaticMethodDirectCalls.qtest`
+and `AOTPlainFunctionClassContext.qtest` compare this with the AST interpreter in
+every execution mode and in AOT code.
+
 ## Tiered Execution
 
 Tiered mode lowers `%modern` functions to IR when their Program is committed, so

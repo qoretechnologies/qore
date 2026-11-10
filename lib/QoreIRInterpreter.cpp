@@ -4775,9 +4775,15 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
-    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+    bool ok;
+    {
+        // the parameters are bound in the caller's object and class context; the body of a plain function runs
+        // without an object and a class, as a call of the function does (UserVariantBase::eval())
+        ObjectSubstitutionHelper callee_context(nullptr, nullptr);
+        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+            nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -4788,6 +4794,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     }
 
     if (!(xsink && *xsink)) {
+        ObjectSubstitutionHelper callee_context(nullptr, nullptr);
         acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
     }
     if (xsink && *xsink) {

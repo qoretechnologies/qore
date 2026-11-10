@@ -559,6 +559,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_push_native_closure_call_frame",
         reinterpret_cast<void*>(&qore_rt_push_native_closure_call_frame) },
     { "qore_rt_pop_native_call_frame", reinterpret_cast<void*>(&qore_rt_pop_native_call_frame) },
+    { "qore_rt_push_native_function_context_v1",
+        reinterpret_cast<void*>(&qore_rt_push_native_function_context_v1) },
+    { "qore_rt_pop_native_function_context_v1", reinterpret_cast<void*>(&qore_rt_pop_native_function_context_v1) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
     { "qore_rt_call_function_with_base",
@@ -11292,6 +11295,40 @@ extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {
     static_cast<QoreNativeCallStackLocation*>(storage)->~QoreNativeCallStackLocation();
 }
 
+//! The object and class context of a plain function, which native code calling its fast entry directly switches to
+/** A call of user code runs a plain function's body without an object or a class (UserVariantBase::eval()); native
+    code calling the fast entry of a plain function directly from code that can run with an object or a class
+    (QoreIRToLLVM::nativeCallNeedsFunctionContext()) switches to this context after pushing the frame of the call
+    and restores the caller's before popping it (qore_rt_push_native_function_context_v1() and
+    qore_rt_pop_native_function_context_v1()), as ObjectSubstitutionHelper does.
+*/
+class QoreNativeFunctionContext {
+public:
+    DLLLOCAL QoreNativeFunctionContext() : context(nullptr, nullptr) {
+    }
+
+private:
+    ObjectSubstitutionHelper context;
+};
+
+size_t qore_rt_native_function_context_size() {
+    return sizeof(QoreNativeFunctionContext);
+}
+
+size_t qore_rt_native_function_context_align() {
+    return alignof(QoreNativeFunctionContext);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_function_context_v1(void* storage) {
+    assert(storage);
+    new (storage) QoreNativeFunctionContext();
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_native_function_context_v1(void* storage) {
+    assert(storage);
+    static_cast<QoreNativeFunctionContext*>(storage)->~QoreNativeFunctionContext();
+}
+
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 
     Before the JIT call: instantiates body locals unless all are IR-only.
@@ -11834,6 +11871,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 
     QoreValue val{};
     {
+        // the parameters are bound in the caller's object and class context; the body of a plain function runs
+        // without an object and a class, as a call of the function does (UserVariantBase::eval())
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
@@ -11886,6 +11926,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             // Missing return statement: check type and set location to method definition
@@ -12272,6 +12313,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     QoreValue val{};
     {
+        // the parameters are bound in the caller's object and class context; the body of a plain function runs
+        // without an object and a class, as a call of the function does (UserVariantBase::eval())
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
@@ -12291,6 +12335,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -16604,6 +16649,9 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         QoreValue val{};
         {
+            // the parameters are bound in the caller's object and class context; the body of a plain function runs
+            // without an object and a class, as a call of the function does (UserVariantBase::eval())
+            ObjectSubstitutionHelper function_context(nullptr, nullptr);
             ArgvContextHelper argv_helper(argv.release(), xsink);
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
             if (uvb->hasCachedFunction()) {
@@ -16645,6 +16693,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         }
 
         if (!*xsink) {
+            ObjectSubstitutionHelper function_context(nullptr, nullptr);
             const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);

@@ -9609,11 +9609,23 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     bool summary_nothrow = false;
     // the frame of the call, also when the callee's body summary takes the place of the call
     AotInlineCallFrame frame = emitPushAotInlineCallFrame(slot, callee_info, inst, module, llvm_func);
+    // a plain function runs without the object and class context of a caller that has one
+    const AbstractQoreFunctionVariant* context_callee = !object_base ? getBatchCalleeVariant(callee_info) : nullptr;
+    llvm::CallInst* function_context = context_callee && nativeCallNeedsFunctionContext(context_callee)
+        ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
     llvm::Value* fast_result = emitAOTImportedSummary(callee_info, call_args,
         callee_ctx, module, fast_fn, &summary_nothrow);
     const bool inline_body = fast_result;
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
+    }
+    if (function_context) {
+        if (inline_body && summary_nothrow) {
+            // an inline summary that raises no exception does not observe the context
+            function_context->eraseFromParent();
+        } else {
+            emitPopNativeFunctionContext(module);
+        }
     }
     endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
     if (has_arg_cleanups) {
@@ -10256,11 +10268,60 @@ void QoreIRToLLVM::emitPopNativeCallFrame(llvm::Module& module) {
             {native_call_frame_storage});
 }
 
+bool QoreIRToLLVM::nativeCallNeedsFunctionContext(const AbstractQoreFunctionVariant* callee) const {
+    assert(callee && callee->getUserVariantBase());
+    // a closure runs in the context it was created in, the caller's
+    if (dynamic_cast<const UserClosureVariant*>(callee)) {
+        return false;
+    }
+    // AOT code calls the fast entries of methods with the context that they establish
+    if (dynamic_cast<const MethodVariantBase*>(callee)) {
+        assert(aot_mode);
+        return false;
+    }
+    const AbstractQoreFunctionVariant* caller = current_ir_func ? current_ir_func->source_variant : nullptr;
+    // top-level code and closures run in a context that is not known here
+    if (!caller || !caller->getUserVariantBase() || dynamic_cast<const UserClosureVariant*>(caller)) {
+        return true;
+    }
+    // a plain function runs without an object and a class: the callee's context
+    return dynamic_cast<const MethodVariantBase*>(caller) != nullptr;
+}
+
+llvm::CallInst* QoreIRToLLVM::emitPushNativeFunctionContext(llvm::Module& module, llvm::Function* llvm_func) {
+    if (!native_function_context_storage) {
+        // the storage, in the function's entry block
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+        native_function_context_storage = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+            llvm::ConstantInt::get(i64_type, qore_rt_native_function_context_size()), "native_function_context");
+        native_function_context_storage->setAlignment(llvm::Align(qore_rt_native_function_context_align()));
+    }
+    return builder->CreateCall(module.getOrInsertFunction("qore_rt_push_native_function_context_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false)),
+        {native_function_context_storage});
+}
+
+void QoreIRToLLVM::emitPopNativeFunctionContext(llvm::Module& module) {
+    assert(native_function_context_storage);
+    builder->CreateCall(module.getOrInsertFunction("qore_rt_pop_native_function_context_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false)),
+        {native_function_context_storage});
+}
+
 llvm::CallInst* QoreIRToLLVM::emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
         const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
         const llvm::Twine& name) {
     emitPushNativeCallFrame(callee, module, llvm_func);
+    // the context is switched inside the frame and restored before the frame is popped
+    bool function_context = nativeCallNeedsFunctionContext(callee);
+    if (function_context) {
+        emitPushNativeFunctionContext(module, llvm_func);
+    }
     llvm::CallInst* call = builder->CreateCall(fn, args, name);
+    if (function_context) {
+        emitPopNativeFunctionContext(module);
+    }
     emitPopNativeCallFrame(module);
     return call;
 }
@@ -10946,6 +11007,7 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
     native_handler_cache_cancelled = false;
     native_call_frame_storage = nullptr;
+    native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
     open_native_call_frames = 0;
     bg_helper_count = 0;

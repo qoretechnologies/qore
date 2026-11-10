@@ -794,6 +794,16 @@ void qore_rt_push_native_closure_call_frame(void* storage);
 //! Pops the call stack frame pushed by qore_rt_push_native_call_frame() in the same storage
 void qore_rt_pop_native_call_frame(void* storage);
 
+//! Switches to the object and class context of a plain function for a direct call of its fast entry from native code
+/** The function then runs without an object and a class, as a call of the function does, until
+    qore_rt_pop_native_function_context_v1() restores the caller's context; the storage has the size and alignment
+    given by qore_rt_native_function_context_size() and qore_rt_native_function_context_align().
+*/
+void qore_rt_push_native_function_context_v1(void* storage);
+
+//! Restores the context replaced by qore_rt_push_native_function_context_v1()
+void qore_rt_pop_native_function_context_v1(void* storage);
+
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
 
@@ -2140,5 +2150,9 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
 DLLLOCAL size_t qore_rt_native_call_frame_size();
 //! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_align();
+//! Returns the size of the storage of the context for qore_rt_push_native_function_context_v1()
+DLLLOCAL size_t qore_rt_native_function_context_size();
+//! Returns the alignment of the storage of the context for qore_rt_push_native_function_context_v1()
+DLLLOCAL size_t qore_rt_native_function_context_align();
 
 #endif
