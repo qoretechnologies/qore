@@ -7246,7 +7246,13 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
         return nullptr;
     }
     if (LocalVar* local = getLocalVarFromValue(*expr)) {
-        return parse_context->guaranteedType(local);
+        const QoreTypeInfo* type = parse_context->guaranteedType(local);
+        // a local that is the operand of delete or remove anywhere in its scope can be NOTHING when it is read, also
+        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710)
+        if (type && local->everDeleted()) {
+            return get_or_nothing_type_check(type);
+        }
+        return type;
     }
     return nullptr;
 }

@@ -15144,6 +15144,15 @@ load_local_done:
                             }
                         }
                         }  // end of LValueHelper scope
+                        // delete gives NOTHING, as the AST interpreter's delete operator does: the value removed is
+                        // released here, after the lvalue's lock (LValueRemoveHelper::deleteLValue(); qore#5710)
+                        if (path_inst->unary_op == LVUnaryOp::Delete && !res.isNothing()) {
+                            res.discard(xsink);
+                            res = QoreValue();
+                            if (*xsink) {
+                                return -1;
+                            }
+                        }
                         single_step_remove_done:;
                     } else {
                         // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:

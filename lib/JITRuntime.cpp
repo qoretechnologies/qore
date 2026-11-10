@@ -15456,6 +15456,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
             }
         }
+        // delete gives NOTHING, as the AST interpreter's delete operator does: the value removed is released here,
+        // after the lvalue's lock (LValueRemoveHelper::deleteLValue(); qore#5710)
+        if (inst->unary_op == LVUnaryOp::Delete && !res.isNothing()) {
+            res.discard(xsink);
+            res = QoreValue();
+        }
     } else {
         // Pop, Shift, Trim, Chomp should not vivify containers (use for_remove=true)
         bool no_vivify = (inst->unary_op == LVUnaryOp::Pop
