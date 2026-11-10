@@ -4537,16 +4537,24 @@ static bool parseArgHasValue(const type_vec_t& argTypeInfo, const arg_value_vec_
     return QoreTypeInfo::hasType(t) && QoreTypeInfo::parseReturns(t, NT_NOTHING) == QTI_NOT_EQUAL;
 }
 
-//! Returns true if the signature \a b has the parameter names of \a a at the given positions where it has parameters
-/** An argument after the parameters of \a b is an extra argument for it, which a variant with strict arguments
-    does not accept and one without ignores (see the callers)
+//! Returns true if the signature \a b has the parameter names of \a a at the given positions
+/** A position after the parameters of a signature \a b with variable arguments does not match: the argument would be
+    passed to its variable arguments, not by its name.  A position after the parameters of one without variable
+    arguments is not compared: a variant with strict arguments does not accept the extra argument, and one without
+    ignores it, as it ignores any extra argument (see the callers)
 */
 static bool qore_param_names_match_at(const AbstractFunctionSignature* a, const AbstractFunctionSignature* b,
         const std::vector<bool>& positions) {
     const name_vec_t& an = a->getParamNames();
     const name_vec_t& bn = b->getParamNames();
     for (size_t p = 0, e = positions.size(); p < e; ++p) {
-        if (!positions[p] || p >= b->numParams()) {
+        if (!positions[p]) {
+            continue;
+        }
+        if (p >= b->numParams()) {
+            if (b->hasVarargs()) {
+                return false;
+            }
             continue;
         }
         if (p >= an.size() || p >= bn.size() || an[p] != bn[p]) {

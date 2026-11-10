@@ -76,6 +76,15 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             assertEq("nf5(*int x, string y)", p.callFunction("t"));
         }
         {
+            # a variant with variable arguments would take the argument at a position after its parameters by
+            # position
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "but vb\\(int a, \\.\\.\\.\\)", \p.parse(),
+                ("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs"));
+        }
+        {
             # an argument that always has a value is bound at parse time
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");

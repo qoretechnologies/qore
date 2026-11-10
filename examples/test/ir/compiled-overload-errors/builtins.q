@@ -11,6 +11,21 @@ namespace User {
     string sub abs(auto v) { return "User::abs"; }
 }
 
+# user functions named length() and strlen() with a string parameter, called in a loop: neither the builtin's fast
+# path nor hoisting the call out of the loop may apply to them
+our int user_calls = 0;
+namespace Foo {
+    int sub length(string s) { ++user_calls; return 100 + s.size(); }
+    int sub strlen(string s) { ++user_calls; return 200 + s.size(); }
+}
+int sub user_length_loop(string s) {
+    int t = 0;
+    for (int i = 0; i < 10; ++i) {
+        t += Foo::length(s) + Foo::strlen(s);
+    }
+    return t;
+}
+
 # arguments without a type known at parse time
 auto sub call_length(auto v) { return length(v); }
 auto sub call_strlen(auto v) { return strlen(v); }
@@ -92,3 +107,4 @@ printf("abs(number)=%y\n", abs_number(-3.25n));
 printf("trim(string)=%y\n", trim_string(" ÄbC "));
 printf("tolower(string)=%y\n", tolower_string("ÄbC"));
 printf("toupper(string)=%y\n", toupper_string("ÄbC"));
+printf("user length/strlen loop: %d calls: %d\n", user_length_loop("abc"), user_calls);

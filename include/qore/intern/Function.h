@@ -83,10 +83,12 @@ typedef std::vector<bool> arg_value_vec_t;
     expression whose branches are such expressions.  A member, a global variable, a dereference and the other
     operators can have no value, as an unassigned member or a removed hash key has none.
 
-    A local variable assigned before a loop and removed later in its body is taken as assigned at a read earlier in
-    the body, as the parse analyzes the body once; at run time, a committed variant that its argument does not match
-    because it has no value is resolved again (CodeEvaluationHelper::init()), so the call has the result of the AST
-    interpreter's run-time resolution in that case too.
+    Two cases are not strict: a local variable assigned before a loop and removed later in its body is taken as
+    assigned at a read earlier in the body, as the parse analyzes the body once, and a method call can call an
+    overriding method whose return type accepts no value (a \c *int method overriding an \c int one).  At run time,
+    a committed variant that its argument does not match because it has no value is resolved again
+    (CodeEvaluationHelper::init()), so the call has the result of the AST interpreter's run-time resolution in these
+    cases too.
 */
 DLLLOCAL bool parse_arg_always_has_value(QoreValue arg);
 

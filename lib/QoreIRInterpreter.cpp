@@ -3135,6 +3135,27 @@ static inline __attribute__((always_inline)) QoreStringNode* qore_ir_value_to_st
     }
 }
 
+//! The checked conversions of string(), int() and float() with one argument (ToStringChecked, ToIntChecked,
+//! ToFloatChecked; issue #5660)
+/** Out of line: the conversion code is not part of the function that interprets every opcode
+
+    @return true with the result in \a res, false if the builtin raised an exception
+*/
+static __attribute__((noinline)) bool qore_ir_checked_conversion(int kind, QoreValue val, QoreValue& res,
+        ExceptionSink* xsink) {
+    if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
+        // as the unchecked string conversion does, with the check of the type
+        QoreStringNode* str = qore_ir_value_to_string_node_checked(val, val.getType());
+        if (str) {
+            res = str;
+            return true;
+        }
+        // any other type: the builtin raises its error, or converts a type that is not handled here
+        return qore_rt_builtin_conversion_call(kind, val, res, xsink);
+    }
+    return qore_rt_builtin_conversion_checked(kind, val, res, xsink);
+}
+
 //! Gives the parameter type error of a fast call the outcome of the AST interpreter; see qore_fast_call_param_mismatch()
 static __attribute__((noinline, cold)) void qore_ir_fast_call_param_mismatch(const QoreFunction* func,
         const QoreTypeInfo* receiver_type_info, unsigned nargs, const uint64_t* args, ExceptionSink* xsink) {
@@ -14159,23 +14180,8 @@ load_local_done:
                     : (inst->opcode == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
                         : QORE_RT_BUILTIN_CONVERSION_FLOAT);
                 QoreValue res;
-                bool converted;
-                if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
-                    // as the unchecked string conversion does, with the check of the type
-                    QoreValue val = getIRValue(values, inst->operands[0]);
-                    QoreStringNode* str = qore_ir_value_to_string_node_checked(val, val.getType());
-                    if (str) {
-                        res = str;
-                        converted = true;
-                    } else {
-                        // any other type: the builtin raises its error, or converts a type that is not handled here
-                        converted = qore_rt_builtin_conversion_call(kind, val, res, xsink);
-                    }
-                } else {
-                    converted = qore_rt_builtin_conversion_checked(kind, getIRValue(values, inst->operands[0]), res,
-                        xsink);
-                }
-                if (!converted) {
+                // out of line, so that the conversions add no code to this function's hot paths
+                if (!qore_ir_checked_conversion(kind, getIRValue(values, inst->operands[0]), res, xsink)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;

@@ -10978,11 +10978,17 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, Exception
 
 // --- Phase 5.3: Additional fast-path optimizations ---
 
-//! The fast path of trim() with one argument: a string node
+//! The fast path of trim() with one argument: a string node or a short string
 extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
     if (arg.hasNode() && arg.getInternalNode()->getType() == NT_STRING) {
         QoreStringNode* result = static_cast<const QoreStringNode*>(arg.getInternalNode())->copy();
+        result->trim();
+        return toBits(result);
+    }
+    if (arg.isShortString()) {
+        QoreStringValueHelper str(arg);
+        QoreStringNode* result = new QoreStringNode(**str);
         result->trim();
         return toBits(result);
     }

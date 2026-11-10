@@ -9,6 +9,10 @@ reference-cleared: f(*string) null
 reference-cleared store: RUNTIME-TYPE-ERROR
 reference loop 0: f(int)
 reference loop 1: f(*string) null
+reference parameter, unassigned variable: f(*string) null
+reference parameter, unassigned member: f(*string) null
+reference parameter, missing key: f(*string) null
+reference parameter, assigned: f(int)
 closure-removed: f(*string) null
 branch True: f(int)
 branch False: f(*string) null

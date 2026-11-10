@@ -60,6 +60,12 @@ sub reference() {
     }
 }
 
+# a reference parameter: it is assigned with the reference, but a read gives the referenced value, which can have no
+# value (an unassigned variable, an unassigned member, a missing hash key)
+string sub viaref(reference<int> r) {
+    return f(r);
+}
+
 # a local that a closure removes
 sub closure() {
     int y = 1;
@@ -83,6 +89,16 @@ printf("conditional: %s\n", f(True ? 1 : g()));
 params(1, 2);
 loop();
 reference();
+{
+    int ry;
+    printf("reference parameter, unassigned variable: %s\n", viaref(\ry));
+    M rm();
+    printf("reference parameter, unassigned member: %s\n", viaref(\rm.m));
+    hash<string, int> rh;
+    printf("reference parameter, missing key: %s\n", viaref(\rh.k));
+    int rv = 3;
+    printf("reference parameter, assigned: %s\n", viaref(\rv));
+}
 closure();
 branch(True);
 branch(False);

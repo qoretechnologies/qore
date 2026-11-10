@@ -130,3 +130,4 @@ abs(number)=3.25
 trim(string)="ÄbC"
 tolower(string)="äbc"
 toupper(string)="ÄBC"
+user length/strlen loop: 3060 calls: 20

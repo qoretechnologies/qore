@@ -279,7 +279,8 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
     }
     const auto* call = dynamic_cast<const FunctionCallNode*>(
         expr.getInternalNode());
-    if (!call || call->hasExplicitTypeArgs()) {
+    // only a call of the Qore builtin, never a user or module function with the same name
+    if (!call || call->hasExplicitTypeArgs() || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();

@@ -1010,7 +1010,9 @@ static LocalVar* qoreIrGetHoistableGlobalStringLengthLocal(const QoreValue& expr
         return nullptr;
     }
     auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
-    if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())) {
+    // only a call of the Qore builtin, never a user or module function with the same name
+    if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())
+            || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return nullptr;
     }
     QoreValue arg_expr;
@@ -14692,8 +14694,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
+    // only a call of the Qore builtin, never a user or module function with the same name
     if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
-            && !call->hasExplicitTypeArgs()) {
+            && !call->hasExplicitTypeArgs() && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
