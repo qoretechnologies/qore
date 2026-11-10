@@ -632,6 +632,37 @@ QoreIRInstruction* QoreIRBuilder::createCheckCancelEvery(QoreIRValue count, Qore
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCheckRangeBound(QoreIRValue bound, QoreIRRangeBound which,
+        const QoreProgramLocation* loc) {
+    QoreIRValue which_val = createConstInt(static_cast<int64_t>(which), loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckRangeBound);
+    inst->loc = loc;
+    inst->operands.push_back(bound);
+    inst->operands.push_back(which_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
+        const std::vector<QoreIRValue>& selectors, const QoreProgramLocation* loc) {
+    bool begin = flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin);
+    assert(begin || !selectors.empty());
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSelectorStep);
+    inst->loc = loc;
+    if (begin) {
+        // the Begin step makes the result, so it has no result operand
+        inst->result = func->createValue();
+    } else {
+        inst->operands.push_back(result);
+    }
+    inst->operands.push_back(seq);
+    inst->operands.push_back(flags_val);
+    for (const QoreIRValue& value : selectors) {
+        inst->operands.push_back(value);
+    }
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListAppendElement);
@@ -1758,6 +1789,65 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
+        int64_t count, const QoreProgramLocation* loc) {
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    QoreIRValue count_val = createConstInt(count, loc)->result;
+    auto inst = append<QoreIRIteratorCreateInstruction>(seq);
+    inst->opcode = QoreIROpcode::IteratorCreateSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(count_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorPending(QoreIRValue iterator,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorPending);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(iterator);
+    return inst;
+}
+
+QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNextSelectors(QoreIRValue iterator,
+        QoreIRBasicBlock* none_target, QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRIteratorNextInstruction>(iterator, none_target, continue_target);
+    inst->opcode = QoreIROpcode::IteratorNextSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorFeed(QoreIRValue iterator, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc) {
+    assert(selector.size() == ((flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range)) ? 2 : 1));
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorFeed);
+    inst->loc = loc;
+    inst->operands.push_back(iterator);
+    inst->operands.push_back(flags_val);
+    for (const QoreIRValue& value : selector) {
+        inst->operands.push_back(value);
+    }
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionSuspend(const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionSuspend);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionResume(QoreIRValue handle, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionResume);
+    inst->loc = loc;
+    inst->operands.push_back(handle);
     return inst;
 }
 

@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and serialization of background helpers in closures, and threads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class BackgroundRefClosureTest
+
+#! issue #5677: qcc compiles background expressions in closures that take references to local variables
+/** A background expression takes a reference to a local variable when its thread starts and holds it in a parameter
+    of its helper; the helper's code takes a reference to that parameter.  The IR of a closure, and with it the IR of
+    the helpers in it, is serialized against the closure's local slots, where the helper's parameter had no slot, so
+    qcc failed with "CLOSURE_CREATE ... EXPR_TREE for node 'variable reference'".
+
+    The script next to the test runs the cases (the issue's, a helper parameter of the same name in the function that
+    creates the closure, a background expression in an on_block_exit handler of a closure, a nested helper, several
+    values, a parameter of the closure) in every execution mode, on the IR tier and as AOT executables at -O0 and
+    -O3, and its output must be that of the AST interpreter.
+*/
+class BackgroundRefClosureTest inherits QUnit::Test {
+    public {
+        #! the output of background-ref.q with the AST interpreter, which every execution mode and AOT must give
+        const Expected = (
+            "in closure: k=103",
+            "same name in parent: a=11 b=14",
+            "in handler: h=3",
+            "nested: x=21 y=42",
+            "several: m=3 s=sp!",
+            "closure param: prm=12",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string path;
+    }
+
+    constructor() : QUnit::Test("background references in closures", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        path = get_script_dir() + "/background-ref.q";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", sub () { aotTest("-O0"); });
+        addTestCase("AOT executable -O3", sub () { aotTest("-O3"); });
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("background-ref-closure-aot-");
+        string exe = dir.path + "/background-ref";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, path));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), opt + ": AOT");
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}

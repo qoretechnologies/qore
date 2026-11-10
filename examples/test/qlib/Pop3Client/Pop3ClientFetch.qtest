@@ -32,7 +32,7 @@ class MockPop3Server {
         #! The socket of the session being served, if any
         *Socket current;
         #! Set by wait() when it closes the session being served, whose error is then not recorded
-        bool current_closed_by_wait;
+        bool current_closed_by_wait = False;
         #! Serializes stop_flag and current between wait() and the server thread
         Mutex m();
         #! Error from server thread

@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 
 lvalue_ref::lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject* self, const void* lvid,
         const qore_class_private* cls) : vexp(lvexp),
@@ -42,6 +43,9 @@ lvalue_ref::lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
+    if (pgm) {
+        pgm->depRef();
+    }
 }
 
 lvalue_ref::lvalue_ref(const lvalue_ref& old) : vexp(old.vexp.refSelf()), typeInfo(old.typeInfo), self(old.self),
@@ -49,6 +53,36 @@ lvalue_ref::lvalue_ref(const lvalue_ref& old) : vexp(old.vexp.refSelf()), typeIn
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
+    if (pgm) {
+        pgm->depRef();
+    }
+}
+
+QoreReferenceProgramHelper::QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink) : xsink(xsink) {
+    QoreProgram* p = r.pgm;
+    // the current Program, which the thread is in, and a Program that the current thread deletes (whose destructors
+    // can use references to its lvalues while it deletes the Program's data) keep their data while the thread uses
+    // them
+    int tid;
+    if (!p || !qore_reference_program_needs_entry(p, tid)) {
+        return;
+    }
+    // the Program is allocated while the reference exists (see lvalue_ref::pgm); its teardown waits until the lvalue
+    // has been used
+    if (!qore_program_private::get(*p)->enterWithoutContext(tid)) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program of the lvalue that the reference refers to has "
+            "already been deleted and therefore cannot be accessed at runtime");
+        valid = false;
+        return;
+    }
+    entry.pgm = p;
+    entry.tid = tid;
+}
+
+QoreReferenceProgramHelper::~QoreReferenceProgramHelper() {
+    if (entry.pgm) {
+        qore_program_private::decThreadCount(*entry.pgm, entry.tid, xsink);
+    }
 }
 
 bool lvalue_ref::scanReference(RSetHelper& rsh) {

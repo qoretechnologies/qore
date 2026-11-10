@@ -1,0 +1,415 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceReadParityTest
+
+#! Regression test (qore#5638): a value read from a variable is held, or released, by the same rule in every mode
+/** A value that a read of a variable gives a reference of its own to - through a reference (a local, a
+    \c reference<T> parameter, a reference to a member of another object or of \c self), or from a closure-bound
+    local, a global, a thread-local variable, a static class variable or a member of \c self - lives as long as its
+    statement uses it: as the receiver of a call or a member access and as the operand of an operator until the
+    statement ends, and as an argument of a call (also of a builtin conversion such as \c boolean()) until the call
+    returns.  A value borrowed from a local is released when the local is assigned another value.  Each case prints
+    <tt>mark <case></tt> after the statement cleared the variable, and RuleTable says whether the object is destroyed
+    before (\c "E") or after (\c "H") that line; every mode, the IR tier and a qcc executable must give the AST
+    interpreter's output, which must follow the table.
+
+    The cases also cover a variable given twice, read as the receiver and as an argument in one statement, a callee
+    that clears the variable through a reference while it uses the argument, optional, variable and \c auto
+    arguments, a callee that keeps the argument, a list literal given as an argument and used as a receiver, a later
+    argument and the call itself throwing, reads in a loop (the slot of a read site is used again), recursion through a
+    reference parameter, the values that a callee evaluates in the caller's statement (default arguments of a function
+    and of a method, member initializers and hashdecl member defaults, which are statements of their own), an
+    argument read through a reference in a statement that also gives a reference argument or overwrites the local,
+    conversions, and compiled code shared by several threads.  Before the fix, 62 of the cases differed between the
+    modes on develop; with the first changes for qore#5638, the static class variable and member of \c self cases,
+    the plain local operand, the callee clearing the variable, the default arguments and member initializers and
+    the arguments in a statement that also writes the local still differed.
+*/
+class ReferenceReadParityTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# the cases add a string and the value of an assignment of NOTHING to a variable of an object type
+%disable-all-warnings
+# each case prints "mark <case>" after the statement cleared the variable that the value was read from; the test checks
+# whether "dtor <case>" comes before it (E: released when the value was used) or after it (H: held to the end of the
+# statement)
+
+class E {
+    public { string n; *E m; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+    string name() { return n; }
+    string other(E e) { return e.n; }
+    static string st(E e) { return e.n; }
+}
+auto sub mark(string m) { printf("mark %s\n", m); return ""; }
+string sub argName(E e) { return e.n; }
+string sub argName2(E a, E b) { return a.n + b.n; }
+string sub argOpt(E e, *int x) { return e.n; }
+string sub argVa(...) { return argv[0].n; }
+string sub argList(list<auto> l) { return l[0].n; }
+string sub argAuto(auto a) { return a.n; }
+E sub ident(E e) { return e; }
+our *E keep;
+string sub store(E e) { keep = e; return e.n; }
+# the callee changes the variable that its argument was read from through a reference
+string sub clearsRef(E e, reference<auto> r) { r = NOTHING; printf("inside %s\n", e.n); return e.n; }
+class X { public { string n; } constructor(E e) { n = e.n; } }
+
+our *E g;
+thread_local *E tl;
+our *E gd;
+string sub dflt(*E e = gd) { return e ? e.n : ""; }
+
+class S {
+    public { static *E s; }
+}
+
+class H {
+    public { *E m; }
+    recv(string c) { m = new E(c); auto s = m.name() + (m = NOTHING) + mark(c); }
+    arg(string c) { m = new E(c); auto s = argName(m) + (m = NOTHING) + mark(c); }
+    op(string c) { m = new E(c); auto b = (m && (m = NOTHING)) || mark(c); }
+    conv(string c) { m = new E(c); auto s = (boolean(m) ? "t" : "f") + (m = NOTHING) + mark(c); }
+    # a reference to a member of self read through
+    refrecv(string c) { m = new E(c); auto v = \m; auto s = v.name() + (m = NOTHING) + mark(c); }
+    refarg(string c) { m = new E(c); auto v = \m; auto s = argName(v) + (m = NOTHING) + mark(c); }
+}
+
+# ---- plain local
+sub plain_recv() { auto o = new E("plain_recv"); auto s = o.name() + (o = NOTHING) + mark("plain_recv"); }
+sub plain_arg() { auto o = new E("plain_arg"); auto s = argName(o) + (o = NOTHING) + mark("plain_arg"); }
+sub plain_op() { auto o = new E("plain_op"); auto b = (o && (o = NOTHING)) || mark("plain_op"); }
+sub plain_conv() { auto o = new E("plain_conv"); auto s = (boolean(o) ? "t" : "f") + (o = NOTHING) + mark("plain_conv"); }
+
+# ---- reference local
+sub ref_recv() { auto o = new E("ref_recv"); auto v = \o; auto s = v.name() + (o = NOTHING) + mark("ref_recv"); }
+sub ref_arg() { auto o = new E("ref_arg"); auto v = \o; auto s = argName(v) + (o = NOTHING) + mark("ref_arg"); }
+sub ref_op() { auto o = new E("ref_op"); auto v = \o; auto b = (v && (o = NOTHING)) || mark("ref_op"); }
+sub ref_conv() { auto o = new E("ref_conv"); auto v = \o; auto s = (boolean(v) ? "t" : "f") + (o = NOTHING) + mark("ref_conv"); }
+sub ref_marg() { auto o = new E("ref_marg"); auto v = \o; auto k = new E("k"); auto s = k.other(v) + (o = NOTHING) + mark("ref_marg"); remove k; }
+sub ref_sarg() { auto o = new E("ref_sarg"); auto v = \o; auto s = E::st(v) + (o = NOTHING) + mark("ref_sarg"); }
+sub ref_new() { auto o = new E("ref_new"); auto v = \o; auto s = new X(v).n + (o = NOTHING) + mark("ref_new"); }
+sub ref_closure() { auto o = new E("ref_closure"); auto v = \o; code c = string sub (E e) { return e.n; }; auto s = c(v) + (o = NOTHING) + mark("ref_closure"); }
+sub ref_bif() { auto o = new E("ref_bif"); auto v = \o; auto s = get_class_name(v) + (o = NOTHING) + mark("ref_bif"); }
+sub ref_bif_va() { auto o = new E("ref_bif_va"); auto v = \o; auto s = sprintf("%s", get_class_name(v)) + sprintf("%y", v).substr(0, 0) + (o = NOTHING) + mark("ref_bif_va"); }
+
+# ---- risky argument cases (all through a reference local)
+# an argument that is also the receiver of a later chain in the same statement: held by the receiver
+sub risk_arg_then_recv() { auto o = new E("risk_arg_then_recv"); auto v = \o; auto s = argName(v) + v.name() + (o = NOTHING) + mark("risk_arg_then_recv"); }
+# receiver and argument in one call
+sub risk_recv_and_arg() { auto o = new E("risk_recv_and_arg"); auto v = \o; auto s = v.other(v) + (o = NOTHING) + mark("risk_recv_and_arg"); }
+# the same variable twice
+sub risk_twice() { auto o = new E("risk_twice"); auto v = \o; auto s = argName2(v, v) + (o = NOTHING) + mark("risk_twice"); }
+# the call result aliases the argument and is a receiver: held as the receiver (a temporary created by a call)
+sub risk_ident_recv() { auto o = new E("risk_ident_recv"); auto v = \o; auto s = ident(v).name() + (o = NOTHING) + mark("risk_ident_recv"); }
+# the callee clears the variable the argument was read from; the argument must stay valid inside the callee
+sub risk_callee_clears() { auto o = new E("risk_callee_clears"); auto v = \o; auto s = clearsRef(v, \o) + mark("risk_callee_clears"); }
+# optional and variable arguments
+sub risk_opt() { auto o = new E("risk_opt"); auto v = \o; auto s = argOpt(v) + (o = NOTHING) + mark("risk_opt"); }
+sub risk_va() { auto o = new E("risk_va"); auto v = \o; auto s = argVa(v) + (o = NOTHING) + mark("risk_va"); }
+sub risk_auto() { auto o = new E("risk_auto"); auto v = \o; auto s = argAuto(v) + (o = NOTHING) + mark("risk_auto"); }
+# the callee stores the argument: the object lives on in keep
+sub risk_store() { auto o = new E("risk_store"); auto v = \o; auto s = store(v) + (o = NOTHING) + mark("risk_store"); keep = NOTHING; mark("risk_store-released"); }
+# a default argument read from a global in the callee
+sub risk_default() { gd = new E("risk_default"); auto s = dflt() + (gd = NOTHING) + mark("risk_default"); }
+# a list literal of a read given as an argument: the literal is a temporary released at the return of the call
+sub risk_list_arg() { auto o = new E("risk_list_arg"); auto v = \o; auto s = argList((v,)) + (o = NOTHING) + mark("risk_list_arg"); }
+# a list literal of a read as a receiver: held
+sub risk_list_recv() { auto o = new E("risk_list_recv"); auto v = \o; auto s = (v,)[0].name() + (o = NOTHING) + mark("risk_list_recv"); }
+# a hash literal of a read as an operand
+sub risk_hash_lit() { auto o = new E("risk_hash_lit"); auto v = \o; auto h = {"a": v, "b": (o = NOTHING), "c": mark("risk_hash_lit")}; remove h; }
+# a list literal assigned (the element of a literal lives to the end of the statement); the variable keeps it
+sub risk_list_lit() { auto o = new E("risk_list_lit"); auto v = \o; auto l = (v, (o = NOTHING), mark("risk_list_lit")); remove l; mark("risk_list_lit-removed"); }
+# an argument evaluated, then a later argument throws: the read is released exactly once
+sub risk_arg_throw() {
+    auto o = new E("risk_arg_throw"); auto v = \o;
+    try {
+        auto s = argName2(v, (o = NOTHING) ?? thrower("risk_arg_throw"));
+    } catch (hash<ExceptionInfo> ex) {
+        mark("risk_arg_throw-caught");
+    }
+}
+E sub thrower(string c) { printf("throw %s\n", c); throw "X", c; }
+# the call throws after the variable was cleared
+string sub argThrows(E e, reference<auto> r) { r = NOTHING; printf("inside %s\n", e.n); throw "Y", e.n; }
+sub risk_call_throws() {
+    auto o = new E("risk_call_throws"); auto v = \o;
+    try {
+        auto s = argThrows(v, \o) + mark("not reached");
+    } catch (hash<ExceptionInfo> ex) {
+        mark("risk_call_throws-caught");
+    }
+}
+# in a loop: the per-site slot of a reference read is used again in each iteration
+sub risk_loop() {
+    auto o; auto v = \o;
+    for (int i = 0; i < 3; ++i) {
+        o = new E("risk_loop" + i);
+        auto s = argName(v) + (o = NOTHING) + mark("risk_loop" + i);
+    }
+}
+# in a loop with a receiver read and an argument read at different sites
+sub risk_loop_mixed() {
+    auto o; auto v = \o;
+    for (int i = 0; i < 3; ++i) {
+        o = new E("risk_loop_mixed" + i);
+        auto s = v.name() + argName(v) + (o = NOTHING) + mark("risk_loop_mixed" + i);
+    }
+}
+# recursion through a reference parameter
+string sub rec(reference<auto> r, int n) {
+    if (!n) { return ""; }
+    return argName(r) + rec(\r, n - 1);
+}
+sub risk_recursion() { auto o = new E("risk_recursion"); auto s = rec(\o, 3) + (o = NOTHING) + mark("risk_recursion"); }
+# a parameter that holds a reference in one call and a value in another (the reference flag differs per frame)
+string sub maybeRef(auto p, reference<auto> clr) { return argName(p) + (clr = NOTHING) + mark("maybe" + (p ? "" : "")); }
+string sub maybeRef2(auto p, string c) { return argName(p) + mark(c); }
+
+# ---- reference<T> parameter
+sub rp_recv_f(reference<*E> r) { auto s = r.name() + (r = NOTHING) + mark("rp_recv"); }
+sub rp_arg_f(reference<*E> r) { auto s = argName(r) + (r = NOTHING) + mark("rp_arg"); }
+sub rp_op_f(reference<*E> r) { auto b = (r && (r = NOTHING)) || mark("rp_op"); }
+sub rp_conv_f(reference<*E> r) { auto s = (boolean(r) ? "t" : "f") + (r = NOTHING) + mark("rp_conv"); }
+sub rp_recv() { *E o = new E("rp_recv"); rp_recv_f(\o); }
+sub rp_arg() { *E o = new E("rp_arg"); rp_arg_f(\o); }
+sub rp_op() { *E o = new E("rp_op"); rp_op_f(\o); }
+sub rp_conv() { *E o = new E("rp_conv"); rp_conv_f(\o); }
+
+# ---- reference to a member of another object
+sub rm_recv() { auto x = new E("x1"); x.m = new E("rm_recv"); auto v = \x.m; auto s = v.name() + (x.m = NOTHING) + mark("rm_recv"); }
+sub rm_arg() { auto x = new E("x2"); x.m = new E("rm_arg"); auto v = \x.m; auto s = argName(v) + (x.m = NOTHING) + mark("rm_arg"); }
+sub rm_op() { auto x = new E("x3"); x.m = new E("rm_op"); auto v = \x.m; auto b = (v && (x.m = NOTHING)) || mark("rm_op"); }
+sub rm_conv() { auto x = new E("x4"); x.m = new E("rm_conv"); auto v = \x.m; auto s = (boolean(v) ? "t" : "f") + (x.m = NOTHING) + mark("rm_conv"); }
+
+# ---- closure-bound local
+sub cl_recv() { auto o = new E("cl_recv"); code c = auto sub () { return o; }; auto s = o.name() + (o = NOTHING) + mark("cl_recv"); }
+sub cl_arg() { auto o = new E("cl_arg"); code c = auto sub () { return o; }; auto s = argName(o) + (o = NOTHING) + mark("cl_arg"); }
+sub cl_op() { auto o = new E("cl_op"); code c = auto sub () { return o; }; auto b = (o && (o = NOTHING)) || mark("cl_op"); }
+sub cl_conv() { auto o = new E("cl_conv"); code c = auto sub () { return o; }; auto s = (boolean(o) ? "t" : "f") + (o = NOTHING) + mark("cl_conv"); }
+
+# ---- global
+sub gl_recv() { g = new E("gl_recv"); auto s = g.name() + (g = NOTHING) + mark("gl_recv"); }
+sub gl_arg() { g = new E("gl_arg"); auto s = argName(g) + (g = NOTHING) + mark("gl_arg"); }
+sub gl_op() { g = new E("gl_op"); auto b = (g && (g = NOTHING)) || mark("gl_op"); }
+sub gl_conv() { g = new E("gl_conv"); auto s = (boolean(g) ? "t" : "f") + (g = NOTHING) + mark("gl_conv"); }
+
+# ---- thread-local
+sub tl_recv() { tl = new E("tl_recv"); auto s = tl.name() + (tl = NOTHING) + mark("tl_recv"); }
+sub tl_arg() { tl = new E("tl_arg"); auto s = argName(tl) + (tl = NOTHING) + mark("tl_arg"); }
+sub tl_op() { tl = new E("tl_op"); auto b = (tl && (tl = NOTHING)) || mark("tl_op"); }
+sub tl_conv() { tl = new E("tl_conv"); auto s = (boolean(tl) ? "t" : "f") + (tl = NOTHING) + mark("tl_conv"); }
+
+# ---- static class variable
+sub sv_recv() { S::s = new E("sv_recv"); auto s = S::s.name() + (S::s = NOTHING) + mark("sv_recv"); }
+sub sv_arg() { S::s = new E("sv_arg"); auto s = argName(S::s) + (S::s = NOTHING) + mark("sv_arg"); }
+sub sv_op() { S::s = new E("sv_op"); auto b = (S::s && (S::s = NOTHING)) || mark("sv_op"); }
+sub sv_conv() { S::s = new E("sv_conv"); auto s = (boolean(S::s) ? "t" : "f") + (S::s = NOTHING) + mark("sv_conv"); }
+
+# ---- self member
+sub sm_all() {
+    H h();
+    h.recv("sm_recv");
+    h.arg("sm_arg");
+    h.op("sm_op");
+    h.conv("sm_conv");
+    h.refrecv("smref_recv");
+    h.refarg("smref_arg");
+}
+
+# ---- local that a reference is taken of elsewhere in its function
+sub rl_recv() { auto o = new E("rl_recv"); auto s = o.name() + (o = NOTHING) + mark("rl_recv"); if (!o) { return; } auto r = \o; }
+sub rl_arg() { auto o = new E("rl_arg"); auto s = argName(o) + (o = NOTHING) + mark("rl_arg"); if (!o) { return; } auto r = \o; }
+sub rl_op() { auto o = new E("rl_op"); auto b = (o && (o = NOTHING)) || mark("rl_op"); if (!o) { return; } auto r = \o; }
+
+# ---- conversions: no-op / aliasing / forwarded values
+string sub mkstr(string c) { return c + "-str"; }
+auto sub mkauto(string c) { return c + "-auto"; }
+sub conv_misc() {
+    # a conversion of a string that is already a string, from a call and through a reference; the result is used after
+    string r = string(mkauto("conv_str")) + "!";
+    printf("conv %s\n", r);
+    auto s0 = mkstr("conv_strref");
+    auto sv = \s0;
+    auto r2 = string(sv) + ((s0 = NOTHING) ? "" : "") + "!";
+    printf("conv %s\n", r2);
+    # a bool that is already a bool
+    bool bb = True;
+    auto bv = \bb;
+    bool r3 = boolean(bv) && boolean(bb);
+    printf("conv %y\n", r3);
+    # an object stored in a local and then converted: the local keeps it
+    auto x = new E("conv_fwd");
+    auto b = boolean(x);
+    printf("conv fwd %s %y\n", x.name(), b);
+    E y = new E("conv_fwd_typed");
+    b = boolean(y) && boolean(y);
+    printf("conv fwd typed %s %y\n", y.name(), b);
+    int i = int(mkauto("1"));
+    float f = float(mkauto("2"));
+    printf("conv %d %y\n", i, f);
+    b = boolean(new E("conv_new")) && mark("conv_new");
+    # conversion of a temporary used twice
+    auto z = new E("conv_twice");
+    b = boolean(ident(z)) && boolean(ident(z)) && (z = NOTHING) ?? mark("conv_twice");
+    b = (boolean(ident(z = new E("conv_ident"))) && !(z = NOTHING)) || mark("conv_ident");
+}
+
+
+# ---- values that a callee evaluates: a default argument, a member initializer, a hashdecl member default
+thread_local *E td;
+string sub dfltT(*E e = td) { return e ? e.n : ""; }
+class M { public { *E m = gd; } }
+hashdecl HD { *E e = gd; }
+string sub drop(auto x) { return ""; }
+class K { string m(*E e = gd) { return e ? e.n : ""; } }
+sub cs_default_tl() { td = new E("cs_default_tl"); auto s = dfltT() + (td = NOTHING) + mark("cs_default_tl"); }
+sub cs_member_init() { gd = new E("cs_member_init"); auto s = drop(new M()) + (gd = NOTHING) + mark("cs_member_init"); }
+sub cs_hashdecl() { gd = new E("cs_hashdecl"); auto s = drop(hash<HD>{}) + (gd = NOTHING) + mark("cs_hashdecl"); }
+sub cs_method_default() { gd = new E("cs_method_default"); K k(); auto s = k.m() + (gd = NOTHING) + mark("cs_method_default"); }
+
+# ---- an argument read through a reference in a statement that can also write the local
+string sub refArg(E e, reference<auto> r) { return e.n; }
+sub ow_ref_arg() { auto o = new E("ow_ref_arg"); auto v = \o; auto x = 1; auto s = refArg(v, \x) + (o = NOTHING) + mark("ow_ref_arg"); }
+sub ow_overwritten() { auto o = new E("ow_overwritten"); auto v = \o; auto s = argName2(v, (v = new E("ow_overwritten-2"))) + mark("ow_overwritten"); }
+sub ow_loop() {
+    auto o = new E("ow_loop0"); auto v = \o; auto x = 1;
+    for (int i = 0; i < 2; ++i) {
+        auto s = refArg(v, \x) + (o = NOTHING) + mark("ow_loop" + i);
+        o = new E("ow_loop" + (i + 1));
+    }
+}
+
+# ---- threads sharing compiled code
+our int dtors = 0;
+our Mutex dm();
+class Q {
+    destructor() { dm.lock(); ++dtors; dm.unlock(); }
+    int id() { return 1; }
+}
+int sub qa(Q q) { return q.id(); }
+sub qworker() {
+    auto o; auto v = \o; auto w; code c = auto sub () { return w; };
+    for (int i = 0; i < 2000; ++i) {
+        o = new Q();
+        w = new Q();
+        auto s = qa(v) + v.id() + ((o = NOTHING) ? 0 : 0) + qa(w) + ((w = NOTHING) ? 0 : 0);
+    }
+}
+sub threads() {
+    Counter cnt();
+    for (int t = 0; t < 4; ++t) {
+        cnt.inc();
+        background sub () { on_exit cnt.dec(); qworker(); }();
+    }
+    cnt.waitForZero();
+    printf("threads dtors %d expected %d\n", dtors, 4 * 2000 * 2);
+}
+
+for (int run = 0; run < 2; ++run) {
+    printf("-- run %d\n", run);
+    plain_recv(); plain_arg(); plain_op(); plain_conv();
+    ref_recv(); ref_arg(); ref_op(); ref_conv(); ref_marg(); ref_sarg(); ref_new(); ref_closure(); ref_bif(); ref_bif_va();
+    risk_arg_then_recv(); risk_recv_and_arg(); risk_twice(); risk_ident_recv(); risk_callee_clears(); risk_opt();
+    risk_va(); risk_auto(); risk_store(); risk_default(); risk_list_arg(); risk_list_recv(); risk_hash_lit();
+    risk_list_lit(); risk_arg_throw(); risk_call_throws(); risk_loop(); risk_loop_mixed(); risk_recursion();
+    {
+        auto o = new E("maybe_ref"); maybeRef(\o, \o);
+        auto o2 = new E("maybe_val"); auto o2c = o2; maybeRef2(o2, "maybe_val"); remove o2; remove o2c; mark("maybe_val-removed");
+    }
+    rp_recv(); rp_arg(); rp_op(); rp_conv();
+    rm_recv(); rm_arg(); rm_op(); rm_conv();
+    cl_recv(); cl_arg(); cl_op(); cl_conv();
+    gl_recv(); gl_arg(); gl_op(); gl_conv();
+    tl_recv(); tl_arg(); tl_op(); tl_conv();
+    sv_recv(); sv_arg(); sv_op(); sv_conv();
+    sm_all();
+    rl_recv(); rl_arg(); rl_op();
+    conv_misc();
+    cs_default_tl(); cs_member_init(); cs_hashdecl(); cs_method_default();
+    ow_ref_arg(); ow_overwritten(); ow_loop();
+}
+threads();
+';
+
+        #! whether each case destroys its object before (E) or after (H) the statement's mark
+        const RuleTable = {
+            "plain_recv": "E", "plain_arg": "E", "plain_op": "E", "plain_conv": "E",
+            "ref_recv": "H", "ref_arg": "E", "ref_op": "H", "ref_conv": "E",
+            "ref_marg": "E", "ref_sarg": "E", "ref_new": "E", "ref_closure": "E",
+            "ref_bif": "E", "ref_bif_va": "E", "risk_arg_then_recv": "H", "risk_recv_and_arg": "H",
+            "risk_twice": "E", "risk_ident_recv": "H", "risk_callee_clears": "E", "risk_opt": "E",
+            "risk_va": "E", "risk_auto": "E", "risk_store": "H", "risk_default": "E",
+            "risk_list_arg": "H", "risk_list_recv": "H", "risk_hash_lit": "H", "risk_list_lit": "H",
+            "risk_loop0": "E", "risk_loop1": "E", "risk_loop2": "E", "risk_loop_mixed0": "H",
+            "risk_loop_mixed1": "H", "risk_loop_mixed2": "H", "risk_recursion": "E", "maybe_val": "H",
+            "rp_recv": "H", "rp_arg": "E", "rp_op": "H", "rp_conv": "E",
+            "rm_recv": "H", "rm_arg": "E", "rm_op": "H", "rm_conv": "E",
+            "cl_recv": "H", "cl_arg": "E", "cl_op": "H", "cl_conv": "E",
+            "gl_recv": "H", "gl_arg": "E", "gl_op": "H", "gl_conv": "E",
+            "tl_recv": "H", "tl_arg": "E", "tl_op": "H", "tl_conv": "E",
+            "sv_recv": "H", "sv_arg": "E", "sv_op": "H", "sv_conv": "E",
+            "sm_recv": "H", "sm_arg": "E", "sm_op": "H", "sm_conv": "E",
+            "smref_recv": "H", "smref_arg": "E", "rl_recv": "H", "rl_arg": "E",
+            "rl_op": "H", "conv_new": "E", "cs_default_tl": "E", "cs_member_init": "E",
+            "cs_hashdecl": "E", "cs_method_default": "E", "ow_ref_arg": "E", "ow_overwritten": "E",
+            "ow_loop0": "E", "ow_loop1": "E",
+        };
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceReadParity", Script,
+            ExecModeOutputTest::ast_output("ReferenceReadParity", Script),
+            "holds or releases a value read from a variable by the same rule", ("threads dtors 16000 expected 16000",),
+            \checkRules()) {
+    }
+
+    #! returns the cases whose object is not destroyed where RuleTable says it is
+    static list<string> checkRules(string out) {
+        hash<string, int> dtor = {};
+        hash<string, int> mark = {};
+        int i = 0;
+        foreach string l in (out.split("\n")) {
+            if (l == "-- run 1") {
+                break;
+            }
+            if (l =~ /^dtor /) {
+                string c = l.substr(5);
+                if (!exists dtor{c}) {
+                    dtor{c} = i;
+                }
+            } else if (l =~ /^mark /) {
+                string c = l.substr(5);
+                if (!exists mark{c}) {
+                    mark{c} = i;
+                }
+            }
+            ++i;
+        }
+        list<string> rv = ();
+        foreach hash<auto> c in (RuleTable.pairIterator()) {
+            if (!exists mark{c.key} || !exists dtor{c.key}) {
+                rv += sprintf("%s: missing", c.key);
+                continue;
+            }
+            string actual = dtor{c.key} < mark{c.key} ? "E" : "H";
+            if (actual != c.value) {
+                rv += sprintf("%s: %s, expected %s", c.key, actual, c.value);
+            }
+        }
+        return rv;
+    }
+}

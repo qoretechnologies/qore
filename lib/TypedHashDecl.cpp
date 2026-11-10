@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
@@ -899,7 +900,9 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                     local_xsink.appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
                 }
             };
-            ValueEvalOptimizedRefHolder val(i.second->exp, sink);
+            // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
+            // temporary of the statement that creates the hash (see design/temporary-lifetime.md)
+            QoreScopedEvalHolder val(i.second->exp, true, sink);
             if (*sink) {
                 describe_local();
                 return -1;
@@ -983,7 +986,8 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             continue;
         }
 
-        ValueEvalOptimizedRefHolder default_val(i.second->exp, xsink);
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder default_val(i.second->exp, true, xsink);
         if (*xsink) {
             return -1;
         }

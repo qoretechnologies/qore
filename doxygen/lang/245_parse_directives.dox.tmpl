@@ -2445,6 +2445,10 @@ sub legacy() {
     - unsetenv()
     - usleep()
 
+    Code in a @ref Qore::Program "Program" with this option can also read but not change the public variables of a
+    trusted module and the static members of its classes, which every importer of the module shares; see
+    @ref module_public_variables.
+
     <hr>
     @section no-reflection %no-reflection
 

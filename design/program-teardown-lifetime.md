@@ -15,7 +15,9 @@ that use them, and where the teardown can still wait for ever.  The code is in `
    the Program, and `incThreadCount()` refuses every thread but the tearing-down one once `ptid` is set;
 3. sets `ptid` under `plock` and waits again for every thread in the Program to leave it: threads can enter it
    while the callback runs (the dispatcher threads, a thread calling a call reference into the Program, a method of
-   a class of the Program called from a Program sharing the class); no thread but this one can enter it afterwards;
+   a class of the Program called from a Program sharing the class); no thread but this one can enter it afterwards,
+   except a thread that is in it, whose nested calls into it the teardown waits for as well
+   (`qore_program_private::canEnterIntern()`);
 4. deletes the data: thread resources, the exec-class object, saved objects, opaque targets, local and global
    variables, the namespaces (which release the values of the static class variables, see below), the code.
 
@@ -86,6 +88,168 @@ Programs found are stored in the work (`BgCompileWork::pgms`) and decide which w
 cancels or waits for.  Refused work leaves the function in its tier for good (`jit_compile_state` 2), as it would be
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
+
+## Caches that outlive their objects
+
+A cache that is not deleted with the objects it holds (a `thread_local` or process-wide cache) must not identify
+them by their addresses, nor by the ID of their Program: the allocator gives the memory of freed functions, variants
+and IR to the objects created next, so an object created later can have every address that the cache holds, and code
+is freed while its Program lives as well.  An Expression parses its code into its Program, and deleting the
+Expression frees that code with the closures in it (`qore_program_private::deleteExpression()`;
+`~QoreClosureParseNode()` deletes the `UserClosureFunction`), so the closure of the next Expression gets the
+addresses of the freed one in the same Program, on every platform.  A deleted Program frees its code too, and macOS
+gives its memory to a Program parsed right after it at once.
+
+Such a cache is keyed by an identity that is never reused: the serial of a variant (`UserVariantBase::serial`) or of
+a closure function (`UserClosureFunction::serial`), both from one 64-bit counter (`UserVariantBase::getNextSerial()`).
+The IR of a variant is published once and never replaced (`UserVariantBase::setCachedIR()`), and a closure function
+has one variant, so a variant or a closure function with the serial cached, which the closure called holds, has the
+variant and the IR cached.  The serial makes the comparisons of addresses and of the Program ID redundant, so a call
+compares no more than it did before:
+
+- the IR interpreter's cache of the last closure called inline (`tryExecuteInterpreterInlineIRClosure()`) compares
+  the serial of the closure function, which the call has at hand, and the caller's Program, as a closure runs inline
+  only in code of its own Program; the Program cached is that of the live variant, so it cannot be another Program at
+  its address;
+- the cache of the last closure that native code ran as a leaf (`tryExecClosureNativeLeaf()`) compares the serial of
+  the variant, which the call has at hand, and the number of arguments.
+
+Before the serial, the caches were keyed by addresses: a closure with the addresses of a freed closure ran the freed
+IR, or the IR and the signature of the function that had been given that memory: a wrong result, a
+`RUNTIME-TYPE-ERROR` for a parameter of another function, an `IR-EXEC-ERROR` or a crash.
+`examples/test/ir/ClosureCacheExpressionReuse.qtest` tests closures of deleted Expressions, which reuse the memory
+in every run; `examples/test/ir/ClosureCacheProgramReuse.qtest` and `examples/test/ir/ClosureCacheProgramRounds.qtest` test
+closures of deleted Programs, which reuse it only when the allocator does: the first runs its driver several times
+in each execution mode, the second creates many Programs and starts each round of them with another heap layout.
+macOS's allocator gave the addresses in most runs, glibc's in none, so both declare macOS as a platform they must run
+on.  A library with debugging counts the calls that found an entry made for a freed closure at the same addresses
+(`dbg_closure_call_cache_program_misses()`), and `ClosureCacheProgramReuse.qtest` fails on macOS if no run was given
+the addresses, so that it cannot stop reproducing the reuse unnoticed.  The source Program that released a class
+(`qore_class_private::released_spgm_id`) is recorded by its ID, which is never reused, for the same reason.
+
+A cache keyed by the metadata of a class can identify the class by its instance serial instead
+(`qore_class_private::instance_serial`, which no other class ever has), or use the method dispatch epoch
+(`qore_get_method_dispatch_epoch()`), which the destruction of a class or a hashdecl increments before the memory can be
+reused (`qore_bump_method_dispatch_epoch()`), as do the methods added at parse time.  The type and hashdecl path caches
+of an AOT module (`qore_rt_resolve_full_type_path_cached()` and `qore_rt_resolve_hashdecl_path_cached()` in
+`lib/JITRuntime.cpp`: their thread-local front caches and `QoreAOTContext::type_path_cache` and `hashdecl_path_cache`)
+are keyed by the receiver's type, which is freed with its class, while the module's context lives as long as the module.
+A subclass of the module's generic class declared by a later Program at the deleted subclass's address was given the
+type found for the deleted one (`hash<string, int>` for a `Box<string>`) or a type of a freed hashdecl.  The entries of
+the contexts' maps are keyed by the receiver's type and the serial of its class
+(`qore_rt_aot_path_cache_receiver_serial()`): a class's own type is identified by the serial of the class, and a
+parameterized class type, which is never freed (a type built on a destroyed one is retired by
+`qore_purge_derived_types()`), by its address and the serial of its base class; the receiver is live, so its class is,
+and the class keeps the types of its type arguments.  Nothing is cached for a receiver type of another kind, which is
+not the type of an object or a class, nor for a context without a Program.  The thread-local front caches record the
+epoch, which a call compares at no cost, and refill an entry of an earlier epoch from the map.  The maps' entries
+recorded the epoch first, but each method added at parse time and each class destroyed cleared every context's maps, so
+the module's generic code resolved the paths of all of its receivers again while another thread created and deleted
+Programs (calls over 300 receivers took 48% longer than without the other thread, 10% longer with the serials).  A map
+holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries, and evicts its oldest entry for each new one once it is full
+(`QoreAOTContext::hashdecl_path_cache_order` and `type_path_cache_order`, a ring of pointers to the keys in the map's
+nodes): the entries of destroyed classes are never found again; clearing the full map made a working set larger than the
+map resolve every path again, and evicting the entry that the map iterates first evicted the newest ones, so a live
+working set in a map full of dead entries found its entries in about 40% of its calls (99% first in, first out).
+`examples/test/ir/AOTPathCacheProgramReuse.qtest` declares such subclasses in Programs created one after another, and
+more subclasses in one Program than a map holds.
+
+## Thread-local variables
+
+Each thread keeps its value of a `thread_local` variable in a map of its own (`ThreadData::tlvmap` in
+`lib/thread.cpp`), which only the thread changes.  The key is the variable's serial (`Var::tl_serial`), which is never
+reused: the map was keyed by the variable's address, and a variable of a Program created after another one was deleted
+could have the address of a deleted variable and was given the value (with its type) that the deleted variable had in
+the thread.  In the threads of a shared pool, one Program's code read another Program's values, across sandboxes.
+
+The values of every thread are released with the variable, as the value of a global variable is: when its Program
+clears its variables (`Var::clearLocal()`, while the Program can still run their destructors), or, for a variable that
+another Program imports (a public variable inherited by a child Program), when the last Program holding it releases it
+(`Var::del()`); the Program clearing an imported variable releases its own thread's value only, as the other threads
+can still use it through the importing Program.  They were released only in the deleting thread, and every other
+thread kept them until it ended, with objects of the deleted Program's classes.
+
+A thread that ends, or whose values are cleared between tasks, releases its values itself.  It enters the Program owning
+each variable first, once for all of its values (`Var::tl_pgm`, the Program that parses or loads it, identified by its
+ID; `ThreadData::releaseThreadLocalVarsOfProgram()` and `qore_program_private::enterWithoutContext()`), and takes the
+values out of the registry: the Program can be deleted in another thread at the same time, and its teardown waits for
+the thread (step 1 or 3).  The thread releases the values whose release runs code of the Program while it is in the
+Program (`ThreadData::tlvReleaseRunsCodeOf()`: an object of a class of the Program or created in it, a closure of the
+Program, and lists and hashes holding such values), so that the Program can still run their destructors, which enter the
+Programs of their classes as nested calls; it leaves the Program before it releases the others, as the teardown must not
+wait for code of other Programs, which can wait for the thread deleting the Program (a lock that it holds: the teardown
+waited for ever).  The members of an object of another class are not checked: their release follows the destructor of
+the object, and a destructor of a member of a class of the Program enters it itself, which raises `PROGRAM-ERROR` if the
+teardown has marked the Program by then.  A Program that the thread cannot enter (its teardown has marked it, or it has
+been deleted) releases the variable itself, or has released it, or, for a variable that another Program imports, the
+last Program holding it does: the thread hands the value over to the registry
+(`ThreadLocalVarRegistry::Entry::orphans`), and the release of the variable releases it.  The values were released in
+whichever state their Program was, often after another thread had deleted it, and their destructors raised
+`PROGRAM-ERROR` (up to 4% of the values of pool workers clearing their values while Programs were deleted).  The owner
+of an imported variable that is deleted first releases the value of the deleting thread only; the values of the other
+threads, also those handed over by threads that ended or cleared their values since, are released with the last Program
+importing the variable.
+
+`ThreadLocalVarRegistry` records the value of every thread by the variable's serial (`release_thread_local_var()`).
+No thread uses a variable that is released this way, so the releasing thread takes the value out of the other
+thread's entry without changing that thread's map; the thread erases the empty entry the next time it looks up a
+variable (`ThreadData::eraseDeletedThreadLocalVars()`).  A thread that ends, or whose values are cleared between tasks
+(`clear_all_program_thread_local_data()`), takes its entries out of the registry before it releases their values
+(`ThreadData::releaseThreadLocalVars()`).  The destructors that the release runs cannot assign the thread's
+variables then (`thread_local_vars_finalizing()`: `ThreadData::finalizing` while the thread ends,
+`ThreadData::tlv_clearing` while a ThreadPool or AsyncIoController worker releases the values of its task in
+`clear_all_program_thread_local_data()`, which releases the values again after clearing its other data: the code
+clearing the thread resources and the thread-local data of the Programs can assign the variables), so a second pass
+finds no value: the clearing between tasks allowed it,
+and a destructor giving a variable a value whose destructor gave it a value again kept the worker releasing values for
+ever, and `ThreadPool::stopWait()` waiting for it.  The registry's lock is a leaf lock: no value is released under it.
+`examples/test/qore/vars/thread-local-program-reuse.qtest` checks the release with the variable's Program in a worker
+thread, reads in a worker thread and in the deleting thread with Programs created one after another, the release at
+the end of a thread, an inherited variable, the clearing between the tasks of a ThreadPool worker and between the
+callbacks of an AsyncIoController worker, an imported variable whose owner is deleted first, and the values that
+threads ending and pool workers release while their Program is deleted (deterministic in its result: every value is
+released while the Program can run its destructor).
+
+## References to a Program's lvalues
+
+A reference (`lvalue_ref` in `include/qore/intern/lvalue_ref.h`) names the Program of its lvalue (`lvalue_ref::pgm`),
+and its lvalue expression names variables of that Program, which are freed with it; a function of the Program can return
+a reference to one of its variables, which outlives the Program.  Using the reference entered the freed Program
+(`ProgramThreadCountContextHelper::set()` crashed) or, for a reference held by a variable, resolved the freed variable.
+The reference now holds a dependency reference to its Program (`QoreProgram::depRef()`), which keeps the Program
+allocated, and its address from being given to another Program, while the reference exists, without a global lock on its
+use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).  The thread
+stays in the Program until the lvalue has been used: the teardown released a variable while another thread assigned it
+through a reference (a data race that TSan reported).  The `LValueHelper` keeps the entries
+(`QoreLValueReferencePrograms`, which leaves them if the helper's construction throws) and leaves them in its destructor
+right after the lvalue's locks are released and the write-back of a static variable, before member write gates and
+accessors, the recursive-reference scan and the release of the values that the write replaced, which run code of other
+Programs and of modules (a jni or python callback taking its lock while another thread deletes the Program would wait
+for ever).  A reference held by a local or closure-bound variable, or a parameter, is resolved with a
+`RuntimeReferenceHelper` (`LocalRefHelper`), which enters the Program with its context; the helper leaves it when it is
+destroyed, before the caller uses the lvalue, so it hands its thread count over to the `LValueHelper`
+(`ProgramThreadCountContextHelper::takeThreadCount()`, `RuntimeReferenceHelperBase::takeProgramEntry()`,
+`LValueHelper::adoptReferenceProgram()`), as does `LValueHelper(const ReferenceNode&)`.  Entering the Program a second
+time instead made 4 threads using references held by local variables 66 to 88% slower.  A reference held by a global
+variable or an object member is resolved without a helper: the `LValueHelper` enters the Program without switching to it
+(`LValueHelper::keepReferenceProgram()`, `QoreReferenceProgramHelper`, `qore_program_private::enterWithoutContext()`,
+which a parse in progress does not refuse, as no code of the Program runs).  A reference to a lvalue of the current
+Program, the usual case, enters nothing: it costs the comparison of the Programs
+(`ProgramThreadCountContextHelper::set()`, whose failure `RuntimeReferenceHelperBase` reads from the helper instead of
+the exception sink, or `qore_reference_program_needs_entry()`) and the test in `QoreLValueReferencePrograms::release()`,
+which has no destructor of its own (the `LValueHelper` constructors that can enter a Program leave it when they throw);
+a release build executes no more instructions per use than before the fix.  Across Programs, the thread's data is looked
+up once per use: `qore_reference_program_needs_entry()` compares the current Program, searches the Programs that the
+thread deletes only while it deletes one (`ThreadData::pgm_teardown_depth`), and the entry records the TID for its exit.
+`examples/test/qore/vars/reference-program-entry.qtest` holds a thread after an assignment through a reference held by a
+local variable, a closure-bound variable and a parameter, and checks that it is still in the Program; the debug build's
+`dbg_hold_reference_lvalue()` holds it.  The removal through a reference held by a local or closure-bound variable
+enters it while it removes the value.  A reference to a lvalue of a Program whose teardown has marked it, or has ended,
+raises `PROGRAM-ERROR`.  It recorded the Program's ID and took a reference to it by ID for each use, which took the
+global lock of the Program registry and made a loop using references across Programs 10 to 24% slower.
+`examples/test/qore/vars/reference-deleted-program.qtest` uses references to a thread_local, a global and a
+closure-bound local variable of a deleted Program through local, closure-bound and global variables, and writes through
+a global variable holding a reference into a Program with a parse pending, in every execution mode.
 
 ## Where the teardown can wait for ever
 

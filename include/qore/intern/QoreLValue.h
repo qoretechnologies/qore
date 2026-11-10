@@ -1782,6 +1782,32 @@ public:
         }
     }
 
+    //! Moves the value to an lvalue that has none, as it is: no reference and no mark of the value changes
+    /** For a caller that holds a lock under which the value cannot be released: releasing it can remove the real
+        reference mark of an object (check_lvalue_object_in_out(), which can take the object's lock and wait) or
+        release an enum value.  This lvalue has no value afterwards; \a target releases the value with removeValue()
+        or discard() when the lock is released.
+
+        @param target an lvalue with no value, which takes the value, its type and its flags
+    */
+    DLLLOCAL void moveValueTo(QoreLValue<U>& target) {
+        assert(!target.assigned);
+        target.v = v;
+        target.type = type;
+        target.fixed_type = fixed_type;
+        target.assigned = assigned;
+        target.static_assignment = static_assignment;
+        target.is_closure = is_closure;
+        target.closure_lent = closure_lent;
+        assigned = false;
+        static_assignment = false;
+#ifdef DEBUG
+        if (type == QV_Node) {
+            v.n = nullptr;
+        }
+#endif
+    }
+
     DLLLOCAL QoreValue removeValue(bool for_del) {
         if (!assigned)
             return QoreValue();

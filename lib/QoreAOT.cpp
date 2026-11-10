@@ -2653,6 +2653,9 @@ static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWi
 */
 static bool aotFunctionBodyMayBeOutlined(const QoreIRFunction& func);
 
+// the IR of a closure as it is serialized (QoreAOTBinary.cpp)
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out);
+
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
         QoreIRFunction*& ir_func, std::string& error,
         const QoreFunction* source_qf = nullptr,
@@ -3710,10 +3713,12 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
         }
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             // IteratorCreateReverse carries its iterable in operands (above)
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             cb(static_cast<const QoreIRIteratorNextInstruction*>(inst)->iterator);
             break;
         default:
@@ -17996,6 +18001,42 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         }
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
+#ifdef DEBUG
+        // the runtime binds this body's slots to the variables of the serialized IR by index: both must have the same
+        // variable in each slot, or a local of one is bound to another variable (a reservation made in only one of the
+        // two lowerings reorders the table); the parameters of background helpers are created by each lowering, so
+        // they are the same when they have the same name
+        {
+            std::string closure_error;
+            std::unique_ptr<QoreIRFunction> serialized_ir(::lowerClosureForSerialization(variant, &closure_error));
+            if (serialized_ir) {
+                const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
+                if (qoreAOTPrepareClosureIRLocalSlots(serialized_ir.get(), sig, vlist)) {
+                    qoreAOTPruneClosureIRBodyLocals(serialized_ir.get(), sig, vlist);
+                    auto by_slot = [](const QoreIRFunction& f) {
+                        std::map<uint32_t, const LocalVar*> rv;
+                        for (const auto& [lv, slot_id] : f.local_var_slots) {
+                            rv.emplace(slot_id, lv);
+                        }
+                        return rv;
+                    };
+                    std::map<uint32_t, const LocalVar*> native_slots = by_slot(*ir_func);
+                    std::map<uint32_t, const LocalVar*> serialized_slots = by_slot(*serialized_ir);
+                    assert(native_slots.size() == serialized_slots.size()
+                        && "the native closure body and its serialized IR have different local slot tables");
+                    for (const auto& [slot_id, lv] : native_slots) {
+                        auto i = serialized_slots.find(slot_id);
+                        assert(i != serialized_slots.end()
+                            && (i->second == lv
+                                || (lv && i->second && lv->getName() && lv->getName()[0] == '%'
+                                    && !strcmp(lv->getName(), i->second->getName())))
+                            && "the native closure body and its serialized IR have different local slot tables");
+                        (void)i;
+                    }
+                }
+            }
+        }
+#endif
         if (sig) {
             for (unsigned p = 0; p < sig->numParams(); ++p) {
                 if (p && !(p % 100)

@@ -129,21 +129,43 @@ class IRExecModeTest inherits QUnit::Test {
         assertEq(0, rc, "AST exec mode should exit cleanly");
     }
 
+    #! the automatic mode of Program objects, in a process without an execution mode given on the command line
+    /** An explicit execution mode (\c --exec-mode, which the per-mode test runs give) is inherited by child Programs
+        whose parse options support it (issue #5687), so the automatic mode is checked in a process of its own
+    */
     testProgramDefaultExecMode() {
-        Program legacy();
-        assertEq(EM_AST, legacy.getExecMode(), "plain Program defaults to AST before parsing");
-        legacy.parse("sub t() { return 1; }", "legacy-code");
-        assertEq(EM_AST, legacy.getExecMode(), "non-modern Program stays AST after parsing");
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
 
-        Program modern(PO_MODERN);
-        assertEq(EM_TIERED, modern.getExecMode(), "PO_MODERN Program defaults to tiered");
-        modern.parse("int sub t() { return 1; }", "modern-code");
-        assertEq(EM_TIERED, modern.getExecMode(), "PO_MODERN Program stays tiered after parsing");
+        TmpFile script();
+        script.file.write("%modern\n"
+            "%no-child-restrictions\n"
+            "Program legacy();\n"
+            "printf(\"legacy before=%d\\n\", legacy.getExecMode());\n"
+            "legacy.parse(\"sub t() { return 1; }\", \"legacy-code\");\n"
+            "printf(\"legacy after=%d\\n\", legacy.getExecMode());\n"
+            "Program modern(PO_MODERN);\n"
+            "printf(\"modern before=%d\\n\", modern.getExecMode());\n"
+            "modern.parse(\"int sub t() { return 1; }\", \"modern-code\");\n"
+            "printf(\"modern after=%d\\n\", modern.getExecMode());\n"
+            "Program directive();\n"
+            "printf(\"directive before=%d\\n\", directive.getExecMode());\n"
+            "directive.parse(\"%modern\\nint sub t() { return 1; }\", \"directive-code\");\n"
+            "printf(\"directive after=%d\\n\", directive.getExecMode());\n");
+        script.file.close();
 
-        Program directive();
-        assertEq(EM_AST, directive.getExecMode(), "non-modern Program starts AST");
-        directive.parse("%modern\nint sub t() { return 1; }", "directive-code");
-        assertEq(EM_TIERED, directive.getExecMode(), "%modern directive switches implicit default to tiered");
+        TmpFile out();
+        TmpFile err();
+        int rc = system(sprintf("%s %s > %s 2> %s", qore_bin, script.path, out.path, err.path));
+        assertEq(0, rc, "the script ran: " + ReadOnlyFile::readTextFile(err.path));
+        # a plain Program is AST before and after parsing legacy code, a PO_MODERN Program is tiered, and the %modern
+        # directive switches the automatic mode to tiered
+        assertEq(sprintf("legacy before=%d\nlegacy after=%d\nmodern before=%d\nmodern after=%d\n"
+            "directive before=%d\ndirective after=%d\n", EM_AST, EM_AST, EM_TIERED, EM_TIERED, EM_AST, EM_TIERED),
+            ReadOnlyFile::readTextFile(out.path), "the automatic modes");
     }
 
     testProgramExplicitAstOverride() {
