@@ -2086,7 +2086,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
     add("llvm-version", LLVM_VERSION_STRING);
     add("target-triple", target_triple && *target_triple
-        ? target_triple : llvm::sys::getDefaultTargetTriple());
+        ? target_triple : QoreAOT::getDefaultTargetTriple());
     add("opt-level", std::to_string(opt_level));
     add("include-source", include_source ? "true" : "false");
     add("debug-info", q_env_is_set("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
@@ -2143,7 +2143,7 @@ static bool qccAOTVerbose() {
 
 static std::string qccTargetTriple(const char* target_triple) {
     return target_triple && *target_triple
-        ? target_triple : llvm::sys::getDefaultTargetTriple();
+        ? target_triple : QoreAOT::getDefaultTargetTriple();
 }
 
 static int64_t qccFileSize(const std::string& path) {
@@ -22963,7 +22963,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     if (target_triple) {
         triple = target_triple;
     } else {
-        triple = llvm::sys::getDefaultTargetTriple();
+        triple = QoreAOT::getDefaultTargetTriple();
     }
 #if LLVM_VERSION_MAJOR >= 21
     module.setTargetTriple(llvm::Triple(triple));
@@ -23264,21 +23264,55 @@ struct AOTLinkConfig {
     2. QORE_LIBDIR env var + "/aot-link.conf" (development builds)
     3. Compiled-in QORE_LIBDIR + "/qore/aot-link.conf" (installed builds)
 */
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+//! Return the macOS version this file - and therefore libqore - is being compiled for (e.g. \c "26.6" or \c "10.15.4")
+static std::string qore_aot_libqore_macos_version() {
+    // as MMmmpp (e.g. 260600, 101504)
+    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
+    std::string rv = std::to_string(version / 10000) + "." + std::to_string((version / 100) % 100);
+    if (version % 100) {
+        rv += "." + std::to_string(version % 100);
+    }
+    return rv;
+}
+#endif
+
 std::string QoreAOT::getLinkTargetFlags() {
 #if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
     if (q_env_is_set("MACOSX_DEPLOYMENT_TARGET")) {
         return std::string();
     }
-    // the version this file - and therefore libqore - is being compiled for, as MMmmpp (e.g. 260600, 101500)
-    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
-    std::string rv = "-mmacosx-version-min=" + std::to_string(version / 10000) + "."
-        + std::to_string((version / 100) % 100);
-    if (version % 100) {
-        rv += "." + std::to_string(version % 100);
-    }
-    return rv;
+    return "-mmacosx-version-min=" + qore_aot_libqore_macos_version();
 #else
     return std::string();
+#endif
+}
+
+std::string QoreAOT::getDefaultTargetTriple() {
+    std::string triple = llvm::sys::getDefaultTargetTriple();
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+    llvm::Triple parsed(triple);
+    if (!parsed.isMacOSX()) {
+        return triple;
+    }
+    // the same version the link targets: an explicit MACOSX_DEPLOYMENT_TARGET, else libqore's own version; the
+    // host triple names a Darwin kernel version instead, which LLVM maps to a macOS version that can be newer
+    std::string version;
+    QoreEnvironmentValue deployment_target("MACOSX_DEPLOYMENT_TARGET");
+    if (deployment_target && !deployment_target.str().empty()) {
+        llvm::VersionTuple requested;
+        // tryParse() returns true on error; an invalid value is left to the compiler driver to report at link time
+        if (!requested.tryParse(deployment_target.str())) {
+            version = requested.getAsString();
+        }
+    }
+    if (version.empty()) {
+        version = qore_aot_libqore_macos_version();
+    }
+    parsed.setOSName("macosx" + version);
+    return parsed.str();
+#else
+    return triple;
 #endif
 }
 
@@ -25671,7 +25705,7 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
 //! Adds the section holding an encoded AOT module metadata record; see addAOTModuleInfoSection()
 static bool addAOTModuleInfoSectionRecord(llvm::LLVMContext& ctx, llvm::Module& module, std::vector<uint8_t> record,
         const char* target_triple, std::string& error) {
-    llvm::Triple triple(target_triple ? std::string(target_triple) : llvm::sys::getDefaultTargetTriple());
+    llvm::Triple triple(target_triple ? std::string(target_triple) : QoreAOT::getDefaultTargetTriple());
     std::vector<uint8_t> contents;
     const char* section;
     if (triple.isOSBinFormatMachO()) {
@@ -36612,7 +36646,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
 void QoreAOT::printSupportedTargets() {
     qore_llvm_initialize_targets();
 
-    std::string default_triple = llvm::sys::getDefaultTargetTriple();
+    std::string default_triple = QoreAOT::getDefaultTargetTriple();
     printf("Default target: %s\n\n", default_triple.c_str());
     printf("Target triple format: <arch>-<vendor>-<os>[-<environment>]\n\n");
 
