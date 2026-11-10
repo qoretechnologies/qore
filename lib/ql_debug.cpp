@@ -19006,7 +19006,7 @@ std::string dbg_http1_bytes_arg(const QoreListNode* params, size_t i) {
 void dbg_http1_take_peer(Http1SendFailure& h, int& pfd, std::string& response, QoreSocketObject*& peer) {
     peer = h.peer;
     h.peer = nullptr;
-    pfd = peer ? peer->getSocket() : -1;
+    pfd = peer ? peer->getPollableDescriptor() : -1;
     response.swap(h.response);
 }
 

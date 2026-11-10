@@ -16964,7 +16964,7 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
 #ifdef DEBUG
     // tests hold the write here, with the socket's lock held, until the connection is shut down or reset
     if (qore_dbg_socket_send_hook_t hook = qore_dbg_socket_send_hook.load()) {
-        hook(sock->priv->socket->getSocket());
+        hook(sock->getPollableDescriptor());
     }
 #endif
 

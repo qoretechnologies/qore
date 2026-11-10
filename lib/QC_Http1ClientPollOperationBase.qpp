@@ -830,7 +830,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                     poll_xsink.clear();
                     ASYNC_IO_TRACE("H1 driveSendSide: the request body send failed (%s: %s) - reading the response "
                         "the peer may have sent fd=%d\n", saved_err.c_str(), saved_desc.c_str(),
-                        sock_obj ? sock_obj->getSocket() : -1);
+                        sock_obj ? sock_obj->getPollableDescriptor() : -1);
 #ifdef DEBUG
                     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
                         hook(QoreDbgHttp1SendEvent::RecoveryStart, dbgHookFd(), nullptr);
