@@ -341,6 +341,15 @@ QoreValue QoreExternalStaticMember::getValue() const {
     return reinterpret_cast<const QoreVarInfo*>(this)->getRuntimeReferencedValue();
 }
 
+int QoreExternalStaticMember::setValue(const QoreValue val, const QoreProgram* writer, ExceptionSink* xsink) const {
+    // decided on the Program of the code that asks for the write: the write itself can run in the Program that
+    // defines the class, whose code may change its state (qore#5664)
+    if (reinterpret_cast<const QoreVarInfo*>(this)->checkTrustedModuleWriter(writer, xsink)) {
+        return -1;
+    }
+    return setValue(val, xsink);
+}
+
 int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink) const {
     LValueHelper lvh(xsink);
     if (const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this))->getLValue(lvh)) {
@@ -582,6 +591,16 @@ QoreValue QoreExternalGlobalVar::getReferencedValue() const {
 
 const QoreExternalProgramLocation* QoreExternalGlobalVar::getSourceLocation() const {
     return reinterpret_cast<const QoreExternalProgramLocation*>(reinterpret_cast<const Var*>(this)->getParseLocation());
+}
+
+int QoreExternalGlobalVar::setValue(const QoreValue val, const QoreProgram* writer, const QoreProgram* owner,
+        ExceptionSink* xsink) const {
+    // decided on the Program of the code that asks for the write: the write itself can run in the Program that
+    // holds the variable (qore#5664)
+    if (reinterpret_cast<const Var*>(this)->checkModuleStateWriter(writer, owner, xsink)) {
+        return -1;
+    }
+    return setValue(val, xsink);
 }
 
 int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) const {

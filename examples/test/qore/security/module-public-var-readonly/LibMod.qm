@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a library module (from the module path) whose function sets another module's public variable (qore#5664)
+
+%modern
+
+%requires OurVarMod
+
+module LibMod {
+    version = "1.0";
+    desc = "test library module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+
+public namespace LibMod {
+    public sub set_other(int v) {
+        OurVarMod::i = v;
+    }
+}

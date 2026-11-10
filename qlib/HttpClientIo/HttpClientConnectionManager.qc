@@ -2596,7 +2596,8 @@ printf("%d connection(s) migrated\n", migrated);
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         HttpClientConnection h2 = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+            opts.protocol == "auto");
         applyTcpUserTimeout(h2);
         return h2;
     }
@@ -3015,7 +3016,8 @@ printf("%d connection(s) migrated\n", migrated);
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
         h2conn = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+            opts.protocol == "auto");
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);

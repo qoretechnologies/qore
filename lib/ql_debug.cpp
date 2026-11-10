@@ -17122,6 +17122,15 @@ static QoreValue f_dbg_close_program_bg_compile(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+//! returns the number of closure calls that found a cache entry made for a closure of a deleted Program
+/** The entry was found by the addresses of the closure's objects, which a Program created after the deleted one can
+    reuse, and is not used, as its Program's ID differs; see qore_dbg_closure_call_cache_program_misses
+*/
+static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
+}
+
 //! returns the number of background JIT compiles refused because a Program they refer to is being deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -19928,6 +19937,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "id_offset");

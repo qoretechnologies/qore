@@ -144,19 +144,28 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same
     path must therefore be cached separately for each active receiver type context. */
+//! The key of an entry of the type and hashdecl path caches of an AOT context
+/** The receiver's type is identified by its address and the serial of its class, as its address can be given to the
+    type of a class created after its class was destroyed (see qore_rt_aot_path_cache_receiver_serial() in
+    lib/JITRuntime.cpp)
+*/
 struct QoreAOTHashDeclPathCacheKey {
     std::string path;
     const QoreTypeInfo* receiver_type_info = nullptr;
+    //! the instance serial of the receiver's class (qore_class_private::instance_serial), or 0 without a receiver
+    uint64_t receiver_serial = 0;
 
     bool operator==(const QoreAOTHashDeclPathCacheKey& other) const {
-        return receiver_type_info == other.receiver_type_info && path == other.path;
+        return receiver_type_info == other.receiver_type_info && receiver_serial == other.receiver_serial
+            && path == other.path;
     }
 };
 
 struct QoreAOTHashDeclPathCacheKeyHash {
     size_t operator()(const QoreAOTHashDeclPathCacheKey& key) const {
         size_t path_hash = std::hash<std::string>()(key.path);
-        size_t receiver_hash = std::hash<const QoreTypeInfo*>()(key.receiver_type_info);
+        size_t receiver_hash = std::hash<const QoreTypeInfo*>()(key.receiver_type_info)
+            ^ std::hash<uint64_t>()(key.receiver_serial);
         return path_hash ^ (receiver_hash + 0x9e3779b97f4a7c15ULL + (path_hash << 6) + (path_hash >> 2));
     }
 };
@@ -289,11 +298,14 @@ struct QoreAOTContext {
     //! The generation distinguishes TLS front-cache entries after context address reuse.
     uint64_t hashdecl_cache_generation = 0;
     std::mutex hashdecl_path_cache_mutex;
+    //! The entries are keyed by the receiver's type and the serial of its class, which is never reused, and hold at
+    //! most QORE_AOT_PATH_CACHE_MAX_ENTRIES entries; guarded by hashdecl_path_cache_mutex
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;
 
     //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
     std::mutex type_path_cache_mutex;
+    //! Keyed as hashdecl_path_cache; guarded by type_path_cache_mutex
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
 

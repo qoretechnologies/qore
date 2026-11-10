@@ -458,13 +458,115 @@ static const QoreTypeInfo* get_no_narrow_lvalue_type(const QoreTypeInfo* ti) {
     return ti;
 }
 
+void Var::setTrustedModuleVarImport(QoreProgram* importer, const char* module_name, const std::string& ns_path) {
+    assert(is_ref);
+    assert(importer);
+    assert(!module_import);
+    if (!module_name) {
+        module_name = parseGetVar()->getModuleName();
+    }
+    std::string path;
+    // the root namespace's path is "::"; a variable there is named by its name alone
+    if (ns_path.size() > 2 && !ns_path.compare(0, 2, "::")) {
+        path.assign(ns_path, 2, std::string::npos);
+        path += "::";
+    }
+    path += name;
+    module_import.reset(new ModuleVarImport{importer, module_name ? module_name : "", std::move(path)});
+}
+
+bool qore_module_state_write_restricted(const QoreProgram* writer) {
+    return writer && qore_program_private::restrictsModuleVarWrites(*writer);
+}
+
+void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
+        const char* module_name) {
+    if (!module_name || !*module_name) {
+        module_name = "<unknown>";
+    }
+    xsink->raiseException("MODULE-VARIABLE-READ-ONLY", "cannot change %s '%s' of module '%s': sandboxed code, and "
+        "code in a Program with PO_NO_PROCESS_CONTROL set, can read the %ss of a module but not change them, because "
+        "every Program that uses the module shares them; to let such code change the value, the module must export a "
+        "public function or method that sets it", what, path, module_name, what);
+}
+
+int Var::checkModuleStateWriter(const QoreProgram* writer, const QoreProgram* owner, ExceptionSink* xsink) const {
+    if (writer == owner || !qore_module_state_write_restricted(writer)) {
+        return 0;
+    }
+    if (is_ref) {
+        // an import: the import of a module's public variable, or a chain of imports ending at one
+        for (const Var* v = this; v->is_ref; v = v->val.v.getPtr()) {
+            if (v->module_import) {
+                qore_raise_module_state_read_only(xsink, "public variable", v->module_import->path.c_str(),
+                    v->module_import->module_name.c_str());
+                return -1;
+            }
+        }
+        return 0;
+    }
+    // a variable of the Program of a trusted module, public or not
+    if (owner && qore_program_private::isTrustedModuleProgram(*owner)) {
+        qore_raise_module_state_read_only(xsink, "variable", name.c_str(), getModuleName());
+        return -1;
+    }
+    return 0;
+}
+
+bool Var::moduleVarWriteRestricted() const {
+    assert(module_import);
+    return qore_module_state_write_restricted(module_import->importer);
+}
+
+bool Var::refWriteRefused(bool check_import) const {
+    assert(is_ref);
+    return val.v.isReadOnly() || (check_import && module_import && moduleVarWriteRestricted());
+}
+
+int Var::checkModuleVarWrite(ExceptionSink* xsink) const {
+    if (!moduleVarWriteRestricted()) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(xsink, "public variable", module_import->path.c_str(),
+        module_import->module_name.c_str());
+    return -1;
+}
+
 int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
+    return getLValueIntern(lvh, for_remove, true);
+}
+
+int Var::getLValueIntern(LValueHelper& lvh, bool for_remove, bool check_import) const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {
-        if (val.v.write(lvh.vl.xsink))
-            return -1;
-        return val.v.getPtr()->getLValue(lvh, for_remove);
+        // only the reference that the code names is checked for a trusted module's variable: it belongs to the
+        // code's Program, and a reference that it refers to in turn can belong to a Program that no longer exists
+        // (qore#5664)
+        switch (lvh.getReadAccess()) {
+            case LValueHelper::RA_VAR:
+                // a reference that only reads the variable needs no write access (see LValueHelper::ReadAccess)
+                if (lvh.tracksWriteProtection() && refWriteRefused(check_import)) {
+                    lvh.setWriteProtected();
+                }
+                break;
+            case LValueHelper::RA_ELEMENT:
+                // resolving an element or member could change the variable: the containers in it are then resolved
+                // without being changed (see LValueHelper::setReadOnlyResolution())
+                if (refWriteRefused(check_import)) {
+                    lvh.setReadOnlyResolution();
+                }
+                break;
+            case LValueHelper::RA_NONE:
+                if (val.v.write(lvh.vl.xsink)) {
+                    return -1;
+                }
+                if (check_import && module_import && checkModuleVarWrite(lvh.vl.xsink)) {
+                    return -1;
+                }
+                break;
+        }
+        return val.v.getPtr()->getLValueIntern(lvh, for_remove, false);
     }
 
     if (!is_thread_local) {
@@ -480,12 +582,21 @@ int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
 }
 
 void Var::remove(LValueRemoveHelper& lvrh) {
+    removeIntern(lvrh, true);
+}
+
+void Var::removeIntern(LValueRemoveHelper& lvrh, bool check_import) {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {
-        if (val.v.write(lvrh.getExceptionSink()))
+        if (val.v.write(lvrh.getExceptionSink())) {
             return;
-        val.v.getPtr()->remove(lvrh);
+        }
+        // see getLValueIntern()
+        if (check_import && module_import && checkModuleVarWrite(lvrh.getExceptionSink())) {
+            return;
+        }
+        val.v.getPtr()->removeIntern(lvrh, false);
         return;
     }
 
@@ -498,6 +609,11 @@ void Var::remove(LValueRemoveHelper& lvrh) {
 }
 
 void Var::del(ExceptionSink* xsink) {
+    if (is_thread_local) {
+        // the values of every thread are released with the variable
+        release_thread_local_var(tl_serial, xsink);
+        return;
+    }
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {
@@ -628,6 +744,22 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, Exceptio
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, ReadAccess)
+        : vl(xsink), read_access(RA_VAR) {
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, rc, false);
+    }
+}
+
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove)
+        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -659,7 +791,11 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
-        assignment_only(o.assignment_only), write_rejected(o.write_rejected),
+        assignment_only(o.assignment_only), read_access(o.read_access),
+        track_write_protection(o.track_write_protection),
+        write_protected(o.write_protected),
+        read_only_resolution(o.read_only_resolution),
+        write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
@@ -1000,6 +1136,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (parent_rc) {
         return -1;
     }
+    // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution())
+    if (read_only_resolution) {
+        for_remove = true;
+    }
 
     QoreListNode* l = nullptr;
     if (getType() == NT_LIST) {
@@ -1144,6 +1284,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     assignment_only = final_assignment;
     if (parent_rc) {
         return -1;
+    }
+    // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution())
+    if (read_only_resolution) {
+        for_remove = true;
     }
 
     QoreListNode* l = nullptr;
@@ -1471,8 +1615,14 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem.c_str(), for_remove);
+        // a member of a write-protected variable's hash is resolved without creating it (see
+        // setReadOnlyResolution())
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
+    // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
+    // other reference, under the object's own access control
+    read_only_resolution = false;
+    write_protected = false;
 
     return doObjLValue(o, mem.c_str(), for_remove);
 }
@@ -1515,8 +1665,14 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem.c_str(), for_remove);
+        // a member of a write-protected variable's hash is resolved without creating it (see
+        // setReadOnlyResolution())
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
+    // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
+    // other reference, under the object's own access control
+    read_only_resolution = false;
+    write_protected = false;
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
     return doObjLValue(o, mem.c_str(), for_remove, class_ctx);
@@ -1547,6 +1703,11 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
     lvid_set->insert(r->lvalue_id);
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
+    // the lvalue of a reference of a deleted Program is freed with it
+    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
+    if (!rph) {
+        return -1;
+    }
     return doLValue(r->vexp, for_remove);
 }
 
@@ -1565,6 +1726,11 @@ int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for
     // a reference to a reference, however it's safe to insert it multiple times;
     // the reference count for the lvalue_id object is handled elsewhere
     lvid_set->insert(r->lvalue_id);
+    // the lvalue of a reference of a deleted Program is freed with it
+    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
+    if (!rph) {
+        return -1;
+    }
     return doLValue(r->vexp, rc, for_remove);
 }
 
@@ -1626,6 +1792,10 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         }
     } else {
         assert(ntype == NT_OPERATOR);
+        // resolving an element or member can change the variable that holds it (see read_access)
+        if (read_access == RA_VAR) {
+            read_access = RA_ELEMENT;
+        }
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {
@@ -1739,6 +1909,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         }
     } else {
         assert(ntype == NT_OPERATOR);
+        // resolving an element or member can change the variable that holds it (see read_access)
+        if (read_access == RA_VAR) {
+            read_access = RA_ELEMENT;
+        }
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {
@@ -3968,7 +4142,11 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
 void LocalVarValue::remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo) {
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
-        lvrh.doRemove(lvalue_ref::get(ref)->vexp);
+        // the lvalue of a reference of a deleted Program is freed with it
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(ref), lvrh.getExceptionSink(), true);
+        if (rph) {
+            lvrh.doRemove(lvalue_ref::get(ref)->vexp);
+        }
         return;
     }
 
@@ -4050,7 +4228,11 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
     if (val.getType() == NT_REFERENCE) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());
         sl.release();
-        lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
+        // the lvalue of a reference of a deleted Program is freed with it
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(*ref), lvrh.getExceptionSink(), true);
+        if (rph) {
+            lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
+        }
         return;
     }
 

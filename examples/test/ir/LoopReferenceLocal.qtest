@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class LoopReferenceLocalTest
+
+#! Regression test (#5674): a reference local declared in a block binds a new reference each time its block runs
+/** In a frame that runs on_exit, on_error or on_success handlers, native code publishes the native caches of its
+    locals to the runtime stack before the handlers run, reloading the caches that a call can have made stale.  A
+    local declared with a reference type lives on the runtime stack, and its cache is never read: the reload read
+    the referenced lvalue, which raised OBJECT-ALREADY-DELETED at the end of a loop iteration whose object the
+    reference referred to was deleted, and the publication assigned the stale cache to the variable before its
+    declaration ran, so that the declaration in a catch block assigned the reference to the referenced type
+    (RUNTIME-TYPE-ERROR).  Locals declared with a reference type are no longer published, reloaded or given to the
+    handlers from their caches.  The script declares reference locals in the bodies of for, foreach, while and do
+    loops with handlers, in a loop of a function with a handler, in a catch block and in a block whose handler uses
+    the reference, and locals of no type and untyped reference locals holding references, in functions and at top
+    level; it runs in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
+*/
+class LoopReferenceLocalTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a reference local declared in a block binds a new reference each time the block is entered, as the AST interpreter
+# binds it, in a frame that runs on_exit, on_error or on_success handlers too; a case whose exception escapes its
+# function is reported by its caller
+class C {
+    public {
+        int m;
+        string name;
+    }
+    constructor(string name, int m) {
+        self.name = name;
+        self.m = m;
+    }
+    destructor() {
+        printf("destroy %s m=%d\n", name, m);
+    }
+    reference<int> get() {
+        return \m;
+    }
+}
+sub escaped(string label, hash<ExceptionInfo> ex) {
+    printf("%s: escaped its function: %s: %s\n", label, ex.err, ex.desc);
+}
+# the issue example: the object of the previous iteration is gone when the next one declares the reference
+sub plain_for() {
+    for (int i = 0; i < 2; ++i) {
+        C c("pf" + i, 1);
+        reference<int> r = c.get();
+        printf("plain for %d: %d\n", i, r);
+    }
+}
+# the body of the loop has a handler, and the object a reference refers to is deleted in it
+sub for_on_exit() {
+    for (int i = 0; i < 3; ++i) {
+        on_exit printf("for on_exit %d\n", i);
+        C c("f" + i, i);
+        reference<int> r = c.get();
+        r += 10;
+        printf("for %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+    }
+}
+sub foreach_on_error() {
+    foreach int i in (0..2) {
+        on_success printf("foreach on_success %d\n", i);
+        on_error printf("foreach on_error %d\n", i);
+        C c("fe" + i, i);
+        reference<int> r = c.get();
+        r += 20;
+        printf("foreach %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+    }
+}
+sub while_on_exit() {
+    int i = 0;
+    while (i < 3) {
+        on_exit printf("while on_exit %d\n", i);
+        C c("w" + i, i);
+        reference<int> r = c.get();
+        r += 30;
+        printf("while %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+        ++i;
+    }
+}
+sub do_on_exit() {
+    int i = 0;
+    do {
+        on_exit printf("do on_exit %d\n", i);
+        C c("d" + i, i);
+        reference<int> r = c.get();
+        r += 40;
+        printf("do %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+    } while (++i < 3);
+}
+# the handler of the function, not of the loop body; the objects are released at the end of each iteration
+sub function_on_exit() {
+    on_exit printf("function on_exit\n");
+    for (int i = 0; i < 3; ++i) {
+        C c("fn" + i, i);
+        reference<int> r = c.get();
+        r += 50;
+        printf("function %d: r=%d c.m=%d\n", i, r, c.m);
+    }
+}
+# a reference declared in a catch block of a function with a handler, in a loop
+sub catch_block() {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            throw "ERR";
+        } catch (hash<ExceptionInfo> ex) {
+            C c("cb" + i, i);
+            reference<int> r = c.get();
+            r += 60;
+            printf("catch %d: r=%d c.m=%d\n", i, r, c.m);
+            delete c;
+        }
+    }
+    on_exit printf("catch on_exit\n");
+}
+# a handler reads and writes the reference local of its block
+sub handler_reads_reference() {
+    for (int i = 0; i < 2; ++i) {
+        C c("h" + i, i);
+        reference<int> r = c.get();
+        on_exit {
+            r += 100;
+            printf("handler %d: r=%d c.m=%d\n", i, r, c.m);
+        }
+        r += 70;
+    }
+}
+# a local of no type and an untyped reference local holding the reference
+sub auto_on_exit() {
+    for (int i = 0; i < 2; ++i) {
+        on_exit printf("auto on_exit %d\n", i);
+        C c("a" + i, i);
+        auto r = c.get();
+        r += 130;
+        printf("auto %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+    }
+}
+sub untyped_reference() {
+    for (int i = 0; i < 2; ++i) {
+        on_exit printf("untyped on_exit %d\n", i);
+        C c("u" + i, i);
+        reference r = c.get();
+        r += 140;
+        printf("untyped %d: r=%d c.m=%d\n", i, r, c.m);
+        delete c;
+    }
+}
+try { plain_for(); } catch (hash<ExceptionInfo> ex) { escaped("plain for", ex); }
+try { for_on_exit(); } catch (hash<ExceptionInfo> ex) { escaped("for", ex); }
+try { foreach_on_error(); } catch (hash<ExceptionInfo> ex) { escaped("foreach", ex); }
+try { while_on_exit(); } catch (hash<ExceptionInfo> ex) { escaped("while", ex); }
+try { do_on_exit(); } catch (hash<ExceptionInfo> ex) { escaped("do", ex); }
+try { function_on_exit(); } catch (hash<ExceptionInfo> ex) { escaped("function", ex); }
+try { catch_block(); } catch (hash<ExceptionInfo> ex) { escaped("catch", ex); }
+try { handler_reads_reference(); } catch (hash<ExceptionInfo> ex) { escaped("handler", ex); }
+try { auto_on_exit(); } catch (hash<ExceptionInfo> ex) { escaped("auto", ex); }
+try { untyped_reference(); } catch (hash<ExceptionInfo> ex) { escaped("untyped", ex); }
+# the same at top level, where the exception of a case would end the script
+for (int i = 0; i < 2; ++i) {
+    on_exit printf("top-level for on_exit %d\n", i);
+    C c("tf" + i, i);
+    reference<int> r = c.get();
+    r += 80;
+    printf("top-level for %d: r=%d c.m=%d\n", i, r, c.m);
+    delete c;
+}
+foreach int i in (0..1) {
+    on_exit printf("top-level foreach on_exit %d\n", i);
+    C c("tfe" + i, i);
+    reference<int> r = c.get();
+    r += 90;
+    printf("top-level foreach %d: r=%d c.m=%d\n", i, r, c.m);
+    delete c;
+}
+int j = 0;
+while (j < 2) {
+    on_exit printf("top-level while on_exit %d\n", j);
+    C c("tw" + j, j);
+    reference<int> r = c.get();
+    r += 110;
+    printf("top-level while %d: r=%d c.m=%d\n", j, r, c.m);
+    delete c;
+    ++j;
+}
+j = 0;
+do {
+    on_exit printf("top-level do on_exit %d\n", j);
+    C c("td" + j, j);
+    reference<int> r = c.get();
+    r += 120;
+    printf("top-level do %d: r=%d c.m=%d\n", j, r, c.m);
+    delete c;
+} while (++j < 2);
+printf("done\n");
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "plain for 0: 1",
+            "destroy pf0 m=1",
+            "plain for 1: 1",
+            "destroy pf1 m=1",
+            "for 0: r=10 c.m=10",
+            "destroy f0 m=10",
+            "for on_exit 0",
+            "for 1: r=11 c.m=11",
+            "destroy f1 m=11",
+            "for on_exit 1",
+            "for 2: r=12 c.m=12",
+            "destroy f2 m=12",
+            "for on_exit 2",
+            "foreach 0: r=20 c.m=20",
+            "destroy fe0 m=20",
+            "foreach on_success 0",
+            "foreach 1: r=21 c.m=21",
+            "destroy fe1 m=21",
+            "foreach on_success 1",
+            "foreach 2: r=22 c.m=22",
+            "destroy fe2 m=22",
+            "foreach on_success 2",
+            "while 0: r=30 c.m=30",
+            "destroy w0 m=30",
+            "while on_exit 1",
+            "while 1: r=31 c.m=31",
+            "destroy w1 m=31",
+            "while on_exit 2",
+            "while 2: r=32 c.m=32",
+            "destroy w2 m=32",
+            "while on_exit 3",
+            "do 0: r=40 c.m=40",
+            "destroy d0 m=40",
+            "do on_exit 0",
+            "do 1: r=41 c.m=41",
+            "destroy d1 m=41",
+            "do on_exit 1",
+            "do 2: r=42 c.m=42",
+            "destroy d2 m=42",
+            "do on_exit 2",
+            "function 0: r=50 c.m=50",
+            "destroy fn0 m=50",
+            "function 1: r=51 c.m=51",
+            "destroy fn1 m=51",
+            "function 2: r=52 c.m=52",
+            "destroy fn2 m=52",
+            "function on_exit",
+            "catch 0: r=60 c.m=60",
+            "destroy cb0 m=60",
+            "catch 1: r=61 c.m=61",
+            "destroy cb1 m=61",
+            "catch on_exit",
+            "handler 0: r=170 c.m=170",
+            "destroy h0 m=170",
+            "handler 1: r=171 c.m=171",
+            "destroy h1 m=171",
+            "auto 0: r=130 c.m=130",
+            "destroy a0 m=130",
+            "auto on_exit 0",
+            "auto 1: r=131 c.m=131",
+            "destroy a1 m=131",
+            "auto on_exit 1",
+            "untyped 0: r=140 c.m=140",
+            "destroy u0 m=140",
+            "untyped on_exit 0",
+            "untyped 1: r=141 c.m=141",
+            "destroy u1 m=141",
+            "untyped on_exit 1",
+            "top-level for 0: r=80 c.m=80",
+            "destroy tf0 m=80",
+            "top-level for on_exit 0",
+            "top-level for 1: r=81 c.m=81",
+            "destroy tf1 m=81",
+            "top-level for on_exit 1",
+            "top-level foreach 0: r=90 c.m=90",
+            "destroy tfe0 m=90",
+            "top-level foreach on_exit 0",
+            "top-level foreach 1: r=91 c.m=91",
+            "destroy tfe1 m=91",
+            "top-level foreach on_exit 1",
+            "top-level while 0: r=110 c.m=110",
+            "destroy tw0 m=110",
+            "top-level while on_exit 1",
+            "top-level while 1: r=111 c.m=111",
+            "destroy tw1 m=111",
+            "top-level while on_exit 2",
+            "top-level do 0: r=120 c.m=120",
+            "destroy td0 m=120",
+            "top-level do on_exit 0",
+            "top-level do 1: r=121 c.m=121",
+            "destroy td1 m=121",
+            "top-level do on_exit 1",
+            "done",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("LoopReferenceLocal", Script, (map $1 + "\n", Expected).join(""),
+            "binds a new reference for each declaration of a reference local as the AST interpreter does") {
+    }
+}

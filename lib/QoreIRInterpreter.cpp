@@ -4984,6 +4984,27 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     return true;
 }
 
+//! Returns the value of a closure-bound variable whose value slots the uninstantiation of the variable releases
+/** The value of a variable holding a reference is the reference, which no value slot holds: its referenced lvalue,
+    which eval() reads, is another variable's, which can be gone (the object or the Program of the lvalue deleted),
+    and reading it raised an exception when the scope of the variable was left, which the AST interpreter does not
+*/
+static QoreValue qore_ir_uninstantiate_scan_value(ClosureVarValue& cvv, ExceptionSink* xsink) {
+    if (ReferenceNode* ref = cvv.getHeldReference()) {
+        ref->deref(xsink);
+        return QoreValue();
+    }
+    return cvv.eval(xsink);
+}
+
+#ifdef DEBUG
+//! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
+/** The entry is not used (see tryExecuteInterpreterInlineIRClosure() and tryExecClosureNativeLeaf()); a test that
+    reproduces the reuse of a deleted Program's addresses checks that it occurred (dbg_closure_call_cache_program_misses())
+*/
+std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses{0};
+#endif
+
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -5008,10 +5029,16 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return false;
     }
 
+    // The entry is found by the closure, its function and the id of the Program that owns the function and the
+    // variant, IR and signature cached for it.  A Program's id is never reused, but its address is: a Program created
+    // after the cached one was deleted can have its address, and its closure function, closure and variant can have
+    // the addresses of the deleted ones, so an entry found by the Program's address ran the deleted Program's freed IR
+    // with its freed signature (a wrong result, a wrong release of a reference argument, or a crash).  The function
+    // and its variant live as long as their Program, so the id identifies them while the Program's code runs.
     struct ClosureInlineCache {
         const AbstractQoreNode* node = nullptr;
         UserClosureFunction* function = nullptr;
-        QoreProgram* caller_pgm = nullptr;
+        qore_program_id_t caller_pgm_id = 0;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
         const UserSignature* sig = nullptr;
@@ -5026,15 +5053,24 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const UserSignature* sig = nullptr;
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
+    const qore_program_id_t caller_pgm_id = qore_program_private::get(*caller_pgm)->getProgramId();
     bool use_cached_metadata = closure_inline_cache.node == node
         && closure_inline_cache.function == uf
-        && closure_inline_cache.caller_pgm == caller_pgm
+        && closure_inline_cache.caller_pgm_id == caller_pgm_id
         && closure_inline_cache.uvb
+        // the cached variant is the function's own; a check that does not rely on the lifetime of the function
+        && uf->first() && uf->first()->getUserVariantBase() == closure_inline_cache.uvb
         && closure_inline_cache.callee_ir
         && closure_inline_cache.sig
         && ((closure_inline_cache.direct_params_eligible
                 && nargs >= static_cast<int>(closure_inline_cache.num_params))
             || nargs == static_cast<int>(closure_inline_cache.num_params));
+#ifdef DEBUG
+    if (closure_inline_cache.node == node && closure_inline_cache.function == uf
+            && closure_inline_cache.caller_pgm_id != caller_pgm_id) {
+        qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (use_cached_metadata) {
         uvb = closure_inline_cache.uvb;
         if (uvb->hasCachedFunction()) {
@@ -5069,7 +5105,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         closure_inline_cache = {
             node,
             uf,
-            caller_pgm,
+            caller_pgm_id,
             uvb,
             callee_ir,
             sig,
@@ -9251,6 +9287,12 @@ next_instruction:
                     bool needs_deref = true;
                     out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
+                        if (needs_deref) {
+                            out.discard(xsink);
+                        }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return false;
@@ -9298,6 +9340,9 @@ next_instruction:
                             }
                             if (xsink && *xsink) {
                                 out.discard(xsink);
+                                if (branchToExceptionTarget(inst)) {
+                                    break;
+                                }
                                 unwindForException();
                                 cleanupLocalCaches();
                                 return false;
@@ -9352,6 +9397,12 @@ next_instruction:
                         bool needs_deref = true;
                         QoreValue val = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
+                            if (needs_deref) {
+                                val.discard(xsink);
+                            }
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             unwindForException();
                             cleanupLocalCaches();
                             return false;
@@ -9443,6 +9494,12 @@ next_instruction:
                         bool needs_deref = true;
                         out = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
+                            if (needs_deref) {
+                                out.discard(xsink);
+                            }
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             unwindForException();
                             cleanupLocalCaches();
                             return false;
@@ -9559,6 +9616,9 @@ load_local_done:
                             QoreValue val = cv->evalWeakBorrowed(is_weak_ref_local, xsink);
                             if (is_weak_ref_local) {
                                 if (xsink && *xsink) {
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     unwindForException();
                                     cleanupLocalCaches();
                                     return false;
@@ -9567,6 +9627,9 @@ load_local_done:
                             } else {
                                 if (xsink && *xsink) {
                                     val.discard(xsink);
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     unwindForException();
                                     cleanupLocalCaches();
                                     return false;
@@ -9586,6 +9649,12 @@ load_local_done:
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
+                                    if (needs_deref) {
+                                        out.discard(xsink);
+                                    }
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     unwindForException();
                                     cleanupLocalCaches();
                                     return false;
@@ -10279,6 +10348,9 @@ load_local_done:
                         if (ref_needs_deref) {
                             rv.discard(xsink);
                         }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return false;
@@ -10298,6 +10370,12 @@ load_local_done:
                     bool nd = true;
                     QoreValue sv = fused_inst->source->eval(nd, xsink);
                     if (xsink && *xsink) {
+                        if (nd) {
+                            sv.discard(xsink);
+                        }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return false;
@@ -12088,7 +12166,7 @@ load_local_done:
                                 ClosureVarValue* cvv = thread_try_find_closure_var(
                                     local_inst->local->getName());
                                 if (cvv) {
-                                    QoreValue cvval = cvv->eval(xsink);
+                                    QoreValue cvval = qore_ir_uninstantiate_scan_value(*cvv, xsink);
                                     if (cvval.hasNode()) {
                                         const AbstractQoreNode* node_ptr = cvval.getInternalNode();
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
@@ -12138,7 +12216,9 @@ load_local_done:
                                 // returns object 'a') that hold extra references in
                                 // the IR values array beyond the load/init slots.
                                 bool nd = false;
-                                QoreValue lval = lvar->eval(nd, xsink);
+                                // the value of a variable holding a reference is the reference, which no value slot
+                                // holds: reading the referenced lvalue would read another variable, which can be gone
+                                QoreValue lval = lvar->isRef() ? QoreValue() : lvar->eval(nd, xsink);
                                 if (lval.hasNode()) {
                                     const AbstractQoreNode* node_ptr = lval.getInternalNode();
                                     bool is_obj = (lval.getType() == NT_OBJECT);
@@ -12238,7 +12318,7 @@ load_local_done:
                                 // 1. Scan values[] for refs to the CVV's contained value
                                 // and discard them BEFORE clearValue.
                                 {
-                                    QoreValue cvval = cvv->eval(xsink);
+                                    QoreValue cvval = qore_ir_uninstantiate_scan_value(*cvv, xsink);
                                     if (cvval.hasNode()) {
                                         const AbstractQoreNode* node_ptr = cvval.getInternalNode();
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
