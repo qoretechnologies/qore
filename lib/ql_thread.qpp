@@ -1143,6 +1143,12 @@ bool active_exception() [dom=PROCESS;flags=CURRENT_THREAD_ONLY] {
     no blocking calls) will not be interrupted, but such code is inherently finite and
     will complete on its own.
 
+    @par Socket Calls
+    A synchronous @ref Qore::Socket "Socket" call that waits for its socket ends with \c THREAD-CANCELLED, and its
+    I/O ends with it, as at a timeout of the call: the socket can be used at once, unless the call had already
+    received part of its data, which is then lost, and the socket is closed; data that arrives after the call ended
+    is left for the next call.
+
     @par Which Threads Can Be Cancelled
     A request issued from an unrestricted @ref Qore::Program "Program" — one with no
     @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller
