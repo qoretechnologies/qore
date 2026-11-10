@@ -15,8 +15,11 @@
     as its parameters, so a local the walk misses is not instantiated in the new thread, which raises LVALUE-ERROR
     (the operators with three and four operands were missed: a local used only in a ?: in new hash<K, V>(...) in a
     background expression).  The walk has no fallback for a node it does not know, so every operator class in
-    include/qore/intern must derive from one of the operator classes it handles; this test reads the headers and the
-    walk and fails for an operator class that does not, and for a handled class that the walk no longer casts to.
+    include/qore/intern and lib must derive from one of the operator classes it handles; this test reads the headers,
+    the sources and the walk and fails for an operator class that does not, and for a handled class that the walk no
+    longer casts to.  So that an operator class cannot slip past it, it also fails for an operator class with a base
+    it cannot resolve (bases named through \c using and \c typedef aliases are resolved), and for a class named
+    \c *OperatorNode that it does not find to be an operator class.
 */
 class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
     public {
@@ -66,15 +69,20 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
     }
 
     testOperatorClasses() {
-        string headers = "";
-        foreach string file in (glob(src_dir + "/include/qore/intern/*.h")) {
-            headers += ReadOnlyFile::readTextFile(file) + "\n";
+        string src = "";
+        # the headers (the public ones declare the bases of the node classes), and the sources, which declare some
+        # classes of their own
+        foreach string file in (glob(src_dir + "/include/qore/*.h") + glob(src_dir + "/include/qore/intern/*.h")
+                + glob(src_dir + "/lib/*.cpp")) {
+            src += ReadOnlyFile::readTextFile(file) + "\n";
         }
-        hash<string, list<string>> bases = parseClasses(headers);
+        hash<string, list<string>> bases = parseClasses(src);
         list<string> ops = operatorClasses(bases);
         # the operators of the language are many more than the bases; a scan that finds few has failed
         assertGt(80, ops.size(), "operator classes found");
         assertEq((), uncovered(bases, ops), "operator classes whose operands the slot walk does not reach");
+        assertEq((), unknownBases(bases, ops), "bases of operator classes that the scan cannot resolve");
+        assertEq((), unclassified(bases, ops), "*OperatorNode classes that the scan does not find to be operators");
     }
 
     testWalkCasts() {
@@ -92,12 +100,43 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
         string headers = "class QoreFiveOperatorNode : public QoreNOperatorNodeBase<5> {\n};\n"
             "class QoreTernaryOperatorNode : public QoreNOperatorNodeBase<3> {\n};\n"
             "class QoreRawOperatorNode : public QoreOperatorNode {\n};\n"
-            "class QoreSubOperatorNode\n    : public QoreTernaryOperatorNode, public FunctionalOperator {\n};\n";
+            "class QoreSubOperatorNode\n    : public QoreTernaryOperatorNode, public FunctionalOperator {\n};\n"
+            "class FunctionalOperator {\n};\n";
         hash<string, list<string>> bases = parseClasses(headers);
         list<string> ops = operatorClasses(bases);
         assertEq(("QoreFiveOperatorNode", "QoreRawOperatorNode", "QoreSubOperatorNode", "QoreTernaryOperatorNode"),
             sort(ops));
         assertEq(("QoreFiveOperatorNode", "QoreRawOperatorNode"), sort(uncovered(bases, ops)));
+        assertEq((), unknownBases(bases, ops));
+        assertEq((), unclassified(bases, ops));
+
+        # an export macro before the class name
+        headers = "class DLLLOCAL QoreXOperatorNode : public QoreNOperatorNodeBase<5> {\n};\n"
+            "class DLLEXPORT QoreYOperatorNode final : public QoreNOperatorNodeBase<4> {\n};\n";
+        bases = parseClasses(headers);
+        ops = operatorClasses(bases);
+        assertEq(("QoreXOperatorNode", "QoreYOperatorNode"), sort(ops), "export macro");
+        assertEq(("QoreXOperatorNode",), uncovered(bases, ops), "export macro");
+
+        # a base named through an alias is resolved
+        headers = "using QoreFiveBase = QoreNOperatorNodeBase<5>;\n"
+            "typedef QoreNOperatorNodeBase<3> QoreThreeBase;\n"
+            "class QoreAliasOperatorNode : public QoreFiveBase {\n};\n"
+            "class QoreTypedefOperatorNode : public QoreThreeBase {\n};\n";
+        bases = parseClasses(headers);
+        ops = operatorClasses(bases);
+        assertEq(("QoreAliasOperatorNode", "QoreTypedefOperatorNode"), sort(ops), "alias");
+        assertEq(("QoreAliasOperatorNode",), uncovered(bases, ops), "alias");
+
+        # a base the scan cannot resolve leaves the class unclassified, which is reported, as is the base
+        headers = "class QoreUnknownOperatorNode : public QoreUnknownBase {\n};\n"
+            "class QoreKnownOperatorNode : public QoreUnknownOperatorNode {\n};\n";
+        bases = parseClasses(headers);
+        ops = operatorClasses(bases);
+        assertEq((), ops, "unknown base");
+        assertEq(("QoreKnownOperatorNode", "QoreUnknownOperatorNode"), unclassified(bases, ops), "unknown base");
+        assertEq(("QoreKnownOperatorNode: QoreUnknownBase", "QoreUnknownOperatorNode: QoreUnknownBase"),
+            unknownBases(bases, ops), "unknown base");
     }
 
     #! returns the source of collectLocalSlotsFromExpr()
@@ -111,11 +150,14 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
     }
 
     #! returns the direct bases of every class declared in the source, normalized (see normalize())
+    /** A base named through a \c using or \c typedef alias declared in the source is given as the type it names
+    */
     private hash<string, list<string>> parseClasses(string src) {
+        hash<string, string> aliases = parseAliases(src);
         hash<string, list<string>> rv();
         # a class definition, with its bases up to the opening brace; the second group always matches, so that the
-        # list has two elements for each class
-        *list<*string> m = (src =~ x/\bclass\s+(\w+)\s*(?:final\s*)?(:[^{;]*|)\{/g);
+        # list has two elements for each class; an export macro can precede the name
+        *list<*string> m = (src =~ x/\bclass\s+(?:(?:DLLLOCAL|DLLEXPORT)\s+)?(\w+)\s*(?:final\s*)?(:[^{;]*|)\{/g);
         for (int i = 0; i < m.size(); i += 2) {
             string name = m[i];
             if (exists rv{name}) {
@@ -128,13 +170,40 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
                     base = trim(regex_subst(base, "^\\s*(public|protected|private|virtual)\\s+", ""));
                     base = trim(regex_subst(base, "^\\s*(public|protected|private|virtual)\\s+", ""));
                     if (base.val()) {
-                        base_list += normalize(base);
+                        base_list += normalize(resolveAlias(aliases, base));
                     }
                 }
             }
             rv{name} = base_list;
         }
         return rv;
+    }
+
+    #! returns the aliases declared in the source: name -> the type it names
+    private hash<string, string> parseAliases(string src) {
+        hash<string, string> rv();
+        *list<*string> m = (src =~ x/\busing\s+(\w+)\s*=\s*([^;]+);/g);
+        for (int i = 0; i + 1 < m.size(); i += 2) {
+            rv{m[i]} = trim(m[i + 1]);
+        }
+        # typedef <type> <name>; the type is all but the last word
+        m = (src =~ x/\btypedef\s+([^;(){}]+?)\s+(\w+)\s*;/g);
+        for (int i = 0; i + 1 < m.size(); i += 2) {
+            rv{m[i + 1]} = trim(m[i]);
+        }
+        return rv;
+    }
+
+    #! returns the type an alias names, through any chain of aliases, or the base as it is
+    private string resolveAlias(hash<string, string> aliases, string base) {
+        for (int i = 0; i < 16; ++i) {
+            *string next = aliases{replace(base, " ", "")};
+            if (!next || next == base) {
+                break;
+            }
+            base = next;
+        }
+        return base;
     }
 
     #! splits a base clause at the commas that are not in template arguments
@@ -217,6 +286,38 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
             }
         }
         return rv;
+    }
+
+    #! returns the bases of the operator classes and of the classes named *OperatorNode that are neither a class
+    #! declared in the source nor an instantiation of an operator template, as "<class>: <base>"
+    private list<string> unknownBases(hash<string, list<string>> bases, list<string> ops) {
+        hash<string, bool> check = map {$1: True}, ops;
+        foreach string name in (keys bases) {
+            if ((name =~ /OperatorNode$/) && !Abstract{name} && !Templates{name}) {
+                check{name} = True;
+            }
+        }
+        list<string> rv = ();
+        foreach string name in (keys check) {
+            foreach string base in (allBases(bases, name)) {
+                if (!exists bases{base} && !Abstract{base} && !Templates{templateName(base)}) {
+                    rv += sprintf("%s: %s", name, base);
+                }
+            }
+        }
+        return sort(rv);
+    }
+
+    #! returns the classes named *OperatorNode that are not operator classes (see operatorClasses())
+    private list<string> unclassified(hash<string, list<string>> bases, list<string> ops) {
+        hash<string, bool> op_set = map {$1: True}, ops;
+        list<string> rv = ();
+        foreach string name in (keys bases) {
+            if ((name =~ /OperatorNode$/) && !Abstract{name} && !Templates{name} && !op_set{name}) {
+                rv += name;
+            }
+        }
+        return sort(rv);
     }
 
     #! returns the operator classes that neither are nor derive from a handled class
