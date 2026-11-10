@@ -15,7 +15,7 @@
 
 #! Verifies that every provider module building REST-schema actions builds its output types on first use, and that
 #! they are the types built at load
-/** Each module is loaded twice, in separate processes that run at the same time: once with
+/** Each module is loaded twice, in separate processes: once with
     @ref RestSchemaActions::RestSchemaActionSet::setEagerResponseTypes() "RestSchemaActionSet::setEagerResponseTypes()"
     forcing every output type to be built at construction, and once as shipped.  Every action's output type,
     options and other metadata must be identical.
@@ -77,32 +77,19 @@ class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
         return False;
     }
 
-    #! Loads the modules in a new process for each mode and returns what each process writes
-    /** The processes run at the same time.
-
-        @return mode -> what the process for that mode wrote
-    */
-    private hash<string, hash<auto>> dump(list<string> modes, list<string> modules) {
+    #! Loads the modules in a new process and returns what it writes
+    private hash<auto> dump(string mode, list<string> modules) {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
+        string output = dir + DirSep + mode + ".json";
         string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        string script = get_script_dir() + DirSep + "RestSchemaModuleTypes.q";
-        # mode -> command
-        hash<string, string> cmds = map {$1: sprintf("%s %s %s %s %s > %s 2>&1", qore, script, $1,
-            dir + DirSep + $1 + ".json", modules.join(" "), dir + DirSep + $1 + ".log")}, modes;
-        # the processes share nothing: each loads the modules on its own and writes its own files
-        backquote((map $1 + " &", cmds.iterator()).join(" ") + " wait");
-        hash<string, hash<auto>> rv = {};
-        foreach hash<auto> i in (cmds.pairIterator()) {
-            string output = dir + DirSep + i.key + ".json";
-            if (!is_file(output)) {
-                string log = dir + DirSep + i.key + ".log";
-                throw "TEST-ERROR", sprintf("%s did not write %s: %s", i.value, output,
-                    is_file(log) ? ReadOnlyFile::readTextFile(log) : "(no output)");
-            }
-            rv{i.key} = parse_json(ReadOnlyFile::readTextFile(output));
+        string cmd = sprintf("%s %s %s %s %s 2>&1", qore, get_script_dir() + DirSep + "RestSchemaModuleTypes.q",
+            mode, output, modules.join(" "));
+        string log = backquote(cmd);
+        if (!is_file(output)) {
+            throw "TEST-ERROR", sprintf("%s did not write %s: %s", cmd, output, log);
         }
-        return rv;
+        return parse_json(ReadOnlyFile::readTextFile(output));
     }
 
     modulesTest() {
@@ -112,9 +99,8 @@ class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
             "every module building a REST-schema action set opts in to lazy response types");
 
         list<string> names = sort(keys modules);
-        hash<string, hash<auto>> dumps = dump(("eager", "lazy"), names);
-        hash<auto> eager = dumps.eager;
-        hash<auto> lazy = dumps.lazy;
+        hash<auto> eager = dump("eager", names);
+        hash<auto> lazy = dump("lazy", names);
 
         assertEq(keys eager.apps, keys lazy.apps, "the same applications are registered");
         hash<string, int> lazy_actions = {};
