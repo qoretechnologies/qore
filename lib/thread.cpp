@@ -2634,7 +2634,7 @@ const QoreStackLocation* get_runtime_stack_location() {
 // that the mask covers, and removes the explicitly-allowed options that the mask covers and its value lacks.  It never
 // lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
 // closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
-static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
+static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
     if (!td->runtime_po_override_mask) {
         return po;
     }
@@ -2851,6 +2851,15 @@ void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStateme
     old_loc = td->runtime_loc;
     td->runtime_statement = nullptr;
     td->runtime_loc = loc;
+}
+
+void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    td->runtime_po = apply_runtime_po_override(td, po);
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
@@ -3667,6 +3676,16 @@ ModuleUncountedEntries& module_uncounted_entries() {
 */
 std::atomic<bool> module_uncounted_active{true};
 
+//! the TID of the thread that runs the module cleanup once the Programs of the modules are closed to other threads,
+//! or -1; see qore_close_module_programs()
+std::atomic<int> module_programs_closed_tid{-1};
+
+//! returns true if the Programs of the modules are closed to the given thread; see qore_close_module_programs()
+bool qore_module_programs_closed(const ThreadData* td) {
+    int tid = module_programs_closed_tid.load(std::memory_order_seq_cst);
+    return tid >= 0 && tid != td->tid;
+}
+
 //! enters a Program with module lifetime without its thread count, if such entries are still allowed
 /** The thread counts its own entries; the sequentially consistent increment and load pair with the store and the
     loads of qore_stop_module_uncounted_entries(), so either the stopping thread sees the entry, or the entry sees that
@@ -3694,6 +3713,16 @@ void qore_module_uncounted_exit(ThreadData* td) {
         module_uncounted_entries().notify();
     }
 }
+}
+
+//! raises the exception of an entry into a module's Program that qore_close_module_programs() refuses
+static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ExceptionSink* xsink) {
+    xsink->raiseException("PROGRAM-ERROR", "the Program of a module cannot be entered by another thread while the "
+        "modules are deleted at the end of the process");
+}
+
+void qore_close_module_programs() {
+    module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
 }
 
 void qore_stop_module_uncounted_entries() {
@@ -3848,6 +3877,13 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         if (runtime && pp->module_lifetime.load(std::memory_order_acquire) && qore_module_uncounted_entry(td)) {
             module_uncounted = true;
         } else {
+            // once the module cleanup has started to clear the data of the modules, only the thread that runs it can
+            // enter their Programs (see qore_close_module_programs()); the cleanup waits for the threads that
+            // entered before
+            if (pp->module_lifetime.load(std::memory_order_acquire) && qore_module_programs_closed(td)) {
+                qore_raise_module_programs_closed(xsink);
+                return;
+            }
             // try to increment thread count
             if (pp->incThreadCount(xsink)) {
                 printd(5, "ProgramThreadCountContextHelper::set() failed\n");

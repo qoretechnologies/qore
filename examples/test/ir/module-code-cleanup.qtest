@@ -18,7 +18,8 @@
     of the cleanup: the module cleanup removes the handler before it clears the module's data, so that the handler
     cannot run module code on data being destroyed.  A foreign thread whose data holds module objects runs module
     code in the module's Program when it is deregistered.  The checks use debug-build functions; each runs in a child
-    process in every execution mode, so that a crash fails an assertion rather than the test run.
+    process in every execution mode, so that a crash fails an assertion rather than the test run.  Once the cleanup
+    clears the data of the modules, no thread but the one that runs it can enter module code.
 */
 class ModuleCodeCleanupTest inherits QUnit::Test {
     private {
@@ -36,6 +37,8 @@ class ModuleCodeCleanupTest inherits QUnit::Test {
             "data", \testSignalHandler());
         addTestCase("a foreign thread's deregistration runs module code in the module's Program",
             \testForeignThread());
+        addTestCase("only the thread that runs the module cleanup enters module code while the cleanup clears the "
+            "module's data", \testEntryDuringCleanup());
 
         set_return_value(main());
     }
@@ -56,6 +59,19 @@ class ModuleCodeCleanupTest inherits QUnit::Test {
             assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
             assertEq("handler ran in: module\ndone\nhandler set while the module's data is cleared: False\n", r.out,
                 mode);
+        }
+    }
+
+    testEntryDuringCleanup() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check requires a debug build");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript("entry-cleanup.q", mode, False);
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq("another thread before the cleanup: null\ndone\n"
+                "another thread while the module's data is cleared: \"PROGRAM-ERROR\"\n"
+                "the cleanup thread while the module's data is cleared: 2\n", r.out, mode);
         }
     }
 

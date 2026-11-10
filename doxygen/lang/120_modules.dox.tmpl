@@ -1742,7 +1742,9 @@ public class Lookup {
     can call a module concurrently.  The threads running module code for calls from other Programs therefore count as
     threads of the calling Programs only: @ref Qore::Program::getThreadList() "Program::getThreadList()" of the
     module's %Program and a debugger attached to the module's %Program do not see them, and the module's %Program
-    waits for them only when the modules are deleted at the end of the process.
+    waits for them only when the modules are deleted at the end of the process.  Once the modules' data is being
+    deleted then, no other thread can enter module code: a call from a thread that is still running (a signal handler
+    of another %Program, a thread pool or a foreign thread) raises \c PROGRAM-ERROR.
 
     The @ref background "background" operator in module code is checked against the module's own options when the
     module is parsed, so module code can start threads for a caller with

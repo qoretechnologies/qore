@@ -1173,12 +1173,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 // only the parse options change: the thread's current statement and location are kept; the
                 // RuntimeConfig has them only for the AST interpreter, which keeps both current, while the IR
                 // interpreter and native code update only the thread's
-                swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
-                    old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+                // (the stack was checked above)
+                swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
                 restore_runtime_ctx = true;
-                if (*xsink) {
-                    return;
-                }
             }
         }
     }
@@ -1271,12 +1268,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             old_rc_po = rc.getParseOptions();
             rc.setParseOptions(pgm_po);
             // only the parse options change: the thread's current statement and location are kept (see above)
-            swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
-                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
             restore_runtime_ctx = true;
-            if (*xsink) {
-                return;
-            }
         }
     }
 

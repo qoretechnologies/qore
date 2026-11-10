@@ -5501,6 +5501,8 @@ void QoreModuleManager::delUser() {
     // module code entered without it leave it first, so that the teardown below waits for every thread in it (see
     // qore_stop_module_uncounted_entries())
     qore_stop_module_uncounted_entries();
+    // and no other thread can enter module code from now on; those that are in it are waited for below
+    qore_close_module_programs();
 
 #ifdef HAVE_SIGNAL_HANDLING
     // the signal handlers that module code set belong to the module's Program; the signal thread runs until the end of

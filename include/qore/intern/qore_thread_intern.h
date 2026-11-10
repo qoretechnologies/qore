@@ -379,6 +379,14 @@ DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
+//! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
+/** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
+    lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
+*/
+DLLLOCAL void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
@@ -1113,6 +1121,17 @@ DLLLOCAL void qore_release_module_program_pins();
     idempotent
 */
 DLLLOCAL void qore_stop_module_uncounted_entries();
+
+//! Closes the Programs with module lifetime to every thread but the calling one, which runs the module cleanup
+/** Called by QoreModuleManager::delUser() right after qore_stop_module_uncounted_entries(), before it clears the data
+    of the module Programs: a thread outside the threads that qore_cleanup() waits for (the signal thread running a
+    handler of a Program that is not a module's, a thread pool or asynchronous I/O thread, a foreign thread) would
+    otherwise run module code on data being destroyed.  Such an entry then fails with a \c PROGRAM-ERROR exception.
+    The threads that entered a module's Program before are waited for by the cleanup, as before: a thread blocked in
+    module code for good keeps the cleanup waiting, which cannot be bounded without destroying data that the thread
+    uses; no thread can enter module code anew to prolong the wait
+*/
+DLLLOCAL void qore_close_module_programs();
 
 //! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
 DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);

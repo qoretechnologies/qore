@@ -146,7 +146,7 @@ crossing pays for entering the Program, and nothing else:
   that did not define the function is not inlined, and a call into another Program is never evaluated as a native leaf
   without entering it.
 
-## Signal handlers at the module cleanup
+## Entries into module code at the module cleanup
 
 A signal handler that module code sets belongs to the module's Program and stays installed until that Program is
 deleted, while the signal thread runs until the end of `qore_cleanup()`.  `QoreModuleManager::delUser()` therefore
@@ -168,3 +168,12 @@ Consequences:
   be destroyed now keeps the cleanup waiting; before, that depended on the order in which the modules were cleared.
   A thread blocked in module code with nothing to release it kept the cleanup waiting before as well
 - thread entry handlers and thread initialization of the module's Program still run
+
+The handlers are not the only way in: a signal handler of a Program that is not a module's (one that module code
+created and keeps in the module's data), a thread pool or asynchronous I/O thread and a foreign thread run outside the
+threads that `qore_cleanup()` waits for.  So the cleanup also closes the Programs with module lifetime to every thread
+but its own (`qore_close_module_programs()`, right after `qore_stop_module_uncounted_entries()`): a later entry from
+another thread (`ProgramThreadCountContextHelper::set()`) raises `PROGRAM-ERROR` instead of taking the thread count.
+The threads that entered before are waited for by `waitForTermination()` in Phase 1, as on develop.  That wait is not
+bounded: a thread blocked in module code for good keeps the cleanup waiting, as clearing the data under it would
+destroy what it uses; the close ensures that only entries made before it can do so.

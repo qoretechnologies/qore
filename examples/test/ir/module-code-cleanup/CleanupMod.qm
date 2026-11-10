@@ -31,6 +31,9 @@ namespace Priv {
     our *CleanupCheck cleanup_check;
     # counts the calls of the destructor of Holder that ran in the module's Program
     our Counter holder_calls;
+    # calls module code from another thread while the module cleanup clears the module's data; see
+    # arm_cleanup_entry_check()
+    our *CleanupEntryCheck cleanup_entry_check;
 
     sub init() {
         module_path = get_script_path();
@@ -62,6 +65,29 @@ namespace Priv {
         }
     }
 
+    #! calls module code from a foreign thread through a Program that is not a module's when it is destroyed: when the
+    #! module cleanup clears the module's data
+    /** The module's Program is closed to every thread but the one that runs the cleanup by then, so the call fails,
+        while the cleanup thread can still call module code
+    */
+    class CleanupEntryCheck {
+        private {
+            Program pgm;
+        }
+
+        constructor() {
+            pgm = new Program(PO_NEW_STYLE);
+            pgm.parse("%requires CleanupMod\nint sub run() { return CleanupMod::f(1); }", "cleanup-entry-check");
+        }
+
+        destructor() {
+            stdout.printf("another thread while the module's data is cleared: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("run")));
+            stdout.printf("the cleanup thread while the module's data is cleared: %y\n", CleanupMod::f(1));
+            stdout.sync();
+        }
+    }
+
     #! an object that module code saves in a thread's data: its destructor runs module code when the data is deleted
     class Holder {
         destructor() {
@@ -87,6 +113,11 @@ public string sub wait_handler() {
 #! reports whether the signal has a handler while the module cleanup clears the module's data (debug builds only)
 public sub arm_cleanup_check(int sig) {
     Priv::cleanup_check = new Priv::CleanupCheck(sig);
+}
+
+#! calls module code from another thread while the module cleanup clears the module's data (debug builds only)
+public sub arm_cleanup_entry_check() {
+    Priv::cleanup_entry_check = new Priv::CleanupEntryCheck();
 }
 
 #! saves an object in the thread's data whose destructor runs module code when the thread's data is deleted
