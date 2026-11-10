@@ -17,6 +17,9 @@
     - \c outside: raises \c CMDCTX-OUTSIDE with whether QoreModuleCommandContext::get() is null on another thread
     Anything else is an error.
 
+    The module also has the function CmdCtxAware::caller() (CmdCtxLegacy::caller()), which returns the description of
+    QoreModuleCommandRestrictions::getCallerRestrictions() ("po=none|restricted sandboxed=0|1").
+
     Qore Programming Language
 
     Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
@@ -146,7 +149,19 @@ void cmdctx_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
 void cmdctx_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 }
 
+//! the function CmdCtxAware::caller(): describes the restrictions of the code that calls it
+QoreValue f_cmdctx_caller(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreModuleCommandRestrictions r = QoreModuleCommandRestrictions::getCallerRestrictions();
+    char buf[64];
+    snprintf(buf, sizeof(buf), "po=%s sandboxed=%d", r.getParseOptions() ? "restricted" : "none",
+        r.isSandboxed() ? 1 : 0);
+    return new QoreStringNode(buf);
+}
+
 void cmdctx_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+    QoreNamespace* ns = new QoreNamespace(CMDCTX_AWARE ? "CmdCtxAware" : "CmdCtxLegacy");
+    ns->addBuiltinVariant("caller", f_cmdctx_caller, QCF_NO_FLAGS, QDOM_DEFAULT, stringTypeInfo);
+    qns->addNamespace(ns);
 }
 
 void cmdctx_module_delete() {

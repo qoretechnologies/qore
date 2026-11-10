@@ -158,6 +158,17 @@
     to change a classpath that the code of a library module issues at run time is not refused for a caller that has
     only \c PO_NO_FILESYSTEM (see design/module-sandboxing-audit-guide.md).
 
+    @par The Restrictions of the Caller of a Module Function (module API 2.1)
+
+    A module function or method that decides what its caller may do (a database driver that judges a classpath
+    option, for example) asks QoreModuleCommandRestrictions::getCallerRestrictions() instead of reading
+    \c getProgram()->getParseOptions() or using QoreReflectionCaller.  It returns what a module command issued by
+    the same code would have in its QoreModuleCommandContext: the restricting parse options of the calling code and
+    whether a sandbox governs it.  Code of a library module has no parse options, only its sandbox, so a module
+    that applies the rule that a command issued by library module code is judged by the sandbox only, applies it
+    to its functions as well; the parse options of the Program of a library module are only what it inherited from
+    the code that loaded it.
+
     @subsection module_example Complete Example
 
     The following is a minimal but complete example based on the \c astparser module:

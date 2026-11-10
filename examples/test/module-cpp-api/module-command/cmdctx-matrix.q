@@ -8,6 +8,13 @@
 #! the Program code that issues a command to the Program it runs in, and to a Program that it is given
 const IssueCode = "%modern
 %requires CmdCtxUser
+%requires cmdctxaware
+public string sub caller_by_module() {
+    return CmdCtxUser::caller();
+}
+public string sub caller_own() {
+    return CmdCtxAware::caller();
+}
 public sub issue_by_module(string mod, string cmd) {
     CmdCtxUser::issue(mod, cmd);
 }
@@ -230,4 +237,31 @@ printf("40 path-chosen module, trusted:           %s\n", load_in_program(dir + "
     Program fs = make_program(PO_NO_FILESYSTEM);
     printf("41 no-filesystem, via module, path: %s\n", issue_via_module(fs, "cmdctxaware", "path"));
     printf("42 no-filesystem, own code, path:   %s\n", issue_in(fs, "cmdctxaware", "path"));
+}
+
+#! calls a function of IssueCode that returns what CmdCtxAware::caller() says
+string sub caller_in(Program p, string func) {
+    try {
+        return p.callFunction(func);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# the restrictions of the caller of a module function: library module code has none but the sandbox (the options of
+# its Program are only what it inherited from the loader), the code of the caller itself has its own
+{
+    Program fs = make_program(PO_NO_FILESYSTEM);
+    printf("43 caller, no-filesystem, via module: %s\n", caller_in(fs, "caller_by_module"));
+    printf("44 caller, no-filesystem, own code:   %s\n", caller_in(fs, "caller_own"));
+    Program t = make_program();
+    printf("45 caller, trusted, via module:       %s\n", caller_in(t, "caller_by_module"));
+    printf("46 caller, trusted, own code:         %s\n", caller_in(t, "caller_own"));
+    Program s = make_program();
+    SandboxManager sm();
+    s.setSandboxManager(sm);
+    printf("47 caller, sandboxed, via module:     %s\n", caller_in(s, "caller_by_module"));
+    printf("48 caller, sandboxed, own code:       %s\n", caller_in(s, "caller_own"));
+    Program n = make_program(PO_NO_UNCONTROLLED_APIS);
+    printf("49 caller, no-uncontrolled, via module: %s\n", caller_in(n, "caller_by_module"));
 }

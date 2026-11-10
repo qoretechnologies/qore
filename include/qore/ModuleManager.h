@@ -266,6 +266,25 @@ public:
     */
     DLLEXPORT static QoreParseOptions getRestrictingOptions();
 
+    //! returns the restrictions of the code that is calling the module function that is running
+    /** For a module function or method (not a module command) that decides what its caller may do: it gives the
+        restrictions that a module command issued by the same code would have in its QoreModuleCommandContext.  They
+        are the restricting parse options that apply to the calling code and whether a sandbox governs it
+        (isSandboxed()).  Code of a library module (a module found in a module directory, not one that the code
+        loading it chose by a path of its own) has no parse options, only the sandbox that governs it, as module code
+        has everywhere in %Qore: the parse options of the Program of such a module are only what it inherited from
+        the code that loaded it (for example \c PO_NO_FILESYSTEM from a \c %no-filesystem loader), so a module that
+        judges its caller by getProgram()->getParseOptions() or QoreReflectionCaller refuses library module code that
+        a sandbox allows.  Inside a module command handler the restrictions are those of the command, as in
+        QoreModuleCommandContext::get().
+
+        Call it on a thread that Qore knows, from the module function, before the function hands work to another
+        thread (pass a copy of the result).
+
+        @since %Qore 3.0 (module API 2.1)
+    */
+    DLLEXPORT static QoreModuleCommandRestrictions getCallerRestrictions();
+
 protected:
     //! the restricting parse options of the issuing code
     QoreParseOptions po;

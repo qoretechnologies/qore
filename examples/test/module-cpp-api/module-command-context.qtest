@@ -76,6 +76,13 @@ class ModuleCommandContextTest inherits QUnit::Test {
             + "40 path-chosen module, trusted:           ok\n"
             + "41 no-filesystem, via module, path: ok\n"
             + "42 no-filesystem, own code, path:   CMDCTX-DENIED\n"
+            + "43 caller, no-filesystem, via module: po=none sandboxed=0\n"
+            + "44 caller, no-filesystem, own code:   po=restricted sandboxed=0\n"
+            + "45 caller, trusted, via module:       po=none sandboxed=0\n"
+            + "46 caller, trusted, own code:         po=none sandboxed=0\n"
+            + "47 caller, sandboxed, via module:     po=none sandboxed=1\n"
+            + "48 caller, sandboxed, own code:       po=none sandboxed=1\n"
+            + "49 caller, no-uncontrolled, via module: po=none sandboxed=0\n"
             + "";
 
         #! the replay program: the helper that reads the history, and the output line

@@ -2232,6 +2232,13 @@ static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed,
     }
 }
 
+QoreModuleCommandRestrictions QoreModuleCommandRestrictions::getCallerRestrictions() {
+    QoreParseOptions po;
+    bool sandboxed;
+    qore_get_command_restrictions(po, sandboxed, nullptr, false);
+    return QoreModuleCommandRestrictions(po, sandboxed);
+}
+
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
     if (!module_parse_cmd) {
         if (xsink) {

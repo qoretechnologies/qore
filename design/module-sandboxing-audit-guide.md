@@ -436,6 +436,11 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is
 handling. The context is valid only while the handler runs, on its thread; hand `ctx->copy()` to another thread, and
 ask it with `hasAny()` and `isSandboxed()` there (`check()` raises an exception, so it needs a thread that Qore knows).
+A module function (not a command) that judges its caller asks `QoreModuleCommandRestrictions::getCallerRestrictions()`:
+the same restrictions as a command issued by the calling code would have (library module code: none but the sandbox).
+Reading `getProgram()->getParseOptions()` or using `QoreReflectionCaller` in such a function sees the parse options that
+the Program of a library module inherited from its loader, and refuses library module code that the sandbox allows.
+
 Through library module code the usual rule holds: a sandbox that governs the caller governs the module code that issues
 the command (`isSandboxed()`), a parse option that restricts the caller or that the module's Program inherited from its
 loader does not: a jni classpath command issued at run time by a library module (the Jdbc and Jms data providers) is not

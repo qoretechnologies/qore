@@ -10,9 +10,16 @@ module CmdCtxUser {
     license = "MIT";
 }
 
+%requires cmdctxaware
+
 public namespace CmdCtxUser {
     #! issues a module command to the Program of the module
     public sub issue(string mod, string cmd) {
         Program::issueModuleCmd(mod, cmd);
+    }
+
+    #! returns what the aware module's function says about the restrictions of its caller, which is module code
+    public string sub caller() {
+        return CmdCtxAware::caller();
     }
 }
