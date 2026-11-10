@@ -90,10 +90,23 @@ map-select run with the element as the implicit argument (`$1`) and its index as
 expression, as for the AST interpreter's receivers: the code records a temp scope that no `PushTempMark` opens
 (`QoreIRBuilder::allocateUnmarkedTempScopeId()`), so the normal path has no per-element mark or drain, an exception
 that the code raises releases nothing before the operator's cleanup, and the arguments that it creates for a call are
-still the call's.
+still the call's.  A map-select sets the implicit argument once for its predicate and its map expression, as the AST
+interpreter does.  The IR interpreter's slot of a `PushImplicitArg` borrows the context that it restores: the context
+does not change hands until the `PopImplicitArg`, or the frame's exit, restores it, so the loop takes no reference
+per element.
 
-An exception that leaves the operator releases, in the AST interpreter's order, the element, the value that a map
-expression gave last, the list built so far, the iterator and the source, then the statement's temporaries
+A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
+can hold an object, each path that takes the next element releases the element and then the values that the stages
+gave from it, in the order of the stages, and so does the pipeline's end, before the iterator and the source: the AST
+interpreter's functional map iterator releases the element when it has evaluated the value, and its consumer releases
+the value before it takes the next one.  A stage whose value holds no object adds nothing to the loop.  The value of a
+predicate that can hold an object is released when the element has been decided on
+(`QoreIRLowering::releasePredicateValue()`), as the AST interpreter's holder of the predicate's value releases it:
+as a statement temporary it outlived the element, and an exception released it after the operator's list.
+
+An exception that leaves the operator releases, in the AST interpreter's order, the element, the values that map
+expressions gave last (only those that can hold an object: native code keeps a released value in a cleanup slot on
+the normal path, see `qore_ir_observable_release()`), the list built so far, the iterator and the source, then the statement's temporaries
 (`FunctionalLoopExceptionCleanup`); an exception that the iterator's `next()` raises releases the iterator and the
 source before the list (`routeNext()`), as the AST interpreter's functional iterator ends as if the source were
 exhausted.  The cleanup exists only if a handler of the function encloses the operator: an exception target gives
@@ -101,8 +114,12 @@ the operator's calls and operations their invoke form, which the IR interpreter 
 with no handler keeps the form it has always had and an exception leaves the function directly.  The function's exit
 then restores the implicit arguments and elements open at the raising instruction, innermost first, before it
 releases the frame's values (`qore_ir_find_open_implicit_contexts()`: the IR interpreter's frame exit, native code's
-`QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only), and releases the
-operator's iterator before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).
+`QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only, and
+`emitImplicitContextRestore()` on the exit of a `throw` and of an operator cleanup's synthetic rethrow, which also
+release the statement's temporaries in the order of an exception check's exit), and releases the operator's iterator
+before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).  Native code raises an integer
+or float division by zero where it happens, on the path that only a zero divisor takes: left pending, the exception
+let the code after it run, and the operator's `next()` then took it for its own.
 
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map
