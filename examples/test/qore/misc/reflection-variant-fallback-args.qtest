@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionVariantFallbackArgsTest
+
+string sub f(softint a, int b) {
+    return sprintf("A %y %y", a, b);
+}
+
+string sub f(string a, string b) {
+    return sprintf("B %y %y", a, b);
+}
+
+string sub f(int a, string b) {
+    return sprintf("C %y %y", a, b);
+}
+
+#! A call through a fixed variant whose arguments that variant does not accept is made with another variant
+/** The variant is found for the arguments as given, as for a direct call: the arguments that the check of the fixed
+    variant converted before it failed on a later one (here the first, converted to an int for its softint parameter)
+    are restored first (#5692).
+*/
+class ReflectionVariantFallbackArgsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("reflection variant fallback arguments", "1.0") {
+        addTestCase("fallback with the arguments as given", \fallbackArgs());
+        set_return_value(main());
+    }
+
+    fallbackArgs() {
+        string direct = f("1", "x");
+        assertEq("B \"1\" \"x\"", direct);
+        Function fn = Function::forName("f");
+        foreach AbstractVariant v in (fn.getVariants()) {
+            # the variant that accepts the arguments is called; through the others, the variant of the direct call
+            assertEq(direct, cast<FunctionVariant>(v).call("1", "x"), v.toString());
+        }
+        # a fixed variant that accepts the arguments after converting them keeps the converted values
+        assertEq("A 1 2", fn.getVariant(SoftIntType, IntType).call("1", 2));
+    }
+}

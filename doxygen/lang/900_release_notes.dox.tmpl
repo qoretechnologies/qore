@@ -527,6 +527,11 @@
     not export, nor constructs or uses the static members of a class it does not export; see
     @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
 
+    @par Call References to Builtin Methods Run in the Program That Made Them
+    A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
+    %Program that made it, wherever it is called, and raises \c PROGRAM-ERROR once that %Program is deleted; see
+    @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;

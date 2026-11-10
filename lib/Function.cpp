@@ -1197,8 +1197,31 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
+        // the original values of the arguments that the check below converts for the fixed variant; it is filled
+        // only for an argument that is converted, and emptied right after the check
+        arg_undo_vec_t undo;
         // first process all non-default args; no evaluation, so we can try to find another variant
-        if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER)) {
+        int prep_rc = prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER, &undo);
+        if (!prep_rc && !undo.empty()) {
+            // the arguments stay converted for the fixed variant
+            for (auto& i : undo) {
+                i.second.discard(xsink);
+            }
+            undo.clear();
+        }
+        if (prep_rc) {
+            // the arguments converted for the fixed variant before the check failed are restored, so another
+            // variant is searched for and called with the arguments as given
+            for (auto i = undo.rbegin(), e = undo.rend(); i != e; ++i) {
+                QoreValue& p = tmp.getEntryReference(i->first);
+                p.discard(xsink);
+                p = i->second;
+            }
+            undo.clear();
+            if (*xsink) {
+                xsink2.clear();
+                return;
+            }
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
                 xsink2.clear();
@@ -1209,9 +1232,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 return;
             }
             xsink2.clear();
-            // the other variant was selected for the arguments, which are prepared for it; they are kept (a call
+            // the other variant was selected for the arguments as given, which are now prepared for it (a call
             // through a fixed variant, as a reflection FunctionVariant::call(), with arguments that only another
-            // variant accepts got no arguments at all)
+            // variant accepts got no arguments at all, or arguments converted for the fixed variant)
             sig = variant->getSignature();
             if (setup_type_param_instantiation()) {
                 return;
@@ -1376,7 +1399,7 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
 }
 
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, arg_undo_vec_t* undo) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1467,6 +1490,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
                 // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
+                if (undo) {
+                    // keep the original value: the check may fail on a later argument
+                    undo->push_back(std::make_pair(i, p.refSelf()));
+                }
                 QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
                     return -1;

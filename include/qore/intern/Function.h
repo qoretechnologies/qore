@@ -515,8 +515,16 @@ public:
         ct = n_ct;
     }
 
+    //! the original value of an argument that prepareDefaultArgs() converted in place (see @ref prepareDefaultArgs())
+    typedef std::vector<std::pair<unsigned, QoreValue>> arg_undo_vec_t;
+
+    /** @param undo if not null, the original value of every argument converted in place is saved here (with a
+        reference) before it is converted, so that a failed check of a fixed variant can restore the arguments before
+        another variant is searched for them
+    */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
+        arg_undo_vec_t* undo = nullptr);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
