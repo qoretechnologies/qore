@@ -39,6 +39,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
@@ -125,6 +126,7 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <system_error>
 #include <thread>
 
 static inline void strindent(QoreString* s, int indent) {
@@ -17765,6 +17767,63 @@ static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* par
     return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
 }
 
+//! runs the return analysis of a function's IR in a native thread without Qore thread data, as the background JIT
+//! compilation thread runs it, and returns its result (qore#5750)
+/** The analysis (qore_ir_function_returns_pass_through()) checks the types of the function's returned values against
+    its declared return type with the parse-time type checks, which a class's private parent classes make depend on
+    the class context; it must use the function's own class context, as no thread state gives one in that thread.
+
+    @param code a call reference to a user function, method or closure with one variant, which is lowered to IR if it
+    has not been (as a batch compilation lowers its callees)
+
+    @return True if the function's declared return type leaves every value that it returns unchanged
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function, method or closure with one variant
+    that can be lowered to IR
+*/
+static QoreValue f_dbg_ir_returns_pass_through_without_thread_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir && uvb) {
+        // a closure is lowered when it is first run; lower it here, as a batch compilation lowers its callees, without
+        // promoting it to the IR tier
+        uvb->forceIRLowering(qf->getName(), false, false);
+        ir = uvb->getCachedIR();
+    }
+    if (!ir) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ir_returns_pass_through_without_thread_data() requires a "
+            "call reference to a user function, method or closure with one variant that can be lowered to IR");
+        return QoreValue();
+    }
+    const QoreTypeInfo* return_type = variant->getReturnTypeInfo();
+    bool rv = false;
+    // a native thread that is not registered with Qore, as the background compilation thread; an exception in it is
+    // passed to this thread, as one that left the thread's function would end the process
+    std::string thread_error;
+    try {
+        std::thread th([ir, return_type, &rv, &thread_error]() {
+            try {
+                rv = qore_ir_function_returns_pass_through(*ir, return_type);
+            } catch (const std::exception& e) {
+                thread_error = e.what();
+            }
+        });
+        th.join();
+    } catch (const std::system_error& e) {
+        xsink->raiseException("DBG-THREAD-ERROR", "cannot start a native thread: %s", e.what());
+        return QoreValue();
+    }
+    if (!thread_error.empty()) {
+        xsink->raiseException("DBG-THREAD-ERROR", "the analysis failed: %s", thread_error.c_str());
+        return QoreValue();
+    }
+    return rv;
+}
+
 //! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -20706,6 +20765,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
+        f_dbg_ir_returns_pass_through_without_thread_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,

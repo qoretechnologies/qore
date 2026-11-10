@@ -10526,6 +10526,30 @@ private:
     }
 };
 
+const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func) {
+    const QoreFunction* qf = func.source_qf;
+    if (!qf) {
+        // a method that qcc lowers without its function has its variant
+        const MethodVariantBase* mv = dynamic_cast<const MethodVariantBase*>(func.source_variant);
+        return mv ? mv->getClassPriv() : nullptr;
+    }
+    const QoreClass* qc = qf->getClass();
+    if (!qc) {
+        // a closure: the class of the method in which it was parsed, if recorded
+        const UserClosureFunction* ucf = dynamic_cast<const UserClosureFunction*>(qf);
+        qc = ucf ? QoreTypeInfo::getUniqueReturnClass(ucf->getClassType()) : nullptr;
+    }
+    return qc ? qore_class_private::get(*qc) : nullptr;
+}
+
+// a function without code of its own (neither source_qf nor source_variant: the IR function of a try or catch block,
+// or of a background expression, lowered as part of the function that contains the code) keeps the class context of
+// that function, as its code runs in it; top-level code, lowered on its own, has none
+QoreIRClassContextHelper::QoreIRClassContextHelper(const QoreIRFunction& func)
+        : QoreIRClassContextHelper(!func.source_qf && !func.source_variant && isSet() ? parse_get_class_priv()
+            : qore_ir_function_class_context(func)) {
+}
+
 //! Removes the checks of return values that the function proves unnecessary
 /** The declared return type accepts such a value as it is (see qore_ir_return_needs_coercion() and
     QoreIRReturnValueProof): it has a value, or the type accepts no value, and its type is accepted without a
@@ -10536,6 +10560,8 @@ private:
     @return the number of checks removed
 */
 static size_t qore_ir_elide_proven_return_checks(QoreIRFunction& func, size_t& check_count) {
+    // the type checks of the proof are made in the class context of the function's code (qore#5750)
+    QoreIRClassContextHelper class_ctx(func);
     size_t elided = 0;
     QoreIRReturnValueProof proof(func, check_count);
     const QoreTypeInfo* return_type = func.specializeType(func.return_type_info);

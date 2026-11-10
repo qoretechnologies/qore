@@ -1293,6 +1293,9 @@ bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type) {
 }
 
 bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type) {
+    // the returns of the function are checked in its own class context, not in that of the caller being compiled
+    // (qore#5750)
+    QoreIRClassContextHelper class_ctx(func);
     return_type = func.specializeType(return_type);
     size_t check_count = 0;
     for (const auto& block : func.blocks) {
@@ -11208,6 +11211,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             return false;
         }
     }
+    // the parse-time type checks of the lowering are made in the class context of the function's code, in a
+    // background compilation thread as in any other (qore#5750)
+    QoreIRClassContextHelper class_ctx(func);
     native_handler_cache_cancelled = false;
     native_call_frame_storage = nullptr;
     native_call_thread_data = nullptr;

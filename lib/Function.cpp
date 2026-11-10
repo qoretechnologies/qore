@@ -6275,6 +6275,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         class_name ? std::string(class_name) + "::" + name : std::string());
     func->source_qf = source_qf;
     func->source_variant = variant;
+    // the parse-time type checks of the lowering and of the analysis of its IR are made in the class context of the
+    // code, not in that of the code being parsed in this thread, if any (qore#5750)
+    QoreIRClassContextHelper class_ctx(*func);
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     func->pgm_id = pgm->getProgramId();

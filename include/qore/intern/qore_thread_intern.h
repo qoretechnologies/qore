@@ -997,8 +997,49 @@ DLLLOCAL void updateVStack(VNode* nvs);
 DLLLOCAL VNode* getVStack();
 
 //DLLLOCAL void setParseClass(QoreClass* c);
+//! Returns the class context of the parse-time checks made in the current thread
+/** That is the class of the code being parsed, or, while a QoreIRClassContextHelper is set, its class; the class
+    context decides, for example, whether a class's private parent classes are accessible
+    (qore_class_private::parseCheckPrivateClassAccess())
+*/
 DLLLOCAL QoreClass* parse_get_class();
+//! Returns the class context of the parse-time checks made in the current thread; see parse_get_class()
 DLLLOCAL qore_class_private* parse_get_class_priv();
+
+//! Sets the class context of the parse-time checks made in the current thread while IR is lowered, analyzed or compiled
+/** Code is lowered to IR, analyzed and compiled after it is parsed, in the class context of the code (the class of a
+    method, or the class in which a closure was parsed: see qore_ir_function_class_context()), which is not the class
+    being parsed in the thread, if any: a background compilation thread has no parse state at all, and a thread that
+    lowers or compiles a function at runtime has none of that function's (qore#5750).  The parse-time type checks
+    made meanwhile (QoreTypeInfo::parseAccepts(), for example) use this class context; helpers nest, and each restores
+    the class context set before it.
+
+    While a helper is set, parse_get_class_priv() returns its class whatever the thread's parse state is: code run
+    meanwhile must not set the thread's class context (thread_set_class_and_ns(), QoreParseClassHelper) and expect to
+    read it back; lowering, analysis and compilation parse nothing.
+*/
+class QoreIRClassContextHelper {
+public:
+    //! sets the class context; nullptr is the context of code outside a class
+    DLLLOCAL QoreIRClassContextHelper(const qore_class_private* cls);
+
+    //! sets the class context of an IR function: the class context of its code, or, for a function without code of
+    //! its own (see qore_ir_function_class_context()), the context set for the function that it is part of, if any
+    DLLLOCAL QoreIRClassContextHelper(const QoreIRFunction& func);
+
+    //! returns true if a helper sets the class context of the current thread
+    DLLLOCAL static bool isSet();
+
+    //! restores the class context set before
+    DLLLOCAL ~QoreIRClassContextHelper();
+
+    QoreIRClassContextHelper(const QoreIRClassContextHelper&) = delete;
+    QoreIRClassContextHelper& operator=(const QoreIRClassContextHelper&) = delete;
+
+private:
+    const qore_class_private* old_cls;
+    bool old_set;
+};
 DLLLOCAL void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns, const qore_class_private*& old_cls, qore_ns_private*& old_ns);
 DLLLOCAL void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns);
 DLLLOCAL void thread_set_ns(qore_ns_private* new_ns, qore_ns_private*& old_ns);
