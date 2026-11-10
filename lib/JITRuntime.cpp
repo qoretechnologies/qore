@@ -10809,7 +10809,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // Fast helpers capture caller_pgm before their ProgramThreadCountContextHelper
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
-    const QoreProgramLocation* call_loc = get_runtime_location();
+    const QoreProgramLocation* call_loc = take_runtime_call_location();
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
         caller_pgm ? caller_pgm : runtime_pgm);
 

@@ -3015,6 +3015,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
+    # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/JITRuntime.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreCastOperatorNode.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h

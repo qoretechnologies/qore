@@ -6302,6 +6302,60 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     }
 }
 
+//! Returns true if an instruction calls code whose call stack frame is located at the call (see emitCallSiteSet())
+static bool qore_llvm_inst_is_call(const QoreIRInstruction* inst) {
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+    }
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::NewObject:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void QoreIRToLLVM::emitCallSiteSet(const QoreIRInstruction* inst, llvm::Module& module) {
+    if (!call_site_cache_ptr) {
+        return;
+    }
+    llvm::Value* loc_val;
+    // a call without a source location gives no call site: its frame is located at the runtime location
+    if (!inst->loc || inst->loc == &loc_builtin) {
+        return;
+    } else if (aot_mode) {
+        // the location that the image holds, as for the runtime location (emitRuntimeLocationUpdate()); a location
+        // without a line has none
+        loc_val = getAotLocationConstant(inst->loc, module);
+        if (!loc_val) {
+            return;
+        }
+    } else {
+        loc_val = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
+            llvm::PointerType::getUnqual(ctx));
+    }
+    builder->CreateStore(loc_val, call_site_cache_ptr);
+}
+
+void QoreIRToLLVM::emitCallSiteClear() {
+    if (!call_site_cache_ptr) {
+        return;
+    }
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), call_site_cache_ptr);
+}
+
 void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
     if (!di_sp) {
         return;
@@ -11790,6 +11844,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // AOT mode: the addresses of the constant locations of the image (getAotLocationConstant()).
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
+    call_site_cache_ptr = nullptr;
     last_runtime_line = -1;
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
@@ -11809,6 +11864,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         native_call_thread_data = load_slot(0, "thread_data");
         loc_cache_ptr = load_slot(1, "loc_ptr");
         stmt_cache_ptr = load_slot(2, "stmt_ptr");
+        // the call site follows the runtime location in the thread's data (qore_call_site_slot())
+        call_site_cache_ptr = builder->CreateConstInBoundsGEP1_32(ptr_type, loc_cache_ptr, 1, "call_site_ptr");
         // in a function of a debuggable program, the current statement is set by the step hook of each statement
         // while a debugger is attached (emitDebugStepHook()), and it is not cleared at each line, so that the frames
         // of the calls of the statement record it; it is cleared once here
@@ -13211,6 +13268,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     deferred_check_needed = false;
                 }
             }
+            // the frame of the code that a call instruction calls is located at the call: the thread's call site is
+            // set for the call and cleared after it, as by an AST call (QoreRcCallSiteHelper); no other code runs between
+            // a call site and the frame that takes it, so the call site is otherwise always clear
+            const bool call_site = qore_llvm_inst_is_call(inst);
+            if (call_site) {
+                emitCallSiteSet(inst, module);
+            }
             if (!lowerInstruction(inst, llvm_func, module, error)) {
                 appendQoreIRInstructionDiagnostic(error, inst);
                 if (q_env_is_set("QORE_LLVM_DEBUG")) {
@@ -13225,6 +13289,31 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     fflush(stderr);
                 }
                 return false;
+            }
+            if (call_site) {
+                llvm::BasicBlock* cur = builder->GetInsertBlock();
+                llvm::Instruction* term = qoreGetTerminator(cur);
+                if (!term) {
+                    emitCallSiteClear();
+                } else if (auto* invoke = llvm::dyn_cast<llvm::InvokeInst>(term)) {
+                    // the call returned normally; an exception that it raised has cleared the call site
+                    // (QoreJITException)
+                    llvm::BasicBlock* normal = invoke->getNormalDest();
+                    llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+                    builder->SetInsertPoint(normal, normal->getFirstInsertionPt());
+                    emitCallSiteClear();
+                } else {
+                    // the call's exception check ended the block: the call site is cleared on each edge; the
+                    // successors are continuation blocks and exception targets (for an IR Invoke, its invoke.cont and
+                    // handler blocks), which have no PHI nodes when the call is lowered (PHI nodes are created when a
+                    // block is lowered), so the store is placed at their start
+                    for (unsigned i = 0, e = term->getNumSuccessors(); i < e; ++i) {
+                        llvm::BasicBlock* succ = term->getSuccessor(i);
+                        llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+                        builder->SetInsertPoint(succ, succ->getFirstInsertionPt());
+                        emitCallSiteClear();
+                    }
+                }
             }
             if (fused_string_call
                     && aot_hash_string_extraction_instruction != inst) {
@@ -13515,6 +13604,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     llvm::pred_begin(error_return_block),
                     llvm::pred_end(error_return_block))));
         builder->SetInsertPoint(error_return_block);
+        // a call that raised an exception before its frame took the call site leaves no call site behind
+        emitCallSiteClear();
         // the temporaries of the statements left are released before the on_block_exit handlers run, as in the
         // AST
         emitExitStatementCleanup(module, false, true);

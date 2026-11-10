@@ -187,17 +187,34 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
 }
 
 //! call stack hash description
-/** @since %Qore 0.8.13
+/** Each frame describes a call of the code named in \c function and is located where that code was called: at the
+    call expression in the calling code, such as <tt>g(2)</tt> in <tt>r = f(1) + g(2);</tt>, with its lines and
+    columns, in every @ref exec_mode_overview "execution mode"; the location of the innermost frame is where the
+    current code is.  A frame of code that is called without a call expression, such as a destructor or a
+    \c memberGate() method, is located where the code that runs it is: at its statement in the AST interpreter, and
+    at a location of its line in the other execution modes
+    (<a href="https://github.com/qoretechnologies/qore/issues/5746">issue 5746</a>).
+
+    @since %Qore 0.8.13
+
+    @since %Qore 3.0 a frame of a call is located at the call expression; before, at the statement that makes the call
+    in the AST interpreter, and at a location of its line in other execution modes
 */
 hashdecl CallStackInfo {
     //! function or method name
     string function;
 
-    //! starting line number
+    //! starting line number of the location
     int line;
 
-    //! ending line number
+    //! ending line number of the location
     int endline;
+
+    //! the 0-based column of the first character of the location in its start line, or -1 if unknown, as for AOT-compiled code; a column counts bytes (since %Qore 3.0)
+    int start_column = -1;
+
+    //! the 0-based column after the last character of the location in its end line, or -1 if unknown, as for AOT-compiled code (since %Qore 3.0)
+    int end_column = -1;
 
     //! The parse label of the code; this is normally the file name; this corresponds to the label parameter of the Program::parse() and Program::parsePending() methods and the Qore::parse() function, for example (if known, for user code only)
     string file;
@@ -561,7 +578,8 @@ hash<string, list<hash<CallStackInfo>>> get_all_thread_call_stacks() [dom=THREAD
     Because it is always from the same thread being read, no locking is applied as in
     @ref get_all_thread_call_stacks()
 
-    @return a list of @ref CallStackInfo hashes for the current TID (thread ID)
+    @return a list of @ref CallStackInfo hashes for the current TID (thread ID), from the innermost frame; each frame
+    of a call is located at the call expression that made it (see @ref CallStackInfo)
 
     @par Example:
     @code{.py}

@@ -326,6 +326,51 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+
+//! Returns the location of the call stack frame of code being called, and clears the call site
+/** The location of a frame is the location of the call expression that called the code, set by the call site with
+    QoreRcCallSiteHelper (or the equivalent stores of IR and native code); without one, it is the thread's current
+    runtime location.  The call site is cleared, as it is the location of this frame only, not of the frames of the
+    calls that the called code makes.
+*/
+DLLLOCAL const QoreProgramLocation* take_runtime_call_location();
+//! Returns the runtime location for the frame of code that no call expression calls, and hides the call site
+/** For a destructor, for example (see CodeEvaluationHelper): the call site, if any, is cleared, and the caller
+    restores it through \a slot with \a prev when the code has run
+*/
+DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev);
+//! Sets the location of the call that the current thread makes; returns the thread's data
+/** @param loc the location of the call expression
+    @param prev receives the previous call site, to be restored with restore_runtime_call_site() after the call
+*/
+DLLLOCAL void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLocation*& prev);
+//! Restores the call site after a call; see set_runtime_call_site()
+DLLLOCAL void restore_runtime_call_site(void* thread_data, const QoreProgramLocation* prev);
+
+//! Clears the call site for the helper's lifetime if requested, and restores it afterwards
+/** For code that runs other code between a call site and the frame that takes it, such as the member initializers
+    of an object that are evaluated before the frame of its constructor is created: only the calls that the code
+    makes set a call site; without a request, as for code that makes no calls, the helper does nothing
+*/
+class QoreHideCallSiteHelper {
+public:
+    DLLLOCAL QoreHideCallSiteHelper(bool hide) : td(hide ? set_runtime_call_site(nullptr, prev) : nullptr) {
+    }
+
+    DLLLOCAL ~QoreHideCallSiteHelper() {
+        if (td) {
+            restore_runtime_call_site(td, prev);
+        }
+    }
+
+    QoreHideCallSiteHelper(const QoreHideCallSiteHelper&) = delete;
+    QoreHideCallSiteHelper& operator=(const QoreHideCallSiteHelper&) = delete;
+
+private:
+    const QoreProgramLocation* prev = nullptr;
+    void* td;
+};
 //! Pushes a fully constructed location on the current thread's call stack
 /** @param stack_loc the location; other threads can read it from now on, so it must not change afterwards
     @param current_stmt receives the thread's current statement, before the location is pushed
@@ -391,6 +436,14 @@ struct RuntimeLocationCache {
     const AbstractStatement** stmt_ptr;
     void* thread_data;   //!< the thread's data, for push_native_call_stack_location()
 };
+
+//! Returns the thread's call site slot, the location of the call being made, from its runtime location slot
+/** The call site follows the runtime location in the thread's data (see QoreRcCallSiteHelper), so IR and native code
+    address it from the runtime location slot that they get once when a function is entered
+*/
+static inline const QoreProgramLocation** qore_call_site_slot(const QoreProgramLocation** loc_ptr) {
+    return loc_ptr + 1;
+}
 
 //! Returns cached pointers to the current thread's runtime location fields.
 //! Call once at function entry, then write through the pointers directly.

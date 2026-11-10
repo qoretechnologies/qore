@@ -233,6 +233,8 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
             "reference (evaluated to type '%s')", lv->getTypeName());
         return QoreValue();
     }
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
     return r->invoke(args, xsink);
 }
 

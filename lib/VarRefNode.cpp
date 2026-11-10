@@ -750,6 +750,8 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
     switch (vrn_type) {
         case VRN_OBJECT: {
             assert(QoreTypeInfo::getUniqueReturnClass(runtime_type_info));
+            // the location of this call is the location of the call stack frame of the constructor
+            QoreRcCallSiteHelper call_site(rc, loc);
             value = qore_class_private::execConstructor(
                 *QoreTypeInfo::getUniqueReturnClass(runtime_type_info), rc, variant, args, xsink, runtime_type_info
             );
@@ -778,6 +780,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
             if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, getProgram(), xsink)) {
                 return QoreValue();
             }
+            QoreRcCallSiteHelper call_site(rc, loc);
             value = qc->execConstructor(args, xsink);
             break;
         }

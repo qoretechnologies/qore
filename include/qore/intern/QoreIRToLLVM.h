@@ -1162,6 +1162,8 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
+    llvm::Value* call_site_cache_ptr = nullptr;
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
@@ -1174,6 +1176,13 @@ private:
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Sets the location of a call instruction as the thread's call site, for the frame of the called code
+    /** As QoreRcCallSiteHelper: the frame of the called code takes the location, so that it is located at the call
+        expression, as for an AST call; emitCallSiteClear() clears it after the call.
+    */
+    void emitCallSiteSet(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Clears the thread's call site after a call or when an exception leaves it; see emitCallSiteSet()
+    void emitCallSiteClear();
 
     // Initialize types and helpers
     void initTypes();

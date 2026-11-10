@@ -80,6 +80,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Call Stack Frames Are Located at Their Calls
+    Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
+    its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
+    more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
     \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the

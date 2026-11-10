@@ -635,11 +635,12 @@ list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_A
    blocks of the statement and of closures that it creates; also calls whose called code is only known at runtime,
    such as calls of methods of objects of unknown classes and of call references, whose \c statement_id is 0; calls
    of builtin code and of the user code of other Programs are not given, as a debugger of this Program does not
-   stop in them.  A debugger steps into a call by matching the functions that the statement calls with the
-   \c function of the call and the number of earlier calls with it in the list; when an operand of a conditional
-   operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the same
-   \c function can be stepped into instead
-   (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>)
+   stop in them.  The call stack frame of called code is located at its call
+   (@ref Qore::CallStackInfo "CallStackInfo"), so a debugger steps into a call by matching the location of the
+   frame of the code that the statement calls with the location of the call, which stays exact when an operand of
+   a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated; where the columns of
+   a call are not known, as in AOT-compiled code, by matching the functions that the statement calls with the
+   \c function of the call and the number of earlier calls with it in the list
 
    @par Example:
    @code{.py}
