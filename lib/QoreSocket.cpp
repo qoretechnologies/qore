@@ -3651,6 +3651,11 @@ static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, Abstr
     return result.release();
 }
 
+void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink) {
+    xsink->raiseException("SOCKET-CLOSED", "the operation of Socket::%s() was canceled before it completed; a close "
+        "of the socket by another thread cancels it", mname);
+}
+
 static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* poller, int timeout_ms,
         const char* owner_name, const char* goal, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -3678,6 +3683,16 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
         qore_socket_exec_poll_operation(*sock_obj, pollable, *op_obj, timeout_ms, owner_name, xsink, ex_out),
         xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a send, a receive, a connect, a TLS upgrade or a TLS shutdown that a close canceled while it waited has a result
+    // without an exception: it must not return as if it had completed (the waits, whose callers handle a canceled
+    // result themselves, return as before)
+    if (result && result->getKeyValue("canceled").getAsBool() && !poller->goalReached()
+            && (!strcmp(goal, "send") || !strcmp(goal, "received") || !strcmp(goal, "connected")
+                || !strcmp(goal, "ssl-connected") || !strcmp(goal, "ssl-upgraded")
+                || !strcmp(goal, "ssl-shutdown"))) {
+        qore_socket_raise_canceled(owner_name, xsink);
         return QoreValue();
     }
     return poller->getOutput();
@@ -4427,6 +4442,8 @@ static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, 
         return -1;
     }
     if (result->isNothing()) {
+        // the operation was canceled: a timeout has an exception
+        qore_socket_raise_canceled("acceptAndReplace", xsink);
         return -1;
     }
     return static_cast<int>(result->getAsBigInt());

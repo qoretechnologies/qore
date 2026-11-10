@@ -2528,6 +2528,137 @@ static void ut_event_loop_sub_ms_timer_wakeups(UnitTestCounters& c) {
     }
 }
 
+#ifndef _Q_WINDOWS
+namespace {
+//! State of the thread that makes a C++ API call in ut_socket_closed_during_cpp_call()
+struct UtClosedCallThread {
+    QoreSocketObject* sock;
+    //! true for a send that waits (the peer does not read), false for a receive that waits (the peer sends nothing)
+    bool send;
+    QoreThreadLock l;
+    QoreCondition cond;
+    bool started = false;
+    bool done = false;
+    //! the error of the call, or "returned"
+    std::string result;
+};
+
+void ut_closed_call_thread(ExceptionSink* xsink, void* arg) {
+    UtClosedCallThread* t = static_cast<UtClosedCallThread*>(arg);
+    // the data of a send, more than the buffers of a loopback connection hold, is made before the thread reports
+    // that it has started, so that the close can come while the send waits
+    std::vector<char> buf(t->send ? 32 * 1024 * 1024 : 0, 'x');
+    {
+        AutoLocker al(t->l);
+        t->started = true;
+        t->cond.broadcast();
+    }
+    std::string result;
+    if (t->send) {
+        t->sock->send(buf.data(), static_cast<int>(buf.size()), -1, xsink);
+    } else {
+        SimpleRefHolder<QoreStringNode> str(t->sock->recv(static_cast<qore_offset_t>(1), -1, xsink));
+    }
+    if (*xsink) {
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        result = err->c_str();
+        xsink->clear();
+    } else {
+        result = "returned";
+    }
+    AutoLocker al(t->l);
+    t->result = result;
+    t->done = true;
+    t->cond.broadcast();
+}
+}
+
+//! A send or a receive of the C++ Socket API that another thread closes the socket during ends with the close
+/** The C++ API of QoreSocketObject, which the HTTP clients use, has paths of its own to the async I/O controller.  A
+    close of the socket by another thread cancels an operation that waits on the I/O thread, and a canceled call
+    returned as if it had completed (a send with success, a receive with the data it had).  Each
+    iteration closes the socket as soon as the calling thread has started; the call must end with SOCKET-CLOSED or
+    SOCKET-NOT-OPEN, and the send, which always waits, must end with SOCKET-CLOSED in some iterations at least.
+*/
+static void ut_socket_closed_during_cpp_call(UnitTestCounters& c) {
+    for (int mode = 0; mode < 2; ++mode) {
+        bool send = !mode;
+        const char* what = send ? "send" : "recv";
+        std::map<std::string, int> results;
+        for (int i = 0; i < 100; ++i) {
+            ExceptionSink xsink;
+            QoreSocketObject* listener = new QoreSocketObject;
+            ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+            int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+            if (!rc && !xsink) {
+                rc = listener->listen(5);
+            }
+            QoreSocketObject* client = new QoreSocketObject;
+            ReferenceHolder<QoreObject> client_obj(new QoreObject(QC_SOCKET, getProgram(), client), &xsink);
+            if (!rc && !xsink) {
+                rc = client->connectINET("127.0.0.1", listener->getPort(), 5000, &xsink);
+            }
+            // the connection is in the listener's queue: wait for it, as the listener is non-blocking
+            int peer = -1;
+            if (!rc && !xsink) {
+                struct pollfd lpfd = {listener->getPollableDescriptor(), POLLIN, 0};
+                if (::poll(&lpfd, 1, 10000) == 1) {
+                    peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+                }
+            }
+            if (rc || xsink || peer < 0) {
+                UT_ASSERT(c, false, "the C++ call's connection is made");
+                xsink.clear();
+                return;
+            }
+            struct PeerCloser {
+                int fd;
+                ~PeerCloser() {
+                    ::close(fd);
+                }
+            } peer_closer{peer};
+
+            UtClosedCallThread t;
+            t.sock = client;
+            t.send = send;
+            if (q_start_thread(&xsink, ut_closed_call_thread, &t) < 0) {
+                UT_ASSERT(c, false, "the calling thread starts");
+                xsink.clear();
+                return;
+            }
+            {
+                AutoLocker al(t.l);
+                while (!t.started) {
+                    t.cond.wait(t.l);
+                }
+            }
+            if (send && (i & 1)) {
+                // in every other iteration the close comes once the send has written data: it is in progress on the
+                // I/O thread then (the data is more than the buffers hold)
+                struct pollfd pfd = {peer, POLLIN, 0};
+                UT_ASSERT(c, ::poll(&pfd, 1, 10000) == 1, "the send writes data");
+            }
+            client->close();
+            // the close ends the call, which waits for nothing else: the wait is not bounded by a timeout
+            AutoLocker al(t.l);
+            while (!t.done) {
+                t.cond.wait(t.l);
+            }
+            ++results[t.result];
+        }
+        for (auto& [result, count] : results) {
+            UT_ASSERT(c, result == "SOCKET-CLOSED" || result == "SOCKET-NOT-OPEN",
+                (std::string("C++ ") + what + ": " + result + " in " + std::to_string(count)
+                    + " of 100 iterations").c_str());
+        }
+        if (send) {
+            UT_ASSERT(c, results.count("SOCKET-CLOSED"),
+                "C++ send: a close by another thread ends a send that waits with SOCKET-CLOSED");
+        }
+    }
+}
+#endif
+
 //! Tests that a close racing with the release of a socket's descriptor never reaches the reused descriptor number
 /** The system gives the lowest free descriptor number to the next socket opened by any thread.  A close or
     prepareForClose() that read the number before a concurrent close released it, and used it afterwards, shut down
@@ -16993,6 +17124,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #endif
 #endif
     ut_socket_close_race_releases_descriptor_once(c);
+#ifndef _Q_WINDOWS
+    ut_socket_closed_during_cpp_call(c);
+#endif
     ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);
     ut_asyncio_construction(c);

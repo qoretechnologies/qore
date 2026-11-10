@@ -250,6 +250,16 @@ DLLLOCAL void se_timeout(const char* cname, const char* meth, int timeout_ms, Ex
     const char* extra = nullptr);
 DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsink);
 
+//! Raises SOCKET-CLOSED for a synchronous call whose operation was canceled before it reached its goal
+/** A close of the socket by another thread cancels the operation that waits on the I/O thread; its result has no
+    exception, and the call must not return as if it had completed.  Another cancel (of the operation's owner, or the
+    controller's stop) ends the call in the same way.
+
+    @param mname the name of the Socket method
+    @param xsink for the exception
+*/
+DLLLOCAL void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink);
+
 class Transform;
 
 #ifdef _Q_WINDOWS
