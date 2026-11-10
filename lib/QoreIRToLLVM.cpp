@@ -27570,7 +27570,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
-                auto lc_ft =llvm::FunctionType::get(i64_type,
+                auto lc_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_load_closure_aot", lc_ft);
                 auto helper_throwing = module.getOrInsertFunction(
@@ -27697,7 +27697,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
-                auto sc_ft =llvm::FunctionType::get(void_type,
+                auto sc_ft = llvm::FunctionType::get(void_type,
                         {ptr_type, i32_type, i64_type, ptr_type}, false);
                 const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_store_closure_aot"
                         : "qore_rt_store_closure_eval_weak_aot";

@@ -78,6 +78,27 @@ try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
 code c = sub () { int e = 0; for (int n = 0; n < 3; ++n) { on_exit { foreach int i in (1, 2) { code f = sub () { e += i * (n + 1); }; f(); } } } printf(\"e=%d\\n\", e); };
 c();
 "},
+            # leaving the loop of the handler early pops its variable at the break
+            {"name": "break-out-of-handler-foreach", "out": "e=4\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { foreach int i in (1, 2, 3) { code f = sub () { e += i; }; f(); if (i == 2) break; } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            # each recursive frame has its own variables on the closure variable stack
+            {"name": "recursion-with-rethrow", "out": "n=0 e=2\ncaught 1 e=1\nn=1 e=3\ncaught 2 e=2\nn=2 e=4\nSV\n", "src": "%modern
+sub c(int n, bool fail) { int e = n; on_error { try { throw \"IN\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"n=%d e=%d\\n\", n, e); } if (n > 0) { try { c(n-1, fail); } catch (hash<ExceptionInfo> x) { printf(\"caught %d e=%d\\n\", n, e); throw x.err; } } else if (fail) throw \"SV\"; }
+try { c(2, True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            # locals that the function declares after the handler
+            {"name": "locals-declared-after-the-handler", "out": "e=4\nSV\nlate=6\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; code g = sub() { e++; }; g(); on_error { try { throw \"IN\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"e=%d\\n\", e); } int late = 5; code h = sub() { late++; }; h(); if (fail) throw \"SV\"; printf(\"late=%d\\n\", late); };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+c(False);
+"},
+            # a handler that raises its own exception after its closure ran
+            {"name": "handler-throws", "out": "SV \"R\"\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { try { throw \"INNER\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); throw \"R\"; } } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s %y\\n\", ex.err, ex.next.err); }
+"},
         );
     }
 
@@ -111,7 +132,20 @@ c();
             libqore_dir, path), True);
     }
 
+    #! compiles a trivial program with qcc and returns True if it produced an executable
+    private bool qccAvailable() {
+        string src = write(tmp.path + "/probe.qr", "%modern\nprintf(\"ok\\n\");\n");
+        string exe = tmp.path + "/probe";
+        backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1", libqore_dir,
+            libqore_dir, libqore_dir, qcc_bin, exe, src));
+        return is_file(exe);
+    }
+
     testHandlerCaptures() {
+        # a build without qcc has nothing to compile; a compile failure of any case below is a failure
+        if (!qccAvailable()) {
+            testSkip("qcc is not available or cannot compile a trivial program");
+        }
         foreach hash<auto> c in (Cases) {
             string src = write(tmp.path + "/" + c.name + ".qr", c.src);
             # the AST interpreter is the reference
@@ -127,9 +161,7 @@ c();
                 string exe = tmp.path + "/" + c.name + ".O" + opt;
                 string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%s -o %s %s 2>&1",
                     libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, src));
-                if (!is_file(exe)) {
-                    testSkip("qcc is not available or cannot compile: " + out);
-                }
+                assertTrue(is_file(exe), sprintf("%s: qcc -O%s compiled an executable: %s", c.name, opt, out));
                 hash<ExecModeHarness::ModeRunResult> r = runExe(exe);
                 assertEq(0, r.rc, sprintf("%s: qcc -O%s exit status: %s", c.name, opt, r.out));
                 assertEq(c.out, r.stdout, sprintf("%s: qcc -O%s output", c.name, opt));
