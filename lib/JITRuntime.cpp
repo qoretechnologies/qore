@@ -785,6 +785,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref(uint64_t val) {
 
 //! Returns the bits of the result of an operation whose helper native code checks for an exception only when the
 //! result is NOTHING (QoreIRToLLVM::emitExceptionCheckIfNothing()): NOTHING if the operation raised an exception
+/** The operators that the untyped addition, subtraction and multiplication evaluate do not promise NOTHING when they
+    raise; a division or a modulo returns NOTHING when it raises, so its helper needs no check of its own.
+*/
 static inline uint64_t qore_rt_result_or_nothing(QoreValue result, ExceptionSink* xsink) {
     if (xsink && *xsink) {
         result.discard(xsink);
@@ -838,15 +841,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t rig
 extern "C" DLLEXPORT uint64_t qore_rt_div_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
+    // NOTHING when it raises (a division by zero), as native code expects (see qore_rt_result_or_nothing())
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::DivAny, lv, rv, xsink);
-    return qore_rt_result_or_nothing(result, xsink);
+    return toBits(result);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_mod_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
+    // NOTHING when it raises (a division by zero), as native code expects (see qore_rt_result_or_nothing())
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::ModAny, lv, rv, xsink);
-    return qore_rt_result_or_nothing(result, xsink);
+    return toBits(result);
 }
 
 // Timeout arithmetic: `int + date` or `date + int` where the int is interpreted
@@ -909,7 +914,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_number_div(uint64_t left, uint64_t right, 
     if (!ln || !rn) {
         return toBits(QoreValue());
     }
-    return qore_rt_result_or_nothing(QoreValue(ln->doDivideBy(*rn, xsink)), xsink);
+    // NOTHING when it raises (a division by zero), as native code expects (see qore_rt_result_or_nothing())
+    return toBits(QoreValue(ln->doDivideBy(*rn, xsink)));
 }
 
 // --- Integer/float division with zero check ---

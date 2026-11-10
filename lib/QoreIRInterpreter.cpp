@@ -13019,7 +13019,7 @@ load_local_done:
                                 || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
                             continue;
                         }
-                        removeAllCleanupEntries(cleanup, id);
+                        // the entry stays for the slot's next value, as for the element above
                         QoreValue v = values[id];
                         values[id] = QoreValue();
                         // every value is released; an exception that a destructor raises is added to any other
