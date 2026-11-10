@@ -196,4 +196,9 @@ public:
     }
 };
 
+#ifdef DEBUG
+//! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses;
+#endif
+
 #endif

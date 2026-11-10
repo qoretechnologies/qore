@@ -86,6 +86,12 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Restricted Code Cannot Change a Module's State
+    The code of a sandboxed %Program, or of a %Program with \c PO_NO_PROCESS_CONTROL set, can read but no longer
+    change the public variables of a trusted module or the static members of its classes, which every importer
+    shares: a change raises \c MODULE-VARIABLE-READ-ONLY, and such code must call a function or method that the
+    module exports to set the value; see @ref module_public_variables.
+
     @par Modules May Not Declare Public thread_local Variables
     A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
     compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module
