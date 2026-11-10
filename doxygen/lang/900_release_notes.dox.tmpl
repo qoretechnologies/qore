@@ -1575,6 +1575,10 @@
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
+    - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with square brackets evaluated their
+      selectors while they held the lock of a global variable, an object member or a static class variable, so that a
+      selector that read it aborted debug builds or deadlocked; the selectors are now evaluated after the path to the
+      lvalue and before its lock, as in the other execution modes
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
