@@ -6288,11 +6288,16 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
             // takes a "reference<string>" argument), at a point the analysis does not see - even before the read,
             // in an earlier iteration of a loop.  Such a read can be NOTHING whatever its declared type, so it
             // must not let compiled code skip the checks for NOTHING.
+            // A local of a reference type (such as a "reference<int>" parameter) is assigned with the reference,
+            // but a read gives the referenced value, which can have no value whatever the referenced type: the
+            // target can be cleared through another path (a member of an object deleted since, a removed hash
+            // key or variable), so such a read must not let compiled code skip the checks for NOTHING either.
             const VarRefNode* var = dynamic_cast<const VarRefNode*>(node);
             if (var) {
                 qore_var_t var_type = var->getType();
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->closureUse()) {
+                        && var->ref.id && (var->ref.id->closureUse()
+                            || QoreTypeInfo::getReferenceTarget(var->ref.id->getTypeInfo()))) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
@@ -14410,8 +14415,12 @@ bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const
         // Guard insertion treats unassigned locals as valid NOTHING values, but
         // overload dispatch must fall back when a selected non-NOTHING variant
         // could reject that runtime value.
+        // a local that is the target of a reference or captured by a closure, or of a reference type (whose read
+        // gives the referenced value), can have no value whatever its declared type (see getAnalysis())
         const QoreTypeInfo* local_type = local->parseGetTypeInfo();
         return !parse_context
+            || local->closureUse()
+            || QoreTypeInfo::getReferenceTarget(local->getTypeInfo())
             || !parse_context->isLocalDefinitelyAssigned(local)
             || !local_type
             || QoreTypeInfo::parseReturns(

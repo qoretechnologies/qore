@@ -993,7 +993,20 @@ extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     }
 }
 
+//! Returns true if a NaN-boxed value may own a reference: a node pointer (0xFFFA), an enum member (0xFFFD) or an
+//! opaque reference (0xFFD0-0xFFDF); any other value (a double, an int, a short string, a special value, a char)
+//! holds none, and releasing it does nothing
+static inline __attribute__((always_inline)) bool qore_rt_bits_may_own_reference(uint64_t val) {
+    uint16_t tag = static_cast<uint16_t>(val >> 48);
+    return tag == 0xFFFA || tag == 0xFFFD || (tag >= 0xFFD0 && tag <= 0xFFDF);
+}
+
+// compiled code releases its temporaries with these helpers whatever their values, most of which own no reference
 extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
+    if (!qore_rt_bits_may_own_reference(val)) {
+        assert(!fromBits(val).isReferenceCounted());
+        return;
+    }
     QoreValue v = fromBits(val);
     v.discard(xsink);
 }
@@ -1007,6 +1020,10 @@ extern "C" DLLEXPORT void qore_rt_release_reference_read(uint64_t* slot, uint64_
 }
 
 extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
+    if (!qore_rt_bits_may_own_reference(val)) {
+        assert(!fromBits(val).isReferenceCounted());
+        return;
+    }
     QoreValue v = fromBits(val);
     v.discard(nullptr);
 }

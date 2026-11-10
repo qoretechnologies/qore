@@ -16054,12 +16054,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // unchanged is checked and converted like an assignment to a boxed local, so an unsuitable value raises
             // an error instead of being converted silently; returns the converted NaN-boxed value, or nullptr if
             // the operand needs no check
+            auto native_local_value_needs_check = [&]() -> bool {
+                const QoreTypeInfo* local_type = linst->local
+                    ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
+                return QoreTypeInfo::hasType(local_type) && nanboxed_values.count(inst->operands[0].id)
+                    && qore_ir_return_needs_coercion(local_type, current_ir_func
+                        ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr);
+            };
             auto check_native_local_value = [&]() -> llvm::Value* {
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
-                if (!QoreTypeInfo::hasType(local_type) || !nanboxed_values.count(inst->operands[0].id)
-                        || !qore_ir_return_needs_coercion(local_type, current_ir_func
-                            ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr)) {
+                if (!native_local_value_needs_check()) {
                     return nullptr;
                 }
                 llvm::Function* func = builder->GetInsertBlock()->getParent();
@@ -16097,14 +16102,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (is_native_int) {
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
-                llvm::Value* checked = check_native_local_value();
-                llvm::Value* native_val = checked
-                    ? builder->CreateCall(module.getOrInsertFunction("qore_rt_to_int",
-                        llvm::FunctionType::get(i64_type, {i64_type}, false)), {checked})
-                    : QoreTypeInfo::equal(
-                        local_type, timeoutTypeInfo)
-                    ? ensureTimeoutTypeInline(val, inst->operands[0].id)
-                    : ensureIntTypeInline(val, inst->operands[0].id);
+                llvm::Value* native_val;
+                if (native_local_value_needs_check()) {
+                    // a value that is an int is accepted unchanged by the type of a native int local: only any other
+                    // value (no value, a value of another type) is checked and converted out of line
+                    llvm::BasicBlock* int_bb = llvm::BasicBlock::Create(ctx, "native_store_int", llvm_func);
+                    llvm::BasicBlock* check_bb = llvm::BasicBlock::Create(ctx, "native_store_check", llvm_func);
+                    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "native_store_merge", llvm_func);
+                    llvm::Value* is_int = builder->CreateICmpEQ(
+                        builder->CreateAnd(val, llvm::ConstantInt::get(i64_type, TAG_MASK)),
+                        llvm::ConstantInt::get(i64_type, TAG_INT48));
+                    builder->CreateCondBr(is_int, int_bb, check_bb, llvm::MDBuilder(ctx).createBranchWeights(1000, 1));
+                    builder->SetInsertPoint(int_bb);
+                    // sign-extend the 48-bit payload
+                    llvm::Value* int_val = builder->CreateAShr(builder->CreateShl(val, 16), 16);
+                    llvm::BasicBlock* int_end = builder->GetInsertBlock();
+                    builder->CreateBr(merge_bb);
+                    builder->SetInsertPoint(check_bb);
+                    llvm::Value* checked = check_native_local_value();
+                    assert(checked);
+                    llvm::Value* checked_val = builder->CreateCall(module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false)), {checked});
+                    llvm::BasicBlock* check_end = builder->GetInsertBlock();
+                    builder->CreateBr(merge_bb);
+                    builder->SetInsertPoint(merge_bb);
+                    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "native_store_val");
+                    phi->addIncoming(int_val, int_end);
+                    phi->addIncoming(checked_val, check_end);
+                    native_val = phi;
+                } else {
+                    native_val = QoreTypeInfo::equal(local_type, timeoutTypeInfo)
+                        ? ensureTimeoutTypeInline(val, inst->operands[0].id)
+                        : ensureIntTypeInline(val, inst->operands[0].id);
+                }
                 builder->CreateStore(native_val, it->second.storage());
                 markLocalCacheFresh(key, llvm_func);
                 if (inst->result.isValid()) {
