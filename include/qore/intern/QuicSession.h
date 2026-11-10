@@ -57,6 +57,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <queue>
 #include <string>
 #include <unordered_map>
@@ -1074,6 +1075,35 @@ public:
         return remote_settings_received_.load(std::memory_order_acquire);
     }
 
+    //! The result of waitForRemoteSettings()
+    enum class SettingsWait {
+        Received,   //!< the peer's SETTINGS have been received
+        Closed,     //!< the connection was closed before
+        Timeout,    //!< the timeout expired before
+    };
+
+    //! Waits until the peer's HTTP/3 SETTINGS have been received or the connection is closed
+    /** Must not be called on the thread that reads the connection's packets (the async I/O thread), which would never
+        receive them.  A close of the connection that the session itself does not see (a client poll operation that is
+        closed, a socket that drops the session) wakes the waiters with wakeSettingsWaiters().
+
+        @param timeout_ms the maximum time to wait; negative = no limit, 0 = check only
+
+        @return Received, Closed or Timeout
+    */
+    DLLLOCAL SettingsWait waitForRemoteSettings(int64_t timeout_ms);
+
+    //! Wakes the threads in waitForRemoteSettings(), which check the SETTINGS and the connection again
+    /** May be called with mtx_ held: a waiter never holds settings_wait_mtx_ while it takes mtx_
+    */
+    DLLLOCAL void wakeSettingsWaiters();
+
+    //! Ends the current and later waits in waitForRemoteSettings() with SettingsWait::Closed
+    /** For a close that the session does not see itself: the client poll operation of the session is closed, or
+        the socket dropped the session; a request submitted afterwards reports the state of the connection
+    */
+    DLLLOCAL void releaseSettingsWaiters();
+
     //! Returns true if remote SETTINGS have been received and enable_connect_protocol was not set
     /** Used by the client to detect servers that don't support extended CONNECT (RFC 9220).
     */
@@ -1081,21 +1111,6 @@ public:
         return remote_settings_received_.load(std::memory_order_acquire)
             && !remote_enable_connect_protocol_.load(std::memory_order_acquire);
     }
-
-    //! Submit a client-side extended CONNECT request (RFC 9220)
-    /** Opens a bidirectional stream and sends a CONNECT request with the :protocol
-        pseudo-header.  Uses a deferred data provider so the stream stays open for
-        bidirectional tunnel data (e.g., WebSocket frames).  A request is refused on a closed connection, as by
-        submitRequest().
-
-        @param path the request path (e.g., "/" or "/ws")
-        @param headers additional request headers
-        @param protocol the :protocol pseudo-header value (e.g., "websocket")
-        @param xsink exception sink
-        @return the stream ID on success, or -1 on error
-    */
-    DLLLOCAL int64_t submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
-        const char* protocol, ExceptionSink* xsink);
 
     //! Cancel a QUIC stream (send RESET_STREAM + STOP_SENDING)
     /** @param stream_id the stream to cancel
@@ -1981,6 +1996,29 @@ private:
     std::atomic<bool> remote_enable_connect_protocol_{false};
     std::atomic<bool> remote_settings_received_{false};
 
+    //! Protects settings_wait_gen_ for waitForRemoteSettings(); never held while mtx_ is taken
+    std::mutex settings_wait_mtx_;
+    //! Signaled when settings_wait_gen_ changes
+    std::condition_variable settings_wait_cv_;
+    //! Incremented by wakeSettingsWaiters(): the SETTINGS were received or the connection may have been closed
+    uint64_t settings_wait_gen_ = 0;
+    //! Set by releaseSettingsWaiters(): waitForRemoteSettings() returns SettingsWait::Closed
+    std::atomic<bool> settings_wait_released_{false};
+
+#ifdef DEBUG
+    //! DEBUG: the peer's SETTINGS held back from this client session (see qore_quic_test_hold_client_settings())
+    bool test_settings_held_ = false;
+    //! DEBUG: whether the held SETTINGS advertised SETTINGS_ENABLE_CONNECT_PROTOCOL
+    bool test_held_enable_connect_ = false;
+    friend void qore_quic_test_hold_client_settings(bool hold);
+#endif
+
+    //! Records the peer's HTTP/3 SETTINGS (RFC 9114 section 7.2.4) and wakes the waiters; from the SETTINGS callback
+    DLLLOCAL void onRemoteSettings(bool enable_connect_protocol);
+
+    //! Stores the peer's SETTINGS and wakes the threads in waitForRemoteSettings()
+    DLLLOCAL void applyRemoteSettings(bool enable_connect_protocol);
+
     //! Whether a server session advertises SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220); set before setupHttp3()
     bool enable_connect_protocol_ = true;
 
@@ -2119,6 +2157,21 @@ DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
 
 //! Debug-only: the number of QUIC packets that client and server connections of the process have processed
 DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
+
+//! Debug-only: holds back the server's HTTP/3 SETTINGS from the client sessions of the process, or releases them
+/** While held, a client session that receives the server's SETTINGS does not record them, as if they had not arrived
+    yet: QuicSession::isRemoteSettingsReceived() stays false, and QuicSession::waitForRemoteSettings() waits.  A release
+    (\a hold false) records the SETTINGS held so far, as they were received, and wakes the waiters, without network
+    I/O, so a test controls when they arrive.
+*/
+DLLLOCAL void qore_quic_test_hold_client_settings(bool hold);
+
+//! Debug-only: the number of client sessions whose SETTINGS are held (see qore_quic_test_hold_client_settings())
+DLLLOCAL int64_t qore_quic_test_held_client_settings();
+
+//! Debug-only: waits until \a count threads of the process wait in QuicSession::waitForRemoteSettings(); returns
+//! false on timeout
+DLLLOCAL bool qore_quic_test_wait_settings_waiters(int64_t count, int64_t timeout_ms);
 
 //! Debug-only: records a UDP socket that QUIC connections of the process receive packets on
 /** qore_quic_test_advance_clock() advances the clock only when none of these sockets has a packet waiting to be

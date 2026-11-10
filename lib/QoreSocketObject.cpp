@@ -6637,6 +6637,47 @@ void QoreSocketObject::clearNonBlock(unsigned direction) {
     priv->clearNonBlock(direction);
 }
 
+int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int64 timeout_ms, ExceptionSink* xsink) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(s);
+    if (!session) {
+        xsink->raiseException("HTTP3-ERROR", "no HTTP/3 session active");
+        return -1;
+    }
+    if (session->isRemoteSettingsReceived()) {
+        return 1;
+    }
+    // the I/O thread reads the SETTINGS, and a continuePoll() worker holds up the operation that it runs
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        xsink->raiseException("HTTP3-STATE-ERROR", "cannot wait for the server's HTTP/3 SETTINGS in the async I/O "
+            "thread or in a continuePoll() worker, which read them");
+        return -1;
+    }
+    switch (session->waitForRemoteSettings(timeout_ms)) {
+        case QuicSession::SettingsWait::Received:
+            return 1;
+        case QuicSession::SettingsWait::Timeout:
+            return 0;
+        case QuicSession::SettingsWait::Closed:
+            break;
+    }
+    switch (session->getCloseReason()) {
+        case QuicSession::CloseReason::Idle:
+            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
+                "server's HTTP/3 SETTINGS were received");
+            break;
+        case QuicSession::CloseReason::PeerClose:
+            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
+                "SETTINGS were received");
+            break;
+        default:
+            // closed locally, or the socket dropped the session
+            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the server's HTTP/3 "
+                "SETTINGS were received");
+            break;
+    }
+    return -1;
+}
+
 bool QoreSocketObject::isQuic() const {
     AutoLocker al(priv->m);
     return priv->hasQuicSession();

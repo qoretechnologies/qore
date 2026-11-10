@@ -2139,8 +2139,20 @@ public:
 
     //! Remove a QUIC session from the session map
     DLLLOCAL void removeQuicSession(int64_t session_id) {
-        AutoLocker al(quic_sessions_lock);
-        quic_sessions.erase(session_id);
+        std::shared_ptr<QuicSession> session;
+        {
+            AutoLocker al(quic_sessions_lock);
+            auto i = quic_sessions.find(session_id);
+            if (i == quic_sessions.end()) {
+                return;
+            }
+            session = std::move(i->second);
+            quic_sessions.erase(i);
+        }
+        // a thread waiting for the peer's SETTINGS on the dropped session (Socket::waitForQuicSettings()) is woken
+        if (session) {
+            session->releaseSettingsWaiters();
+        }
     }
 
     //! Get a QUIC session by session ID
@@ -2641,6 +2653,10 @@ public:
                     session->clearDispatcher();
                 }
                 old_quic_sessions.swap(quic_sessions);
+            }
+            // a thread waiting for the peer's SETTINGS (Socket::waitForQuicSettings()) is woken by the close
+            for (auto& [id, session] : old_quic_sessions) {
+                session->releaseSettingsWaiters();
             }
         }
         // Free shared server SSL_CTX after all sessions are released
