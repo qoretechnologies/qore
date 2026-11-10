@@ -462,11 +462,11 @@ public:
         new_args.discard(nullptr);
     }
 
-    DLLLOCAL virtual bool stayInTree() const {
+    DLLLOCAL virtual bool stayInTree() const override {
         return true;
     }
 
-    DLLLOCAL const char* parseGetTypeName() const {
+    DLLLOCAL virtual const char* parseGetTypeName() const override {
         return typeInfo ? QoreTypeInfo::getName(typeInfo) : parseTypeInfo->cscope->getIdentifier();
     }
 
@@ -542,11 +542,11 @@ protected:
     std::string dynamic_hashdecl_name;
     bool runtime_check = false;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override;
 
     // initializes during parsing
-    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) override;
 
     DLLLOCAL int parseInitConstructorCall(const QoreProgramLocation* loc, QoreParseContext& parse_context,
             const QoreClass* qc);

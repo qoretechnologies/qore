@@ -997,7 +997,9 @@ if (resp.status_code == 200) {
     - \c headers: response headers
 
     @throw HTTP3-ERROR if HTTP/3 is not available
-    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT, or the protocol contains a NUL or another control character than horizontal tab
+    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails, or the protocol contains a NUL or another control character than horizontal tab
+    @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the server's SETTINGS did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220), so it does not support extended CONNECT; the request is not sent
+    @throw HTTP3-EXTENDED-CONNECT-ERROR the server's HTTP/3 SETTINGS, which can arrive after the QUIC handshake and say whether it supports extended CONNECT, did not arrive within the connect timeout; the request is not sent
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
     @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 

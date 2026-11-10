@@ -106,8 +106,8 @@ string sub opacity_after_null_check(auto value) {
 }
 
 #! a function with two variants, neither of which takes NULL
-/** public: a module function runs in the Program that calls it, where call_function() resolves the name, so the
-    module exports it
+/** public so that code using the module can call it as well; module code resolves the name with call_function() in
+    the module's Program, where private names exist too
 */
 public string sub overloaded(int i) {
     return "int";

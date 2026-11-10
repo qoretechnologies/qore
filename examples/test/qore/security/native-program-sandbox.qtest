@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its scenarios run in child processes that set their own execution modes and an AOT executable
 
 # A Program that C++ code creates on behalf of sandboxed code is sandboxed (issue #5659): a Program created while a
 # sandbox governs the thread, or by the code of a sandboxed Program, is sandboxed wherever it is created - by

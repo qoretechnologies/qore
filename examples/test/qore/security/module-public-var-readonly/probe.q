@@ -230,7 +230,7 @@ sub check_message(string key, Program p, string func, string what) {
 }
 
 # a Program that restricted code creates is restricted as well: a child Program inherits the parent's parse options
-# (qore#5664); a child of a sandboxed Program is sandboxed with qore#5659
+# (qore#5664); a child of a sandboxed Program is sandboxed (qore#5659)
 foreach string ctx in (("sandbox", "no-pc")) {
     OurVarMod::reset();
     Program s(PO_NEW_STYLE | (ctx == "no-pc" ? PO_NO_PROCESS_CONTROL : 0));
