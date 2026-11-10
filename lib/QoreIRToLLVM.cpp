@@ -2329,6 +2329,13 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
             current_body_locals.insert(reinterpret_cast<const void*>(lv));
         }
     }
+    // the closure-bound locals that an on_block_exit handler declares are its own, as the body locals of a function
+    // are: a catch variable of a catch block that ends in a throw or rethrow has no InstantiateLocal or
+    // UninstantiateLocal, so it was taken for a variable of an outer scope, read from the runtime stack where it had
+    // never been instantiated, and a closure capturing it failed to find it
+    for (const LocalVar* lv : func.handler_own_locals) {
+        current_body_locals.insert(reinterpret_cast<const void*>(lv));
+    }
 
     // First pass: identify block-scoped locals (those with explicit UninstantiateLocal
     // or InstantiateLocal)

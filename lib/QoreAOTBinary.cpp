@@ -14681,6 +14681,26 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         writer.writeU32(binding_index);
     }
 
+    // 2b. The handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
+    // declares itself, which its lowering does not mark pre-instantiated; every one has a parent slot, as the lowering
+    // reserves slots in the function for the locals of a handler (see qore_ir_reserve_handler_local_slots())
+    {
+        std::vector<uint32_t> own_slots;
+        own_slots.reserve(func.handler_own_locals.size());
+        for (const LocalVar* lv : func.handler_own_locals) {
+            auto slot_it = func.local_var_slots.find(lv);
+            assert(slot_it != func.local_var_slots.end() && slot_it->second < func.parent_slot_count);
+            if (slot_it != func.local_var_slots.end() && slot_it->second < func.parent_slot_count) {
+                own_slots.push_back(slot_it->second);
+            }
+        }
+        std::sort(own_slots.begin(), own_slots.end());
+        writer.writeU32(static_cast<uint32_t>(own_slots.size()));
+        for (uint32_t slot_id : own_slots) {
+            writer.writeU32(slot_id);
+        }
+    }
+
     // 3. Body locals
     for (auto* lv : func.all_body_locals) {
         writer.writeStringRef(lv->getName());

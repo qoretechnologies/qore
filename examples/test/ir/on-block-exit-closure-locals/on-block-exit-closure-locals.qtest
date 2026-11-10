@@ -39,8 +39,10 @@
     closure bodies): a handler read from serialized IR had no pre-instantiated variables, so after #5653 the IR
     interpreter took every closure-bound variable of the closure for one of the handler's own, which started with no
     value (\c add30(\\e) left \c e at 30 instead of 31, and a thread started by the handler read no value), and the
-    handler's updates were lost.  A closure read from its IR and compiled with the JIT crashed when it created a
-    closure, as the IR read had no closure node for it.
+    handler's updates were lost.  The handler's own variables are those that its lowering gives it, which the
+    serialized IR records: they include a catch variable of a catch block that ends in a rethrow, and the variables of
+    a nested handler, which its IR alone does not show.  A closure read from its IR and compiled with the JIT crashed
+    when it created a closure, as the IR read had no closure node for it.
 */
 class OnBlockExitClosureLocalsTest inherits QUnit::Test {
     public {
@@ -82,18 +84,24 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
                 "block handlers: block error b=102 e=101; block exit b=132 e=131; caught BH",
                 "own and parent: exit h=35 e=31 sum=66",
                 "own and parent: exit h=35 e=31 sum=66; caught OP",
+                "rethrow catch function: error e=31; f=Q e=31; caught Q",
+                "rethrow catch closure: error e=31; f=Q e=31; caught Q",
+                "nested error function: nested error z=36 e=31; caught N1+N2",
+                "nested error closure: nested error z=36 e=31; caught N1+N2",
             ),
         };
 
         #! the ways an AOT executable runs its closures, by the environment that selects them: native closure bodies,
         #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created, and
         #! compiled with the JIT on its first call
+        #! (an executable runs with ExecModeHarness::TraceEnv, which compiles a function with the JIT after its first
+        #! call; the IR modes raise the JIT threshold, so that the closures keep running on the IR interpreter)
         const AOTClosureModes = {
             "native closures": "",
-            "closures from IR": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
-            "closures from IR read eagerly": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1",
-            "closures from IR compiled with the JIT": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_JIT_SYNC_COMPILE=1 "
-                "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1",
+            "closures from IR": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_JIT_THRESHOLD=1000000000",
+            "closures from IR read eagerly": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1 "
+                "QORE_JIT_THRESHOLD=1000000000",
+            "closures from IR compiled with the JIT": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
         };
 
         #! each script prints its lines this many times

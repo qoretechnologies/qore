@@ -191,8 +191,11 @@ static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, c
         if (lv && lv->closureUse()) {
             handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
             handler_func.pre_instantiated_cache.erase(lv);
+            // serialized with the handler's IR, so that a handler read from it is not given them pre-instantiated
+            handler_func.handler_own_locals.insert(lv);
         }
     }
+    handler_func.handler_own_locals_known = true;
 }
 
 static bool blockHasTerminator(const QoreIRBasicBlock* block) {
@@ -4627,9 +4630,6 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
-        // a handler read from serialized IR derives its pre-instantiated locals from its IR, which must give the ones
-        // that the lowering marked (see QoreIRFunction::restoreHandlerPreInstantiatedLocals())
-        assert(handler_func->handlerPreInstantiatedLocalsMatchIR());
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
@@ -4762,9 +4762,6 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
-        // a handler read from serialized IR derives its pre-instantiated locals from its IR, which must give the ones
-        // that the lowering marked (see QoreIRFunction::restoreHandlerPreInstantiatedLocals())
-        assert(handler_func->handlerPreInstantiatedLocalsMatchIR());
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);

@@ -8232,6 +8232,41 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
+    // the handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
+    // declares itself, which restoreHandlerPreInstantiatedLocals() does not mark pre-instantiated
+    if (reader.getHeader().version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
+        if (!need(4, "handler-own local slot count")) {
+            return nullptr;
+        }
+        uint32_t num_own_slots = QoreAOTBinaryReader::readU32(ptr);
+        if (num_own_slots > remaining() / 4) {
+            error = "malformed IR function '";
+            error += display_func_name;
+            error += "': handler-own local slot count " + std::to_string(num_own_slots)
+                + " exceeds remaining payload";
+            return nullptr;
+        }
+        std::unordered_map<uint32_t, const LocalVar*> slot_locals;
+        if (num_own_slots) {
+            for (const auto& [lv, slot_id] : func->local_var_slots) {
+                slot_locals.emplace(slot_id, lv);
+            }
+        }
+        for (uint32_t i = 0; i < num_own_slots; ++i) {
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
+            auto it = slot_locals.find(slot_id);
+            if (slot_id >= parent_slot_count || it == slot_locals.end()) {
+                error = "malformed IR function '";
+                error += display_func_name;
+                error += "': handler-own local slot " + std::to_string(slot_id)
+                    + " is not a parent slot with a local";
+                return nullptr;
+            }
+            func->handler_own_locals.insert(it->second);
+        }
+        func->handler_own_locals_known = true;
+    }
+
     if (extended_closure_locals) {
         for (const auto& i : func->local_var_slots) {
             if (checkCancel()) {

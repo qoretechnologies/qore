@@ -164,6 +164,97 @@ string sub own_and_parent(bool fail) {
     return run(c, fail, \log);
 }
 
+#! an on_error handler of a function updates a local of the function, and its catch block, which ends in a rethrow,
+#! captures its catch variable in a closure (the catch variable has no UninstantiateLocal at the end of the try)
+sub rethrow_catch_function(reference<list<string>> log) {
+    int e = 1;
+    on_error {
+        add30(\e);
+        log += sprintf("error e=%d", e);
+        try {
+            throw "Q";
+        } catch (hash<ExceptionInfo> ce) {
+            code f = string sub () { return ce.err; };
+            log += sprintf("f=%s e=%d", f(), e);
+            rethrow;
+        }
+    }
+    throw "X";
+}
+
+#! rethrow_catch_function() in a closure
+string sub rethrow_catch_closure() {
+    list<string> log;
+    code c = sub (bool fail) {
+        int e = 1;
+        on_error {
+            add30(\e);
+            log += sprintf("error e=%d", e);
+            try {
+                throw "Q";
+            } catch (hash<ExceptionInfo> ce) {
+                code f = string sub () { return ce.err; };
+                log += sprintf("f=%s e=%d", f(), e);
+                rethrow;
+            }
+        }
+        if (fail) {
+            throw "X";
+        }
+    };
+    return run(c, True, \log);
+}
+
+#! an on_error handler of a function has a nested on_error handler, which is not lowered inline, that declares a
+#! closure-bound local and updates a local of the function from a closure
+sub nested_error_function(reference<list<string>> log) {
+    int e = 1;
+    on_error {
+        on_error {
+            int z = 5;
+            code f = sub () { z += e; };
+            f();
+            log += sprintf("nested error z=%d e=%d", z, e);
+        }
+        add30(\e);
+        throw "N2";
+    }
+    throw "N1";
+}
+
+#! nested_error_function() in a closure
+string sub nested_error_closure() {
+    list<string> log;
+    code c = sub (bool fail) {
+        int e = 1;
+        on_error {
+            on_error {
+                int z = 5;
+                code f = sub () { z += e; };
+                f();
+                log += sprintf("nested error z=%d e=%d", z, e);
+            }
+            add30(\e);
+            throw "N2";
+        }
+        if (fail) {
+            throw "N1";
+        }
+    };
+    return run(c, True, \log);
+}
+
+#! runs a function that takes the log and returns its log, with the exception it raised
+string sub run_function(code f) {
+    list<string> log;
+    try {
+        f(\log);
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + chain(ex);
+    }
+    return log.join("; ");
+}
+
 sub main() {
     # every case runs more than once, on both paths where it has two, so that the functions are compiled with tiered
     # execution, and the normal path (where the handler is lowered inline) runs before and after the exception path
@@ -179,6 +270,10 @@ sub main() {
         printf("block handlers: %s\n", block_handlers(True));
         printf("own and parent: %s\n", own_and_parent(False));
         printf("own and parent: %s\n", own_and_parent(True));
+        printf("rethrow catch function: %s\n", run_function(\rethrow_catch_function()));
+        printf("rethrow catch closure: %s\n", rethrow_catch_closure());
+        printf("nested error function: %s\n", run_function(\nested_error_function()));
+        printf("nested error closure: %s\n", nested_error_closure());
     }
 }
 

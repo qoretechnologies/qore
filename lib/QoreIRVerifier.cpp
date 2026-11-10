@@ -2534,7 +2534,7 @@ QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
     return usage;
 }
 
-std::unordered_set<const LocalVar*> QoreIRFunction::getHandlerOwnClosureLocals() const {
+std::unordered_set<const LocalVar*> QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR() const {
     std::unordered_set<const LocalVar*> own;
     if (!parent_slot_count) {
         return own;
@@ -2563,30 +2563,16 @@ void QoreIRFunction::restoreHandlerPreInstantiatedLocals() {
     if (!parent_slot_count) {
         return;
     }
-    std::unordered_set<const LocalVar*> own = getHandlerOwnClosureLocals();
+    if (!handler_own_locals_known) {
+        handler_own_locals = deriveHandlerOwnClosureLocalsFromIR();
+    }
     for (const auto& [lv, slot_id] : local_var_slots) {
-        if (!lv || slot_id >= parent_slot_count || own.count(lv)) {
+        if (!lv || slot_id >= parent_slot_count || handler_own_locals.count(lv)) {
             continue;
         }
         pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         pre_instantiated_cache.insert(lv);
     }
-}
-
-bool QoreIRFunction::handlerPreInstantiatedLocalsMatchIR() const {
-    if (!parent_slot_count) {
-        return true;
-    }
-    std::unordered_set<const LocalVar*> own = getHandlerOwnClosureLocals();
-    for (const auto& [lv, slot_id] : local_var_slots) {
-        if (!lv || slot_id >= parent_slot_count) {
-            continue;
-        }
-        if (static_cast<bool>(pre_instantiated_locals.count(reinterpret_cast<const void*>(lv))) == own.count(lv)) {
-            return false;
-        }
-    }
-    return true;
 }
 
 void QoreIRFunction::computeSlotIdsAndEmbed() {
