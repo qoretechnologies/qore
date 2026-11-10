@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2023 David Nichols
+    Copyright (C) 2003 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -76,7 +76,12 @@ struct qore_sslcert_private {
         OPENSSL_X509_GET0_SIGNATURE_CONST X509_ALGOR* alg;
         X509_get0_signature(&sig, &alg, cert);
         BinaryNode* rv = new BinaryNode;
+#ifdef HAVE_OPENSSL_INIT_CRYPTO
+        // ASN1_STRING is opaque in OpenSSL 4
+        rv->append(ASN1_STRING_get0_data(sig), ASN1_STRING_length(sig));
+#else
         rv->append(sig->data, sig->length);
+#endif
         return rv;
 #else
         int len = cert->signature->length;
