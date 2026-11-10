@@ -752,9 +752,13 @@ Audit findings for apps:
    belongs to, so a module must not contribute an action whose class does uncontrolled external I/O to the app of
    another module that does not declare `external_io` (or that is `sandbox_aware`); register such an action in an
    app of its own that declares it
-7. **Registrations by sandboxed code**: the catalog refuses `registerApp()`, `registerPendingApp()` and
-   `DataProvider::registerFactory()` to sandboxed code, so that a tenant cannot take an app or factory name from the
-   module that owns it; register apps and factories in module initialization, which no sandbox governs
+7. **Registrations by sandboxed code**: the catalog refuses every process-wide registration and removal to sandboxed
+   code (`registerApp()`, `registerPendingApp()`, `registerAction()`, `registerPendingAppAction()`,
+   `registerLazyAppActions()`, `registerAppFileApi()`, `registerDiscoveryInventoryProvider()` and their removals,
+   `deregisterDynamicApp()`, `DataProvider::registerFactory()`, `DataProvider::registerType()`), so that a tenant
+   cannot take a name from the module that owns it, add an action to an app it does not own, or remove one; register
+   them in module initialization, which no sandbox governs (a deferred initialization that trusted code registered may
+   still register on a sandboxed reader's thread)
 
 #### Common Java audit findings
 

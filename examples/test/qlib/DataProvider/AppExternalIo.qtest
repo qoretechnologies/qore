@@ -97,7 +97,8 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
         addTestCase("the catalog refuses sandboxed code the factories of a module with such an app",
             \centralFactoryTest());
-        addTestCase("sandboxed code registers no app and no factory", \sandboxedRegistrationTest());
+        addTestCase("sandboxed code registers nothing in the process-wide catalog", \sandboxedRegistrationTest());
+        addTestCase("a trusted lazy registration runs for a sandboxed reader", \trustedLazyRegistrationTest());
         addTestCase("a subclass of a refused factory is refused", \factorySubclassTest());
         addTestCase("the declarations survive the provider index", \indexRoundTripTest());
         addTestCase("an index published before the declarations existed is read", \developIndexTest());
@@ -434,7 +435,34 @@ public class AppExternalIoTest inherits QUnit::Test {
         # a name that the tenant would take from the module that owns it
         string name = newName("AppExternalIoSquat");
         hash<DataProviderAppInfo> info = appInfo(name);
+        # an app that trusted code registered, controlled: a tenant must not add actions or a file API to it
+        string owned = newName("AppExternalIoOwned");
+        DataProviderActionCatalog::registerApp(appInfo(owned));
+        hash<DataProviderActionInfo> action = <DataProviderActionInfo>{
+            "app": owned, "action": "tenant", "path": "/tenant", "display_name": "tenant", "short_desc": "tenant",
+            "desc": "tenant", "action_code": DPAT_API, "cls": "ExternalIoFixtureProvider",
+        };
+        string type_path = "/qore/test/" + newName("AppExternalIoType");
         foreach hash<auto> i in ({
+            "registerAction": sub () { DataProviderActionCatalog::registerAction(action); },
+            "registerPendingAppAction": sub () {
+                DataProviderActionCatalog::registerPendingAppAction(owned, "tenant", sub () {
+                    DataProviderActionCatalog::registerAction(action);
+                });
+            },
+            "registerLazyAppActions": sub () {
+                DataProviderActionCatalog::registerLazyAppActions(owned, sub () {
+                    DataProviderActionCatalog::registerAction(action);
+                });
+            },
+            "registerAppFileApi": sub () {
+                DataProviderActionCatalog::registerAppFileApi(owned, <DataProviderFileApiInfo>{
+                    "read_action": "tenant", "read_path_option": "path",
+                });
+            },
+            "registerType": sub () {
+                DataProvider::registerType(type_path, AbstractDataProviderType::get(StringType));
+            },
             "registerApp": sub () { DataProviderActionCatalog::registerApp(info); },
             "registerPendingApp": sub () {
                 DataProviderActionCatalog::registerPendingApp(name, sub () {
@@ -450,17 +478,53 @@ public class AppExternalIoTest inherits QUnit::Test {
                 p.callFunction("through", reg);
             }, NOTHING, i.key);
         }
+        # nothing was registered: no action of the owned app, no file API, no type
+        assertNothing(DataProviderActionCatalog::getAppAction(owned, "tenant"), "no action was added to the app");
+        assertNothing(DataProviderActionCatalog::getAppFileApi(owned), "no file API was attached to the app");
+        assertNothing(DataProvider::getType(type_path), "no type was registered");
         # the name is not taken: the owner registers it with its own declarations
         assertNothing(DataProviderActionCatalog::getApp(name), "the refused registration left nothing");
         DataProviderActionCatalog::registerApp(appInfo(name, {"external_io": True}));
         assertTrue(DataProviderActionCatalog::getAppEx(name).external_io);
         assertFalse(DataProviderActionCatalog::isSandboxAllowed(name));
-        # the same registrations through a system-policy capability called by sandboxed code are refused too
+        # the same registrations through a system-policy capability called by sandboxed code, or under a policy
+        # barrier, are refused too
         assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
             p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
                 DataProviderActionCatalog::registerApp(appInfo(newName("AppExternalIoSquat")));
             }));
         });
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
+                DataProviderActionCatalog::registerAction(action);
+            }));
+        }, NOTHING, "registerAction in a capability");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () {
+                SandboxManager::callWithSystemPolicy(sub () { DataProviderActionCatalog::registerAction(action); });
+            });
+        }, NOTHING, "registerAction under a policy barrier");
+        assertNothing(DataProviderActionCatalog::getAppAction(owned, "tenant"));
+        # trusted code registers the same action
+        DataProviderActionCatalog::registerAction(action);
+        assertEq("tenant", DataProviderActionCatalog::getAppActionEx(owned, "tenant").action);
+    }
+
+    trustedLazyRegistrationTest() {
+        # a lazy registration that trusted code made runs when a sandboxed reader first reads the app, and its
+        # registrations are not refused
+        string app = newName("AppExternalIoLazy");
+        DataProviderActionCatalog::registerApp(appInfo(app));
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": app, "action": "lazy", "path": "/lazy", "display_name": "lazy", "short_desc": "lazy",
+                "desc": "lazy", "action_code": DPAT_API,
+            });
+        });
+        Program p = getSandboxed();
+        assertEq("lazy", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getAppActionEx(app, "lazy").action;
+        }));
     }
 
     factorySubclassTest() {

@@ -53,19 +53,28 @@ class DataProviderSandboxState {
     #! Refuses a registration in the process-wide catalog to sandboxed code
     /** An app or factory name registered by sandboxed code would be taken from the module that owns it: that
         module's later registration would fail, denying its apps to everyone, or a sandboxed caller could decide the
-        declarations of a name that it does not own.  Sandboxed code (Qore::SandboxManager::isSandboxed(), also
-        through a policy barrier or a system-policy capability) therefore registers no app and no factory; modules
-        register them in their initialization, which no sandbox governs.
+        declarations of a name that it does not own; an action it registered would be decided by the declarations of
+        an app it does not own, and a file API it registered would be attached to such an app.  Sandboxed code
+        (Qore::SandboxManager::isSandboxed(), also through a policy barrier or a system-policy capability) therefore
+        registers nothing in the process-wide catalog: no app, pending app, action, pending or lazy action
+        registration, file API, factory or type; modules register them in their initialization, which no sandbox
+        governs.  A deferred initialization that trusted code registered (registerPendingApp(),
+        registerLazyAppActions(), ...) may still register when it runs on a sandboxed reader's thread.
 
-        @param what the kind of registration, for the error: \c "application" or \c "data provider factory"
-        @param name the name registered
+        It cannot remove them either: a dynamic app, a file API or a discovery inventory provider that it removed
+        would be removed for every caller.
 
-        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers an app or a factory
+        @param what the kind of registration, for the error
+        @param name the name registered or removed
+        @param removal @ref True if the registration is removed
+
+        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers or removes a registration
     */
-    static checkRegistration(string what, string name) {
-        if (SandboxManager::isSandboxed()) {
-            throw "APP-SANDBOX-ACCESS-DENIED", sprintf("sandboxed code cannot register %s %y in the process-wide "
-                "data provider catalog", what, name);
+    static checkRegistration(string what, string name, *bool removal) {
+        # a deferred initialization that trusted code registered runs also on a sandboxed reader's thread
+        if (SandboxManager::isSandboxed() && !Priv::_trusted_deferred_init) {
+            throw "APP-SANDBOX-ACCESS-DENIED", sprintf("sandboxed code cannot %s %s %y in the process-wide data "
+                "provider catalog", removal ? "remove" : "register", what, name);
         }
     }
 

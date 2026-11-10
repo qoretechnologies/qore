@@ -988,6 +988,8 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         and therefore not suitable for indexing)
     */
     static registerType(string path, AbstractDataProviderType type) {
+        # a type path taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider type", path);
         try {
             type_cache.registerType(path, type, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {

@@ -1629,12 +1629,15 @@ public class DataProviderActionCatalog {
         @param action the action to register
         @param init the initialization code that will register the app
 
-        Called by code that a sandbox governs, or when the module has no catalog worker, \a init runs at once, on the
-        calling thread (see registerPendingApp())
+        When the module has no catalog worker, \a init runs at once, on the calling thread (see registerPendingApp());
+        sandboxed code cannot register a pending action (see registerAction())
+
+        @throw APP-SANDBOX-ACCESS-DENIED the code registering the action is sandboxed (since %DataProvider 3.12)
 
         @since DataProvider 3.0
     */
     static registerPendingAppAction(string app, string action, code init) {
+        DataProviderSandboxState::checkRegistration("action", app + "/" + action);
         # without a catalog worker, and for code that a sandbox governs, the registration runs now, on this thread
         # (see registerPendingApp())
         if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
@@ -1693,9 +1696,9 @@ public class DataProviderActionCatalog {
         @ref dataprovider_lazy_actions).  A thread that uses the application while another thread runs its lazy
         registrations waits for them to finish.  \a init runs on the thread that first uses the application, or, for a
         sandboxed thread, on the catalog worker, so that it never runs in the sandbox of the thread that first uses the
-        application; see @ref dataprovider_lazy_actions.  Called by code that a sandbox governs (a module that sandboxed
-        code loads), \a init runs at once, on the calling thread, as before registrations were lazy, so that no code
-        registered under a sandbox runs later on another thread.
+        application; see @ref dataprovider_lazy_actions.  Sandboxed code cannot make a lazy registration: its actions
+        would be decided by the declarations of an app that it does not own (see registerAction()); a deferred
+        initialization that trusted code registered may make one when it runs on a sandboxed reader's thread.
 
         @param app the registered application whose actions \a init registers
         @param init the code that registers the actions; an exception it raises is retained as an initialization
@@ -1704,6 +1707,7 @@ public class DataProviderActionCatalog {
         reader calls \a init again
 
         @throw APP-ERROR the application is not registered
+        @throw APP-SANDBOX-ACCESS-DENIED the code making the registration is sandboxed (since %DataProvider 3.12)
 
         @par Example
         @code{.py}
@@ -1720,6 +1724,7 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         @since %DataProvider 3.11
     */
     static registerLazyAppActions(string app, code init) {
+        DataProviderSandboxState::checkRegistration("lazy action registration", app);
         # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs (a module that sandboxed
         # code loads, also under a policy barrier), the
         # registration runs now, on this thread, as it did when it was not lazy: no code registered under a sandbox
@@ -2336,6 +2341,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     */
     static registerDiscoveryInventoryProvider(string name,
             code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()> provider) {
+        # it would run in every index build, and could take a provider name from trusted code
+        DataProviderSandboxState::checkRegistration("discovery inventory provider", name);
         if (!name.val()) {
             throw "INVALID-ARGUMENT-ERROR",
                 "a discovery inventory provider name cannot be empty";
@@ -2397,6 +2404,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @since %DataProvider 3.8
     */
     static deregisterDiscoveryInventoryProvider(string name) {
+        DataProviderSandboxState::checkRegistration("discovery inventory provider", name, True);
         DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         if (!exists discovery_inventory_provider_map{name}) {
             return;
@@ -3581,6 +3589,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) {
+        # sandboxed code would remove an app that it does not own from every caller
+        DataProviderSandboxState::checkRegistration("application", name, True);
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove app %y from a context with restricted process control",
                 name);
@@ -3673,13 +3683,21 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Registers a data provider action
-    /** @param action the action to register
+    /** Sandboxed code registers no action: an action's provider is decided by the declarations of the app it belongs
+        to (see @ref dataprovider_external_io), so an action that sandboxed code added to an app that it does not own
+        would be decided by that app's declarations
+
+        @param action the action to register
 
         @throw ACTION-ERROR missing or invalid attributes, action already registered
+        @throw APP-SANDBOX-ACCESS-DENIED the code registering the action is sandboxed, also through a policy barrier
+        or a system-policy capability (since %DataProvider 3.12)
 
         The \c app and \c action attributes must be unique for every action registered
     */
     static registerAction(hash<DataProviderActionInfo> action) {
+        # an action registered by sandboxed code would be decided by the declarations of an app it does not own
+        DataProviderSandboxState::checkRegistration("action", sprintf("%s/%s", action.app ?? "", action.action ?? ""));
         *string module_path = DataProviderActionCatalog::registrationModulePath();
 
         # check for required keys
@@ -4608,6 +4626,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @see getAppFileApi()
     */
     static registerAppFileApi(string app, hash<DataProviderFileApiInfo> info) {
+        # sandboxed code would attach a file API to an app that it does not own
+        DataProviderSandboxState::checkRegistration("file API", app);
         if (info.read_mode != DPFR_DATA && info.read_mode != DPFR_URL) {
             throw "FILE-API-ERROR", sprintf("application %y: read_mode %y is invalid; expecting %y or %y", app,
                 info.read_mode, DPFR_DATA, DPFR_URL);
@@ -4679,6 +4699,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @since %DataProvider 3.6
     */
     static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) {
+        DataProviderSandboxState::checkRegistration("file API", app, True);
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -6417,12 +6438,17 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         *string save_load = _mod_init_load_ctx;
         *string save_name = _mod_init_name;
         *int save_reg = _lazy_reg_id;
+        *bool save_deferred = _trusted_deferred_init;
         on_exit {
             _mod_init_ctx = save;
             _mod_init_load_ctx = save_load;
             _mod_init_name = save_name;
             _lazy_reg_id = save_reg;
+            _trusted_deferred_init = save_deferred;
         }
+        # sandboxed code registers no deferred initialization, so this one was registered by trusted code, which may
+        # register also when a sandboxed reader runs it (see DataProviderSandboxState::checkRegistration())
+        _trusted_deferred_init = True;
         # set only for lazy action registrations; see replaceAction()
         _lazy_reg_id = h.reg_id;
         _mod_init_ctx = h.module_context;
@@ -6467,4 +6493,7 @@ thread_local *string _mod_init_name;
 
 #! The ID of the lazy action registration that the current thread runs, if any; see DataProviderActionCatalog
 thread_local *int _lazy_reg_id;
+
+#! True while the current thread runs a deferred initialization that trusted code registered; module-private
+thread_local *bool _trusted_deferred_init;
 }

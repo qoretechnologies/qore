@@ -40,9 +40,6 @@ class SafetyRuns {
     }
 }
 
-#! The thread on which the registration of barrierRegistrationTest() ran
-our int barrier_registration_tid;
-
 #! The most catalog workers that run at once (DataProviderActionCatalog::MaxLazyWorkers)
 const MaxLazyWorkersForTest = 4;
 
@@ -123,7 +120,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \restrictedCallerTest());
         addTestCase("a restricted Program loads a module with a lazy value", \restrictedModuleLoadTest());
         addTestCase("a sandboxed reader under a policy barrier is still sandboxed", \barrierReaderTest());
-        addTestCase("a registration made under a policy barrier for sandboxed code runs at once",
+        addTestCase("a registration that a system-policy capability makes for sandboxed code is refused",
             \barrierRegistrationTest());
         addTestCase("NoInit getters never run a lazy registration", \noInitNeverRunsTest());
         addTestCase("NoInit getters never wait for another thread's initialization", \noInitNeverWaitsTest());
@@ -140,7 +137,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \partialRunTest());
         addTestCase("a sandboxed reader's registration runs in its module's context", \sandboxedReaderTest());
         addTestCase("a sandboxed reader's trusted pending registrations run on the worker", \pendingSandboxedReaderTest());
-        addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
+        addTestCase("a lazy registration that sandboxed code makes is refused", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused a lazy value that is not built",
@@ -156,7 +153,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a worker whose thread a registration ends releases its readers and is started again",
             \workerEndTest());
         addTestCase("the child of a fork() runs the initializations that the parent's threads ran", \forkTest());
-        addTestCase("a registration made under a sandbox runs at once and blocks no other thread",
+        addTestCase("a lazy registration that sandboxed code attempts is refused and blocks no other thread",
             \governedNowTest());
         addTestCase("sandboxed code cannot add a catalog change listener", \sandboxedListenerTest());
         addTestCase("a slow trusted registration does not delay another sandboxed reader", \workerPoolTest());
@@ -164,7 +161,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("listeners are called on a catalog worker, never on a sandboxed reader's thread",
             \listenerThreadTest());
         addTestCase("a listener runs under no tenant's policy", \listenerPolicyTest());
-        addTestCase("the changes made on a sandboxed thread are delivered by a worker", \governedChangeDeliveryTest());
+        addTestCase("sandboxed code makes no catalog change", \governedChangeDeliveryTest());
         addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
         addTestCase("a sandboxed thread interrupted when it requests a delivery does not lose it",
             \interruptedDeliveryRequestTest());
@@ -173,7 +170,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a first load from the module path has a worker, unless restricted; from source and AOT",
             \noWorkerTest());
         addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
-        addTestCase("the callbacks of an action registered under a sandbox run when it is registered",
+        addTestCase("an action that sandboxed code registers is refused before its callbacks run",
             \governedActionCallbacksTest());
         addTestCase("a module that sandboxed code loads first sets its callbacks only from the module path",
             \sandboxedCallbackModuleLoadTest());
@@ -330,11 +327,11 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         tenant.parse("int sub run(code cap, string app, string path) { return cap(app, path); }\n",
             "barrier-registrar");
         tenant.setSandboxManager(sm);
-        int registering_tid = tenant.callFunction("run", cap, app, get_script_path());
-        # registered for sandboxed code: run at once, on the registering thread, nothing deferred
-        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
-        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
-        assertEq(registering_tid, barrier_registration_tid);
+        # the capability is called by sandboxed code, which registers nothing in the catalog (qore#5632), also through
+        # a capability
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", \tenant.callFunction(), ("run", cap, app, get_script_path()));
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
+        assertEq((), (map $1.action, DataProviderActionCatalog::getActionsNoInit(app)) ?? (), "nothing is registered");
     }
 
     noInitNeverRunsTest() {
@@ -646,7 +643,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
         string script = get_script_path();
-        # sandboxed code registers the lazy actions: they run under its sandbox, as an eager registration would
+        # sandboxed code cannot register lazy actions (qore#5632); they would be decided by an app it does not own
         Program registrar(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         registrar.parse("%requires DataProvider\n"
             "sub reg(string app, string script) {\n"
@@ -659,12 +656,12 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             "    });\n"
             "}\n", "lazy-registrar");
         registrar.setSandboxManager(sm);
-        registrar.callFunction("reg", app, script);
-        # a sandboxed reader is not refused, and the filesystem policy of the registration applies
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", \registrar.callFunction(), ("reg", app, script));
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
+        # a sandboxed reader reads the trusted registrations only
         Program reader = readerProgram(sm);
         reader.callFunction("read", app);
-        hash<DataProviderActionInfo> probe = DataProviderActionCatalog::getAppActionEx(app, "probe");
-        assertNeq("none", probe.short_desc, "the registration's sandbox denies the read");
+        assertEq(("eager-a",), map $1.action, DataProviderActionCatalog::getActions(app, False));
     }
 
     moduleLoadTest() {
@@ -1010,36 +1007,29 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         SandboxManager sm();
         Program registrar(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         registrar.parse("%requires DataProvider\n"
-            "sub reg(string app, Counter started, Counter release) {\n"
-            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
-            "        started.dec();\n"
-            "        release.waitForZero();\n"
-            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
-            "            \"action\": \"tenant\", \"path\": \"/tenant\", \"display_name\": \"tenant\",\n"
-            "            \"short_desc\": \"tenant\", \"desc\": \"tenant\", \"action_code\": DPAT_API});\n"
-            "    });\n"
+            "string sub reg(string app) {\n"
+            "    try {\n"
+            "        DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
+            "            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "                \"action\": \"tenant\", \"path\": \"/tenant\", \"display_name\": \"tenant\",\n"
+            "                \"short_desc\": \"tenant\", \"desc\": \"tenant\", \"action_code\": DPAT_API});\n"
+            "        });\n"
+            "        return \"registered\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
             "}\n", "governed-now");
         registrar.setSandboxManager(sm);
-        Counter started(1);
-        Counter release(1);
-        Counter done(1);
-        # the tenant's registration runs on the tenant's thread, at once
-        background LazyAppActionsSafetyTest::callIn(registrar, "reg", (app, started, release), done);
-        started.waitForZero();
-        on_exit if (release.getCount()) {
-            release.dec();
-            done.waitForZero();
-        }
+        # sandboxed code registers no deferred initialization (qore#5632): it is refused at once, on its own thread
+        assertEq("APP-SANDBOX-ACCESS-DENIED", registrar.callFunction("reg", app));
         assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
-        # trusted code reading the app is not held by the tenant's registration
+        # trusted code reading the app is not held by the refused registration
         Counter read(1);
         Queue results();
         background LazyAppActionsSafetyTest::readInto(app, read, results);
         assertEq(0, read.waitForZero(Deadline), "the trusted reader is not blocked");
         assertEq(("eager-a",), results.get());
-        release.dec();
-        assertEq(0, done.waitForZero(Deadline));
-        assertEq(("eager-a", "tenant"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(("eager-a",), map $1.action, DataProviderActionCatalog::getActions(app, False));
     }
 
     sandboxedListenerTest() {
@@ -1164,47 +1154,43 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     }
 
     governedChangeDeliveryTest() {
-        # registered before the listener is added, so that the listener sees only the tenant's change
         string app = registerApp("SafeGovernedChange");
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
-        QueueListener listener(get_script_path());
-        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
-        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
         Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
-        # sandboxed code registers no app (qore#5632), so its change is an action of an app that trusted code
-        # registered
+        # sandboxed code registers nothing in the catalog and removes nothing from it (qore#5632)
         tenant.parse("%requires DataProvider\n"
-            "int sub reg(string app) {\n"
-            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"x\",\n"
-            "        \"path\": \"/x\", \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\",\n"
-            "        \"action_code\": DPAT_API});\n"
-            "    return gettid();\n"
+            "string sub tryit(code c) {\n"
+            "    try { c(); return \"done\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }\n"
+            "}\n"
+            "string sub reg(string app) {\n"
+            "    return tryit(sub () {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "            \"action\": \"x\", \"path\": \"/x\", \"display_name\": \"x\", \"short_desc\": \"x\",\n"
+            "            \"desc\": \"x\", \"action_code\": DPAT_API});\n"
+            "    });\n"
             "}\n"
             "string sub regApp(string app) {\n"
-            "    try {\n"
-            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app,\n"
-            "            \"display_name\": app, \"short_desc\": app, \"desc\": app,\n"
-            "            \"groups\": (AppGroup::DataTransformation,),\n"
-            "            \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
-            "            \"dynamic\": True});\n"
-            "        return \"registered\";\n"
-            "    } catch (hash<ExceptionInfo> ex) {\n"
-            "        return ex.err;\n"
-            "    }\n"
-            "}\n", "tenant-change");
+            "    return tryit(sub () { DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app,\n"
+            "        \"display_name\": app, \"short_desc\": app, \"desc\": app,\n"
+            "        \"groups\": (AppGroup::DataTransformation,),\n"
+            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "        \"dynamic\": True}); });\n"
+            "}\n"
+            "string sub dereg(string app) {\n"
+            "    return tryit(sub () { DataProviderActionCatalog::deregisterDynamicApp(app); });\n"
+            "}\n",
+            "tenant-change");
         tenant.setSandboxManager(sm);
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("reg", app), "the tenant adds no action");
         string tenant_app = "SafeGovernedChange_" + get_random_string(8);
         assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("regApp", tenant_app), "the tenant registers no app");
-        int tenant_tid = tenant.callFunction("reg", app);
-        # the tenant's own change is delivered by a worker, not on the tenant's thread
-        hash<auto> call = listener.calls.get(Deadline);
-        assertTrue(call.tid != tenant_tid, "the listener did not run on the tenant's thread");
-        assertEq("read", call.read);
-%ifdef QoreDebug
-        assertTrue(inlist(call.tid, DataProviderActionCatalog::getLazyWorkers()), "a worker delivered the change");
-%endif
+        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("dereg", app), "the tenant removes no app");
+        # nothing changed: there is no change of the tenant's for a listener to receive
+        assertEq(revision, DataProviderActionCatalog::getCatalogRevision(), "the catalog did not change");
+        assertEq(app, DataProviderActionCatalog::getAppEx(app).name, "the app is still registered");
     }
 
     interruptedReaderDeliveryTest() {
@@ -1498,32 +1484,32 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         tenant.parse("%requires DataProvider\n"
             "hash<auto> sub reg(string app) {\n"
-            "    hash<auto> tids;\n"
-            "    tids.thread = gettid();\n"
-            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"typed\",\n"
-            "        \"path\": \"/typed\", \"display_name\": \"typed\", \"short_desc\": \"typed\", \"desc\": \"typed\",\n"
-            "        \"action_code\": DPAT_API,\n"
-            "        \"get_output_type\": AbstractDataProviderType sub () {\n"
-            "            tids.output_type = gettid();\n"
-            "            return new HashDataType(\"SafeGovernedOutput\");\n"
-            "        },\n"
-            "        \"get_dynamic_options\": sub (reference<hash<DataProviderActionInfo>> info) {\n"
-            "            tids.options = gettid();\n"
-            "            info.desc = \"options set\";\n"
-            "        },\n"
-            "    });\n"
-            "    return tids;\n"
+            "    hash<auto> rv;\n"
+            "    try {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "            \"action\": \"typed\", \"path\": \"/typed\", \"display_name\": \"typed\",\n"
+            "            \"short_desc\": \"typed\", \"desc\": \"typed\",\n"
+            "            \"action_code\": DPAT_API,\n"
+            "            \"get_output_type\": AbstractDataProviderType sub () {\n"
+            "                rv.output_type = True;\n"
+            "                return new HashDataType(\"SafeGovernedOutput\");\n"
+            "            },\n"
+            "            \"get_dynamic_options\": sub (reference<hash<DataProviderActionInfo>> info) {\n"
+            "                rv.options = True;\n"
+            "            },\n"
+            "        });\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        rv.err = ex.err;\n"
+            "    }\n"
+            "    return rv;\n"
             "}\n", "tenant-action-callbacks");
         tenant.setSandboxManager(new SandboxManager());
-        hash<auto> tids = tenant.callFunction("reg", app);
-        # both ran on the registering thread, when the action was registered
-        assertEq(tids.thread, tids.output_type);
-        assertEq(tids.thread, tids.options);
-        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getActionsNoInit(app)[0];
-        assertFalse(action.hasKey("get_output_type") && exists action.get_output_type);
-        assertFalse(action.hasKey("get_dynamic_options") && exists action.get_dynamic_options);
-        assertEq("SafeGovernedOutput", action.output_type.getName());
-        assertEq("options set", action.desc);
+        hash<auto> rv = tenant.callFunction("reg", app);
+        # sandboxed code registers no action (qore#5632): it is refused before either callback runs
+        assertEq("APP-SANDBOX-ACCESS-DENIED", rv.err);
+        assertNothing(rv.output_type, "the output type callback did not run");
+        assertNothing(rv.options, "the options callback did not run");
+        assertEq((), DataProviderActionCatalog::getActionsNoInit(app) ?? ());
     }
 
     failedLoadValueTest() {
@@ -1580,11 +1566,9 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         return gettid();
     }
 
-    #! Registers lazy actions for a sandboxed caller under a policy barrier; returns the thread's TID
+    #! Tries to register lazy actions for a sandboxed caller in a system-policy capability, which is refused
     private static int registerBarrier(string app, string path) {
         DataProviderActionCatalog::registerLazyAppActions(app, sub () {
-            barrier_registration_tid = gettid();
-            # the barrier masks the caller's filesystem policy
             ReadOnlyFile::readTextFile(path);
             LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
         });
