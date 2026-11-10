@@ -651,14 +651,20 @@ public:
     //! the execution mode of the Program's code; set again by every commit (applyDefaultExecMode()), and read by other
     //! threads that call the Program's functions (UserVariantBase::recordFastCallExecution())
     std::atomic<qore_exec_mode_t> exec_mode{QEM_AST};
-    bool user_requested_exec_mode = false;
-    bool inherited_user_requested_exec_mode = false;
+    //! true if the execution mode applies as requested (by --exec-mode, setExecMode(), or inherited and supported)
+    /** atomic: written whenever the parse options change, and read by a thread that loads a module (see
+        getInheritableExecMode())
+    */
+    std::atomic<bool> user_requested_exec_mode{false};
+    //! true if the Program inherited an explicitly requested execution mode from its parent (inherited_exec_mode)
+    std::atomic<bool> inherited_user_requested_exec_mode{false};
+    //! the explicitly requested execution mode of the parent; see syncExecModeWithParseOptions()
+    qore_exec_mode_t inherited_exec_mode = QEM_AST;
     // LLVM optimization level applied to this Program's JIT-compiled functions;
     // -1 means "unset", in which case the process-wide default is used
     // (QoreJIT::getJITOptLevel(), QORE_JIT_OPT_LEVEL); see QoreProgram::setJitOptimizationLevel()
     // atomic: read by the background JIT compile thread while the API may set it from another
     std::atomic<int> jit_opt_level{-1};
-    QoreParseOptions inherited_exec_mode_parse_options;
 
     //! the parent whose external data is copied once this Program is fully constructed
     /** nullptr when the Program does not inherit it (PO_NO_INHERIT_PROGRAM_DATA); see copyExternalData()
@@ -1163,10 +1169,53 @@ public:
         exec_mode = hasModernParseOptions() ? QEM_TIERED : QEM_AST;
     }
 
+    //! Sets the execution mode after the parse options are set or changed
+    /** An execution mode that the parent requested explicitly (--exec-mode, Program::setExecMode()) is kept for as long
+        as the Program's parse options support it, whatever else changes in them (the Program's own %modern, for
+        example): AST supports all parse options, the other modes need %modern (qore_parse_options_support_ir()).
+        Otherwise the Program has its automatic mode (applyDefaultExecMode()), and gets the inherited mode back when
+        its parse options support it again (issue #5687).
+    */
+    //! Returns the execution mode that a child or module Program of this Program inherits, if any
+    /** The explicitly requested mode: the Program's own (--exec-mode, setExecMode()), or the one it inherited, also
+        while its own parse options do not support it, so that a Program created from a legacy child, for example,
+        inherits it as well (issue #5687)
+
+        @return true if a mode was requested explicitly, with the mode in \a mode
+    */
+    DLLLOCAL bool getInheritableExecMode(qore_exec_mode_t& mode) const {
+        if (user_requested_exec_mode.load(std::memory_order_acquire)
+                && !inherited_user_requested_exec_mode.load(std::memory_order_acquire)) {
+            mode = exec_mode;
+            return true;
+        }
+        if (inherited_user_requested_exec_mode.load(std::memory_order_acquire)) {
+            mode = inherited_exec_mode;
+            return true;
+        }
+        return false;
+    }
+
+    //! Inherits the explicitly requested execution mode of the given parent, if any, and sets the mode
+    /** Used for child Programs (setParent()) and for the Programs of user modules (see ModuleManager.cpp); see
+        syncExecModeWithParseOptions()
+    */
+    DLLLOCAL void inheritExecMode(const qore_program_private_base* parent) {
+        qore_exec_mode_t mode = QEM_AST;
+        bool inherited = parent && parent->getInheritableExecMode(mode);
+        inherited_exec_mode = inherited ? mode : QEM_AST;
+        inherited_user_requested_exec_mode.store(inherited, std::memory_order_release);
+        user_requested_exec_mode.store(false, std::memory_order_release);
+        syncExecModeWithParseOptions();
+    }
+
     DLLLOCAL void syncExecModeWithParseOptions() {
-        if (inherited_user_requested_exec_mode
-            && pwo.parse_options != inherited_exec_mode_parse_options) {
-            inherited_user_requested_exec_mode = false;
+        if (inherited_user_requested_exec_mode) {
+            if (inherited_exec_mode == QEM_AST || hasModernParseOptions()) {
+                exec_mode = inherited_exec_mode;
+                user_requested_exec_mode = true;
+                return;
+            }
             user_requested_exec_mode = false;
         }
 
@@ -2699,6 +2748,7 @@ public:
         if (should_auto_enable_modern(filename)) {
             pwo.parse_options |= PO_MODERN;
             applyParseOptionImplications();
+            syncExecModeWithParseOptions();
             pgm->setWarningMask(QP_WARN_ALL);
         }
     }
@@ -3388,6 +3438,8 @@ public:
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
             pwo.parse_options = i->second;
             ppo.erase(i);
+            // the options restored may not support an inherited execution mode that the ones of the file did
+            syncExecModeWithParseOptions();
         }
     }
 
@@ -4302,6 +4354,7 @@ public:
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
         pgm.priv->applyParseOptionImplications();
+        pgm.priv->syncExecModeWithParseOptions();
         return rv;
     }
 

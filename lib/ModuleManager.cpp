@@ -3733,8 +3733,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -4720,8 +4720,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -4842,8 +4842,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {

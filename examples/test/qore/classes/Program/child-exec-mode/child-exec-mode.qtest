@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../../ExecModeHarness.qm
+
+%exec-class ChildExecModeTest
+
+#! issue #5687: a child Program keeps an explicitly requested execution mode when its parse options change
+/** A child Program inherited the explicit execution mode of its parent only while its parse options were those of the
+    parent; when they changed, by its own %modern for example, it ran with tiered execution in every mode.  Now it
+    runs in the inherited mode for as long as its parse options support it, and on the AST interpreter otherwise.
+
+    The script next to the test runs with each --exec-mode: a child whose own %modern makes it modern, one made modern
+    with Program::setParseOptions(), one without %modern, one whose %modern is undone by %push-parse-options after the
+    parse (it runs on the AST interpreter, without an error), a grandchild that its own %modern makes modern, created
+    by a legacy child (it inherits the requested mode, which the legacy child does not run in), and a function of a user
+    module, which runs in a Program of its own.  The test checks the mode that each Program reports and the mode that
+    its code really runs in: with the environment of the runs, a function lowered to IR is reported by the IR optimizer
+    statistics (IR, JIT and tiered execution), and a function compiled to native code by the native compilation trace
+    (JIT execution compiles a function at its first call, tiered execution at its second, and every function is called
+    three times; IR execution never does).
+*/
+class ChildExecModeTest inherits QUnit::Test {
+    public {
+        #! the environment of the runs: see the class description
+        const Env = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=2 QORE_JIT_TIMING=1 "
+            "QORE_IR_OPT_STATS=1";
+
+        #! the exec mode values of the modes
+        const ModeValues = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the modern Programs, and their functions, which run in the requested mode
+        const ModernPrograms = {
+            "modern-directive": "child_directive",
+            "modern-api": "child_api",
+            "grandchild": "child_grand",
+            "module": "module_fn",
+        };
+
+        #! the legacy Programs, and their functions, which run on the AST interpreter in every mode
+        const LegacyPrograms = {
+            "legacy": "child_legacy",
+            "push-options": "child_push",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string env;
+        string path;
+    }
+
+    constructor() : QUnit::Test("child Program execution modes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        path = get_script_dir() + "/child-exec-mode.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase("--exec-mode=" + mode, sub () { modeTest(mode); });
+        }
+        set_return_value(main());
+    }
+
+    #! runs the script with the given mode and checks the children
+    private modeTest(string mode) {
+        hash<ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+            path), NOTHING, Env);
+        assertEq(0, r.rc, mode + ": the script ran: " + r.out);
+        int m = ModeValues{mode};
+        assertEq(sprintf("modern-directive: mode before=%d after=%d result=6\n"
+            "modern-api: mode before=%d after=%d result=9\n"
+            "legacy: mode before=%d after=%d result=12\n"
+            "push-options: mode before=%d after=%d result=15\n"
+            "grandchild: mode child=%d grandchild=%d result=21\n"
+            "module: result=18\n", EM_AST, m, m, m, EM_AST, EM_AST, EM_AST, EM_AST, EM_AST, m),
+            r.stdout, mode + ": the modes that the Programs report");
+        # the functions lowered to IR and compiled to native code
+        hash<string, bool> lowered = map {($1 =~ x/^IR-OPT: ([a-z_]+):/)[0]: True}, r.stderr.split("\n"),
+            $1 =~ /^IR-OPT: (child|module)_/;
+        hash<string, bool> native = map {($1 =~ x/compiled '([a-z_]+)@/)[0]: True}, r.trace,
+            ExecModeHarness::is_native_compilation($1) && $1 =~ /'(child|module)_/;
+        foreach hash<auto> i in (ModernPrograms.pairIterator()) {
+            assertEq(mode != "ast", lowered{i.value} ?? False, sprintf("%s: %s runs as IR", mode, i.key));
+            assertEq(mode == "jit" || mode == "tiered", native{i.value} ?? False,
+                sprintf("%s: %s runs as native code", mode, i.key));
+        }
+        foreach hash<auto> i in (LegacyPrograms.pairIterator()) {
+            assertEq(False, lowered{i.value} ?? False, sprintf("%s: %s runs on the AST interpreter", mode, i.key));
+            assertEq(False, native{i.value} ?? False, sprintf("%s: %s is not compiled to native code", mode, i.key));
+        }
+    }
+}
