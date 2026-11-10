@@ -3570,6 +3570,15 @@ if (QORE_BUILD_WITH_EXTERNAL_MODULES)
     list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 endif()
 string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
+# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
+# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
+# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
+# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
+file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
+configure_file(
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
+    COPYONLY)
 set(QORE_BUILD_MODULE_DIRS_STR
     "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
 if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
@@ -3623,8 +3632,11 @@ if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     endforeach()
 elseif(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
+        # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
+        # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${_qore_exe} -l ${_pm} -ne
+            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+                ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc
             OUTPUT_VARIABLE _pm_api
