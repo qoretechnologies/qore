@@ -53,6 +53,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cinttypes>
 #include <cctype>
 #include <cerrno>
 #include <climits>
@@ -3419,10 +3420,14 @@ int qore_get_ptr_hash(QoreString& str, const void* ptr) {
 static std::atomic<uint64_t> io_obj_id_seq{0};
 
 AbstractPollableIoObjectBase::AbstractPollableIoObjectBase() {
+    // the identity is unique for the life of the process (the sequence number), whatever the object's address, and it
+    // contains no address, so it reveals none where it is shown (a key or an owner of the async I/O controller); it
+    // needs no digest, which cost about 18,000 instructions for every pollable object (every Socket object, every
+    // accepted socket, every controller wrapper)
     uint64_t oid = io_obj_id_seq.fetch_add(1, std::memory_order_relaxed);
-    QoreString tmp;
-    qore_get_object_hash(tmp, this, oid);
-    io_unique_hash = tmp.c_str();
+    char buf[32];
+    snprintf(buf, sizeof buf, "io-%" PRIx64, oid);
+    io_unique_hash = buf;
 }
 
 int AbstractPollableIoObjectBase::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {

@@ -1042,7 +1042,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
 
     if (expired) {
         ASYNC_IO_TRACE("H2 handleReading: IDLE-TIMEOUT deadline reached fd=%d\n",
-            sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
         if (poll_info) {
             poll_info->deref(xsink);
         }
@@ -1053,7 +1053,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
 
     if (armed_now) {
         ASYNC_IO_TRACE("H2 handleReading: arming idle deadline now+%lldus fd=%d\n",
-            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
 
     // Keepalive PING: when idle for ping_interval_us, submit an HTTP/2
@@ -1172,7 +1172,7 @@ void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
     h2_state.store(H2State::CLOSED, std::memory_order_release);
     // Close the socket to release the fd and prevent CLOSE-WAIT accumulation.
     // Safe here: setError() is called from continuePoll() on the I/O thread.
-    if (sock_obj && sock_obj->getSocket() >= 0) {
+    if (sock_obj && sock_obj->getPollableDescriptor() >= 0) {
         sock_obj->closeIo(xsink);
     }
     // Mark the connection closed BEFORE notifying the pending streams:
