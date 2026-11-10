@@ -74,6 +74,8 @@ class ModuleCommandContextTest inherits QUnit::Test {
             + "38 library module, code directive:        ok\n"
             + "39 path-chosen module, restricted:        CMDCTX-DENIED\n"
             + "40 path-chosen module, trusted:           ok\n"
+            + "41 no-filesystem, via module, path: ok\n"
+            + "42 no-filesystem, own code, path:   CMDCTX-DENIED\n"
             + "";
 
         #! the replay program: the helper that reads the history, and the output line

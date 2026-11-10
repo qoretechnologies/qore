@@ -222,3 +222,12 @@ string dir = ENV.CMDCTX_CHOSEN_DIR ?? (get_script_dir() + "/../module-command-ch
 printf("39 path-chosen module, restricted:        %s\n",
     load_in_program(dir + "/CmdCtxDirectiveD.qm", PO_NO_UNCONTROLLED_APIS, False));
 printf("40 path-chosen module, trusted:           %s\n", load_in_program(dir + "/CmdCtxDirectiveF.qm", 0, False));
+
+# library module code that issues a command that needs the filesystem, for a caller that has PO_NO_FILESYSTEM: only the
+# sandbox restricts library module code at run time, so the command is not refused (the same command issued by the
+# code of the caller itself is)
+{
+    Program fs = make_program(PO_NO_FILESYSTEM);
+    printf("41 no-filesystem, via module, path: %s\n", issue_via_module(fs, "cmdctxaware", "path"));
+    printf("42 no-filesystem, own code, path:   %s\n", issue_in(fs, "cmdctxaware", "path"));
+}

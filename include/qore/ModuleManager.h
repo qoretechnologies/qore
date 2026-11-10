@@ -201,9 +201,10 @@ class ExceptionSink;
     fills in from the issuing code before it switches to the target Program (see QoreModuleCommandContext).
 
     The restrictions are those of the code that issued the command, with the restrictions that it inherits from its
-    callers: the effective run-time parse options (including what module code inherits from a restricted caller and a
-    \c %push-parse-options block), whether a sandbox governs it, and, for a command replayed from a compiled program,
-    also the parse options that program is declared with.  They only grow within a command: a command that a handler
+    callers: the effective run-time parse options (including a \c %push-parse-options block), whether a sandbox governs
+    it, and, for a command replayed from a compiled program, also the parse options that program is declared with.
+    Code of a library module (a module from the module path, not one that the code loading it chose by a path of its
+    own) has no parse options: only the sandbox that governs it restricts it, as module code is everywhere in %Qore.  They only grow within a command: a command that a handler
     issues itself has at least the restrictions of the command it is handling.
 
     An object of this class is a plain value: a handler that hands the restrictions to another thread passes a copy

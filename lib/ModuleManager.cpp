@@ -2214,7 +2214,14 @@ static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed,
         // are not theirs, only what was in force at the directive (see qore_module_load_is_library())
         po = declared_po ? *declared_po : QoreParseOptions();
     } else {
-        po = runtime_get_effective_program_parse_options();
+        // a command issued by the code of a library module is judged by the sandbox only, as library module code is
+        // everywhere at run time: the parse options of its Program are only what it inherited from the code that
+        // loaded it (a %no-filesystem loader), not restrictions of the library
+        const QoreProgram* issuing = getProgram();
+        po = QoreParseOptions();
+        if (!issuing || !qore_program_private::get(*const_cast<QoreProgram*>(issuing))->library_module) {
+            po = runtime_get_effective_program_parse_options();
+        }
         if (declared_po) {
             po |= *declared_po;
         }

@@ -429,15 +429,18 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 
 | What the handler gets | Where it comes from |
 |---|---|
-| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (so what module code inherits from a sandboxed caller, and a `%push-parse-options` block); for `%module-cmd` the options in force at the directive and those of the code that runs the parse, except in the source of a library module that is being loaded (found in a module directory, not chosen by a path of the loading code; see `qore_module_load_is_library()`): that is library code, judged by the sandbox only, as module code is everywhere (the parse options of the module's Program are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v25; the options the program is declared with before that), and for a library module loaded compiled only those |
+| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v25; the options the program is declared with before that), and for a library module loaded compiled only those |
 | `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
 | `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
 
 Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is
 handling. The context is valid only while the handler runs, on its thread; hand `ctx->copy()` to another thread, and
 ask it with `hasAny()` and `isSandboxed()` there (`check()` raises an exception, so it needs a thread that Qore knows).
-Through module code the usual rule holds: a sandbox that governs the caller governs the module code that issues the
-command, a parse option that restricts the caller does not (see "Reading the calling Program's parse options").
+Through library module code the usual rule holds: a sandbox that governs the caller governs the module code that issues
+the command (`isSandboxed()`), a parse option that restricts the caller or that the module's Program inherited from its
+loader does not: a jni classpath command issued at run time by a library module (the Jdbc and Jms data providers) is not
+refused for a caller that has only `PO_NO_FILESYSTEM`, and is refused for a sandboxed one (see "Reading the calling
+Program's parse options").
 
 A module whose handler checks the context for every command that executes code, changes a path, touches the filesystem
 or the network, or has process-wide effect sets `mod_info.cmd_caller_aware = true`. A module that does not set it (any

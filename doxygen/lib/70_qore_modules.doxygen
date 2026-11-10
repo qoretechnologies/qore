@@ -112,11 +112,13 @@
     from the restrictions of the issuing code, which Qore gives it in the QoreModuleCommandContext returned by
     QoreModuleCommandContext::get(), captured from the issuing code before Qore switches to the target Program:
     - the restricting parse options of the issuing code (QoreModuleCommandRestrictions::getParseOptions()), which are
-      its effective run-time parse options, so also what module code inherits from a sandboxed caller and a
-      \c %push-parse-options block; for a \c %module-cmd directive, the options in force at the directive (and those of
-      the code that runs the parse), except in the source of a library module that is being loaded (a module found in a
-      module directory, not one that the loading code chose by a path of its own), which is governed only by the
-      sandbox, as module code is everywhere in %Qore; for a command replayed from a compiled program, the options of
+      its effective run-time parse options, so also a \c %push-parse-options block; code of a library module (a module
+      found in a module directory, not one that the code loading it chose by a path of its own) is governed only by
+      the sandbox, as module code is everywhere in %Qore: the parse options of its Program are only what it inherited
+      from the code that loaded it, so a command issued at run time by library module code has none, and neither has a
+      \c %module-cmd directive in the source of a library module that is being loaded; a module that the loading code
+      chose by a path of its own is judged by the restrictions of that code; for a \c %module-cmd directive in other
+      code, the options in force at the directive (and those of the code that runs the parse); for a command replayed from a compiled program, the options of
       the code that loads the program together with the options that were in force at the directive when the program
       was compiled (the options that the program is declared with, for a program compiled before they were recorded),
       except for a library module that is loaded compiled, which has only the latter;
@@ -149,9 +151,12 @@
     functional domain): the command is refused with \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR before the
     handler runs.  Code that is not restricted can issue commands to every module.
 
-    @note Through module code, restrictions travel as they do everywhere in %Qore: a sandbox that governs the caller
-    governs the module code that issues a command, but a parse option that restricts the caller does not restrict the
-    module code (see design/module-sandboxing-audit-guide.md).
+    @note Through library module code, restrictions travel as they do everywhere in %Qore: a sandbox that governs the
+    caller governs the module code that issues a command (QoreModuleCommandRestrictions::isSandboxed() is true, and a
+    handler refuses what sandboxed code may not do), but a parse option that restricts the caller, or that the module's
+    Program inherited from its loader (\c PO_NO_FILESYSTEM, for example), does not restrict the module code: a command
+    to change a classpath that the code of a library module issues at run time is not refused for a caller that has
+    only \c PO_NO_FILESYSTEM (see design/module-sandboxing-audit-guide.md).
 
     @subsection module_example Complete Example
 
