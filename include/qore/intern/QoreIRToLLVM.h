@@ -2060,12 +2060,7 @@ private:
             llvm::Module& module, std::string& error);
 };
 
-// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion() and
-// qore_ir_nothing_return_needs_filter() are declared in QoreIRAnalysis.h
-
-//! Returns true if the declared return type leaves every value returned by the function unchanged
-/** A call-site summary that substitutes the callee's returned value is only valid in this case
-*/
-DLLLOCAL bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type);
+// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion(),
+// qore_ir_nothing_return_needs_filter() and qore_ir_function_returns_pass_through() are declared in QoreIRAnalysis.h
 
 #endif

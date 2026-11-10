@@ -508,6 +508,24 @@ size_t qore_ir_fuse_object_int_string_measure_consumers(
 //! Fuse exact string case transformations with supported sole consumers.
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
 
+//! Returns the class context of the code of an IR function: the class of a method, the class of the method in which a
+//! closure was parsed, or nullptr for other code
+/** It is the class context of the function's parse-time checks, and of its runtime type checks: whether a class's
+    private parent classes are accessible to the code, for example.  The lowering, analysis and compilation of the
+    function's IR make their parse-time type checks in it (see QoreIRClassContextHelper), whatever thread they run in.
+    A closure parsed in a static method has no class recorded for it (UserClosureFunction::getClassType()) and gets
+    nullptr, the context of code outside a class, in which no private parent class is accessible: a return of such
+    a class's object then keeps its runtime check, which decides in the closure's runtime class context.
+*/
+DLLLOCAL const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func);
+
+//! Returns true if the declared return type leaves every value returned by the function unchanged
+/** A call-site summary that substitutes the callee's returned value is only valid in this case.  The returns are
+    checked in the function's own class context (qore_ir_function_class_context()), in any thread.  Defined in
+    lib/QoreIRToLLVM.cpp
+*/
+DLLLOCAL bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type);
+
 //! Returns true if a returned value with the given facts must be converted or checked by the declared return type
 /** Defined in lib/QoreIRToLLVM.cpp
 */

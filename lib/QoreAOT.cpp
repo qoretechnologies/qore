@@ -2678,6 +2678,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
+    // the parse-time type checks of the lowering are made in the class context of the code, as in
+    // UserVariantBase::lowerIRFunction() (qore#5750)
+    QoreIRClassContextHelper class_ctx(*ir_func);
     ir_func->return_type_info = qore_substitute_type_params_if_needed(
         uvb->getUserSignature()->getReturnTypeInfo(),
         specialization_receiver_type_info,

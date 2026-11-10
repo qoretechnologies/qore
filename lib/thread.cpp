@@ -6040,13 +6040,42 @@ VNode* get_global_vnode() {
     return (thread_data.get())->global_vnode;
 }
 
-QoreClass* parse_get_class() {
-    const qore_class_private* cls = (thread_data.get())->current_class;
-    return cls ? const_cast<qore_class_private*>(cls)->cls : nullptr;
+namespace {
+// the class context of the parse-time checks while IR is lowered, analyzed or compiled in this thread (see
+// QoreIRClassContextHelper); a thread-local variable of its own, as a background compilation thread has no ThreadData
+thread_local const qore_class_private* ir_class_ctx = nullptr;
+thread_local bool ir_class_ctx_set = false;
+}
+
+QoreIRClassContextHelper::QoreIRClassContextHelper(const qore_class_private* cls) : old_cls(ir_class_ctx),
+        old_set(ir_class_ctx_set) {
+    ir_class_ctx = cls;
+    ir_class_ctx_set = true;
+}
+
+QoreIRClassContextHelper::~QoreIRClassContextHelper() {
+    ir_class_ctx = old_cls;
+    ir_class_ctx_set = old_set;
+}
+
+bool QoreIRClassContextHelper::isSet() {
+    return ir_class_ctx_set;
 }
 
 qore_class_private* parse_get_class_priv() {
-    return const_cast<qore_class_private*>((thread_data.get())->current_class);
+    if (ir_class_ctx_set) {
+        return const_cast<qore_class_private*>(ir_class_ctx);
+    }
+    ThreadData* td = thread_data.get();
+    // a thread without parse state (a background compilation thread) makes parse-time checks only in the class
+    // context of the code that it compiles, which a QoreIRClassContextHelper sets
+    assert(td);
+    return td ? const_cast<qore_class_private*>(td->current_class) : nullptr;
+}
+
+QoreClass* parse_get_class() {
+    qore_class_private* cls = parse_get_class_priv();
+    return cls ? cls->cls : nullptr;
 }
 
 void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns,
