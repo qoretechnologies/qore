@@ -101,6 +101,13 @@ DLLLOCAL extern std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_
 
 //! called by ClosureVarValue::deref() when a dereference of a closure-bound variable that has a collection decision
 //! to make has taken its count, before it decides; called with no lock held; set by dbg_hold_closure_var_deref()
+//! called by an LValueHelper whose lvalue was reached through a reference and holds an integer, before it releases
+//! the lvalue's locks and leaves the Programs of the references
+/** see dbg_hold_reference_lvalue(): a test holds the thread there, after it assigned the value through the reference
+*/
+typedef void (*qore_dbg_reference_lvalue_hook_t)(int64 value);
+DLLLOCAL extern std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook;
+
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook;
 

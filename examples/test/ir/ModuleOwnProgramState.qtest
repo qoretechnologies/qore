@@ -15,23 +15,23 @@
 %exec-class ModuleOwnProgramStateTest
 
 #! Module code running in its own Program uses its thread-local data for a restricted caller in every execution mode
-/** Module code runs with the restrictions of its caller as well as its own, so a method of a module class that keeps
-    a context in its thread-local data (Mapper::mapData(), the AbstractDataProcessor methods) failed with
+/** Module code runs with the restrictions of a sandboxed caller as well as its own, so a method of a module class that
+    keeps a context in its thread-local data (Mapper::mapData(), the AbstractDataProcessor methods) failed with
     \c INVALID-FUNCTION-ACCESS for a caller with \c PO_NO_THREAD_CONTROL, such as a Qorus workflow step.  Builtin
     variants flagged with \c QCF_OWN_PROGRAM_STATE change only the state that the Program running them keeps for the
-    current thread; module code running in its own Program can reach only the module's own thread-local data with
-    them, so they are checked against the module's own restrictions there.
+    current thread; module code, which runs in the module's Program, can reach only the module's own thread-local data
+    with them, so they are checked against the module's own restrictions.
 
     The tests check that:
-    - methods of a module class (static, normal, a call reference, a nested call, a closure created in module code and
-      calls resolved at run time) can use every flagged function for a \c PO_NO_THREAD_CONTROL caller, as can
-      Mapper::mapData() and AbstractDataProcessor::processRecord();
-    - a thread-control function that is not confined to the module's own state stays refused for module code, a module
-      function (which runs in its caller's Program) stays refused, and restricted code calling a flagged function
-      directly is refused at parse time and at run time;
+    - module code (a function, static and normal methods, a call reference, a nested call, a closure created in
+      module code and calls resolved at run time) can use every flagged function for a sandboxed
+      \c PO_NO_THREAD_CONTROL caller, as can Mapper::mapData() and AbstractDataProcessor::processRecord();
+    - a thread-control function that is not confined to the module's own state stays refused for module code called
+      by a sandboxed caller, and is allowed for a caller restricted only by its parse options, which restrict its own
+      code only; restricted code calling a flagged function directly is refused at parse time and at run time;
     - a module's Program roots its own thread-local data family: the user code of a Program that uses the module can
-      neither read nor change the module's thread-local data, and the module code can neither read nor change the user
-      code's, while a module function uses its caller's.
+      neither read nor change the module's thread-local data, and the module code (functions and methods alike) can
+      neither read nor change the user code's.
 
     Each case runs with the test module as source and AOT-compiled, in every execution mode, against the output of the
     source module with the AST interpreter; the Mapper and DataProvider modules run from source, and also AOT-compiled
@@ -50,38 +50,70 @@ class ModuleOwnProgramStateTest inherits QUnit::Test {
         string qlib_src_dir;
 
         #! the output of the source module with the AST interpreter, after the line that gives the qlib module form
-        const ExpectedOutput = "restricted static_put: \"module\"
-restricted static_put: \"module\"
-restricted static_get: \"module\"
-restricted static_get: \"module\"
-restricted get_all: {k: \"module\"}
-restricted get_all: {k: \"module\"}
-restricted remove_key: \"module\"
-restricted remove_key: null
-restricted delete_key: null
-restricted delete_key: null
-restricted del_all: 0
-restricted del_all: 0
-restricted method_put: \"method\"
-restricted method_put: \"method\"
-restricted callref_put: \"callref\"
-restricted callref_put: \"callref\"
-restricted nested_put: \"nested\"
-restricted nested_put: \"nested\"
-restricted closure_put: \"closure\"
-restricted closure_put: \"closure\"
-restricted dyn_put: \"dynamic\"
-restricted dyn_put: \"dynamic\"
-restricted mapper: {a: 1}
-restricted mapper: {a: 1}
-restricted processor: 2
-restricted processor: 2
-restricted mark_resources: INVALID-FUNCTION-ACCESS
-restricted mark_resources: INVALID-FUNCTION-ACCESS
-restricted module_function_put: INVALID-FUNCTION-ACCESS
-restricted module_function_put: INVALID-FUNCTION-ACCESS
-restricted direct_dyn_put: INVALID-FUNCTION-ACCESS
-restricted direct_dyn_put: INVALID-FUNCTION-ACCESS
+        const ExpectedOutput = "sandboxed static_put: \"module\"
+sandboxed static_put: \"module\"
+unsandboxed static_put: \"module\"
+unsandboxed static_put: \"module\"
+sandboxed static_get: \"module\"
+sandboxed static_get: \"module\"
+unsandboxed static_get: \"module\"
+unsandboxed static_get: \"module\"
+sandboxed get_all: {k: \"module\"}
+sandboxed get_all: {k: \"module\"}
+unsandboxed get_all: {k: \"module\"}
+unsandboxed get_all: {k: \"module\"}
+sandboxed remove_key: \"module\"
+sandboxed remove_key: null
+unsandboxed remove_key: null
+unsandboxed remove_key: null
+sandboxed delete_key: null
+sandboxed delete_key: null
+unsandboxed delete_key: null
+unsandboxed delete_key: null
+sandboxed del_all: 0
+sandboxed del_all: 0
+unsandboxed del_all: 0
+unsandboxed del_all: 0
+sandboxed method_put: \"method\"
+sandboxed method_put: \"method\"
+unsandboxed method_put: \"method\"
+unsandboxed method_put: \"method\"
+sandboxed callref_put: \"callref\"
+sandboxed callref_put: \"callref\"
+unsandboxed callref_put: \"callref\"
+unsandboxed callref_put: \"callref\"
+sandboxed nested_put: \"nested\"
+sandboxed nested_put: \"nested\"
+unsandboxed nested_put: \"nested\"
+unsandboxed nested_put: \"nested\"
+sandboxed closure_put: \"closure\"
+sandboxed closure_put: \"closure\"
+unsandboxed closure_put: \"closure\"
+unsandboxed closure_put: \"closure\"
+sandboxed dyn_put: \"dynamic\"
+sandboxed dyn_put: \"dynamic\"
+unsandboxed dyn_put: \"dynamic\"
+unsandboxed dyn_put: \"dynamic\"
+sandboxed mapper: {a: 1}
+sandboxed mapper: {a: 1}
+unsandboxed mapper: {a: 1}
+unsandboxed mapper: {a: 1}
+sandboxed processor: 2
+sandboxed processor: 2
+unsandboxed processor: 2
+unsandboxed processor: 2
+sandboxed mark_resources: INVALID-FUNCTION-ACCESS
+sandboxed mark_resources: INVALID-FUNCTION-ACCESS
+unsandboxed mark_resources: \"marked\"
+unsandboxed mark_resources: \"marked\"
+sandboxed module_function_put: \"function\"
+sandboxed module_function_put: \"function\"
+unsandboxed module_function_put: \"function\"
+unsandboxed module_function_put: \"function\"
+sandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+sandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+unsandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+unsandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
 restricted direct parse: PARSE-EXCEPTION
 user module_put_user_get: null
 user module_put_user_get: null
@@ -89,8 +121,8 @@ user user_put_module_get: \"module\"
 user user_put_module_get: \"module\"
 user user_only_module_get: null
 user user_only_module_get: null
-user user_only_module_function_get: \"user\"
-user user_only_module_function_get: \"user\"
+user user_only_module_function_get: null
+user user_only_module_function_get: null
 user module_del_all_user_get: \"user\"
 user module_del_all_user_get: \"user\"
 user user_del_all_module_get: \"module\"
@@ -249,7 +281,7 @@ public class Store {
     }
 }
 
-# a module function runs in its caller's Program and so uses its caller's thread-local data
+# a module function runs in the module's Program, as a method does, and so uses the module's thread-local data
 public auto sub functionPut(string k, auto v) {
     save_thread_data(k, v);
     return get_thread_data(k);
@@ -274,12 +306,7 @@ string sub form(string mod) {
 }
 printf(\"qlib: %s %s\\n\", form(\"Mapper\"), form(\"DataProvider\"));
 
-Program p(PO_NEW_STYLE);
-p.loadModule(\"OwnStateMod\");
-p.loadModule(\"Mapper\");
-p.loadModule(\"DataProvider\");
-p.setParseOptions(PO_NO_THREAD_CONTROL);
-p.parse(\"
+const RestrictedCode = \"
 class Processor inherits DataProvider::AbstractDataProcessor {
     private *auto processRecordImpl(auto r) { return r + 1; }
 }
@@ -299,7 +326,23 @@ auto sub processor() { Processor pr(); pr.setThreadLocalData({'x': 1}); return p
 auto sub mark_resources() { return OwnStateMod::Store::markResources(); }
 auto sub module_function_put() { return OwnStateMod::functionPut('f', 'function'); }
 auto sub direct_dyn_put() { return call_function('save_thread_data', 'k', 'direct'); }
-\", \"restricted\");
+\";
+
+# a sandboxed PO_NO_THREAD_CONTROL Program, whose restrictions apply to the module code that it calls, and one
+# restricted only by its parse options, which restrict its own code only
+hash<string, Program> restricted;
+foreach string label in (\"sandboxed\", \"unsandboxed\") {
+    Program p(PO_NEW_STYLE);
+    if (label == \"sandboxed\") {
+        p.setSandboxManager(new SandboxManager());
+    }
+    p.loadModule(\"OwnStateMod\");
+    p.loadModule(\"Mapper\");
+    p.loadModule(\"DataProvider\");
+    p.setParseOptions(PO_NO_THREAD_CONTROL);
+    p.parse(RestrictedCode, label);
+    restricted{label} = p;
+}
 
 # a Program that uses the module and may use thread-local data itself
 Program u(PO_NEW_STYLE);
@@ -333,8 +376,10 @@ sub call(string label, Program pgm, string f) {
 foreach string f in (\"static_put\", \"static_get\", \"get_all\", \"remove_key\", \"delete_key\", \"del_all\", \"method_put\",
         \"callref_put\", \"nested_put\", \"closure_put\", \"dyn_put\", \"mapper\", \"processor\", \"mark_resources\",
         \"module_function_put\", \"direct_dyn_put\") {
-    call(\"restricted\", p, f);
-    call(\"restricted\", p, f);
+    foreach string label in (\"sandboxed\", \"unsandboxed\") {
+        call(label, restricted{label}, f);
+        call(label, restricted{label}, f);
+    }
 }
 # restricted code calling a flagged function directly
 string direct_err;

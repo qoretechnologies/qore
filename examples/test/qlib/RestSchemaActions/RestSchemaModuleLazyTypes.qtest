@@ -3,6 +3,8 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
+# test-exec-mode: children - the modules are loaded and compared in child processes that run in the default mode
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"

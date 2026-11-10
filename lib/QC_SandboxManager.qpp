@@ -163,6 +163,19 @@ sm.setMaxThreads(4);
 sm.setWallTimeLimit(5000);  # 5 seconds per call
     @endcode
 
+    @par Changes by Code That Is Not Trusted
+    The code of a sandboxed %Program, or of a %Program that restricts a functional domain, can change only a sandbox
+    manager that code of its own %Program created in a way that could loosen it: a method that could lift a restriction
+    (a higher or no limit, allowing paths, hosts or ports, allowing by default, changing the sandbox root, and
+    clearInterrupt()) raises \c SANDBOX-ACCESS-ERROR for any other manager, such as the one that governs the code,
+    which @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns, or one that governs another
+    %Program.  A change that only adds restrictions (a stricter limit, denying by default, denying a path or address
+    range, blockPrivateNetworks(), blockLocalhost(), requestInterrupt(), and allowHTTPSOnly() unless the allowed ports
+    are an allowlist that lacks 443/TCP) is allowed.  Such code
+    also cannot replace the sandbox manager of a %Program (see
+    @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()").  Trusted code may change any manager,
+    also when a sandbox governs it because sandboxed code called it.
+
     @since Qore 3.0
 */
 qclass SandboxManager [arg=QoreSandboxManager* sm; ns=Qore];
@@ -174,7 +187,10 @@ SandboxManager sm();
     @endcode
 */
 SandboxManager::constructor() {
-    self->setPrivate(CID_SANDBOXMANAGER, new QoreSandboxManager());
+    QoreSandboxManager* nsm = new QoreSandboxManager();
+    // code that is not trusted may change the managers that it creates (issue #5659)
+    qore_sandbox_manager_record_creator(nsm);
+    self->setPrivate(CID_SANDBOXMANAGER, nsm);
 }
 
 //! Destroys the sandbox manager
@@ -188,7 +204,10 @@ SandboxManager::destructor() {
 /** @return A new SandboxManager with the same configuration
 */
 SandboxManager::copy() {
-    self->setPrivate(CID_SANDBOXMANAGER, sm->copy());
+    QoreSandboxManager* nsm = sm->copy();
+    // code that is not trusted may change the managers that it creates (issue #5659)
+    qore_sandbox_manager_record_creator(nsm);
+    self->setPrivate(CID_SANDBOXMANAGER, nsm);
 }
 
 //! Sets the maximum number of threads that code governed by the sandbox may have running at once
@@ -216,6 +235,12 @@ sm.setMaxThreads(max_threads: 4);
     @ref sandbox_resources)
 */
 nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
+    // a stricter limit only adds restrictions (see qore_sandbox_manager_check_change())
+    int64 current = sm->getMaxThreads();
+    if (!(max_threads > 0 && (!current || max_threads <= current))
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::setMaxThreads()", xsink)) {
+        return QoreValue();
+    }
     sm->setMaxThreads(max_threads);
 }
 
@@ -254,6 +279,12 @@ sm.setWallTimeLimit(max_wall_time_ms: 5000);  # 5 seconds per call
     @since %Qore 3.0
 */
 nothing SandboxManager::setWallTimeLimit(int max_wall_time_ms) [flags=NAMED_ARGS] {
+    // a stricter limit only adds restrictions (see qore_sandbox_manager_check_change())
+    int64 current = sm->getWallTimeLimit();
+    if (!(max_wall_time_ms > 0 && (!current || max_wall_time_ms <= current))
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::setWallTimeLimit()", xsink)) {
+        return QoreValue();
+    }
     if (max_wall_time_ms < 0) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "the wall time limit cannot be negative; got: " QLLD,
             max_wall_time_ms);
@@ -292,6 +323,12 @@ sm.setCPUTimeLimit(max_cpu_time_ms: 1000);  # 1 second of CPU time per call
     @since %Qore 3.0
 */
 nothing SandboxManager::setCPUTimeLimit(int max_cpu_time_ms) [flags=NAMED_ARGS] {
+    // a stricter limit only adds restrictions (see qore_sandbox_manager_check_change())
+    int64 current = sm->getCPUTimeLimit();
+    if (!(max_cpu_time_ms > 0 && (!current || max_cpu_time_ms <= current))
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::setCPUTimeLimit()", xsink)) {
+        return QoreValue();
+    }
     if (max_cpu_time_ms < 0) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "the CPU time limit cannot be negative; got: " QLLD,
             max_cpu_time_ms);
@@ -332,6 +369,12 @@ sm.setMemoryLimit(max_memory_bytes: 10 * 1024 * 1024);  # 10MB
     @since %Qore 3.0
 */
 nothing SandboxManager::setMemoryLimit(int max_memory_bytes) [flags=NAMED_ARGS] {
+    // a stricter limit only adds restrictions (see qore_sandbox_manager_check_change())
+    int64 current = sm->getMemoryLimit();
+    if (!(max_memory_bytes > 0 && (!current || max_memory_bytes <= current))
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::setMemoryLimit()", xsink)) {
+        return QoreValue();
+    }
     if (max_memory_bytes < 0) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "the memory limit cannot be negative; got: " QLLD,
             max_memory_bytes);
@@ -383,6 +426,12 @@ sm.setMaxStackSize(max_stack_bytes: 1024 * 1024);  # 1MB per call
     @since %Qore 3.0
 */
 nothing SandboxManager::setMaxStackSize(int max_stack_bytes) [flags=NAMED_ARGS] {
+    // a stricter limit only adds restrictions (see qore_sandbox_manager_check_change())
+    int64 current = sm->getMaxStackSize();
+    if (!(max_stack_bytes > 0 && (!current || max_stack_bytes <= current))
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::setMaxStackSize()", xsink)) {
+        return QoreValue();
+    }
     if (max_stack_bytes < 0) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "the stack size limit cannot be negative; got: " QLLD,
             max_stack_bytes);
@@ -411,6 +460,7 @@ sm.requestInterrupt();
     @endcode
 */
 nothing SandboxManager::requestInterrupt() {
+    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
     sm->requestInterrupt();
 }
 
@@ -418,6 +468,9 @@ nothing SandboxManager::requestInterrupt() {
 /** Resets the interrupt flag to allow continued execution
 */
 nothing SandboxManager::clearInterrupt() {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::clearInterrupt()", xsink)) {
+        return QoreValue();
+    }
     sm->clearInterrupt();
 }
 
@@ -456,7 +509,10 @@ SandboxManager sm = SandboxManager::createLockdown();
 */
 static SandboxManager SandboxManager::createLockdown() {
     QoreObject* obj = new QoreObject(QC_SANDBOXMANAGER, getProgram());
-    obj->setPrivate(CID_SANDBOXMANAGER, QoreSandboxManager::createLockdown());
+    QoreSandboxManager* nsm = QoreSandboxManager::createLockdown();
+    // code that is not trusted may change the managers that it creates (issue #5659)
+    qore_sandbox_manager_record_creator(nsm);
+    obj->setPrivate(CID_SANDBOXMANAGER, nsm);
     return obj;
 }
 
@@ -479,7 +535,10 @@ SandboxManager sm = SandboxManager::createWebSafe();
 */
 static SandboxManager SandboxManager::createWebSafe() {
     QoreObject* obj = new QoreObject(QC_SANDBOXMANAGER, getProgram());
-    obj->setPrivate(CID_SANDBOXMANAGER, QoreSandboxManager::createWebSafe());
+    QoreSandboxManager* nsm = QoreSandboxManager::createWebSafe();
+    // code that is not trusted may change the managers that it creates (issue #5659)
+    qore_sandbox_manager_record_creator(nsm);
+    obj->setPrivate(CID_SANDBOXMANAGER, nsm);
     return obj;
 }
 
@@ -500,6 +559,9 @@ sm.addFilesystemAllowedPath(path: "/data/uploads", access_modes: QSEC_READ | QSE
     @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::addFilesystemAllowedPath(string path, int access_modes) [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::addFilesystemAllowedPath()", xsink)) {
+        return QoreValue();
+    }
     // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
     if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
         return QoreValue();
@@ -519,6 +581,7 @@ nothing SandboxManager::addFilesystemAllowedPath(string path, int access_modes) 
     @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::addFilesystemDeniedPath(string path) [flags=NAMED_ARGS] {
+    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
     // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
     if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
         return QoreValue();
@@ -546,6 +609,9 @@ sm.setFilesystemSandboxRoot(path: "/home/user/sandbox");
     @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::setFilesystemSandboxRoot()", xsink)) {
+        return QoreValue();
+    }
     // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
     if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
         return QoreValue();
@@ -557,6 +623,9 @@ nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS]
 /** Removes any previously set sandbox root restriction
 */
 nothing SandboxManager::clearFilesystemSandboxRoot() {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::clearFilesystemSandboxRoot()", xsink)) {
+        return QoreValue();
+    }
     sm->filesystem().clearSandboxRoot();
 }
 
@@ -586,6 +655,10 @@ nothing SandboxManager::clearFilesystemSandboxRoot() {
     to @ref Qore::True "True" means only explicitly denied paths will be blocked.
 */
 nothing SandboxManager::setFilesystemDefaultPolicy(bool allow) [flags=NAMED_ARGS] {
+    // denying by default only adds restrictions (see qore_sandbox_manager_check_change())
+    if (allow && qore_sandbox_manager_check_change(sm, "SandboxManager::setFilesystemDefaultPolicy()", xsink)) {
+        return QoreValue();
+    }
     sm->filesystem().setDefaultPolicy(allow);
 }
 
@@ -622,6 +695,9 @@ sm.addNetworkAllowedHost(host_pattern: "*.trusted-domain.org");
     resolves to is in a denied IP range or the port is not allowed; see @ref sandbox_net_rules
 */
 nothing SandboxManager::addNetworkAllowedHost(string host_pattern) [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::addNetworkAllowedHost()", xsink)) {
+        return QoreValue();
+    }
     sm->network().addAllowedHost(host_pattern->c_str(), xsink);
 }
 
@@ -635,6 +711,9 @@ sm.addNetworkAllowedIPRange(cidr: "2001:db8::/32");    # IPv6
     @endcode
 */
 nothing SandboxManager::addNetworkAllowedIPRange(string cidr) [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::addNetworkAllowedIPRange()", xsink)) {
+        return QoreValue();
+    }
     sm->network().addAllowedIPRange(cidr->c_str(), xsink);
 }
 
@@ -647,6 +726,7 @@ sm.addNetworkDeniedIPRange(cidr: "192.168.0.0/16");
     @endcode
 */
 nothing SandboxManager::addNetworkDeniedIPRange(string cidr) [flags=NAMED_ARGS] {
+    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
     sm->network().addDeniedIPRange(cidr->c_str(), xsink);
 }
 
@@ -661,6 +741,9 @@ sm.addNetworkAllowedPort(port: 53, protocol: QSEC_NET_ALL);   # DNS on both TCP 
     @endcode
 */
 nothing SandboxManager::addNetworkAllowedPort(int port, int protocol = QSEC_NET_ALL) [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::addNetworkAllowedPort()", xsink)) {
+        return QoreValue();
+    }
     sm->network().addAllowedPort(port, protocol);
 }
 
@@ -676,6 +759,9 @@ sm.addNetworkAllowedPortRange(start_port: 80, end_port: 443, protocol: QSEC_NET_
 */
 nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port, int protocol = QSEC_NET_ALL)
         [flags=NAMED_ARGS] {
+    if (qore_sandbox_manager_check_change(sm, "SandboxManager::addNetworkAllowedPortRange()", xsink)) {
+        return QoreValue();
+    }
     sm->network().addAllowedPortRange(start_port, end_port, protocol);
 }
 
@@ -701,6 +787,7 @@ sm.blockPrivateNetworks();
     @endcode
 */
 nothing SandboxManager::blockPrivateNetworks() {
+    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
     sm->network().blockPrivateNetworks();
 }
 
@@ -714,6 +801,7 @@ sm.blockLocalhost();
     @endcode
 */
 nothing SandboxManager::blockLocalhost() {
+    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
     sm->network().blockLocalhost();
 }
 
@@ -724,6 +812,13 @@ sm.allowHTTPSOnly();
     @endcode
 */
 nothing SandboxManager::allowHTTPSOnly() {
+    // it adds 443/TCP to the allowed ports: with no port rule every port is allowed already, so it only restricts
+    // the ports then (as it does when 443/TCP is allowed already), but it loosens an allowlist that lacks the port
+    // (see qore_sandbox_manager_check_change())
+    if (!sm->network().allowsPort(443, QSEC_NET_TCP)
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::allowHTTPSOnly()", xsink)) {
+        return QoreValue();
+    }
     sm->network().allowHTTPSOnly();
 }
 
@@ -739,6 +834,10 @@ sm.setNetworkDefaultPolicy(allow: True);  # Allow by default, only deny listed
     @endcode
 */
 nothing SandboxManager::setNetworkDefaultPolicy(bool allow) [flags=NAMED_ARGS] {
+    // denying by default only adds restrictions (see qore_sandbox_manager_check_change())
+    if (allow && qore_sandbox_manager_check_change(sm, "SandboxManager::setNetworkDefaultPolicy()", xsink)) {
+        return QoreValue();
+    }
     sm->network().setDefaultPolicy(allow);
 }
 

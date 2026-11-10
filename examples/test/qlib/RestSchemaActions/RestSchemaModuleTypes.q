@@ -21,141 +21,233 @@
     The graph is reduced to its classes of structurally equal nodes by partition refinement, and the digest of a
     root is that of the reduced graph reachable from it, with its nodes numbered in the order they are reached;
     neither depends on object identities or on how the graph is shared.
+
+    Each type or field object is read once.  Nodes are numbered, a node's content is kept once per distinct content,
+    classes are numbers, and a digest is computed once per class.
 */
 class TypeGraph {
     private {
-        #! Node key -> the node's own content
-        hash<string, string> local = {};
+        #! Node key (\c "t" or \c "f" and the object's unique hash) -> node number
+        hash<string, int> nodes = {};
 
-        #! Node key -> the keys of its children, in order, each prefixed with what the child is
-        hash<string, list<string>> kids = {};
+        #! Node number -> the type or field object
+        /** Holding every object keeps it alive, so that no other object can be given its address, and so its key,
+            while the graph exists
+        */
+        list<object> objects = ();
 
-        #! Node key -> the key of the node, without the prefix, by child entry
-        hash<string, list<string>> kid_keys = {};
+        #! Node number -> the number of the node's own content
+        list<int> local = ();
 
-        #! Node key -> structural class, once computed
-        *hash<string, string> cls;
+        #! Content number -> content
+        list<string> contents = ();
+
+        #! Content -> content number
+        hash<string, int> content_ids = {};
+
+        #! Node number -> what each of its children is, in order
+        list<list<string>> markers = ();
+
+        #! Node number -> the node numbers of its children, in order
+        list<list<int>> children = ();
+
+        #! Node number -> structural class, once computed
+        *list<int> cls;
+
+        #! Structural class -> digest, once computed
+        hash<string, string> digests = {};
     }
 
-    #! Adds a type and everything reachable from it; returns its key
-    string addType(AbstractDataProviderType t) {
-        string key = "t" + t.uniqueHash();
-        # an untyped list, so that the literal does not narrow its element type to the root's class
-        list<auto> stack = ();
-        push stack, t;
-        while (stack) {
-            auto o = pop stack;
-            string k = (o instanceof AbstractDataField ? "f" : "t") + o.uniqueHash();
-            if (exists local{k}) {
-                continue;
+    #! Adds a type and everything reachable from it; returns its node number
+    /** If reading a type or field throws an exception, the graph is left as it was before the call.
+    */
+    int addType(AbstractDataProviderType t) {
+        int first = objects.size();
+        int first_content = contents.size();
+        list<string> new_keys = ();
+        try {
+            int rv = getNode("t", t, \new_keys);
+            # nodes are numbered in the order they are found, and each new one is read in that order, once
+            for (int n = first; n < objects.size(); ++n) {
+                readNode(n, \new_keys);
             }
-            # children are objects, each preceded by a marker saying what it is
-            list<auto> children = ();
-            if (o instanceof AbstractDataField) {
-                AbstractDataField f = o;
-                local{k} = make_json(TypeGraph::plain(f.getLocalInfo() - "unique_key"));
-                children += ("type", f.getType());
-            } else {
-                AbstractDataProviderType dt = o;
-                local{k} = make_json(TypeGraph::plain({
-                    "class": dt.className(),
-                    "name": dt.getName(),
-                    "display_name": dt.getDisplayName(),
-                    "short_desc": dt.getShortDescription(),
-                    "desc": dt.getDesc(),
-                    "base_type": dt.getBaseTypeName(),
-                    "mandatory": dt.isMandatory(),
-                    "options": dt.getOptions(),
-                    "tags": dt.getTags(),
-                    "constraints": dt.getConstraints(),
-                    "default_value": dt.getDefaultValue(),
-                    "path": dt.getPath(),
-                    "allowed_values": dt.getAllowedValues(),
-                    "element_allowed_values": dt.getElementAllowedValues(),
-                }));
-                if (*hash<string, AbstractDataField> fields = dt.getFields()) {
-                    foreach AbstractDataField f in (fields.iterator()) {
-                        children += ("field", f);
-                    }
-                }
-                if (*AbstractDataProviderType et = dt.getElementType()) {
-                    children += ("element", et);
-                }
-                if (dt instanceof QoreUnionDataType) {
-                    foreach AbstractDataProviderType ut in (cast<QoreUnionDataType>(dt).getUnionTypes()) {
-                        children += ("union", ut);
-                    }
-                }
-                if (dt instanceof HashDataType) {
-                    if (*AbstractDataProviderType ot = cast<HashDataType>(dt).getDefaultOtherFieldType()) {
-                        children += ("other", ot);
-                    }
-                }
-            }
-            list<string> markers = ();
-            list<string> child_keys = ();
-            for (int i = 0; i < children.size(); i += 2) {
-                auto c = children[i + 1];
-                push markers, children[i];
-                push child_keys, (c instanceof AbstractDataField ? "f" : "t") + c.uniqueHash();
-                push stack, c;
-            }
-            kids{k} = markers;
-            kid_keys{k} = child_keys;
+            remove cls;
+            digests = {};
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            nodes -= new_keys;
+            content_ids -= extract contents, first_content;
+            splice objects, first;
+            splice local, first;
+            splice markers, first;
+            splice children, first;
+            rethrow;
         }
-        remove cls;
-        return key;
     }
 
-    #! Returns the structural digest of the node with the given key
-    string getDigest(string key) {
+    #! Returns the structural digest of the node with the given number
+    string getDigest(int node) {
         if (!cls) {
             refine();
         }
+        # structurally equal nodes have the same digest
+        int root_class = cls[node];
+        *string rv = digests{root_class};
+        if (exists rv) {
+            return rv;
+        }
         # number the classes reachable from the root in the order they are reached
-        hash<string, int> index = {cls{key}: 0};
-        list<string> order = (key,);
-        list<string> rv = ();
+        hash<string, int> index = {root_class: 0};
+        list<int> order = (node,);
+        list<string> lines = ();
         for (int i = 0; i < order.size(); ++i) {
-            string k = order[i];
+            int n = order[i];
+            list<int> node_children = children[n];
+            list<string> node_markers = markers[n];
             list<string> refs = ();
-            for (int j = 0; j < kid_keys{k}.size(); ++j) {
-                string child = kid_keys{k}[j];
-                string c = cls{child};
-                if (!exists index{c}) {
-                    index{c} = order.size();
+            for (int j = 0; j < node_children.size(); ++j) {
+                int child = node_children[j];
+                int c = cls[child];
+                *int child_index = index{c};
+                if (!exists child_index) {
+                    child_index = order.size();
+                    index{c} = child_index;
                     push order, child;
                 }
-                push refs, kids{k}[j] + index{c};
+                push refs, node_markers[j] + child_index;
             }
-            push rv, local{k} + "->" + refs.join(",");
+            push lines, contents[local[n]] + "->" + refs.join(",");
         }
-        return rv.join("\n").toSHA256();
+        return digests{root_class} = lines.join("\n").toSHA256();
+    }
+
+    #! Returns the node number of a type (\c "t") or field (\c "f"), giving it the next number if it is new
+    private int getNode(string kind, object o, reference<list<string>> new_keys) {
+        string k = kind + o.uniqueHash();
+        *int n = nodes{k};
+        if (exists n) {
+            return n;
+        }
+        n = objects.size();
+        nodes{k} = n;
+        push new_keys, k;
+        push objects, o;
+        return n;
+    }
+
+    #! Reads the content and the children of the given node, which is the next one to be read
+    private readNode(int n, reference<list<string>> new_keys) {
+        @assert(local.size() == n);
+        object o = objects[n];
+        string content;
+        list<string> node_markers = ();
+        list<int> node_children = ();
+        if (o instanceof AbstractDataField) {
+            AbstractDataField f = cast<AbstractDataField>(o);
+            content = TypeGraph::toJson(f.getLocalInfo() - "unique_key");
+            push node_markers, "type";
+            push node_children, getNode("t", f.getType(), \new_keys);
+        } else {
+            AbstractDataProviderType dt = cast<AbstractDataProviderType>(o);
+            content = TypeGraph::toJson({
+                "class": dt.className(),
+                "name": dt.getName(),
+                "display_name": dt.getDisplayName(),
+                "short_desc": dt.getShortDescription(),
+                "desc": dt.getDesc(),
+                "base_type": dt.getBaseTypeName(),
+                "mandatory": dt.isMandatory(),
+                "options": dt.getOptions(),
+                "tags": dt.getTags(),
+                "constraints": dt.getConstraints(),
+                "default_value": dt.getDefaultValue(),
+                "path": dt.getPath(),
+                "allowed_values": dt.getAllowedValues(),
+                "element_allowed_values": dt.getElementAllowedValues(),
+            });
+            if (*hash<string, AbstractDataField> fields = dt.getFields()) {
+                foreach AbstractDataField f in (fields.iterator()) {
+                    push node_markers, "field";
+                    push node_children, getNode("f", f, \new_keys);
+                }
+            }
+            if (*AbstractDataProviderType et = dt.getElementType()) {
+                push node_markers, "element";
+                push node_children, getNode("t", et, \new_keys);
+            }
+            if (dt instanceof QoreUnionDataType) {
+                foreach AbstractDataProviderType ut in (cast<QoreUnionDataType>(dt).getUnionTypes()) {
+                    push node_markers, "union";
+                    push node_children, getNode("t", ut, \new_keys);
+                }
+            }
+            if (dt instanceof HashDataType) {
+                if (*AbstractDataProviderType ot = cast<HashDataType>(dt).getDefaultOtherFieldType()) {
+                    push node_markers, "other";
+                    push node_children, getNode("t", ot, \new_keys);
+                }
+            }
+        }
+        *int id = content_ids{content};
+        if (!exists id) {
+            id = contents.size();
+            content_ids{content} = id;
+            push contents, content;
+        }
+        push local, id;
+        push markers, node_markers;
+        push children, node_children;
     }
 
     #! Partitions the nodes into classes of structurally equal nodes
-    /** Refinement only splits classes, so the partition is final once an iteration splits none.
+    /** The first partition is by content; each iteration then splits the nodes of a class whose children are in
+        different classes.  Refinement only splits classes, so the partition is final once an iteration splits none.
+        A class is a number, and an iteration numbers the classes it finds in the order it finds them.
     */
     private refine() {
-        hash<string, string> c = map {$1.key: $1.value.toSHA256()}, local.pairIterator();
-        int classes = (map {$1: True}, c.iterator()).size();
+        int count = local.size();
+        # content numbers are given in the order nodes are read, so they are the first partition's numbers
+        list<int> c = local;
+        int classes = contents.size();
         while (True) {
-            hash<string, string> next = {};
-            foreach hash<auto> i in (c.pairIterator()) {
-                list<string> refs = ();
-                for (int j = 0; j < kid_keys{i.key}.size(); ++j) {
-                    push refs, kids{i.key}[j] + c{kid_keys{i.key}[j]};
+            list<int> next = ();
+            hash<string, int> ids = {};
+            for (int n = 0; n < count; ++n) {
+                list<int> node_children = children[n];
+                list<string> node_markers = markers[n];
+                string signature = c[n] + "|";
+                for (int j = 0; j < node_children.size(); ++j) {
+                    signature += node_markers[j] + c[node_children[j]] + ",";
                 }
-                next{i.key} = (i.value + "|" + refs.join(",")).toSHA256();
+                *int id = ids{signature};
+                if (!exists id) {
+                    id = ids.size();
+                    ids{signature} = id;
+                }
+                push next, id;
             }
-            int next_classes = (map {$1: True}, next.iterator()).size();
             c = next;
-            if (next_classes == classes) {
+            if (ids.size() == classes) {
                 break;
             }
-            classes = next_classes;
+            classes = ids.size();
         }
         cls = c;
+    }
+
+    #! Returns a value as JSON, with objects and code replaced by their class name
+    /** Most values hold neither, so the value is serialized as it is, and only one that cannot be is made plain
+        first
+    */
+    static string toJson(auto v) {
+        try {
+            return make_json(v);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "JSON-SERIALIZATION-ERROR") {
+                rethrow;
+            }
+        }
+        return make_json(TypeGraph::plain(v));
     }
 
     #! Returns a value with objects and code replaced by their class name
@@ -205,6 +297,8 @@ foreach hash<auto> i in (app_modules.pairIterator()) {
         info.actions{action.action}.registered_lazy = exists action.get_output_type;
     }
     try {
+        # one graph per application: applications share almost no type objects, and the graph of one is freed
+        # before the next is read
         TypeGraph graph();
         list<hash<auto>> roots = ();
         foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app)) {
@@ -232,7 +326,8 @@ foreach hash<auto> i in (app_modules.pairIterator()) {
             }
             info.actions{root.action} += {
                 "metadata": root.metadata.toSHA256(),
-                "output_type": root.output_type ? graph.getDigest(root.output_type) : NOTHING,
+                # node 0 is a valid node number
+                "output_type": exists root.output_type ? graph.getDigest(root.output_type) : NOTHING,
                 "options": options,
             };
         }

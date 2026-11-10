@@ -11,7 +11,7 @@
 %exec-class ModuleIoSandboxManagerTest
 
 #! The network and filesystem access of module code is governed by the SandboxManager, not by the caller's options
-/** Module code runs with the restrictions of the code that calls it as well as its own, except for
+/** Module code runs with the restrictions of a sandboxed caller as well as its own, except for
     \c PO_NO_NETWORK and \c PO_NO_FILESYSTEM: a module that a host loaded into a Program is a capability that the host
     granted it, and its network and filesystem access is governed by the Program's SandboxManager, which every network
     and filesystem operation checks, also on I/O threads.
@@ -19,11 +19,11 @@
     The caller's network and filesystem options were applied only to the calls of module code whose variant is
     selected at run time: a module that created a \c Socket or \c File with \c new could do so, and one that created
     it with \c create_object() was refused, so whether module I/O was refused depended on overload resolution.  The
-    other restrictions of the caller are still inherited.
+    other restrictions of a sandboxed caller are still inherited.
 */
 class ModuleIoSandboxManagerTest inherits QUnit::Test {
     public {
-        #! the source of the module loaded into the caller's Program
+        #! the source of the module that the caller imports
         const ModuleSource = "%modern
 module CallerIoProbe {
     version = \"1.0\";
@@ -83,7 +83,7 @@ auto sub call(string name, *list<auto> args) {
         addTestCase("a caller's PO_NO_NETWORK and PO_NO_FILESYSTEM do not restrict module code",
             \ownAccessTest());
         addTestCase("the SandboxManager governs module network and filesystem access", \sandboxManagerTest());
-        addTestCase("negative: the caller's other restrictions are inherited", \otherRestrictionsTest());
+        addTestCase("negative: a sandboxed caller's other restrictions are inherited", \otherRestrictionsTest());
         addTestCase("negative: the caller's own code is restricted", \callerCodeTest());
         set_return_value(main());
     }
@@ -121,11 +121,16 @@ auto sub call(string name, *list<auto> args) {
     }
 
     otherRestrictionsTest() {
-        # a thread class created by name in module code is refused for a caller that may not use thread classes
+        # a thread class created by name in module code is refused for a sandboxed caller that may not use thread
+        # classes
         Program p = caller(PO_NO_THREAD_CLASSES);
+        p.setSandboxManager(new SandboxManager());
         assertEq("CREATE-OBJECT-ERROR", p.callFunction("call", "mutexByName"));
-        # and allowed for a caller that may
+        # and allowed for a caller that may, and for one restricted only by its parse options, which restrict its own
+        # code only
         p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        assertEq("Mutex", p.callFunction("call", "mutexByName"));
+        p = caller(PO_NO_THREAD_CLASSES);
         assertEq("Mutex", p.callFunction("call", "mutexByName"));
     }
 
