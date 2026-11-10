@@ -47,6 +47,9 @@ print_usage () {
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
+  echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
+  echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -589,6 +592,22 @@ if [ -n "$TEST_MODULE_DIRS" ]; then
     export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 else
     export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+fi
+# The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
+# requires the modules it was compiled with, and the build's qore does not search these directories when they are
+# outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
+# last, so the modules of the build and of this tree come first.  With QORE_MODULE_DIR_ONLY set, the caller gives the
+# complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
+# as set even when it is empty.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
+    _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
+    if [ -n "$_external_module_dirs" ]; then
+        case "$QORE_MODULE_DIR" in
+            *:) export QORE_MODULE_DIR=$QORE_MODULE_DIR$_external_module_dirs ;;
+            *) export QORE_MODULE_DIR=$QORE_MODULE_DIR:$_external_module_dirs ;;
+        esac
+    fi
+    unset _external_module_dirs
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.
