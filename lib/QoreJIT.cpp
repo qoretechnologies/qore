@@ -946,19 +946,20 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
         return;
     }
 
-    llvm::LoopAnalysisManager LAM;
-    llvm::FunctionAnalysisManager FAM;
-    llvm::CGSCCAnalysisManager CGAM;
-    llvm::ModuleAnalysisManager MAM;
     // the instrumentation only answers whether an optional pass runs, so the pipeline of a background compile is the
     // same as that of a synchronous compile until the compile is detached; the callback is only registered for a
-    // background compile, which can be detached
+    // background compile, which can be detached.  It is declared before the analysis managers, whose results refer
+    // to it.
     llvm::PassInstrumentationCallbacks PIC;
     if (detached) {
         PIC.registerShouldRunOptionalPassCallback([detached](llvm::StringRef, llvm::Any) -> bool {
             return !detached->load(std::memory_order_relaxed);
         });
     }
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
     llvm::PassBuilder PB(tm, llvm::PipelineTuningOptions(), std::nullopt, detached ? &PIC : nullptr);
     PB.registerModuleAnalyses(MAM);
     PB.registerCGSCCAnalyses(CGAM);
@@ -988,9 +989,12 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
 static void qore_jit_shutdown_at_exit() {
     QoreJIT& jit = QoreJIT::instance();
     jit.stopBackgroundCompiler();
-    // this handler runs before LLVM's static objects are destroyed (it is registered after LLVM was loaded): a compile
-    // still running in LLVM is waited for here, as exit() would destroy them under it.  The qore and qr programs and
-    // qore_exit_process() end the process with _exit() instead (see QoreJIT::exitQuickly()), so they do not wait.
+    // a compile still running in LLVM is waited for here, so that the static objects of LLVM that are destroyed after
+    // this handler runs (those registered before it, as LLVM's global options are when the library is loaded) are not
+    // destroyed under it; function-local statics that LLVM creates later, during its first compile, are destroyed
+    // before this handler runs, so a process should not rely on this: the qore and qr programs, qore_exit_process()
+    // and the executables compiled with qcc end the process with _exit() instead (see QoreJIT::exitQuickly()), and an
+    // embedding program calls qore_fork_child_quick_exit() after qore_cleanup() for the same.
     jit.joinAbandonedCompileThread();
 }
 
@@ -1178,13 +1182,12 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     // copied before any LLVM operations; see compileFunctionInternal()
     const std::string func_name = func.name;
 
-    if (bgCompileThreadAbandoned(error)) {
-        return false;
-    }
-
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
-    std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    std::unique_lock<std::mutex> compile_lock;
+    if (!lockForSyncCompile(compile_lock, error)) {
+        return false;
+    }
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1202,13 +1205,22 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     return rc;
 }
 
-bool QoreJIT::bgCompileThreadAbandoned(std::string& error) const {
-    if (!bg_thread_abandoned.load(std::memory_order_acquire)) {
+bool QoreJIT::lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string& error) {
+    lock = std::unique_lock<std::mutex>(compile_mutex, std::try_to_lock);
+    if (lock) {
+        return true;
+    }
+    // A detached background compile holds compile_mutex until LLVM returns, which can take without bound, and so does
+    // the compile thread abandoned at process exit; once the compiler stops, nothing is worth waiting for.  The caller
+    // runs the code in the IR tier instead.  Otherwise the lock is held by a compile that will be published, which is
+    // waited for as before.  A compile detached after this check is waited for too: the check is not made under the
+    // lock that orders it with the detachment, as the holder of compile_mutex takes bg_queue_mutex.
+    if (bg_in_progress_detached.load(std::memory_order_acquire) || bg_thread_abandoned.load(std::memory_order_acquire)
+            || !bg_accept_work.load(std::memory_order_acquire)) {
+        error = "the JIT is busy with a background compile whose result is discarded, or it is stopped";
         return false;
     }
-    // the abandoned compile thread can hold compile_mutex without bound; the process is exiting, and the code runs in
-    // the IR tier (see stopBackgroundCompiler())
-    error = "the JIT was stopped at process exit while a compile was running";
+    lock.lock();
     return true;
 }
 
@@ -1417,12 +1429,11 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
         }
     }
 
-    if (bgCompileThreadAbandoned(error)) {
+    // Serialize the entire compilation pipeline
+    std::unique_lock<std::mutex> compile_lock;
+    if (!lockForSyncCompile(compile_lock, error)) {
         return false;
     }
-
-    // Serialize the entire compilation pipeline
-    std::lock_guard<std::mutex> compile_lock(compile_mutex);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1934,6 +1945,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     }
     auto root_fn_ptr = sym->toPtr<uint64_t(ExceptionSink*)>();
 
+    if (bgCheckDetached()) {
+        bgDiscardModule(rt.get(), root_func_name);
+        error = "the compile of '" + root_func_name + "' was detached";
+        return false;
+    }
+
     // Look up all callee functions; they were generated with the root function, as the module is materialized as a
     // whole.  Use pre-copied callee_names (not callee.ir_func->name) as LLVM may have
     // corrupted adjacent heap memory during addIRModule()/lookup() above.
@@ -2145,6 +2162,7 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
         bg_in_progress = nullptr;
         bg_in_progress_pgms.clear();
         bg_in_progress_phase = BgCompilePhase::Lowering;
+        bg_in_progress_detached.store(false, std::memory_order_relaxed);
     }
     // Always notify: both the shutdown waiter (queue empty && active_work == 0)
     // and per-Program waiters (in-progress no longer references their Program)
@@ -2217,8 +2235,9 @@ void QoreJIT::bgDiscardModule(llvm::orc::ResourceTracker* rt, const std::string&
     if (!rt) {
         return;
     }
-    // the thread of a compile abandoned at process exit touches the JIT no more: exit() can already be destroying
-    // LLVM's static objects, and the engine is left to the operating system (see stopBackgroundCompiler())
+    // the module of a compile abandoned at process exit is left in place, as the engine is left to the operating
+    // system (see stopBackgroundCompiler()); the tracker, when it is released, only moves the module to the default
+    // tracker of its JITDylib.  The process does not run exit() while this thread is in LLVM (see exitQuickly()).
     if (bg_thread_abandoned.load(std::memory_order_acquire)) {
         return;
     }
@@ -2253,10 +2272,17 @@ bool QoreJIT::detachInProgressLocked(BgDetachedRefs& refs) noexcept {
     bg_detach_releases.insert(bg_detach_releases.end(), refs.pgms.begin(), refs.pgms.end());
     bg_in_progress_phase = BgCompilePhase::Detached;
     bg_in_progress_detached.store(true, std::memory_order_release);
+    // the references are released by releaseDetachedRefs(), or by the destructor of refs
+    refs.jit = this;
     return true;
 }
 
 void QoreJIT::releaseDetachedRefs(BgDetachedRefs& refs) noexcept {
+    if (!refs.jit) {
+        // not detached, or released already
+        return;
+    }
+    refs.jit = nullptr;
     // the root function can be submitted again, as when queued work is cancelled: its Program can outlive the one
     // whose teardown detached the compile.  The variant is alive: the references are released below
     if (refs.uvb) {
@@ -2267,9 +2293,14 @@ void QoreJIT::releaseDetachedRefs(BgDetachedRefs& refs) noexcept {
     }
     refs.variant_refs.clear();
     refs.owned_ir_func.reset();
+    endRelease(refs.pgms);
+    refs.pgms.clear();
+}
+
+void QoreJIT::endRelease(const std::vector<const QoreProgram*>& pgms) noexcept {
     {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
-        for (const QoreProgram* p : refs.pgms) {
+        for (const QoreProgram* p : pgms) {
             auto i = std::find(bg_detach_releases.begin(), bg_detach_releases.end(), p);
             assert(i != bg_detach_releases.end());
             if (i != bg_detach_releases.end()) {
@@ -2277,8 +2308,7 @@ void QoreJIT::releaseDetachedRefs(BgDetachedRefs& refs) noexcept {
             }
         }
     }
-    refs.pgms.clear();
-    // the teardowns of the other Programs of the item wait for the release
+    // the teardowns of the other Programs of the items wait for the release
     bg_queue_empty_cv.notify_all();
 }
 
@@ -2380,15 +2410,31 @@ void QoreJIT::bgCompileThreadLoop() {
             bg_queue_cv.wait(lock, [this]() {
                 return !bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire);
             });
-            // once the compiler stops, the queued work is left to stopBackgroundCompiler(), which cancels it: it
-            // decides whether to join this thread from the work in progress when it stops the compiler, so this
-            // thread must not claim more work afterwards
             if (bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire)) {
                 // Check if all work is truly complete (queue empty AND no in-progress compilations)
                 if (bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0) {
                     bg_queue_empty_cv.notify_all();
                 }
                 continue;  // Shutdown signal or spurious wakeup, check loop condition
+            }
+        }
+
+        // Acquire compile lock (blocking is OK here — this is a dedicated background thread).  It is taken before the
+        // work is claimed: a synchronous compile on another thread can hold it through a long LLVM run, and a claimed
+        // work item would make the teardown of its Programs wait for that run although nothing of them was read yet.
+        // Unclaimed work is still in the queue, where a teardown cancels it.
+        std::unique_lock<std::mutex> compile_lock(compile_mutex);
+        {
+            std::unique_lock<std::mutex> lock(bg_queue_mutex);
+            // once the compiler stops, the queued work is left to stopBackgroundCompiler(), which cancels it: it
+            // decides whether to join this thread from the work in progress when it stops the compiler, so this
+            // thread must not claim more work afterwards.  The queue can also have been emptied by a teardown while
+            // this thread waited for compile_mutex.
+            if (bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire)) {
+                if (bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0) {
+                    bg_queue_empty_cv.notify_all();
+                }
+                continue;
             }
             work = std::move(bg_compile_queue.front());
             bg_compile_queue.pop();
@@ -2410,9 +2456,6 @@ void QoreJIT::bgCompileThreadLoop() {
             }
 #endif
         }
-
-        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
-        std::lock_guard<std::mutex> lock(compile_mutex);
 
         // Tiered execution can reach a hot function before any synchronous JIT
         // compilation has initialized LLVM.  Initialize it here so that the
@@ -2501,6 +2544,7 @@ void QoreJIT::bgCompileThreadLoop() {
             continue;
         }
         // BgCompilePhase::Installing: a Program teardown waits until the work is finished
+        dbgBgHold(BgCompileHoldPoint::Install);
 
         if (!success) {
             if (q_env_is_set("QORE_JIT_TIMING")) {
@@ -2715,12 +2759,13 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
             ++dbg_bg_compile_refused_closed;
         }
 #endif
-        // work with code whose Program is unknown is refused for good, as is work for a function whose own Program is
-        // deleted or being deleted: the function stays in its tier (state 2), as submitting it again on every call
-        // would be refused in the same way.  A function whose callee's Program is deleted can be submitted again, as
-        // its callees are collected again (see waitForBgCompileQueue(QoreProgram*)), as can one refused because the
+        // work with code whose Program is unknown or deleted is refused for good, as is work for a function whose own
+        // Program is deleted or being deleted: the function stays in its tier (state 2), as submitting it again on
+        // every call would be refused in the same way (the callees of a function are collected from its IR, which
+        // still calls the function of the deleted Program, so each call would lower its batch again for nothing).  A
+        // function whose callee's Program is being deleted can be submitted again, as can one refused because the
         // compiler stops.
-        bool final = !pgms_known;
+        bool final = !pgms_known || (!registered && !shutting_down);
         if (!final && !shutting_down) {
             std::vector<std::pair<const QoreProgram*, qore_program_id_t>> root_pgm(work_pgms.begin(),
                 work_pgms.begin() + 1);
@@ -2787,10 +2832,10 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
     // to other Programs stay queued and running, so Program teardown is not
     // serialized behind the whole global queue.
     std::vector<BgCompileWork> cancelled;
-    BgDetachedRefs detached;
-    bool have_detached = false;
+    // the Programs of the cancelled items, listed in bg_detach_releases while their references are released
+    std::vector<const QoreProgram*> cancelled_pgms;
     {
-        std::unique_lock<std::mutex> lock(bg_queue_mutex);
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
         // no work referring to the Program is accepted from now on (see enqueueBgCompile())
         qore_program_private::get(*pgm)->bg_compile_closed = true;
         if (!bg_compile_queue.empty()) {
@@ -2799,6 +2844,7 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
                 BgCompileWork w = std::move(bg_compile_queue.front());
                 bg_compile_queue.pop();
                 if (workReferencesPgm(w, pgm)) {
+                    cancelled_pgms.insert(cancelled_pgms.end(), w.pgms.begin(), w.pgms.end());
                     cancelled.push_back(std::move(w));
                 } else {
                     kept.push(std::move(w));
@@ -2806,6 +2852,21 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
             }
             bg_compile_queue = std::move(kept);
         }
+        // the release below can destroy variants of the other Programs of the cancelled items: their teardowns wait
+        // for it (see bg_detach_releases)
+        bg_detach_releases.insert(bg_detach_releases.end(), cancelled_pgms.begin(), cancelled_pgms.end());
+    }
+    // Release refs (which may destroy the now-orphaned variants) outside the lock; nothing is waited for here
+    if (!cancelled.empty()) {
+        for (auto& w : cancelled) {
+            cancelQueuedBgCompileWork(w);
+        }
+        endRelease(cancelled_pgms);
+    }
+
+    BgDetachedRefs detached;
+    {
+        std::unique_lock<std::mutex> lock(bg_queue_mutex);
         // The bg thread changes the phase of the in-progress compile and clears bg_in_progress under bg_queue_mutex
         // and notifies, and it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
 #ifdef DEBUG
@@ -2816,8 +2877,8 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
             bool in_progress = bg_in_progress
                 && std::find(bg_in_progress_pgms.begin(), bg_in_progress_pgms.end(), pgm)
                     != bg_in_progress_pgms.end();
-            // the references of an item detached by the teardown of another Program can be released right now,
-            // which can destroy this Program's variants: they are released while this Program exists
+            // the references of an item detached or cancelled by the teardown of another Program can be released
+            // right now, which can destroy this Program's variants: they are released while this Program exists
             bool releasing = std::find(bg_detach_releases.begin(), bg_detach_releases.end(), pgm)
                 != bg_detach_releases.end();
             if (!releasing) {
@@ -2828,12 +2889,11 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
                 // a compile in the LLVM phase reads no Program data, and can take without bound: it is detached, and
                 // its result is discarded when that phase ends
                 if (bg_in_progress_phase == BgCompilePhase::Llvm && detachInProgressLocked(detached)) {
-                    have_detached = true;
                     break;
                 }
             }
             // the compile is lowering the IR (BgCompilePhase::Lowering) or publishing its result
-            // (BgCompilePhase::Installing), or another teardown releases the references of a detached compile
+            // (BgCompilePhase::Installing), or another teardown releases the references of an item
 #ifdef DEBUG
             if (!noted_wait) {
                 // notified once per call, as each waiter that notifies would wake the others again
@@ -2845,16 +2905,12 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
             bg_queue_empty_cv.wait(lock);
         }
     }
-    if (have_detached) {
+    if (detached.jit) {
         if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] detached an in-progress compile from a Program being deleted\n");
         }
         // released here, while this Program exists, as the compile thread released them before it finished
         releaseDetachedRefs(detached);
-    }
-    // Release refs (which may destroy the now-orphaned variants) outside the lock.
-    for (auto& w : cancelled) {
-        cancelQueuedBgCompileWork(w);
     }
 }
 
@@ -2864,7 +2920,6 @@ void QoreJIT::stopBackgroundCompiler() {
     // true if the compile thread runs a detached compile in LLVM, and is not joined
     bool abandon = false;
     BgDetachedRefs detached;
-    bool have_detached = false;
     {
         // Serialize the shutdown transition with worker startup and queue insertion.
         std::unique_lock<std::mutex> lock(bg_queue_mutex);
@@ -2881,7 +2936,6 @@ void QoreJIT::stopBackgroundCompiler() {
                 break;
             }
             if (bg_in_progress_phase == BgCompilePhase::Llvm && detachInProgressLocked(detached)) {
-                have_detached = true;
                 abandon = true;
                 break;
             }
@@ -2905,7 +2959,7 @@ void QoreJIT::stopBackgroundCompiler() {
             bg_compile_thread.join();
         }
     }
-    if (have_detached) {
+    if (detached.jit) {
         if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] detached an in-progress compile at shutdown\n");
         }
@@ -3026,6 +3080,8 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     bg_detach_releases.clear();
     bg_thread_abandoned.store(false, std::memory_order_relaxed);
     bg_thread_done.store(false, std::memory_order_relaxed);
+    // it pointed at the stack of the compile thread, which does not exist in the child
+    bg_compile_ctx = nullptr;
 #ifdef DEBUG
     dbg_bg_hold_armed = 0;
     dbg_bg_held = -1;

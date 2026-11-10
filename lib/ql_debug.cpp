@@ -17155,15 +17155,17 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
         rv = QoreJIT::BgCompileHoldPoint::Llvm;
     } else if (!strcmp(point->c_str(), "commit")) {
         rv = QoreJIT::BgCompileHoldPoint::Commit;
+    } else if (!strcmp(point->c_str(), "install")) {
+        rv = QoreJIT::BgCompileHoldPoint::Install;
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown background compile hold point '%s'; expecting "
-            "\"lowering\", \"llvm\" or \"commit\"", point->c_str());
+            "\"lowering\", \"llvm\", \"commit\" or \"install\"", point->c_str());
         return false;
     }
     return true;
 }
 
-//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm" or \c "commit")
+//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
 

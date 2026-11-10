@@ -743,6 +743,8 @@ public:
         //! at the end of the LLVM phase, after the code was generated and looked up, before the result is published
         //! or discarded
         Commit,
+        //! in the installing phase, before the result is published to the variants
+        Install,
     };
 
     //! Returns the process-wide JIT
@@ -810,9 +812,10 @@ public:
     static bool exitQuickly();
 
     //! Waits for a compile thread that stopBackgroundCompiler() left running, if any, to end
-    /** Called by the \c atexit() handler of the library, which runs before LLVM's static objects are destroyed, for a
-        process that exits without qore_fork_child_quick_exit(): it waits for LLVM, as there is no other way to keep
-        LLVM's static objects intact under the compile.
+    /** Called by the \c atexit() handler of the library for a process that exits without
+        qore_fork_child_quick_exit(): it waits for LLVM, so that the static objects of LLVM destroyed after the handler
+        are not destroyed under the compile.  Function-local statics that LLVM creates during its first compile are
+        destroyed before the handler, so a process should end with qore_fork_child_quick_exit() instead.
     */
     void joinAbandonedCompileThread();
 
@@ -1112,10 +1115,13 @@ private:
     */
     std::atomic<bool> bg_in_progress_detached{false};
 
-    //! The Programs of detached work items whose references are being released; protected by bg_queue_mutex
-    /** A Program appears once for each such item.  The waiter that detaches an item releases its references outside
-        the lock, which can destroy variants of every Program the item refers to; the teardown of another of these
-        Programs waits until the release is done, as it waited for the compile thread to release them before.
+    //! The Programs of detached or cancelled work items whose references are being released; protected by
+    //! bg_queue_mutex
+    /** A Program appears once for each such item.  The waiter that detaches or cancels an item releases its references
+        outside the lock, which can destroy variants of every Program the item refers to; the teardown of another of
+        these Programs waits until the release is done, as it waits for the compile thread to release the references
+        of an item it finishes.  A releaser waits for nothing while it releases, so two teardowns cannot wait for each
+        other.
     */
     std::vector<const QoreProgram*> bg_detach_releases;
 
@@ -1144,7 +1150,12 @@ private:
     BgCompileContext* bg_compile_ctx = nullptr;
 
     //! The references of a detached work item, taken by the waiter that detaches it
+    /** Released by QoreJIT::releaseDetachedRefs(), or by the destructor if that was not called, so that the Programs
+        of the item are always removed from bg_detach_releases
+    */
     struct BgDetachedRefs {
+        //! the JIT, set when the references are taken
+        QoreJIT* jit = nullptr;
         //! the root function, whose state is reset so that it can be submitted again
         const UserVariantBase* uvb = nullptr;
         //! the references that keep the variants alive
@@ -1153,6 +1164,16 @@ private:
         std::shared_ptr<QoreIRFunction> owned_ir_func;
         //! the Programs of the item, added to bg_detach_releases while the references are released
         std::vector<const QoreProgram*> pgms;
+
+        DLLLOCAL BgDetachedRefs() = default;
+        DLLLOCAL BgDetachedRefs(const BgDetachedRefs&) = delete;
+        DLLLOCAL BgDetachedRefs& operator=(const BgDetachedRefs&) = delete;
+
+        DLLLOCAL ~BgDetachedRefs() {
+            if (jit) {
+                jit->releaseDetachedRefs(*this);
+            }
+        }
     };
 
 #ifdef DEBUG
@@ -1171,7 +1192,7 @@ private:
     //! the number of Program teardowns that waited for the in-progress compile; protected by bg_queue_mutex
     unsigned dbg_bg_teardown_waits = 0;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
-    std::string dbg_bg_hold_func[3];
+    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
 
@@ -1210,13 +1231,19 @@ private:
     */
     bool detachInProgressLocked(BgDetachedRefs& refs) noexcept;
 
-    //! Returns true if stopBackgroundCompiler() abandoned the compile thread, setting \a error
-    /** A synchronous compile does not wait for compile_mutex then, which the abandoned thread can hold without bound
+    //! Takes compile_mutex for a synchronous compile
+    /** A synchronous compile does not wait for a detached background compile, for the compile thread abandoned at
+        process exit, or for anything once the compiler stops: they can hold compile_mutex without bound.
+
+        @return false with \a error set if the lock is held by such a compile: the caller runs the code in the IR tier
     */
-    bool bgCompileThreadAbandoned(std::string& error) const;
+    bool lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string& error);
 
     //! Releases the references of a detached work item; no lock is held
     void releaseDetachedRefs(BgDetachedRefs& refs) noexcept;
+
+    //! Removes the Programs of released work items from bg_detach_releases and wakes the waiting teardowns
+    void endRelease(const std::vector<const QoreProgram*>& pgms) noexcept;
 
     //! Background thread worker loop
     void bgCompileThreadLoop();

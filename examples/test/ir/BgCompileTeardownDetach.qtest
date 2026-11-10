@@ -59,6 +59,7 @@ ExecMode em = ARGV[0] == \"jit\" ? EM_JIT : EM_TIERED;
             addTestCase(mode + ": teardown detaches a compile in the LLVM phase", \llvmPhaseDetach(), (mode,));
             addTestCase(mode + ": teardown waits for the lowering, then detaches", \loweringPhaseWait(), (mode,));
             addTestCase(mode + ": a callee's Program deleted after code generation", \otherProgramCallee(), (mode,));
+            addTestCase(mode + ": teardown waits while the result is published", \installPhaseWait(), (mode,));
             addTestCase(mode + ": exit with a compile left in LLVM", \exitWithBlockedCompile(), (mode,));
         }
         addTestCase("hold usage errors", \holdErrors());
@@ -147,8 +148,8 @@ printf(\"sum=%d held_lowering=%y waited=%y pending=%d continued_lowering=%y held
     /** The compile is stopped at the end of the LLVM phase, after the code of the batch was generated; the deletion of
         the callee's Program detaches it.  The discarded module is removed from the JIT: a function of the surviving
         Program that the batch defined is compiled again afterwards under the same symbol.  The root function's state
-        is reset, so it is submitted again when it is called (and refused, as its batch still refers to the deleted
-        Program).
+        is reset, so it is submitted again when it is called, and refused for good, as its batch still refers to the
+        deleted Program.
     */
     otherProgramCallee(string mode) {
         checkDebug();
@@ -180,18 +181,20 @@ int discarded = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
 int g1 = a.callFunction(\"g\", 1);
 call_function(\"dbg_wait_bg_compile_idle\");
 int r0 = call_function(\"dbg_get_bg_compile_refused_count\");
+# f(0) calls neither g nor h: h's code belongs to the deleted Program b
 int sum = 0;
 for (int i = 0; i < 3; ++i) {
-    sum += a.callFunction(\"f\", 10);
+    sum += a.callFunction(\"f\", 0);
 }
 call_function(\"dbg_wait_bg_compile_idle\");
 int resubmitted = call_function(\"dbg_get_bg_compile_refused_count\") - r0;
-printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded=%d resubmitted=%y\\n\", f0, g1, sum,
-    held, deleted_while_held, continued, discarded, resubmitted > 0);
+printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded=%d resubmitted=%d\\n\", f0, g1, sum,
+    held, deleted_while_held, continued, discarded, resubmitted);
 ", mode);
         assertEq(0, r.rc, r.output);
-        assertRegex("f0=0 g1=2 sum=435 held=True deleted_while_held=True continued=True discarded=1 "
-            "resubmitted=True",
+        # f is submitted again once, and refused for good: its batch still refers to the deleted Program
+        assertRegex("f0=0 g1=2 sum=0 held=True deleted_while_held=True continued=True discarded=1 "
+            "resubmitted=1",
             r.output, "the compile was detached by the callee's Program and discarded, and f was submitted again");
         assertRegex("\\[BG-JIT\\] discarded the compile of 'f@", r.output);
         # g was defined by the discarded batch; it compiles under the same symbol only if that module was removed
@@ -199,6 +202,41 @@ printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded
             "g compiled again after the batch that defined it was discarded");
         assertNRegex("failed to compile", r.output);
         assertNRegex("compiled 'f@[^']*' and promoted", r.output, "f's discarded code was not installed");
+    }
+
+    #! a teardown that finds the compile publishing its result waits for it
+    /** The compile is stopped after it decided to publish its result, before it installs the entry point in the
+        variant: the teardown waits, and the compile is not discarded
+    */
+    installPhaseWait(string mode) {
+        checkDebug();
+        hash<auto> r = runChild(Header + "
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+int d0 = call_function(\"dbg_get_bg_compile_discarded_count\");
+call_function(\"dbg_hold_bg_compile\", \"install\", \"f\");
+int sum = p.callFunction(\"f\", 10);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"install\", T);
+Counter deleted(1);
+background sub () {
+    delete p;
+    deleted.dec();
+}();
+bool waited = call_function(\"dbg_wait_bg_compile_teardown_waiting\", T);
+int pending = deleted.getCount();
+bool continued = call_function(\"dbg_continue_bg_compile\", T);
+deleted.waitForZero();
+call_function(\"dbg_wait_bg_compile_idle\");
+int discarded = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
+printf(\"sum=%d held=%y waited=%y pending=%d continued=%y discarded=%d\\n\", sum, held, waited, pending, continued,
+    discarded);
+", mode);
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=45 held=True waited=True pending=1 continued=True discarded=0", r.output,
+            "the teardown waited for the result to be published");
+        assertRegex("\\[BG-JIT\\] compiled 'f@[^']*' and promoted to JIT tier", r.output);
+        assertNRegex("detached an in-progress compile", r.output);
     }
 
     #! the process exits while a compile is stopped in LLVM and never continued
@@ -269,6 +307,11 @@ try {
         assertRegex("second=DBG-ARGUMENT-ERROR", r.output, "a second hold at the same point is refused");
     }
 
+    #! returns the argument quoted for the shell
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
     private checkDebug() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the background compile holds require a debug build");
@@ -292,8 +335,10 @@ try {
         hash<string, string> env = {"QORE_JIT_THRESHOLD": "1", "QORE_JIT_TIMING": "1"};
         list<string> args = ("--enable-debug", "--exec-mode=" + main_mode, script, mode);
 %ifdef NoProcess
-        string output = backquote(sprintf("env %s %s %s 2>&1; echo \"rc=$?\"",
-            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "), qore_bin, args.join(" ")));
+        # the variables are assigned by the shell, which runs the child itself
+        string output = backquote(sprintf("%s %s %s 2>&1; echo \"rc=$?\"",
+            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "), shellQuote(qore_bin),
+            (map shellQuote($1), args).join(" ")));
         *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
         assertTrue(exists rc, "the child's status is known: " + output);
         return {"rc": rc[0].toInt(), "output": output};
