@@ -7447,38 +7447,40 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
-    const QoreIRFunction* callee_ir = uvb->getCachedIR();
-    const UserSignature* sig = uvb->getUserSignature();
-    if (!callee_ir || !sig) {
-        return false;
-    }
 
     struct NativeClosureLeafCache {
         NativeClosureLeafCache()
             : descriptor(nullptr, nullptr, nullptr, QoreValue()) {
         }
 
-        const UserVariantBase* uvb = nullptr;
-        //! the id of the Program of the variant, which is never reused
-        qore_program_id_t pgm_id = 0;
+        //! the serial of the variant that the descriptor is for; 0 if none (serials start at 1)
+        uint64_t serial = 0;
         int nargs = -1;
         QoreIRCallDirectInstruction descriptor;
     };
+    // The cache outlives the variant and the IR it holds: they are freed with the closure function, with their Program
+    // or while it lives (the code of an Expression), and the allocator can give their memory to the closure function
+    // parsed next, so a variant at the address of the one cached can be another one; the native leaf state of the
+    // descriptor, derived from the IR of the freed variant, was used for another closure then.  The cache is
+    // therefore keyed by the serial of the variant, which is never reused (UserVariantBase::serial): the variant with
+    // the serial cached is the variant cached, and its IR, which is never replaced (UserVariantBase::setCachedIR()),
+    // the IR cached
     static thread_local NativeClosureLeafCache cache;
-    // the entry is found by the id of the variant's Program as well: the variant and its IR live as long as their
-    // Program, but the variant and IR of a Program created after it was deleted can have their addresses, and the
-    // descriptor's analysis of the deleted IR (the leaf's operation) and its return type would then be used for them
-    // (see tryExecuteInterpreterInlineIRClosure())
-    const qore_program_id_t pgm_id = uvb->pgm_id;
 #ifdef DEBUG
-    if (cache.uvb == uvb && cache.descriptor.cached_callee_ir == callee_ir && cache.pgm_id != pgm_id) {
+    // a variant at the address of the one cached with another serial is another variant; counted for tests that
+    // reproduce the reuse of a freed closure's addresses (dbg_closure_call_cache_program_misses())
+    if (cache.serial && cache.descriptor.cached_uvb == uvb && cache.serial != uvb->serial) {
         qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
     }
 #endif
-    if (cache.uvb != uvb || cache.pgm_id != pgm_id || cache.nargs != nargs
-            || cache.descriptor.cached_callee_ir != callee_ir) {
-        cache.uvb = uvb;
-        cache.pgm_id = pgm_id;
+    if (cache.serial != uvb->serial || cache.nargs != nargs) {
+        // an entry is made only with the variant's IR, so a call that finds its entry has it
+        const QoreIRFunction* callee_ir = uvb->getCachedIR();
+        const UserSignature* sig = uvb->getUserSignature();
+        if (!callee_ir || !sig) {
+            return false;
+        }
+        cache.serial = uvb->serial;
         cache.nargs = nargs;
         cache.descriptor.cached_callee_ir = callee_ir;
         cache.descriptor.cached_uvb = uvb;

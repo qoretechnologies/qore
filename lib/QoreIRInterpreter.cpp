@@ -4998,9 +4998,10 @@ static QoreValue qore_ir_uninstantiate_scan_value(ClosureVarValue& cvv, Exceptio
 }
 
 #ifdef DEBUG
-//! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
-/** The entry is not used (see tryExecuteInterpreterInlineIRClosure() and tryExecClosureNativeLeaf()); a test that
-    reproduces the reuse of a deleted Program's addresses checks that it occurred (dbg_closure_call_cache_program_misses())
+//! the closure calls that found a cache entry made for a freed closure at the same addresses
+/** The entry is not used, as its serial differs (see tryExecuteInterpreterInlineIRClosure() and
+    tryExecClosureNativeLeaf()); a test that reproduces the reuse of a deleted Program's addresses checks that it
+    occurred (dbg_closure_call_cache_program_misses())
 */
 std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses{0};
 #endif
@@ -5029,16 +5030,21 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return false;
     }
 
-    // The entry is found by the closure, its function and the id of the Program that owns the function and the
-    // variant, IR and signature cached for it.  A Program's id is never reused, but its address is: a Program created
-    // after the cached one was deleted can have its address, and its closure function, closure and variant can have
-    // the addresses of the deleted ones, so an entry found by the Program's address ran the deleted Program's freed IR
-    // with its freed signature (a wrong result, a wrong release of a reference argument, or a crash).  The function
-    // and its variant live as long as their Program, so the id identifies them while the Program's code runs.
+    // The cache outlives the objects it holds: a closure function, its variant and the variant's IR are freed with the
+    // code that parsed them, with their Program or while it lives (the code of an Expression), and the allocator can
+    // give their memory to the closure function parsed next, so a closure function at the address of the one cached
+    // can be another one.  The cache is therefore keyed by the closure function's serial, which is never reused
+    // (UserClosureFunction::serial): a closure function with the serial cached is the one cached and is alive, as the
+    // closure called holds it, and with it its variant and the variant's IR, which is never replaced
+    // (UserVariantBase::setCachedIR()).  The caller's Program is compared as well, as a closure is run inline only by
+    // code of its own Program; the Program cached is that of the live variant, so it cannot be another Program at its
+    // address.  Before the serial, the cache was keyed by addresses, and a call ran the freed IR of another closure or
+    // the IR of the function given its memory.
     struct ClosureInlineCache {
-        const AbstractQoreNode* node = nullptr;
-        UserClosureFunction* function = nullptr;
-        qore_program_id_t caller_pgm_id = 0;
+        //! the serial of the closure function cached; 0 if none (serials start at 1)
+        uint64_t serial = 0;
+        //! the Program of uvb
+        QoreProgram* caller_pgm = nullptr;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
         const UserSignature* sig = nullptr;
@@ -5053,21 +5059,18 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const UserSignature* sig = nullptr;
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
-    const qore_program_id_t caller_pgm_id = qore_program_private::get(*caller_pgm)->getProgramId();
-    bool use_cached_metadata = closure_inline_cache.node == node
-        && closure_inline_cache.function == uf
-        && closure_inline_cache.caller_pgm_id == caller_pgm_id
-        && closure_inline_cache.uvb
-        // the cached variant is the function's own; a check that does not rely on the lifetime of the function
-        && uf->first() && uf->first()->getUserVariantBase() == closure_inline_cache.uvb
-        && closure_inline_cache.callee_ir
-        && closure_inline_cache.sig
+    // an entry has a variant, IR and a signature: it is made only with them
+    bool use_cached_metadata = closure_inline_cache.serial == uf->getSerial()
+        && closure_inline_cache.caller_pgm == caller_pgm
         && ((closure_inline_cache.direct_params_eligible
                 && nargs >= static_cast<int>(closure_inline_cache.num_params))
             || nargs == static_cast<int>(closure_inline_cache.num_params));
 #ifdef DEBUG
-    if (closure_inline_cache.node == node && closure_inline_cache.function == uf
-            && closure_inline_cache.caller_pgm_id != caller_pgm_id) {
+    // a closure function whose variant is at the address of the one cached but with another serial is another closure
+    // function; counted for tests that reproduce the reuse of a freed closure's addresses
+    // (dbg_closure_call_cache_program_misses())
+    if (closure_inline_cache.serial && closure_inline_cache.serial != uf->getSerial() && uf->first()
+            && uf->first()->getUserVariantBase() == closure_inline_cache.uvb) {
         qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
     }
 #endif
@@ -5103,9 +5106,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         num_params = sig->numParams();
         simple_increment = nargs == 0 ? getSimpleClosureIncrementInstruction(callee_ir) : nullptr;
         closure_inline_cache = {
-            node,
-            uf,
-            caller_pgm_id,
+            uf->getSerial(),
+            caller_pgm,
             uvb,
             callee_ir,
             sig,

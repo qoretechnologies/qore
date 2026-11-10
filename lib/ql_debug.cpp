@@ -17122,9 +17122,10 @@ static QoreValue f_dbg_close_program_bg_compile(const QoreListNode* params, Runt
     return QoreValue();
 }
 
-//! returns the number of closure calls that found a cache entry made for a closure of a deleted Program
-/** The entry was found by the addresses of the closure's objects, which a Program created after the deleted one can
-    reuse, and is not used, as its Program's ID differs; see qore_dbg_closure_call_cache_program_misses
+//! returns the number of closure calls that found a cache entry made for a freed closure at the same addresses
+/** The addresses of a closure's objects can be reused by a Program created after the deleted one, or by the code
+    parsed after an Expression freed its code; the entry is not used, as its serial differs; see
+    qore_dbg_closure_call_cache_program_misses
 */
 static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {

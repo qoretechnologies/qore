@@ -89,34 +89,43 @@ cancels or waits for.  Refused work leaves the function in its tier for good (`j
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
-## Caches of a Program's code that outlive it
+## Caches that outlive their objects
 
-A cache that outlives the Programs whose code it describes (a thread-local or a static cache) must find its entries
-by the ID of the Program as well as by the addresses of the code's objects.  The functions, variants, IR and
-signatures of a Program are freed with it, and the Program created after it, its functions, variants, IR and the
-closures they create can have the addresses of the deleted ones, so an entry found by addresses alone gives the new
-code what was cached for the deleted code.  The thread-local caches of closure calls are found so:
+A cache that is not deleted with the objects it holds (a `thread_local` or process-wide cache) must not identify
+them by their addresses, nor by the ID of their Program: the allocator gives the memory of freed functions, variants
+and IR to the objects created next, so an object created later can have every address that the cache holds, and code
+is freed while its Program lives as well.  An Expression parses its code into its Program, and deleting the
+Expression frees that code with the closures in it (`qore_program_private::deleteExpression()`;
+`~QoreClosureParseNode()` deletes the `UserClosureFunction`), so the closure of the next Expression gets the
+addresses of the freed one in the same Program, on every platform.  A deleted Program frees its code too, and macOS
+gives its memory to a Program parsed right after it at once.
 
-- the IR interpreter's inline closure call (`tryExecuteInterpreterInlineIRClosure()` in `lib/QoreIRInterpreter.cpp`)
-  finds its entry by the closure, its function and the ID of the calling Program, which owns the function (the call
-  is only made inline when it does); it caches the variant, its IR and signature.  It found the entry by the
-  Program's address, and ran the deleted Program's freed IR with its freed signature: a wrong result, a crash, or a
-  reference argument released wrongly (`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` saw a cycle
-  collected while its Program lived, in the IR execution mode, on macOS);
-- native code's call of a closure as a native leaf (`tryExecClosureNativeLeaf()` in `lib/JITRuntime.cpp`) finds its
-  entry by the variant, its IR and the ID of the variant's Program; it caches the analysis of the IR (the leaf's
-  operation) and the return type, and computed the deleted closure's operation.
+Such a cache is keyed by an identity that is never reused: the serial of a variant (`UserVariantBase::serial`) or of
+a closure function (`UserClosureFunction::serial`), both from one 64-bit counter (`UserVariantBase::getNextSerial()`).
+The IR of a variant is published once and never replaced (`UserVariantBase::setCachedIR()`), and a closure function
+has one variant, so a variant or a closure function with the serial cached, which the closure called holds, has the
+variant and the IR cached.  The serial makes the comparisons of addresses and of the Program ID redundant, so a call
+compares no more than it did before:
 
-A Program's functions and variants live as long as it does, so the ID identifies them while its code runs; the
-inline call also checks that the cached variant is still its function's variant.  The source Program that released a
-class (`qore_class_private::released_spgm_id`) is recorded by its ID for the same reason.
-`examples/test/ir/ClosureCacheProgramReuse.qtest` creates Programs one after another, each with a closure computing
-another operation, in every execution mode.  Whether a deleted Program's addresses are given to the next one
-depends on the allocator and the layout of the process's heap, so the test runs its driver several times; macOS's
-allocator gave them in most runs, glibc's in none, so the test declares macOS as a platform it must run on.  A library
-with debugging counts the calls that found an entry of a deleted Program at the same addresses
-(`dbg_closure_call_cache_program_misses()`), and the test fails on macOS if no run was given the addresses, so that it
-cannot stop reproducing the reuse unnoticed.
+- the IR interpreter's cache of the last closure called inline (`tryExecuteInterpreterInlineIRClosure()`) compares
+  the serial of the closure function, which the call has at hand, and the caller's Program, as a closure runs inline
+  only in code of its own Program; the Program cached is that of the live variant, so it cannot be another Program at
+  its address;
+- the cache of the last closure that native code ran as a leaf (`tryExecClosureNativeLeaf()`) compares the serial of
+  the variant, which the call has at hand, and the number of arguments.
+
+Before the serial, the caches were keyed by addresses: a closure with the addresses of a freed closure ran the freed
+IR, or the IR and the signature of the function that had been given that memory: a wrong result, a
+`RUNTIME-TYPE-ERROR` for a parameter of another function, an `IR-EXEC-ERROR` or a crash.
+`examples/test/ir/ClosureCacheExpressionReuse.qtest` tests closures of deleted Expressions, which reuse the memory
+in every run; `examples/test/ir/ClosureCacheProgramReuse.qtest` and `examples/test/ir/ClosureCacheProgramRounds.qtest` test
+closures of deleted Programs, which reuse it only when the allocator does: the first runs its driver several times
+in each execution mode, the second creates many Programs and starts each round of them with another heap layout.
+macOS's allocator gave the addresses in most runs, glibc's in none, so both declare macOS as a platform they must run
+on.  A library with debugging counts the calls that found an entry made for a freed closure at the same addresses
+(`dbg_closure_call_cache_program_misses()`), and `ClosureCacheProgramReuse.qtest` fails on macOS if no run was given
+the addresses, so that it cannot stop reproducing the reuse unnoticed.  The source Program that released a class
+(`qore_class_private::released_spgm_id`) is recorded by its ID, which is never reused, for the same reason.
 
 A cache keyed by the metadata of a class can identify the class by its instance serial instead
 (`qore_class_private::instance_serial`, which no other class ever has), or use the method dispatch epoch
