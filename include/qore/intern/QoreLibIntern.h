@@ -1018,6 +1018,8 @@ DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use
 DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
+//! Returns true if the lvalue is a member of the current object named through self (self.x), as a bare member (x) is
+DLLLOCAL bool parse_is_self_member_lvalue(QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
         const MethodVariantBase* variant, const QoreFunction* func = nullptr);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
