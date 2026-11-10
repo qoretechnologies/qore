@@ -1031,7 +1031,7 @@ static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
         return false;
     }
     const char* name = call->getName();
-    return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
+    return name && qore_ir_call_targets_builtin(call) && (!strcmp(name, "type") || !strcmp(name, "typename"));
 }
 
 static const char* qore_llvm_get_single_arg_fast_builtin_helper(

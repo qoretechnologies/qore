@@ -1163,6 +1163,10 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
         return QoreValue();
     }
 
+    // call_function() looks a name up by its scope: it does not take the "::" of a function of the root namespace
+    if (name[0] == ':' && name[1] == ':' && name[2]) {
+        name += 2;
+    }
     QoreParseListNode* dynamic_args = new QoreParseListNode(&loc_builtin);
     dynamic_args->add(new QoreStringNode(name), &loc_builtin);
     if (args) {
@@ -4346,8 +4350,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (fe) {
                         QoreFunction* f = fe->getFunction();
                         if (f) {
-                            ctx->exprs[i] = toBitsNB(QoreValue(
-                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
+                            LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+                            fcr->setFunctionEntry(fe);
+                            ctx->exprs[i] = toBitsNB(QoreValue(fcr));
                             continue;
                         }
                     }

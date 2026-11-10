@@ -140,7 +140,7 @@ static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr)
         return false;
     }
     const char* name = call->getName();
-    return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
+    return name && qore_ir_call_targets_builtin(call) && (!strcmp(name, "type") || !strcmp(name, "typename"));
 }
 
 static int qore_ir_interpreter_get_string_pseudo_predicate_id(QoreIRIntrinsic intrinsic) {

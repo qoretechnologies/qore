@@ -1670,7 +1670,9 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
+    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+    fcr->setFunctionEntry(fe);
+    return QoreValue(fcr);
 }
 
 static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
@@ -1781,7 +1783,9 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
+    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+    fcr->setFunctionEntry(fe);
+    return QoreValue(fcr);
 }
 
 // see QoreAOT.h

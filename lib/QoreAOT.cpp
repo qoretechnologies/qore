@@ -34913,7 +34913,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 = "sig:";
                 id.ref2 += sig->getSignatureText();
             }
-            id.reloc_qore_path = getVariantKey(id.ref1.c_str(), v);
+            // the providers of other objects are keyed by the path without the leading "::" of a root function
+            id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
         if (const QoreTypeParamInstantiation* inst =
                 call->getExplicitTypeParamInstantiation()) {
