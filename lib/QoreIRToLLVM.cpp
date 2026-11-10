@@ -2312,6 +2312,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     entry_locals_set.clear();
     instantiated_non_entry_locals.clear();
     block_scoped_locals.clear();
+    handler_block_scoped_locals.clear();
     current_body_locals.clear();
     local_cleanup_allocas.clear();
     deferred_local_releases.clear();
@@ -2356,6 +2357,53 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     block_scoped_locals.insert(reinterpret_cast<const void*>(linst->local));
                 }
             }
+        }
+    }
+
+    // the locals that the handlers of the function (and their nested handlers) declare in a scope of their own
+    {
+        // the locals that the function's own instructions use: a handler of an on_exit or on_success is also lowered
+        // inline into the function, which then owns those locals' lifecycle as it does for any other local
+        std::unordered_set<const void*> own_locals;
+        std::vector<const QoreIRFunction*> pending;
+        pending.push_back(&func);
+        while (!pending.empty()) {
+            const QoreIRFunction* f = pending.back();
+            pending.pop_back();
+            for (const auto& block : f->blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (!inst_ptr) {
+                        continue;
+                    }
+                    if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
+                        const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst_ptr.get());
+                        if (obe->handler_ir) {
+                            pending.push_back(obe->handler_ir.get());
+                        }
+                        continue;
+                    }
+                    if (inst_ptr->opcode != QoreIROpcode::UninstantiateLocal
+                            && inst_ptr->opcode != QoreIROpcode::InstantiateLocal
+                            && inst_ptr->opcode != QoreIROpcode::LoadLocal
+                            && inst_ptr->opcode != QoreIROpcode::StoreLocal) {
+                        continue;
+                    }
+                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                    if (!linst->local) {
+                        continue;
+                    }
+                    const void* key = reinterpret_cast<const void*>(linst->local);
+                    if (f == &func) {
+                        own_locals.insert(key);
+                    } else if (inst_ptr->opcode == QoreIROpcode::UninstantiateLocal
+                            || inst_ptr->opcode == QoreIROpcode::InstantiateLocal) {
+                        handler_block_scoped_locals.insert(key);
+                    }
+                }
+            }
+        }
+        for (const void* key : own_locals) {
+            handler_block_scoped_locals.erase(key);
         }
     }
 
@@ -2540,6 +2588,12 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
                     continue;
                 }
                 if (block_scoped_locals.count(key)) {
+                    continue;
+                }
+                // a local that a handler declares in a scope of its own is instantiated by the handler at that
+                // scope: instantiated here, it sits below the variables of the function that are instantiated
+                // after it, and the handler's pop of it at the end of its scope pops one of them (qore#5707)
+                if (handler_block_scoped_locals.count(key)) {
                     continue;
                 }
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -15641,6 +15695,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // (e.g., via computed gotos), this assumption would need to be revisited.
             bool is_entry_local = entry_locals_set.count(key) > 0;
             bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+            // a closure-bound body local of AOT code that has a scope of its own (a catch variable of an on_exit or
+            // on_success handler that the function lowers inline) is in pre_instantiated_locals for ownership only:
+            // nothing instantiated it at the function's entry (see emitLocalInstantiation()), so its first store does
+            // (qore#5707)
+            if (is_pre_instantiated && aot_mode && linst->local && linst->local->closureUse()
+                    && current_body_locals.count(key) && block_scoped_locals.count(key)) {
+                is_pre_instantiated = false;
+            }
             if (!is_entry_local && !is_pre_instantiated &&
                     !ir_only_body_locals.count(key) &&
                     instantiated_non_entry_locals.insert(key).second) {
@@ -27500,14 +27562,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                 if (linst->local && linst->local->closureUse()
-                        && aot_body_locals.count(key)) {
+                        && (aot_body_locals.count(key)
+                            || (current_ir_func && current_ir_func->handler_own_locals.count(linst->local)))) {
                     auto inst_helper = module.getOrInsertFunction(
                             "qore_rt_instantiate_local_aot",
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
-                auto lc_ft = llvm::FunctionType::get(i64_type,
+                auto lc_ft =llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_load_closure_aot", lc_ft);
                 auto helper_throwing = module.getOrInsertFunction(
@@ -27622,15 +27685,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (aot_mode) {
                 const void* key = reinterpret_cast<const void*>(linst->local);
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                // a closure-bound local that an on_block_exit handler declares is the handler's own: it is
+                // instantiated here, at its scope, as the function it belongs to does not instantiate it at its
+                // entry (qore#5707)
                 if (linst->local && linst->local->closureUse()
-                        && aot_body_locals.count(key)) {
+                        && (aot_body_locals.count(key)
+                            || (current_ir_func && current_ir_func->handler_own_locals.count(linst->local)))) {
                     auto inst_helper = module.getOrInsertFunction(
                             "qore_rt_instantiate_local_aot",
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
-                auto sc_ft = llvm::FunctionType::get(void_type,
+                auto sc_ft =llvm::FunctionType::get(void_type,
                         {ptr_type, i32_type, i64_type, ptr_type}, false);
                 const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_store_closure_aot"
                         : "qore_rt_store_closure_eval_weak_aot";

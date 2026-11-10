@@ -416,6 +416,15 @@ private:
     // (block-scoped locals that need mid-function destruction)
     std::unordered_set<const void*> block_scoped_locals;
 
+    //! The locals that an on_block_exit handler of the current function declares in a scope of its own
+    /** These have explicit InstantiateLocal and UninstantiateLocal instructions in the IR of the handler, not in the
+        IR of the function.  The handler instantiates and pops them at its own scope: instantiating a closure-bound
+        one at the function's entry as well put its variable below the variables that the function declares, so that
+        popping it at the end of its scope, which pops the top of the closure variable stack, popped one of them
+        instead (qore#5707)
+    */
+    std::unordered_set<const void*> handler_block_scoped_locals;
+
     // Set of all body locals owned by the current IR function.  This is
     // intentionally separate from pre_instantiated_locals: IR-only body locals
     // can be callee-owned without being present on the runtime local stack.
