@@ -25,8 +25,8 @@
 */
 class SelectorEvalOnceTest inherits QUnit::Test {
     public {
-        #! the script
-        const Script = "once-cases";
+        #! the scripts
+        const Scripts = ("once-cases", "once-broken-range");
     }
 
     private {
@@ -50,7 +50,34 @@ class SelectorEvalOnceTest inherits QUnit::Test {
 
     #! checks that the AST interpreter evaluates each selector and sequence of a case once
     private astTest() {
-        string out = astOutput();
+        string out = astOutput("once-cases");
+        hash<string, hash<string, int>> evals = countEvals(out);
+        assertEq(32, evals.size(), "cases");
+        foreach hash<auto> i in (evals.pairIterator()) {
+            assertEq((), (select keys i.value, i.value{$1} != 1), i.key + ": each selector is evaluated once");
+        }
+        # the body runs for each selected element
+        assertTrue(out =~ /\nfe list:\n  sel a\n  sel b\n  sel c\n  body 11\n  body 13\n  body null\n/, "fe list");
+        assertTrue(out =~ /\nmap list:\n  sel a\n  sel b\n  = \[26, 22\]\n/, "map list");
+        # an index that is not an int is converted to one (NOTHING to 0); one past the end gives NOTHING, and a
+        # negative one counts from the end (%modern has negative offsets)
+        assertTrue(out =~ /\nplain index untyped:\n  = \[11, 12, null, 10, 11, 13, 13\]\n/, "untyped indices");
+        # a selector that raises: the earlier ones were evaluated once and nothing is iterated after it
+        assertTrue(out =~ /\nfe list raises:\n  seq l\n  sel a\n  sel t\n  ! SEL-ERROR\n/, "fe list raises");
+
+        out = astOutput("once-broken-range");
+        evals = countEvals(out);
+        assertEq(6, evals.size(), "broken range cases");
+        foreach hash<auto> i in (evals.pairIterator()) {
+            assertEq((), (select keys i.value, i.value{$1} != 1), i.key + ": each selector is evaluated once with "
+                "%broken-list-range");
+        }
+        # a range past the end gives the missing elements as NOTHING
+        assertTrue(out =~ /\nmap range empty:\n  seq l\n  sel a\n  sel b\n  = \[null, null, null\]\n/, "broken range");
+    }
+
+    #! counts the evaluations of the selectors and sequences of each case in the output of a script
+    private hash<string, hash<string, int>> countEvals(string out) {
         hash<string, hash<string, int>> evals;
         string name;
         foreach string line in (out.split("\n")) {
@@ -65,27 +92,23 @@ class SelectorEvalOnceTest inherits QUnit::Test {
                 ++evals{name}{m[0] + " " + m[1]};
             }
         }
-        assertEq(22, evals.size(), "cases");
-        foreach hash<auto> i in (evals.pairIterator()) {
-            assertEq((), (select keys i.value, i.value{$1} != 1), i.key + ": each selector is evaluated once");
-        }
-        # the body runs for each selected element
-        assertTrue(out =~ /\nfe list:\n  sel a\n  sel b\n  sel c\n  body 11\n  body 13\n  body null\n/, "fe list");
-        assertTrue(out =~ /\nmap list:\n  sel a\n  sel b\n  = \[26, 22\]\n/, "map list");
+        return evals;
     }
 
     #! runs the script in every execution mode and on the IR tier
     private modesTest() {
-        string exp = astOutput();
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
+        foreach string script in (Scripts) {
+            string exp = astOutput(script);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                    scriptPath(script))), script + ": " + mode);
             }
-            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
-                mode);
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                scriptPath(script))), script + ": " + ExecModeHarness::IRTierName);
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
-            scriptPath())), ExecModeHarness::IRTierName);
     }
 
     #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
@@ -94,22 +117,25 @@ class SelectorEvalOnceTest inherits QUnit::Test {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
-        string exp = astOutput();
         TmpDir dir("selector-eval-once-aot-");
-        foreach string opt in ("-O0", "-O3") {
-            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
-            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
-            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
-            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        foreach string script in (Scripts) {
+            string exp = astOutput(script);
+            foreach string opt in ("-O0", "-O3") {
+                string exe = sprintf("%s/%s%s", dir.path, script, opt);
+                string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                    scriptPath(script)));
+                assertTrue(is_file(exe), sprintf("%s %s: qcc compiles the script: %s", script, opt, out));
+                assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+            }
         }
     }
 
-    private string scriptPath() {
-        return get_script_dir() + "/" + Script + ".q";
+    private string scriptPath(string script) {
+        return get_script_dir() + "/" + script + ".q";
     }
 
-    #! the output of the script with the AST interpreter
-    private string astOutput() {
-        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    #! the output of a script with the AST interpreter
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(script)));
     }
 }
