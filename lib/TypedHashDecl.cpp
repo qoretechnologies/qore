@@ -309,18 +309,13 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         return nullptr;
     }
 
-    // the type arguments are live, so their identities can be read; see parameterized_hashdecl_key_t
-    parameterized_hashdecl_key_t key;
-    key.reserve(args.size());
-    for (const QoreTypeInfo* arg : args) {
-        key.emplace_back(arg, qore_get_type_identity_serial(arg));
-    }
-
+    // the type arguments are live, so their identities can be read; they are compared with the cached keys as they
+    // are, without making a key; see parameterized_hashdecl_key_t and parameterized_hashdecl_key_less_t
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
-        auto i = parameterized_hashdecl_cache.lower_bound(key);
+        auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
-                && !(parameterized_hashdecl_cache.key_comp()(key, i->first))) {
+                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
             return i->second;
         }
     }
@@ -350,11 +345,17 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     TypedHashDecl* existing = nullptr;
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
-        auto i = parameterized_hashdecl_cache.lower_bound(key);
+        auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
-                && !(parameterized_hashdecl_cache.key_comp()(key, i->first))) {
+                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
             existing = i->second;
         } else {
+            // only a new declaration makes the key that the cache owns
+            parameterized_hashdecl_key_t key;
+            key.reserve(args.size());
+            for (const QoreTypeInfo* arg : args) {
+                key.emplace_back(arg, qore_get_type_identity_serial(arg));
+            }
             parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
                 priv->thd));
         }
@@ -376,8 +377,8 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         thd(thd),
         from_module(old.from_module),
         orig(old.orig),
-        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
-        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
+        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
+        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
         parentHashDecl(old.parentHashDecl),
         // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
         // Use getPath() to get the full namespace path for cross-namespace inheritance
@@ -1030,8 +1031,9 @@ TypedHashDecl::TypedHashDecl(typed_hash_decl_private* p) : priv(p) {
     assert(!priv->typeInfo);
     assert(!priv->orNothingTypeInfo);
 
-    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath());
-    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath());
+    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath(), priv->instance_serial);
+    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath(),
+        priv->instance_serial);
 }
 
 TypedHashDecl::TypedHashDecl(const TypedHashDecl& old) : priv(new typed_hash_decl_private(*old.priv, this)) {

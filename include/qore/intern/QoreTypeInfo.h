@@ -942,10 +942,20 @@ public:
         container_nesting = n;
     }
 
+    //! Returns the identity serial of the type; see qore_get_type_identity_serial()
+    DLLLOCAL uint64_t getIdentitySerial() const {
+        return identity_serial;
+    }
+
 protected:
     QoreString tname;
     QoreString sname;
     unsigned container_nesting = 0;
+    //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
+    /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
+        qore_get_type_identity_serial()
+    */
+    uint64_t identity_serial = 0;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
@@ -1170,10 +1180,19 @@ public:
 
 class QoreClassTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the type of a class
+    /** @param qc the class
+        @param name the class's name
+        @param path the class's path
+        @param serial the instance serial number of the class (qore_class_private::getInstanceSerial()), as the type
+        is freed with the class; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
         : QoreTypeInfo(q_accept_vec_t {{qc, nullptr, true}}, q_return_vec_t {{qc, true}},
             QoreStringMaker("object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "object<";
         pname.append(path);
         pname.append(">");
@@ -1202,13 +1221,16 @@ protected:
 
 class QoreClassOrNothingTypeInfo : public QoreClassTypeInfo {
 public:
-    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the or-nothing type of a class; see QoreClassTypeInfo::QoreClassTypeInfo()
+    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
             : QoreClassTypeInfo(q_accept_vec_t {
                 {qc, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{qc}, {NT_NOTHING}}, QoreStringMaker("*object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*object<";
         pname.append(path);
         pname.append(">");
@@ -1353,10 +1375,19 @@ protected:
 
 class QoreHashDeclTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the type of a hashdecl
+    /** @param hd the hashdecl
+        @param name the hashdecl's name
+        @param path the hashdecl's path
+        @param serial the instance serial number of the hashdecl (typed_hash_decl_private::getInstanceSerial()), as
+        the type is freed with the hashdecl; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path, uint64_t serial)
             : QoreTypeInfo(q_accept_vec_t {{hd, nullptr, true}}, q_return_vec_t {{hd, true}},
             QoreStringMaker("hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "hash<";
         pname.append(path);
         pname.append(">");
@@ -1391,13 +1422,17 @@ protected:
 
 class QoreHashDeclOrNothingTypeInfo : public QoreHashDeclTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the or-nothing type of a hashdecl; see QoreHashDeclTypeInfo::QoreHashDeclTypeInfo()
+    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path,
+            uint64_t serial)
             : QoreHashDeclTypeInfo(q_accept_vec_t {
                 {hd, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{hd}, {NT_NOTHING}}, QoreStringMaker("*hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*hash<";
         pname.append(path);
         pname.append(">");
@@ -1424,7 +1459,14 @@ protected:
 
 class QoreEnumTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the type of an enum
+    /** @param ed the enum
+        @param name the enum's name
+        @param path the enum's path
+        @param serial the instance serial number of the enum (qore_enum_decl_private::getInstanceSerial()), as the
+        type is freed with the enum; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
     //! Constructor with explicit accept/return vectors for or-nothing variant
     DLLLOCAL QoreEnumTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname,
@@ -1460,7 +1502,8 @@ protected:
 
 class QoreEnumOrNothingTypeInfo : public QoreEnumTypeInfo {
 public:
-    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the or-nothing type of an enum; see QoreEnumTypeInfo::QoreEnumTypeInfo()
+    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -4165,18 +4208,26 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
 
-//! Returns the never-reused identity of the classes, hashdecls and enums that a type names, or 0 if it names none
+//! Returns the never-reused identity of a type that is freed with its class, hashdecl or enum, or 0 for any other type
 /** The type of a class, hashdecl or enum (and its or-nothing type) is freed with its owner, and a later owner's type
     can be allocated at the same address, while classes, hashdecls and enums of different Programs can have the same
     path.  A cache keyed by a type that can outlive the type, or that is shared by Programs, therefore also keys it by
     this value: with the type's address, it identifies the type for the lifetime of the process.
 
+    A type that can be freed has exactly one owner, whose instance serial number (never 0 and never reused; see
+    qore_get_next_class_instance_serial()) the type stores when the owner makes it.  Every other type returns 0: the
+    builtin types, and the derived types (complex types, parameterized class types and unions, the only types that
+    can name more than one class, hashdecl or enum), which are never freed while the library is initialized (see
+    qore_purge_derived_types()), so their addresses are never reused.
+
     @param ti a live type; may be nullptr
 
-    @return a value combining the instance serial numbers of the classes, hashdecls and enums that the type returns,
-    or 0 if it returns none of them
+    @return the instance serial number of the class, hashdecl or enum that owns the type, or 0 if the type is never
+    freed while the library is initialized
 */
-DLLLOCAL uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti);
+DLLLOCAL inline uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti) {
+    return ti ? ti->getIdentitySerial() : 0;
+}
 
 //! Returns the unbounded generic wildcard type argument
 DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();

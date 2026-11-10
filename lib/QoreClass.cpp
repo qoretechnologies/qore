@@ -790,7 +790,7 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
         num_user_methods(0),
         num_static_methods(0),
         num_static_user_methods(0),
-        typeInfo(n_typeInfo ? n_typeInfo : new QoreClassTypeInfo(cls, name.c_str(), path.c_str())),
+        typeInfo(n_typeInfo ? n_typeInfo : new QoreClassTypeInfo(cls, name.c_str(), path.c_str(), instance_serial)),
         orNothingTypeInfo(nullptr),
         selfid("self", typeInfo),
         spgm(getProgram()),
@@ -801,14 +801,14 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
     selfid.setSelf();
 
     if (!n_typeInfo) {
-        orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+        orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
         owns_ornothingtypeinfo = true;
     } else {
         // see if typeinfo already accepts NOTHING
         if (QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
             orNothingTypeInfo = reinterpret_cast<QoreClassOrNothingTypeInfo*>(typeInfo);
         } else {
-            orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+            orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
             owns_ornothingtypeinfo = true;
         }
     }
@@ -1027,9 +1027,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         old.spgm.load(), spgm);
 
     // issue #3368: create new type info objects as the class ptr is derived from the typeInfo object in some cases
-    typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str());
+    typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_typeinfo = true;
-    orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+    orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_ornothingtypeinfo = true;
 
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
