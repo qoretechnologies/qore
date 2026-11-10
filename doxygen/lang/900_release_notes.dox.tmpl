@@ -1522,6 +1522,9 @@
     - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
       function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
       @ref references_overview)
+    - calling a @ref call_reference "call reference" to a function of a deleted @ref Qore::Program "Program", made in
+      that Program (for example returned by one of its functions), crashed or returned a wrong value; it now raises a
+      \c PROGRAM-ERROR exception, as a call of a reference made in a Program that imported the function does
     - a thread running the code of a @ref Qore::Program "Program" whose deletion waited for it could not call into the
       Program again through the code of another Program (\c PROGRAM-ERROR); see @ref threads_and_program_deletion
     - in the IR, JIT and tiered execution modes, leaving the scope of a variable holding a reference to a lvalue that

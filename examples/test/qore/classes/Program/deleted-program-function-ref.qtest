@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DeletedProgramFunctionRefTest
+
+#! Tests calls of references to functions of a Program that has been deleted
+/** A call reference to a function held the function without a reference, so a reference made in the Program that
+    defines the function used freed memory once the Program had been deleted and had freed its functions: the call
+    crashed in every execution mode, or, with tiered execution, returned a garbage value.  A call of such a reference
+    must fail as a call into a deleted Program does, with \c PROGRAM-ERROR, as a call of a reference made in a
+    Program that imported the function does, which holds the function itself.
+*/
+class DeletedProgramFunctionRefTest inherits QUnit::Test {
+    public {
+        const DefiningSrc = "string sub defined(*string arg) { return 'defined' + (arg ?? ''); }
+code sub get_ref() { return \\defined(); }
+code sub get_ref_by_name() { return get_call_reference('defined'); }
+sub export_to(Program p) { p.importFunction('defined'); }
+";
+    }
+
+    constructor() : QUnit::Test("DeletedProgramFunctionRef", "1.0") {
+        addTestCase("references to a function of a live Program", \liveTest());
+        addTestCase("a reference made in the defining Program, after its deletion", \ownRefTest());
+        addTestCase("a reference made in an importing Program, after the defining Program's deletion",
+            \importedRefTest());
+        addTestCase("a reference outliving every Program that held the function", \lastHolderTest());
+        set_return_value(main());
+    }
+
+    #! Returns a Program that defines the function
+    private Program getDefining() {
+        Program p(PO_NEW_STYLE);
+        p.parse(DefiningSrc, "defining");
+        return p;
+    }
+
+    #! Returns a Program that imported the function from \a defining, with a function returning a reference to it
+    private Program getImporting(Program defining) {
+        Program p(PO_NEW_STYLE);
+        defining.callFunction("export_to", p);
+        p.parse("code sub get_ref() { return \\defined(); }", "importing");
+        return p;
+    }
+
+    #! Checks that every way of calling \a ref fails with PROGRAM-ERROR
+    private checkDeleted(code ref, string label) {
+        # repeated calls run the call on every tier with tiered execution
+        for (int i = 0; i < 3; ++i) {
+            assertThrows("PROGRAM-ERROR", ref, (), sprintf("%s: direct call %d", label, i));
+            assertThrows("PROGRAM-ERROR", ref, ("x",), sprintf("%s: direct call with an argument %d", label, i));
+            assertThrows("PROGRAM-ERROR", \call_function(), (ref,), sprintf("%s: call_function() %d", label, i));
+            assertThrows("PROGRAM-ERROR", \call_function_args(), (ref, ("x",)),
+                sprintf("%s: call_function_args() %d", label, i));
+            assertThrows("PROGRAM-ERROR", sub () { call_async(ref).get(); }, (),
+                sprintf("%s: call_async() %d", label, i));
+        }
+    }
+
+    liveTest() {
+        Program defining = getDefining();
+        Program importing = getImporting(defining);
+        foreach code ref in (defining.callFunction("get_ref"), defining.callFunction("get_ref_by_name"),
+                importing.callFunction("get_ref")) {
+            assertEq("defined", ref());
+            assertEq("definedx", ref("x"));
+            assertEq("definedx", call_async(ref, "x").get());
+        }
+    }
+
+    ownRefTest() {
+        Program defining = getDefining();
+        code ref = defining.callFunction("get_ref");
+        code ref_by_name = defining.callFunction("get_ref_by_name");
+        assertEq("defined", ref());
+        delete defining;
+        checkDeleted(ref, "reference");
+        checkDeleted(ref_by_name, "reference by name");
+    }
+
+    importedRefTest() {
+        Program defining = getDefining();
+        Program importing = getImporting(defining);
+        code ref = importing.callFunction("get_ref");
+        assertEq("defined", ref());
+        delete defining;
+        checkDeleted(ref, "imported reference");
+    }
+
+    #! the reference is the last holder of the function: it is freed with the reference, not before
+    lastHolderTest() {
+        Program defining = getDefining();
+        Program importing = getImporting(defining);
+        list<code> refs = (defining.callFunction("get_ref"), importing.callFunction("get_ref"));
+        delete defining;
+        delete importing;
+        foreach code ref in (refs) {
+            checkDeleted(ref, sprintf("reference %d", $#));
+        }
+        # releasing the last references frees the functions
+        remove refs;
+        assertEq(NOTHING, refs);
+    }
+}

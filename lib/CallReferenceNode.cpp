@@ -1209,6 +1209,8 @@ bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Ex
 bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "FunctionCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm, reference_count(),
     //  reference_count() - 1);
+    // the function can outlive the Program that defined it (see the constructor)
+    const_cast<QoreFunction*>(uf)->deref();
     pgm->depDeref();
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }

@@ -287,11 +287,17 @@ protected:
 };
 
 //! a call reference to a user function
+/** The reference holds the function: a reference can outlive the Program that defines the function, which frees
+    its functions when it is deleted, and a call of the reference must then fail as a call into a deleted Program
+    does (see qore_get_function_pgm_context()), not use a freed function
+*/
 class FunctionCallReferenceNode : public LocalFunctionCallReferenceNode {
 public:
     DLLLOCAL FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
             QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
         assert(pgm);
+        assert(uf);
+        const_cast<QoreFunction*>(uf)->ref();
         // make a weak reference to the Program - a strong reference (QoreProgram::ref()) could cause a recursive
         // reference
         pgm->depRef();
