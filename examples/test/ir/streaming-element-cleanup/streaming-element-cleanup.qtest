@@ -30,7 +30,12 @@
     list in native code; an iterator's next() that raised released the list before the source (the AST interpreter
     ends the functional iterator as if the source were exhausted); a destructor of the previous element that raised
     did not stop the loop in the IR interpreter; the message of a negative take or drop count differed; and code with
-    no handler in the function released its values in another order in the IR interpreter.
+    no handler in the function released its values in another order in the IR interpreter.  Its second round found
+    that a fused map stage whose value is an object released its last value after the source (and an intermediate
+    stage's value one element late), that a throw or an operator cleanup's rethrow with no handler in the function did
+    not restore the implicit argument of an enclosing operator in native code, that a division by zero in a
+    predicate was taken by native code for an exception of the iterator's next(), and that a predicate whose value is
+    an object kept it until the next element's or the statement's end.
 
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
@@ -72,6 +77,19 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "fused_stage_raises_nh: released it1; released it2; itdone it; catch STAGE/it2; after",
             "take_neg: itdone it; catch STREAMING-OPERATOR-ERROR/take operator expression requires a non-negative "
                 "count, got -1; after",
+            "fpm_count: released it1; released p1; released it2; released p2; released it3; released p3; itdone it; "
+                "c 3; after",
+            "fpm_select: released it1; released p1; released q1; released it2; released p2; released it3; "
+                "released p3; released q3; itdone it; c 2; after",
+            "fpm_list: released p1; released p2; released h1; released h2; first 0; after",
+            "fpm_raises: released it1; released p1; released it2; released p2; itdone it; catch SELECT/p2; after",
+            "nh_rethrow: released in1; itdone in; released out1; itdone out; catch NEXT/in2; after",
+            "nh_throw: itdone in; released out1; itdone out; catch STREAMING-OPERATOR-ERROR/take operator expression "
+                "requires a non-negative count, got -1; after",
+            "nh_div_select: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",
+            "ap_msel_list: released h1; released h2; catch STAGE/h2; after",
+            "ap_msel_it: released it1; released it2; itdone it; catch STAGE/it2; after",
+            "ap_msel_normal: released it1; released it2; released it3; itdone it; r 3; after",
         );
     }
 

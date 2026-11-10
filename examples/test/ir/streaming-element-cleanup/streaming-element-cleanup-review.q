@@ -121,6 +121,36 @@ sub temp_pred_any(Log log) { bool b = (any (new Holder(log, "t" + $#)).n == "t1"
 sub temp_pred_all(Log log) { bool b = (all (new Holder(log, "t" + $#)).n != "t1", new It(log, 3)); log.add("all " + b); log.add("after"); }
 # a map-select's map expression with a temporary on the normal path
 sub temp_map_expr_mapsel(Log log) { list r = map (new Holder(log, "m" + $#)).n, new It(log, 3), $1.n != "it2"; log.add("r " + r.size()); log.add("after"); }
+# a fused map stage whose value is an object on the normal path: the last value is released before the iterator is
+# asked for another element, as the AST interpreter releases it when the next element is taken
+sub fpm_count(Log log) { int c = (count $1.n != "zz", (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("c " + c); log.add("after"); }
+sub fpm_any(Log log) { bool b = (any $1.n == "zz", (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("any " + b); log.add("after"); }
+sub fpm_all(Log log) { bool b = (all $1.n != "zz", (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("all " + b); log.add("after"); }
+sub fpm_first(Log log) { auto x = (first $1.n == "zz", (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("first " + exists x); log.add("after"); }
+sub fpm_select(Log log) { int c = (count $1.n != "zz", (map new Holder(log, "q" + $1.n[1]), (select (map new Holder(log, "p" + $1.n[2]), new It(log, 3)), $1.n != "p2"))); log.add("c " + c); log.add("after"); }
+sub fpm_two_maps(Log log) { int c = (count $1.n != "zz", (map new Holder(log, "q" + $1.n[1]), (map new Holder(log, "p" + $1.n[2]), new It(log, 3)))); log.add("c " + c); log.add("after"); }
+sub fpm_list(Log log) { auto x = (first $1.n == "zz", (map new Holder(log, "p" + $1.n[1]), holders(log, 3))); log.add("first " + exists x); log.add("after"); }
+sub fpm_raises(Log log) { try { int c = (count sel_fail($1, "p2"), (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+# with no handler in the function, a throw (a negative count) and the rethrow of an operator's cleanup restore the
+# implicit argument of the enclosing operator before the function is left
+sub nh_rethrow_inner(Log log) { int c = (count (count True, new It(log, 3, "in", 2)) > 0, new It(log, 2, "out")); log.add("c " + c); }
+sub nh_rethrow(Log log) { try { nh_rethrow_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub nh_throw_inner(Log log) { int c = (count (take -1 - $#, new It(log, 2, "in")).size() >= 0, new It(log, 2, "out")); log.add("c " + c); }
+sub nh_throw(Log log) { try { nh_throw_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+# with no handler in the function, an instruction that raises inline (a division by zero) in a predicate
+sub nh_div_select_inner(Log log) { list r = select new It(log, 3), (10 / ($1.n == "it2" ? 0 : 1)) > 0; log.add("r " + r.size()); }
+sub nh_div_select(Log log) { try { nh_div_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_div_takewhile_inner(Log log) { list r = (takewhile (10 / ($1.n == "it2" ? 0 : 1)) > 0, new It(log, 3)); log.add("r " + r.size()); }
+sub nh_div_takewhile(Log log) { try { nh_div_takewhile_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+# a predicate whose value is an object (the element) is released when the element has been decided on, so that a
+# predicate that raises for a later element releases the source list's elements in their order
+sub ap_msel_list(Log log) { try { list r = map $1.n, holders(log, 3), fail_on($1, "h2"); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_msel_it(Log log) { try { list r = map $1.n, new It(log, 3), fail_on($1, "it2"); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_sel_it(Log log) { try { list r = select new It(log, 3), fail_on($1, "it2"); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_sel_list(Log log) { try { list r = select holders(log, 3), fail_on($1, "h2"); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_count_it(Log log) { try { int c = (count fail_on($1, "it2"), new It(log, 3)); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_fused(Log log) { try { int c = (count fail_on($1, "p2"), (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub ap_msel_normal(Log log) { list r = map $1.n, new It(log, 3), fail_on($1, "zz"); log.add("r " + r.size()); log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -129,6 +159,9 @@ const Cases = (
     "fused_stage_raises", "fused_stage_raises_nh", "tl_map_new_raises", "tl_mapsel_raises", "next_raises",
     "next_raises_count", "next_raises_select", "next_raises_nh", "dtor_raises_normal_any",
     "dtor_raises_normal_take", "dtor_raises_nh", "nested_nohandler", "on_exit_case", "take_neg", "drop_neg_nh",
+    "fpm_count", "fpm_any", "fpm_all", "fpm_first", "fpm_select", "fpm_two_maps", "fpm_list", "fpm_raises",
+    "nh_rethrow", "nh_throw", "nh_div_select", "nh_div_takewhile", "ap_msel_list", "ap_msel_it", "ap_sel_it",
+    "ap_sel_list", "ap_count_it", "ap_fused", "ap_msel_normal",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned
