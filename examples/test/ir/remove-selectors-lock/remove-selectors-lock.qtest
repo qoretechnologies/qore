@@ -19,15 +19,14 @@
     the keys of the path to the lvalue and before its lock, as in the other execution modes.
 
     The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
-    must be that of the AST interpreter; each run has a time limit, so that a deadlock fails the test.
+    must be that of the AST interpreter.  A deadlock fails the test at the time limit of a test of run_tests.sh,
+    which ends the processes that the test started; the runs use no external command for a time limit of their own,
+    which not every platform has (macOS has no timeout command).
 */
 class RemoveSelectorsLockTest inherits QUnit::Test {
     public {
         #! the script
         const Script = "remove-cases";
-
-        #! the time limit of a run of the script, in seconds
-        const TimeLimit = 120;
     }
 
     private {
@@ -98,11 +97,11 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
             if (mode == "ast") {
                 continue;
             }
-            assertEq(exp, ExecModeHarness::run(sprintf("%s timeout %d %s --exec-mode=%s %s", env, TimeLimit, qore_bin,
-                mode, scriptPath())), mode);
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s timeout %d %s --exec-mode=tiered %s", env, TimeLimit,
-            qore_bin, scriptPath())), ExecModeHarness::IRTierName);
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
     }
 
     #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
@@ -117,7 +116,7 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
             string exe = sprintf("%s/%s%s", dir.path, Script, opt);
             string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
             assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
-            assertEq(exp, ExecModeHarness::run_any(sprintf("%s timeout %d %s", env, TimeLimit, exe)), "AOT " + opt);
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
         }
     }
 
@@ -127,7 +126,6 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
 
     #! the output of the script with the AST interpreter
     private string astOutput() {
-        return ExecModeHarness::run(sprintf("%s timeout %d %s --exec-mode=ast %s", env, TimeLimit, qore_bin,
-            scriptPath()));
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
     }
 }
