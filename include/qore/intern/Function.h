@@ -515,16 +515,58 @@ public:
         ct = n_ct;
     }
 
-    //! the original value of an argument that prepareDefaultArgs() converted in place (see @ref prepareDefaultArgs())
-    typedef std::vector<std::pair<unsigned, QoreValue>> arg_undo_vec_t;
+    //! The original values of the arguments that prepareDefaultArgs() converted in place for a fixed variant
+    /** A plain struct with no constructor or destructor, so that it adds no cleanup to the return paths of the call
+        (CodeEvaluationHelper::init() is on every call's path): the caller sets \c n and \c more to zero before the
+        check (the caller sets only \c func); prepareDefaultArgs() initializes it when it saves the first value, if
+        the function can find another variant, and reports that in its return code,
+        and the caller consumes it with finishArgUndo() right after the check.  Up to \c INLINE values are kept in
+        place; more go to a heap list.
+    */
+    struct ArgUndo {
+        static constexpr unsigned INLINE = 4;
+        //! the function called; set by the caller: values are saved only if it can find another variant
+        const QoreFunction* func;
+        //! the number of values saved in place
+        unsigned n;
+        //! the argument index of each value saved in place
+        unsigned idx[INLINE];
+        //! the values saved in place (constructed with placement new), each with a reference
+        alignas(QoreValue) unsigned char buf[sizeof(QoreValue) * INLINE];
+        //! the values beyond \c INLINE, or nullptr
+        std::vector<std::pair<unsigned, QoreValue>>* more;
+
+        DLLLOCAL QoreValue* val(unsigned i) {
+            return reinterpret_cast<QoreValue*>(buf) + i;
+        }
+
+        DLLLOCAL void save(unsigned i, QoreValue v) {
+            if (n < INLINE) {
+                idx[n] = i;
+                new (val(n)) QoreValue(v);
+                ++n;
+                return;
+            }
+            if (!more) {
+                more = new std::vector<std::pair<unsigned, QoreValue>>;
+            }
+            more->push_back(std::make_pair(i, v));
+        }
+    };
 
     /** @param undo if not null, the original value of every argument converted in place is saved here (with a
         reference) before it is converted, so that a failed check of a fixed variant can restore the arguments before
-        another variant is searched for them
+        another variant is searched for them (see finishArgUndo()); @a undo is initialized only when a value is saved
+
+        @return 0 for OK, -1 for an error; with @a undo, 1 for OK and -2 for an error when values were saved in it
     */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
-        arg_undo_vec_t* undo = nullptr);
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, ArgUndo* undo = nullptr);
+
+    //! Restores (@a restore) or releases the values saved in @a undo and empties it
+    /** Called only if a value was saved; out of line, as it is not on a call's common path.
+    */
+    DLLLOCAL void finishArgUndo(ArgUndo& undo, bool restore);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
@@ -1777,6 +1819,14 @@ public:
         resolves to unless this returns false.
     */
     DLLLOCAL bool hasInheritedVariants() const;
+
+    //! Returns true if a call with a fixed variant whose arguments it does not accept can find another variant
+    /** False only for a function with a single variant and no inherited functions (the inheritance list holds the
+        function itself), where the variant search finds the same variant and the call raises its error.
+    */
+    DLLLOCAL bool mayFindAnotherVariant() const {
+        return !vlist.singular() || ilist.size() > 1;
+    }
 
     DLLLOCAL QoreListNode* runtimeGetCallVariants() const;
 

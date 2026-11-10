@@ -1197,31 +1197,24 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
-        // the original values of the arguments that the check below converts for the fixed variant; it is filled
-        // only for an argument that is converted, and emptied right after the check
-        arg_undo_vec_t undo;
+        // the original values of the arguments that the check below converts for the fixed variant, kept if the
+        // check can fail over to another variant (initialized by prepareDefaultArgs() when it saves the first value,
+        // which it reports with 1 or -2), and consumed right after the check
+        ArgUndo undo;
+        undo.func = func;
         // first process all non-default args; no evaluation, so we can try to find another variant
         int prep_rc = prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER, &undo);
-        if (!prep_rc && !undo.empty()) {
-            // the arguments stay converted for the fixed variant
-            for (auto& i : undo) {
-                i.second.discard(xsink);
-            }
-            undo.clear();
-        }
-        if (prep_rc) {
-            // the arguments converted for the fixed variant before the check failed are restored, so another
-            // variant is searched for and called with the arguments as given
-            for (auto i = undo.rbegin(), e = undo.rend(); i != e; ++i) {
-                QoreValue& p = tmp.getEntryReference(i->first);
-                p.discard(xsink);
-                p = i->second;
-            }
-            undo.clear();
+        if (prep_rc && (prep_rc > 0 || prep_rc == -2)) {
+            // a failed check restores the arguments that it converted, so another variant is searched for and
+            // called with the arguments as given; otherwise they stay converted for the fixed variant
+            prep_rc = prep_rc > 0 ? 0 : -1;
+            finishArgUndo(undo, prep_rc);
             if (*xsink) {
                 xsink2.clear();
                 return;
             }
+        }
+        if (prep_rc) {
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
                 xsink2.clear();
@@ -1398,8 +1391,37 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
+void CodeEvaluationHelper::finishArgUndo(ArgUndo& undo, bool restore) {
+    assert(undo.n);
+    // the values beyond the inline ones were saved last; restore in the reverse order of saving
+    if (undo.more) {
+        for (auto i = undo.more->rbegin(), e = undo.more->rend(); i != e; ++i) {
+            if (restore) {
+                QoreValue& p = tmp.getEntryReference(i->first);
+                p.discard(xsink);
+                p = i->second;
+            } else {
+                i->second.discard(xsink);
+            }
+        }
+        delete undo.more;
+        undo.more = nullptr;
+    }
+    for (unsigned j = undo.n; j > 0; --j) {
+        QoreValue* v = undo.val(j - 1);
+        if (restore) {
+            QoreValue& p = tmp.getEntryReference(undo.idx[j - 1]);
+            p.discard(xsink);
+            p = *v;
+        } else {
+            v->discard(xsink);
+        }
+    }
+    undo.n = 0;
+}
+
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, arg_undo_vec_t* undo) {
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, ArgUndo* undo) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1409,6 +1431,8 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     }
     OptionalObjectOnlySubstitutionHelper self_helper;
     bool self_set = false;
+    // true once a value has been saved in undo
+    bool undo_saved = false;
     for (unsigned i = 0; i < max; ++i) {
         const QoreTypeInfo* paramTypeInfo = nullptr;
         auto get_param_type_info = [&]() -> const QoreTypeInfo* {
@@ -1491,17 +1515,30 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
                 if (undo) {
-                    // keep the original value: the check may fail on a later argument
-                    undo->push_back(std::make_pair(i, p.refSelf()));
+                    // keep the original value: the check may fail on a later argument and another variant be
+                    // searched for with the arguments as given
+                    if (!undo_saved) {
+                        if (!undo->func->mayFindAnotherVariant()) {
+                            // the search finds the same variant: nothing to restore
+                            undo = nullptr;
+                        } else {
+                            undo->n = 0;
+                            undo->more = nullptr;
+                            undo_saved = true;
+                        }
+                    }
+                    if (undo) {
+                        undo->save(i, p.refSelf());
+                    }
                 }
                 QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
-                    return -1;
+                    return undo_saved ? -2 : -1;
                 }
             }
         }
     }
-    return 0;
+    return undo_saved ? 1 : 0;
 }
 
 int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
