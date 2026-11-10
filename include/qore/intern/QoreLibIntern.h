@@ -142,6 +142,18 @@ static inline bool isoctaldigit(const char x) {
     return x >= '0' && x <= '7';
 }
 
+//! for the fast path of a hot internal function, whose slow path is a separate function marked QORE_INTERN_NOINLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
+#define QORE_INTERN_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define QORE_INTERN_ALWAYS_INLINE __forceinline
+#define QORE_INTERN_NOINLINE __declspec(noinline)
+#else
+#define QORE_INTERN_ALWAYS_INLINE inline
+#define QORE_INTERN_NOINLINE
+#endif
+
 // here we define virtual types
 #define NT_NONE             -1
 #define NT_ALL              -2

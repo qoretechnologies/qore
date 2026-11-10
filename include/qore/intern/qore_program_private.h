@@ -1851,6 +1851,11 @@ public:
         return parse_tid == q_gettid();
     }
 
+    //! returns true if the given thread, which is the current thread, holds the parse lock
+    DLLLOCAL bool parsingLocked(int tid) const {
+        return parse_tid == tid;
+    }
+
     // called only with plock held
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
@@ -3693,6 +3698,12 @@ public:
         return pgm.priv;
     }
 
+    //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
+    //! library's exported interface
+    DLLLOCAL static const QoreParseOptions& getParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options;
+    }
+
     //! returns true if the Program's constructor has run to completion
     /** A Program is reachable from code running inside its own constructor - see the "constructed"
         member - and must not be selected as a thread's runtime context until it is complete;
@@ -3741,6 +3752,11 @@ public:
     DLLLOCAL static void addSignal(QoreProgram& pgm, int sig) {
         assert(pgm.priv->sigset.find(sig) == pgm.priv->sigset.end());
         pgm.priv->sigset.insert(sig);
+    }
+
+    //! returns the signals of the Program's handlers; locking is done by the signal manager
+    DLLLOCAL static int_set_t getSignals(const QoreProgram& pgm) {
+        return pgm.priv->sigset;
     }
 
     // locking is done by the signal manager

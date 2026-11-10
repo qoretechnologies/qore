@@ -1152,8 +1152,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         // Program already, otherwise the Program running on the thread
         QoreProgram* caller_pgm = (old_pgm && old_pgm != pgm_ctx) ? old_pgm : ::getProgram();
         if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
-            module_po_override.reset(new RuntimeParseOptionsOverrideHelper(
-                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm)));
+            module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
@@ -4971,38 +4970,59 @@ QoreParseOptions get_module_own_access_parse_options() {
 static QoreParseOptions keep_module_own_access_parse_options(const QoreParseOptions& po,
         const QoreProgram* module_pgm) {
     const QoreParseOptions own_access = get_module_own_access_parse_options();
-    return (po & ~own_access) | (module_pgm->getParseOptions() & own_access);
+    return (po & ~own_access) | (qore_program_private::getParseOptions(*module_pgm) & own_access);
 }
 
 bool qore_program_is_module(const QoreProgram* pgm) {
-    return pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
+    // runs on every call of a user variant (see qore_get_user_call_runtime_po_override())
+    return pgm && qore_program_private::getParseOptions(*pgm).hasAny(QoreParseOptions(PO_IN_MODULE));
 }
+
+//! sets \a o, which the caller creates without an override, to the override of a call of module code; see
+//! qore_get_module_call_runtime_po_override()
+static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverride& o, const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td);
 
 QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
         const QoreParseOptions& caller_po, const QoreProgram* caller_pgm) {
-    assert(qore_program_is_module(module_pgm));
+    return qore_get_module_call_runtime_po_override(module_pgm, &caller_po, caller_pgm, qore_get_thread_data());
+}
+
+QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td) {
     QoreCallParseOptionsOverride o;
+    qore_set_module_call_runtime_po_override(o, module_pgm, caller_po, caller_pgm, td);
+    return o;
+}
+
+static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverride& o, const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td) {
+    assert(qore_program_is_module(module_pgm));
+    o.td = td;
     o.mask = get_user_variant_runtime_po_override_mask();
-    const QoreParseOptions& own_po = module_pgm->getParseOptions();
+    const QoreParseOptions& own_po = qore_program_private::getParseOptions(*module_pgm);
     o.replace = get_module_own_access_parse_options();
-    // this is the boundary of every call into module code from another Program and of every call of module code by
-    // module code, for functions and methods alike: the record of the caller's restrictions for the Programs that
-    // module code creates (qore#5669) is set here for every caller, before the decision below
-    QoreParseOptions composed = keep_module_own_access_parse_options(
-        qore_compose_module_call_parse_options(own_po, caller_po), module_pgm);
-    // a module is a capability: once it is loaded, any caller can use it, and its code runs with its own options;
-    // only the sandbox governs it at run time.  For a sandboxed caller, the caller's restrictions are part of its
-    // sandbox: the module code also runs with them (the restricting options of both and only the explicitly-allowed
-    // options that both have), and passes them on to the module code it calls, also when the module's own options
-    // have them already
-    if (!runtime_module_call_inherits_caller_restrictions(caller_pgm)) {
+    o.override_pgm = module_pgm;
+    // this is the boundary of every call into module code from another Program, for functions and methods alike, and
+    // of every call of module code by module code that does not keep the override in effect (see
+    // runtime_module_call_override_in_effect()).  A module is a capability: once it is loaded, any caller can use
+    // it, and its code runs with its own options; only the sandbox governs it at run time
+    if (!runtime_module_call_inherits_caller_restrictions(td, caller_pgm)) {
         o.value = own_po;
-        return o;
+        return;
     }
+    // for a sandboxed caller, the caller's restrictions are part of its sandbox: the module code also runs with them
+    // (the restricting options of both and only the explicitly-allowed options that both have), and passes them on to
+    // the module code it calls, also when the module's own options have them already.  Only then are the caller's
+    // restrictions composed and recorded in the override (caller_restrictions); no record of a caller's restrictions
+    // is made here for any other caller
     o.sandboxed = true;
+    QoreParseOptions composed = keep_module_own_access_parse_options(
+        qore_compose_module_call_parse_options(own_po,
+            caller_po ? *caller_po : runtime_get_effective_parse_options_for(td, caller_pgm)), module_pgm);
     if ((composed & o.mask) == (own_po & o.mask)) {
         o.value = own_po;
-        return o;
+        return;
     }
     o.value = composed;
     // the restricting options that the module has only because its caller has them
@@ -5011,32 +5031,36 @@ QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const Qore
         o.module_pgm = module_pgm;
         o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
-    return o;
 }
 
-void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
+bool qore_get_user_call_runtime_po_override_slow(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
     bool module_code = qore_program_is_module(uvb->pgm);
     if (exec_pgm && exec_pgm != uvb->pgm) {
         // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
         // released it (see qore_get_method_pgm_context() and qore_get_function_pgm_context()), which runs in its
         // caller's Program, whose state it would change
-        o = QoreCallParseOptionsOverride();
         o.mask = get_user_variant_runtime_po_override_mask();
-        o.value = module_code
-            ? keep_module_own_access_parse_options(
-                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(), caller_po), uvb->pgm)
-            : exec_pgm->getParseOptions();
         if (module_code) {
+            o.value = keep_module_own_access_parse_options(
+                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(),
+                    caller_po ? *caller_po : runtime_get_effective_parse_options_for(caller_pgm)), uvb->pgm);
             o.replace = get_module_own_access_parse_options();
+        } else {
+            o.value = exec_pgm->getParseOptions();
         }
-        return;
+        return true;
     }
-    if (module_code) {
-        o = qore_get_module_call_runtime_po_override(uvb->pgm, caller_po, caller_pgm);
-        return;
+    assert(module_code);
+    ThreadData* td = qore_get_thread_data();
+    // module code called by code of its own module in the module's Program: the override that the call would set is
+    // the one in effect, which was set where the thread entered the module's code (see
+    // runtime_module_call_override_in_effect())
+    if (caller_pgm == uvb->pgm && runtime_module_call_override_in_effect(td, uvb->pgm)) {
+        return false;
     }
-    o = QoreCallParseOptionsOverride();
+    qore_set_module_call_runtime_po_override(o, uvb->pgm, caller_po, caller_pgm, td);
+    return true;
 }
 
 // Thread-local stack-top pointer for the "current builtin source location"
@@ -7357,11 +7381,12 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
     // a call that entered a module's Program from another Program has the override of the crossing already
-    std::optional<RuntimeParseOptionsOverrideHelper> po_override;
+    RuntimeParseOptionsOverrideHelper po_override;
     if (!ceh || !ceh->hasModuleCallOverride()) {
         QoreCallParseOptionsOverride po_o;
-        qore_get_user_call_runtime_po_override(uveh.getProgram(), this, caller_po, caller_pgm, po_o);
-        po_override.emplace(po_o);
+        if (qore_get_user_call_runtime_po_override(uveh.getProgram(), this, &caller_po, caller_pgm, po_o)) {
+            po_override.set(po_o);
+        }
     }
 
     // This is a normal function/method call, not a closure invocation.  If the
@@ -7392,11 +7417,12 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
         return QoreValue();
     }
     // a call that entered a module's Program from another Program has the override of the crossing already
-    std::optional<RuntimeParseOptionsOverrideHelper> po_override;
+    RuntimeParseOptionsOverrideHelper po_override;
     if (!ceh.hasModuleCallOverride()) {
         QoreCallParseOptionsOverride po_o;
-        qore_get_user_call_runtime_po_override(uveh.getProgram(), this, caller_po, caller_pgm, po_o);
-        po_override.emplace(po_o);
+        if (qore_get_user_call_runtime_po_override(uveh.getProgram(), this, &caller_po, caller_pgm, po_o)) {
+            po_override.set(po_o);
+        }
     }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);

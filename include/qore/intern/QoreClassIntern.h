@@ -3713,7 +3713,8 @@ public:
         @param deleted if not null, set to true if the class has a source Program, but it is being deleted (its last
         reference has been released): the code of the class cannot run then
     */
-    DLLLOCAL QoreProgram* getSourceProgramForCall(bool& referenced, bool* deleted = nullptr) const {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCall(bool& referenced,
+            bool* deleted = nullptr) const {
         referenced = false;
         QoreProgram* p = spgm.load();
         if (!p) {
@@ -3727,6 +3728,12 @@ public:
         if (spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
             return p;
         }
+        return getSourceProgramForCallSlow(referenced, deleted);
+    }
+
+    //! the part of getSourceProgramForCall() for a source Program that is neither current nor has module lifetime
+    DLLLOCAL QORE_INTERN_NOINLINE QoreProgram* getSourceProgramForCallSlow(bool& referenced, bool* deleted) const {
+        QoreProgram* p;
         {
             // see getReferencedSourceProgram()
             AutoLocker al(gate.asl_lock);
@@ -4550,11 +4557,10 @@ public:
         set(c);
     }
 
-    DLLLOCAL ~QoreSourceProgramHolder() {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~QoreSourceProgramHolder() {
+        // a call within the Program, or into a module's Program, takes no reference
         if (referenced) {
-            // releasing the last reference deletes the Program, which needs a sink for its destructors
-            assert(xsink);
-            pgm->deref(xsink);
+            release();
         }
     }
 
@@ -4570,9 +4576,36 @@ public:
     //! takes the Program that defined a user variant (the code of a function); may be called once
     /** The Program is identified by its address and ID (UserVariantBase::pgm and UserVariantBase::pgm_id), as it can
         have been deleted: a reference is taken only if it is still registered, and \a sourceDeleted() is true if it
-        is not
+        is not.  No reference is taken if the Program is \a cur_pgm, the thread's current Program, or \a call_pgm, the
+        explicit Program of the call, which the caller keeps allocated for the call (QoreProgram::callFunction()), or
+        if it has module lifetime
     */
-    DLLLOCAL void setVariant(const UserVariantBase* uvb);
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void setVariant(const UserVariantBase* uvb, const QoreProgram* cur_pgm,
+            const QoreProgram* call_pgm = nullptr) {
+        assert(!pgm);
+        assert(uvb);
+        QoreProgram* p = uvb->pgm;
+        if (!p) {
+            return;
+        }
+        // the ID tells the variant's Program from a later one at the same address
+        if ((p == cur_pgm || p == call_pgm) && p->getProgramId() == uvb->pgm_id) {
+            pgm = p;
+            return;
+        }
+        // a module's Program stays allocated while any code can run (module lifetime), so a call from another Program
+        // needs no reference to it; entering it fails once its teardown has started
+        if (uvb->pgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+            pgm = p;
+            return;
+        }
+        setVariantSlow(uvb);
+    }
+
+    //! takes the Program that defined a user variant, called from the thread's current Program; see setVariant()
+    DLLLOCAL void setVariant(const UserVariantBase* uvb) {
+        setVariant(uvb, ::getProgram());
+    }
 
     //! the Program, or nullptr if the class has no source Program (it has released the class, or it is deleted)
     DLLLOCAL QoreProgram* get() const {
@@ -4594,6 +4627,12 @@ private:
     ExceptionSink* xsink;
     bool referenced = false;
     bool deleted = false;
+
+    //! takes the Program of a variant that is neither current nor held by the caller nor has module lifetime
+    DLLLOCAL QORE_INTERN_NOINLINE void setVariantSlow(const UserVariantBase* uvb);
+
+    //! releases the reference taken to the Program
+    DLLLOCAL QORE_INTERN_NOINLINE void release();
 };
 
 //! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
@@ -4607,8 +4646,9 @@ DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSour
 /** A user function runs in the Program that defined it, as a method runs in the source Program of its class (see
     qore_get_method_pgm_context()): a module function called from another Program runs in the module's Program.  A
     function with only builtin variants runs in \a call_pgm, the Program the call is made in (its explicit Program,
-    if any, otherwise the caller's).  \a variant is the variant of the call if it is known; otherwise the Program of
-    the function's user variants is used, as all of them are defined by one Program.
+    if any, otherwise the caller's), which must stay allocated while the call is made, or nullptr for the current
+    Program.  \a variant is the variant of the call if it is known; otherwise the Program of the function's user
+    variants is used, as all of them are defined by one Program.
 
     @return the Program to run the call in, or nullptr with an exception raised in the holder's sink if the Program
     that defined the function is being deleted

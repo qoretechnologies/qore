@@ -1551,8 +1551,6 @@ struct ModuleProgramPins {
     //! leaf lock: only the reference count is changed while it is held
     QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_program_pins"};
     std::vector<QoreProgram*> pgms;
-    //! true until qore_release_module_program_pins()
-    std::atomic<bool> active{true};
 };
 
 ModuleProgramPins& module_program_pins() {
@@ -1562,6 +1560,9 @@ ModuleProgramPins& module_program_pins() {
 }
 }
 
+// written under ModuleProgramPins::m; constant-initialized, so it is valid before and after static initialization
+std::atomic<bool> qore_module_lifetime_flag{true};
+
 void qore_program_set_module_lifetime(QoreProgram& pgm) {
     qore_program_private* pp = qore_program_private::get(pgm);
     if (pp->module_lifetime.load(std::memory_order_acquire)) {
@@ -1569,7 +1570,8 @@ void qore_program_set_module_lifetime(QoreProgram& pgm) {
     }
     ModuleProgramPins& pins = module_program_pins();
     std::lock_guard<std::mutex> l(pins.m);
-    if (!pins.active.load(std::memory_order_relaxed) || pp->module_lifetime.load(std::memory_order_relaxed)) {
+    if (!qore_module_lifetime_flag.load(std::memory_order_relaxed)
+            || pp->module_lifetime.load(std::memory_order_relaxed)) {
         return;
     }
     pins.pgms.push_back(&pgm);
@@ -1579,13 +1581,15 @@ void qore_program_set_module_lifetime(QoreProgram& pgm) {
 }
 
 bool qore_program_has_module_lifetime(const QoreProgram* pgm) {
-    return pgm && module_program_pins().active.load(std::memory_order_acquire)
+    return pgm && qore_module_lifetime_flag.load(std::memory_order_acquire)
         && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->module_lifetime.load(
             std::memory_order_acquire);
 }
 
-bool qore_module_lifetime_active() {
-    return module_program_pins().active.load(std::memory_order_acquire);
+void qore_get_module_lifetime_programs(std::vector<QoreProgram*>& pgms) {
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    pgms = pins.pgms;
 }
 
 void qore_release_module_program_pins() {
@@ -1593,7 +1597,7 @@ void qore_release_module_program_pins() {
     std::vector<QoreProgram*> pgms;
     {
         std::lock_guard<std::mutex> l(pins.m);
-        pins.active.store(false, std::memory_order_release);
+        qore_module_lifetime_flag.store(false, std::memory_order_release);
         pgms.swap(pins.pgms);
     }
     for (QoreProgram* pgm : pgms) {

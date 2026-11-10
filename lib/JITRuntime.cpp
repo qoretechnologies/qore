@@ -10812,9 +10812,10 @@ static bool qore_rt_call_needs_call_program(const QoreProgram* call_pgm, const U
     @return the Program, or nullptr with an exception raised in \a xsink if the Program that defined the function is
     being deleted
 */
-static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm, QoreProgram* caller_pgm,
-        const UserVariantBase* uvb, QoreSourceProgramHolder& holder, ExceptionSink* xsink) {
-    holder.setVariant(uvb);
+static QORE_ALWAYS_INLINE QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm,
+        QoreProgram* caller_pgm, const UserVariantBase* uvb, QoreSourceProgramHolder& holder, ExceptionSink* xsink) {
+    // the explicit Program of the call is kept by the caller (QoreProgram::callFunction())
+    holder.setVariant(uvb, caller_pgm, explicit_pgm);
     if (QoreProgram* pgm = holder.get()) {
         return pgm;
     }
@@ -10831,26 +10832,23 @@ static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
 /** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
-    defined it is restricted with the executing Program's restrictions, module code also with its caller's, and
-    otherwise any override of the caller is cleared for the call.
+    defined it is restricted with the executing Program's restrictions, module code runs with its module's options
+    (and a sandboxed caller's restrictions), a call of module code by code of the same module keeps the override in
+    effect, and otherwise any override of the caller is cleared for the call.
 */
 class QoreRtUserCallOverrideHelper {
 public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
-    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
-            : helper(get(exec_pgm, uvb, caller_pgm)) {
+    DLLLOCAL QORE_ALWAYS_INLINE QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm) {
+        QoreCallParseOptionsOverride o;
+        if (qore_get_user_call_runtime_po_override(exec_pgm, uvb, nullptr, caller_pgm, o)) {
+            helper.set(o);
+        }
     }
 
 private:
     RuntimeParseOptionsOverrideHelper helper;
-
-    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
-            QoreProgram* caller_pgm) {
-        QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
-            caller_pgm, o);
-        return o;
-    }
 };
 
 //! Returns the Program that a method runs in, as for the calls made without native code
@@ -11081,7 +11079,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb, exec_pgm_holder, xsink);
-    if (*xsink) {
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
         return toBits(QoreValue());
     }
 
@@ -11536,7 +11535,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
-    if (*xsink) {
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
         return toBits(QoreValue());
     }
 
@@ -11670,7 +11670,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     // one its caller runs in
     QoreSourceProgramHolder exec_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
-    if (*xsink) {
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
         return toBits(QoreValue());
     }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -15835,7 +15836,8 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         QoreSourceProgramHolder exec_pgm_holder(xsink);
         QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb, exec_pgm_holder,
             xsink);
-        if (*xsink) {
+        // a Program is returned unless an exception was raised
+        if (!exec_pgm && *xsink) {
             return toBits(QoreValue());
         }
 

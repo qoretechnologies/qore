@@ -141,23 +141,13 @@ QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgram
     return (nspgm && nspgm != ::getProgram()) ? qore_check_pgm_context(nspgm) : nullptr;
 }
 
-void QoreSourceProgramHolder::setVariant(const UserVariantBase* uvb) {
-    assert(!pgm);
-    assert(uvb);
+void QoreSourceProgramHolder::setVariantSlow(const UserVariantBase* uvb) {
     QoreProgram* p = uvb->pgm;
-    if (!p) {
-        return;
-    }
-    // the current Program, and a Program that this thread deletes, which runs its code while it deletes its data
-    // (destructors, for example) without a reference, as its last one can have been released, are allocated; the ID
-    // tells the variant's Program from a later one at the same address
-    if ((p == ::getProgram() || qore_program_torn_down_by_current_thread(p)) && p->getProgramId() == uvb->pgm_id) {
-        pgm = p;
-        return;
-    }
-    // a module's Program stays allocated while any code can run (module lifetime), so a call from another Program
-    // needs no reference to it; entering it fails once its teardown has started
-    if (uvb->pgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+    assert(p);
+    // a Program that this thread deletes, which runs its code while it deletes its data (destructors, for example)
+    // without a reference, as its last one can have been released, is allocated; the ID tells the variant's Program
+    // from a later one at the same address
+    if (qore_program_torn_down_by_current_thread(p) && p->getProgramId() == uvb->pgm_id) {
         pgm = p;
         return;
     }
@@ -179,6 +169,13 @@ void QoreSourceProgramHolder::setVariant(const UserVariantBase* uvb) {
 #endif
 }
 
+void QoreSourceProgramHolder::release() {
+    assert(referenced && pgm);
+    // releasing the last reference deletes the Program, which needs a sink for its destructors
+    assert(xsink);
+    pgm->deref(xsink);
+}
+
 QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
         QoreSourceProgramHolder& holder, QoreProgram* call_pgm) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -195,7 +192,14 @@ QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const Abstr
         // builtin code has no Program of its own; it runs in the Program of the call
         return call_pgm;
     }
-    holder.setVariant(uvb);
+    // the Program of the call is allocated while the call is made: it is the current Program, or the explicit Program
+    // of QoreProgram::callFunction(), whose caller holds a reference to it, so a function that it defines needs no
+    // reference to it
+    if (call_pgm) {
+        holder.setVariant(uvb, call_pgm);
+    } else {
+        holder.setVariant(uvb);
+    }
     if (QoreProgram* pgm = holder.get()) {
         return qore_check_pgm_context(pgm);
     }

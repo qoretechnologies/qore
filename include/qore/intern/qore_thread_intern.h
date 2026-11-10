@@ -468,6 +468,16 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
 */
 DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
 
+//! returns the data of the current thread, for the functions that take it to look it up only once
+DLLLOCAL ThreadData* qore_get_thread_data();
+
+//! runtime_module_call_inherits_caller_restrictions() for the data of the current thread, \a td
+DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const QoreProgram* caller_pgm);
+
+//! returns the effective parse options of \a pgm for the current thread, whose data is \a td; see
+//! runtime_get_effective_parse_options_for()
+DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm);
+
 //! returns the ID of the application Program that module code calling from \a caller_pgm runs for
 /** If module code already runs for an application with that application's restrictions, it is that application;
     otherwise it is \a caller_pgm, or 0 if there is none
@@ -792,6 +802,7 @@ private:
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
     bool old_sandboxed;
+    const QoreProgram* old_override_pgm;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -845,30 +856,72 @@ struct QoreCallParseOptionsOverride {
         calls runs with the caller's restrictions in any case
     */
     bool sandboxed = false;
+    //! the Program of the module whose code the override is for, or nullptr if it is not the override of a call of
+    //! module code (see qore_get_module_call_runtime_po_override())
+    /** A call of module code by code of the same module keeps the override, as it is the override that the call
+        would set (see runtime_module_call_override_in_effect())
+    */
+    const QoreProgram* override_pgm = nullptr;
+    //! the data of the current thread if the override was computed with it, or nullptr; it is then set with it
+    ThreadData* td = nullptr;
 };
+
+//! Returns true if the runtime parse options override of the thread is the one set for a call of the code of the given
+//! module Program (see QoreCallParseOptionsOverride::override_pgm)
+/** Module code that calls code of its own module from the module's Program then keeps the override: the override
+    that the call would set is the same, as the caller's options already have the module's options and the caller's
+    restrictions that it inherits, and the module code runs for the same application and sandbox
+*/
+DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm);
+
+//! runtime_module_call_override_in_effect() for the data of the current thread, \a td
+DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
 
 class RuntimeParseOptionsOverrideHelper {
 public:
+    //! sets no override; see set()
+    DLLLOCAL RuntimeParseOptionsOverrideHelper() = default;
     //! sets an override that inherits no caller restrictions
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
     //! sets the override of a call
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o);
-    DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
+
+    //! restores the override that was in effect when the override was set, if it was set
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~RuntimeParseOptionsOverrideHelper() {
+        if (active) {
+            restore();
+        }
+    }
 
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const RuntimeParseOptionsOverrideHelper&) = delete;
     DLLLOCAL RuntimeParseOptionsOverrideHelper& operator=(const RuntimeParseOptionsOverrideHelper&) = delete;
 
+    //! sets the override of a call for a helper created without one; may be called once
+    DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
+
+    //! sets the override of a call for a helper created without one on \a td, the current thread; may be called once
+    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o);
+
+    //! returns true if the override has been set
+    DLLLOCAL bool isSet() const {
+        return active;
+    }
+
 private:
+    ThreadData* td = nullptr;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
     QoreParseOptions old_po;
     QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
-    bool old_sandboxed;
+    const QoreProgram* old_module_pgm = nullptr;
+    qore_program_id_t old_app_pgm_id = 0;
+    bool old_sandboxed = false;
+    //! true if the override has been set
+    bool active = false;
+    const QoreProgram* old_override_pgm = nullptr;
 
-    DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
+    DLLLOCAL void restore();
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
@@ -1007,6 +1060,14 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program
+/** A thread caches in its Program context that no Program on its context chain has a sandbox manager (see
+    ProgramThreadCountContextHelper::sandboxChainClear()); the cache holds only for the generation it was made in.  It
+    starts at 1, so that a context's initial generation of 0 is never current.  Removing a manager does not change it:
+    a Program without a manager has none afterwards either.
+*/
+DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
+
 //! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
 /** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which
     qore_cleanup() calls once no other thread can run Qore code, so code that calls into the module from another
@@ -1021,8 +1082,18 @@ DLLLOCAL void qore_program_set_module_lifetime(QoreProgram& pgm);
 */
 DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
 
+//! true while module lifetime is in effect; see qore_module_lifetime_active()
+DLLLOCAL extern std::atomic<bool> qore_module_lifetime_flag;
+
 //! Returns true while module lifetime is in effect: until qore_release_module_program_pins()
-DLLLOCAL bool qore_module_lifetime_active();
+/** Read without a lock on every call into module code from another Program
+*/
+DLLLOCAL inline bool qore_module_lifetime_active() {
+    return qore_module_lifetime_flag.load(std::memory_order_acquire);
+}
+
+//! Returns the Programs with module lifetime; they stay allocated until qore_release_module_program_pins()
+DLLLOCAL void qore_get_module_lifetime_programs(std::vector<QoreProgram*>& pgms);
 
 //! Releases the dependency references of the Programs with module lifetime; called by qore_cleanup() once no other
 //! thread can run Qore code, before the binary modules are deleted
@@ -1693,12 +1764,20 @@ public:
     */
     DLLLOCAL void exit(ExceptionSink* xsink);
 
+    //! exits the frame on the given thread, which is the current thread; see exit(ExceptionSink*)
+    DLLLOCAL void exit(ThreadData* td, ExceptionSink* xsink);
+
     //! returns true if the frame is entered
     DLLLOCAL bool isActive() const {
         return active;
     }
 
 private:
+    //! runs the entry handler of the Program, if any; see enter()
+    DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
+    //! runs the exit handler paired with the entry handler that ran; see exit()
+    DLLLOCAL QORE_INTERN_NOINLINE void exitHandlers(ThreadData* td, ExceptionSink* xsink);
+
     //! the thread's entered Program before the frame
     QoreProgram* old_entry_pgm = nullptr;
     //! the handlers whose entry handler ran, or nullptr; a reference is held while the frame is entered
@@ -1739,7 +1818,28 @@ public:
         return old_ctx;
     }
 
+    //! returns true if a lookup found at generation \a gen that neither \a cur_pgm, the thread's current Program, nor
+    //! any Program left by this context or an enclosing one has a sandbox manager (see qore_sandbox_manager_generation)
+    /** The Programs left by the contexts of the chain do not change while this context is entered, and a Program that
+        gets a manager increments the generation, so the lookup of the thread's sandbox manager need not check them
+        again (a cancellation point runs it on every loop iteration)
+    */
+    DLLLOCAL bool sandboxChainClear(const QoreProgram* cur_pgm, uint64_t gen) const {
+        return sandbox_clear_gen == gen && sandbox_clear_pgm == cur_pgm;
+    }
+
+    //! records that a lookup made at generation \a gen found no sandbox manager on the chain; see sandboxChainClear()
+    DLLLOCAL void setSandboxChainClear(const QoreProgram* cur_pgm, uint64_t gen) const {
+        sandbox_clear_pgm = cur_pgm;
+        sandbox_clear_gen = gen;
+    }
+
 protected:
+    //! see sandboxChainClear(); written and read by the thread itself only
+    mutable const QoreProgram* sandbox_clear_pgm = nullptr;
+    mutable uint64_t sandbox_clear_gen = 0;
+    //! the data of the thread, which set() entered the Program in, or nullptr if set() did nothing
+    ThreadData* ctx_td = nullptr;
     QoreProgram* old_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
