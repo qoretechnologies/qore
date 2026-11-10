@@ -78,13 +78,17 @@ privileged init: REFLECTION-ACCESS-ERROR
 ";
 
         #! the probe module loaded first by a Program with injection: a direct call from a Program with injection may
-        #! use it, a call reflected into the module from a Program without injection is refused
+        #! use it, a call reflected into the module from a Program without injection is refused, a direct call from a
+        #! Program without injection may use it (module code runs with its own options), and one from a sandboxed
+        #! Program without injection is refused (an explicitly-allowed option applies only if both have it)
         const ExpectedReflectedOutput = "direct: no error
 reflected: REFLECTION-ACCESS-ERROR
-sibling direct: INVALID-FUNCTION-ACCESS
+sibling direct: no error
+sandboxed sibling direct: INVALID-FUNCTION-ACCESS
 direct: no error
 reflected: REFLECTION-ACCESS-ERROR
-sibling direct: INVALID-FUNCTION-ACCESS
+sibling direct: no error
+sandboxed sibling direct: INVALID-FUNCTION-ACCESS
 ";
     }
 
@@ -113,7 +117,8 @@ sibling direct: INVALID-FUNCTION-ACCESS
 
         addTestCase("a module loaded first by a restricted Program without injection has its restrictions",
             \testNarrowed());
-        addTestCase("a Program without injection cannot call into a module that inherited injection with reflection",
+        addTestCase("a Program without injection cannot call into a module that inherited injection with reflection, "
+            "nor directly if it is sandboxed",
             \testReflectedCall());
         addTestCase("module reflection is judged by the nearest application, or strictly without one",
             \testChain());
@@ -582,6 +587,12 @@ sibling.loadModule(\"InheritedProbe\");
 sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }
 string sub direct_static() { return InheritedProbe::Probe::inject(); }\", \"sibling\");
 
+# a sandboxed sibling without injection
+Program sandboxed(PO_NEW_STYLE);
+sandboxed.setSandboxManager(new SandboxManager());
+sandboxed.loadModule(\"InheritedProbe\");
+sandboxed.parse(\"string sub direct_static() { return InheritedProbe::Probe::inject(); }\", \"sandboxed\");
+
 for (int i = 0; i < 2; ++i) {
     printf(\"direct: %s\\n\", caller.callFunction(\"direct\"));
     try {
@@ -589,8 +600,10 @@ for (int i = 0; i < 2; ++i) {
     } catch (hash<ExceptionInfo> ex) {
         printf(\"reflected: %s\\n\", ex.err);
     }
-    # a method of the module runs with the restrictions of its caller, without injection
+    # a method of the module runs with its own options for a caller restricted only by its parse options, and with
+    # the restrictions of a sandboxed caller, without injection
     printf(\"sibling direct: %s\\n\", sibling.callFunction(\"direct_static\"));
+    printf(\"sandboxed sibling direct: %s\\n\", sandboxed.callFunction(\"direct_static\"));
 }
 ";
     }

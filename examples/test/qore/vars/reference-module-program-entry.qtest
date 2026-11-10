@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/reference-module-program-entry"
+%requires QUnit
+%requires RefEntryMod
+
+%exec-class ReferenceModuleProgramEntryTest
+
+#! A thread uses an lvalue of a module's Program through a reference created by module code
+/** A call into module code from another Program enters the module's Program without its thread count (the module's
+    Program is deleted only by the module cleanup, which stops such entries first).  A reference to a lvalue of the
+    module's Program, resolved from the script's Program, makes such an entry as well; the LValueHelper keeps the
+    thread in the Program until it has used the lvalue (see reference-program-entry.qtest), so the entry takes the
+    Program's thread count when it is handed over (ProgramThreadCountContextHelper::takeThreadCount()), and the
+    LValueHelper leaves it.
+
+    The debug build holds the thread after it assigned the lvalue (dbg_hold_reference_lvalue()): there the thread holds
+    the entry into the module's Program.  A thread count that is not left would keep the module cleanup waiting for the
+    thread at the exit of the process; a debug build also asserts that the count is taken.
+*/
+class ReferenceModuleProgramEntryTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step
+        const StepTimeout = 60000;
+
+        #! the kinds of variables of the module that are referenced
+        const Kinds = ("thread_local", "global");
+
+        #! the ways the thread holds the reference and assigns its lvalue
+        const Holders = ("local", "closure", "parameter");
+    }
+
+    constructor() : QUnit::Test("ReferenceModuleProgramEntryTest", "1.0", \ARGV) {
+        addTestCase("held", \heldTest());
+        addTestCase("not held", \notHeldTest());
+        set_return_value(main());
+    }
+
+    #! the thread assigns the module's lvalue through the reference while a hold stops it after the assignment
+    heldTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the reference lvalue hold requires a debug build");
+        }
+        int value = 5151515151;
+        foreach string kind in (Kinds) {
+            foreach string holder in (Holders) {
+                ++value;
+                Queue tidq();
+                Queue result();
+                call_function("dbg_hold_reference_lvalue", value);
+                on_error {
+                    # a thread that is held is let go
+                    if (call_function("dbg_wait_reference_lvalue_held", 0)) {
+                        call_function("dbg_continue_reference_lvalue", StepTimeout);
+                    }
+                }
+                background ReferenceModuleProgramEntryTest::assignThroughReference(kind, holder, value, tidq, result);
+                tidq.get(StepTimeout);
+                assertEq(True, call_function("dbg_wait_reference_lvalue_held", StepTimeout), sprintf("%s held by a "
+                    "%s: the thread is held", kind, holder));
+                assertEq(True, call_function("dbg_continue_reference_lvalue", StepTimeout), sprintf("%s held by a "
+                    "%s: the thread continued", kind, holder));
+                hash<auto> r = result.get(StepTimeout);
+                assertEq(NOTHING, r.err, sprintf("%s held by a %s: no exception", kind, holder));
+                assertEq(value, r.read, sprintf("%s held by a %s: the value assigned is read back", kind, holder));
+                assertEq(value, r.module_read, sprintf("%s held by a %s: module code reads the value assigned",
+                    kind, holder));
+            }
+        }
+    }
+
+    #! the thread assigns the module's lvalue through the reference without a hold, also many times in a row
+    notHeldTest() {
+        int value = 6161616161;
+        foreach string kind in (Kinds) {
+            foreach string holder in (Holders) {
+                for (int i = 0; i < 100; ++i) {
+                    ++value;
+                    Queue tidq();
+                    Queue result();
+                    ReferenceModuleProgramEntryTest::assignThroughReference(kind, holder, value, tidq, result);
+                    hash<auto> r = result.get(StepTimeout);
+                    if (r.err || r.read != value || r.module_read != value) {
+                        assertEq({"read": value, "module_read": value}, r, sprintf("%s held by a %s: iteration %d",
+                            kind, holder, i));
+                        break;
+                    }
+                }
+                assertEq(value, kind == "global" ? RefEntryMod::read_g() : RefEntryMod::read_tl(),
+                    sprintf("%s held by a %s: the last value assigned", kind, holder));
+            }
+        }
+    }
+
+    #! takes a reference from the module and assigns its lvalue as \a holder says
+    private static assignThroughReference(string kind, string holder, int value, Queue tidq, Queue result) {
+        # the value types of the hash vary, so its literal is not used: its type would be hash<string, int>
+        hash<auto> rv = {};
+        try {
+            reference<*int> r;
+            if (kind == "global") {
+                r = RefEntryMod::get_g();
+            } else {
+                r = RefEntryMod::get_tl();
+            }
+            tidq.push(gettid());
+            switch (holder) {
+                case "local":
+                    r = value;
+                    break;
+                case "closure": {
+                    code c = sub (int v) { r = v; };
+                    c(value);
+                    break;
+                }
+                case "parameter":
+                    ReferenceModuleProgramEntryTest::assignParameter(\r, value);
+                    break;
+            }
+            rv.read = r;
+            rv.module_read = kind == "global" ? RefEntryMod::read_g() : RefEntryMod::read_tl();
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err + ": " + ex.desc;
+        }
+        result.push(rv);
+    }
+
+    #! assigns the lvalue of a reference held by a parameter
+    private static assignParameter(reference<*int> r, int v) {
+        r = v;
+    }
+}

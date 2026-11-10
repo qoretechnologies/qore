@@ -38,6 +38,7 @@
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cassert>
 #include <cctype>
@@ -1591,6 +1592,67 @@ bool qore_program_is_sandboxed(const QoreProgram* pgm) {
 
 void qore_program_mark_sandboxed(QoreProgram& pgm) {
     qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+}
+
+namespace {
+//! the Programs with module lifetime, each with a dependency reference; see qore_program_set_module_lifetime()
+struct ModuleProgramPins {
+    std::mutex m;
+    //! leaf lock: only the reference count is changed while it is held
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_program_pins"};
+    std::vector<QoreProgram*> pgms;
+};
+
+ModuleProgramPins& module_program_pins() {
+    // never destroyed: the pins are released by qore_cleanup(), which can run after static destructors started
+    static ModuleProgramPins* p = new ModuleProgramPins;
+    return *p;
+}
+}
+
+// written under ModuleProgramPins::m; constant-initialized, so it is valid before and after static initialization
+std::atomic<bool> qore_module_lifetime_flag{true};
+
+void qore_program_set_module_lifetime(QoreProgram& pgm) {
+    qore_program_private* pp = qore_program_private::get(pgm);
+    if (pp->module_lifetime.load(std::memory_order_acquire)) {
+        return;
+    }
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    if (!qore_module_lifetime_flag.load(std::memory_order_relaxed)
+            || pp->module_lifetime.load(std::memory_order_relaxed)) {
+        return;
+    }
+    pins.pgms.push_back(&pgm);
+    pgm.depRef();
+    // published after the reference has been taken
+    pp->module_lifetime.store(true, std::memory_order_release);
+}
+
+bool qore_program_has_module_lifetime(const QoreProgram* pgm) {
+    return pgm && qore_module_lifetime_flag.load(std::memory_order_acquire)
+        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->module_lifetime.load(
+            std::memory_order_acquire);
+}
+
+void qore_get_module_lifetime_programs(std::vector<QoreProgram*>& pgms) {
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    pgms = pins.pgms;
+}
+
+void qore_release_module_program_pins() {
+    ModuleProgramPins& pins = module_program_pins();
+    std::vector<QoreProgram*> pgms;
+    {
+        std::lock_guard<std::mutex> l(pins.m);
+        qore_module_lifetime_flag.store(false, std::memory_order_release);
+        pgms.swap(pins.pgms);
+    }
+    for (QoreProgram* pgm : pgms) {
+        pgm->depDeref();
+    }
 }
 
 //------------------------------------------------------------------------------

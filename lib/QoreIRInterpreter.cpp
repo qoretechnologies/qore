@@ -3385,12 +3385,21 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     // only readable behind an eligible state, and these values are exactly what the cache
     // would hold anyway.
     const UserVariantBase* uvb = inst->variant->getUserVariantBase();
-    if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
+    // a function of another Program (a module function, an imported function) is inlined as well: the inlined call
+    // takes and enters the Program that defined it, as the call path does (see
+    // tryExecuteInterpreterInlineIRFunction()); a call with an explicit Program of its own that did not define the
+    // function is made from that Program, which only the call path enters (see QoreFunction::evalFunction())
+    if (!uvb || !uvb->pgm || (inst->pgm && inst->pgm != uvb->pgm) || uvb->hasCachedFunction()
             || !uvb->isStaticallyFastCallEligible()) {
         return reject();
     }
 
     const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    // a function of another Program is not lowered with the caller's Program; the call path lowers it once it is
+    // called often enough, so the call site is checked again by a later call
+    if (!callee_ir && uvb->pgm != caller_pgm && !uvb->irLoweringFailed()) {
+        return QORE_IR_INLINE_UNCHECKED;
+    }
     const UserSignature* sig = uvb->getUserSignature();
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
@@ -4681,22 +4690,26 @@ public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
     DLLLOCAL QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
             const UserVariantBase* uvb, QoreProgram* caller_pgm)
-            : po_override(get(exec_pgm, uvb, caller_pgm)),
+            : po_override(exec_pgm, uvb, caller_pgm),
             loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
                 uvb->getParseOptions(exec_pgm->getParseOptions())) {
     }
 
 private:
-    RuntimeParseOptionsOverrideHelper po_override;
-    QoreProgramLocationHelper loc_helper;
+    //! sets the override of the call (see qore_get_user_call_runtime_po_override()), if it sets one
+    class CalleeOverride {
+    public:
+        DLLLOCAL CalleeOverride(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+            qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
+        }
 
-    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
-            QoreProgram* caller_pgm) {
-        QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
-            caller_pgm, o);
-        return o;
-    }
+    private:
+        RuntimeParseOptionsOverrideHelper helper;
+    };
+
+    // the override is set before the location helper is created and restored after it is destroyed
+    CalleeOverride po_override;
+    QoreProgramLocationHelper loc_helper;
 };
 
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
@@ -4718,9 +4731,13 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    QoreProgram* exec_pgm = uvb->pgm;
+    // the function runs in the Program that defined it (see qore_get_function_pgm_context()), which is kept for the
+    // whole inlined call: a function of another Program can be called while that Program is deleted in another
+    // thread; if it is being deleted, the call path reports it
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    exec_pgm_holder.setVariant(uvb, caller_pgm);
+    QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
-        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
     // the callee runs in this interpreter instead of being called, so the call is counted here for its promotion
@@ -16124,6 +16141,8 @@ load_local_done:
                     } else if (!debug_active
                             && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
                             && !direct_inst->cached_uvb->hasCachedFunction()
+                            // a call into another Program enters it (see tryExecuteInterpreterInlineIRFunction())
+                            && direct_inst->cached_uvb->pgm == pgm
                             && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
                         // the call is evaluated without entering the callee, so it is counted here for its
                         // promotion to native code, as qore_rt_call_fast() counts the calls it makes
