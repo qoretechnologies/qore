@@ -1940,7 +1940,7 @@ public:
             // teardown below.  Matches the pattern used on the server
             // side (SocketQuicServerPollOperation::abort).
             if (quic_session) {
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 if (fd >= 0) {
                     uint8_t close_buf[1280];
                     ssize_t close_len = quic_session->writeConnectionClose(
@@ -2181,7 +2181,7 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        int fd = sock->priv->socket->getSocket();
+        int fd = sock->priv->socket->getDescriptor();
         // Graceful QUIC shutdown (nginx pattern, see nginx-1.29.4
         // src/event/quic/ngx_event_quic.c:468-620):
         //   1. Send HTTP/3 GOAWAY on each session so clients stop opening

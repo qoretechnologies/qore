@@ -250,6 +250,16 @@ DLLLOCAL void se_timeout(const char* cname, const char* meth, int timeout_ms, Ex
     const char* extra = nullptr);
 DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsink);
 
+//! Raises SOCKET-CLOSED for a synchronous call whose operation was canceled before it reached its goal
+/** A close of the socket by another thread cancels the operation that waits on the I/O thread; its result has no
+    exception, and the call must not return as if it had completed.  Another cancel (of the operation's owner, or the
+    controller's stop) ends the call in the same way.
+
+    @param mname the name of the Socket method
+    @param xsink for the exception
+*/
+DLLLOCAL void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink);
+
 class Transform;
 
 #ifdef _Q_WINDOWS
@@ -308,6 +318,41 @@ DLLLOCAL inline int qore_socket_cloexec(int family, int type, int protocol) {
     return fd2;
 }
 
+//! Creates a socket that is close-on-exec and non-blocking; returns QORE_INVALID_SOCKET on error (errno set)
+/** The sockets of the library are always non-blocking: every operation on them is a step of a poll operation, which
+    handles \c EAGAIN, and the async I/O threads expect it (design/async-socket-io.md, "Sync I/O on Born-Non-Blocking
+    Sockets").  Where the platform supports it (\c SOCK_NONBLOCK), the flag is set when the socket is created.
+*/
+DLLLOCAL inline int qore_socket_cloexec_nonblock(int family, int type, int protocol) {
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+    int fd = socket(family, type | SOCK_CLOEXEC | SOCK_NONBLOCK, protocol);
+    if (fd != QORE_INVALID_SOCKET || errno != EINVAL) {
+        return fd;
+    }
+    // a kernel without SOCK_CLOEXEC / SOCK_NONBLOCK
+#endif
+    int fd2 = qore_socket_cloexec(family, type, protocol);
+    if (fd2 == QORE_INVALID_SOCKET) {
+        return QORE_INVALID_SOCKET;
+    }
+#ifdef _Q_WINDOWS
+    u_long mode = 1;
+    if (ioctlsocket(fd2, FIONBIO, &mode) != 0) {
+        closesocket(fd2);
+        return QORE_INVALID_SOCKET;
+    }
+#else
+    int flags = fcntl(fd2, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd2, F_SETFL, flags | O_NONBLOCK) < 0) {
+        int saved_errno = errno;
+        ::close(fd2);
+        errno = saved_errno;
+        return QORE_INVALID_SOCKET;
+    }
+#endif
+    return fd2;
+}
+
 //! Accepts a connection on a socket as a close-on-exec socket; returns QORE_INVALID_SOCKET on error (errno set)
 DLLLOCAL inline int qore_accept_cloexec(int fd, struct sockaddr* addr, socklen_t* size) {
 #if defined(__linux__) && defined(SOCK_CLOEXEC)
@@ -323,30 +368,45 @@ DLLLOCAL inline int qore_accept_cloexec(int fd, struct sockaddr* addr, socklen_t
     return rc2;
 }
 
-//! Creates a socket and immediately sets it to non-blocking mode.
-/** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set).
+//! Accepts a connection as a close-on-exec, non-blocking socket; returns QORE_INVALID_SOCKET on error (errno set)
+/** See qore_socket_cloexec_nonblock().  On the platforms without \c accept4(), the BSD systems among them make the
+    accepted socket non-blocking when the listening socket is (and the library's listening sockets are); the flag is
+    set explicitly otherwise.
 */
-DLLLOCAL inline int create_nonblocking_socket(int family, int type, int protocol) {
-    int fd = qore_socket_cloexec(family, type, protocol);
-    if (fd == QORE_INVALID_SOCKET) {
+DLLLOCAL inline int qore_accept_nonblock(int fd, struct sockaddr* addr, socklen_t* size) {
+#if defined(__linux__) && defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+    int rc = ::accept4(fd, addr, size, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    if (rc != QORE_INVALID_SOCKET || errno != ENOSYS) {
+        return rc;
+    }
+#endif
+    int rc2 = qore_accept_cloexec(fd, addr, size);
+    if (rc2 == QORE_INVALID_SOCKET) {
         return QORE_INVALID_SOCKET;
     }
 #ifdef _Q_WINDOWS
     u_long mode = 1;
-    if (ioctlsocket(fd, FIONBIO, &mode) != 0) {
-        closesocket(fd);
+    if (ioctlsocket(rc2, FIONBIO, &mode) != 0) {
+        closesocket(rc2);
         return QORE_INVALID_SOCKET;
     }
 #else
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    int flags = fcntl(rc2, F_GETFL, 0);
+    if (flags < 0 || (!(flags & O_NONBLOCK) && fcntl(rc2, F_SETFL, flags | O_NONBLOCK) < 0)) {
         int saved_errno = errno;
-        ::close(fd);
+        ::close(rc2);
         errno = saved_errno;
         return QORE_INVALID_SOCKET;
     }
 #endif
-    return fd;
+    return rc2;
+}
+
+//! Creates a socket and immediately sets it to non-blocking mode.
+/** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set); see qore_socket_cloexec_nonblock()
+*/
+DLLLOCAL inline int create_nonblocking_socket(int family, int type, int protocol) {
+    return qore_socket_cloexec_nonblock(family, type, protocol);
 }
 
 template <typename T>
@@ -430,14 +490,13 @@ DLLLOCAL bool qore_in_async_io_continue_poll_worker();
 DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
 #endif
 
+//! Makes the socket non-blocking for an I/O call, if it is not already; the socket stays non-blocking
+/** A check of the socket's known state, without a system call, for the sockets of the library, which are non-blocking
+    from their creation; see qore_socket_private::fd_nonblocking
+*/
 class OptionalNonBlockingHelper {
 public:
-    qore_socket_private& sock;
-    ExceptionSink* xsink;
-    bool set;
-
     DLLLOCAL OptionalNonBlockingHelper(qore_socket_private& s, bool n_set, ExceptionSink* xs);
-    DLLLOCAL ~OptionalNonBlockingHelper();
 };
 
 class PrivateQoreSocketTimeoutBase {
@@ -1466,6 +1525,15 @@ struct qore_socket_private : public QoreReferenceCounter {
         connection.
     */
     std::atomic<SSLSocketHelper*> ssl{nullptr};
+
+    //! Returns true if the socket has a TLS connection; for a step of a poll operation of the socket
+    /** QoreSocket::isSecure() asks the socket's I/O thread when it is called on another thread, which a step on a
+        callback worker, or the initialization of an operation on the thread that creates it, must not do: the round
+        trip is refused there, and isSecure() reports false.  The state is read directly, as the I/O thread does.
+    */
+    DLLLOCAL bool hasSsl() const {
+        return ssl.load(std::memory_order_acquire) != nullptr;
+    }
     mutable QoreThreadLock tls_state_cache_m;
     mutable std::string ssl_cipher_name_cache;
     mutable std::string ssl_cipher_version_cache;
@@ -1888,6 +1956,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     uint32_t fd_generation = 0;
 
+    //! True if the descriptor is known to be non-blocking, so set_non_blocking(true) needs no system call
+    /** Set when the library creates the descriptor (openUNIX(), openINET()) or makes it non-blocking, cleared when the
+        descriptor is closed or replaced: a descriptor that came from elsewhere is checked once.  Atomic: the socket's
+        I/O thread and the threads that use the socket read it.
+    */
+    std::atomic<bool> fd_nonblocking{false};
+
     //! The async I/O controller route key of the Socket object wrapping this socket, or empty if there is none
     /** The controller runs every operation on a socket on one I/O thread, chosen by the route key (see
         AsyncIoControllerPriv::getThreadIndex()): normally the I/O identity hash of the operation's socket.  A Socket
@@ -2000,21 +2075,7 @@ public:
     */
     H2SessionHolder h2_session;
 
-    //! Active HTTP/2 stream ID for WebSocket or other bidirectional streams
-    /** When set to a positive value, send() and recv() operations will use
-        HTTP/2 DATA frames on this stream instead of raw socket I/O.
-        Set to -1 when no stream is active.
-    */
-    int32_t h2_active_stream_id = -1;
-    mutable QoreThreadLock h2_active_stream_lock;
     mutable QoreThreadLock h2_session_lock;
-    std::unordered_map<int, int32_t> h2_active_stream_ids;
-
-    //! Flag to prevent recursion in HTTP/2 receive path
-    /** When true, socket data-availability checks bypass active stream handling.
-        This is set when receiving HTTP/2 protocol frames to avoid infinite recursion.
-    */
-    bool h2_receiving_frames = false;
 
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
     /** When set, chunked body readers raise an HTTP-BODY-TOO-LARGE exception
@@ -2270,41 +2331,6 @@ public:
     //! Clears a directional controller-backed I/O section for the current thread
     DLLLOCAL void clearAsyncSequenceIo(unsigned direction);
 
-    DLLLOCAL int32_t getH2ActiveStreamId() const {
-        bool use_thread_map;
-        {
-            AutoLocker al(h2_session_lock);
-            Http2SessionPtr session = h2_session.get();
-            use_thread_map = !session || session->isServer();
-        }
-        if (use_thread_map) {
-            AutoLocker al(h2_active_stream_lock);
-            auto it = h2_active_stream_ids.find(q_gettid());
-            return it == h2_active_stream_ids.end() ? -1 : it->second;
-        }
-        return h2_active_stream_id;
-    }
-
-    DLLLOCAL void setH2ActiveStreamId(int32_t stream_id) {
-        bool use_thread_map;
-        {
-            AutoLocker al(h2_session_lock);
-            Http2SessionPtr session = h2_session.get();
-            use_thread_map = !session || session->isServer();
-        }
-        if (use_thread_map) {
-            AutoLocker al(h2_active_stream_lock);
-            int tid = q_gettid();
-            if (stream_id > 0) {
-                h2_active_stream_ids[tid] = stream_id;
-            } else {
-                h2_active_stream_ids.erase(tid);
-            }
-        } else {
-            h2_active_stream_id = stream_id;
-        }
-    }
-
     //! Registers a callback for HTTP/2 stream completion (client multiplexing)
     /** @param stream_id the stream ID to register
         @param callback the callback value (typically a code reference)
@@ -2522,6 +2548,7 @@ public:
         }
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
+        fd_nonblocking.store(false, std::memory_order_relaxed);
         return true;
     }
 
@@ -2532,12 +2559,14 @@ public:
 
         @param fd the descriptor
         @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+        @param nonblocking true if the descriptor is non-blocking (created with create_nonblocking_socket())
     */
-    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt) {
+    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking) {
         CloseLockHelper cl(*this);
         sock = fd;
         shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
         ++fd_generation;
+        fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor
@@ -2603,6 +2632,7 @@ public:
         // change on re-acquire and returns QSE_NOT_OPEN instead of
         // retrying on a dead fd.
         ++fd_generation;
+        fd_nonblocking.store(false, std::memory_order_relaxed);
         if (buflen) {
             buflen = 0;
         }
@@ -2925,21 +2955,11 @@ public:
         }
 
         while (true) {
-            int rc = qore_accept_cloexec(io_use.getDescriptor(), addr, size);
+            int rc = qore_accept_nonblock(io_use.getDescriptor(), addr, size);
             if (rc != QORE_INVALID_SOCKET) {
-                // The listener is non-blocking while owned by the async I/O controller.
-                // Some platforms propagate that flag to accepted sockets; return accepted
-                // descriptors in blocking mode so legacy callers and SSL setup keep their
-                // expected socket state.
-#ifdef _Q_WINDOWS
-                u_long mode = 0;
-                ioctlsocket(rc, FIONBIO, &mode);
-#else
-                int arg = fcntl(rc, F_GETFL, 0);
-                if (arg >= 0 && (arg & O_NONBLOCK)) {
-                    fcntl(rc, F_SETFL, arg & ~O_NONBLOCK);
-                }
-#endif
+                // the accepted socket is non-blocking, as every socket of the library is (see
+                // qore_socket_cloexec_nonblock()); the TLS handshake of an accepted socket is a non-blocking poll
+                // operation step, which handles SSL_ERROR_WANT_READ / SSL_ERROR_WANT_WRITE
                 return rc;
             }
 
@@ -3451,6 +3471,11 @@ public:
         if (sock == QORE_INVALID_SOCKET) {
             return -1;
         }
+        // a socket of the library is non-blocking from its creation; only a descriptor that came from elsewhere
+        // needs the system calls, once
+        if (non_blocking && fd_nonblocking.load(std::memory_order_relaxed)) {
+            return 0;
+        }
 
 #ifdef _Q_WINDOWS
         u_long mode = non_blocking ? 1 : 0;
@@ -3470,16 +3495,12 @@ public:
         int new_arg = non_blocking
             ? (arg | O_NONBLOCK)    // set non-blocking
             : (arg & ~O_NONBLOCK);  // set blocking
-        // a socket on the async I/O thread is already non-blocking at every I/O call; skip the second syscall
-        if (new_arg == arg) {
-            return 0;
-        }
-
-        if (fcntl(sock, F_SETFL, new_arg) < 0) {
+        if (new_arg != arg && fcntl(sock, F_SETFL, new_arg) < 0) {
             return sock_errno_err("SOCKET-CONNECT-ERROR", "error in fcntl() setting socket descriptor status "
                 "flag", xsink);
         }
 #endif
+        fd_nonblocking.store(non_blocking, std::memory_order_relaxed);
         //printd(5, "qore_socket_private::set_non_blocking() set: %d\n", non_blocking);
 
         return 0;
@@ -3522,9 +3543,10 @@ public:
             close();
 
         assert(sock == QORE_INVALID_SOCKET);
-        if ((sock = qore_socket_cloexec(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
+        if ((sock = qore_socket_cloexec_nonblock(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
             return -1;
         }
+        fd_nonblocking.store(true, std::memory_order_relaxed);
         resetCloseInterrupt();
 
         sfamily = AF_UNIX;
@@ -3541,8 +3563,10 @@ public:
             close();
 
         assert(sock == QORE_INVALID_SOCKET);
-        if ((sock = qore_socket_cloexec(family, sock_type, protocol)) == QORE_INVALID_SOCKET)
+        if ((sock = qore_socket_cloexec_nonblock(family, sock_type, protocol)) == QORE_INVALID_SOCKET) {
             return -1;
+        }
+        fd_nonblocking.store(true, std::memory_order_relaxed);
         resetCloseInterrupt();
 
         sfamily = family;
@@ -4728,6 +4752,12 @@ public:
 /** For the C++ unit tests; the wrappers that the controller-backed socket methods make are of the same class
 */
 DLLLOCAL QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s);
+
+//! Debug builds: if true, a TCP connect attempt is not checked right after connect() returns EINPROGRESS
+/** For the C++ unit tests of the attempts whose result is read when the descriptor is writable, after it has been
+    registered (see SocketConnectInetHappyEyeballsPollState::continuePoll())
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
 #endif
 
 #endif

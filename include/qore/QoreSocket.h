@@ -1952,10 +1952,27 @@ public:
     */
     DLLEXPORT int shutdownSSL(ExceptionSink* xsink);
 
-    //! returns the file descriptor associated with this socket
-    /** @return the file descriptor associated with this socket
+    //! Returns the socket's descriptor, for a module that uses it outside the async I/O controller
+    /** The operations of a socket are made by the async I/O controller, which owns its descriptor; this is only for a
+        module that:
+        - gives it to a library that reads and writes the descriptor itself (as libssh2 does),
+        - reports it as the pollable descriptor of a module object that wraps the socket
+          (AbstractPollableIoObjectBase::getPollableDescriptor(), with holdPollableDescriptor() implemented with
+          holdDescriptor()), or
+        - waits for it itself while it drives a poll state of the socket (see AbstractPollState::getPollTimeoutMs()).
+
+        The descriptor is non-blocking.  The module must hold the descriptor open while it or the library uses it
+        (holdDescriptor()), as a close of the socket in another thread can otherwise release the number while it is
+        still used, and must not make the socket's own operations while the library makes its I/O.
+
+        @return the socket's descriptor, or -1 if the socket is not open
+
+        @since %Qore 3.0 (replaces getSocket())
     */
-    DLLEXPORT int getSocket() const;
+    DLLEXPORT int getDescriptorForLibrary() const;
+
+    //! Returns the socket's descriptor, for the library's own use
+    DLLLOCAL int getDescriptor() const;
 
     //! Keeps the socket's descriptor open while an async I/O event loop has it registered
     /** For an I/O object whose pollable descriptor is that of a socket, to implement
@@ -1963,7 +1980,7 @@ public:
         thread closes the socket for its users at once and shuts the descriptor down, and the descriptor is closed
         when the last hold is released.
 
-        @param fd the descriptor read with getSocket()
+        @param fd the descriptor read with getDescriptorForLibrary()
         @param hold set to the hold, which keeps @p fd open until it is released
 
         @return 0 if the hold was taken, -1 if @p fd is no longer the socket's descriptor (the socket was closed or its
