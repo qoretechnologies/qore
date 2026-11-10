@@ -17765,10 +17765,93 @@ static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* par
     return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
 }
 
-//! returns the number of background JIT compiles refused because a Program they refer to is being deleted
+//! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return (int64)QoreJIT::instance().bgCompileRefusedClosedCount();
+}
+
+//! returns the hold point of the background JIT compiler named by \a point
+/** @throw DBG-ARGUMENT-ERROR the name is unknown
+*/
+static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::BgCompileHoldPoint& rv,
+        ExceptionSink* xsink) {
+    if (!strcmp(point->c_str(), "lowering")) {
+        rv = QoreJIT::BgCompileHoldPoint::Lowering;
+    } else if (!strcmp(point->c_str(), "llvm")) {
+        rv = QoreJIT::BgCompileHoldPoint::Llvm;
+    } else if (!strcmp(point->c_str(), "commit")) {
+        rv = QoreJIT::BgCompileHoldPoint::Commit;
+    } else if (!strcmp(point->c_str(), "install")) {
+        rv = QoreJIT::BgCompileHoldPoint::Install;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown background compile hold point '%s'; expecting "
+            "\"lowering\", \"llvm\", \"commit\" or \"install\"", point->c_str());
+        return false;
+    }
+    return true;
+}
+
+//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
+/** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
+    function name is given, only the compile of that function (the root function of the batch) stops.
+
+    @throw DBG-ARGUMENT-ERROR the point is unknown, or a hold is armed there already
+*/
+static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::BgCompileHoldPoint point;
+    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+        return QoreValue();
+    }
+    const QoreStringNode* func = get_param_value(params, 1).get<const QoreStringNode>();
+    if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
+    }
+    return QoreValue();
+}
+
+//! waits until the background JIT compiler is stopped at the given point; returns False on timeout
+static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::BgCompileHoldPoint point;
+    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+        return QoreValue();
+    }
+    return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
+}
+
+//! returns True if the background JIT compiler is stopped at a hold point
+static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgBgCompileHeld();
+}
+
+//! lets the held background JIT compile continue and waits until it has left the hold point; False on timeout
+/** @throw DBG-ARGUMENT-ERROR no compile is held
+*/
+static QoreValue f_dbg_continue_bg_compile(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int rv = QoreJIT::instance().dbgContinueBgCompile(get_param_value(params, 0).getAsBigInt());
+    if (rv < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no background compile is held");
+        return QoreValue();
+    }
+    return rv > 0;
+}
+
+//! waits until a Program teardown waits for the in-progress background JIT compile; returns False on timeout
+static QoreValue f_dbg_wait_bg_compile_teardown_waiting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgWaitBgCompileTeardownWaiting(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until the background JIT compiler has no queued or in-progress work, detached work included
+static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::instance().waitForBgCompileQueue();
+    return QoreValue();
+}
+
+//! returns the number of detached background JIT compiles whose result was discarded
+static QoreValue f_dbg_get_bg_compile_discarded_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return (int64)QoreJIT::instance().bgCompileDiscardedCount();
 }
 
 //! returns True if the background JIT compiler sees the given Program with its ID plus \a id_offset
@@ -20608,6 +20691,20 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_close_program_bg_compile", f_dbg_close_program_bg_compile, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "func");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_teardown_waiting", f_dbg_wait_bg_compile_teardown_waiting,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_idle", f_dbg_wait_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
