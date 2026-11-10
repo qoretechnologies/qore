@@ -90,6 +90,8 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "ap_msel_list: released h1; released h2; catch STAGE/h2; after",
             "ap_msel_it: released it1; released it2; itdone it; catch STAGE/it2; after",
             "ap_msel_normal: released it1; released it2; released it3; itdone it; r 3; after",
+            "nh_modany_select: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",
+            "nh_stradd_select: released it2; released it1; itdone it; catch ENCODING-CONVERSION-ERROR; after",
         );
     }
 

@@ -158,6 +158,24 @@ sub next_raises_any(Log log) { try { bool b = (any $1.n == "zz", new It(log, 4, 
 sub next_raises_fused_count(Log log) { try { int r = (count True, (map new Holder(log, "p" + $1.n[1]), new It(log, 4, "n", 3))); log.add("r " + r); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
 sub next_raises_fused_count_nh_inner(Log log) { int r = (count True, (map new Holder(log, "p" + $1.n[1]), new It(log, 4, "n", 3))); log.add("r " + r); }
 sub next_raises_fused_count_nh(Log log) { try { next_raises_fused_count_nh_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+# with no handler in the function, an operation that raises through a runtime helper in a predicate: a division
+# and a modulo of untyped values, a division of numbers, and a string concatenation whose encoding conversion fails
+auto sub div_by(Holder h) { return h.n == "it2" ? 0 : 1; }
+number sub num_div_by(Holder h) { return h.n == "it2" ? 0n : 1n; }
+string sub euro_if(Holder h) { return h.n == "it2" ? "\u20ac" : "e"; }
+string sub latin1() { return convert_encoding("x", "ISO-8859-1"); }
+sub nh_divany_select_inner(Log log) { list r = select new It(log, 3), (10 / div_by($1)) > 0; log.add("r " + r.size()); }
+sub nh_divany_select(Log log) { try { nh_divany_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_divany_takewhile_inner(Log log) { list r = (takewhile (10 / div_by($1)) > 0, new It(log, 3)); log.add("r " + r.size()); }
+sub nh_divany_takewhile(Log log) { try { nh_divany_takewhile_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_modany_select_inner(Log log) { list r = select new It(log, 3), (10 % div_by($1)) >= 0; log.add("r " + r.size()); }
+sub nh_modany_select(Log log) { try { nh_modany_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_divnum_select_inner(Log log) { list r = select new It(log, 3), (10n / num_div_by($1)) > 0n; log.add("r " + r.size()); }
+sub nh_divnum_select(Log log) { try { nh_divnum_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_stradd_select_inner(Log log) { list r = select new It(log, 3), (latin1() + euro_if($1)).size() > 0; log.add("r " + r.size()); }
+sub nh_stradd_select(Log log) { try { nh_stradd_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+# a fused map stage in a closure (whose IR an AOT executable can carry: the stage values are released by next())
+sub fpm_closure(Log log) { code c = sub (Log l) { int n = (count $1.n != "zz", (map new Holder(l, "p" + $1.n[2]), new It(l, 3))); l.add("c " + n); }; c(log); log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -169,7 +187,8 @@ const Cases = (
     "fpm_count", "fpm_any", "fpm_all", "fpm_first", "fpm_select", "fpm_two_maps", "fpm_list", "fpm_raises",
     "nh_rethrow", "nh_throw", "nh_div_select", "nh_div_takewhile", "ap_msel_list", "ap_msel_it", "ap_sel_it",
     "ap_sel_list", "ap_count_it", "ap_fused", "ap_msel_normal", "next_raises_count_nh", "next_raises_any",
-    "next_raises_fused_count", "next_raises_fused_count_nh",
+    "next_raises_fused_count", "next_raises_fused_count_nh", "nh_divany_select", "nh_divany_takewhile",
+    "nh_modany_select", "nh_divnum_select", "nh_stradd_select", "fpm_closure",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned
