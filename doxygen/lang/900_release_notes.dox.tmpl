@@ -1502,6 +1502,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
+      pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
+      links them by their full paths
     - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
       @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
       without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
