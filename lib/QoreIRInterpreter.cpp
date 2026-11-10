@@ -114,9 +114,28 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
     return enabled;
 }
 
+// Casts of the call nodes that the call paths read on every call.  The node type identifies the class
+// (include/qore/node_types.h): FunctionCallNode is the only class constructed with NT_FUNCTION_CALL and the base of the
+// only one with NT_PROGRAM_FUNC_CALL (ProgramFunctionCallNode), and StaticMethodCallNode the only class with
+// NT_STATIC_METHOD_CALL; a copy keeps the type of the node copied.  A test of the type replaces a dynamic_cast, which
+// compares the names of the classes (strcmp) on every call, at a cost that depends on where the names are in memory.
+static inline const FunctionCallNode* qore_ir_function_call_node(const AbstractQoreNode* node) {
+    const FunctionCallNode* rv = node && (node->getType() == NT_FUNCTION_CALL
+            || node->getType() == NT_PROGRAM_FUNC_CALL)
+        ? static_cast<const FunctionCallNode*>(node) : nullptr;
+    assert(rv == dynamic_cast<const FunctionCallNode*>(node));
+    return rv;
+}
+
+static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const AbstractQoreNode* node) {
+    const StaticMethodCallNode* rv = node && node->getType() == NT_STATIC_METHOD_CALL
+        ? static_cast<const StaticMethodCallNode*>(node) : nullptr;
+    assert(rv == dynamic_cast<const StaticMethodCallNode*>(node));
+    return rv;
+}
+
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
-    const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    const auto* call = expr.hasNode() ? qore_ir_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call) {
         return false;
     }
@@ -15807,8 +15826,7 @@ load_local_done:
                     const QoreTypeParamInstantiation* explicit_inst =
                         direct_inst->explicit_type_param_inst;
                     if (!explicit_inst) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
-                            direct_inst->expr.getInternalNode());
+                        const auto* call = qore_ir_function_call_node(direct_inst->expr.getInternalNode());
                         explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation()
                             : nullptr;
@@ -15931,7 +15949,7 @@ load_local_done:
             case QoreIROpcode::CallStaticDirect: {
                 // Fast path: bypass AST for resolved static method calls with IR/JIT
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                const StaticMethodCallNode* static_call_expr = dynamic_cast<const StaticMethodCallNode*>(
+                const StaticMethodCallNode* static_call_expr = qore_ir_static_method_call_node(
                     static_inst->expr.getInternalNode());
                 if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
@@ -16496,8 +16514,7 @@ load_local_done:
                     const auto* synthetic_global_call =
                         direct_inst->fallback_method_name
                             && direct_inst->expr.hasNode()
-                        ? dynamic_cast<const FunctionCallNode*>(
-                            direct_inst->expr.getInternalNode()) : nullptr;
+                        ? qore_ir_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = direct_inst->method
                         ? direct_inst->method->getName()
@@ -16691,8 +16708,7 @@ load_local_done:
                     const auto* synthetic_global_call =
                         de_invoke_inst->fallback_method_name
                             && de_invoke_inst->expr.hasNode()
-                        ? dynamic_cast<const FunctionCallNode*>(
-                            de_invoke_inst->expr.getInternalNode()) : nullptr;
+                        ? qore_ir_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = de_invoke_inst->method
                         ? de_invoke_inst->method->getName()
