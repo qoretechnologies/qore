@@ -1755,6 +1755,65 @@ public:
     DLLLOCAL ~CodeContextHelperBase();
 };
 
+//! Runs the body of a plain function or a static method in its own object and class context
+/** A call of user code runs a plain function's body without an object or a class, and a static method's body
+    without an object in the class of its variant (UserVariantBase::eval()); the paths that run the body without that
+    call (the runtime fast-call helpers, the IR interpreter's inline calls and native code calling a fast entry
+    directly) switch to that context with this helper, as ObjectSubstitutionHelper does, and restore the caller's
+    when it is destroyed.  It does nothing when the thread already has that context, as for a plain function called
+    from a plain function or from top-level code, and it updates the thread's RuntimeConfig through its data (as
+    sync_runtime_config_program() does), so a switch makes no thread-local lookup when the caller gives the thread's
+    data, and the runtime helpers set the call's implicit arguments with it (as ArgvContextHelper does) in the same
+    lookup.
+*/
+class CalleeContextHelper {
+public:
+    //! Switches to the callee's context if the thread does not have it
+    /** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls = nullptr);
+
+    //! Sets the implicit arguments of the call, as ArgvContextHelper does, and switches to the callee's context if
+    //! the thread does not have it
+    /** @param argv the implicit arguments, which the helper dereferences when it is destroyed
+        @param xsink for exceptions raised when the arguments are dereferenced
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls = nullptr);
+
+    //! Restores the context that the constructor replaced, if any, and the implicit arguments, if it set them
+    DLLLOCAL ~CalleeContextHelper() {
+        if (argv_xsink) {
+            restoreArgv();
+        }
+        if (switched) {
+            restoreContext();
+        }
+    }
+
+    CalleeContextHelper(const CalleeContextHelper&) = delete;
+    CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+private:
+    //! the current thread
+    ThreadData* td;
+    //! true if the constructor switched the context
+    bool switched = false;
+    QoreObject* old_obj;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_obj;
+    const qore_class_private* old_rc_class;
+    //! the implicit arguments that the call's replaced, if it set them
+    QoreListNode* old_argv = nullptr;
+    //! the sink for the dereference of the call's implicit arguments, if it set them
+    ExceptionSink* argv_xsink = nullptr;
+
+    DLLLOCAL void switchContext(const qore_class_private* cls);
+    DLLLOCAL void restoreContext();
+    DLLLOCAL void restoreArgv();
+};
+
 class ObjectSubstitutionHelper {
 private:
    QoreObject* old_obj;

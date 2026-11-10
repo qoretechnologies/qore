@@ -798,8 +798,11 @@ void qore_rt_pop_native_call_frame(void* storage);
 /** The function then runs without an object and a class, as a call of the function does, until
     qore_rt_pop_native_function_context_v1() restores the caller's context; the storage has the size and alignment
     given by qore_rt_native_function_context_size() and qore_rt_native_function_context_align().
+
+    @param thread_data the current thread's data, which the caller got when it was entered
+    (qore_rt_get_native_entry_slots())
 */
-void qore_rt_push_native_function_context_v1(void* storage);
+void qore_rt_push_native_function_context_v1(void* storage, void* thread_data);
 
 //! Restores the context replaced by qore_rt_push_native_function_context_v1()
 void qore_rt_pop_native_function_context_v1(void* storage);

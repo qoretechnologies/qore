@@ -566,6 +566,9 @@ struct BatchCalleeInfo {
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
+    //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a
+    //! direct native call need not switch to the callee's (QoreIRToLLVM::nativeCallNeedsFunctionContext())
+    bool context_free_body = false;
     bool may_invalidate_external_caches = true; //!< Callee can mutate caller-visible runtime state
     bool may_modify_runtime_locals = true; //!< Callee can change unknown caller-visible runtime local slots
     std::vector<const void*> modified_runtime_locals; //!< Exact modified locals when effects are known
@@ -668,6 +671,25 @@ struct BatchCalleeInfo {
 //! located instruction if it has none, which is where a summary of the body runs; nullptr if it has none or the
 //! compilation is cancelled
 DLLLOCAL const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func);
+
+//! Returns true if the body of a function does not observe the object and class context it runs in
+/** The analysis of AOT context-independent fast entries (only scalar operations on its private locals), for a body
+    that makes no calls
+*/
+DLLLOCAL bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func);
+
+//! Returns true if the body of a function runs without an object and a class in every call path: a plain function
+//! that is not a closure
+DLLLOCAL bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func);
+
+//! Marks the batch callees whose fast-entry bodies do not observe the object and class context they run in
+/** Sets BatchCalleeInfo::context_free_body for each callee with a fast entry (approach_b_eligible) whose body the
+    analysis of AOT context-independent fast entries proves free of the caller's context: only scalar operations on
+    its private locals and direct calls to other such callees (see QoreIRToLLVM::nativeCallNeedsFunctionContext()).
+*/
+DLLLOCAL void qore_ir_resolve_context_free_fast_entries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees);
 
 //! Populate conservative interprocedural summaries for a batch of lowered
 //! functions. The function pointers remain owned by the caller.

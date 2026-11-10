@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 #
 # Plain functions called directly through their fast entries by native code from methods and static methods, and
 # static methods called directly, run in their own object and class context: JITStaticMethodDirectCalls.qr gives the
@@ -10,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 %exec-class JITStaticMethodDirectCallsTest
 
 class JITStaticMethodDirectCallsTest inherits QUnit::Test {
@@ -70,10 +72,16 @@ class JITStaticMethodDirectCallsTest inherits QUnit::Test {
         string exp = getExpected();
         foreach string mode in (("ir", "jit", "tiered")) {
             foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 ",
-                    "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                    "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ",
+                    # every direct native call of a plain function switches the context
+                    "QORE_JIT_SYNC_COMPILE=1 QORE_DISABLE_JIT_CONTEXT_FREE_CALLS=1 ")) {
                 assertEq(exp, run((qore, "--exec-mode=" + mode, source), control), control + mode);
             }
         }
+        # tiered execution kept on the IR tier: nothing is compiled to native code, nothing runs on the AST
+        string ir_cmd = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + quote(qore) + " --exec-mode=tiered " + quote(source);
+        assertEq(exp, ExecModeHarness::run_ir_tier(ir_cmd), "IR tier");
     }
 
     aot() {

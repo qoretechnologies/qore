@@ -10279,6 +10279,12 @@ bool QoreIRToLLVM::nativeCallNeedsFunctionContext(const AbstractQoreFunctionVari
         assert(aot_mode);
         return false;
     }
+    // a body that does not observe the context (only scalar operations on its own locals and calls of such callees:
+    // qore_aot_fast_entry_is_context_independent()) runs alike in any context
+    const BatchCalleeInfo* info = getBatchCallee(callee);
+    if (info && (aot_mode ? info->context_independent_fast_entry : info->context_free_body)) {
+        return false;
+    }
     const AbstractQoreFunctionVariant* caller = current_ir_func ? current_ir_func->source_variant : nullptr;
     // top-level code and closures run in a context that is not known here
     if (!caller || !caller->getUserVariantBase() || dynamic_cast<const UserClosureVariant*>(caller)) {
@@ -10297,9 +10303,11 @@ llvm::CallInst* QoreIRToLLVM::emitPushNativeFunctionContext(llvm::Module& module
             llvm::ConstantInt::get(i64_type, qore_rt_native_function_context_size()), "native_function_context");
         native_function_context_storage->setAlignment(llvm::Align(qore_rt_native_function_context_align()));
     }
+    // the thread's data comes with the slots got when the function is entered
+    assert(native_call_thread_data);
     return builder->CreateCall(module.getOrInsertFunction("qore_rt_push_native_function_context_v1",
-            llvm::FunctionType::get(void_type, {ptr_type}, false)),
-        {native_function_context_storage});
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false)),
+        {native_function_context_storage, native_call_thread_data});
 }
 
 void QoreIRToLLVM::emitPopNativeFunctionContext(llvm::Module& module) {

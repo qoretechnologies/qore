@@ -47,25 +47,49 @@ Normal method dispatch cannot invoke a copy variant: its calling convention is
 different. `ImplicitCopyDispatch.qtest` exercises polymorphic copies and failing
 copy hooks in all four execution modes.
 
-### Plain-function access context
+### Callee access context
 
-A call of user code runs a plain function's body without an object or a class
-(`UserVariantBase::eval()`), so a private method reached through an object or a
-private inheritance of the caller's class is not visible in it. Every path that
-runs a plain function's body without that call does the same: the runtime
-fast-call helpers (`qore_rt_call_fast()`, `qore_rt_call_fast_with_target()`,
-`qore_rt_call_direct_aot()`) and the IR interpreter's inline calls bind the
-parameters in the caller's object and class context, then run the body and check
-its return value with neither (`ObjectSubstitutionHelper`, which keeps the
-thread's context and its `RuntimeConfig` in step and restores both on exit).
-Native code calling a plain function's fast entry directly (a JIT batch callee,
-an AOT batch fast entry) switches to that context inside the frame of the call
-(`qore_rt_push_native_function_context_v1()`) when the caller can run with an
-object or a class (`QoreIRToLLVM::nativeCallNeedsFunctionContext()`: methods,
-closures and top-level code); a plain function calling another needs no switch.
-Closures keep the context they were created in. `JITStaticMethodDirectCalls.qtest`
-and `AOTPlainFunctionClassContext.qtest` compare this with the AST interpreter in
-every execution mode and in AOT code.
+A call of user code runs a plain function's body without an object or a class, and a
+static method's body without an object in the class of its variant
+(`UserVariantBase::eval()`); a closure runs in the context it was created in (a closure
+made outside a class has no class context). So a private method reached through an
+object, a private member, or a private inheritance of the caller's class is not visible
+in a plain function, and a static method sees its own class's, also when the check of
+its return value accepts its object as a privately inherited class. Every path that
+runs such a body without that call does the same: the runtime fast-call helpers
+(`qore_rt_call_fast()`, `qore_rt_call_fast_with_target()`, `qore_rt_call_direct_aot()`,
+`qore_rt_call_static_method_direct()`, `execClosureDirect()`) and the IR interpreter's
+inline calls of functions, static methods and closures bind the parameters in the
+caller's context, then run the body and check its return value in the callee's, in one
+scope of `CalleeContextHelper` (`qore_thread_intern.h`).
+
+The helper keeps the thread's context and its `RuntimeConfig` in step, as
+`ObjectSubstitutionHelper` does, but updates the `RuntimeConfig` through the thread's
+data (`ThreadData::rc`) instead of looking it up, and it does nothing when the thread
+has the callee's context already, as for a plain function called from a plain function
+or from top-level code. The runtime helpers set the call's implicit arguments with it
+(replacing `ArgvContextHelper`, in the same lookup of the thread's data, which the
+destructor reuses), and the IR interpreter gives it the thread's data it holds
+(`RuntimeLocationCache::thread_data`), so a call that needs no switch costs a few loads
+and compares and no lookup of its own. Native code calling a plain function's fast
+entry directly (a JIT batch callee, an AOT batch fast entry) switches to that context
+inside the frame of the call (`qore_rt_push_native_function_context_v1()`, with the
+thread's data that the caller got when it was entered) when the caller can run with an
+object or a class (`QoreIRToLLVM::nativeCallNeedsFunctionContext()`: methods, closures
+and top-level code) and the callee's body can observe it: a body that the analysis of
+context-independent fast entries proves free of it (`qore_aot_fast_entry_is_context_independent()`;
+`BatchCalleeInfo::context_independent_fast_entry` in AOT code, `context_free_body` in a
+JIT batch, `qore_ir_resolve_context_free_fast_entries()`; disabled with
+`QORE_DISABLE_JIT_CONTEXT_FREE_CALLS`) needs no switch, nor does a plain function called
+from another. The class context of the caller that AST frames record for reflection
+(`ThreadData::caller_class`) is not set on these paths.
+
+`JITStaticMethodDirectCalls.qtest`, `AOTPlainFunctionClassContext.qtest` and
+`PlainFunctionCallerContexts.qtest` (constructors, destructors, copy methods, closures,
+map and select, background expressions and modules compiled with
+`qcc --compile-module` as callers; static methods called from top-level code and
+closures; closures made outside a class called from methods) compare this with the AST
+interpreter in every execution mode, on the IR tier and in AOT code.
 
 ## Tiered Execution
 

@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The callee of a call runs in its own object and class context whatever path the call takes: a static method in its
+# class without an object, also for the check of its return value, a plain function and a closure created outside a
+# class without a class.  The second fixture of PlainFunctionCallerContexts.qtest, whose output must be the same in
+# every execution mode and in AOT code; each case loops so that its call is compiled with low tier thresholds
+
+%modern
+
+class PBase {}
+
+class PChild inherits private PBase {
+    # the return value is a PBase only in the class, which privately inherits it
+    static PBase staticAsBase(PChild o) {
+        return o;
+    }
+
+    static code makeClosure(PChild c) {
+        return auto sub () { return PChild::staticAsBase(c); };
+    }
+}
+
+class Secret {
+    private {
+        int secret = 42;
+    }
+
+    run() {
+        for (int i = 0; i < 40; ++i) {
+            try {
+                auto v = peek(self);
+                if (!i || i == 39) {
+                    printf("plain function reading a private member from a method %d: %y\n", i, v);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (!i || i == 39) {
+                    printf("plain function reading a private member from a method %d: %s\n", i, ex.err);
+                }
+            }
+        }
+    }
+}
+
+auto sub peek(auto o) {
+    return o.secret;
+}
+
+class T {
+    private int pm() {
+        return 42;
+    }
+}
+
+# a closure created outside any class
+code top_closure = string sub (object o) {
+    try {
+        o.pm();
+        return "allowed";
+    } catch (hash<ExceptionInfo> ex) {
+        return "denied";
+    }
+};
+
+class Caller inherits T {
+    string callTopClosure(code c) {
+        string rv;
+        for (int i = 0; i < 40; ++i) {
+            rv = c(self);
+        }
+        return rv;
+    }
+
+    static string callTopClosureStatic(code c, object o) {
+        string rv;
+        for (int i = 0; i < 40; ++i) {
+            rv = c(o);
+        }
+        return rv;
+    }
+}
+
+class Base {
+    private:internal {
+        int secret = 7;
+    }
+
+    final int readSecret() {
+        return secret;
+    }
+}
+
+class Sub inherits Base {
+    private:internal {
+        int secret = 9;
+    }
+
+    int callInherited() {
+        int rv;
+        for (int i = 0; i < 40; ++i) {
+            rv = readSecret();
+        }
+        return rv;
+    }
+
+    int callInheritedSelf() {
+        int rv;
+        for (int i = 0; i < 40; ++i) {
+            rv = self.readSecret();
+        }
+        return rv;
+    }
+}
+
+class A {
+    static string peekOther(object o) {
+        try {
+            o.bp();
+            return "allowed";
+        } catch (hash<ExceptionInfo> ex) {
+            return "denied";
+        }
+    }
+}
+
+class B {
+    private int bp() {
+        return 1;
+    }
+
+    string viaStatic() {
+        string rv;
+        for (int i = 0; i < 40; ++i) {
+            rv = A::peekOther(self);
+        }
+        return rv;
+    }
+}
+
+sub check_static(string label, code c) {
+    string rv;
+    for (int i = 0; i < 40; ++i) {
+        try {
+            rv = "returned " + c().className();
+        } catch (hash<ExceptionInfo> ex) {
+            rv = ex.err;
+        }
+    }
+    printf("%s: %s\n", label, rv);
+}
+
+PChild pc();
+# a static method called from top-level code and from closures
+string rv;
+for (int i = 0; i < 40; ++i) {
+    try {
+        rv = "returned " + PChild::staticAsBase(pc).className();
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err;
+    }
+}
+printf("static method from top-level code: %s\n", rv);
+for (int i = 0; i < 40; ++i) {
+    try {
+        rv = "returned " + (auto sub () { return PChild::staticAsBase(pc); })().className();
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err;
+    }
+}
+printf("static method from an immediate closure at top level: %s\n", rv);
+check_static("static method from a closure made in a static method", PChild::makeClosure(pc));
+check_static("static method from a closure made at top level", auto sub () { return PChild::staticAsBase(pc); });
+
+Secret sc();
+sc.run();
+
+Caller c();
+printf("closure made at top level called from a method: %s\n", c.callTopClosure(top_closure));
+printf("closure made at top level called from a static method: %s\n",
+    Caller::callTopClosureStatic(top_closure, c));
+Sub s();
+printf("inherited final method: %d\n", s.callInherited());
+printf("inherited final method through self: %d\n", s.callInheritedSelf());
+B b();
+printf("static method of another class called from a method: %s\n", b.viaStatic());
