@@ -9104,6 +9104,18 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             he_state = HEBS_RACING;
             return SOCK_POLLOUT;
         }
+        if (qore_dbg_connect_complete_before_immediate_check.load(std::memory_order_relaxed)) {
+            // the check below finds a result only if the attempt has one: on Linux a loopback connection is
+            // refused within connect(), on macOS only after it returns; waits for the attempt's own readiness (the
+            // timeout only bounds a regression)
+            assert(!active_attempts.empty());
+            struct pollfd pfd;
+            pfd.fd = active_attempts.back().fd;
+            pfd.events = POLLOUT;
+            pfd.revents = 0;
+            while (qore_poll_compat(&pfd, 1, 5000) < 0 && errno == EINTR) {
+            }
+        }
 #endif
         he_state = HEBS_FIRST_CONNECT;
     }
@@ -9500,6 +9512,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 
 #ifdef DEBUG
 std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
+std::atomic<bool> qore_dbg_connect_complete_before_immediate_check{false};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));

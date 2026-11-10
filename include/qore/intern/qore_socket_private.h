@@ -4775,6 +4775,12 @@ DLLLOCAL QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s);
     registered (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
+
+//! Debug builds: if true, a TCP connect attempt that connect() left in progress is checked only once it is writable
+/** For the C++ unit tests of the attempts whose result the check right after connect() finds, which on macOS a
+    loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
 #endif
 
 #endif
