@@ -49,7 +49,11 @@ its deletion raises `PROGRAM-ERROR`).  The holder is declared before the helper 
 
 A call with an explicit Program that neither defines the function nor runs it (`QoreProgram::callFunction()` of an
 imported function) enters that Program first (`QoreCallProgramEntryHelper`), so the call is made from it: its
-restrictions and its sandbox apply.  The JIT and AOT fast paths take the slow path for such calls.
+restrictions and its sandbox apply.  The JIT and AOT fast paths take the slow path for such calls.  The explicit
+Program of a call through a call reference is the Program that made the reference; when code of a third Program
+makes the call, an AST call gives its argument expressions, which read the caller's locals: the helper evaluates them
+in the caller's context before it enters the Program (see
+`examples/test/qore/classes/Program/call-reference-program-args.qtest`).
 
 ## Restrictions of module code
 

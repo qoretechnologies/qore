@@ -4752,20 +4752,42 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     function, a module function) runs in the Program that defined the function, and is made from the call's Program:
     that Program is entered first, so that it is the caller of the function, with its restrictions and its sandbox,
     as for a call that its own code makes.  Nothing is done if the call's Program is the current one or the function's
+
+    The arguments of the call are the caller's: arguments that need evaluation (an AST call through a call reference,
+    whose Program is the one that created the reference, gives its argument expressions) are evaluated in the
+    caller's context before the call's Program is entered, as the locals they read exist only there; see getArgs()
 */
 class QoreCallProgramEntryHelper {
 public:
-    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, QoreProgram* call_pgm, QoreProgram* exec_pgm) {
+    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, QoreProgram* call_pgm, QoreProgram* exec_pgm,
+            const QoreListNode* args = nullptr) : eval_args(xsink) {
         if (call_pgm && exec_pgm && call_pgm != exec_pgm && call_pgm != ::getProgram()) {
+            if (args && args->needs_eval()) {
+                eval_args.assignEval(args);
+                if (*xsink) {
+                    return;
+                }
+                evaluated = true;
+            }
             ptcch.emplace(xsink, call_pgm, true);
         }
+    }
+
+    //! returns the arguments to give the call: those evaluated before the call's Program was entered, if any, else
+    //! \a args
+    DLLLOCAL const QoreListNode* getArgs(const QoreListNode* args) const {
+        return evaluated ? *eval_args : args;
     }
 
     QoreCallProgramEntryHelper(const QoreCallProgramEntryHelper&) = delete;
     QoreCallProgramEntryHelper& operator=(const QoreCallProgramEntryHelper&) = delete;
 
 private:
+    //! the arguments evaluated in the caller's context; declared before the entry, so that they are released after
+    //! the thread has left the call's Program, in the caller's context
+    QoreListNodeEvalOptionalRefHolder eval_args;
     std::optional<ProgramThreadCountContextHelper> ptcch;
+    bool evaluated = false;
 };
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
@@ -4802,14 +4824,14 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     }
     // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
     // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
-    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm, args);
     if (*xsink) {
         return QoreValue();
     }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
+        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
