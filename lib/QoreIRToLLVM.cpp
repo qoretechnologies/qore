@@ -1968,6 +1968,16 @@ llvm::Value* QoreIRToLLVM::emitIsBoxedFloat(llvm::Value* qv) {
 // Emits: has_node ? qore_rt_refself(val) : val
 // This avoids external function call overhead for the type check
 // Uses LLVM select to avoid extra basic blocks - inline conditional evaluation
+bool QoreIRToLLVM::checkSelectorIteratorLowered(uint32_t iterator, std::string& error) const {
+    auto def = value_definitions.find(iterator);
+    if (def == value_definitions.end() || def->second->opcode != QoreIROpcode::IteratorCreateSelectors
+            || lowered_selector_iterators.count(iterator)) {
+        return true;
+    }
+    error = "a step of a list of selectors is lowered before the creation of its iterator";
+    return false;
+}
+
 bool QoreIRToLLVM::lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction* iter_inst,
         const SelectorSegmentState& seg, llvm::Module& module, llvm::Function* llvm_func, std::string& error) {
     auto done_it = block_map.find(iter_inst->done_target);
@@ -11680,6 +11690,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     cleanup_alloca_value_ids.clear();
     iterator_element_allocas.clear();
     selector_segment_states.clear();
+    lowered_selector_iterators.clear();
     iterator_cleanup_allocas.clear();
     positioned_iterator_allocas.clear();
     positioned_iterator_alloca_set.clear();
@@ -26301,6 +26312,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorPending: {
             // operands: the iterator handle
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
             auto segment_it = selector_segment_states.find(inst->operands[0].id);
             if (segment_it != selector_segment_states.end()) {
                 // the selector-segment loop asks for a selector only when it has given every value of the previous
@@ -26324,6 +26338,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorFeed: {
             // operands: the iterator handle, the flags, and the index or the bounds of a range
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
             auto* iter_ptr = getVal(inst->operands[0].id, error);
             if (!iter_ptr) { return false; }
             if (iter_ptr->getType() != ptr_type) {
@@ -32855,6 +32872,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_selectors", ft);
                 result = builder->CreateCall(helper, {iterable_boxed, flags_int, count_int, xsink_arg});
+                lowered_selector_iterators.insert(inst->result.id);
                 // the selector-segment loop of a list whose values hold no reference: the cursor lives in the frame,
                 // and the iterator only keeps the sequence (qore#5711)
                 auto* flags_const = llvm::dyn_cast<llvm::ConstantInt>(flags_int);
@@ -32870,7 +32888,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     state.seq = iterable_boxed;
                     state.flags = flags_const->getSExtValue();
                     state.count = count_const->getSExtValue();
-                    // each evaluation of the list of selectors starts with no index and its first selector
+                    // each evaluation of the list of selectors starts with no index and its first selector; a value
+                    // that is not a list, a string or a binary has no iterator, which the lowering of each consumer
+                    // checks before its loop, so that the loop never runs for it
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, 0),
                         builder->CreateConstInBoundsGEP1_64(i64_type, state.cursor, QORE_RT_SEGMENT_COUNT));
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, 0), state.selector);
@@ -33055,6 +33075,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the iterator of a list of selectors is not released when it has no value, so its cleanup slot keeps it
             const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
             if (keep_iterator) {
+                if (!checkSelectorIteratorLowered(iter_inst->iterator.id, error)) {
+                    return false;
+                }
                 auto segment_it = selector_segment_states.find(iter_inst->iterator.id);
                 if (segment_it != selector_segment_states.end()) {
                     return lowerSelectorSegmentNext(iter_inst, segment_it->second, module, llvm_func, error);

@@ -10980,11 +10980,21 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
         lazy = false;
     } else if (!lazy && !pure_consumer) {
         // stable selectors over a list whose values hold no reference are iterated lazily as well, without the list
-        // of their values: the iteration gives the same values at the same time, and the release of a value cannot
-        // be observed, while native code iterates the list with the selector-segment loop (qore#5711)
-        LazySelectorSource src;
-        src.op = op;
-        lazy = useSelectorSegmentLoop(src);
+        // of their values, when they have at least as many ranges as single indices: the iteration gives the same
+        // values at the same time, and the release of a value cannot be observed.  A lazy range gives its values
+        // without the list of them, while a lazy single index costs a step of the iteration protocol where the list
+        // of values costs one element, so that single indices are evaluated into the list first (qore#5711)
+        size_t ranges = 0;
+        for (const QoreValue& selector : selectors) {
+            if (dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
+                ++ranges;
+            }
+        }
+        if (ranges * 2 >= selectors.size()) {
+            LazySelectorSource src;
+            src.op = op;
+            lazy = useSelectorSegmentLoop(src);
+        }
     }
     lazy_selector_decisions[op] = lazy;
     return lazy;

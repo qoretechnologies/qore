@@ -641,6 +641,16 @@ private:
     };
     //! the selector-segment loops of the function, by the value of their iterator
     std::unordered_map<uint32_t, SelectorSegmentState> selector_segment_states;
+    //! the iterators of lists of selectors whose IteratorCreateSelectors has been lowered
+    std::unordered_set<uint32_t> lowered_selector_iterators;
+    //! fails the lowering if the iterator of a list of selectors is used before its creation is lowered
+    /** The state of a selector-segment loop is registered when its IteratorCreateSelectors is lowered, so that the
+        pending, feed and next steps of the loop, which use it, must be lowered after it; a step lowered first would
+        use the iterator instead of the cursor (qore#5711).
+
+        @return true if \a iterator is not the iterator of a list of selectors, or if its creation has been lowered
+    */
+    DLLLOCAL bool checkSelectorIteratorLowered(uint32_t iterator, std::string& error) const;
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows

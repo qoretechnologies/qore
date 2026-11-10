@@ -39,12 +39,18 @@ loop (qore#5711):
   referenced and released.
 
 The cursor is native state only: a loop never changes tiers while it runs (on-stack replacement requests only a
-native compilation for the next call), and no layout of a runtime object is compiled into AOT code.
+native compilation for the next call), and no layout of a runtime object is compiled into AOT code.  The pending,
+feed and next steps of a loop must be lowered after its `IteratorCreateSelectors`, which registers the cursor
+(`checkSelectorIteratorLowered()` fails the lowering otherwise).  A sequence that is not a list, a string or a binary
+(`NOTHING` in a list-typed variable with `%loose-types`) has no iterator, which the lowering of each consumer checks
+before its loop, so the cursor is never used for it.
 
 A list of stable selectors (constants, and int locals that the loop does not write) over such a list is iterated
-lazily as well, instead of building the list of its values first (`decideLazySelectorSource()`), except for a
-`map`, `select` or `foldl` operator whose expressions only compute values from numeric elements, which keeps the
-eager path.
+lazily as well, instead of building the list of its values first (`decideLazySelectorSource()`), when it has at
+least as many ranges as single indices: a lazy range gives its values without a list of them, while a lazy single
+index costs a step of the iteration protocol (pending, feed, next) where the list costs one element, in the IR
+interpreter as in native code.  A `map`, `select` or `foldl` operator whose expressions only compute values from
+numeric elements keeps the eager path too.
 
 `QORE_DISABLE_IR_SELECTOR_SEGMENT_LOOP` disables both the flag and the lazy iteration of stable selectors;
 `QORE_DISABLE_LLVM_SELECTOR_SEGMENT_LOOP` makes native code use the iterator for flagged iterators.

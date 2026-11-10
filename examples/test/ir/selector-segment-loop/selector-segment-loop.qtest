@@ -31,15 +31,22 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         #! the script whose native code is checked
         const ShapeScript = "segment-shape";
 
+        #! the script with %loose-types, whose list-typed variables can hold NOTHING
+        const LooseScript = "segment-loose";
+
         #! the functions of ShapeScript that use the selector-segment loop
         const SegmentFunctions = ("seg_foreach_int", "seg_map_int", "seg_select_or_nothing", "seg_foldl_float",
-            "seg_map_bool");
+            "seg_map_bool", "seg_foreach_stable");
+
+        #! the functions of ShapeScript whose stable selectors are evaluated into a list first
+        const ListFunctions = ("list_map_stable_indices",);
 
         #! the functions of ShapeScript that use the iterator
         const IteratorFunctions = ("iter_map_string", "iter_foreach_auto");
 
         #! the output of ShapeScript
-        const ShapeOutput = "[10, [2, 3, 4, 5], [1, null, 3], 7.5, [False, True], [\"ax\", \"bx\", \"cx\"], 3]\n";
+        const ShapeOutput = "[10, [2, 3, 4, 5], [1, null, 3], 7.5, [False, True], 10, [2, 4, 6, 8], [\"ax\", \"bx\", "
+            "\"cx\"], 3]\n";
     }
 
     private {
@@ -59,6 +66,7 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         addTestCase("execution modes", \modesTest());
         addTestCase("AOT executables", \aotTest());
         addTestCase("native code", \nativeCodeTest());
+        addTestCase("JIT native code", \jitNativeCodeTest());
         set_return_value(main());
     }
 
@@ -78,21 +86,38 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         assertTrue(out =~ /\nfe start nothing:\n  sel a\n  body 10\n  ! RANGE-ERROR: /, "NOTHING start");
         # the iterated list is not the one that the body changes
         assertTrue(out =~ /\nfe body appends:\n(  [^\n]*\n)*  = \[1, 2, 3, 13, 14, 15, 16, 17\]\n/, "body appends");
+
+        # a list-typed variable that holds NOTHING (%loose-types)
+        out = astOutput(LooseScript);
+        lines = out.split("\n");
+        assertEq(11, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "loose cases");
+        # a list of selectors with a range, iterated lazily: no selector is evaluated and no value is given
+        assertTrue(out =~ /\nfe local selectors:\n  = "done"\n/, "foreach");
+        assertTrue(out =~ /\nmap local:\n  = null\n/, "map");
+        assertTrue(out =~ /\nfoldl local:\n  = null\n/, "foldl");
+        assertTrue(out =~ /\nfe hashdecl member:\n  = "done"\n/, "hashdecl member");
+        # a range alone raises an exception, and a list of indices without a range evaluates its selectors
+        assertTrue(out =~ /^fe local stable:\n  ! ILLEGAL-EXPRESSION: /, "range alone");
+        assertTrue(out =~ /\nmap member bool:\n  sel a\n  sel b\n  = null\n/, "list of indices");
+        assertEq(("  body 10", "  body 11", "  body 12"), (select lines, $1 =~ /^  body /), "only the assigned list "
+            "gives values");
     }
 
     #! runs the script in every execution mode and on the IR tier
     private modesTest() {
-        string exp = astOutput(Script);
-        string path = scriptPath(Script);
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
+        foreach string name in (Script, LooseScript) {
+            string exp = astOutput(name);
+            string path = scriptPath(name);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
+                    name + ": " + mode);
             }
-            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
-                mode);
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+                name + ": " + ExecModeHarness::IRTierName);
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
-            ExecModeHarness::IRTierName);
     }
 
     #! compiles the scripts with qcc -O0 and -O3 and checks that the executables give the output of the AST
@@ -102,7 +127,7 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
             testSkip("qcc is not available at " + qcc_bin);
         }
         TmpDir dir("selector-segment-loop-aot-");
-        foreach string name in (Script, ShapeScript) {
+        foreach string name in (Script, ShapeScript, LooseScript) {
             string exp = astOutput(name);
             foreach string opt in ("-O0", "-O3") {
                 string exe = sprintf("%s/%s%s", dir.path, name, opt);
@@ -126,14 +151,34 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         # the optimized LLVM module of the script is written on stderr
         string out = ExecModeHarness::run_any(sprintf("%s QORE_DUMP_IR_AFTER_OPT=1 %s -O3 -o %s %s", env, qcc_bin,
             exe, scriptPath(ShapeScript)));
-        hash<string, hash<string, int>> calls = getSelectorCalls(out);
+        checkSelectorCalls(getSelectorCalls(out), "AOT");
+    }
+
+    #! checks the code that the JIT compiles for the functions, as nativeCodeTest() checks the AOT code: the
+    #! selector-segment loop needs the flags and the number of selectors as constants, without which the JIT would
+    #! use the iterator, with the same output
+    private jitNativeCodeTest() {
+        # the optimized LLVM module of each function compiled is written on stderr
+        string out = ExecModeHarness::run_any(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+            "QORE_DUMP_LLVM_IR=1 %s --exec-mode=jit %s", env, qore_bin, scriptPath(ShapeScript)));
+        checkSelectorCalls(getSelectorCalls(out), "JIT");
+    }
+
+    #! checks the calls of the selector-segment loop and of the iterator in the native code of the functions
+    private checkSelectorCalls(hash<string, hash<string, int>> calls, string what) {
         foreach string name in (SegmentFunctions) {
-            assertTrue(calls{name}.feed > 0, name + ": the selectors are given to the selector-segment loop");
-            assertEq(0, calls{name}.next ?? 0, name + ": no call of the iterator for each value");
+            assertTrue(calls{name}.feed > 0, what + " " + name + ": the selectors are given to the selector-segment "
+                "loop");
+            assertEq(0, calls{name}.next ?? 0, what + " " + name + ": no call of the iterator for each value");
         }
         foreach string name in (IteratorFunctions) {
-            assertTrue(calls{name}.next > 0, name + ": the iterator gives each value");
-            assertEq(0, calls{name}.feed ?? 0, name + ": no selector-segment loop");
+            assertTrue(calls{name}.next > 0, what + " " + name + ": the iterator gives each value");
+            assertEq(0, calls{name}.feed ?? 0, what + " " + name + ": no selector-segment loop");
+        }
+        foreach string name in (ListFunctions) {
+            assertTrue(exists calls{name}, what + " " + name + ": the function is in the module");
+            assertEq(0, calls{name}.feed ?? 0, what + " " + name + ": no selector-segment loop");
+            assertEq(0, calls{name}.next ?? 0, what + " " + name + ": no iterator");
         }
     }
 
@@ -143,7 +188,9 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         hash<string, hash<string, int>> rv;
         *string func;
         foreach string line in (ir.split("\n")) {
-            *list<*string> def = (line =~ x/^define [^@]*@([a-z_]+?)_+h[0-9a-f]+/);
+            # an AOT function is named <name>_h<hash>, a JIT function "<name>@<id>"
+            *list<*string> def = (line =~ x/^define [^@]*@([a-z_]+?)_+h[0-9a-f]+/)
+                ?? (line =~ x/^define [^@]*@"([a-z_]+)@[0-9]/);
             if (def) {
                 func = def[0];
                 rv{func} = rv{func} ?? {"feed": 0, "next": 0};
