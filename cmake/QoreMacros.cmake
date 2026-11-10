@@ -2104,7 +2104,13 @@ ENDMACRO (QORE_BINARY_MODULE)
 # stale one (see QoreRemoveStaleModuleApiFiles.cmake and design/module-api-version.md).  QORE_BINARY_MODULE* call it;
 # a module that sets its -api-*.qmod suffix itself calls it after doing so.
 function(qore_remove_stale_module_api_files _target)
-    set(_name "$<IF:$<BOOL:$<TARGET_PROPERTY:${_target},OUTPUT_NAME>>,$<TARGET_PROPERTY:${_target},OUTPUT_NAME>,${_target}>")
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
+        # the base name of the file, from LIBRARY_OUTPUT_NAME, OUTPUT_NAME or the target name
+        set(_name "$<TARGET_FILE_BASE_NAME:${_target}>")
+    else()
+        # CMake 3.14 has no TARGET_FILE_BASE_NAME; a LIBRARY_OUTPUT_NAME here only means that nothing is found
+        set(_name "$<IF:$<BOOL:$<TARGET_PROPERTY:${_target},OUTPUT_NAME>>,$<TARGET_PROPERTY:${_target},OUTPUT_NAME>,${_target}>")
+    endif()
     add_custom_command(TARGET ${_target} POST_BUILD
         COMMAND "${CMAKE_COMMAND}" "-DDIR=$<TARGET_FILE_DIR:${_target}>" "-DNAME=${_name}"
             "-DKEEP=$<TARGET_FILE_NAME:${_target}>" -P "${QORE_CMAKE_DIR}/QoreRemoveStaleModuleApiFiles.cmake"

@@ -33,7 +33,8 @@ class StaleModuleApiFilesTest(unittest.TestCase):
         (source / "fixture.c").write_text("void fixture(void) {}\n")
         (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
         # "fixture" is built by the module macro and has the name of its target; "other" sets its suffix itself and
-        # calls the function, as a module that does not use the macro does, and has an OUTPUT_NAME of its own
+        # calls the function, as a module that does not use the macro does, and has an OUTPUT_NAME of its own; "third"
+        # has a LIBRARY_OUTPUT_NAME, which names the file of a MODULE target instead of its OUTPUT_NAME
         (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
 project(StaleModuleApiFiles C)
 include("{ROOT}/cmake/QoreMacros.cmake")
@@ -46,11 +47,15 @@ add_library(other MODULE fixture.c)
 set_target_properties(other PROPERTIES PREFIX "" SUFFIX "-api-${{QORE_API_VERSION}}.qmod" OUTPUT_NAME renamed
     LIBRARY_OUTPUT_DIRECTORY "${{CMAKE_BINARY_DIR}}/renamed")
 qore_remove_stale_module_api_files(other)
+add_library(third MODULE fixture.c)
+set_target_properties(third PROPERTIES PREFIX "" SUFFIX "-api-${{QORE_API_VERSION}}.qmod" OUTPUT_NAME ignored
+    LIBRARY_OUTPUT_NAME libname LIBRARY_OUTPUT_DIRECTORY "${{CMAKE_BINARY_DIR}}/libname")
+qore_remove_stale_module_api_files(third)
 ''')
 
     def build(self, root, source, build, api):
         self.run_command([CMAKE, "-S", str(source), "-B", str(build), f"-DQORE_API_VERSION={api}"], root)
-        return self.run_command([CMAKE, "--build", str(build), "--target", "fixture", "other"], root)
+        return self.run_command([CMAKE, "--build", str(build), "--target", "fixture", "other", "third"], root)
 
     def test_api_change_removes_only_the_stale_module_files(self):
         with tempfile.TemporaryDirectory(prefix="qore stale api ") as directory:
@@ -61,12 +66,14 @@ qore_remove_stale_module_api_files(other)
             self.build(root, source, build, "2.0")
             self.assertTrue((build / "fixture-api-2.0.qmod").is_file())
             self.assertTrue((build / "renamed/renamed-api-2.0.qmod").is_file())
+            self.assertTrue((build / "libname/libname-api-2.0.qmod").is_file())
 
             # files that are not a build of the module for another module API, and another module API's file that
             # is only a link
             kept = ["fixture.qmod", "fixture-api-2.1x.qmod", "fixture-api-.qmod", "fixture-api-2.qmod",
                     "fixture-api-2.0.qm", "fixturex-api-1.0.qmod", "other-api-1.0.qmod", "renamed-api-1.0.qmod",
-                    "renamed/fixture-api-1.0.qmod", "renamed/other-api-1.0.qmod"]
+                    "renamed/fixture-api-1.0.qmod", "renamed/other-api-1.0.qmod", "libname/ignored-api-1.0.qmod",
+                    "libname/third-api-1.0.qmod"]
             for name in kept:
                 (build / name).write_text("kept\n")
             (build / "fixture-api-1.5.qmod").symlink_to(build / "fixture-api-2.0.qmod")
@@ -74,7 +81,9 @@ qore_remove_stale_module_api_files(other)
             out = self.build(root, source, build, "2.1")
             self.assertTrue((build / "fixture-api-2.1.qmod").is_file())
             self.assertTrue((build / "renamed/renamed-api-2.1.qmod").is_file())
-            for name in ("fixture-api-2.0.qmod", "fixture-api-1.5.qmod", "renamed/renamed-api-2.0.qmod"):
+            self.assertTrue((build / "libname/libname-api-2.1.qmod").is_file())
+            for name in ("fixture-api-2.0.qmod", "fixture-api-1.5.qmod", "renamed/renamed-api-2.0.qmod",
+                         "libname/libname-api-2.0.qmod"):
                 with self.subTest(removed=name):
                     self.assertFalse(os.path.lexists(build / name))
                     self.assertIn(str(build / name), out.stdout)

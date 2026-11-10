@@ -75,8 +75,9 @@ class ModuleApiVersionTest inherits QUnit::Test {
         # not loaded: only the names matter
         foreach string name in ("hint-api-1.9.qmod", "hint" + DirSep + "hint-api-3.0.qmod",
                 # not <major>.<minor>.qmod, or another feature
-                "hint-api-2.1x.qmod", "hint-api-.qmod", "hint-api-2.qmod", "hint-api-a.1.qmod", "hint-api-2.1.qm",
-                "hintx-api-1.0.qmod", "other-api-1.0.qmod") {
+                "hint-api-2.1x.qmod", "hint-api-.qmod", "hint-api-2.-1.qmod", "hint-api-2..qmod", "hint-api-.1.qmod",
+                "hint-api-+2.0.qmod", "hint-api- 2.0.qmod", "hint-api-2.1234567890.qmod", "hint-api-2.qmod",
+                "hint-api-a.1.qmod", "hint-api-2.1.qm", "hintx-api-1.0.qmod", "other-api-1.0.qmod") {
             File f();
             f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
             f.close();

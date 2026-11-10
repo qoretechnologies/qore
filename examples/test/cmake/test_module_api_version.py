@@ -16,8 +16,10 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 import importlib.util
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,6 +70,24 @@ class ModuleApiVersionTest(unittest.TestCase):
                              check=True, capture_output=True, text=True)
         self.assertEqual(out.stdout, header_api() + "\n")
         self.assertEqual(out.stderr, "")
+
+    @unittest.skipUnless(shutil.which("dpkg-gencontrol"), "requires dpkg-gencontrol")
+    def test_debian_provides_generated(self):
+        # the libqore20 control record that dpkg-gencontrol makes from debian/control with the value of debian/rules
+        api = header_api()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "debian").mkdir()
+            for name in ("control", "changelog"):
+                shutil.copy(ROOT / "debian" / name, root / "debian" / name)
+            result = subprocess.run(["dpkg-gencontrol", "-plibqore20", "-O", f"-Vqore:Module-ABI=qore-module-abi-{api}",
+                                     "-Vshlibs:Depends=", "-Vmisc:Depends="],
+                                    cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+            fields = dict(line.split(": ", 1) for line in result.stdout.splitlines() if ": " in line)
+            self.assertEqual(fields.get("Package"), "libqore20")
+            self.assertEqual(fields.get("Provides"), f"qore-module-abi-{api}")
 
     def test_helper_parses_header_text(self):
         self.assertEqual(module_api.module_api("#define QORE_MODULE_API_MAJOR 3\n#define QORE_MODULE_API_MINOR 12\n"),

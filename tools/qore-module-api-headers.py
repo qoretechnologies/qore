@@ -6,8 +6,9 @@
 A binary module carries the inline code and the type layouts of the public headers that it was compiled with, so a
 change to them that a module built with the previous headers would get wrong must increment QORE_MODULE_API_MINOR
 (design/module-api-version.md).  This script hashes the installed header set (the files that "install(DIRECTORY
-include/qore ...)" in CMakeLists.txt installs, with comments and whitespace removed) and compares the hash with the one
-recorded with the module API version in cmake/module-api-headers.txt:
+include/qore ...)" in CMakeLists.txt installs, with comments and whitespace removed; in a git checkout only the files
+that git tracks, so that untracked leftovers do not count) and compares the hash with the one recorded with the module
+API version in cmake/module-api-headers.txt:
 
 - the hash differs and the API is the same: the headers changed without a decision; either increment the API (a
   change that a compiled module would get wrong) or, for a change that cannot affect a compiled module (a new
@@ -21,8 +22,9 @@ import argparse
 import fnmatch
 import hashlib
 import importlib.util
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import subprocess
 import sys
 
 RECORD = "cmake/module-api-headers.txt"
@@ -46,17 +48,43 @@ def install_excludes(cmake_text):
     return re.findall(r"PATTERN\s+(\S+)\s+EXCLUDE", rule.group(1))
 
 
+def _git_files(root):
+    """Returns the files of include/qore that git tracks (relative to include/qore), or None if root is not the top
+    of a git checkout (a source tarball) or git is not available."""
+    try:
+        top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"], capture_output=True,
+                             text=True)
+        if top.returncode or Path(top.stdout.strip()).resolve() != root.resolve():
+            return None
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", "include/qore"], capture_output=True,
+                             check=True)
+    except FileNotFoundError:
+        return None
+    prefix = "include/qore/"
+    return [name[len(prefix):] for name in out.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+            if name.startswith(prefix)]
+
+
 def installed_headers(root):
-    """Returns the paths (relative to include/qore) of the installed public headers, sorted."""
+    """Returns the paths (relative to include/qore) of the installed public headers, sorted.
+
+    In a git checkout, these are the files that git tracks, so that files that are not part of the sources (editor
+    and merge leftovers, .DS_Store) do not count; in a source tarball, all files of the directory.
+    """
     excludes = install_excludes((root / "CMakeLists.txt").read_text(encoding="utf-8"))
     base = root / "include/qore"
+    tracked = _git_files(root)
+    if tracked is None:
+        candidates = [path.relative_to(base) for path in base.rglob("*")]
+    else:
+        candidates = [PurePosixPath(name) for name in tracked]
     result = []
-    for path in base.rglob("*"):
-        rel = path.relative_to(base)
+    for rel in candidates:
         # a CMake PATTERN matches the name of any file or directory in the tree
         if any(fnmatch.fnmatchcase(part, pattern) for part in rel.parts for pattern in excludes):
             continue
-        if path.is_file():
+        # a tracked file deleted in the working tree is not installed
+        if (base / rel).is_file():
             result.append(rel.as_posix())
     return sorted(result)
 

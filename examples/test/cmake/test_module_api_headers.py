@@ -151,6 +151,39 @@ class ModuleApiHeadersTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("no install(DIRECTORY include/qore ...) rule", result.stderr)
 
+    @unittest.skipUnless(shutil.which("git"), "requires git")
+    def test_git_checkout_hashes_tracked_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_tree(root)
+            # the same tree as a git checkout: the tracked files are the files of the tree, so the record holds
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            self.assertIsNotNone(guard._git_files(root))
+            self.assert_ok(root)
+            # untracked files are not sources: editor and merge leftovers do not count
+            for name in (".DS_Store", "Value.h.orig", "Value.h.rej", ".Value.h.swp", "intern/.DS_Store"):
+                (root / "include/qore" / name).write_text("junk\n")
+            self.assert_ok(root)
+            # a header that is added to git counts
+            (root / "include/qore/New.h").write_text("class New {};\n")
+            self.assert_ok(root)
+            subprocess.run(["git", "-C", str(root), "add", "include/qore/New.h"], check=True)
+            self.assert_fails(root, "the public headers changed without a change of the module API 2.1")
+            subprocess.run(["git", "-C", str(root), "rm", "-q", "--cached", "include/qore/New.h"], check=True)
+            self.assert_ok(root)
+            # a tracked header deleted in the working tree is not installed
+            (root / "include/qore/qlist").unlink()
+            self.assert_fails(root, "the public headers changed without a change of the module API 2.1")
+
+    def test_tarball_hashes_all_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_tree(root)
+            self.assertIsNone(guard._git_files(root))
+            (root / "include/qore/.DS_Store").write_text("junk\n")
+            self.assert_fails(root, "the public headers changed without a change of the module API 2.1")
+
     def test_normalize(self):
         self.assertEqual(guard.normalize("a // c\n/* d\n e */ b"), "a b")
         self.assertEqual(guard.normalize("a/* c */b"), "a b")

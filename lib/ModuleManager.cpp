@@ -2704,10 +2704,21 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
                 }
                 // the rest must be exactly <major>.<minor>.qmod
                 const char* ver = base + prefix.size();
+                // a number of 1 to 9 decimal digits: no sign, no space, no overflow
+                auto parse_num = [] (const char*& p, unsigned& n) -> bool {
+                    n = 0;
+                    const char* start = p;
+                    while (isdigit(static_cast<unsigned char>(*p))) {
+                        if (p - start == 9) {
+                            return false;
+                        }
+                        n = n * 10 + (*p - '0');
+                        ++p;
+                    }
+                    return p != start;
+                };
                 unsigned major, minor;
-                int end = 0;
-                if (!isdigit(static_cast<unsigned char>(*ver))
-                        || sscanf(ver, "%u.%u.qmod%n", &major, &minor, &end) != 2 || !end || ver[end]) {
+                if (!parse_num(ver, major) || *ver++ != '.' || !parse_num(ver, minor) || strcmp(ver, ".qmod")) {
                     continue;
                 }
                 bool supported = false;

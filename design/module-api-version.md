@@ -52,7 +52,10 @@ Adding new exported functions, or new types that old modules do not use, needs n
 `tools/qore-module-api-headers.py` hashes the installed public header set: the files that
 `install(DIRECTORY include/qore ...)` in CMakeLists.txt installs, read with its `PATTERN ... EXCLUDE` list (so `intern/`
 and the excluded files are not hashed, and the headers without an extension, such as `qlist`, `safe_dslist`,
-`vector_map` and `vector_set`, are), with comments removed and whitespace kept only between two word characters.  The
+`vector_map` and `vector_set`, are), with comments removed and whitespace kept only between two word characters.  In a
+git checkout it hashes the files of `include/qore` that git tracks (`git ls-files`), so that untracked files in a
+development tree (`.DS_Store`, `*.orig`, `*.rej`, editor swap files) do not fail it; in a source tarball, every file of
+the directory.  The
 hash is recorded with the module API it was recorded for in `cmake/module-api-headers.txt`.  The check fails when:
 
 - the hash differs and the API does not: the author either increments `QORE_MODULE_API_MINOR` (a change that a
@@ -72,7 +75,9 @@ When the API changes, CMake writes `<name>-api-<new>.qmod` but does not remove `
 in an incrementally built tree, where tools that look for a module file by a pattern find it.
 `qore_remove_stale_module_api_files(<target>)` (cmake/QoreMacros.cmake) adds a post-build step that runs
 `cmake/QoreRemoveStaleModuleApiFiles.cmake` to remove the other `<name>-api-<major>.<minor>.qmod` files of the module
-from its output directory; the `QORE_BINARY_MODULE*` macros call it (and so external modules built with the installed
+from its output directory (the module's file base name is `$<TARGET_FILE_BASE_NAME>`, which follows
+`LIBRARY_OUTPUT_NAME` and `OUTPUT_NAME`; CMake 3.14, which lacks it, uses `OUTPUT_NAME` or the target name); the
+`QORE_BINARY_MODULE*` macros call it (and so external modules built with the installed
 macros), as do the in-tree modules that set their suffix themselves (dbi_test, the module-cpp-api test modules).
 Test: examples/test/cmake/test_stale_module_api_files.py.
 
