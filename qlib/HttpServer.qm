@@ -1163,6 +1163,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         *HttpServerAsyncIo::HttpAsyncTarget asyncTarget;
 
+        #! Keeps the Program of this server alive while a connection that its handler manages externally is open
+        /** See @ref Priv::ExternalConnectionKeeper (qore#5752)
+        */
+        Priv::ExternalConnectionKeeper external_connections();
+
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -5220,7 +5225,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # holds the request helper for the server's end of a stream whose handler takes it over
                     # (WebSocketHandler), which then runs ws_end when the stream ends: no thread of the handler pool
                     # waits for the stream (qore#5752)
-                    Priv::DedicatedConnectionHolder holder(request_helper);
+                    Priv::DedicatedConnectionHolder holder(request_helper, external_connections);
                     try {
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> resp_hdr = rv.hdr ?? {};
@@ -5448,7 +5453,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # connection ends, not here (qore#5752)
                     bool externally_managed = False;
                     # holds the request helper for the server's end of an externally managed connection
-                    Priv::DedicatedConnectionHolder holder(request_helper);
+                    Priv::DedicatedConnectionHolder holder(request_helper, external_connections);
                     on_exit {
                         cx.close = True;
                         if (!externally_managed) {
@@ -5573,10 +5578,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     */
     private code<nothing()> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
             *Socket s, softstring sock_id, *string handler_name) {
-        # the controller keeps this code in the connection's context for the life of the connection, so its
-        # reference to the controller is weak, as the context's own reference is (see the 101 path)
+        # the controller and the handler keep this code for the life of the connection, so its references to the
+        # controller and to the listener (which references the server) are weak, as the context's own reference to
+        # the controller is (see the 101 path); the connection's context still references the listener, so the
+        # Program is kept running while the connection is open (see Priv::ExternalConnectionKeeper)
         hash<auto> refs;
         refs.ctrl @= asyncIo;
+        refs.listener @= listener;
         return sub () {
             # runs once
             if (!holder.claim()) {
@@ -5585,16 +5593,22 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the listener counts the connection until its end is complete
             on_exit holder.release();
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
+            # the listener, unless it has been deleted
+            *HttpListener l = refs.listener;
             if (s && ctrl) {
                 try {
                     ctrl.deregisterH1WebSocketConnection(s);
                 } catch (hash<ExceptionInfo> ex) {
-                    listener.logError("dedicated socket %y: error deregistering the WebSocket connection of handler "
-                        "%y: %s: %s", sock_id, handler_name, ex.err, ex.desc);
+                    if (l) {
+                        l.logError("dedicated socket %y: error deregistering the WebSocket connection of handler "
+                            "%y: %s: %s", sock_id, handler_name, ex.err, ex.desc);
+                    }
                 }
             }
-            listener.removeDedicatedSocket(sock_id);
-            listener.log("dedicated socket %y: stopped dedicated socket handler: %y", sock_id, handler_name);
+            if (l) {
+                l.removeDedicatedSocket(sock_id);
+                l.log("dedicated socket %y: stopped dedicated socket handler: %y", sock_id, handler_name);
+            }
         };
     }
 
@@ -8994,19 +9008,29 @@ class DedicatedConnectionHolder {
     private {
         Mutex m();
         *RequestHelper rh;
+        #! counts the connection from accept() until release()
+        ExternalConnectionKeeper keeper;
         bool claimed;
         bool accepted;
     }
 
-    constructor(RequestHelper rh) {
+    constructor(RequestHelper rh, ExternalConnectionKeeper keeper) {
         self.rh = rh;
+        self.keeper = keeper;
     }
 
     #! Called by the handler when it takes over the end of the connection (it runs the server's end when the
     #! connection has ended)
+    /** From here on the connection keeps the Program of the server alive until it has ended (see
+        @ref ExternalConnectionKeeper)
+    */
     accept() {
         AutoLock al(m);
+        if (accepted || !rh) {
+            return;
+        }
         accepted = True;
+        keeper.connectionOpened();
     }
 
     #! Returns @ref True if the handler took over the end of the connection
@@ -9028,11 +9052,83 @@ class DedicatedConnectionHolder {
     #! Releases the request helper, which then no longer counts the connection, once the connection has ended
     release() {
         *RequestHelper r;
+        bool counted;
         {
             AutoLock al(m);
             r = remove rh;
+            counted = r && accepted;
+        }
+        # the connection is no longer counted, also if the destruction of the helper raises an exception
+        on_exit if (counted) {
+            keeper.connectionEnded();
         }
         # the helper is destroyed here if this was its last reference, outside the lock
+        r = NOTHING;
+    }
+}
+
+#! Keeps the Program of a server alive while a connection that its handler manages externally is open
+/** A connection whose handler manages it externally (an asynchronous WebSocket connection, see
+    \c WebSocketHandler::startImpl()) has no thread that waits for it, so nothing keeps the Program that runs the
+    server from ending while it is open: once the Program has ended (all its threads have), it is deleted, the end of
+    the connection, which runs the connection's close callbacks in the Program, can no longer run, and the objects that
+    those callbacks release (often ones that hold the connection's context, and with it the listener and the server)
+    keep the server and the threads of its handler pool alive, so the process never ends (qore#5752; seen with
+    \c qdbg-server, whose debugged program ends before its debugger's connection closes).  When a thread of the
+    handler pool waited for each connection, the Program waited for the connection as it waits for its threads.
+
+    One thread, which is not a thread of the handler pool, waits while the server has such connections: the Program
+    then waits for them as before, and their ends always run in it.  A stop of the server ends the connections, and
+    with them the thread.
+*/
+class ExternalConnectionKeeper {
+    private {
+        Mutex m();
+        Condition cond();
+        #! the number of open connections
+        int count;
+        #! True while the waiting thread runs
+        bool waiting;
+    }
+
+    #! Counts an open connection; starts the waiting thread if it does not run
+    connectionOpened() {
+        AutoLock al(m);
+        ++count;
+        if (waiting) {
+            return;
+        }
+        try {
+            background waitForConnections();
+            waiting = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # no thread can be started (a thread limit): the connection works, but the Program does not wait for it
+        }
+    }
+
+    #! Ends the count of a connection that has ended
+    connectionEnded() {
+        AutoLock al(m);
+        @assert(count > 0, "ExternalConnectionKeeper::connectionEnded() without connectionOpened()");
+        if (!--count) {
+            cond.broadcast();
+        }
+    }
+
+    #! The waiting thread: returns when no connection is open
+    private waitForConnections() {
+        # a cancellation of this thread while it takes the lock leaves waiting set, so that no thread waits for the
+        # server's connections any more; the Program then ends as it did without this class
+        AutoLock al(m);
+        # a later connection starts a new thread (the lock is still held when this runs)
+        on_exit waiting = False;
+        try {
+            while (count) {
+                cond.wait(m);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the thread was cancelled: the Program no longer waits for the connections
+        }
     }
 }
 
