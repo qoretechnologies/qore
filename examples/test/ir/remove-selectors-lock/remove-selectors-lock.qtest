@@ -52,7 +52,7 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(17, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        assertEq(26, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
         # a selector reads the global after its earlier selectors, before anything is removed
         assertTrue(out =~ /^global list read:\n  read g \[1, 2, 3, 4\]\n  = \[\[1, 4\], \[2, 3\]\]\n/, "read");
         # a selector that writes the global changes the list that is removed from
@@ -64,6 +64,22 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
         # the keys of the path are evaluated before the selectors and the index
         assertTrue(out =~ /\npath order index:\n  key a\n  sel x\n/, "path before index");
         assertTrue(out =~ /\npath order range:\n  key a\n  sel x\n  sel y\n/, "path before range");
+        # a selector that raises before anything is selected: only its exception, and the lvalue is not resolved
+        # memberNotification() runs for the assignments of the cases, never after a selector that raised
+        list<string> lines = out.split("\n");
+        for (int i = 1; i < lines.size(); ++i) {
+            if (lines[i] =~ /^  notify /) {
+                assertFalse(lines[i - 1] =~ /^  (sel throw|caught) /, "no member notification after a failed removal: "
+                    + lines[i - 1]);
+            }
+        }
+        assertEq(5, (select lines, $1 =~ /^  notify /).size(), "member notifications");
+        assertEq((), (select out.split("\n"), $1 =~ /OBJECT-ALREADY-DELETED/), "a deleted object is not resolved");
+        assertEq((), (select out.split("\n"), $1 =~ / then /), "only the selector's exception is raised");
+        assertTrue(out =~ /\nraise single member notification:\n  notify l\n  sel throw single\n  caught SEL-ERROR: single\n  = \[1, 2, 3, 4\]\n/,
+            "single");
+        assertTrue(out =~ /\nraise reference:\n  sel throw single\n  caught SEL-ERROR: single\n  sel a\n  sel throw second\n  caught SEL-ERROR: second\n  = \[2, 3, 4\]\n/,
+            "reference partial");
         assertEq((), (select out.split("\n"), $1 =~ /^  ! /), "no case raised an exception");
     }
 

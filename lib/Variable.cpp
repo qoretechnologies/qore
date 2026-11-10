@@ -789,7 +789,7 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
     }
 }
 
-LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, void (*hook)(void*),
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, int (*hook)(void*),
         void* hook_arg)
         : vl(xsink), root_hook(hook), root_hook_arg(hook_arg) {
     if (!exp.isNothing() && exp.hasNode()) {
@@ -1837,9 +1837,11 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         vl.del();
     }
     qore_type_t ntype = n.getType();
-    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated
-    if (ntype != NT_OPERATOR) {
-        runRootHook();
+    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated,
+    // unless the root hook stops the resolution
+    if (ntype != NT_OPERATOR && runRootHook()) {
+        clearPtr();
+        return -1;
     }
     //printd(5, "LValueHelper::doLValue() n: %s (%d)\n", n.getFullTypeName(), n.getType());
     if (ntype == NT_VARREF) {
@@ -1961,9 +1963,11 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         vl.del();
     }
     qore_type_t ntype = n.getType();
-    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated
-    if (ntype != NT_OPERATOR) {
-        runRootHook();
+    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated,
+    // unless the root hook stops the resolution
+    if (ntype != NT_OPERATOR && runRootHook()) {
+        clearPtr();
+        return -1;
     }
     if (ntype == NT_VARREF) {
         const VarRefNode* v = n.get<const VarRefNode>();
@@ -3404,9 +3408,11 @@ namespace {
 /** The selectors are evaluated when the keys and indices of the path to the lvalue have been evaluated, and before its
     root is resolved and locked (LValueHelper's root hook), as the other execution modes and the expression as a value
     evaluate them, so that a selector can read the lvalue (qore#5696).  The selectors are evaluated in order up to the
-    first that raises an exception, which is kept in an exception sink of its own while the lvalue is resolved and the
-    values of the earlier selectors are removed, and is raised when the removal ends, before any exception raised
-    since.  The values of the selectors are released then, after the lvalue's lock.
+    first that raises an exception, which is kept in an exception sink of its own and raised when the removal ends,
+    before any exception raised since.  If an earlier selector of a list selected something, the lvalue is resolved
+    and what the earlier selectors selected is removed first; otherwise the lvalue is not resolved and nothing is
+    locked, as when the expression is evaluated as a value.  The values of the selectors are released at the end,
+    after the lvalue's lock.
 */
 class LValueRemoveSelectors {
 public:
@@ -3434,8 +3440,11 @@ public:
     }
 
     //! the root hook of LValueHelper: evaluates the selectors
-    static void eval(void* arg) {
-        static_cast<LValueRemoveSelectors*>(arg)->evalIntern();
+    /** @return -1 if a selector raised an exception and no earlier selector selected anything to remove, so that the
+        lvalue is not resolved and locked, 0 if not
+    */
+    static int eval(void* arg) {
+        return static_cast<LValueRemoveSelectors*>(arg)->evalIntern();
     }
 
     //! returns true if a selector raised an exception
@@ -3462,19 +3471,22 @@ private:
     ExceptionSink sel_xsink;
     std::vector<QoreValue> values;
 
-    void evalIntern() {
+    int evalIntern() {
         if (list) {
             values.reserve(list->size());
             for (const QoreValue& selector : *list) {
                 if (evalOne(selector)) {
-                    break;
+                    // what the earlier selectors selected is removed before the exception is raised (qore#5675)
+                    return values.empty() ? -1 : 0;
                 }
             }
-            return;
+            return 0;
         }
-        if (!evalOne(*first) && second) {
-            evalOne(*second);
+        values.reserve(second ? 2 : 1);
+        if (evalOne(*first) || (second && evalOne(*second))) {
+            return -1;
         }
+        return 0;
     }
 
     //! evaluates one selector; returns -1 if it raised an exception
@@ -3483,6 +3495,8 @@ private:
         if (sel_xsink) {
             return -1;
         }
+        // the capacity was reserved, so that the value cannot be lost by an exception here
+        assert(values.size() < values.capacity());
         values.push_back(rh.takeReferencedValue());
         return 0;
     }

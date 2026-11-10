@@ -33,6 +33,27 @@ class Obj {
 
 our list<auto> go;
 
+#! an object whose members changed from outside the class are reported
+class Notified {
+    public {
+        list<auto> l = (1, 2, 3, 4);
+    }
+
+    memberNotification(string m) {
+        print("  notify " + m + "\n");
+    }
+
+    #! removes from a member of self with a selector that raises an exception
+    auto removeSelf() {
+        return remove l[thr("self")];
+    }
+}
+
+our Notified gn = new Notified();
+#! a deleted object, which is still referenced by this global
+our auto gd;
+thread_local list<auto> tl = (1, 2, 3, 4);
+
 #! records an evaluation
 int sub f(string tag, int rv) {
     print("  sel " + tag + "\n");
@@ -43,6 +64,22 @@ int sub f(string tag, int rv) {
 string sub k(string tag) {
     print("  key " + tag + "\n");
     return tag;
+}
+
+#! a selector that raises an exception
+int sub thr(string tag) {
+    print("  sel throw " + tag + "\n");
+    throw "SEL-ERROR", tag;
+}
+
+#! runs a removal whose selector raises an exception and prints the exceptions raised
+sub caught(code<auto()> c) {
+    try {
+        c();
+        print("  no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("  caught %s: %s%s\n", ex.err, ex.desc, ex.next ? " then " + ex.next.err : "");
+    }
 }
 
 #! the last index of the global list, read by a selector
@@ -146,6 +183,63 @@ sub main() {
             print("  caught " + ex.err + "\n");
         }
         return go.size();
+    });
+    # a selector that raises an exception before anything is selected: the lvalue is not resolved or locked
+    t("raise single member notification", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        caught(auto sub () { return remove gn.l[thr("single")]; });
+        return gn.l;
+    });
+    t("raise range member notification", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        caught(auto sub () { return remove gn.l[f("a", 0)..thr("range")]; });
+        return gn.l;
+    });
+    t("raise first list member notification", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        caught(auto sub () { return remove gn.l[thr("first"), 1]; });
+        return gn.l;
+    });
+    t("raise delete member notification", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        caught(auto sub () { delete gn.l[thr("delete")]; });
+        return gn.l;
+    });
+    t("raise deleted object", auto sub () {
+        {
+            Holder h = new Holder();
+            gd = h;
+            delete h;
+        }
+        caught(auto sub () { return remove gd.l[thr("single")]; });
+        caught(auto sub () { return remove gd.l[thr("range")..2]; });
+        caught(auto sub () { return remove gd.l[thr("first"), 1]; });
+        return exists gd;
+    });
+    t("raise self member", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        caught(\gn.removeSelf());
+        return gn.l;
+    });
+    t("raise reference", auto sub () {
+        g = (1, 2, 3, 4);
+        reference<list<auto>> r = \g;
+        caught(auto sub () { return remove r[thr("single")]; });
+        caught(auto sub () { return remove r[f("a", 0), thr("second")]; });
+        return g;
+    });
+    t("raise closure variable", auto sub () {
+        list<auto> cl = (1, 2, 3, 4);
+        code c = auto sub () { return remove cl[thr("single")]; };
+        caught(c);
+        caught(auto sub () { return remove cl[f("a", 1)..thr("range")]; });
+        return cl;
+    });
+    t("raise thread local", auto sub () {
+        tl = (1, 2, 3, 4);
+        caught(auto sub () { return remove tl[thr("single")]; });
+        caught(auto sub () { return remove tl[f("a", 0), thr("second")]; });
+        return tl;
     });
 }
 
