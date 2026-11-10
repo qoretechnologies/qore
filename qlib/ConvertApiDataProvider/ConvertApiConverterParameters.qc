@@ -136,7 +136,8 @@ public class ConvertApiConverterParameters {
         if (param.Featured) {
             attr.preselected = True;
         }
-        if (param.Name =~ /password/i) {
+        # passwords, and the cookies and HTTP headers that a web page is requested with, can carry credentials
+        if (param.Type == "String" && param.Name =~ /(password|^cookies$|^headers$)/i) {
             attr.sensitive = True;
         }
         if (attr) {

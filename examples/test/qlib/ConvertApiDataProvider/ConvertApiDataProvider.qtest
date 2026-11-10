@@ -524,6 +524,10 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertTrue(copts.to.has_dependents);
         assertEq(("refetch",), copts.to.on_change);
         assertFalse(actionMap."get-converter-info".data_dependent_options);
+        # the options that can carry credentials are sensitive
+        foreach string opt in (("AuthPassword", "Cookies", "Headers")) {
+            assertTrue(actionMap."convert-html-to-pdf".options{opt}.sensitive, opt);
+        }
         # the options of the image converters depend on the image format
         assertTrue(actionMap."convert-pdf-to-image".data_dependent_options);
         assertEq(("refetch",), actionMap."convert-pdf-to-image".options.format.on_change);
@@ -1038,6 +1042,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                         {"Name": "AuthPassword", "Label": "Password", "Type": "String"},
                         {"Name": "Pages", "Label": "Pages", "Type": "Collection", "Array": True,
                             "Values": {"odd": "Odd", "even": "Even"}, "Description": "The pages."},
+                        {"Name": "Cookies", "Label": "Cookies", "Type": "String"},
+                        {"Name": "Headers", "Label": "Custom Headers", "Type": "String"},
+                        {"Name": "RespectOwnerPassword", "Label": "Respect owner password", "Type": "Bool"},
                         {"Name": "Shape", "Label": "Shape", "Type": "Polygon"},
                         {"Name": "StoreFile", "Type": "Bool"},
                         {"Name": "FileName", "Type": "String"},
@@ -1052,7 +1059,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         # the input, output and authentication parameters are set by the module, and the names of the action's own
         # fields are not taken
         assertEq(("Data", "OverlayFile", "Images", "Pdfa", "Quality", "Padding", "Color", "Mode", "AuthPassword",
-            "Pages", "Shape"), keys fields);
+            "Pages", "Cookies", "Headers", "RespectOwnerPassword", "Shape"), keys fields);
         HashDataType type("test");
         type.addQoreFields(fields);
         hash<string, AbstractDataField> tf = type.getFields();
@@ -1093,6 +1100,10 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertTrue(fields.Data.attr.preselected);
         assertNothing(fields.Pdfa.attr);
         assertTrue(fields.AuthPassword.attr.sensitive);
+        # the cookies and HTTP headers of a page request can carry credentials too; a boolean option cannot
+        assertTrue(fields.Cookies.attr.sensitive);
+        assertTrue(fields.Headers.attr.sensitive);
+        assertNothing(fields.RespectOwnerPassword.attr);
         # the action options built from the fields
         hash<string, hash<ActionOptionInfo>> opts = DataProviderActionCatalog::getActionOptionFromFields(fields);
         assertTrue(opts.Data.required);
@@ -1374,6 +1385,11 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         # the input, output and authentication parameters are the action's own options
         foreach string opt in (("File", "StoreFile", "FileName", "Timeout", "Secret", "Token")) {
             assertFalse(opts.hasKey(opt), opt);
+        }
+        # the options of the web page converter that can carry credentials are sensitive
+        opts = convert.tryGetActionOptionsWithOptions(action, {"from": "html", "to": "pdf"});
+        foreach string opt in (("AuthPassword", "Cookies", "Headers")) {
+            assertTrue(opts{opt}.sensitive, opt);
         }
         # a converter that takes no file: its input is a required option
         opts = convert.tryGetActionOptionsWithOptions(action, {"from": "data", "to": "qrcode"});

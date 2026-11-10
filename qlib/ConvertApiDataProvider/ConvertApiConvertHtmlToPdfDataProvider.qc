@@ -72,6 +72,8 @@ public class ConvertApiConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "desc": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs "
                     "separated by `|`.\n\n"
                     "**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+                # an Authorization header can carry credentials
+                "sensitive": True,
             },
             "AdBlock": {
                 "type": SoftBoolOrNothingType,
