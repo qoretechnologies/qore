@@ -700,6 +700,53 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
     return pgm ? pgm : cls->getProgram();
 }
 
+//! returns the user variant of a call reference to a user function (not a closure or a method), or nullptr
+static const UserVariantBase* qore_call_reference_function_variant(const ResolvedCallReferenceNode* rcr) {
+    if (rcr->getType() == NT_RUNTIME_CLOSURE) {
+        return nullptr;
+    }
+    const QoreFunction* f = rcr->getFunction();
+    if (!f || f->getClass() || !f->hasUser()) {
+        return nullptr;
+    }
+    QoreFunctionIterator i(*f);
+    while (i.next()) {
+        if (const UserVariantBase* uvb = i.getVariant()->getUserVariantBase()) {
+            return uvb;
+        }
+    }
+    return nullptr;
+}
+
+int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
+        ExceptionSink* xsink) {
+    // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
+    // can have been deleted: it is taken with a reference while its options are read
+    if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
+        QoreSourceProgramHolder holder(xsink);
+        holder.setVariant(uvb);
+        if (QoreProgram* pgm = holder.get()) {
+            // a Program that another thread has deleted, or is deleting, stays registered while any thread holds a
+            // reference to it (such as the thread that runs a call of the function scheduled earlier, while the call
+            // leaves the Program), but its code cannot run anymore: it is deleted whatever other threads hold
+            if (qore_program_private::get(*pgm)->deletedByOtherThread()) {
+                return -1;
+            }
+            po = pgm->getParseOptions();
+            return 1;
+        }
+        if (holder.sourceDeleted()) {
+            return -1;
+        }
+    }
+    const QoreProgram* pgm = qore_call_reference_code_program(rcr);
+    if (!pgm) {
+        return 0;
+    }
+    po = pgm->getParseOptions();
+    return 1;
+}
+
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
     return vc && obj == vc->obj && method == vc->method;
@@ -1164,6 +1211,8 @@ bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Ex
 bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "FunctionCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm, reference_count(),
     //  reference_count() - 1);
+    // the function can outlive the Program that defined it (see the constructor)
+    const_cast<QoreFunction*>(uf)->deref();
     pgm->depDeref();
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }

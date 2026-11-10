@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,10 @@ protected:
 
 public:
    DLLLOCAL AbstractParseObjectMethodReferenceNode(const QoreProgramLocation* loc) : ParseNode(loc, NT_OBJMETHREF) {
+   }
+
+   DLLLOCAL AbstractParseObjectMethodReferenceNode(const AbstractParseObjectMethodReferenceNode& old)
+         : ParseNode(old) {
    }
 
    DLLLOCAL virtual ~AbstractParseObjectMethodReferenceNode() {
@@ -96,7 +100,28 @@ protected:
 
 public:
     DLLLOCAL ParseObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_exp, char* n_method);
+
+    //! Creates the copy of a background expression, with the object expression taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL ParseObjectMethodReferenceNode(const ParseObjectMethodReferenceNode& old, QoreValue n_exp)
+            : AbstractParseObjectMethodReferenceNode(old), exp(n_exp), method(old.method), qc(old.qc), m(nullptr) {
+        // the method is resolved when the first reference is created, under the lock (see makeReference())
+        AutoLocker al(old.lck);
+        m = old.m;
+    }
+
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! Releases the object expression with the caller's exception sink
+    /** A background copy holds the value of the expression, whose release can run its destructor; see
+        QoreParseListNode::derefImpl()
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        exp.discard(xsink);
+        exp = QoreValue();
+        return AbstractParseObjectMethodReferenceNode::derefImpl(xsink);
+    }
 
     //! Returns the object expression (for IR local variable analysis)
     DLLLOCAL const QoreValue& getExp() const {

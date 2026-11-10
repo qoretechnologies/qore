@@ -712,6 +712,21 @@ private:
     std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
     // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
     std::unordered_set<uint32_t> value_defined_by_call;
+    // the values read from a variable (LoadLocal, LoadArg, LoadClosure, LoadGlobal, LoadThreadLocal): one that the
+    // read gave a reference of its own to (a cleanup slot) and that a call takes as an argument is released when the
+    // call returns, as any argument
+    std::unordered_set<uint32_t> value_defined_by_variable_read;
+    // non-zero for each value id of a call argument that a later execution of the call uses again without the value
+    // being defined again, such as a read hoisted out of a loop (qore_ir_find_reused_call_args()): no call releases
+    // it or takes its cleanup slot
+    std::vector<uint8_t> reused_call_args;
+    // the values read through a reference by a local with a reference flag -> the slot holding the reference that the
+    // read took (see emitReferenceLocalRead()): the slot is not a cleanup slot of the value, as the value is the
+    // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
+    // only if it holds the value (qore_rt_release_reference_read())
+    std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the slot of the last reference read emitted by emitReferenceLocalRead()
+    llvm::AllocaInst* last_reference_read_slot = nullptr;
 
     // Single-use or nonescaping stored closure values consumed directly by
     // CallClosureDirect. Their creation can be fused into the call without

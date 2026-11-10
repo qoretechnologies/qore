@@ -152,6 +152,12 @@ DLLLOCAL RuntimeConfig& rc_get_current_ref();
 DLLLOCAL RuntimeConfig& rc_get_tls_ref();
 
 /**
+ * @brief Get the data of the thread-local RuntimeConfig (rc_get_tls_ref()), which stays in place for the life of the
+ * thread; for code that updates it on every switch of the thread's Program
+ */
+DLLLOCAL RuntimeConfig::Impl* rc_get_tls_impl();
+
+/**
  * @brief Sync runtime config changes back to thread-local storage.
  *
  * Call this when the RuntimeConfig has been modified and those changes

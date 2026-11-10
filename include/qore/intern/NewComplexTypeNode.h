@@ -129,9 +129,28 @@ public:
             dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""), runtime_check(true) {
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewHashDeclNode(const NewHashDeclNode& old, QoreParseListNode* a) : ParseNode(old), hd(old.hd),
+            args(a), typeInfo(old.typeInfo), dynamic_hashdecl_name(old.dynamic_hashdecl_name),
+            runtime_check(old.runtime_check) {
+    }
+
     DLLLOCAL virtual ~NewHashDeclNode() {
         if (args)
             args->deref(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink
+    /** A background copy holds runtime values, whose release can run destructors; see QoreParseListNode::derefImpl()
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        if (args) {
+            args->deref(xsink);
+            args = nullptr;
+        }
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -182,9 +201,25 @@ public:
         assert(QoreTypeInfo::getUniqueReturnComplexHash(typeInfo));
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexHashNode(const NewComplexHashNode& old, QoreParseListNode* a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a) {
+    }
+
     DLLLOCAL virtual ~NewComplexHashNode() {
         if (args)
             args->deref(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        if (args) {
+            args->deref(xsink);
+            args = nullptr;
+        }
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -226,8 +261,22 @@ public:
         assert(QoreTypeInfo::getUniqueReturnComplexList(typeInfo));
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexListNode(const NewComplexListNode& old, QoreValue a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a) {
+    }
+
     DLLLOCAL virtual ~NewComplexListNode() {
         args.discard(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        args.discard(xsink);
+        args = QoreValue();
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -271,8 +320,22 @@ public:
         assert(QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo));
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexBufferNode(const NewComplexBufferNode& old, QoreValue a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a), initKind(old.initKind) {
+    }
+
     DLLLOCAL virtual ~NewComplexBufferNode() {
         args.discard(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        args.discard(xsink);
+        args = QoreValue();
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {

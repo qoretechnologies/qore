@@ -665,6 +665,11 @@ if (accepted) {
     */
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
+    //! Sets whether the HTTP/3 server sessions of this QUIC socket advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT void setHttp3ConnectProtocolEnabled(bool enable);
+
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
@@ -874,7 +879,6 @@ if (accepted) {
 
     DLLEXPORT long verifyPeerCertificate();
     DLLLOCAL long verifyPeerCertificate(ExceptionSink* xsink);
-    DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);
     DLLEXPORT const QoreEncoding* getEncoding() const;
     DLLEXPORT bool isDataAvailable(ExceptionSink* xsink, int timeout = 0);

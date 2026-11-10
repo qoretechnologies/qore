@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleCodeProgramBarrierTest
+
+#! Module functions and methods behave alike at the Program barrier, and only the sandbox governs module code
+/** A module function called from another Program ran in its caller's Program, while a method of a module class ran in
+    the module's Program, so the two resolved names at run time in different Programs and used different thread-local
+    data.  Both now run in the module's Program, as all released versions of Qore before 2026 ran them.
+
+    A module is a capability: once loaded, any caller can use it, and its code runs with its own options.  Only a
+    sandboxed caller's restrictions apply to module code (they are part of its sandbox); a caller restricted only by
+    its parse options restricts its own code.  Each probe runs as a module function and as a static method, from a
+    Program without restrictions, from one restricted by parse options only, from a sandboxed one with the same
+    restrictions, and from the main Program, with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode and as an AOT-compiled script, against the expected output of
+    the source module with the AST interpreter.  It also checks that a sandboxed caller's restrictions pass on through
+    module code whose own options have them already, that a host's call of an imported module function in a sandboxed
+    Program is made from that Program, that module code refuses to run a sandboxed caller's reference to a
+    function whose Program has been deleted, and that concurrent calls from several threads, which enter the module's
+    Program without its thread count, run in the module's Program with each thread's own thread-local data.
+*/
+class ModuleCodeProgramBarrierTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        TmpDir tmp("qore-module-code-program-barrier-");
+        string src_dir;
+        string qmod_dir;
+
+        #! the output of the source module with the AST interpreter
+        const ExpectedOutput = "unrestricted: function program: \"module\"
+unrestricted: method program: \"module\"
+unrestricted: function private function by name: \"private\"
+unrestricted: method private function by name: \"private\"
+unrestricted: function private class by name: \"PrivateThing\"
+unrestricted: method private class by name: \"PrivateThing\"
+unrestricted: function builtin by caller's name: \"ok\"
+unrestricted: method builtin by caller's name: \"ok\"
+unrestricted: function class by caller's name: \"Mutex\"
+unrestricted: method class by caller's name: \"Mutex\"
+unrestricted: function nested module code: \"ok\"
+unrestricted: method nested module code: \"ok\"
+unrestricted: function own thread data: \"function\"
+unrestricted: method own thread data: \"method\"
+unrestricted: function async caller code: \"scheduled\"
+unrestricted: method async caller code: \"scheduled\"
+unrestricted: function callback: \"ok\"
+unrestricted: method callback: \"ok\"
+unrestricted: function object call reference: \"readers: 0\"
+unrestricted: method object call reference: \"readers: 0\"
+unrestricted: function call reference: \"module\"
+unrestricted: function call_function: \"module\"
+unrestricted: function caller-only name: \"NO-FUNCTION\"
+unrestricted: method caller-only name: \"NO-FUNCTION\"
+unrestricted: function same-named function: \"module\"
+unrestricted: method same-named function: \"module\"
+unrestricted: function same-named class: \"module\"
+unrestricted: method same-named class: \"module\"
+unrestricted: function closure from module code: \"module\"
+unrestricted: method closure from module code: \"module\"
+unrestricted: closure from module code by name: \"module\"
+unrestricted: function call reference from module code: \"module\"
+unrestricted: method call reference from module code: \"module\"
+restricted by parse options: function program: \"module\"
+restricted by parse options: method program: \"module\"
+restricted by parse options: function private function by name: \"private\"
+restricted by parse options: method private function by name: \"private\"
+restricted by parse options: function private class by name: \"PrivateThing\"
+restricted by parse options: method private class by name: \"PrivateThing\"
+restricted by parse options: function builtin by caller's name: \"ok\"
+restricted by parse options: method builtin by caller's name: \"ok\"
+restricted by parse options: function class by caller's name: \"Mutex\"
+restricted by parse options: method class by caller's name: \"Mutex\"
+restricted by parse options: function nested module code: \"ok\"
+restricted by parse options: method nested module code: \"ok\"
+restricted by parse options: function own thread data: \"function\"
+restricted by parse options: method own thread data: \"method\"
+restricted by parse options: function async caller code: \"scheduled\"
+restricted by parse options: method async caller code: \"scheduled\"
+restricted by parse options: function callback: \"INVALID-FUNCTION-ACCESS\"
+restricted by parse options: method callback: \"INVALID-FUNCTION-ACCESS\"
+restricted by parse options: function object call reference: \"readers: 0\"
+restricted by parse options: method object call reference: \"readers: 0\"
+restricted by parse options: function call reference: \"module\"
+restricted by parse options: function call_function: \"module\"
+restricted by parse options: function caller-only name: \"NO-FUNCTION\"
+restricted by parse options: method caller-only name: \"NO-FUNCTION\"
+restricted by parse options: function same-named function: \"module\"
+restricted by parse options: method same-named function: \"module\"
+restricted by parse options: function same-named class: \"module\"
+restricted by parse options: method same-named class: \"module\"
+restricted by parse options: function closure from module code: \"module\"
+restricted by parse options: method closure from module code: \"module\"
+restricted by parse options: closure from module code by name: \"module\"
+restricted by parse options: function call reference from module code: \"module\"
+restricted by parse options: method call reference from module code: \"module\"
+sandboxed: function program: \"module\"
+sandboxed: method program: \"module\"
+sandboxed: function private function by name: \"private\"
+sandboxed: method private function by name: \"private\"
+sandboxed: function private class by name: \"PrivateThing\"
+sandboxed: method private class by name: \"PrivateThing\"
+sandboxed: function builtin by caller's name: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method builtin by caller's name: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function class by caller's name: \"CREATE-OBJECT-ERROR\"
+sandboxed: method class by caller's name: \"CREATE-OBJECT-ERROR\"
+sandboxed: function nested module code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method nested module code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function own thread data: \"function\"
+sandboxed: method own thread data: \"method\"
+sandboxed: function async caller code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method async caller code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function callback: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method callback: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function object call reference: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method object call reference: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function call reference: \"module\"
+sandboxed: function call_function: \"module\"
+sandboxed: function caller-only name: \"NO-FUNCTION\"
+sandboxed: method caller-only name: \"NO-FUNCTION\"
+sandboxed: function same-named function: \"module\"
+sandboxed: method same-named function: \"module\"
+sandboxed: function same-named class: \"module\"
+sandboxed: method same-named class: \"module\"
+sandboxed: function closure from module code: \"module\"
+sandboxed: method closure from module code: \"module\"
+sandboxed: closure from module code by name: \"module\"
+sandboxed: function call reference from module code: \"module\"
+sandboxed: method call reference from module code: \"module\"
+sandboxed: function through a module: \"CREATE-OBJECT-ERROR\"
+sandboxed: method through a module: \"CREATE-OBJECT-ERROR\"
+restricted by parse options: function through a module: \"Mutex\"
+restricted by parse options: method through a module: \"Mutex\"
+restricted by parse options: host call of an imported function: \"ok\"
+sandboxed: host call of an imported function: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: async reference to an imported function: \"scheduled\"
+sandboxed: async reference to a function of a deleted Program: \"INVALID-FUNCTION-ACCESS\"
+concurrent calls: {ok: 8}
+main: function program: \"module\"
+main: method program: \"module\"
+main: function private function by name: \"private\"
+main: method private function by name: \"private\"
+main: function caller-only name: \"NO-FUNCTION\"
+main: method same-named function: \"module\"
+main: function same-named class: \"module\"
+main: closure from module code: \"module\"
+main: call reference from module code: \"module\"
+";
+
+        #! the output of held-delete.q: the held call fails as a call into a deleted Program does
+        const HeldDeleteOutput = "before: \"defined\"
+held: True referenced: True
+after: \"INVALID-FUNCTION-ACCESS\"
+continued: True rv: null err: \"PROGRAM-ERROR\"
+";
+    }
+
+    constructor() : QUnit::Test("ModuleCodeProgramBarrierTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        src_dir = get_script_dir() + "/module-code-program-barrier";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+
+        addTestCase("module functions and methods run in the module's Program, and only the sandbox governs module "
+            "code, in every mode", \testBarrier());
+        addTestCase("module code refuses a reference to a function of a Program that another thread keeps while it is "
+            "deleted, in every mode", \testHeldDelete());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    private compileModule() {
+        # ChainMod requires BarrierMod, which is found in the AOT module directory
+        foreach string mod in ("BarrierMod", "ChainMod") {
+            string qmod_path = qmod_dir + "/" + mod + ".qmod";
+            if (is_file(qmod_path)) {
+                continue;
+            }
+            string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", env(),
+                qmod_dir, qore_bin, qmod_path, src_dir + "/" + mod + ".qm"));
+            assertTrue(is_file(qmod_path), sprintf("compiled %s.qmod: %s", mod, out));
+        }
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string mode) {
+        return ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s",
+            env(), module_dir, qore_bin, mode, src_dir + "/barrier.q"));
+    }
+
+    testBarrier() {
+        compileModule();
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir, "ast");
+        assertEq(ExpectedOutput, reference.out, "source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, mode);
+            assertEq(ExpectedOutput, r.out, sprintf("source module, %s", mode));
+            r = runScript(qmod_dir, mode);
+            assertEq(ExpectedOutput, r.out, sprintf("AOT module, %s", mode));
+        }
+
+        # the script compiled with AOT, with the AOT module
+        string bin = tmp.path + "/barrier";
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile --output %s %s 2>&1", env(), qmod_dir,
+            qore_bin, bin, src_dir + "/barrier.q"));
+        assertTrue(is_file(bin), sprintf("compiled the script: %s", out));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s", env(),
+            qmod_dir, bin));
+        assertEq(ExpectedOutput, r.out, "AOT script and module");
+    }
+
+    #! module code refuses a reference to a function of a Program that another thread keeps while it is deleted
+    /** A thread that calls a function from another Program holds a reference to the function's Program until the
+        call has left it, as the thread that runs the reference scheduled for the first call of the barrier script
+        does; the Program, deleted meanwhile, stays allocated and registered, so the check of the second call accepted
+        the reference ("scheduled") whenever that thread had not released it yet.  The debug build holds such a call
+        at that point while the Program is deleted (see held-delete.q).
+    */
+    testHeldDelete() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the source Program hold requires a debug build");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", env(), src_dir, qore_bin, mode, src_dir + "/held-delete.q"));
+            assertEq(HeldDeleteOutput, r.out, mode);
+        }
+    }
+}

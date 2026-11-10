@@ -40,6 +40,8 @@
 #include <pthread.h>
 #include <cstring>
 
+std::atomic<int> qore_async_io_logger_count{0};
+
 static QoreThreadLock async_io_logger_lock;
 static QoreLoggerBridge* async_io_logger = nullptr;
 // the logger can be set in a child process created with fork() (see QoreForkHandlers.h)
@@ -52,6 +54,7 @@ void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xsink) {
         AutoLocker al(async_io_logger_lock);
         old_logger = async_io_logger;
         async_io_logger = logger_obj ? new QoreLoggerBridge(logger_obj) : nullptr;
+        qore_async_io_note_logger_change(old_logger, async_io_logger);
     }
     // Deref old bridge outside lock — destructor may call Qore user code
     if (old_logger) {
@@ -70,6 +73,9 @@ QoreObject* qore_get_async_io_logger_object() {
 }
 
 void qore_async_io_log_v(int level, const char* fmt, va_list args) {
+    if (!qore_async_io_any_logger()) {
+        return;
+    }
     QoreLoggerBridge* lgr;
     {
         AutoLocker al(async_io_logger_lock);
@@ -125,6 +131,7 @@ void qore_async_io_logger_cleanup() {
         AutoLocker al(async_io_logger_lock);
         old_logger = async_io_logger;
         async_io_logger = nullptr;
+        qore_async_io_note_logger_change(old_logger, nullptr);
     }
     // Deref outside lock — destructor may call Qore user code
     if (old_logger) {

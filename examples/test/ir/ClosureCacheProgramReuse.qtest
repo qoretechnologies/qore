@@ -25,8 +25,10 @@
     closure and variant can have the addresses of the deleted ones, so a call in the new Program could find the entry
     of the deleted Program: the IR interpreter ran the freed IR with the freed signature (a wrong result, a crash, or
     a reference argument released wrongly: dgc-opaque-object-local-release.qtest saw a cycle collected while its
-    Program lived), and native code computed the deleted closure's operation.  The entries are now found by the id of
-    the Program as well, which is never reused.
+    Program lived), and native code computed the deleted closure's operation.  The entries are now found by the serial
+    of the closure function or the variant, which is never reused (the id of the Program did not suffice: an
+    Expression frees its closures while its Program lives; see ClosureCacheExpressionReuse.qtest), and
+    ClosureCacheProgramRounds.qtest varies the heap layout between rounds of Programs.
 
     The driver creates Programs one after another, each with a closure that computes another operation, calls it and
     deletes the Program.  Whether a deleted Program's addresses are given to the next one depends on the allocator,

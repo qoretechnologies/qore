@@ -38,7 +38,8 @@ const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 ExecMode mode = Modes{ARGV[0]};
 
 # each use of a reference is made by a function of its own, and the caller handles the exception it raises; use()
-# also reads the references itself and handles the exception
+# also reads the references itself, in a local variable, in an expression and as an argument, and handles the
+# exception
 
 #! reads the lvalue of a reference held by a local variable (a parameter)
 auto sub read_local(reference r) {
@@ -148,6 +149,17 @@ sub use(string kind, string label, reference r) {
     } catch (hash<ExceptionInfo> ex) {
         report_error(label + ", read here in a global variable", ex);
     }
+    # the reads in an expression and as an argument of a builtin function
+    try {
+        report(label + ", read here in an expression", (r ?? 0) + 1);
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here in an expression", ex);
+    }
+    try {
+        printf("%s, read here as an argument: %y\n", label, r);
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here as an argument", ex);
+    }
 }
 
 const Code = "%modern
@@ -189,6 +201,30 @@ sub run(string kind) {
 run("thread_local");
 run("global");
 run("local");
+
+# a global variable holding a reference into a Program with a parse pending: the write through it does not refuse the
+# Program as being parsed, as before, and gives the value that the Program reads after the commit
+our reference<int> gref_pending;
+string sub write_pending() {
+    gref_pending = 3;
+    return "ok";
+}
+sub parse_pending() {
+    Program p(PO_ALLOW_REPARSE);
+    p.setExecMode(mode);
+    p.parse("%modern\nour int gx = 1;\nreference<int> sub get() { return \\gx; }\nint sub peek() { return gx; }\n",
+        "pending");
+    gref_pending = p.callFunction("get");
+    p.parsePending("%modern\nsub later() {}\n", "later");
+    try {
+        report("written in a global variable while a parse is pending", write_pending());
+    } catch (hash<ExceptionInfo> ex) {
+        report_error("written in a global variable while a parse is pending", ex);
+    }
+    p.parseCommit();
+    printf("read by the Program after the commit: %y\n", p.callFunction("peek"));
+}
+parse_pending();
 printf("done\n");
 ';
     }
@@ -248,6 +284,8 @@ printf("done\n");
             "thread_local of a live Program, written in a global variable: \"ok\"\n"
             "thread_local of a live Program, read here in a local variable: 13\n"
             "thread_local of a live Program, read here in a global variable: 13\n"
+            "thread_local of a live Program, read here in an expression: 14\n"
+            "thread_local of a live Program, read here as an argument: 13\n"
             "thread_local of a live Program: 13\n"
             "thread_local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -257,6 +295,8 @@ printf("done\n");
             "thread_local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
             "global of a live Program, read in a local variable: 5\n"
             "global of a live Program, written in a local variable: \"ok\"\n"
             "global of a live Program, read in a closure: 11\n"
@@ -265,6 +305,8 @@ printf("done\n");
             "global of a live Program, written in a global variable: \"ok\"\n"
             "global of a live Program, read here in a local variable: 13\n"
             "global of a live Program, read here in a global variable: 13\n"
+            "global of a live Program, read here in an expression: 14\n"
+            "global of a live Program, read here as an argument: 13\n"
             "global of a live Program: 13\n"
             "global of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "global of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -274,6 +316,8 @@ printf("done\n");
             "global of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "global of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "global of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
             "local of a live Program, read in a local variable: 1\n"
             "local of a live Program, written in a local variable: \"ok\"\n"
             "local of a live Program, read in a closure: 11\n"
@@ -282,6 +326,8 @@ printf("done\n");
             "local of a live Program, written in a global variable: \"ok\"\n"
             "local of a live Program, read here in a local variable: 12\n"
             "local of a live Program, read here in a global variable: 13\n"
+            "local of a live Program, read here in an expression: 13\n"
+            "local of a live Program, read here as an argument: 12\n"
             "local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read in a closure: PROGRAM-ERROR\n"
@@ -290,6 +336,10 @@ printf("done\n");
             "local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
+            "written in a global variable while a parse is pending: \"ok\"\n"
+            "read by the Program after the commit: 3\n"
             "done\n";
     }
 
