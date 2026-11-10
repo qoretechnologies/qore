@@ -67,6 +67,13 @@ enum class QoreStringCaseConsumer : int32_t {
     RFind,
 };
 
+//! The date kind check of a date<absolute>/date<relative> parameter (qore_rt_date_kind_matches()); 0: no check
+enum QoreDateKindGuardFlags : uint8_t {
+    QORE_DATE_KIND_GUARD_ABSOLUTE = 1, //!< the value must be an absolute date
+    QORE_DATE_KIND_GUARD_RELATIVE = 2, //!< the value must be a relative date
+    QORE_DATE_KIND_GUARD_OR_NOTHING = 4, //!< NOTHING is also accepted (*date<absolute>, *date<relative>)
+};
+
 // C ABI helpers called by JIT-generated code.
 // All functions use extern "C" linkage so LLVM can resolve them by name.
 //
@@ -1728,6 +1735,9 @@ QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int
 //! Returns true when an assigned object is valid and needs no provenance guard.
 //! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.
 int qore_rt_object_is_valid(uint64_t value);
+//! Returns true when a value passes the date kind check @a flags (QoreDateKindGuardFlags) of a date<absolute> or
+//! date<relative> parameter; never raises.  Guards the native fast entry of a call with a date argument (#5730).
+int qore_rt_date_kind_matches(uint64_t value, int32_t flags);
 //! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
 void qore_rt_check_valid_object_call_receiver(uint64_t value,
         ExceptionSink* xsink);

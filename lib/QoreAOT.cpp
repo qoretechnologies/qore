@@ -6094,7 +6094,7 @@ static bool qore_aot_fast_entry_args_need_no_binding(
                     receiver_type_info
                         ? QoreTypeInfo::getPath(receiver_type_info) : "<none>");
             }
-            if (!arg_ti || !QoreTypeInfo::isInputIdentical(param_ti, arg_ti)) {
+            if (!arg_ti || !QoreTypeInfo::acceptsInputUnchecked(param_ti, arg_ti)) {
                 return false;
             }
         }
@@ -6188,7 +6188,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
         if (!facts || !facts->type_info) {
             return false;
         }
-        if (QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+        if (QoreTypeInfo::acceptsInputUnchecked(param_ti, facts->type_info)) {
             if (allow_relaxed_binding
                     && QoreTypeInfo::parseAcceptsReturns(
                         param_ti, NT_NOTHING)) {
@@ -6208,7 +6208,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
                 || !QoreTypeInfo::parseAcceptsReturns(
                     param_ti, NT_NOTHING)
                 || !QoreTypeInfo::hasType(param_value_type)
-                || !QoreTypeInfo::isInputIdentical(
+                || !QoreTypeInfo::acceptsInputUnchecked(
                     param_value_type, operand_value_type)) {
             return false;
         }

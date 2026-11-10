@@ -577,6 +577,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
+    { "qore_rt_date_kind_matches", reinterpret_cast<void*>(&qore_rt_date_kind_matches) },
     { "qore_rt_check_valid_object_call_receiver",
         reinterpret_cast<void*>(&qore_rt_check_valid_object_call_receiver) },
     { "qore_rt_object_has_exact_aot_target_class",
@@ -7972,7 +7973,7 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
     for (int i = 0; i < nargs; ++i) {
         QoreValue value = fromBits(args[i]);
         if (value.isNothing() || value.needsEval()
-                || !QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
+                || !QoreTypeInfo::acceptsInputUnchecked(sig->getParamTypeInfo(i),
                     value.getTypeInfo())
                 // no-narrow container params must bind through the TLS paths so
                 // applyNoNarrowContainerType() gives them assignment semantics
@@ -16723,6 +16724,21 @@ extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
     QoreValue receiver = fromBits(value);
     return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid()
         && !qore_object_private::get(*receiver.get<QoreObject>())->sandbox_provenance;
+}
+
+extern "C" DLLEXPORT int qore_rt_date_kind_matches(uint64_t value, int32_t flags) {
+    // decoded inline: this runs at every guarded call, and QoreValue::getType() is not inline
+    QoreValue v = fromBits(value);
+    if (!v.isPointer()) {
+        // NOTHING is encoded as 0 (QoreValue::VAL_NOTHING)
+        return !value && (flags & QORE_DATE_KIND_GUARD_OR_NOTHING);
+    }
+    const AbstractQoreNode* node = v.getPtr();
+    if (node->getType() != NT_DATE) {
+        return 0;
+    }
+    return static_cast<const DateTimeNode*>(node)->isRelative()
+        == static_cast<bool>(flags & QORE_DATE_KIND_GUARD_RELATIVE);
 }
 
 extern "C" DLLEXPORT void qore_rt_check_valid_object_call_receiver(

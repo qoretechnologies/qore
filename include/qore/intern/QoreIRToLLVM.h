@@ -1025,7 +1025,22 @@ private:
             uint32_t object_base_id = UINT32_MAX,
             const char* fallback_throwing_name = nullptr,
             const char* fallback_consume_throwing_name = nullptr,
-            bool require_exact_object_class = false);
+            bool require_exact_object_class = false,
+            const std::vector<uint8_t>* date_kind_guards = nullptr);
+
+    //! Returns @a can_use_fast_entry ANDed with the date kind checks @a date_kind_guards of a call's arguments
+    /** @a date_kind_guards has a QoreDateKindGuardFlags entry (0: no check) per argument, as set by
+        qore_ir_fast_entry_args_need_no_binding(); the check of a date argument for a date<absolute> or date<relative>
+        parameter that the fast entry does not check (#5730)
+    */
+    llvm::Value* emitFastEntryDateKindGuards(llvm::Module& module, llvm::Value* can_use_fast_entry,
+            const std::vector<uint8_t>& date_kind_guards, const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids, const std::vector<llvm::Value*>& boxed_args);
+
+    //! Converts the NaN-boxed result of a generic fallback call to the return ABI of @a callee_info's fast entry
+    //! and releases the boxed result if it was converted
+    llvm::Value* emitFallbackResultToFastReturnKind(llvm::Module& module, const BatchCalleeInfo& callee_info,
+            llvm::Value* fallback_result);
 
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary
     // is absent, disabled, or not valid for the supplied native arguments.
