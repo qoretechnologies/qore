@@ -12806,10 +12806,17 @@ static X509* ut_tls_make_cert(EVP_PKEY* key) {
     X509_gmtime_adj(X509_getm_notBefore(x), 0);
     X509_gmtime_adj(X509_getm_notAfter(x), 3600);
     X509_set_pubkey(x, key);
-    X509_NAME* name = X509_get_subject_name(x);
+    // OpenSSL 4 returns the subject name as const, so the name is made here and set as both subject and issuer
+    X509_NAME* name = X509_NAME_new();
+    if (!name) {
+        X509_free(x);
+        return nullptr;
+    }
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("localhost"), -1, -1,
         0);
+    X509_set_subject_name(x, name);
     X509_set_issuer_name(x, name);
+    X509_NAME_free(name);
     if (!X509_sign(x, key, EVP_sha256())) {
         X509_free(x);
         return nullptr;
