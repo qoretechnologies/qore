@@ -23807,6 +23807,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
         QoreIRLowering lowering(builder, &parse_context, &const_reverse_map);
         std::string lower_error;
         bool toplevel_ok = false;
+        // the phase that failed and why, when the top-level code could not be lowered: an executable without its
+        // top-level code does nothing, so the failure fails the build, as that of a function does
+        const char* toplevel_failed_phase = nullptr;
+        std::string toplevel_failed_reason;
         if (lowering.lowerStatementBlock(&sb, lower_error)) {
             // Ensure terminator for the current block (where the builder is pointing)
             // After lowering control flow constructs like try-catch, the builder may be pointing
@@ -23886,6 +23890,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                             llvm_error.c_str());
                     }
                     printd(2, "AOT: LLVM lowering failed for _toplevel: %s\n", llvm_error.c_str());
+                    toplevel_failed_phase = "LLVM lowering";
+                    toplevel_failed_reason = llvm_error;
                 }
             } else {
                 if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -23893,16 +23899,27 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         verify_error.c_str());
                 }
                 printd(2, "AOT: _toplevel verification failed: %s\n", verify_error.c_str());
+                toplevel_failed_phase = "IR verification";
+                toplevel_failed_reason = verify_error;
             }
         } else {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
             }
             printd(2, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
+            toplevel_failed_phase = "IR lowering";
+            toplevel_failed_reason = lower_error;
         }
         delete ir_func;
         if (!toplevel_ok) {
             ++failed_count;
+            // the executable of a program without its top-level code runs nothing and exits successfully: qcc
+            // fails the build, as it does when a function fails to lower (qore#5738)
+            std::string fatal_error;
+            setAOTCompileFatal(&fatal_error, "top-level code", "_toplevel",
+                toplevel_failed_phase ? toplevel_failed_phase : "lowering", toplevel_failed_reason);
+            error = fatal_error;
+            return false;
         }
     }
 

@@ -1529,6 +1529,8 @@
       @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
       and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output
       now matches the AST interpreter
+    - qcc (and <tt>qore --compile</tt>) now fails the build when the top-level code of a program cannot be lowered to
+      native code, as it does for a function; it wrote an executable that did nothing and exited with status 0
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
