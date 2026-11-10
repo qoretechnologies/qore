@@ -537,6 +537,11 @@ QoreProgramRegistryForkHandler program_registry_fork_handler;
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
+    // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
+    // every Program wherever it is created, and before the Program is registered and can be found
+    if (qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
+    }
     registerProgram();
     // the Program's ID is known now
     thread_hub = new ProgramThreadHub(programId);
@@ -554,6 +559,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         for (const auto& i : dmap) {
             source_defines.insert(i.first);
         }
+    }
+}
+
+void qore_program_private::markSandboxedParse() {
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
     }
 }
 
@@ -1575,8 +1587,15 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     joinThreadDataFamily(p_pgm);
 
     {
-        // make sure no parsing is running in the parent while we copy namespaces
-        ProgramRuntimeParseAccessHelper rah(0, p_pgm);
+        // keeps the parent from being cleared while its namespaces are copied; it takes no parse lock: the copy is
+        // made under the parent's namespace read lock, and ProgramControl::createEvalProgram() holds the parent's
+        // parse lock as well, so that no code is parsed in it meanwhile.  The parent is the current Program
+        // (Program::constructor()), or a Program that the caller holds a thread count on (createEvalProgram()), so
+        // its data are not cleared while they are copied, also if its deletion starts meanwhile, in which case
+        // entering it fails and the exception is discarded
+        ExceptionSink rah_xsink;
+        ProgramRuntimeParseAccessHelper rah(&rah_xsink, p_pgm);
+        rah_xsink.clear();
         // setup derived namespaces
         RootNS = qore_root_ns_private::copy(*p_pgm->priv->RootNS, n_parse_options, pgm);
     }
@@ -1589,7 +1608,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     applyParseOptionImplications();
     if (p_pgm->priv->user_requested_exec_mode
         && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
-        exec_mode = p_pgm->priv->exec_mode;
+        exec_mode = p_pgm->priv->exec_mode.load();
         user_requested_exec_mode = true;
         inherited_user_requested_exec_mode = true;
         inherited_exec_mode_parse_options = pwo.parse_options;
@@ -3879,8 +3898,8 @@ void QoreProgram::parse(const char* code, const char* label, ExceptionSink* xsin
 
 void QoreProgram::parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
         bool only_first_except) {
-    priv->only_first_except = only_first_except;
-    priv->parseFile(filename, xsink, wS, wm);
+    // set with the parse lock held (see qore_program_private::parseFile())
+    priv->parseFile(filename, xsink, wS, wm, only_first_except);
 }
 
 void QoreProgram::parsePending(const QoreString* str, const QoreString* lstr, ExceptionSink* xsink, ExceptionSink* wS,
@@ -3990,6 +4009,12 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that the
+    // commit runs (see QoreCallerSandboxHelper)
+    QoreCallerSandboxHelper caller_sandbox(this, xsink);
+    if (*xsink) {
+        return;
+    }
     ProgramRuntimeParseCommitContextHelper pch(xsink, this);
     if (*xsink)
         return;
@@ -4304,6 +4329,12 @@ void QoreProgram::parseCmdLineDefines(const std::map<std::string, std::string> d
 }
 
 void QoreProgram::parseCmdLineDefines(ExceptionSink& xs, ExceptionSink& ws, int wm, const std::map<std::string, std::string>& defmap) {
+    // before the parse switches to the Program, as for any parse (see qore_program_private::parse())
+    QoreCallerSandboxHelper caller_sandbox(this, &xs);
+    if (xs) {
+        return;
+    }
+    priv->markSandboxedParse();
     ProgramRuntimeParseCommitContextHelper pch(&xs, this);
 
     if (xs) {

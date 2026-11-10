@@ -44,6 +44,7 @@ class RuntimeConfig;
 #include <memory>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
 #define QORE_THREAD_STACK_SIZE 1024*512
@@ -978,18 +979,106 @@ private:
 };
 
 //! Returns true if the code of the Program is sandboxed
-/** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
-    qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;
-    false for a Program that trusted code created (the host, a module loaded by trusted code).  Never changes from true
-    to false.
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code, by Qore code or by C++ code
+    acting for it (see qore_caller_is_sandboxed()), or is a user module that a sandboxed Program loaded by a path it
+    chose; false for a Program that trusted code created (the host, library code, a module loaded by trusted code).
+    Never changes from true to false.
 */
 DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
-//! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
-DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
+//! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
+/** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
+    Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
+    callback of the host, for example) is trusted: it acts on its own behalf when it changes a sandbox manager or
+    issues a module command, and passing such an API what a sandboxed caller supplied is that code's responsibility.
+*/
+DLLLOCAL bool qore_calling_code_is_untrusted();
+
+//! Records that code that is not trusted (see qore_calling_code_is_untrusted()) in the current Program created \a sm
+/** Called by the SandboxManager constructors that %Qore code calls; see qore_sandbox_manager_check_change()
+*/
+DLLLOCAL void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm);
+
+//! Checks that the code running on the current thread may change \a sm (issue #5659)
+/** Trusted code may change any sandbox manager; code that is not trusted (see qore_calling_code_is_untrusted()) may
+    change only one that code of its own Program created (see qore_sandbox_manager_record_creator()): not the one that governs
+    it, which it can get with Program::getSandboxManager(), nor one that governs another Program, which could
+    otherwise be loosened or have its interrupt cleared.
+
+    @param sm the manager to change
+    @param what the API, for the exception
+    @param xsink raises \c SANDBOX-ACCESS-ERROR if the change is refused
+
+    @return 0 if the change is allowed, -1 if an exception was raised
+*/
+DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink);
+
+//! Returns true if the code running on the current thread is sandboxed, or acts for sandboxed code
+/** Decides whether a Program is sandboxed (issue #5659):
+    - when it is created, in the QoreProgram constructors (qore_program_private), so that it holds wherever a
+      Program is created: by Program::constructor() and ProgramControl::createEvalProgram(), by the module manager
+      for a module, or by a module's C++ code;
+    - when code is parsed in it (qore_program_private::markSandboxedParse()): a Program that sandboxed code adds
+      code to is sandboxed from then on, as is every class that it already has, since the code that it runs is then
+      partly the sandbox's; it is called before the parse switches to the Program.
+
+    True if a sandboxed Program is on the thread's call stack (also one without a manager of its own, which
+    sandboxed code created and trusted code calls), or if a sandbox governs the thread (trusted code that sandboxed
+    code calls, see qore_find_thread_sandbox_manager_ref()).
+
+    Under a module initialization barrier (see QoreModuleInitSandboxBarrierHelper), the code that loads library code
+    is not looked at: a Program that library code's own initialization creates, or parses code in, is trusted, also
+    when sandboxed code loads the library first, so that whether shared library state is trusted never depends on
+    which code loaded the library first.  Library initialization that parses code that sandboxed code supplied
+    (registered with the library before it is loaded, for example) is responsible for parsing it in a sandboxed
+    Program.
+
+    Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
+*/
+DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
+/** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their
+    variants) switch the thread's current Program to the target Program with a ProgramRuntimeParseContextHelper (or
+    one of its variants), which hides the calling Program from sandbox resolution: without this helper, the code that
+    runs for the call in the target Program (the initializers of the parsed code, the initialization of the module,
+    the module manager's own checks, the Programs created) would be governed as if trusted code had made the call.
+
+    Created before the switch: if the caller is sandboxed (see qore_caller_is_sandboxed()), it records that on the
+    thread, so that qore_caller_is_sandboxed() stays true while it exists, and applies the sandbox that governs the
+    caller as the provenance of the code that runs (see QoreSandboxProvenanceHelper).  Under a module initialization
+    barrier set later (the initialization of library code that the call loads), neither is seen, as for any caller of
+    library code (see QoreModuleInitSandboxBarrierHelper).  Inactive if the target Program is the current one or the
+    caller is trusted.
+*/
+class QoreCallerSandboxHelper {
+public:
+    //! Applies the caller's sandbox for a parse or module load in \a target; raises out-of-memory in \a xsink on failure
+    DLLLOCAL QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink);
+    DLLLOCAL ~QoreCallerSandboxHelper();
+
+    //! Returns the helper that was active before this one on the thread
+    DLLLOCAL const QoreCallerSandboxHelper* getPrevious() const {
+        return previous;
+    }
+
+    //! Returns the number of module initialization barriers that were active when the helper was created
+    DLLLOCAL size_t getBarrierDepth() const {
+        return barrier_depth;
+    }
+
+    DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
+    DLLLOCAL QoreCallerSandboxHelper& operator=(const QoreCallerSandboxHelper&) = delete;
+
+private:
+    QoreSandboxProvenanceHelper provenance;
+    const QoreCallerSandboxHelper* previous = nullptr;
+    size_t barrier_depth = 0;
+    bool pushed = false;
+};
 
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
@@ -1732,6 +1821,14 @@ protected:
 
 public:
     DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
+
+    //! Takes the Program's parse lock without waiting if \a no_wait is true
+    /** If another thread holds the parse lock, \c PROGRAM-ERROR is raised in \a xsink instead of waiting for it (see
+        qore_program_private::tryLockParsing()); used where waiting could deadlock (see
+        QoreModuleManager::issueRuntimeCmd())
+    */
+    DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool no_wait);
+
     DLLLOCAL ~ProgramRuntimeParseContextHelper();
 };
 
