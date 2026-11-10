@@ -6588,12 +6588,25 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
         || (type_param_instantiation && !type_param_instantiation->empty());
 }
 
+//! Appends the path and the process-lifetime identity of a type to a specialization key
+/** Paths alone are not unique: classes with the same path in different Programs are different types.  The type's
+    address with qore_get_type_identity_serial() identifies it for the lifetime of the process, even after the type
+    is freed with its Program and a later type is allocated at the same address.
+*/
+static void qore_append_generic_specialization_type(std::string& key, const QoreTypeInfo* ti) {
+    key += QoreTypeInfo::getPath(ti);
+    key += "@";
+    key += std::to_string(reinterpret_cast<uintptr_t>(ti));
+    key += "#";
+    key += std::to_string(qore_get_type_identity_serial(ti));
+}
+
 std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* type_param_instantiation) {
     std::string key;
     if (receiver_type_info) {
         key += "R:";
-        key += QoreTypeInfo::getPath(receiver_type_info);
+        qore_append_generic_specialization_type(key, receiver_type_info);
     }
     if (type_param_instantiation && !type_param_instantiation->empty()) {
         key += "|M:";
@@ -6603,7 +6616,7 @@ std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_ty
             if (i) {
                 key += ",";
             }
-            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+            qore_append_generic_specialization_type(key, type_param_instantiation->type_args[i]);
         }
         key += ">";
     }

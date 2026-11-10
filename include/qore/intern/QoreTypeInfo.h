@@ -4165,6 +4165,19 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
 
+//! Returns the never-reused identity of the classes, hashdecls and enums that a type names, or 0 if it names none
+/** The type of a class, hashdecl or enum (and its or-nothing type) is freed with its owner, and a later owner's type
+    can be allocated at the same address, while classes, hashdecls and enums of different Programs can have the same
+    path.  A cache keyed by a type that can outlive the type, or that is shared by Programs, therefore also keys it by
+    this value: with the type's address, it identifies the type for the lifetime of the process.
+
+    @param ti a live type; may be nullptr
+
+    @return a value combining the instance serial numbers of the classes, hashdecls and enums that the type returns,
+    or 0 if it returns none of them
+*/
+DLLLOCAL uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti);
+
 //! Returns the unbounded generic wildcard type argument
 DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();
 

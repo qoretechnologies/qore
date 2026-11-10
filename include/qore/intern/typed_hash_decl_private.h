@@ -511,7 +511,17 @@ public:
         return false;
     }
 
+    //! Returns the process-unique serial number of this private hashdecl instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
+    }
+
 protected:
+    //! the identity of this private hashdecl instance for the lifetime of the process
+    /** Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
+        class or enum ever has this serial number (see qore_get_type_identity_serial()).
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
     // references
     mutable QoreReferenceCounter refs;
     const QoreProgramLocation* loc;

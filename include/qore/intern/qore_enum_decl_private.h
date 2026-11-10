@@ -41,6 +41,9 @@
 
 class qore_ns_private;
 class QoreEnumTypeInfo;
+
+// declared in QoreClassIntern.h
+DLLLOCAL uint64_t qore_get_next_class_instance_serial();
 class QoreEnumOrNothingTypeInfo;
 
 // Internal representation of an enum member
@@ -264,7 +267,17 @@ public:
         return members;
     }
 
+    //! Returns the process-unique serial number of this private enum instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
+    }
+
 protected:
+    //! the identity of this private enum instance for the lifetime of the process
+    /** Unlike the address, which a later enum can reuse after this one is freed, no other private enum, class or
+        hashdecl ever has this serial number (see qore_get_type_identity_serial()).
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
     // references
     mutable QoreReferenceCounter refs;
     // The declaration can outlive the Program's interned source locations.

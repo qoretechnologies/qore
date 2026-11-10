@@ -697,6 +697,28 @@ void init_qore_types() {
 //! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
 static std::vector<QoreTypeInfo*> retired_derived_types;
 
+uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return 0;
+    }
+    uint64_t rv = 0;
+    for (const auto& i : ti->return_vec) {
+        uint64_t serial = 0;
+        if (const QoreClass* qc = i.spec.getClass()) {
+            serial = qore_class_private::get(*qc)->getInstanceSerial();
+        } else if (const TypedHashDecl* hd = i.spec.getHashDecl()) {
+            serial = typed_hash_decl_private::get(*hd)->getInstanceSerial();
+        } else if (const QoreEnumDecl* ed = i.spec.getEnum()) {
+            serial = qore_enum_decl_private::get(*ed)->getInstanceSerial();
+        }
+        if (serial) {
+            // serial numbers are unique and never reused, so the combination identifies the set of owners
+            rv = rv * 0x9e3779b97f4a7c15ULL + serial;
+        }
+    }
+    return rv;
+}
+
 void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
     std::set<const QoreTypeInfo*> dead;
     if (ti1) {
