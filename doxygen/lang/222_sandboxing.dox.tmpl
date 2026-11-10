@@ -117,14 +117,24 @@ Program p(opts);
     - <b>No resource limits</b>: Cannot limit the number of threads
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
-    - <b>The Program's own code</b>: @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
-      @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" restrict the code parsed in the %Program.  Module code that the
-      %Program calls does not inherit them: a module that the host gave the %Program is a capability that the host
-      granted it, and the network and filesystem access of module code, also on the I/O threads that run it, is
-      governed by the %Program's @ref Qore::SandboxManager "SandboxManager".  To keep a %Program and the modules it
-      was given off the network or the filesystem, give it a @ref Qore::SandboxManager "SandboxManager" with a
-      default deny policy (see @ref sandbox_net_rules and @ref sandbox_fs_policy); the other restrictions of the
-      %Program apply to the module code that it calls (see @ref user_module_runtime_context)
+    - <b>The Program's own code</b>: parse options restrict the code parsed in the %Program.  They are not a run-time
+      boundary for module code: a module that the host gave the %Program, or that another %Program loaded already and
+      the %Program imports, is a capability, and its code runs in the module's %Program with the module's own options
+      (see @ref user_module_runtime_context).  Only a sandboxed %Program (one with a
+      @ref Qore::SandboxManager "SandboxManager", or created by sandboxed code) passes its restrictions on to the
+      module code that it calls, except @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
+      @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM": the network and filesystem access of module code, also on the I/O
+      threads that run it, is governed by the @ref Qore::SandboxManager "SandboxManager".  To keep code from reaching
+      functionality through module code, give its %Program a @ref Qore::SandboxManager "SandboxManager" (with a default
+      deny policy to keep it and the modules it was given off the network or the filesystem; see
+      @ref sandbox_net_rules and @ref sandbox_fs_policy), or @ref Qore::PO_NO_MODULES "PO_NO_MODULES" so that it cannot
+      import modules
+    - <b>Code of other Programs</b>: only module code, the code of a %Program with
+      @ref Qore::PO_IN_MODULE "PO_IN_MODULE" (the %Program of a user module), inherits the restrictions of a sandboxed
+      caller.  The code of any other %Program that a sandboxed %Program calls, such as a function imported with
+      @ref Qore::Program::importFunction() "Program::importFunction()" or a method of a class imported with
+      @ref Qore::Program::importClass() "Program::importClass()", runs with the options of the %Program that defined
+      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it
     - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
       thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
       %Program cannot cause concurrent execution; see @ref sandbox_po_threads
@@ -147,11 +157,11 @@ Program p(opts);
     loaded already or that are loaded with a parse option mask, which the host gives the %Program as capabilities.
 
     What the %Program's restrictions do guarantee when module code is involved:
-    - the restrictions of the %Program apply to the builtins that module code calls for it, as described in
+    - the restrictions of a sandboxed %Program apply to the builtins that module code calls for it, as described in
       @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
       @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
-      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a caller that
-      may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
+      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a sandboxed
+      caller that may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
       checked against the module's own parse options only, and module code can always run its own closures, which can
       call the caller's code
     - a thread that module code starts on behalf of a sandboxed caller inherits the caller's

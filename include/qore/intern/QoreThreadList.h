@@ -297,6 +297,23 @@ public:
         return entry;
     }
 
+    //! Returns true if \a f returns true for the data of any thread that has data, whatever its status
+    /** Also the signal thread (TID 0) and threads that are being deregistered or that have ended but still have their
+        data are checked.  Called with the list's lock held, which keeps the data in place (it is taken out of the list
+        under the lock before it is deleted); \a f must take no lock
+    */
+    template <typename F>
+    DLLLOCAL bool anyThreadData(F f) {
+        AutoLocker al(lck);
+        for (int tid = 0; tid < MAX_QORE_THREADS; ++tid) {
+            ThreadData* td = entry[tid].thread_data;
+            if (td && f(td)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     DLLLOCAL ThreadData* getThreadData(int tid) {
         return entry[tid].active()
             ? entry[tid].thread_data

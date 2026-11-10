@@ -40,7 +40,20 @@
 //! the innermost temporary scope of the thread
 static thread_local QoreStatementTempScope* current_temp_scope = nullptr;
 
-QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(current_temp_scope), xsink(xsink) {
+QoreStatementTempScope* qore_suspend_statement_temp_scope() {
+    QoreStatementTempScope* scope = current_temp_scope;
+    current_temp_scope = nullptr;
+    return scope;
+}
+
+void qore_resume_statement_temp_scope(QoreStatementTempScope* scope) {
+    // the scopes created while the scope was suspended have ended
+    assert(!current_temp_scope);
+    current_temp_scope = scope;
+}
+
+QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(current_temp_scope), xsink(xsink),
+        entries(reinterpret_cast<Entry*>(inline_entries)) {
     current_temp_scope = this;
 }
 
@@ -55,9 +68,8 @@ void QoreStatementTempScope::release() {
     // handles a value held here all the same.  It must release every value, so it is not cancelled: it runs once for
     // each temporary that the statement holds
     site_index.reset();
-    while (!entries.empty()) {
-        QoreValue v = entries.back().value;
-        entries.pop_back();
+    while (count) {
+        QoreValue v = entries[--count].value;
         v.discard(xsink);
     }
 }
@@ -65,60 +77,59 @@ void QoreStatementTempScope::release() {
 size_t QoreStatementTempScope::find(const void* site) {
     if (site_index) {
         auto i = site_index->find(site);
-        return i == site_index->end() ? entries.size() : i->second;
+        return i == site_index->end() ? count : i->second;
     }
     // the value created by the same expression for the previous element is usually the latest one
-    for (size_t i = entries.size(); i; --i) {
+    for (size_t i = count; i; --i) {
         if (entries[i - 1].site == site) {
             return i - 1;
         }
     }
-    return entries.size();
+    return count;
 }
 
 QoreValue QoreStatementTempScope::put(const void* site, QoreValue value) {
     size_t pos = find(site);
-    if (pos == entries.size()) {
-        // a new site: nothing is changed if the vector or the index cannot grow
-        entries.push_back({site, value});
+    if (pos == count) {
+        // a new site: nothing is changed if the entries or the index cannot grow
+        if (count == capacity) {
+            size_t new_capacity = capacity * 2;
+            std::unique_ptr<Entry[]> grown(new Entry[new_capacity]);
+            memcpy(static_cast<void*>(grown.get()), static_cast<const void*>(entries), count * sizeof(Entry));
+            heap_entries = std::move(grown);
+            entries = heap_entries.get();
+            capacity = new_capacity;
+        }
         if (site_index) {
-            try {
-                site_index->emplace(site, pos);
-            } catch (...) {
-                entries.pop_back();
-                throw;
-            }
-        } else if (entries.size() > IndexThreshold) {
+            site_index->emplace(site, pos);
+        } else if (count + 1 > IndexThreshold) {
             auto index = std::make_unique<std::unordered_map<const void*, size_t>>();
-            try {
-                index->reserve(entries.size() * 2);
-                for (size_t i = 0; i < entries.size(); ++i) {
-                    index->emplace(entries[i].site, i);
-                }
-            } catch (...) {
-                entries.pop_back();
-                throw;
+            index->reserve((count + 1) * 2);
+            for (size_t i = 0; i < count; ++i) {
+                index->emplace(entries[i].site, i);
             }
+            index->emplace(site, pos);
             site_index = std::move(index);
         }
+        entries[count++] = {site, value};
         return QoreValue();
     }
     // the site held a value: the new one takes the latest position, as the previous one is released after it
     QoreValue replaced = entries[pos].value;
-    if (pos == entries.size() - 1) {
+    if (pos == count - 1) {
         entries[pos].value = value;
         return replaced;
     }
-    // the moves below cannot allocate: the vector and the index keep their sizes
-    for (size_t i = pos + 1; i < entries.size(); ++i) {
+    // the moves below cannot allocate: the entries and the index keep their sizes
+    for (size_t i = pos + 1; i < count; ++i) {
         entries[i - 1] = entries[i];
         if (site_index) {
             (*site_index)[entries[i - 1].site] = i - 1;
         }
     }
-    entries.back() = {site, value};
+    entries[count - 1] = {site, value};
     if (site_index) {
-        (*site_index)[site] = entries.size() - 1;
+        (*site_index)[site] = count - 1;
     }
     return replaced;
 }
@@ -130,6 +141,18 @@ void QoreStatementTempScope::hold(const void* site, ValueOptionalRefHolder& hold
     if (hold(site, *holder, xsink)) {
         holder.clearTemp();
     }
+}
+
+void QoreStatementTempScope::holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink) {
+    QoreStatementTempScope* scope = current_temp_scope;
+    if (!scope || !isObservable(value)) {
+        return;
+    }
+    // the reference is released here if the scope cannot take it
+    ValueHolder ref(value.refSelf(), xsink);
+    QoreValue replaced = scope->put(site, *ref);
+    ref.release();
+    replaced.discard(xsink);
 }
 
 bool QoreStatementTempScope::hold(const void* site, QoreValue value, ExceptionSink* xsink) {

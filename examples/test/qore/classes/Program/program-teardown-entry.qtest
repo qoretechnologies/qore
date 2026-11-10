@@ -42,6 +42,10 @@ class ProgramTeardownEntryTest inherits QUnit::Test {
             ("",));
         addTestCase("JIT: a call into a class's code while its Program is deleted",
             \callWhileClassProgramDeleted(), ("--exec-mode=jit",));
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            addTestCase(sprintf("%s: a call of a function from another Program while the function's Program is "
+                "deleted", mode), \callWhileFunctionProgramDeleted(), ("--exec-mode=" + mode,));
+        }
         set_return_value(main());
     }
 
@@ -206,6 +210,57 @@ printf(\"before=%y held=%y referenced=%y continued=%y rv=%y err=%y\\n\", before,
         assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
         assertRegex("before=\"m\" held=True referenced=True continued=True rv=null err=\"PROGRAM-ERROR\"", r.output,
             sprintf("the held call failed as a call into a deleted Program: %s", r.output));
+    }
+
+    #! a call of a function from another Program keeps the function's Program while the Program is deleted
+    /** A user function runs in the Program that defined it, as a method runs in its class's: a call from another
+        Program takes that Program, with a reference, before it enters it.  The debug build holds the call at that
+        point while the Program that defined the function, and the Program that imported it, are deleted; the call
+        fails as a call into a deleted Program does.  Repeated calls before the hold run the function on every tier
+        with tiered execution.
+    */
+    callWhileFunctionProgramDeleted(string opts) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the source Program hold requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setScriptPath(\"/defining/p.q\");
+p.parse(\"*string sub f() { return get_script_path(); }
+sub export_to(Program c) { c.importFunction(\\\"f\\\"); }\", \"p\");
+Program c(PO_NEW_STYLE);
+c.setScriptPath(\"/importing/c.q\");
+p.callFunction(\"export_to\", c);
+c.parse(\"*string sub call_f() { return f(); }\", \"c\");
+*string before;
+for (int i = 0; i < 5; ++i) {
+    before = c.callFunction(\"call_f\");
+}
+call_function(\"dbg_hold_source_program_call\", p);
+*string rv;
+*string err;
+Counter done(1);
+background sub () {
+    try {
+        rv = c.callFunction(\"call_f\");
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    done.dec();
+}();
+hash<auto> h = call_function(\"dbg_wait_source_program_call_held\", " + StepTimeout + ");
+delete p;
+bool continued = call_function(\"dbg_continue_source_program_call\", " + StepTimeout + ");
+done.waitForZero();
+printf(\"before=%y held=%y referenced=%y continued=%y rv=%y err=%y\\n\", before, h.held, h.referenced, continued,
+    rv, err);
+", opts);
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("before=\"/defining/p.q\" held=True referenced=True continued=True rv=null err=\"PROGRAM-ERROR\"",
+            r.output, sprintf("the function ran in its own Program, and the held call failed as a call into a "
+            "deleted Program: %s", r.output));
     }
 
     #! a Program is found by the background compiler only with its own ID

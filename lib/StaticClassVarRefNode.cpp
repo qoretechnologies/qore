@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -115,6 +116,16 @@ const char* StaticClassVarRefNode::getTypeName() const {
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue StaticClassVarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
+    QoreValue v = evalCallArg(xsink);
+    // the read gives the code a reference of its own: the value is a temporary of the statement, which holds it until
+    // it ends, as the other execution modes keep the result of LoadStaticVar (see VarRefNode::evalImpl())
+    if (!*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue StaticClassVarRefNode::evalCallArg(ExceptionSink* xsink) const {
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(vi.getReferencedValue(str.c_str(), xsink), xsink);
     // the value here must always require a dereference
@@ -266,6 +277,28 @@ const char* DeferredStaticClassMemberRefNode::getTypeName() const {
 }
 
 QoreValue DeferredStaticClassMemberRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref);
+    QoreValue v = evalValue(needs_deref, xsink);
+    // a read with a reference of its own is held by the statement, as for StaticClassVarRefNode
+    if (needs_deref && !*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue DeferredStaticClassMemberRefNode::evalCallArg(ExceptionSink* xsink) const {
+    bool needs_deref = true;
+    QoreValue v = evalValue(needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    return needs_deref ? v : v.refSelf();
+}
+
+QoreValue DeferredStaticClassMemberRefNode::evalValue(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     std::string full_path = qore_deferred_static_member_path(class_path, member_name);
 

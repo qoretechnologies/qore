@@ -14,19 +14,18 @@
 
 %exec-class ModuleClassMethodContextTest
 
-#! Methods of module classes called from a restricted Program run with its restrictions in every execution mode
+#! Methods of module classes called from a sandboxed restricted Program run with its restrictions in every execution mode
 /** A method of a class defined in a module ran with the module's options only, so lockdown user code could call
     \c RWLock::readLock() through a call reference to an \c RWLock that a static or ordinary method of a module class
     returned, and such a method could create thread classes with \c create_object(), with every execution mode
-    including the AST interpreter.  Module code now runs with the restrictions of its caller as well as its own, also
-    when another module method or function, a closure or a call reference enters it, while it keeps the module's
-    Program and so resolves the module's own names (\c create_object() and \c call_function() of names the caller
-    cannot see).
+    including the AST interpreter.  The restrictions of a sandboxed caller are part of its sandbox: module code runs
+    with them as well as its own, also when another module method or function, a closure or a call reference enters
+    it.  A caller restricted only by its parse options restricts its own code, and the module code runs with the
+    module's own options.
 
-    A module function, by contrast, runs in the Program that calls it, so the names it resolves at run time
-    (\c call_function(), \c create_object()) are those of the calling Program, where only the module's exported names
-    exist, while its direct references (a call, a call reference, \c new) are resolved when the module is parsed; a
-    method resolves the module's private names at run time.
+    Module code, a module function as well as a method, runs in the module's Program, so the names it resolves at run
+    time (\c call_function(), \c create_object()) are those of the module, including its private names, as its direct
+    references (a call, a call reference, \c new) are.
 
     Each case runs the same script with the source module and with the module AOT-compiled with
     <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
@@ -42,12 +41,12 @@ class ModuleClassMethodContextTest inherits QUnit::Test {
         string qmod_dir;
 
         #! the output of the runtime name lookup script with the source module and the AST interpreter
-        const ExpectedNamesOutput = "function_call_private: NO-FUNCTION
-function_call_private: NO-FUNCTION
+        const ExpectedNamesOutput = "function_call_private: \"private function\"
+function_call_private: \"private function\"
 function_call_public: \"public function\"
 function_call_public: \"public function\"
-function_create_private: CREATE-OBJECT-ERROR
-function_create_private: CREATE-OBJECT-ERROR
+function_create_private: \"PrivateThing\"
+function_create_private: \"PrivateThing\"
 function_create_public: \"Holder\"
 function_create_public: \"Holder\"
 function_direct_private: \"private function\"
@@ -60,8 +59,8 @@ method_call_private: \"private function\"
 method_call_private: \"private function\"
 method_create_private: \"PrivateThing\"
 method_create_private: \"PrivateThing\"
-main function_call_private: NO-FUNCTION
-main function_call_private: NO-FUNCTION
+main function_call_private: \"private function\"
+main function_call_private: \"private function\"
 ";
 
         #! the output of the source module with the AST interpreter
@@ -88,6 +87,29 @@ function_via_method_create_obj: CREATE-OBJECT-ERROR
 function_via_method_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
+unsandboxed static_callref: null
+unsandboxed method_callref: null
+unsandboxed static_create_obj: \"RWLock\"
+unsandboxed static_create_obj: \"RWLock\"
+unsandboxed static_create_obj: \"RWLock\"
+unsandboxed method_create_obj: \"RWLock\"
+unsandboxed method_create_obj: \"RWLock\"
+unsandboxed method_create_obj: \"RWLock\"
+unsandboxed function_via_method_callref: null
+unsandboxed member: \"member\"
+unsandboxed member: \"member\"
+unsandboxed holder: \"member\"
+unsandboxed holder: \"member\"
+unsandboxed private_create_obj: \"PrivateThing\"
+unsandboxed private_create_obj: \"PrivateThing\"
+unsandboxed private_call_function: \"private function\"
+unsandboxed private_call_function: \"private function\"
+unsandboxed nested_create_obj: \"RWLock\"
+unsandboxed nested_create_obj: \"RWLock\"
+unsandboxed function_via_method_create_obj: \"RWLock\"
+unsandboxed function_via_method_create_obj: \"RWLock\"
+unsandboxed closure_create_obj: \"RWLock\"
+unsandboxed closure_create_obj: \"RWLock\"
 unrestricted run_restricted: INVALID-FUNCTION-ACCESS
 unrestricted run_restricted: INVALID-FUNCTION-ACCESS
 unrestricted method_create_obj: \"RWLock\"
@@ -110,10 +132,11 @@ unrestricted method_callref: \"locked\"
         mkdir(qmod_dir);
         writeFile(src_dir + "/ClassContextMod.qm", moduleCode());
 
-        addTestCase("module class methods called from a PO_LOCKDOWN Program run with its restrictions in every mode",
+        addTestCase("module class methods called from a sandboxed PO_LOCKDOWN Program run with its restrictions, and "
+            "from an unsandboxed one with the module's own options, in every mode",
             \testExecutionContext());
-        addTestCase("module functions resolve names at run time in the calling Program and methods in the module's "
-            "Program in every mode", \testRuntimeNames());
+        addTestCase("module functions and methods resolve names at run time in the module's Program in every mode",
+            \testRuntimeNames());
 
         set_return_value(main());
     }
@@ -216,8 +239,8 @@ public string sub publicFunction() {
     return \"public function\";
 }
 
-# a module function runs in the Program that calls it, so it resolves names at run time in that Program, where only
-# the exported names of the module exist
+# a module function runs in the module's Program, as a method does, so it resolves names at run time in the module's
+# Program, where its private names exist too
 public string sub functionCallPrivate() {
     return call_function(\"ClassContextMod::privateFunction\");
 }
@@ -266,10 +289,7 @@ public class Lookup {
         return "%modern
 %requires ClassContextMod
 
-Program p(PO_NEW_STYLE);
-p.loadModule(\"ClassContextMod\");
-p.setParseOptions(PO_LOCKDOWN);
-p.parse(\"
+const ProbeCode = \"
 auto sub static_callref() { auto l = ClassContextMod::Factory::staticMake(); code c = \\\\l.readLock(); return c(); }
 auto sub method_callref() { ClassContextMod::Factory f(); auto l = f.make(); code c = \\\\l.readLock(); return c(); }
 auto sub static_create_obj() { return ClassContextMod::Factory::staticCreateObject(); }
@@ -283,7 +303,20 @@ auto sub private_call_function() { return ClassContextMod::Factory::callPrivate(
 auto sub nested_create_obj() { ClassContextMod::Factory f(); return f.nested(); }
 auto sub function_via_method_create_obj() { return ClassContextMod::createViaMethod(); }
 auto sub closure_create_obj() { ClassContextMod::Factory f(); code c = f.makeClosure(); return c(); }
-\", \"probe\");
+\";
+
+# a sandboxed PO_LOCKDOWN Program, whose restrictions apply to the module code it calls
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(new SandboxManager());
+p.loadModule(\"ClassContextMod\");
+p.setParseOptions(PO_LOCKDOWN);
+p.parse(ProbeCode, \"probe\");
+
+# a PO_LOCKDOWN Program without a sandbox, whose restrictions apply to its own code only
+Program q(PO_NEW_STYLE);
+q.loadModule(\"ClassContextMod\");
+q.setParseOptions(PO_LOCKDOWN);
+q.parse(ProbeCode, \"unsandboxed probe\");
 
 # the same calls from a Program without restrictions
 Program u(PO_NEW_STYLE);
@@ -315,6 +348,20 @@ foreach string f in (\"static_callref\", \"method_callref\", \"static_create_obj
         r = ex.err;
     }
     printf(\"%s: %s\\n\", f, r);
+}
+foreach string f in (\"static_callref\", \"method_callref\", \"static_create_obj\", \"static_create_obj\",
+        \"static_create_obj\", \"method_create_obj\", \"method_create_obj\", \"method_create_obj\",
+        \"function_via_method_callref\", \"member\", \"member\", \"holder\", \"holder\", \"private_create_obj\",
+        \"private_create_obj\", \"private_call_function\", \"private_call_function\", \"nested_create_obj\",
+        \"nested_create_obj\", \"function_via_method_create_obj\", \"function_via_method_create_obj\",
+        \"closure_create_obj\", \"closure_create_obj\") {
+    string r;
+    try {
+        r = sprintf(\"%y\", q.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"unsandboxed %s: %s\\n\", f, r);
 }
 printf(\"unrestricted run_restricted: %s\\n\", u.callFunction(\"run_restricted\", r));
 printf(\"unrestricted run_restricted: %s\\n\", u.callFunction(\"run_restricted\", r));
