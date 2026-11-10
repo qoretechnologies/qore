@@ -385,6 +385,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_selector_iterator_pending", reinterpret_cast<void*>(&qore_rt_selector_iterator_pending) },
     { "qore_rt_selector_iterator_feed", reinterpret_cast<void*>(&qore_rt_selector_iterator_feed) },
     { "qore_rt_selector_iterator_next", reinterpret_cast<void*>(&qore_rt_selector_iterator_next) },
+    { "qore_rt_selector_segment_feed", reinterpret_cast<void*>(&qore_rt_selector_segment_feed) },
     { "qore_rt_exception_suspend", reinterpret_cast<void*>(&qore_rt_exception_suspend) },
     { "qore_rt_exception_resume", reinterpret_cast<void*>(&qore_rt_exception_resume) },
     { "qore_rt_list_append_element_throwing",
@@ -3119,6 +3120,53 @@ extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint
         return 1;
     }
     *out_value = toBits(val.takeReferencedValue());
+    return 0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_segment_feed(uint64_t seq_bits, int64_t flags, uint64_t first_bits,
+        uint64_t second_bits, int64_t* cursor, ExceptionSink* xsink) {
+    const QoreValue seq = fromBits(seq_bits);
+    // the iterator exists only for a list (qore_rt_iterator_create_selectors()), and a selector is given to it only
+    // when it exists
+    assert(seq.getType() == NT_LIST);
+    const QoreListNode* list = seq.get<const QoreListNode>();
+    const int64 size = static_cast<int64>(list->size());
+    const bool negative_offsets = flags & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+    const QoreValue first = fromBits(first_bits);
+    cursor[QORE_RT_SEGMENT_SIZE] = size;
+    cursor[QORE_RT_SEGMENT_DATA] = static_cast<int64_t>(reinterpret_cast<intptr_t>(
+        qore_rt_list_get_data_unchecked(seq_bits)));
+    if (!(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range))) {
+        // an index gives one value, the element at the index normalized as the iterator normalizes it, or NOTHING
+        // when it is out of range, which the loop reads for any index outside of the list
+        int64 index = first.getAsBigInt();
+        QoreSquareBracketsOperatorNode::normalizeIndex(index, size, negative_offsets);
+        cursor[QORE_RT_SEGMENT_INDEX] = index;
+        cursor[QORE_RT_SEGMENT_COUNT] = 1;
+        cursor[QORE_RT_SEGMENT_STEP] = 1;
+        return 0;
+    }
+
+    // the indices of a range, as the iterator computes them (QoreRtSelectorIterator::feed())
+    int64 start;
+    int64 stop;
+    bool empty;
+    if (qore_rt_selector_range_bounds(seq, first, fromBits(second_bits), negative_offsets, start, stop, empty,
+            xsink)) {
+        cursor[QORE_RT_SEGMENT_COUNT] = 0;
+        return 1;
+    }
+    cursor[QORE_RT_SEGMENT_INDEX] = start;
+    cursor[QORE_RT_SEGMENT_STEP] = start <= stop ? 1 : -1;
+    if (empty) {
+        cursor[QORE_RT_SEGMENT_COUNT] = 0;
+        return 0;
+    }
+    // a range of more indices than an int can count gives as many as it can count, which no loop reaches
+    __int128 count = start <= stop
+        ? static_cast<__int128>(stop) - start + 1 : static_cast<__int128>(start) - stop + 1;
+    cursor[QORE_RT_SEGMENT_COUNT] = count > std::numeric_limits<int64_t>::max()
+        ? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(count);
     return 0;
 }
 

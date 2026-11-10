@@ -624,6 +624,23 @@ private:
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
     //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
     std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
+    //! The selector-segment loop of the iterator of a list of selectors created with QoreIRListSelectorFlag::Segment
+    //! (qore#5711): its cursor and the selector needed next live in the frame of the function, and the iterator only
+    //! keeps the sequence
+    struct SelectorSegmentState {
+        //! the cursor: an array of QORE_RT_SEGMENT_CURSOR_SIZE int64 values (see QoreRtSelectorSegmentCursor)
+        llvm::AllocaInst* cursor = nullptr;
+        //! the index of the selector needed next
+        llvm::AllocaInst* selector = nullptr;
+        //! the sequence, NaN-boxed, which dominates the loop
+        llvm::Value* seq = nullptr;
+        //! the QoreIRListSelectorFlag flags of the iterator
+        int64_t flags = 0;
+        //! the number of selectors
+        int64_t count = 0;
+    };
+    //! the selector-segment loops of the function, by the value of their iterator
+    std::unordered_map<uint32_t, SelectorSegmentState> selector_segment_states;
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows
@@ -1199,6 +1216,14 @@ private:
     // Lower a single instruction; returns false on unsupported opcode
     bool lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
             llvm::Module& module, std::string& error);
+
+    //! Lowers IteratorNextSelectors for the selector-segment loop of \a seg (qore#5711)
+    /** Gives the value at the next index of the cursor, read from the list, or branches to the done target when the
+        current selector has no index left; the element is held in an output slot as for the iterator
+        (qore_rt_selector_iterator_next())
+    */
+    bool lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction* iter_inst, const SelectorSegmentState& seg,
+            llvm::Module& module, llvm::Function* llvm_func, std::string& error);
 
     //! Reject AOT codegen that would execute serialized expression trees.
     bool checkNoAotExecutableExprFallback(llvm::Function* llvm_func, std::string& error) const;

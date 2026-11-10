@@ -957,6 +957,11 @@ enum class QoreIROpcode : uint16_t {
     //! evaluates no selector and iterates nothing.  The lowering evaluates each selector in the loop when
     //! IteratorNextSelectors has no value and SelectorIteratorPending asks for it, and gives it to the iterator with
     //! SelectorIteratorFeed (qore#5675).
+    //!
+    //! With QoreIRListSelectorFlag::Segment, native code iterates the list with the selector-segment loop: the
+    //! iterator only keeps the sequence, SelectorIteratorFeed computes the first index, the number of indices and the
+    //! step of each selector, and IteratorNextSelectors reads each value from the list, in the frame of the function;
+    //! the IR interpreter ignores the flag (qore#5711).
     IteratorCreateSelectors = 421,
 
     //! Return the index of the selector that the iterator of IteratorCreateSelectors needs before the next
@@ -1025,6 +1030,9 @@ enum class QoreIRListSelectorFlag : int64_t {
     RangeShift = 8,
     //! negative indices count from the end (the parse option negative-offsets); IteratorCreateSelectors only
     NegativeOffsets = 1 << 4,
+    //! the sequence is a list whose values hold no reference (int, float or bool values); IteratorCreateSelectors
+    //! only: native code iterates it with the selector-segment loop (qore#5711)
+    Segment = 1 << 5,
 };
 
 //! The largest number of selectors of one QoreIROpcode::ListSelectorStep (QoreIRListSelectorFlag::RangeShift)
