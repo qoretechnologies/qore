@@ -17650,6 +17650,112 @@ void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* p
 }
 }
 
+namespace {
+//! holds the thread that converts the end of a synchronous socket call's operation into an error
+/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close of the socket ends the call's operation, the
+    test cancels the held thread and lets it continue, so that the thread converts the end of its operation with a
+    pending cancellation, as when its cancellation and the close that the cancellation causes race
+*/
+struct SocketCancelConversionHold {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the next thread that converts is held
+    bool armed = false;
+    //! the TID of the thread to hold, or -1 for any thread
+    int tid = -1;
+    //! a thread is waiting in the hook
+    bool held = false;
+    //! the thread may continue
+    bool released = false;
+};
+
+SocketCancelConversionHold& socket_cancel_conversion_hold() {
+    // not destroyed, as sockets can be used while static objects are destroyed
+    static SocketCancelConversionHold* h = new SocketCancelConversionHold;
+    return *h;
+}
+}
+
+void qore_dbg_socket_cancel_conversion() {
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.armed || h.held || (h.tid != -1 && h.tid != q_gettid())) {
+        return;
+    }
+    h.armed = false;
+    h.held = true;
+    h.cond.notify_all();
+    h.cond.wait(l, [&h]() { return h.released; });
+    h.held = false;
+    h.released = false;
+    h.cond.notify_all();
+}
+
+//! arms a hold of the next thread that converts the end of a synchronous socket call's operation into an error
+/** @param tid the TID of the thread to hold; other threads that convert are not held; with no value, the next
+    thread is held
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed or a thread is held
+*/
+static QoreValue f_dbg_hold_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue tid_v = get_param_value(params, 0);
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.armed || h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a socket cancel conversion hold is already armed or holding");
+        return QoreValue();
+    }
+    h.armed = true;
+    h.tid = tid_v.isNothing() ? -1 : static_cast<int>(tid_v.getAsBigInt());
+    return QoreValue();
+}
+
+//! disarms the socket cancel conversion hold and lets a held thread continue; returns False if a held thread did not
+//! leave the hook within the timeout
+/** For the cleanup of a test that failed: never raises an exception
+*/
+static QoreValue f_dbg_reset_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    h.armed = false;
+    h.tid = -1;
+    if (!h.held) {
+        return true;
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
+//! waits for a thread to reach the armed socket cancel conversion hold; returns False if none did within the timeout
+static QoreValue f_dbg_wait_socket_cancel_conversion_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.held; });
+}
+
+//! lets the held thread continue and waits until it has left the hook; returns False on timeout
+/** @throw DBG-ARGUMENT-ERROR no thread is held
+*/
+static QoreValue f_dbg_continue_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no thread is held for a socket cancel conversion");
+        return QoreValue();
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
 //! returns True if a handler is set for the signal
 static QoreValue f_dbg_signal_handler_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef HAVE_SIGNAL_HANDLING
@@ -20605,6 +20711,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_source_program_call", f_dbg_continue_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_hold_socket_cancel_conversion", f_dbg_hold_socket_cancel_conversion, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_reset_socket_cancel_conversion", f_dbg_reset_socket_cancel_conversion,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_socket_cancel_conversion_held", f_dbg_wait_socket_cancel_conversion_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_socket_cancel_conversion", f_dbg_continue_socket_cancel_conversion,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_close_program_bg_compile", f_dbg_close_program_bg_compile, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,

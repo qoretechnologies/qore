@@ -490,6 +490,11 @@ static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, Exce
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
     QoreStringValueHelper err_str(err);
+    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation
+    if (err.getType() == NT_STRING && !strcmp(err_str->c_str(), "SOCKET-CLOSED")
+            && qore_socket_raise_pending_cancel("socket operation", xsink)) {
+        return;
+    }
     QoreStringValueHelper desc_str(desc);
     xsink->raiseException(
         err.getType() == NT_STRING && err_str
@@ -3651,7 +3656,19 @@ static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, Abstr
     return result.release();
 }
 
+bool qore_socket_raise_pending_cancel(const char* op, ExceptionSink* xsink) {
+#ifdef DEBUG
+    // a test holds the thread here, so that it is cancelled after the close ended its operation (see
+    // dbg_hold_socket_cancel_conversion())
+    qore_dbg_socket_cancel_conversion();
+#endif
+    return qore_check_cancel(xsink, op);
+}
+
 void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink) {
+    if (qore_socket_raise_pending_cancel(mname, xsink)) {
+        return;
+    }
     xsink->raiseException("SOCKET-CLOSED", "the operation of Socket::%s() was canceled before it completed; a close "
         "of the socket by another thread cancels it", mname);
 }
@@ -3830,7 +3847,9 @@ static QoreSocket* qore_socket_exec_accept_socket(QoreSocket* s, SocketSource* s
     }
 
     QoreSocket* rv = accept_poller->releaseAcceptedSocket();
-    if (!rv) {
+    // an accept that ended without a connection (canceled by a close) while the thread is cancelled reports the
+    // cancellation
+    if (!rv && !qore_socket_raise_pending_cancel("accept", xsink)) {
         xsink->raiseException("SOCKET-ACCEPT-ERROR",
             "async accept operation did not return an accepted socket");
     }
@@ -3885,7 +3904,9 @@ static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSourc
     }
 
     QoreSocket* rv = accept_poller->releaseAcceptedSocket();
-    if (!rv) {
+    // an accept that ended without a connection (canceled by a close) while the thread is cancelled reports the
+    // cancellation
+    if (!rv && !qore_socket_raise_pending_cancel("acceptSSL", xsink)) {
         xsink->raiseException("SOCKET-ACCEPT-ERROR",
             "async acceptSSL operation did not return an accepted socket");
     }
