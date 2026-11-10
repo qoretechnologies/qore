@@ -7371,6 +7371,12 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
         return nullptr;
     }
+    // the summary computes the float return value; a BoolParam result (a bool parameter, not yet converted to a
+    // float) is not the value the callee returns; the summary builder never produces one, but an imported
+    // summary comes from a module file
+    if (info.float_expression.nodes.back().kind == AOTFloatExpressionNodeKind::BoolParam) {
+        return nullptr;
+    }
     llvm::Module& module = *builder->GetInsertBlock()->getModule();
     std::unordered_map<size_t, llvm::Value*> hash_values;
     std::map<int8_t, std::vector<size_t>> hash_groups;
@@ -7563,6 +7569,7 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
         values.push_back(value);
     }
     llvm::Value* result = values.back();
+    assert(result->getType() == double_type);
     if (hash_groups.empty()) {
         if (proven_nothrow && !expression_may_throw) {
             *proven_nothrow = true;

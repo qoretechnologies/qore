@@ -12393,8 +12393,12 @@ static bool qore_aot_collect_float_expression_summaries(
 
         int result = collect_block(
             func->blocks.front().get(), {}, {}, 0);
+        // a BoolParam node is a bool (only a Select condition); a function that returns a bool parameter as a
+        // float converts it (True -> 1.0), which the summary does not express, so it is called instead
         if (result < 0 || visited.size() != func->blocks.size()
-                || result != static_cast<int>(expression.nodes.size() - 1)) {
+                || result != static_cast<int>(expression.nodes.size() - 1)
+                || expression.nodes[static_cast<size_t>(result)].kind
+                    == AOTFloatExpressionNodeKind::BoolParam) {
             state = VisitState::Failed;
             return false;
         }
