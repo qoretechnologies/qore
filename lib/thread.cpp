@@ -5595,6 +5595,37 @@ static void qore_thread_cleanup(void* n = nullptr) {
 #endif
 }
 
+//! Runs qore_thread_cleanup() once: where run() is called, or when the thread function's scope is left without it
+/** It replaces pthread_cleanup_push()/pthread_cleanup_pop(1) in q_run_thread() and op_background_thread() (issue
+    #5718): no Qore thread is cancelled with pthread_cancel() or ends with pthread_exit(), so the handler only ran at
+    the pop, and on macOS the macros read and write the cleanup stack in the thread's pthread_t
+    (pthread_self()->__cleanup_stack), which the system library reuses for a new thread after a detached thread (a
+    background thread) has ended.  That reuse is synchronized in the uninstrumented system library, so ThreadSanitizer
+    reported the push of a new thread and the pop of an ended background thread as a data race.
+*/
+class QoreThreadCleanupGuard {
+public:
+    DLLLOCAL QoreThreadCleanupGuard() = default;
+
+    DLLLOCAL ~QoreThreadCleanupGuard() {
+        run();
+    }
+
+    //! Runs the cleanup now, if it has not run yet
+    DLLLOCAL void run() {
+        if (!done) {
+            done = true;
+            qore_thread_cleanup();
+        }
+    }
+
+    QoreThreadCleanupGuard(const QoreThreadCleanupGuard&) = delete;
+    QoreThreadCleanupGuard& operator=(const QoreThreadCleanupGuard&) = delete;
+
+private:
+    bool done = false;
+};
+
 int q_register_foreign_thread() {
     // see if the current thread has already been registered
     ThreadData* td = thread_data.get();
@@ -5944,7 +5975,7 @@ namespace {
 
         set_tid_thread_name(ta->tid);
 
-        pthread_cleanup_push(qore_thread_cleanup, nullptr);
+        QoreThreadCleanupGuard thread_cleanup;
 
         {
             // the sandbox of the starting code governs everything this thread runs, including its teardown; the
@@ -6005,7 +6036,7 @@ namespace {
             }
         }
 
-        pthread_cleanup_pop((int)1);
+        thread_cleanup.run();
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function (instead of calling pthread_exit()) already triggers
         // TLS destructors registered by OpenSSL via pthread_key_create(),
@@ -6032,7 +6063,7 @@ namespace {
 
         set_tid_thread_name(btp->tid);
 
-        pthread_cleanup_push(qore_thread_cleanup, nullptr);
+        QoreThreadCleanupGuard thread_cleanup;
 
         {
             // the sandbox of the starting code governs everything this thread runs, including its teardown; it is
@@ -6185,7 +6216,7 @@ namespace {
             }
         }
 
-        pthread_cleanup_pop(1);
+        thread_cleanup.run();
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
         qore_thread_counter_share = 0;
