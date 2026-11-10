@@ -32327,7 +32327,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
             builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
-            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            // only a value that holds a reference is released (QoreValue::needsRef(): a pointer, an opaque reference
+            // or an enum value), so that the release of a scalar, as of a fused pipeline's stage value for each
+            // element, costs no call
+            {
+                llvm::Value* tag16 = builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 48));
+                llvm::Value* is_pointer = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFA));
+                llvm::Value* is_enum = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFD));
+                llvm::Value* is_opaque = builder->CreateICmpEQ(
+                    builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 52)),
+                    llvm::ConstantInt::get(i64_type, 0xFFD));
+                llvm::Value* needs_ref = builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
+                llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp", llvm_func);
+                llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp_cont", llvm_func);
+                builder->CreateCondBr(needs_ref, release_bb, cont_bb);
+                builder->SetInsertPoint(release_bb);
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                builder->CreateBr(cont_bb);
+                builder->SetInsertPoint(cont_bb);
+            }
             // no exception check: the instruction also runs on the path of an exception, which stays raised (see
             // the interpreter)
             return true;

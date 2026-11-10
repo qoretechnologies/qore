@@ -13372,8 +13372,12 @@ load_local_done:
                         active_iterators.erase(iter);
                         delete iter;
                     }
-                } else if (id < values.size() && hasCleanupEntry(cleanup, id) && !weak_load_temp_slots.count(id)
+                } else if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                        && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
                         && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                    // a value that is not a node has no reference to release: its entry stays for the slot's next
+                    // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
+                    // each element, see QoreIRLowering::lowerLazyPipelineFused())
                     removeAllCleanupEntries(cleanup, id);
                     QoreValue v = values[id];
                     values[id] = QoreValue();
