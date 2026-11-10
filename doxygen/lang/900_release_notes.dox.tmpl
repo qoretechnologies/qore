@@ -1516,6 +1516,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the signal handlers of a deleted @ref Qore::Program "Program" were released after its data, so an object whose
+      last reference a handler's closure held was destroyed without its Program's data, and its destructor could raise
+      \c PROGRAM-ERROR; they are now released first (see @ref signal_handler_program_lifetime)
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the

@@ -1850,6 +1850,20 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         //printd(5, "qore_program_private::waitForTerminationAndClear() this: %p pgm: %p clr: %d\n", this, pgm, clr);
 
+#ifdef HAVE_SIGNAL_HANDLING
+        // issue #5766: the signal handlers of this Program are removed before any of its data is destroyed: a handler
+        // is code that runs in the Program, and its closure can hold the last reference to an object (a server that
+        // the handler stops, for example), whose destructor runs user code; released after the data below, the
+        // object was destroyed in a Program whose data had been deleted, and its destructor raised PROGRAM-ERROR.
+        // The Program's threads have ended and no thread can enter it any more, so no handler runs here.
+        {
+            int_set_t ns = sigset;
+            for (int sig : ns) {
+                QSM.removeHandler(sig, xsink);
+            }
+        }
+#endif
+
         // Discard the exec-class instance now that all threads have terminated.
         // This must happen before clearLocalVars()/clearNamespaceData() because the
         // instance's destructor may run user code that references globals or namespace data.
@@ -1905,15 +1919,6 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             if (twaiting)
                 tcond.broadcast();
         }
-#ifdef HAVE_SIGNAL_HANDLING
-        {
-            int_set_t ns = sigset;
-            // clear all signal handlers managed by this program
-            for (int_set_t::iterator i = ns.begin(), e = ns.end(); i != e; ++i)
-                QSM.removeHandler(*i, xsink);
-        }
-#endif
-
         // merge pending parse exceptions into the passed exception sink, if any
         if (pendingParseSink) {
             xsink->assimilate(pendingParseSink);
