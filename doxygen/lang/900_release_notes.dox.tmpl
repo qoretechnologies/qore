@@ -1516,6 +1516,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
+      dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
+      at exit; the records of the module that the reload replaces are now kept until the module is deleted
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
