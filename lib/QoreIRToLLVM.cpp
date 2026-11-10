@@ -28286,6 +28286,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // a closure node is required: the runtime creates the closure from it
+                if (!ccinst->closure_node) {
+                    error = "CreateClosure without a closure node";
+                    return false;
+                }
                 llvm::Value* cn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ccinst->closure_node));
                 llvm::Value* cn_as_ptr = builder->CreateIntToPtr(cn_ptr, ptr_type);

@@ -7377,7 +7377,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* cci = new QoreIRCreateClosureInstruction(nullptr, expr);
+            // the closure node is the expression's, as in lowered IR: native code compiled from this IR creates the
+            // closure from it
+            auto* cci = new QoreIRCreateClosureInstruction(
+                dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode()), expr);
             cci->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(cci);

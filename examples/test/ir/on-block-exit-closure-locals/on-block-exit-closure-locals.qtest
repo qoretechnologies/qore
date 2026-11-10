@@ -39,7 +39,8 @@
     closure bodies): a handler read from serialized IR had no pre-instantiated variables, so after #5653 the IR
     interpreter took every closure-bound variable of the closure for one of the handler's own, which started with no
     value (\c add30(\\e) left \c e at 30 instead of 31, and a thread started by the handler read no value), and the
-    handler's updates were lost.
+    handler's updates were lost.  A closure read from its IR and compiled with the JIT crashed when it created a
+    closure, as the IR read had no closure node for it.
 */
 class OnBlockExitClosureLocalsTest inherits QUnit::Test {
     public {
@@ -85,11 +86,14 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         };
 
         #! the ways an AOT executable runs its closures, by the environment that selects them: native closure bodies,
-        #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created
+        #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created, and
+        #! compiled with the JIT on its first call
         const AOTClosureModes = {
             "native closures": "",
             "closures from IR": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
             "closures from IR read eagerly": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1",
+            "closures from IR compiled with the JIT": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_JIT_SYNC_COMPILE=1 "
+                "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1",
         };
 
         #! each script prints its lines this many times

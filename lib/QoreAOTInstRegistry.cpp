@@ -33,6 +33,7 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
@@ -2281,7 +2282,10 @@ static std::unique_ptr<QoreIRInstruction> readCreateClosure(
         ctx.error = error;
         return nullptr;
     }
-    auto* cci = new QoreIRCreateClosureInstruction(nullptr, expr);
+    // the closure node is the expression's, as in lowered IR: native code compiled from this IR (a closure read from
+    // its serialized IR and compiled with the JIT) created the closure from a null closure node and crashed
+    auto* cci = new QoreIRCreateClosureInstruction(
+        dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode()), expr);
     cci->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     cci->result = QoreIRValue(result_id);
