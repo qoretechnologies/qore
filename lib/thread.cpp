@@ -5597,11 +5597,18 @@ static void qore_thread_cleanup(void* n = nullptr) {
 
 //! Runs qore_thread_cleanup() once: where run() is called, or when the thread function's scope is left without it
 /** It replaces pthread_cleanup_push()/pthread_cleanup_pop(1) in q_run_thread() and op_background_thread() (issue
-    #5718): no Qore thread is cancelled with pthread_cancel() or ends with pthread_exit(), so the handler only ran at
-    the pop, and on macOS the macros read and write the cleanup stack in the thread's pthread_t
+    #5718): on macOS the macros read and write the cleanup stack in the thread's pthread_t
     (pthread_self()->__cleanup_stack), which the system library reuses for a new thread after a detached thread (a
     background thread) has ended.  That reuse is synchronized in the uninstrumented system library, so ThreadSanitizer
-    reported the push of a new thread and the pop of an ended background thread as a data race.
+    reported the push of a new thread and the pop of an ended background thread as a data race (a false positive; no
+    Qore data was shared).  examples/test/runner/test_no_pthread_cleanup.py keeps the macros out of libqore.
+
+    Unlike the macros, the guard does not run the cleanup when the thread is ended with pthread_cancel() or
+    pthread_exit(), on any platform; with the macros it ran then only with glibc, whose C++ form of the macros is an
+    object whose destructor runs when the thread is unwound, and not with musl or on macOS.  That is acceptable:
+    libqore never cancels a thread with pthread_cancel(), its only pthread_exit() is in the signal thread, which is not
+    a Qore thread and does not use the guard, and a Qore thread that thread_exit() ends returns normally from its thread
+    function, which runs the cleanup at run().
 */
 class QoreThreadCleanupGuard {
 public:
