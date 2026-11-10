@@ -1,0 +1,44 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# a Socket ping-pong between two threads over one connection, in which every receive waits: each side's receive is
+# made before the other side sends; prints microseconds per round trip (two sends and two receives that wait); the
+# number of round trips can be given as an argument (default: 20000)
+int N = ARGV[0] ? ARGV[0].toInt() : 20000;
+
+Socket l();
+if (l.bind("127.0.0.1:0", True)) {
+    throw "BIND-ERROR", "bind failed";
+}
+l.listen();
+Socket c();
+c.connect("127.0.0.1:" + l.getPort());
+Socket s = l.accept();
+
+Counter done(1);
+background sub () {
+    on_exit done.dec();
+    for (int i = 0; i < N + 1000; ++i) {
+        s.recv(4);
+        s.send("pong");
+    }
+}();
+
+# warm up
+for (int i = 0; i < 1000; ++i) {
+    c.send("ping");
+    c.recv(4);
+}
+
+date start = now_us();
+for (int i = 0; i < N; ++i) {
+    c.send("ping");
+    c.recv(4);
+}
+float us = (now_us() - start).durationMicroseconds();
+printf("%.2f us per round trip\n", us / N);
+done.waitForZero();
+c.close();
+s.close();
+l.close();

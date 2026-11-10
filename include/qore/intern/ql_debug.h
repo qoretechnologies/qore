@@ -155,6 +155,14 @@ DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
 //! dbg_ssl_close_notify_count()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_ssl_close_notify_count;
 
+//! the number of sets of references of synchronous operations that their callers took (AsyncIoSyncRelease) instead of
+//! a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_taken;
+
+//! the number of sets of references of synchronous operations that their callers refused, as their waits had ended,
+//! and that went to a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_refused;
+
 //! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
 //! socket's descriptor; set by dbg_http1_send_failure_arm()
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);
