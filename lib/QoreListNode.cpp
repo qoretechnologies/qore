@@ -37,6 +37,9 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/VarRefNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 
 #include <limits>
 #include <algorithm>
@@ -715,6 +718,36 @@ QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, 
     return rv.release();
 }
 
+// evaluates an element of a list that needs evaluation, the argument list of a call; returns a referenced value
+static QoreValue qore_list_eval_entry(const QoreValue& exp, ExceptionSink* xsink) {
+    // a variable given as an argument: the argument list takes the value read over, and it is released when the call
+    // returns, as any argument is, also when the read gives it a reference of its own (see VarRefNode::evalCallArg())
+    switch (exp.getType()) {
+        case NT_VARREF:
+            return exp.get<const VarRefNode>()->evalCallArg(xsink);
+        case NT_SELF_VARREF:
+            return exp.get<const SelfVarrefNode>()->evalCallArg(xsink);
+        case NT_CLASS_VARREF: {
+            // two classes share the type; an AOT program's reference is resolved at run time
+            const AbstractQoreNode* n = exp.getInternalNode();
+            if (const StaticClassVarRefNode* v = dynamic_cast<const StaticClassVarRefNode*>(n)) {
+                return v->evalCallArg(xsink);
+            }
+            if (const DeferredStaticClassMemberRefNode* v = dynamic_cast<const DeferredStaticClassMemberRefNode*>(n)) {
+                return v->evalCallArg(xsink);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    ValueEvalOptimizedRefHolder v(exp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return v.takeReferencedValue();
+}
+
 QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> nl(getCopy(), xsink);
     //printd(5, "qore_list_private::eval() '%s' -> '%s'\n", QoreTypeInfo::getName(complexTypeInfo), get_full_type_name(*nl));
@@ -725,13 +758,13 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "named argument evaluation")) {
                 return nullptr;
             }
-            ValueEvalOptimizedRefHolder v(entry[i], xsink);
+            ValueHolder v(qore_list_eval_entry(entry[i], xsink), xsink);
             if (*xsink) {
                 return nullptr;
             }
             size_t pos = (*eval_pos_map)[i];
             assert(pos < eval_result_size);
-            nl->setEntry(pos, v.takeReferencedValue(), xsink);
+            nl->setEntry(pos, v.release(), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -739,12 +772,12 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
         return nl.release();
     }
     for (size_t i = 0; i < length; ++i) {
-        ValueEvalOptimizedRefHolder v(entry[i], xsink);
+        ValueHolder v(qore_list_eval_entry(entry[i], xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
         //printd(5, "qore_list_private::eval() %d: '%s'\n", i, v->getFullTypeName());
-        nl->push(v.takeReferencedValue(), xsink);
+        nl->push(v.release(), xsink);
         assert(!*xsink);
     }
     return nl.release();

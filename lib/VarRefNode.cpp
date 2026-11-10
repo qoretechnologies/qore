@@ -40,6 +40,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* typeInfo) {
     if (!qore_type_info_is_aot_deferred(typeInfo)
@@ -192,6 +193,35 @@ QoreValue VarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
 }
 
 QoreValue VarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    QoreValue v = evalValue(rc, needs_deref, xsink);
+    // a read that gives the code a reference of its own - through a reference, or from a closure-bound, global or
+    // thread-local variable - gives a temporary of the statement: the statement holds the value until it ends, so
+    // that a later part of the statement that assigns the variable, or the variable that a reference refers to,
+    // another value cannot release the value that an earlier part of the statement read and is still using, as in
+    // the other execution modes, which keep the read's reference in the temp scope of the statement until
+    // DiscardTemps.  A value borrowed from the variable (a local that holds the value itself, or a weak reference
+    // to it) is not held: it is not a temporary, and the other modes do not keep it either
+    if (needs_deref && !*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue VarRefNode::evalCallArg(ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    bool needs_deref = true;
+    QoreValue v = evalValue(rc, needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    // a value borrowed from the variable is referenced for the argument list
+    return needs_deref ? v : v.refSelf();
+}
+
+QoreValue VarRefNode::evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     QoreValue v{};
     if (type == VT_LOCAL) {
         //printd(5, "VarRefNode::evalImpl() this: %p lvar %p (%s) v: '%s' pgm: %p\n", this, ref.id, ref.id->getName(),
@@ -736,6 +766,18 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
             assert(false);
             return QoreValue();
     }
+}
+
+QoreValue VarRefNewObjectNode::evalCallArg(ExceptionSink* xsink) const {
+    bool needs_deref = true;
+    QoreValue v = evalImpl(needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    return needs_deref ? v : v.refSelf();
 }
 
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

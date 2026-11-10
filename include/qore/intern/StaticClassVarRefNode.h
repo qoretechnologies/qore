@@ -62,6 +62,12 @@ public:
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
+    //! evaluates the variable as an argument of a call: the read is not held by the statement, the argument list
+    //! holds its reference and releases it when the call returns (see VarRefNode::evalCallArg())
+    /** @return the value of the variable, referenced for the caller
+    */
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
 
@@ -88,9 +94,15 @@ public:
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
+    //! evaluates the variable as an argument of a call, as StaticClassVarRefNode::evalCallArg()
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! reads the variable without handing the value to the statement
+    DLLLOCAL QoreValue evalValue(bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 //! Returns the variable info \a expr refers to, or nullptr if it refers to no resolved variable

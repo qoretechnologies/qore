@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its scenarios run in child processes that set their own execution modes and an AOT executable
+
+# A Program that C++ code creates on behalf of sandboxed code is sandboxed (issue #5659): a Program created while a
+# sandbox governs the thread, or by the code of a sandboxed Program, is sandboxed wherever it is created - by
+# Program::constructor(), by ProgramControl::createEvalProgram(), by the module manager for a user module, or by a
+# module - so its code never gets the paths reserved for trusted code: the cancellation deferral of trusted
+# destructors and of cleanup critical sections (issue #5634).  A Program that trusted code creates stays trusted, and
+# so does library code that sandboxed code loads first, with the Programs that its initialization creates.  A
+# Program that sandboxed code parses code in is sandboxed from then on, also if trusted code created it.
+#
+# The scenarios are in native-program-sandbox-probe.qr, which runs in a process of its own (the directory of the
+# library module must be in the process-wide module path when the library is initialized) in each execution mode and
+# as an AOT executable.  No scenario depends on timing.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class NativeProgramSandboxTest
+
+class NativeProgramSandboxTest inherits QUnit::Test {
+    public {
+        #! how the code of the Program that each scenario checks treats a cancellation pending on its thread
+        const Expected = {
+            # sandboxed code creates a Program with ProgramControl::createEvalProgram()
+            "sandboxed-creates": "sandboxed",
+            # trusted code that sandboxed code calls creates a Program
+            "trusted-for-sandboxed": "sandboxed",
+            # the code of a Program that sandboxed code created creates a Program, with no sandbox governing it
+            "created-by-sandboxed": "sandboxed",
+            # trusted code that sandboxed code calls loads a user module
+            "user-module-for-sandboxed": "sandboxed",
+            # sandboxed code parses its code in a trusted Program that it was handed (Program::parse())
+            "parse-into-trusted": "sandboxed",
+            # the same with Program::parsePending() and Program::parseCommit()
+            "parse-pending-into-trusted": "sandboxed",
+            # sandboxed code creates an Expression in a trusted Program
+            "expression-in-trusted": "sandboxed",
+            # a child Program created before its parent had a sandbox manager, in which the parent's code parses code
+            "child-before-sandbox": "sandboxed",
+            # sandboxed code loads a user module by path into a trusted Program that it was handed
+            # (Program::loadModule())
+            "load-module-into-trusted": "sandboxed",
+            # the same with Program::loadModuleWarn(): the caller's sandbox governs the module's initialization
+            "load-module-into-trusted-governed": "governed",
+            # sandboxed code parses a %requires of a user module by path in a trusted Program that it was handed
+            "requires-into-trusted": "sandboxed",
+            # the caller's sandbox governs the initializers of code that sandboxed code parses in a trusted Program
+            "parse-into-trusted-governed": "governed",
+            # the caller's sandbox governs the initializers that Program::parseCommit() runs for sandboxed code
+            "parse-pending-into-trusted-governed": "governed",
+            # sandboxed code issues a module command with the path of a user module to a trusted Program
+            # (Program::issueModuleCmd()): refused
+            "module-cmd-into-trusted": "refused",
+            # trusted code loads a user module by path into a trusted Program with Program::loadModule()
+            "load-module-trusted": "trusted",
+            # trusted code creates a Program
+            "trusted-creates": "trusted",
+            # trusted code creates a Program after a call into sandboxed code has returned
+            "trusted-after-sandboxed": "trusted",
+            # trusted code loads a user module
+            "user-module-trusted": "trusted",
+            # the class of library code that sandboxed code loads first
+            "library-class": "trusted",
+            # a Program that the initialization of library code creates, when sandboxed code loads it first
+            "library-init-program": "trusted",
+            # sandboxed code parses its code in a Program that the initialization of library code created
+            "library-program-parsed-by-sandboxed": "sandboxed",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("NativeProgramSandboxTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # libqore is next to qore in a build directory, and in ../lib for an installed qore
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        if (!ENV.QORE_LIBDIR && !glob(libqore_dir + "/libqore*") && is_dir(libqore_dir + "/../lib")) {
+            libqore_dir = normalize_dir(libqore_dir + "/../lib");
+        }
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(dirname(qore_bin) + "/qcc") ? dirname(qore_bin) + "/qcc" : "qcc");
+        string dir = normalize_dir(get_script_dir());
+        script = dir + "/native-program-sandbox-probe.qr";
+        # the library module is in the process-wide module path of the script
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, dir + "/native-program-sandbox-lib");
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("the rule in %s execution", mode), getModeTest(mode));
+        }
+        addTestCase("the rule on the IR tier of tiered execution", \irTierTest());
+        addTestCase("the rule in AOT-compiled code", \aotTest());
+
+        set_return_value(main());
+    }
+
+    #! checks the output of the script: one line per scenario
+    private check(string label, string out) {
+        hash<auto> results;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> m = line.regexExtract("^([a-z-]+):(.*)$");
+            if (!m) {
+                assertEq("", line, label + ": unexpected output");
+                continue;
+            }
+            assertFalse(exists results{m[0]}, label + ": " + m[0] + " is reported once");
+            results{m[0]} = m[1];
+        }
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, label + ": " + i.key);
+        }
+        assertEq(sort(Expected.keys()), sort(results.keys()), label + ": the scenarios");
+    }
+
+    #! returns the test of the given execution mode
+    private code getModeTest(string mode) {
+        return sub () { modeTest(mode); };
+    }
+
+    #! runs the scenarios in the given execution mode; the Programs that they create run in that mode as well
+    modeTest(string mode) {
+        TmpDir tmp("qore-native-program-sandbox-");
+        check(mode, ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s %s %s", env, qore_bin, mode, script,
+            mode, tmp.path)));
+    }
+
+    #! runs the scenarios with every function on the IR tier
+    irTierTest() {
+        TmpDir tmp("qore-native-program-sandbox-");
+        check("ir-tier", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s tiered %s", env, qore_bin,
+            script, tmp.path)));
+    }
+
+    #! runs the scenarios as an AOT executable
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("qore-native-program-sandbox-aot-");
+        string exe = tmp.path + "/native-program-sandbox-probe";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + out);
+        string mods = tmp.path + "/modules";
+        mkdir(mods);
+        check("aot", ExecModeHarness::run_any(sprintf("%s %s tiered %s", env, exe, mods)));
+    }
+}
