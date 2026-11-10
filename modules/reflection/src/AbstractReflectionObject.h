@@ -89,6 +89,30 @@ DLLLOCAL int reflection_check_class_call(const QoreReflectionCaller& caller, con
 DLLLOCAL int reflection_check_class_export(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink);
 
+//! Returns true if the caller may see a typed hash: it is checked against the Program that declares it
+/** As for a class (QoreReflectionCaller::canSeeClass()): a handle to a typed hash can belong to another Program
+    than the one that declares it (Type::getTypedHash() makes it for the calling code's Program when the type has no
+    source Program), and the export boundary of a user module is decided on the declaring Program, else a value of a
+    typed hash that the module does not export would let the caller run its initializers.  A typed hash that another
+    Program imported belongs to that Program.
+
+    @param caller the calling code
+    @param target the Program of the reflection handle; used if the typed hash has no Program
+    @param th the typed hash
+    @param ns the namespace of the typed hash recorded in the handle
+*/
+DLLLOCAL bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, const QoreNamespace* ns);
+
+//! Checks that a typed hash is exported by the user module that declares it, for callers its export boundary applies to
+/** Used for the operations that evaluate its member initializers: casts and member default values; see
+    reflection_can_see_typed_hash()
+
+    @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_typed_hash_export(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, const QoreNamespace* ns, ExceptionSink* xsink);
+
 //! Checks the functional domain of a class whose members or constants are read or written through reflection
 /** @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
 */

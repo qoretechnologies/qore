@@ -3114,7 +3114,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
         bool* content_dependent) const {
     if (type_param_inst) {
@@ -3173,8 +3173,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         //  last_class, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            // skip checking variant if we are only looking for user variants and this variant is builtin
-            if (only_user && !(*i)->isUser()) {
+            // skip a variant that the filter excludes (a builtin one when only user variants are wanted)
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
                 continue;
             }
 
@@ -3326,7 +3326,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         *content_dependent = elements_checked;
     }
 
-    if (!variant && !only_user) {
+    if (!variant && !(variant_filter & QRFV_ONLY_USER)) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, receiver_type_info, true);
         desc->concat("' can be found; ");
@@ -3353,6 +3353,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                         && (skip_method_variant(*i, class_ctx, internal_access)
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
+                    }
+                    // a variant that the filter excludes was not tested, and is not shown to the caller
+                    if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                        continue;
                     }
                     desc->concat("\n   ");
                     QoreTypeParamInstantiation candidate_inst;
@@ -3385,7 +3389,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
             if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS) && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
                 //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(), variant->getFunctionality());
-                if (!only_user) {
+                if (!(variant_filter & QRFV_ONLY_USER)) {
                     std::string class_path = classPath();
                     xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to builtin " \
                         "%s '%s%s%s(%s)'", !class_path.empty() ? "method" : "function",
@@ -3420,7 +3424,8 @@ bool QoreFunction::hasInheritedVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3461,6 +3466,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 && (skip_method_variant(*i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
+            }
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                continue;
             }
 
             // get runtime parse options
@@ -3535,7 +3543,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant, receiver_type_info,
-        explicit_type_param_inst);
+        explicit_type_param_inst, variant_filter);
 }
 
 DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
@@ -3572,7 +3580,8 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
 const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
-        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (!variant) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, nullptr, receiver_type_info, true);
@@ -3596,6 +3605,10 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
                     && (skip_method_variant(*i, class_ctx, internal_access)
                         || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                         continue;
+                }
+                // a variant that the filter excludes is not shown to the caller
+                if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                    continue;
                 }
                 desc->concat("\n   ");
                 QoreTypeParamInstantiation candidate_inst;

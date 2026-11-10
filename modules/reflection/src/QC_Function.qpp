@@ -49,7 +49,7 @@ static QoreReflectionFunction* get_function(ExceptionSink* xsink, const Reflecti
         return nullptr;
     }
 
-    return new QoreReflectionFunction(pgm, f);
+    return new QoreReflectionFunction(pgm, f, ns);
 }
 
 static QoreObject* get_function_object(ExceptionSink* xsink, const ReflectionLookupCaller& caller,
@@ -61,6 +61,16 @@ static QoreObject* get_function_object(ExceptionSink* xsink, const ReflectionLoo
     }
 
     return new QoreObject(QC_FUNCTION, pgm, f);
+}
+
+// Refuses a handle of a function that a user module does not export, for a caller its export boundary applies to:
+// as a call through the handle is refused (QoreExternalFunction::evalFunction()), so are its variants, so a handle
+// that the module created and handed out does not reveal them; returns 0 if allowed, -1 if REFLECTION-ACCESS-ERROR
+// was raised
+static int check_function_handle_export(const QoreReflectionCaller& caller, const QoreReflectionFunction* f,
+        ExceptionSink* xsink) {
+    return caller.checkModuleExport(caller.canSeeDeclaration(f->pgm, f->ns, reflection_exported(f->f)), "function",
+        f->f->getName(), xsink);
 }
 
 static QoreValue find_all_funcs(const ReflectionLookupCaller& caller, const QoreString& pattern, int re_opts,
@@ -76,7 +86,7 @@ static QoreValue find_all_funcs(const ReflectionLookupCaller& caller, const Qore
         if (!caller.canSeeDeclaration(pgm, i.second, reflection_exported(i.first))) {
             continue;
         }
-        l->push(new QoreObject(QC_FUNCTION, pgm, new QoreReflectionFunction(pgm, i.first)), xsink);
+        l->push(new QoreObject(QC_FUNCTION, pgm, new QoreReflectionFunction(pgm, i.first, i.second)), xsink);
     }
 
     return l.release();
@@ -126,6 +136,11 @@ list<FunctionVariant> l = f.getVariants();
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
 */
 list<FunctionVariant> Function::getVariants() [flags=RET_VALUE_ONLY] {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
+    if (check_function_handle_export(caller, f, xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
@@ -134,7 +149,7 @@ list<FunctionVariant> Function::getVariants() [flags=RET_VALUE_ONLY] {
 
     // the function ptr must be valid
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_FUNCTIONVARIANT->getTypeInfo()), xsink);
-    append_variant_objects(**rv, f->pgm, f->f, MT_None, xsink);
+    append_variant_objects(**rv, f->pgm, f->f, MT_None, xsink, &caller);
     return rv.release();
 }
 
@@ -158,6 +173,11 @@ FunctionVariant v = n.getVariant(IntType, StringType);
     - getExactVariantArgs()
 */
 FunctionVariant Function::getVariant(...) [flags=RET_VALUE_ONLY] {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
+    if (check_function_handle_export(caller, f, xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
@@ -165,7 +185,7 @@ FunctionVariant Function::getVariant(...) [flags=RET_VALUE_ONLY] {
     }
 
     // the function ptr must be valid
-    return find_function_variant(f->pgm, f->f, args, 0, MT_None, xsink);
+    return find_function_variant(f->pgm, f->f, args, 0, MT_None, xsink, &caller);
 }
 
 //! Returns the given direct child function variant declared in this function or throws an exception if the function variant is not defined
@@ -188,6 +208,11 @@ FunctionVariant v = n.getVariantArgs((IntType, StringType));
     - getExactVariantArgs()
 */
 FunctionVariant Function::getVariantArgs(softlist<Type> argv) [flags=RET_VALUE_ONLY] {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
+    if (check_function_handle_export(caller, f, xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
@@ -195,7 +220,7 @@ FunctionVariant Function::getVariantArgs(softlist<Type> argv) [flags=RET_VALUE_O
     }
 
     // the function ptr must be valid
-    return find_function_variant(f->pgm, f->f, argv, 0, MT_None, xsink);
+    return find_function_variant(f->pgm, f->f, argv, 0, MT_None, xsink, &caller);
 }
 
 //! calls the function with the given arguments
@@ -224,7 +249,7 @@ auto Function::call(...) {
     }
 
     // the function ptr must be valid
-    return f->f->evalFunction(nullptr, args, f->pgm, caller, xsink);
+    return f->f->evalFunction(nullptr, args, f->pgm, f->ns, caller, xsink);
 }
 
 //! calls the given function with the given arguments as a list
@@ -253,7 +278,7 @@ auto Function::callArgs(*softlist<auto> argv) {
     }
 
     // the function ptr must be valid
-    return f->f->evalFunction(nullptr, argv, f->pgm, caller, xsink);
+    return f->f->evalFunction(nullptr, argv, f->pgm, f->ns, caller, xsink);
 }
 
 //! Returns a %Function object from the function name or namespace-justified path as a string

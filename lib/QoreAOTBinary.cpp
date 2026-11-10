@@ -11125,6 +11125,11 @@ static bool writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                     if (uvb && uvb->isSynchronized()) {
                         vflags |= 0x01;
                     }
+                    // the variant is exported: a module function can have public and private variants, and an
+                    // importer, or reflection within the module's export boundary, sees only the public ones
+                    if (v->isModulePublic()) {
+                        vflags |= 0x02;
+                    }
                     writer.writeU8(vflags);
                     if (!writeVariantSignature(writer, v, error)) {
                         return false;
@@ -18852,7 +18857,10 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 ufv->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
-            if (flags & 0x0001) {
+            // the variant flags record whether each variant is exported (a function can have public and private
+            // variants); without them, the function's public flag applies to all of its variants
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_METHOD_SYNC) != 0
+                    ? (vflags & 0x02) != 0 : (flags & 0x0001) != 0) {
                 ufv->setModulePublic();
             }
 

@@ -678,7 +678,7 @@ Function Namespace::getFunction(string name) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    return new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, rv));
+    return new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, rv, n->ns));
 }
 
 //! Returns a list of all declared functions in the namespace
@@ -714,7 +714,7 @@ list<Function> Namespace::getFunctions() [flags=RET_VALUE_ONLY] {
         if (!filter.visible(reflection_exported(&i.get()))) {
             continue;
         }
-        l->push(new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, &i.get())), xsink);
+        l->push(new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, &i.get(), n->ns)), xsink);
     }
 
     return l.release();
@@ -771,7 +771,7 @@ FunctionVariant Namespace::getVariant(string name, ...) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    return find_function_variant(n->pgm, func, args, 1, MT_None, xsink);
+    return find_function_variant(n->pgm, func, args, 1, MT_None, xsink, &caller);
 }
 
 //! Returns the given direct child function variant declared in this namespace or throws an exception if the function variant is not defined
@@ -825,7 +825,7 @@ FunctionVariant Namespace::getVariantArgs(string name, softlist<Type> argv) [fla
         return QoreValue();
     }
 
-    return find_function_variant(n->pgm, func, argv, 0, MT_None, xsink);
+    return find_function_variant(n->pgm, func, argv, 0, MT_None, xsink, &caller);
 }
 
 //! Returns a list of all declared function variants in the namespace
@@ -862,7 +862,7 @@ list<FunctionVariant> Namespace::getVariants() [flags=RET_VALUE_ONLY] {
         if (!filter.visible(reflection_exported(&f))) {
             continue;
         }
-        append_variant_objects(**l, n->pgm, &f, MT_None, xsink);
+        append_variant_objects(**l, n->pgm, &f, MT_None, xsink, &caller);
         if (*xsink) {
             return QoreValue();
         }

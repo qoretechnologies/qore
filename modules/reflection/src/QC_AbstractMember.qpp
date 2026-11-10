@@ -31,6 +31,7 @@
 #include "qore_reflection.h"
 #include "QC_Class.h"
 #include "QC_AbstractMember.h"
+#include "QC_TypedHashMember.h"
 #include "QC_AbstractClassMember.h"
 #include "QC_Type.h"
 
@@ -133,6 +134,11 @@ auto AbstractMember::getDefaultValue() {
         // the initializers of a class that a user module does not export cannot be evaluated by a caller its export
         // boundary applies to
         if (reflection_check_class_export(caller, cm->cls, m->pgm, xsink)) {
+            return QoreValue();
+        }
+    } else if (const QoreReflectionHashDeclMember* hm = dynamic_cast<const QoreReflectionHashDeclMember*>(m)) {
+        // nor can those of a typed hash that a user module does not export
+        if (reflection_check_typed_hash_export(caller, m->pgm, hm->th, hm->th->getNamespace(), xsink)) {
             return QoreValue();
         }
     }

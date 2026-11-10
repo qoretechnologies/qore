@@ -105,6 +105,7 @@ handle of a non-exported class bound to any Program is refused (`canSeeClass()`)
 |!Operation|!Non-exported declaration
 |Lookup by name in a namespace (`Namespace::get*()`), by path (`*::forName()`, constructors) or by pattern (`*::findAllRegex()`)|Not found: the exception of a declaration that does not exist (`UNKNOWN-FUNCTION`, `UNKNOWN-CONSTANT`, ...)
 |Listing (`Namespace::get*s()`, `getVariants()`)|Left out
+|A user variant without `public` of a function that has public variants: listing (`Function::getVariants()`, `Namespace::getVariants()`), lookup by types (`getVariant*()`), call resolution (`Function::call()`)|Left out, not found (`VARIANT-MATCH-ERROR`), not selected (the call is resolved among the public variants, `RUNTIME-OVERLOAD-ERROR` if none matches; the error lists only the public variants)
 |A handle created otherwise (by the module itself, or `Class::getClass(obj)` for a non-exported class): function and function-variant calls, global reads and writes, constant reads, typed hash casts|`REFLECTION-ACCESS-ERROR`
 |Non-exported class: construction (`newObject*()`, `callConstructor()`, constructor methods and variants), static methods and variants, static members, class constants, member defaults|`REFLECTION-ACCESS-ERROR` (`reflection_check_class_export()`)
 |Non-exported class: normal methods and members, copy and destructor with an object|Allowed (member access applies), as `obj.m()` is in the language
@@ -112,7 +113,24 @@ handle of a non-exported class bound to any Program is refused (`canSeeClass()`)
 Function lookups by path and pattern need the namespace of the function: `QoreProgram::findFunction(path, pns)` and
 `QoreProgram::findAllFunctionsRegexNs()` return it, like the hashdecl, enum, global and constant lookups already do.
 The function check on a handle is in `QoreExternalFunction::evalFunction()` with a caller, which every reflection
-function call uses. Module code reflecting on its own Program, and callers to which 2a does not apply, are unchanged.
+function call uses.
+
+Variants are exported one by one: a module function can have `public` and private variants, and an importer receives
+only the public ones (the `QoreFunction` copy constructor). A check of the function (`hasPublic()`) is not enough, and
+neither is a check of the variant after resolution: resolving among all variants can select a private variant where an
+importer's call selects a public one (an exact `string` match over a `softint` conversion). So
+`QoreFunction::runtimeFindVariant()` takes a variant filter (`QRFV_ONLY_USER`, the former `only_user` flag, and
+`QRFV_EXPORTED_ONLY`), which skips the private user variants in the search and in the "no variant matching" error;
+`evalFunction()` resolves with it when the boundary applies and no variant is given, and refuses a given private variant
+(`canSeeVariant()`). The type-vector lookup `QoreExternalFunction::findVariant(type_vec, pgm, caller, xsink)` and the
+module's listings (`append_variant_objects()`) use the same filter. A zero filter costs the runtime search nothing.
+
+A function handle records the namespace it was found in (`QoreReflectionFunction::ns`), and its calls pass it to
+`evalFunction(..., ns, caller, xsink)`, so a handed-out handle of a `public` function in a non-public namespace is
+refused, as the function is invisible to an importer. A typed hash handle is checked against the hashdecl's own Program
+and namespace (`reflection_can_see_typed_hash()`), as a class is: `Type::getTypedHash()` binds the handle to the type's
+source Program, else to the caller's own, where the boundary would not apply. Its member default values
+(`AbstractMember::getDefaultValue()`) are checked like its casts. Module code reflecting on its own Program, and callers to which 2a does not apply, are unchanged.
 A `PO_NO_*` caller is refused by `checkProgramAccess()` when the module Program has fewer restrictions; when the module
 Program inherited the caller's restrictions (the caller loaded it first), only this boundary refuses.
 
@@ -353,7 +371,8 @@ encode declaration paths and resolve them in the deserializing Program, without 
 | `QoreExternalFunction::evalFunction(…, const QoreReflectionCaller&, …)` | `qore/QoreReflection.h` | call a function checked against the caller and the function's Program
 | `qore_parse_options_allow_domain()` | `qore/QoreReflection.h` | the parser's domain rule, shared by all checks
 | `qore_program_find_namespace()` | `qore/QoreReflection.h` | map a namespace to the one with the same path in a Program's tree (N1)
-| `QoreReflectionCaller::appliesModuleExports()`, `canSeeNamespace()`, `canSeeDeclaration()`, `canSeeClass()`, `checkModuleExport()` | `qore/QoreReflection.h` | the export boundary of user modules (2b)
+| `QoreReflectionCaller::appliesModuleExports()`, `canSeeNamespace()`, `canSeeDeclaration()`, `canSeeClass()`, `canSeeVariant()`, `checkModuleExport()` | `qore/QoreReflection.h` | the export boundary of user modules (2b)
+| `QoreExternalFunction::findVariant(type_vec, pgm, caller, xsink)`, `evalFunction(variant, args, pgm, ns, caller, xsink)` | `qore/QoreReflection.h` | variant lookup and calls within the export boundary (2b)
 | `QoreProgram::findFunction(path, pns)`, `QoreProgram::findAllFunctionsRegexNs()` | `qore/QoreProgram.h` | function lookups that return the namespace, for 2b
 | `QoreClass::runtimeCheckDomain()` | `qore/QoreClass.h` | the class-domain rule (also used by `create_object()`)
 | `qore_program_private_base::creator_ids` / `programCreatedBy()` | internal | the creator chain for `checkProgramAccess()`

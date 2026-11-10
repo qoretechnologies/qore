@@ -85,6 +85,22 @@ int reflection_check_class_export(const QoreReflectionCaller& caller, const Qore
     return caller.checkModuleExport(caller.canSeeClass(target, cls), "class", cls->getName(), xsink);
 }
 
+bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, const QoreNamespace* ns) {
+    const QoreProgram* decl_pgm = th->getProgram();
+    if (decl_pgm && decl_pgm != target) {
+        // the namespace recorded in the handle belongs to the handle's Program; the declaration's own is checked
+        return caller.canSeeDeclaration(decl_pgm, th->getNamespace(), reflection_exported(th));
+    }
+    return caller.canSeeDeclaration(target, ns, reflection_exported(th));
+}
+
+int reflection_check_typed_hash_export(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, const QoreNamespace* ns, ExceptionSink* xsink) {
+    return caller.checkModuleExport(reflection_can_see_typed_hash(caller, target, th, ns), "typed hash",
+        th->getName(), xsink);
+}
+
 int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink) {
     bool caller_refused = false;

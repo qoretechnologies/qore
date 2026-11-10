@@ -619,8 +619,7 @@ hash<auto> TypedHash::doCast(hash<auto> h) {
     }
     // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
     // boundary applies to
-    if (caller.checkModuleExport(caller.canSeeDeclaration(thd->pgm, thd->ns, reflection_exported(thd->th)),
-            "typed hash", thd->th->getName(), xsink)) {
+    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
@@ -660,8 +659,7 @@ hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
     }
     // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
     // boundary applies to
-    if (caller.checkModuleExport(caller.canSeeDeclaration(thd->pgm, thd->ns, reflection_exported(thd->th)),
-            "typed hash", thd->th->getName(), xsink)) {
+    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
@@ -699,8 +697,7 @@ hash<auto> TypedHash::doCastValues(hash<auto> values) {
     }
     // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
     // boundary applies to
-    if (caller.checkModuleExport(caller.canSeeDeclaration(thd->pgm, thd->ns, reflection_exported(thd->th)),
-            "typed hash", thd->th->getName(), xsink)) {
+    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
@@ -767,8 +764,7 @@ hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> ov
     }
     // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
     // boundary applies to
-    if (caller.checkModuleExport(caller.canSeeDeclaration(thd->pgm, thd->ns, reflection_exported(thd->th)),
-            "typed hash", thd->th->getName(), xsink)) {
+    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);

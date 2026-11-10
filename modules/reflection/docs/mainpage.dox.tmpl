@@ -155,9 +155,16 @@
       module's %Program, does not find a declaration that the module does not export, nor anything in a namespace that
       it does not export, and raises the same exception as for a declaration that does not exist; a listing, such as
       @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()", leaves it out
-    - a reflection handle of such a function, global variable, constant or typed hash, which the module itself created
-      and handed out, cannot call the function, read or write the variable, read the constant or evaluate the typed
-      hash's initializers
+    - a function that the module declares with \c public and other variants exports only its public variants: the
+      other variants are not listed, not found by
+      @ref Qore::Reflection::Function::getVariant() "Function::getVariant()" and the like, and a call such as
+      @ref Qore::Reflection::Function::call() "Function::call()" selects the variant among the public ones, as a call
+      from a %Program that imports the module does
+    - a reflection handle of such a function, function variant, global variable, constant or typed hash, which the
+      module itself created and handed out, cannot call the function or variant, read or write the variable, read the
+      constant or evaluate the typed hash's initializers (casts and member default values), nor can a handle of a
+      typed hash obtained from the type of a value (<tt>Type::getType(value).getTypedHash()</tt>), nor a handle of a
+      \c public function in a namespace that the module does not export
     - a class that the module does not export cannot be constructed, and its static methods, static members,
       constants and member initializers cannot be used; its normal methods and members can be used with an object of
       the class, subject to @ref reflection_member_access "member access", as in source code

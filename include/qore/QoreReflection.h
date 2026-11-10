@@ -280,6 +280,23 @@ public:
     //! returns a variant matching the arguments exactly or throws a Qore-language exception and returns nullptr
     DLLEXPORT const QoreExternalVariant* findVariant(const type_vec_t& type_vec, ExceptionSink* xsink) const;
 
+    //! returns a variant matching the arguments among the variants that a caller may see
+    /** As findVariant(const type_vec_t&, ExceptionSink*), but a user variant that a user module does not export
+        is not considered when the export boundary of \a pgm applies to \a caller (see
+        QoreReflectionCaller::canSeeVariant()).
+
+        @param type_vec the parameter types
+        @param pgm the Program where the function is defined
+        @param caller the code looking up the variant
+        @param xsink raises an exception if no visible variant matches
+
+        @note Do not use this function with class methods
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreExternalVariant* findVariant(const type_vec_t& type_vec, const QoreProgram* pgm,
+            const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
+
     //! returns true if the function is builtin
     DLLEXPORT bool isBuiltin() const;
 
@@ -313,6 +330,30 @@ public:
     */
     DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
             const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
+
+    //! evaluates the function found in a namespace on behalf of a caller captured at a reflection entry point
+    /** As evalFunction(const QoreExternalVariant*, const QoreListNode*, QoreProgram*, const QoreReflectionCaller&,
+        ExceptionSink*), and when the export boundary of \a pgm applies to \a caller, the namespace that holds the
+        function must be visible (QoreReflectionCaller::canSeeNamespace()), as for an importer of the module, which
+        does not see a \c public function in a namespace that the module does not export.  Also when the export
+        boundary applies, \a variant must be visible (QoreReflectionCaller::canSeeVariant()), and a variant selected
+        for the arguments is selected among the visible variants only.
+
+        @param variant the variant to call, or nullptr to select it for the arguments
+        @param args the arguments
+        @param pgm the Program where the function is defined
+        @param ns the namespace that holds the function, or nullptr if it is not known
+        @param caller the code calling the function
+        @param xsink raises \c INVALID-FUNCTION-ACCESS if the caller or \a pgm does not allow the variant's
+        functional domain, or \c REFLECTION-ACCESS-ERROR if the caller may not execute code in \a pgm or the function
+        or variant is not exported to it
+
+        @note Do not use this function with class methods
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
+            const QoreNamespace* ns, const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
 
     //! returns the first declared variant in the variant list
     DLLEXPORT const QoreExternalVariant* getFirstVariant() const;
@@ -826,6 +867,18 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT bool canSeeClass(const QoreProgram* target, const QoreClass* cls) const;
+
+    //! Returns true if the caller may see a variant of a function of a target Program
+    /** When the export boundary applies (appliesModuleExports()), a user variant must be \c public: a function
+        that a module declares with \c public and private variants exports only its public ones, which are all that
+        an importer of the module sees and calls.  Builtin variants are always visible.
+
+        @param target the Program that the function belongs to
+        @param v the variant of a function (not of a class method)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeVariant(const QoreProgram* target, const QoreExternalVariant* v) const;
 
     //! Raises \c REFLECTION-ACCESS-ERROR for a declaration that a module does not export to the caller
     /** @param visible the result of canSeeDeclaration() or canSeeClass(); no exception is raised if true

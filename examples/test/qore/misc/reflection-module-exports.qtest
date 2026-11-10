@@ -127,6 +127,31 @@ class ReflectionModuleExportsTest inherits QUnit::Test {
         ("handle-cast-hidden", "555", "REFLECTION-ACCESS-ERROR"),
         ("handle-cast-values-hidden", "555", "REFLECTION-ACCESS-ERROR"),
         ("handle-cast-pub", "1", "1"),
+        # a function with a public and a private variant: the other callers see and call only the public one, and a
+        # call is resolved among the public variants (the private variant matches '7' exactly, the public one by
+        # conversion)
+        ("mixed-pub", "5", "5"),
+        ("mixed-resolve", "-1", "7"),
+        ("mixed-resolve-args", "-1", "7"),
+        ("mixed-unmatched", "-2", "RUNTIME-OVERLOAD-ERROR"),
+        ("mixed-unmatched-desc", "NOTHING", "public-only"),
+        ("mixed-func-variants", "3", "1"),
+        ("mixed-func-variant-call", "-1", "no-variant"),
+        ("mixed-ns-variants", "3", "1"),
+        ("mixed-get-variant", "-1", "VARIANT-MATCH-ERROR"),
+        ("mixed-get-variant-args", "-1", "VARIANT-MATCH-ERROR"),
+        ("mixed-get-variant-hash", "-2", "VARIANT-MATCH-ERROR"),
+        ("mixed-handle-variant", "-1", "REFLECTION-ACCESS-ERROR"),
+        # an importer of the module, also of the module compiled with qcc, calls only the public variant
+        ("mixed-direct", "7", "7"),
+        # a value of a typed hash that the module does not export: its type gives a handle in the caller's Program
+        ("type-hash-cast", "555", "REFLECTION-ACCESS-ERROR"),
+        ("type-hash-cast-values", "555", "REFLECTION-ACCESS-ERROR"),
+        ("type-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-pub-hash-member-default", "1", "1"),
+        # a handle of a public function in a namespace that the module does not export
+        ("handle-func-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
         # hidden_var is 555 for the other callers only through the call reference
         ("state", "555:9:556:556", "555:1:556:556"),
     );
@@ -227,7 +252,13 @@ const HIDDEN = \"hidden\";
 int sub hidden_func() { return hidden_var = 555; }
 namespace HiddenNs {
     int sub in_hidden_ns() { return 3; }
+    public int sub pub_in_hidden() { return 4; }
 }
+
+# a function with a public variant and a private one, which an importer of the module does not see
+public int sub mixed(softint i) { return i; }
+int sub mixed(string s) { return -1; }
+int sub mixed(hash<auto> h) { return -2; }
 hashdecl HiddenHash {
     int a = hidden_func();
 }
@@ -283,6 +314,17 @@ public class Factory {
     static GlobalVar pubGlobalVar() { return GlobalVar::forName(\"pub_var\"); }
     static TypedHash hiddenTypedHash() { return TypedHash::forName(\"HiddenHash\"); }
     static TypedHash pubTypedHash() { return TypedHash::forName(\"PubHash\"); }
+    static Function hiddenNsFunction() { return Function::forName(\"HiddenNs::pub_in_hidden\"); }
+    static FunctionVariant mixedHiddenVariant() {
+        foreach FunctionVariant v in (Function::forName(\"mixed\").getVariants()) {
+            if (v.getParamString() =~ /string/) {
+                return v;
+            }
+        }
+        throw \"TEST-ERROR\", \"no string variant\";
+    }
+    #! a value of the typed hash that the module does not export; no initializer runs
+    static hash<auto> hiddenHashValue() { return <HiddenHash>{\"a\": 0}; }
     #! the state that the operations change
     static string state() { return sprintf(\"%d:%d:%d:%d\", hidden_var, HiddenClass::s, pub_var, PubClass::s); }
 }
@@ -376,6 +418,42 @@ auto sub run(string op) {
         case 'handle-cast-hidden': return Factory::hiddenTypedHash().doCast({}).a;
         case 'handle-cast-values-hidden': return Factory::hiddenTypedHash().doCastValues({'x': {}}).x.a;
         case 'handle-cast-pub': return Factory::pubTypedHash().doCast({}).a;
+        case 'mixed-pub': return root.getFunction('mixed').call(5);
+        case 'mixed-resolve': return root.getFunction('mixed').call('7');
+        case 'mixed-resolve-args': return root.getFunction('mixed').callArgs(('7',));
+        case 'mixed-unmatched': return root.getFunction('mixed').call({});
+        case 'mixed-unmatched-desc': {
+            try {
+                root.getFunction('mixed').call({});
+            } catch (hash<ExceptionInfo> ex) {
+                # the variants listed in the error are only those the caller can see
+                return ex.desc =~ /string s|hash<auto> h/ ? 'private-listed' : 'public-only';
+            }
+            return NOTHING;
+        }
+        case 'mixed-func-variants': return root.getFunction('mixed').getVariants().size();
+        case 'mixed-func-variant-call': {
+            foreach FunctionVariant v in (root.getFunction('mixed').getVariants()) {
+                if (v.getParamString() =~ /string/) {
+                    return v.call('7');
+                }
+            }
+            return 'no-variant';
+        }
+        case 'mixed-ns-variants': return (select root.getVariants(), $1.getFunction().getName() == 'mixed').size();
+        case 'mixed-get-variant': return root.getVariant('mixed', StringType).call('7');
+        case 'mixed-get-variant-args': return root.getVariantArgs('mixed', (StringType,)).call('7');
+        case 'mixed-get-variant-hash': return root.getFunction('mixed').getVariant(HashType).call({});
+        case 'mixed-handle-variant': return Factory::mixedHiddenVariant().call('7');
+        case 'mixed-direct': return mixed('7');
+        case 'type-hash-cast': return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCast({}).a;
+        case 'type-hash-cast-values':
+            return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCastValues({'x': {}}).x.a;
+        case 'type-hash-member-default':
+            return Type::getType(Factory::hiddenHashValue()).getTypedHash().getMember('a').getDefaultValue();
+        case 'handle-hash-member-default': return Factory::hiddenTypedHash().getMember('a').getDefaultValue();
+        case 'handle-pub-hash-member-default': return Factory::pubTypedHash().getMember('a').getDefaultValue();
+        case 'handle-func-hidden-ns': return Factory::hiddenNsFunction().call();
         case 'state': return Factory::state();
     }
     throw 'TEST-ERROR', op;
@@ -393,7 +471,8 @@ foreach string op in (Ops) {
         auto v = p.callFunction(\"run\", op);
         printf(\"%s=%s\\n\", op, exists v ? v.toString() : \"NOTHING\");
     } catch (hash<ExceptionInfo> ex) {
-        bool code_only = ex.err == \"REFLECTION-ACCESS-ERROR\" || ex.err =~ /^UNKNOWN-/;
+        bool code_only = ex.err == \"REFLECTION-ACCESS-ERROR\" || ex.err =~ /^UNKNOWN-/
+            || ex.err == \"RUNTIME-OVERLOAD-ERROR\" || ex.err == \"VARIANT-MATCH-ERROR\";
         printf(\"%s=%s\\n\", op, code_only ? ex.err : ex.err + \": \" + ex.desc);
     }
 }

@@ -1549,6 +1549,14 @@ struct IList : public ilist_t {
         const_iterator aqfi, bool& internal_access, bool& stop) const;
 };
 
+//! variant filter of QoreFunction::runtimeFindVariant(): only user variants
+#define QRFV_ONLY_USER     (1 << 0)
+//! variant filter of QoreFunction::runtimeFindVariant(): no user variant that a user module does not export
+/** For a caller that the export boundary of the module applies to (see QoreReflectionCaller::appliesModuleExports()):
+    it can call only the variants that an importer of the module sees.
+*/
+#define QRFV_EXPORTED_ONLY (1 << 1)
+
 class QoreFunction : protected QoreReferenceCounter {
 friend class QoreFunctionIterator;
 friend class qore_external_function_iterator_private;
@@ -1890,17 +1898,27 @@ public:
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-            bool only_user, const qore_class_private* class_ctx,
+            unsigned variant_filter, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
             bool* content_dependent = nullptr) const;
 
-    // finds the best match with the given arg types
+    // finds the best match with the given arg types; \a variant_filter: see QRFV_ONLY_USER and QRFV_EXPORTED_ONLY
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
+            unsigned variant_filter = 0) const;
+
+    //! returns true if \a v is skipped by a runtime variant search with the given QRFV_* filter (not 0)
+    DLLLOCAL static bool skipFilteredVariant(unsigned variant_filter, const AbstractQoreFunctionVariant* v) {
+        if ((variant_filter & QRFV_ONLY_USER) && !v->isUser()) {
+            return true;
+        }
+        // a user module's variant that the module does not export
+        return (variant_filter & QRFV_EXPORTED_ONLY) && v->isUser() && !v->isModulePublic();
+    }
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 
@@ -2064,7 +2082,7 @@ protected:
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
         const QoreTypeInfo* receiver_type_info = nullptr,
-        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr, unsigned variant_filter = 0) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;

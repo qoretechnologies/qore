@@ -55,7 +55,7 @@ QoreObject* QoreReflectionFunction::getFunctionObject(ExceptionSink* xsink) cons
     return new QoreObject(QC_FUNCTION, pgm, new QoreReflectionFunction(pgm, f));
 }
 
-QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink) {
+QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller) {
     // create argument list
     type_vec_t type_vec;
 
@@ -76,7 +76,11 @@ QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* 
         type_vec.push_back(t->typeInfo);
     }
 
-    const QoreExternalVariant* v = func->findVariant(type_vec, xsink);
+    // a function's variant that a user module does not export is not found by a caller its export boundary
+    // applies to
+    const QoreExternalVariant* v = caller && mtype == MT_None
+        ? func->findVariant(type_vec, pgm, *caller, xsink)
+        : func->findVariant(type_vec, xsink);
 
     if (*xsink) {
         return nullptr;
@@ -110,9 +114,14 @@ QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, 
     return nullptr;
 }
 
-void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink) {
+void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller) {
     QoreExternalFunctionIterator i(*f);
     while (i.next()) {
+        // a function's variant that a user module does not export is not listed to a caller its export boundary
+        // applies to
+        if (caller && mtype == MT_None && !caller->canSeeVariant(pgm, i.getVariant())) {
+            continue;
+        }
         l.push(get_variant_object(pgm, f, mtype, i.getVariant(), xsink), xsink);
     }
 }
