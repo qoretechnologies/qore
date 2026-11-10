@@ -288,10 +288,12 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     // issue #3157: try to handle timeout + date specially; an operand of a type that is not known at parse time (the
     // argument of a map expression, for example) can be a date, so the flag does not depend on the other operand's
     // type being known, as it does not for the subtraction operator (qore#5735)
-    if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+    // (a *timeout is a timeout too: its value in milliseconds, or NOTHING, which is no int to add as milliseconds)
+    if ((QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo) || QoreTypeInfo::equal(leftTypeInfo, timeoutOrNothingTypeInfo))
         && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
         check_timeout_date_variant = true;
-    } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+    } else if ((QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+            || QoreTypeInfo::equal(rightTypeInfo, timeoutOrNothingTypeInfo))
         && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
         check_date_timeout_variant = true;
     }

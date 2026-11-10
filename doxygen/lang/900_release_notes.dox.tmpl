@@ -1539,7 +1539,8 @@
       native code, as it does for a function; it wrote an executable that did nothing and exited with status 0
     - the AST interpreter added a @ref timeout_type "timeout" variable to a @ref date_type "date" of no declared type
       (such as the argument of a @ref map "map" expression) as seconds instead of milliseconds with the \c + operator,
-      unlike the \c - operator and the IR, JIT and AOT modes
+      unlike the \c - operator and the IR, JIT and AOT modes; a \c *timeout operand counts as milliseconds too, in every
+      mode, with the \c + and \c - operators (a \c softint or \c int operand is still seconds)
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the

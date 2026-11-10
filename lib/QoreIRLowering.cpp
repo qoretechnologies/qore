@@ -9478,8 +9478,9 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     if (op == QoreIROpcode::AddAny) {
         const QoreTypeInfo* lti = getExprTypeInfo(plus->getLeft());
         const QoreTypeInfo* rti = getExprTypeInfo(plus->getRight());
-        if ((lti && QoreTypeInfo::equal(lti, timeoutTypeInfo))
-                || (rti && QoreTypeInfo::equal(rti, timeoutTypeInfo))) {
+        if ((lti && (QoreTypeInfo::equal(lti, timeoutTypeInfo) || QoreTypeInfo::equal(lti, timeoutOrNothingTypeInfo)))
+                || (rti && (QoreTypeInfo::equal(rti, timeoutTypeInfo)
+                    || QoreTypeInfo::equal(rti, timeoutOrNothingTypeInfo)))) {
             op = QoreIROpcode::AddTimeout;
         }
     }
@@ -9508,8 +9509,9 @@ QoreIRValue QoreIRLowering::lowerMinus(const QoreValue& expr, std::string& error
     if (op == QoreIROpcode::SubAny) {
         const QoreTypeInfo* lti = getExprTypeInfo(minus->getLeft());
         const QoreTypeInfo* rti = getExprTypeInfo(minus->getRight());
-        if ((lti && QoreTypeInfo::equal(lti, timeoutTypeInfo))
-                || (rti && QoreTypeInfo::equal(rti, timeoutTypeInfo))) {
+        if ((lti && (QoreTypeInfo::equal(lti, timeoutTypeInfo) || QoreTypeInfo::equal(lti, timeoutOrNothingTypeInfo)))
+                || (rti && (QoreTypeInfo::equal(rti, timeoutTypeInfo)
+                    || QoreTypeInfo::equal(rti, timeoutOrNothingTypeInfo)))) {
             op = QoreIROpcode::SubTimeout;
         }
     }
