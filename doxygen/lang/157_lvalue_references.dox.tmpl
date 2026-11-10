@@ -34,6 +34,11 @@ lastorder.numberofitems = lastorder.items.size();
     lvalue represented by the local variable will exist beyond its local scope; as long as the reference to the lvalue
     exists, the local variable's lvalue will exist and remain valid.
 
+    @note A reference can outlive the @ref Qore::Program "Program" whose lvalue it refers to, for example when a
+    function of the Program returns a reference to one of its variables.  Using a reference to a lvalue of a Program
+    that is being deleted, or has been, raises a \c PROGRAM-ERROR exception, as a call into a deleted Program does;
+    while a reference is used, the deletion of its Program waits until the lvalue has been used.
+
     @since %Qore 0.8.5 universal lvalue references are supported; previously references could only be used with
     arguments to a function or method call or the like.  As of %Qore 0.8.5+, references can be used anywhere in %Qore
     in any expression, even with references to local variables in background expressions and in closure argument lists.

@@ -33,6 +33,8 @@ class ExecModeOutputTest inherits QUnit::Test {
         list<string> pinned;
         #! a check of the expected output: returns the lines that break a rule the output must follow
         *code check;
+        #! the qcc optimization options that the executable is compiled with, one executable each ("" for the default)
+        list<string> qcc_opts;
     }
 
     #! creates the test; \a desc describes what every mode and the executable must give
@@ -45,9 +47,11 @@ class ExecModeOutputTest inherits QUnit::Test {
         @param check a check of the expected output, taking the output and returning the lines that break a rule
         that the output must follow (an empty list if none), for an expected output computed by running the AST
         interpreter
+        @param qcc_opts the qcc optimization options (such as \c "-O0") to compile an executable with each, for a
+        test that must hold at every optimization level; the default is one executable with qcc's default level
     */
-    constructor(string name, string script, string expected, string desc, *list<string> pinned, *code check)
-            : QUnit::Test(name, "1.0", \ARGV) {
+    constructor(string name, string script, string expected, string desc, *list<string> pinned, *code check,
+            *list<string> qcc_opts) : QUnit::Test(name, "1.0", \ARGV) {
         self.script = script;
         self.expected = expected;
         prefix = name.lwr();
@@ -64,6 +68,7 @@ class ExecModeOutputTest inherits QUnit::Test {
             addTestCase("the AST interpreter's output holds the pinned results", \testPinned());
         }
         self.check = check;
+        self.qcc_opts = qcc_opts ?? ("",);
         if (check) {
             addTestCase("the AST interpreter's output follows its rules", \testCheck());
         }
@@ -127,12 +132,14 @@ class ExecModeOutputTest inherits QUnit::Test {
     testAot() {
         TmpDir tmp("qore-" + prefix + "-");
         string path = writeScript(tmp);
-        string exe = tmp.path + DirSep + prefix;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
-            libqore_dir, qcc_bin, exe, path));
-        assertTrue(is_file(exe), "compiled the executable: " + out);
-        assertEq((), differences(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe))), "executable");
+        foreach string opt in (qcc_opts) {
+            string exe = tmp.path + DirSep + prefix + (opt ? opt.lwr() : "");
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, qcc_bin, opt, exe, path));
+            assertTrue(is_file(exe), "compiled the executable " + opt + ": " + out);
+            assertEq((), differences(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe))), "executable " + opt);
+        }
     }
 
     #! returns the lines of the output that differ from the expected output, as "expected -> actual"

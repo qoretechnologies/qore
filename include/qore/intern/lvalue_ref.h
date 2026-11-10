@@ -41,11 +41,12 @@ public:
     QoreValue vexp{};
     const QoreTypeInfo* typeInfo;
     QoreObject* self;
-    //! the Program of the lvalue, by address: identification only, see QoreReferenceProgramHelper
+    //! the Program of the lvalue, with a dependency reference (QoreProgram::depRef())
+    /** The dependency reference keeps the Program allocated after it has been deleted, and so its address from being
+        given to another Program, while the reference exists: its use enters the Program, which refuses the entry
+        once it is being deleted (see QoreReferenceProgramHelper)
+    */
     QoreProgram* pgm;
-    //! the ID of the Program of the lvalue, which identifies it: a Program created after it was deleted can have its
-    //! address
-    qore_program_id_t pgm_id;
     const void* lvalue_id;
     const qore_class_private* cls;
     //! weak references to the reference node, which keep it allocated after its last reference is released
@@ -60,6 +61,9 @@ public:
         if (self)
             self->tDeref();
         vexp.discard(nullptr);
+        if (pgm) {
+            pgm->depDeref();
+        }
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {

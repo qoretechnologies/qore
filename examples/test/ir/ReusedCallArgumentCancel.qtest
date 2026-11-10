@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReusedCallArgumentCancelTest
+
+#! Regression test (qore#5638): the first call of a function in a thread with a pending cancellation does not change
+#! how the function releases the arguments of its calls
+/** The analysis of the call arguments that a later execution of a call uses again (qore_ir_find_reused_call_args())
+    is cached for the function and used by every thread that runs it.  It polled cancellation and, when cancelled,
+    returned every value as reused: a function first called by a thread that caught the THREAD-CANCELLED exception
+    (its cancellation stays pending) never released an argument at the return of its call again, in any thread, so
+    the IR interpreter, JIT, tiered and the IR tier destroyed the temporary argument of argName() after mark() ran,
+    also in the later calls of the main thread, while the AST interpreter destroyed it when argName() returned.  The
+    IR interpreter now runs the analysis without check points, as its other analyses, and native code fails the
+    compilation if it is cancelled.
+
+    Every mode, the IR tier and qcc executables built at -O0 and -O3 must give the AST interpreter's output, in which
+    every temporary argument is destroyed before the mark that follows its call.
+*/
+class ReusedCallArgumentCancelTest inherits ExecModeOutputTest {
+    public {
+        const Script = '%modern
+%disable-all-warnings
+
+class E {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+auto sub mark(string m) { printf("mark %s\n", m); return ""; }
+string sub argName(E e) { return e.n; }
+int sub argLen(string s) { return s.size(); }
+
+# a function whose analysis polls cancellation many times: the argument of argName() is released when the call
+# returns, before mark() runs, in every mode
+string sub g(string c, list<string> l) {
+    int r = 0;
+    foreach string e in (l) {
+        r += argLen(e) + argLen(e + "1") + argLen(e + "2") + argLen(e + "3") + argLen(e + "4");
+        r += argLen(e + "5") + argLen(e + "6") + argLen(e + "7") + argLen(e + "8") + argLen(e + "9");
+        if (r > 1000000) { r = 0; }
+    }
+    for (int i = 0; i < 3; ++i) {
+        r += argLen(c) + argLen(c + "a") + argLen(c + "b") + argLen(c + "c") + argLen(c + "d");
+        r += argLen(c + "e") + argLen(c + "f") + argLen(c + "g") + argLen(c + "h") + argLen(c + "i");
+    }
+    auto s = argName(new E(c)) + mark(c);
+    return sprintf("%s %d", c, r);
+}
+
+# no check point (no loop): the whole function runs in a thread whose cancellation is pending
+string sub g2(string c) {
+    int r = 0;
+    r += argLen(c + "0") + argLen(c + "x0");
+    r += argLen(c + "1") + argLen(c + "x1");
+    r += argLen(c + "2") + argLen(c + "x2");
+    r += argLen(c + "3") + argLen(c + "x3");
+    r += argLen(c + "4") + argLen(c + "x4");
+    r += argLen(c + "5") + argLen(c + "x5");
+    r += argLen(c + "6") + argLen(c + "x6");
+    r += argLen(c + "7") + argLen(c + "x7");
+    r += argLen(c + "8") + argLen(c + "x8");
+    r += argLen(c + "9") + argLen(c + "x9");
+    r += argLen(c + "10") + argLen(c + "x10");
+    r += argLen(c + "11") + argLen(c + "x11");
+    r += argLen(c + "12") + argLen(c + "x12");
+    r += argLen(c + "13") + argLen(c + "x13");
+    r += argLen(c + "14") + argLen(c + "x14");
+    r += argLen(c + "15") + argLen(c + "x15");
+    r += argLen(c + "16") + argLen(c + "x16");
+    r += argLen(c + "17") + argLen(c + "x17");
+    r += argLen(c + "18") + argLen(c + "x18");
+    r += argLen(c + "19") + argLen(c + "x19");
+    r += argLen(c + "20") + argLen(c + "x20");
+    r += argLen(c + "21") + argLen(c + "x21");
+    r += argLen(c + "22") + argLen(c + "x22");
+    r += argLen(c + "23") + argLen(c + "x23");
+    r += argLen(c + "24") + argLen(c + "x24");
+    r += argLen(c + "25") + argLen(c + "x25");
+    r += argLen(c + "26") + argLen(c + "x26");
+    r += argLen(c + "27") + argLen(c + "x27");
+    r += argLen(c + "28") + argLen(c + "x28");
+    r += argLen(c + "29") + argLen(c + "x29");
+    r += argLen(c + "30") + argLen(c + "x30");
+    r += argLen(c + "31") + argLen(c + "x31");
+    r += argLen(c + "32") + argLen(c + "x32");
+    r += argLen(c + "33") + argLen(c + "x33");
+    r += argLen(c + "34") + argLen(c + "x34");
+    r += argLen(c + "35") + argLen(c + "x35");
+    r += argLen(c + "36") + argLen(c + "x36");
+    r += argLen(c + "37") + argLen(c + "x37");
+    r += argLen(c + "38") + argLen(c + "x38");
+    r += argLen(c + "39") + argLen(c + "x39");
+    auto s = argName(new E(c)) + mark(c);
+    return sprintf("%s %d", c, r);
+}
+
+list<string> l = ("a", "bb", "ccc");
+Queue q();
+Counter done(1);
+# the first call of g() is made by a thread whose cancellation is pending: it caught the THREAD-CANCELLED exception
+int tid = background sub () {
+    on_exit done.dec();
+    try {
+        q.get();
+        printf("not cancelled\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("worker: %s\n", ex.err);
+        printf("%s\n", g2("worker2"));
+        try {
+            printf("%s\n", g("worker", l));
+        } catch (hash<ExceptionInfo> ex1) {
+            printf("worker g: %s\n", ex1.err);
+        }
+    }
+}();
+cancel_thread(tid, "test");
+done.waitForZero();
+# a later call in another thread follows the same rule
+printf("%s\n", g("main", l));
+printf("%s\n", g("main2", l));
+printf("%s\n", g2("main3"));
+';
+
+        #! the calls whose temporary argument must be destroyed before their mark
+        const Calls = ("worker2", "main", "main2", "main3");
+    }
+
+    constructor() : ExecModeOutputTest("ReusedCallArgumentCancel", Script,
+            ExecModeOutputTest::ast_output("ReusedCallArgumentCancel", Script),
+            "releases a temporary argument when its call returns after a cancelled first call",
+            ("worker: THREAD-CANCELLED", "worker g: THREAD-CANCELLED"),
+            \ReusedCallArgumentCancelTest::checkOrder(), ("-O0", "-O3")) {
+    }
+
+    #! returns the calls whose argument is not destroyed before the call's mark
+    static list<string> checkOrder(string out) {
+        hash<string, int> pos = {};
+        foreach string line in (out.split("\n")) {
+            if (!exists pos{line}) {
+                pos{line} = $#;
+            }
+        }
+        list<string> rv = ();
+        foreach string c in (Calls) {
+            string d = "dtor " + c;
+            string m = "mark " + c;
+            if (!exists pos{d} || !exists pos{m}) {
+                rv += sprintf("%s: missing", c);
+            } else if (pos{d} > pos{m}) {
+                rv += sprintf("%s: destroyed after its mark", c);
+            }
+        }
+        return rv;
+    }
+}
