@@ -575,7 +575,7 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     // local interface address (not wildcard). Required for correct ngtcp2
     // path validation. Connected sockets also filter incoming packets to
     // only those from the peer, which is desirable for QUIC clients.
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
         return -1;
@@ -853,7 +853,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     }
 #endif
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
     if (sent < 0) {
@@ -888,7 +888,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     socklen_t src_addrlen = sizeof(src_addr);
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     size_t cmsg_len = sizeof(cmsg_buf);
 #ifdef DEBUG
     qore_quic_test_note_receive_fd(fd);
@@ -1472,7 +1472,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         return -1;
     }
 
-    int old_fd = sock->priv->socket->getSocket();
+    int old_fd = sock->priv->socket->getDescriptor();
     if (old_fd < 0) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "socket is not open");
         return -1;
@@ -1633,7 +1633,7 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
 
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPacket()
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
     // QUIC servers may receive bursts of client traffic (handshake retries,
@@ -1837,7 +1837,7 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
 
 int SocketQuicServerPollOperation::processTimersAndSendAll(
     ngtcp2_tstamp& min_expiry, ExceptionSink* xsink) {
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     min_expiry = UINT64_MAX;
     int result = 0;
 
@@ -1913,7 +1913,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     socklen_t src_addrlen = sizeof(src_addr);
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     size_t cmsg_len = sizeof(cmsg_buf);
 #ifdef DEBUG
     qore_quic_test_note_receive_fd(fd);
@@ -2098,7 +2098,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             ssize_t retry_len = QuicSession::writeRetry(retry_buf, sizeof(retry_buf), new_hdr,
                 reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
             if (retry_len > 0) {
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 (void)sendto(fd, retry_buf, static_cast<size_t>(retry_len), 0,
                     reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
             }
@@ -2133,7 +2133,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
                 struct sockaddr_storage remote_addr;
                 socklen_t remote_addrlen;
                 target_session->getRemoteAddrCopy(remote_addr, remote_addrlen);
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
                     reinterpret_cast<const struct sockaddr*>(&remote_addr),
                     remote_addrlen);
@@ -2573,7 +2573,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
 
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPackets()
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed in send-response setup");
@@ -2642,7 +2642,7 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
         reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
@@ -2671,7 +2671,7 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
 
 int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
     return recvAndDispatchQuicPackets(
-        sock->priv->socket->getSocket(),
+        sock->priv->socket->getDescriptor(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
@@ -2902,7 +2902,7 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
 
     // Cache local address
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno,
@@ -2964,7 +2964,7 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
         reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
@@ -2990,7 +2990,7 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
 
 int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
     return recvAndDispatchQuicPackets(
-        sock->priv->socket->getSocket(),
+        sock->priv->socket->getDescriptor(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
