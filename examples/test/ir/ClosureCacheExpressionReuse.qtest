@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ClosureCacheExpressionReuseTest
+
+#! Regression test: the caches of closure calls are not used for a closure of a deleted Expression
+/** An Expression parses its code into its Program, and deleting the Expression frees that code while the Program
+    lives, with the closures in it: their closure functions, variants, IR and signatures.  The closure of the next
+    Expression is given the same memory, so it had every address that the caches of closure calls held for the closure
+    of the deleted Expression, in the same Program:
+    - the IR interpreter's cache of the last closure called inline (tryExecuteInterpreterInlineIRClosure()) ran the
+      freed IR of the deleted closure: wrong results or a crash, in IR mode, on the IR tier and where tiered execution
+      runs IR;
+    - the cache of the last closure that native code ran as a leaf (tryExecClosureNativeLeaf()) used the leaf derived
+      from the deleted closure's IR: wrong results in JIT and tiered execution.
+
+    The caches are keyed by the closure function's serial, which is never reused (UserClosureFunction::serial).
+
+    The driver evaluates Expressions in one Program, one after the other, each one with a closure of the same code as
+    the one before but a different result, which a function of the Program calls many times; the allocator gives the
+    closure of each Expression the memory of the one before at once, on every platform, so the test fails in every run
+    without the fix.  ClosureCacheProgramReuse.qtest tests closures of deleted Programs.
+*/
+class ClosureCacheExpressionReuseTest inherits QUnit::Test {
+    public {
+        #! the driver script: ARGV[0] is the execution mode of the Program, ARGV[1] the number of Expressions
+        const Script = '%modern
+%no-child-restrictions
+const Families = (
+    # a closure with no arguments: called inline by the IR interpreter
+    {"name": "closure with no arguments",
+        "lib": "public int sub call_it(code c) { int t = 0; for (int i = 0; i < 100; ++i) { t += c(); } return t; }",
+        "code": ("call_it(int sub () { return 3; })", "call_it(int sub () { return 5; })"),
+        "expected": (300, 500)},
+    # a closure with an int argument: run as a leaf by native code
+    {"name": "closure with an argument",
+        "lib": "public int sub call_it(code c) { int t = 0; for (int i = 0; i < 100; ++i) { t += c(10); } "
+            "return t; }",
+        "code": ("call_it(int sub (int i) { return i + 1; })", "call_it(int sub (int i) { return i - 1; })"),
+        "expected": (1100, 900)},
+);
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+int count = int(ARGV[1]);
+foreach hash<auto> family in (Families) {
+    Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+    p.setExecMode(mode);
+    p.parse(family.lib, "lib");
+    int wrong = 0;
+    *string first;
+    for (int i = 0; i < count; ++i) {
+        int k = i % 2;
+        auto rv;
+        {
+            # the code of the Expression, with its closure, is freed when it goes out of scope
+            Expression e(p, family.code[k], "expression");
+            try {
+                rv = e.eval();
+            } catch (hash<ExceptionInfo> ex) {
+                rv = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+        if (rv !== family.expected[k]) {
+            ++wrong;
+            if (!first) {
+                first = sprintf("Expression %d returned %y instead of %y", i, rv, family.expected[k]);
+            }
+        }
+    }
+    printf("%s: %d wrong results%s\n", family.name, wrong, first ? ("; first: " + first) : "");
+}
+';
+
+        #! the expected output of the driver
+        const Expected = "closure with no arguments: 0 wrong results\nclosure with an argument: 0 wrong results\n";
+
+        #! the number of Expressions of each closure
+        const Count = 200;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ClosureCacheExpressionReuseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("closures of a deleted Expression in %s mode", mode), getModeTest(mode));
+        }
+        addTestCase("closures of a deleted Expression on the IR tier", \runIrTier());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-closure-cache-expression-reuse-");
+        string path = writeScript(tmp);
+        assertEq(Expected, ExecModeHarness::run(getCommand(mode, path)), mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-closure-cache-expression-reuse-");
+        string path = writeScript(tmp);
+        assertEq(Expected, ExecModeHarness::run_ir_tier(getCommand("tiered", path)), ExecModeHarness::IRTierName);
+    }
+
+    #! returns the command running the driver
+    private string getCommand(string mode, string path) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s %d",
+            libqore_dir, libqore_dir, qore_bin, mode, path, mode, Count);
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "closure-cache-expression-reuse-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(Script);
+        return path;
+    }
+}

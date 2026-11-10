@@ -81,6 +81,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     */
     private int submitQuicRequestWithStreamCredit(Socket sock, string method, string path,
             hash<auto> req_headers, *data body, bool streaming, int max_streams) {
+        # RFC 9220: an extended CONNECT request waits for the server's SETTINGS, which say whether it may be sent
+        if (streaming && req_headers{":protocol"}) {
+            self.waitForExtendedConnectSettings();
+        }
         int retries = 0;
         while (True) {
             try {

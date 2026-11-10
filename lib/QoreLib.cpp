@@ -2663,6 +2663,23 @@ bool parse_is_readonly_receiver_expression(QoreValue n, int pflag) {
     return n.hasNode() && parse_is_readonly_receiver_node(n.getInternalNode(), pflag);
 }
 
+bool parse_is_self_member_lvalue(QoreValue n) {
+    if (n.getType() != NT_OPERATOR) {
+        return false;
+    }
+    const QoreHashObjectDereferenceOperatorNode* op =
+        dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreValue left = op->getLeft();
+    if (left.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vrn = left.get<const VarRefNode>();
+    return vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf();
+}
+
 int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n) {
     if (!parse_is_readonly_receiver_expression(n, PF_CONST_METHOD)) {
         return 0;

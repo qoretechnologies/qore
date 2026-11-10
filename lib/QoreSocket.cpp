@@ -12311,6 +12311,10 @@ void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->h2_enable_connect_protocol = enable;
 }
 
+void QoreSocket::setHttp3ConnectProtocolEnabled(bool enable) {
+    priv->h3_enable_connect_protocol.store(enable, std::memory_order_release);
+}
+
 int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
     // see qore_socket_send_http2_stream_data_direct(); ordinary threads keep the facade

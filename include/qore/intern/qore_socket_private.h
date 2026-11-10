@@ -2138,6 +2138,12 @@ public:
     */
     bool h2_enable_connect_protocol = true;
 
+    /** When false, the HTTP/3 server sessions of this QUIC socket do not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+        (RFC 9220), so clients do not send extended CONNECT requests (WebSocket over HTTP/3).  Read when a server
+        session is created (QuicSession::createServer()).  Defaults to true.
+    */
+    std::atomic<bool> h3_enable_connect_protocol{true};
+
     //! Per-stream callbacks for HTTP/2 client multiplexing
     /** Maps stream_id -> QoreValue callback for response dispatch.
         Used by Http2ClientMultiplexPollOperation to route completed responses
@@ -2194,8 +2200,20 @@ public:
 
     //! Remove a QUIC session from the session map
     DLLLOCAL void removeQuicSession(int64_t session_id) {
-        AutoLocker al(quic_sessions_lock);
-        quic_sessions.erase(session_id);
+        std::shared_ptr<QuicSession> session;
+        {
+            AutoLocker al(quic_sessions_lock);
+            auto i = quic_sessions.find(session_id);
+            if (i == quic_sessions.end()) {
+                return;
+            }
+            session = std::move(i->second);
+            quic_sessions.erase(i);
+        }
+        // a thread waiting for the peer's SETTINGS on the dropped session (Socket::waitForQuicSettings()) is woken
+        if (session) {
+            session->releaseSettingsWaiters();
+        }
     }
 
     //! Get a QUIC session by session ID
@@ -2665,6 +2683,10 @@ public:
                     session->clearDispatcher();
                 }
                 old_quic_sessions.swap(quic_sessions);
+            }
+            // a thread waiting for the peer's SETTINGS (Socket::waitForQuicSettings()) is woken by the close
+            for (auto& [id, session] : old_quic_sessions) {
+                session->releaseSettingsWaiters();
             }
         }
         // Free shared server SSL_CTX after all sessions are released

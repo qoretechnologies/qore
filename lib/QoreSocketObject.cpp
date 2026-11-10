@@ -5792,6 +5792,11 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
 }
 
+void QoreSocketObject::setHttp3ConnectProtocolEnabled(bool enable) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp3ConnectProtocolEnabled(enable);
+}
+
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
     // Fast path off the blocking controller facade; see
@@ -6635,6 +6640,35 @@ void QoreSocketObject::clearNonBlock() {
 void QoreSocketObject::clearNonBlock(unsigned direction) {
     AutoLocker al(priv->m);
     priv->clearNonBlock(direction);
+}
+
+int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int64 timeout_ms, ExceptionSink* xsink) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(s);
+    if (!session) {
+        xsink->raiseException("HTTP3-ERROR", "no HTTP/3 session active");
+        return -1;
+    }
+    if (session->isRemoteSettingsReceived()) {
+        return 1;
+    }
+    // the I/O thread reads the SETTINGS, and a continuePoll() worker holds up the operation that it runs
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        xsink->raiseException("HTTP3-STATE-ERROR", "cannot wait for the server's HTTP/3 SETTINGS in the async I/O "
+            "thread or in a continuePoll() worker, which read them");
+        return -1;
+    }
+    switch (session->waitForRemoteSettings(timeout_ms, xsink)) {
+        case QuicSession::SettingsWait::Received:
+            return 1;
+        case QuicSession::SettingsWait::Timeout:
+            return 0;
+        case QuicSession::SettingsWait::Interrupted:
+            return -1;
+        case QuicSession::SettingsWait::Closed:
+            break;
+    }
+    session->raiseSettingsWaitCloseError(xsink);
+    return -1;
 }
 
 bool QoreSocketObject::isQuic() const {

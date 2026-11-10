@@ -46,12 +46,19 @@ print_usage () {
   echo "  QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN"
   echo "                           Set to '1' to leave out the tests that declare '# test-exec-mode: children'"
   echo "                           (needs --exec-mode in QORE_TEST_OPTS): their child processes set their own"
-  echo "                           execution mode, so a run in the default mode makes the same checks."
+  echo "                           execution mode or run in the default mode, so a run in the default mode makes"
+  echo "                           the same checks."
   echo "  QORE_TEST_PLATFORM_SUBSET"
   echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
+  echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
+  echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
+  echo "                           Otherwise they are appended to QORE_MODULE_DIR (those it already holds are not"
+  echo "                           added again), so they are searched after it and before the module directories"
+  echo "                           compiled into the qore of the build (its installation prefix)."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -214,7 +221,9 @@ fi
 # execution mode (--exec-mode) with ExecModeHarness.qm, so the execution mode of the test itself changes nothing they
 # check: a run whose tests all get an execution mode (an --exec-mode option in QORE_TEST_OPTS) leaves them out when
 # QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1, as a run in the default mode runs the same child processes.  A harness test
-# with checks of its own declares "# test-exec-mode: parent" and always runs.
+# with checks of its own declares "# test-exec-mode: parent" and always runs.  A test that does not use the harness
+# declares "children" when its checks run in child processes of its own binary started without an execution mode,
+# which run in the default mode in every job.
 # examples/test/runner/test_exec_mode_markers.py checks the declarations.
 if [ "${QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN}" = "1" ]; then
     case " $QORE_TEST_OPTS " in
@@ -594,6 +603,32 @@ if [ -n "$TEST_MODULE_DIRS" ]; then
     export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 else
     export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+fi
+# The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
+# requires the modules it was compiled with, and the build's qore does not search these directories when they are
+# outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
+# last in QORE_MODULE_DIR, so the modules of the build and of this tree come first; qore searches QORE_MODULE_DIR before
+# the module directories compiled into it, so they also come before those of its installation prefix.  A directory
+# that QORE_MODULE_DIR already holds is not added again.  With QORE_MODULE_DIR_ONLY set, the caller gives the
+# complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
+# as set even when it is empty.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
+    _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
+    _old_ifs=$IFS
+    IFS=:
+    for _external_module_dir in $_external_module_dirs; do
+        case ":$QORE_MODULE_DIR:" in
+            *":$_external_module_dir:"*) ;;
+            *)
+                case "$QORE_MODULE_DIR" in
+                    ""|*:) export QORE_MODULE_DIR=$QORE_MODULE_DIR$_external_module_dir ;;
+                    *) export QORE_MODULE_DIR=$QORE_MODULE_DIR:$_external_module_dir ;;
+                esac
+                ;;
+        esac
+    done
+    IFS=$_old_ifs
+    unset _external_module_dirs _external_module_dir _old_ifs
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.

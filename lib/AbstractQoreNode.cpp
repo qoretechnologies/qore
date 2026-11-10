@@ -621,6 +621,62 @@ static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferen
     return new CallReferenceCallNode(n->loc, exp.release(), args);
 }
 
+//! Copies a parse list of arguments with the values of the local variables of the starting code; nullptr if none
+static QoreParseListNode* crlr_parse_args_copy(RuntimeConfig& rc, const QoreParseListNode* args,
+        ExceptionSink* xsink) {
+    return args ? crlr_list_copy(rc, args, xsink) : nullptr;
+}
+
+//! Copies a new expression (a NT_SCOPE_REF node); the new thread constructs the value with the arguments copied
+/** The arguments are taken when the thread starts, as those of a call are; a node of a type that takes none is
+    returned as it is
+*/
+static QoreValue crlr_new_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = n.getInternalNode();
+    if (auto* soc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        QoreListNode* args = const_cast<QoreListNode*>(soc->getArgs());
+        if (args) {
+            ReferenceHolder<QoreListNode> args_holder(crlr_list_copy(rc, args, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            args = args_holder.release();
+        }
+        return new ScopedObjectCallNode(*soc, args);
+    }
+    if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nhd->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewHashDeclNode(*nhd, args.release()));
+    }
+    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nch->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexHashNode(*nch, args.release()));
+    }
+    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncl->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexListNode(*ncl, args.release()));
+    }
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncb->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexBufferNode(*ncb, args.release()));
+    }
+    return n.refSelf();
+}
+
+//! Copies a reference to a method of an object given by an expression: the expression is taken when the thread starts
+/** A reference to a method of \c self is returned as it is: it is evaluated in the new thread, which has no object
+    context, as in every execution mode (OBJECT-ERROR, whose message says to take the reference before the
+    background operator)
+*/
+static QoreValue crlr_objmethref_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(n.getInternalNode());
+    if (!omr) {
+        return n.refSelf();
+    }
+    ValueHolder exp(copy_value_and_resolve_lvar_refs(rc, omr->getExp(), xsink), xsink);
+    return *xsink ? QoreValue() : QoreValue(new ParseObjectMethodReferenceNode(*omr, exp.release()));
+}
+
 // Non-RuntimeConfig versions - delegate to RuntimeConfig versions
 static QoreListNode* crlr_list_copy(const QoreListNode* n, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -771,6 +827,12 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
 
         case NT_METHOD_CALL:
             return crlr_mcall_copy(rc, n.get<const MethodCallNode>(), xsink);
+
+        case NT_SCOPE_REF:
+            return crlr_new_copy(rc, n, xsink);
+
+        case NT_OBJMETHREF:
+            return crlr_objmethref_copy(rc, n, xsink);
 
         case NT_STATIC_METHOD_CALL:
             return crlr_smcall_copy(rc, n.get<const StaticMethodCallNode>(), xsink);

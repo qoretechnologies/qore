@@ -1011,15 +1011,61 @@ before, and a cancellation arriving while it runs is delivered at its next cance
 reads together with the manager.  It is set:
 
 - when a sandbox manager is set on the Program (`QoreProgram::setSandboxManager()`);
-- when Qore code creates a Program (`Program::constructor()`, `qore_program_set_creator_sandbox()`) while
-  the creating code is sandboxed: its own Program is sandboxed, or a sandbox governs the thread (trusted
-  library code that sandboxed code called).  Such a Program has no manager of its own: the code it runs
-  is governed by its callers, but its classes must not count as trusted, or sandboxed code could get the
-  destructor deferral by defining its class in a child Program;
+- when a Program is created while the creating code is sandboxed (issue #5659): decided in the
+  `qore_program_private` constructor, which every `QoreProgram` constructor runs, by
+  `qore_caller_is_sandboxed()`, so it holds wherever a Program is created: by Qore code
+  (`Program::constructor()`), by `ProgramControl::createEvalProgram()`, by the module manager for a user
+  module or an AOT module, or by a module's C++ code (`module-python`'s `PythonProgram`, for example).  The
+  creating code is sandboxed if a sandboxed Program is on the thread's call stack (also one without a
+  manager of its own, which sandboxed code created and trusted code now calls), or if a sandbox governs
+  the thread (trusted code that sandboxed code called).  Such a Program has no manager of its own: the code
+  it runs is governed by its callers, but its classes must not count as trusted, or sandboxed code could
+  get the destructor deferral by defining its class in a child Program, or in a Program that a module
+  creates for it;
 - for a user module that a sandboxed Program without a manager of its own loads by a path it chose
-  (`inherit_module_sandbox_manager()`).
+  (`inherit_module_sandbox_manager()`);
+- when sandboxed code, or code acting for it, parses code in a Program
+  (`qore_program_private::markSandboxedParse()`, called by `parse()`, `parsePending()` and
+  `parseExpression()` before they switch to the Program, so for `Program::parse()`,
+  `Program::parsePending()`, `Expression` and a user module's source alike).  Whether a Program is trusted
+  is decided when it is created, but code that the sandbox supplies later is its code too: without this, a
+  trusted Program that sandboxed code can reach (one it was handed, one that a library's initialization
+  created and returns, a child Program created before its parent got a sandbox manager) would give a class
+  that sandboxed code defines in it the trusted deferral.  This fails safe: the classes that the Program
+  already had, which trusted code defined, are sandboxed from then on as well.
 
-A Program that C++ code creates directly is trusted, as native code is.  The same child-Program bypass
+Parsing code in a Program and loading a module into it (`Program::parse()`, `Program::loadModule()` and
+their variants) switch the thread's current Program to the target Program with a
+`ProgramRuntimeParseContextHelper` or one of its variants, which used to hide the calling Program from
+sandbox resolution: the initializers of code that sandboxed code parsed in a trusted Program, and the
+initialization of a module that it loaded into one by a path it chose, ran ungoverned, the module manager
+checked the load as a trusted one, and the module's Program was trusted.  `QoreCallerSandboxHelper`,
+created before the switch (in the parse functions of `qore_program_private`,
+`QoreModuleManager::runTimeLoadModule()` and `registerAOTStaticModuleIntern()`), keeps a sandboxed caller
+the caller: `qore_caller_is_sandboxed()` stays true while it exists, and the sandbox that governs the
+caller is applied as the provenance of the code that runs.  Under a module initialization barrier set
+later, neither is seen, so library code that such a call loads is initialized as library code.  A user
+module that sandboxed code chose, loaded into a Program that has no manager, gets the sandbox of that code
+(`inherit_module_sandbox_manager()`), as when it loads the module into its own Program.
+
+A user module that trusted code loads while it serves sandboxed code is sandboxed, and stays sandboxed for
+every later caller (the module manager binds such a module to the tenant that chose it in any case); this is
+fail-safe.
+
+Under a module initialization barrier (`QoreModuleInitSandboxBarrierHelper`), the code that loads library
+code is not looked at: the Program of a library module, and every Program that its initialization creates
+(the global context Program of `module-jni`, the Program of an AOT library module, a Program that the init
+code of a source library module creates), is trusted also when sandboxed code loads the library first;
+otherwise whether shared library state is trusted would depend on which code loaded the library first.
+Before #5659, `Program::constructor()` used `qore_caller_sandbox_ref()`, which gives library code that is
+initialized for an untrusted loader the loader's sandbox (right for the modules that the library code
+chooses, not for what it creates), so such a Program was sandboxed.  The same holds for code that the library's
+initialization parses: it is the library's code, so a library whose initialization parses code that
+sandboxed code supplied (registered with the library before it was loaded, for example) must parse it in a
+sandboxed Program itself.
+
+A Program that trusted code creates with no sandbox governing it is trusted, also when C++ code creates
+it.  The same child-Program bypass
 was checked in the other code that asks whether a Program has a manager: `QoreModuleManager::mayChangeModulePath()`
 now uses the flag; the reflection privilege check (`QoreReflection.cpp`) fails closed for a Program
 without a manager; the governing-sandbox resolution (`find_thread_sandbox_stack_ref_intern()`) walks the

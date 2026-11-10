@@ -69,6 +69,13 @@ DLLLOCAL void qore_socket_raise_accept_without_connection(const QoreHashNode* re
 */
 DLLLOCAL bool qore_socket_errno_is_peer_close(int64 en);
 
+class QoreSocketObject;
+
+//! Waits for the HTTP/3 SETTINGS of the server of the QUIC client connection of a socket (Socket::waitForQuicSettings())
+/** @return 1 if they have been received, 0 on timeout, -1 if an exception was raised
+*/
+DLLLOCAL int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int64 timeout_ms, ExceptionSink* xsink);
+
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>
