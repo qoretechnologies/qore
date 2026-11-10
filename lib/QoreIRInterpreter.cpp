@@ -7744,9 +7744,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the AST interpreter releases the temporaries of every expression and statement that the exception unwinds
     // before the handler runs.  The raising instruction's own scope otherwise (see
     // design/ir-exception-branch-temp-scope.md).
+    // An instruction that closes its temp scope (DiscardTemps, DiscardTempsKeep) raises when a temporary's destructor
+    // does, once its scope's mark is gone: the scopes that the exception leaves are then those after the handler's
+    // among the scopes that remain, and none if the handler's scope is the innermost one left (0).
     auto exceptionBranchTempScope = [&](const QoreIRInstruction* raising) -> uint32_t {
-        uint32_t scope_id = raising->temp_scope_id;
-        if (!scope_id || !raising->exception_target) {
+        bool scope_closed = raising->opcode == QoreIROpcode::DiscardTemps
+            || raising->opcode == QoreIROpcode::DiscardTempsKeep;
+        uint32_t scope_id = scope_closed ? 0 : raising->temp_scope_id;
+        if (!raising->exception_target || (!scope_id && !scope_closed)) {
             return scope_id;
         }
         uint32_t handler_scope_id = raising->exception_target->getHandlerTempScopeId();
@@ -7754,10 +7759,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return scope_id;
         }
         size_t i = temp_cleanup_marks.size();
-        while (i > 0 && temp_cleanup_marks[i - 1].scope_id != scope_id) {
-            --i;
+        if (!scope_closed) {
+            while (i > 0 && temp_cleanup_marks[i - 1].scope_id != scope_id) {
+                --i;
+            }
         }
-        // i - 1 is the index of the raising instruction's mark; the handler's mark is below it
+        // i - 1 is the index of the raising instruction's mark, or of the innermost one left; the handler's mark is
+        // below it
         for (; i > 1; --i) {
             if (temp_cleanup_marks[i - 2].scope_id == handler_scope_id) {
                 return temp_cleanup_marks[i - 1].scope_id;
@@ -13386,9 +13394,11 @@ load_local_done:
                 ephemeral_weak_ref_slots.clear();
                 if (!raised && xsink && *xsink) {
                     // a temporary's destructor raised an exception, which the statement raises, as in the AST
-                    // interpreter (QoreStatementTempScope): the statement's temps and its mark are gone, so the
-                    // handler is entered without releasing anything else
+                    // interpreter (QoreStatementTempScope): the statement's temps and its mark are gone; the scopes
+                    // that the exception leaves among those that remain are released before the handler runs (see
+                    // exceptionBranchTempScope())
                     if (inst->exception_target) {
+                        cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -13505,9 +13515,10 @@ load_local_done:
                 cleanupToTempScope(inst->temp_scope_id, false, true);
                 setOwnedValueSlot(values, cleanup, inst->result.id, kept, xsink);
                 if (xsink && *xsink) {
-                    // a destructor raised: the enclosing statement's scope is the innermost one left
+                    // a destructor raised: the scopes that the exception leaves among those that remain are
+                    // released before the handler runs (see exceptionBranchTempScope())
                     if (inst->exception_target) {
-                        cleanupToTempScope(0, true, true, true);
+                        cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;

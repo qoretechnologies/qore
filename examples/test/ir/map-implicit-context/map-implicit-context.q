@@ -176,6 +176,65 @@ sub new_inner(Log log, ...) {
 }
 sub new_operands(Log log) { new_inner(log, "a", "b"); log.add("after"); }
 
+# chain receivers: the temporary that a call gives the body for a method or member access is released when the next
+# element's is created, in the statement's temp scope, as the AST interpreter releases it, also when the body needs the
+# implicit argument list (qore#5680 review)
+class Mk {
+    public {
+        Log log;
+        string n;
+    }
+
+    constructor(Log l, string nn) {
+        log = l;
+        n = nn;
+        log.add("new " + n);
+        log.created{n} = (log.created{n} ?? 0) + 1;
+    }
+
+    destructor() {
+        log.add("del " + n);
+        log.released{n} = (log.released{n} ?? 0) + 1;
+    }
+}
+Mk sub mk(Log log, auto v) { return new Mk(log, "m" + v); }
+class O {
+    public {
+        string n;
+    }
+
+    constructor(string nn) {
+        n = nn;
+    }
+}
+
+sub chain_inner(Log log, ...) {
+    list ul = ("a", "b", "c");
+    list<string> tl = ("a", "b", "c");
+    list e = (1, 2);
+    list<int> il = (1, 2, 3);
+    log.add("plain " + fmt(map mk(log, $1).n, ul));
+    log.add("ctx ul " + fmt(map mk(log, $1).n + ($2 ?? ""), ul));
+    log.add("ctx tl " + fmt(map mk(log, $1).n + ($2 ?? ""), tl));
+    log.add("ctx it " + fmt(map mk(log, $1).n + ($2 ?? ""), new StrIt(ul)));
+    log.add("ctx newhash " + fmt(map mk(log, $1).n + (new hash<string, int>({"k": $#})).k, tl));
+    log.add("extract " + fmt(map mk(log, $1).n + (extract e, 0, 0).size(), ul));
+    log.add("const newhash " + fmt(map $1 + (new hash<string, int>({"k": 1})).k, il));
+    log.add("fused " + fmt((take 3, (map mk(log, $1).n + ($2 ?? ""), tl))));
+    log.add("select " + fmt(select ul, mk(log, $1).n != ($2 ?? "x")));
+    log.add("select tl " + fmt(select tl, mk(log, $1).n != ($2 ?? "x")));
+    log.add("map-select " + fmt(map $1, ul, mk(log, $1).n != ($2 ?? "x")));
+    log.add("map-select tl " + fmt(map mk(log, $1).n + ($2 ?? ""), tl, True));
+    # the arguments of a declaration's constructor are evaluated with the map's implicit arguments
+    log.add("decl " + fmt(map (O o(sprintf("%y", $2))).n, ul));
+    # the body of a map over a single value runs with the enclosing implicit element
+    log.add("single $# " + fmt(map (map ($#, $2), "s"), il));
+    # map-select where only one operand needs the implicit argument list
+    log.add("map-select one pred " + fmt(map new list<auto>(($1,)), il, $1 % 3 == 0));
+    log.add("map-select one map " + fmt(map $1, il, !exists (new list<auto>(($2,)))[0][0]));
+}
+sub chain(Log log) { chain_inner(log, "A", "B"); log.add("after"); }
+
 # the implicit arguments in map bodies, in a function that has arguments of its own: $1 and $# are those of the map,
 # $2 is NOTHING, and the function's arguments are those of the function again after the map
 sub args_inner(Log log, ...) {
@@ -243,7 +302,8 @@ const Cases = (
     "layout_list_ternary", "layout_list_elvis", "layout_list_and", "layout_it_ternary", "layout_it_elvis",
     "layout_it_and", "layout_fused_ternary", "layout_fused_elvis", "layout_fused_and", "layout_ctx_list_ternary",
     "layout_ctx_it_and", "layout_ctx_fused_elvis", "select_ctx_raises", "map_select_ctx_raises",
-    "map_select_ctx_map_raises", "layout_select_and", "layout_map_select_and", "new_operands", "implicit_args",
+    "map_select_ctx_map_raises", "layout_select_and", "layout_map_select_and", "new_operands", "chain",
+    "implicit_args",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

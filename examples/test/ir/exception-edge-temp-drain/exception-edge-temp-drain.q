@@ -61,12 +61,42 @@ sub no_handler_inner(Log log) { map fail_on($1, "h2"), holders(log, 3); log.add(
 sub no_handler(Log log) { try { no_handler_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 # a nested try: the inner handler rethrows
 sub nested_rethrow(Log log) { try { try { map fail_on($1, "h2"), holders(log, 3); } catch (hash<ExceptionInfo> ex) { log.add("inner " + ex.err); rethrow; } } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+# a temporary's destructor raises when the scope that holds it is closed (DiscardTemps): the scopes that the exception
+# leaves among those that remain are released before the handler runs
+class Dt {
+    public {
+        Log log;
+        string n;
+    }
+
+    constructor(Log l, string nn) {
+        log = l;
+        n = nn;
+        log.created{n} = (log.created{n} ?? 0) + 1;
+    }
+
+    destructor() {
+        log.add("del " + n);
+        log.released{n} = (log.released{n} ?? 0) + 1;
+        if (n == "dh1") {
+            throw "DTOR", n;
+        }
+    }
+}
+Dt sub mkdt(Log log, string n) { return new Dt(log, "d" + n); }
+sub dtor_void_map(Log log) { try { map mkdt(log, $1.n).n, holders(log, 3); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + " " + ex.desc); } log.add("after"); }
+sub dtor_value_map(Log log) { try { list r = map mkdt(log, $1.n).n, holders(log, 3); log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + " " + ex.desc); } log.add("after"); }
+sub dtor_on_error(Log log) { try { on_error { log.add("on_error"); } map mkdt(log, $1.n).n, holders(log, 3); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + " " + ex.desc); } log.add("after"); }
+sub dtor_in_foreach(Log log) { try { foreach Holder o in (holders(log, 2, "o")) { map mkdt(log, $1.n).n, holders(log, 3); log.add("each " + o.n); } } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + " " + ex.desc); } log.add("after"); }
+sub dtor_statement(Log log) { try { log.add(mkdt(log, "h1").n); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + " " + ex.desc); } log.add("after"); }
+
 # the normal path is unchanged
 sub normal(Log log) { try { map fail_on($1, "none"), holders(log, 3); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 
 const Cases = (
     "void_map", "void_map_ternary", "void_map_context", "void_map_in_call", "nested_void_map", "in_foreach",
-    "on_error_handler", "on_error_in_try", "no_handler", "nested_rethrow", "normal",
+    "on_error_handler", "on_error_in_try", "no_handler", "nested_rethrow", "dtor_void_map", "dtor_value_map",
+    "dtor_on_error", "dtor_in_foreach", "dtor_statement", "normal",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

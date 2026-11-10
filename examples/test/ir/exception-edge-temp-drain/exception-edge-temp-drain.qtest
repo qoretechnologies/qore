@@ -18,7 +18,8 @@
     source.  An exception raised in that scope released only its temporaries on the way to a handler outside the
     statement: in JIT and AOT code the statement's temporaries were released after the handler of a try block, and
     in the IR interpreter after the cleanup of an enclosing foreach statement and after the on_error handlers of the
-    block.  The AST interpreter releases the temporaries of every expression and statement that the exception
+    block.  The same held for an exception that a temporary's destructor raised when the per-element scope was
+    closed.  The AST interpreter releases the temporaries of every expression and statement that the exception
     unwinds before the handler runs.
 
     exception-edge-temp-drain.q runs each case and logs the release of every object and the objects that were not
@@ -38,6 +39,9 @@ class ExceptionEdgeTempDrainTest inherits QUnit::Test {
             "on_error_in_try: released h1; released h2; on_error; catch STAGE; after",
             "nested_rethrow: released h1; released h2; inner STAGE; catch STAGE; after",
             "normal: released h1; released h2; done; after",
+            "dtor_void_map: del dh1; released h1; released h2; catch DTOR dh1; after",
+            "dtor_on_error: del dh1; released h1; released h2; on_error; catch DTOR dh1; after",
+            "dtor_in_foreach: del dh1; released h1; released h2; released o1; catch DTOR dh1; after",
         );
     }
 

@@ -868,6 +868,8 @@ private:
         QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
         QoreIRValue element;   //!< virtual $# value
         bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
     };
     VirtualImplicitContext virtual_implicit;
 

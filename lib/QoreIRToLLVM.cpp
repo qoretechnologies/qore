@@ -3669,15 +3669,35 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
 
 llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, llvm::BasicBlock* handler) {
-    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty()) {
+    // an instruction that closes its temp scope (DiscardTemps, DiscardTempsKeep) raises when a temporary's destructor
+    // does, once its scope's mark is gone: the scopes that the exception leaves are then those after the handler's
+    // among the scopes that remain, and none if the handler's scope is the innermost one left
+    bool scope_closed = inst && (inst->opcode == QoreIROpcode::DiscardTemps
+        || inst->opcode == QoreIROpcode::DiscardTempsKeep);
+    if (!inst || (!inst->temp_scope_id && !scope_closed) || temp_cleanup_marks.empty()) {
         return handler;
     }
     size_t mark_index = temp_cleanup_marks.size();
-    while (mark_index > 0 && temp_cleanup_marks[mark_index - 1].scope_id != inst->temp_scope_id) {
-        --mark_index;
-    }
-    if (!mark_index) {
-        return handler;
+    if (scope_closed) {
+        // the first scope after the handler's, below the innermost one left
+        uint32_t handler_scope_id = inst->exception_target ? inst->exception_target->getHandlerTempScopeId() : 0;
+        size_t i = mark_index;
+        for (; i > 0 && handler_scope_id; --i) {
+            if (temp_cleanup_marks[i - 1].scope_id == handler_scope_id) {
+                break;
+            }
+        }
+        if (!handler_scope_id || !i || i == temp_cleanup_marks.size()) {
+            return handler;
+        }
+        mark_index = i + 1;
+    } else {
+        while (mark_index > 0 && temp_cleanup_marks[mark_index - 1].scope_id != inst->temp_scope_id) {
+            --mark_index;
+        }
+        if (!mark_index) {
+            return handler;
+        }
     }
     --mark_index;
     // the exception leaves every temp scope opened after the handler's, which can be more than the instruction's own
@@ -3685,7 +3705,7 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     // expression whose temporaries are released before the rest of its statement runs): their temporaries are
     // released from the first of them, as the AST interpreter releases the temporaries of every expression and
     // statement that the exception unwinds, and the IR interpreter drains them (exceptionBranchTempScope())
-    if (inst->exception_target) {
+    if (inst->exception_target && !scope_closed) {
         uint32_t handler_scope_id = inst->exception_target->getHandlerTempScopeId();
         if (handler_scope_id && handler_scope_id != inst->temp_scope_id) {
             for (size_t i = mark_index; i > 0; --i) {

@@ -53,6 +53,15 @@ class MapImplicitContextTest inherits QUnit::Test {
             "layout_select_and: size 2; released h1; released h2; after",
         );
 
+        #! parts of the chain line of the AST interpreter: a body's chain receiver is released when the next
+        #! element's is created, also when the body needs the implicit argument list
+        const AstChainParts = (
+            "new ma; new mb; del ma; new mc; del mb; ctx ul [\"ma\", \"mb\", \"mc\"]; del mc",
+            "new ma; new mb; del ma; new mc; del mb; extract [\"ma0\", \"mb0\", \"mc0\"]; del mc",
+            "decl [\"null\", \"null\", \"null\"]",
+            "single $# [[0, null], [1, null], [2, null]]",
+        );
+
         #! parts of the implicit_args line of the AST interpreter: $2 is NOTHING in every map body
         const AstArgParts = (
             "list $2 [null, null]",
@@ -107,6 +116,11 @@ class MapImplicitContextTest inherits QUnit::Test {
         assertTrue(exists args, "implicit_args line");
         foreach string part in (AstArgParts) {
             assertNeq(-1, args.find(part), part);
+        }
+        *string chain = (first $1 =~ /^chain: /, lines);
+        assertTrue(exists chain, "chain line");
+        foreach string part in (AstChainParts) {
+            assertNeq(-1, chain.find(part), part);
         }
         # no object outlives its case or is released twice in the AST interpreter
         assertEq(-1, out.find("ERROR:"));

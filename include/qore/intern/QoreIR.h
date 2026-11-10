@@ -3426,6 +3426,12 @@ public:
         instruction that opens or closes a temp scope and records its own; 0 if none is known.  An exception that
         branches to the block leaves every temp scope opened after this one, and releases their temporaries before
         the block runs (see design/ir-exception-branch-temp-scope.md).
+
+        A block whose first instruction opens a temp scope of its own (PushTempMark) is skipped over to the
+        instructions in that scope, which is not open when an exception branches to the block: the scope returned is
+        then found on no stack of open scopes, and the exception drains the raising instruction's own scope, as before
+        the rule for nested scopes.  The handlers that the lowering creates record their scope first (a landing pad, a
+        cleanup block's releases), so this does not arise for them.
     */
     uint32_t getHandlerTempScopeId() const {
         for (const auto& inst : instructions) {
