@@ -455,6 +455,11 @@ void qore_cleanup() {
     QSM.del();
 #endif
 
+    // no other thread can run Qore code any more (the signal thread has stopped as well; threads registered with
+    // q_register_foreign_thread() must have ended): the Programs of the modules no longer need module lifetime, and
+    // the Programs of the user modules, which delUser() deleted, are freed now, before the binary modules are deleted
+    qore_release_module_program_pins();
+
     // delete all loadable modules
     QMM.cleanup();
 

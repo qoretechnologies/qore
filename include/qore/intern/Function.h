@@ -602,6 +602,12 @@ public:
         return caller_runtime_po;
     }
 
+    //! returns true if the call entered a module's Program from another Program and set its runtime parse options
+    //! override (see qore_get_module_call_runtime_po_override()), which is computed once for the crossing
+    DLLLOCAL bool hasModuleCallOverride() const {
+        return module_po_override.isSet();
+    }
+
     DLLLOCAL virtual const AbstractStatement* getStatement() const override {
         return stmt;
     }
@@ -634,8 +640,8 @@ protected:
     QoreParseOptions old_rc_po;
     //! the effective runtime parse options of the caller
     QoreParseOptions caller_runtime_po;
-    //! restricts code entered in a module Program with the caller's restrictions; see init()
-    std::unique_ptr<RuntimeParseOptionsOverrideHelper> module_po_override;
+    //! the runtime parse options override of code entered in a module Program from another Program; see init()
+    RuntimeParseOptionsOverrideHelper module_po_override;
     QoreProgram* exec_pgm = nullptr;
     QoreProgram* old_call_program_context = nullptr;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
@@ -893,32 +899,35 @@ DLLLOCAL QoreParseOptions get_module_own_access_parse_options();
 //! returns true if the Program holds the code of a user module
 DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
 
-//! returns the runtime parse options override for a call of a user variant
-/** - a variant that runs in a Program other than the one that defined it (a module function called from another
-      Program, for example) runs with the executing Program's options forced into its runtime parse options;
-    - the code of a user module (a module function, or a method of a module class, which runs in the module's
-      Program) also runs with the restrictions of its caller, \a caller_po being the effective options of the code
-      that calls it (see qore_compose_module_call_parse_options()), except for the options of
-      get_module_own_access_parse_options(), which are those of the module's Program;
-    - otherwise any override of the caller is cleared for the call.
-
-    For module code that runs in the module's own Program, \a o also records the restrictions inherited from the
-    caller, which do not apply to builtin variants that change only the module's own state (see
-    runtime_get_own_program_state_parse_options()).
-
-    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
-    interpreter.
+//! sets the runtime parse options override for a call of a user variant; see qore_get_user_call_runtime_po_override()
+/** The part of qore_get_user_call_runtime_po_override() for module code and for code that runs in a Program other
+    than the one that defined it
 */
-DLLLOCAL void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o);
+DLLLOCAL QORE_INTERN_NOINLINE void qore_set_user_call_runtime_po_override_slow(
+        RuntimeParseOptionsOverrideHelper& helper, const QoreProgram* exec_pgm, const UserVariantBase* uvb,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm);
 
 //! returns the override for module code entered in its own Program \a module_pgm from \a caller_pgm
-/** @param module_pgm the module's Program
+/** Module code runs with its module's options; for a sandboxed caller (see
+    runtime_module_call_inherits_caller_restrictions()) also with the caller's restrictions, which the override then
+    records (QoreCallParseOptionsOverride::caller_restrictions)
+
+    @param module_pgm the module's Program
     @param caller_po the effective options of the code making the call
     @param caller_pgm the Program making the call, or nullptr
 */
 DLLLOCAL QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
         const QoreParseOptions& caller_po, const QoreProgram* caller_pgm);
+
+//! returns the override for module code entered in its own Program \a module_pgm from \a caller_pgm
+/** @param module_pgm the module's Program
+    @param caller_po the effective options of the code making the call, or nullptr if they are those of
+    \a caller_pgm, which are then determined only if they are needed (for a sandboxed caller)
+    @param caller_pgm the Program making the call, or nullptr
+    @param td the data of the current thread, which the override carries (QoreCallParseOptionsOverride::td)
+*/
+DLLLOCAL QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td);
 
 //! the code flags of builtin variants that module code running in its own Program calls without the restrictions
 //! inherited from its caller (see runtime_get_own_program_state_parse_options())
@@ -990,10 +999,18 @@ public:
     //! returns a new serial for a variant or a closure function; serials start at 1 and are never reused
     DLLLOCAL static uint64_t getNextSerial();
 
+    //! true once a call has found that \a pgm stays allocated while any code can run (a module's Program; see
+    //! qore_program_has_module_lifetime()), so a call from another Program needs no reference to it
+    /** Set by QoreSourceProgramHolder::setVariant() while it holds a reference to the Program; never cleared, as
+        setProgram() is called only before the variant can be called
+    */
+    mutable std::atomic<bool> pgm_module_lifetime{false};
+
     //! sets the Program of the variant
     DLLLOCAL void setProgram(QoreProgram* p) {
         pgm = p;
         pgm_id = p ? p->getProgramId() : 0;
+        pgm_module_lifetime.store(false, std::memory_order_relaxed);
     }
 
 protected:
@@ -1348,6 +1365,11 @@ public:
         return uses_self.load(std::memory_order_acquire);
     }
 
+    //! returns true if the variant cannot be lowered to IR
+    DLLLOCAL bool irLoweringFailed() const {
+        return ir_lower_failed.load(std::memory_order_relaxed);
+    }
+
     //! Returns the cached IR function (if at IR tier or higher), or nullptr
     /** The IR body is published exactly once with a release store (claim-then-publish: the
         first writer to win the CAS owns the slot, every later writer discards its own
@@ -1427,6 +1449,40 @@ public:
         return true;
     }
 };
+
+//! sets the runtime parse options override for a call of a user variant
+/** - a variant that runs in a Program other than the one that defined it (user code whose Program has released it,
+      which runs in its caller's Program) runs with the executing Program's options forced into its runtime parse
+      options;
+    - the code of a user module (a function or a method of the module, which runs in the module's Program) runs with
+      the module's options and, for a sandboxed caller only, also with the restrictions of its caller, except for the
+      options of get_module_own_access_parse_options(), which are those of the module's Program (see
+      qore_get_module_call_runtime_po_override()); a call of module code by code of the same module keeps the
+      override that is in effect (see runtime_module_call_override_in_effect());
+    - otherwise any override of the caller is cleared for the call.
+
+    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
+    interpreter.
+
+    @param helper the helper that sets the override, created without one; it sets none if the call keeps the
+    thread's override
+    @param exec_pgm the Program that the variant runs in, or nullptr for the Program that defined it
+    @param uvb the variant
+    @param caller_po the effective options of the code making the call, or nullptr if they are those of \a caller_pgm
+    (see runtime_get_effective_parse_options_for()), which are then determined only if they are needed
+    @param caller_pgm the Program making the call, before the call switched to \a exec_pgm
+*/
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(RuntimeParseOptionsOverrideHelper& helper,
+        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
+        const QoreProgram* caller_pgm) {
+    // the usual case: code that is not module code runs in the Program that defined it and clears the caller's
+    // override
+    if ((!exec_pgm || exec_pgm == uvb->pgm) && !qore_program_is_module(uvb->pgm)) {
+        helper.setCleared();
+        return;
+    }
+    qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
+}
 
 // the following defines the pure virtual functions that are common to all user variants
 #define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const override {\
@@ -1909,6 +1965,17 @@ public:
             addPendingVariant(*(other.vlist.begin()));
             other.vlist.pop_front();
         }
+        other.program_uvb.store(nullptr, std::memory_order_relaxed);
+    }
+
+    //! returns a committed user variant of the function, or nullptr if it has none
+    /** All user variants of a function are defined by one Program, so any of them identifies the Program that the
+        function runs in (see qore_get_function_pgm_context()); the variant found first is kept, as committed variants
+        stay with the function for its life
+    */
+    DLLLOCAL const UserVariantBase* getProgramVariant() const {
+        const UserVariantBase* uvb = program_uvb.load(std::memory_order_acquire);
+        return uvb ? uvb : findProgramVariant();
     }
 
     DLLLOCAL bool hasUser() const {
@@ -1981,6 +2048,12 @@ protected:
     const QoreTypeInfo* nn_uniqueReturnType = nullptr;
 
     std::string from_module;
+
+    //! a committed user variant of the function, once one has been looked up; see getProgramVariant()
+    mutable std::atomic<const UserVariantBase*> program_uvb{nullptr};
+
+    //! finds a committed user variant and keeps it; see getProgramVariant()
+    DLLLOCAL QORE_INTERN_NOINLINE const UserVariantBase* findProgramVariant() const;
 
     DLLLOCAL int parseCheckReturnType() {
         if (parse_rt_done)

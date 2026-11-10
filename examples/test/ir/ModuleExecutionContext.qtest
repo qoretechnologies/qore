@@ -14,19 +14,19 @@
 
 %exec-class ModuleExecutionContextTest
 
-#! Module code called from a restricted Program runs in the caller's Program in every execution mode
-/** With the AST interpreter, a module function called from a Program runs in that Program and with its restrictions
-    (UserVariantBase::eval()): objects that the function creates belong to the calling Program, so a call reference
-    to one of their methods is checked against the calling Program, and a builtin that checks the current Program,
-    such as \c create_object(), sees the calling Program.  The fast call paths of the IR interpreter, JIT and AOT code
-    ran the function in the Program that defined it, without those restrictions, whenever the call did not go
-    through UserVariantBase::eval() - for example when the function has no default arguments, or after tiered
-    promotion: lockdown user code could call \c RWLock::readLock() through a call reference to an \c RWLock that a
-    module function created, and module code could create objects of thread classes with \c create_object().
+#! Module code called from a restricted Program runs alike in every execution mode, with a sandboxed caller's restrictions
+/** Module code (a module function, a method of a module class or a closure created in module code) runs in the
+    module's Program.  The fast call paths of the IR interpreter, JIT and AOT code once ran module code with other
+    restrictions than an AST call, depending on whether the function has default arguments or on tiered promotion:
+    lockdown user code could call \c RWLock::readLock() through a call reference to an \c RWLock that a module
+    function created, and module code could create objects of thread classes with \c create_object(), only in some
+    modes.
 
-    Each case runs the same script with the source module and with the module AOT-compiled with
-    <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
-    interpreter, which is the reference.
+    A sandboxed caller's restrictions are part of its sandbox and apply to module code in every mode, so the calls are
+    refused for a sandboxed lockdown caller; a caller restricted only by its parse options restricts its own code, and
+    the module code runs with the module's own options.  Each case runs the same script with the source module and
+    with the module AOT-compiled with <tt>--compile-module</tt>, in every execution mode, and expects the output of
+    the source module with the AST interpreter, which is the reference.
 */
 class ModuleExecutionContextTest inherits QUnit::Test {
     private {
@@ -38,24 +38,42 @@ class ModuleExecutionContextTest inherits QUnit::Test {
         string qmod_dir;
 
         #! the output of the source module with the AST interpreter
-        const ExpectedContextOutput = "callref: INVALID-FUNCTION-ACCESS
-callref_default_arg: INVALID-FUNCTION-ACCESS
-direct: INVALID-FUNCTION-ACCESS
-create_obj: CREATE-OBJECT-ERROR
-create_obj: CREATE-OBJECT-ERROR
-create_obj: CREATE-OBJECT-ERROR
-create_obj_default_arg: CREATE-OBJECT-ERROR
-create_obj_default_arg: CREATE-OBJECT-ERROR
-create_obj_default_arg: CREATE-OBJECT-ERROR
-closure_create_obj: CREATE-OBJECT-ERROR
-closure_create_obj: CREATE-OBJECT-ERROR
-closure_create_obj: CREATE-OBJECT-ERROR
-member: \"member\"
-member: \"member\"
-member_default_arg: \"member\"
-member_default_arg: \"member\"
-holder: \"member\"
-holder: \"member\"
+        const ExpectedContextOutput = "sandboxed callref: INVALID-FUNCTION-ACCESS
+sandboxed callref_default_arg: INVALID-FUNCTION-ACCESS
+sandboxed direct: INVALID-FUNCTION-ACCESS
+sandboxed create_obj: CREATE-OBJECT-ERROR
+sandboxed create_obj: CREATE-OBJECT-ERROR
+sandboxed create_obj: CREATE-OBJECT-ERROR
+sandboxed create_obj_default_arg: CREATE-OBJECT-ERROR
+sandboxed create_obj_default_arg: CREATE-OBJECT-ERROR
+sandboxed create_obj_default_arg: CREATE-OBJECT-ERROR
+sandboxed closure_create_obj: CREATE-OBJECT-ERROR
+sandboxed closure_create_obj: CREATE-OBJECT-ERROR
+sandboxed closure_create_obj: CREATE-OBJECT-ERROR
+sandboxed member: \"member\"
+sandboxed member: \"member\"
+sandboxed member_default_arg: \"member\"
+sandboxed member_default_arg: \"member\"
+sandboxed holder: \"member\"
+sandboxed holder: \"member\"
+unsandboxed callref: null
+unsandboxed callref_default_arg: null
+unsandboxed direct: INVALID-FUNCTION-ACCESS
+unsandboxed create_obj: \"RWLock\"
+unsandboxed create_obj: \"RWLock\"
+unsandboxed create_obj: \"RWLock\"
+unsandboxed create_obj_default_arg: \"RWLock\"
+unsandboxed create_obj_default_arg: \"RWLock\"
+unsandboxed create_obj_default_arg: \"RWLock\"
+unsandboxed closure_create_obj: \"RWLock\"
+unsandboxed closure_create_obj: \"RWLock\"
+unsandboxed closure_create_obj: \"RWLock\"
+unsandboxed member: \"member\"
+unsandboxed member: \"member\"
+unsandboxed member_default_arg: \"member\"
+unsandboxed member_default_arg: \"member\"
+unsandboxed holder: \"member\"
+unsandboxed holder: \"member\"
 ";
     }
 
@@ -68,7 +86,8 @@ holder: \"member\"
         mkdir(qmod_dir);
         writeFile(src_dir + "/ExecContextMod.qm", moduleCode());
 
-        addTestCase("module code called from a PO_LOCKDOWN Program runs in that Program in every mode",
+        addTestCase("module code called from a sandboxed PO_LOCKDOWN Program runs with its restrictions, and from an "
+            "unsandboxed one with the module's own options, in every mode",
             \testExecutionContext());
 
         set_return_value(main());
@@ -134,10 +153,7 @@ public string sub memberDefaultArg(hash<auto> opts = {}) {
         return "%modern
 %requires ExecContextMod
 
-Program p(PO_NEW_STYLE);
-p.loadModule(\"ExecContextMod\");
-p.setParseOptions(PO_LOCKDOWN);
-p.parse(\"
+const ProbeCode = \"
 auto sub callref() { auto l = ExecContextMod::getLock(); code c = \\\\l.readLock(); return c(); }
 auto sub callref_default_arg() { auto l = ExecContextMod::getLockDefaultArg(); code c = \\\\l.readLock(); return c(); }
 auto sub direct() { auto l = ExecContextMod::getLock(); l.readLock(); return 'used'; }
@@ -147,21 +163,36 @@ auto sub closure_create_obj() { code c = ExecContextMod::closureCreateObject(); 
 auto sub member() { return ExecContextMod::member(); }
 auto sub member_default_arg() { return ExecContextMod::memberDefaultArg(); }
 auto sub holder() { ExecContextMod::Holder h(); return h.check(); }
-\", \"probe\");
+\";
+
+# the same calls from a sandboxed lockdown Program and from one restricted only by its parse options
+hash<string, Program> callers;
+foreach string label in (\"sandboxed\", \"unsandboxed\") {
+    Program p(PO_NEW_STYLE);
+    if (label == \"sandboxed\") {
+        p.setSandboxManager(new SandboxManager());
+    }
+    p.loadModule(\"ExecContextMod\");
+    p.setParseOptions(PO_LOCKDOWN);
+    p.parse(ProbeCode, label);
+    callers{label} = p;
+}
 
 # repeated calls run the module code on every tier with tiered execution
-foreach string f in (\"callref\", \"callref_default_arg\", \"direct\", \"create_obj\",
-        \"create_obj\", \"create_obj\", \"create_obj_default_arg\", \"create_obj_default_arg\",
-        \"create_obj_default_arg\", \"closure_create_obj\", \"closure_create_obj\",
-        \"closure_create_obj\", \"member\", \"member\", \"member_default_arg\", \"member_default_arg\",
-        \"holder\", \"holder\") {
-    string r;
-    try {
-        r = sprintf(\"%y\", p.callFunction(f));
-    } catch (hash<ExceptionInfo> ex) {
-        r = ex.err;
+foreach string label in (\"sandboxed\", \"unsandboxed\") {
+    foreach string f in (\"callref\", \"callref_default_arg\", \"direct\", \"create_obj\",
+            \"create_obj\", \"create_obj\", \"create_obj_default_arg\", \"create_obj_default_arg\",
+            \"create_obj_default_arg\", \"closure_create_obj\", \"closure_create_obj\",
+            \"closure_create_obj\", \"member\", \"member\", \"member_default_arg\", \"member_default_arg\",
+            \"holder\", \"holder\") {
+        string r;
+        try {
+            r = sprintf(\"%y\", callers{label}.callFunction(f));
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        printf(\"%s %s: %s\\n\", label, f, r);
     }
-    printf(\"%s: %s\\n\", f, r);
 }
 ";
     }
