@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of list indexing with a list of indices
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectorEvalOnceTest
+
+#! issue #5684: the selectors of a list of indices without a range and of a range are evaluated once
+/** A foreach statement or a functional operator that iterates a list of indices without a range (l[a, b] or
+    l[(a, b)]) or a range (l[a..b]) evaluated the indices twice with the AST interpreter, and a range whose result is
+    empty, or whose sequence is not a list, evaluated its sequence twice as well; native code took a list of indices
+    as one index, so the loop's body ran once for the first element.  Every execution mode now evaluates each
+    selector and sequence once, and gives every selected element.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output,
+    which shows each evaluation, must be that of the AST interpreter.
+*/
+class SelectorEvalOnceTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "once-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("selectors evaluated once", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks that the AST interpreter evaluates each selector and sequence of a case once
+    private astTest() {
+        string out = astOutput();
+        hash<string, hash<string, int>> evals;
+        string name;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z][a-z ]*):$/);
+            if (m) {
+                name = m[0];
+                evals{name} = {};
+                continue;
+            }
+            m = (line =~ x/^  (sel|seq) (.+)$/);
+            if (m) {
+                ++evals{name}{m[0] + " " + m[1]};
+            }
+        }
+        assertEq(22, evals.size(), "cases");
+        foreach hash<auto> i in (evals.pairIterator()) {
+            assertEq((), (select keys i.value, i.value{$1} != 1), i.key + ": each selector is evaluated once");
+        }
+        # the body runs for each selected element
+        assertTrue(out =~ /\nfe list:\n  sel a\n  sel b\n  sel c\n  body 11\n  body 13\n  body null\n/, "fe list");
+        assertTrue(out =~ /\nmap list:\n  sel a\n  sel b\n  = \[26, 22\]\n/, "map list");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("selector-eval-once-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

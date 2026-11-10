@@ -33943,23 +33943,51 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
     // Box the list operand and unbox the index
     llvm::Value* list_boxed = boxValue(list_val, inst->operands[0].id);
 
-    // The index needs to be an i64 (native int)
-    llvm::Value* idx_int;
-    if (idx_val->getType() == i64_type) {
-        idx_int = ensureIntTypeInline(idx_val, inst->operands[1].id);
-    } else {
+    // The index needs to be an i64 (native int); a NaN-boxed value is an i64 as well, and is converted to an int only
+    // if it cannot be a list, which selects a slice instead of an element (qore#5684)
+    if (idx_val->getType() != i64_type) {
         return false;  // Can't determine index type
     }
-
+    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0);
     auto helper = module.getOrInsertFunction(
         "qore_rt_list_index_access_compat",
         llvm::FunctionType::get(i64_type,
             {i64_type, i64_type, i32_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(
-        helper, {list_boxed, idx_int,
-         llvm::ConstantInt::get(i32_type,
-             sq_brackets->hasStringIndexChar() ? 1 : 0),
-         xsink_arg});
+    bool may_be_list = false;
+    if (nanboxed_values.count(inst->operands[1].id)) {
+        const QoreIRValueFacts* facts = current_ir_func
+            ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
+        const QoreTypeInfo* idx_type = facts ? facts->type_info : nullptr;
+        may_be_list = !idx_type || QoreTypeInfo::parseAcceptsReturns(idx_type, NT_LIST);
+    }
+    if (!may_be_list) {
+        llvm::Value* idx_int = ensureIntTypeInline(idx_val, inst->operands[1].id);
+        values[inst->result.id] = builder->CreateCall(helper, {list_boxed, idx_int, string_index_char, xsink_arg});
+        return true;
+    }
+
+    // an index that can be a list: an inline int takes the element, any other value the generic helper, which
+    // selects a slice for a list
+    llvm::BasicBlock* int_block = llvm::BasicBlock::Create(ctx, "list_index.int", llvm_func);
+    llvm::BasicBlock* any_block = llvm::BasicBlock::Create(ctx, "list_index.any", llvm_func);
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(ctx, "list_index.merge", llvm_func);
+    builder->CreateCondBr(emitIsBoxedInt48(idx_val), int_block, any_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+    builder->SetInsertPoint(int_block);
+    llvm::Value* int_result = builder->CreateCall(helper, {list_boxed, unboxInt(idx_val), string_index_char,
+        xsink_arg});
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(any_block);
+    auto dynamic_helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
+        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+    llvm::Value* any_result = builder->CreateCall(dynamic_helper, {list_boxed, idx_val, string_index_char,
+        xsink_arg});
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(merge_block);
+    llvm::PHINode* result = builder->CreatePHI(i64_type, 2, "list_index_result");
+    result->addIncoming(int_result, int_block);
+    result->addIncoming(any_result, any_block);
+    values[inst->result.id] = result;
     return true;
 }
 

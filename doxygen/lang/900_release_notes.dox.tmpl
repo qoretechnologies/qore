@@ -1544,6 +1544,9 @@
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
+    - with the AST interpreter, \c foreach and the @ref op_functional "functional operators" evaluated the indices of
+      a list of indices without a range (ex: <tt>l[f(), g()]</tt>) or of a range twice, and the sequence of an empty
+      range or of a string or binary range twice, and leaked a list of indices; each is now evaluated once
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
