@@ -5525,7 +5525,10 @@ void qore_exit_process(int rc) {
         // The native JIT compiler uses a dedicated C++ thread that is not part of
         // thread_list.  Stop it while LLVM's process-wide state is still intact;
         // otherwise exit() can run LLVM static destructors concurrently with an
-        // in-progress ORC materialization.
+        // in-progress ORC materialization.  A compile still in LLVM, which can take without bound, is
+        // detached instead of awaited, and its thread is left running; qore_fork_child_quick_exit() below
+        // then ends the process with _exit() if it still runs, so that exit() does not destroy LLVM's
+        // static objects under it (see QoreJIT::exitQuickly()).
         // Keep compiled code mapped because later atexit callbacks and static destructors can still
         // execute Qore cleanup code after the native compiler has been stopped.
         QoreJIT::instance().stopBackgroundCompiler();

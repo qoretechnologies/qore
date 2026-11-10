@@ -1,0 +1,315 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT background compile thread, LLJIT module removal, and process exit with a compile left running
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+# the process module bounds the time a child can run; without it, a child that hangs stalls the test until the test
+# runner's limit
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class BgCompileTeardownDetachTest
+
+#! Program teardown and process exit do not wait for the LLVM phase of a background JIT compile
+/** A background compile lowers the Qore IR of the Programs it compiles to LLVM IR, and then optimizes, generates and
+    emits the code of the self-contained LLVM module.  The teardown of a Program waits for the lowering only: a compile
+    in the LLVM phase, which can take without bound, is detached, and its result is discarded when LLVM returns.
+    Process exit detaches it too, and does not wait for the compile thread.
+
+    The debug build stops the compile thread at a point of the compile (the start of the lowering, the start of the
+    LLVM phase, or the end of the LLVM phase) until the test lets it continue, holding the compile lock as a compile
+    that takes long does, so each case runs the same steps on every run.  Each case runs in a child process, so that a
+    crash or a hang fails an assertion rather than the test run.
+*/
+class BgCompileTeardownDetachTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step of a child
+        const StepTimeout = 60000;
+
+        #! the longest that a child can run; a child that hangs fails its case
+        const ChildTimeout = 120s;
+
+        #! the execution modes of the child Programs
+        const Modes = ("tiered", "jit");
+
+        #! the start of a child script
+        const Header = "%modern
+%no-child-restrictions
+
+const T = " + StepTimeout + ";
+ExecMode em = ARGV[0] == \"jit\" ? EM_JIT : EM_TIERED;
+";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("BgCompileTeardownDetachTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        foreach string mode in (Modes) {
+            addTestCase(mode + ": teardown detaches a compile in the LLVM phase", \llvmPhaseDetach(), (mode,));
+            addTestCase(mode + ": teardown waits for the lowering, then detaches", \loweringPhaseWait(), (mode,));
+            addTestCase(mode + ": a callee's Program deleted after code generation", \otherProgramCallee(), (mode,));
+            addTestCase(mode + ": exit with a compile left in LLVM", \exitWithBlockedCompile(), (mode,));
+        }
+        addTestCase("hold usage errors", \holdErrors());
+        set_return_value(main());
+    }
+
+    #! deleting a Program returns while the compile of its function is stopped in the LLVM phase
+    /** The compile is stopped at the start of the LLVM phase; the result is discarded when it continues, and the
+        function stays in the IR tier
+    */
+    llvmPhaseDetach(string mode) {
+        checkDebug();
+        hash<auto> r = runChild(Header + "
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+int d0 = call_function(\"dbg_get_bg_compile_discarded_count\");
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+int sum = 0;
+for (int i = 0; i < 5; ++i) {
+    sum += p.callFunction(\"f\", 10);
+}
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+delete p;
+# the teardown returned while the compile is still stopped in LLVM
+bool deleted_while_held = call_function(\"dbg_bg_compile_held\");
+int discarded_before = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
+bool continued = call_function(\"dbg_continue_bg_compile\", T);
+# waits for the detached compile too
+call_function(\"dbg_wait_bg_compile_idle\");
+int discarded = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
+printf(\"sum=%d held=%y deleted_while_held=%y before=%d continued=%y discarded=%d\\n\", sum, held,
+    deleted_while_held, discarded_before, continued, discarded);
+", mode);
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=225 held=True deleted_while_held=True before=0 continued=True discarded=1", r.output,
+            "the Program was deleted while its function's compile was stopped in LLVM, and the result was discarded");
+        assertRegex("\\[BG-JIT\\] detached an in-progress compile from a Program being deleted", r.output);
+        assertRegex("\\[BG-JIT\\] discarded the compile of 'f@", r.output);
+        assertNRegex("promoted to JIT tier", r.output, "no compiled code was installed");
+    }
+
+    #! a teardown that finds the compile lowering its code waits, and detaches the compile when LLVM starts
+    loweringPhaseWait(string mode) {
+        checkDebug();
+        hash<auto> r = runChild(Header + "
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+int d0 = call_function(\"dbg_get_bg_compile_discarded_count\");
+call_function(\"dbg_hold_bg_compile\", \"lowering\");
+int sum = 0;
+for (int i = 0; i < 5; ++i) {
+    sum += p.callFunction(\"f\", 10);
+}
+bool held_lowering = call_function(\"dbg_wait_bg_compile_held\", \"lowering\", T);
+Counter deleted(1);
+background sub () {
+    delete p;
+    deleted.dec();
+}();
+# the teardown waits for the compile, which is about to read the Program's IR
+bool waited = call_function(\"dbg_wait_bg_compile_teardown_waiting\", T);
+int pending = deleted.getCount();
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+bool continued_lowering = call_function(\"dbg_continue_bg_compile\", T);
+bool held_llvm = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+# the teardown detaches the compile once it reaches LLVM
+deleted.waitForZero();
+bool deleted_while_held = call_function(\"dbg_bg_compile_held\");
+bool continued = call_function(\"dbg_continue_bg_compile\", T);
+call_function(\"dbg_wait_bg_compile_idle\");
+int discarded = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
+printf(\"sum=%d held_lowering=%y waited=%y pending=%d continued_lowering=%y held_llvm=%y \"
+    \"deleted_while_held=%y continued=%y discarded=%d\\n\", sum, held_lowering, waited, pending,
+    continued_lowering, held_llvm, deleted_while_held, continued, discarded);
+", mode);
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=225 held_lowering=True waited=True pending=1 continued_lowering=True held_llvm=True "
+            "deleted_while_held=True continued=True discarded=1", r.output,
+            "the teardown waited for the lowering and detached the compile in LLVM");
+        assertNRegex("promoted to JIT tier", r.output, "no compiled code was installed");
+    }
+
+    #! a compile of a surviving Program's function, whose batch folds in a function of a deleted Program
+    /** The compile is stopped at the end of the LLVM phase, after the code of the batch was generated; the deletion of
+        the callee's Program detaches it.  The discarded module is removed from the JIT: a function of the surviving
+        Program that the batch defined is compiled again afterwards under the same symbol.  The root function's state
+        is reset, so it is submitted again when it is called (and refused, as its batch still refers to the deleted
+        Program).
+    */
+    otherProgramCallee(string mode) {
+        checkDebug();
+        hash<auto> r = runChild(Header + "
+Program b(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+b.setExecMode(em);
+b.parse(\"int sub h(int x) { return x * 2; }
+Program sub make(ExecMode em) {
+    Program a(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+    a.setExecMode(em);
+    a.importFunction(\\\"h\\\");
+    a.parse(\\\"int sub g(int x) { return x + 1; }
+int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += g(i) + h(i); } return s; }\\\", \\\"a\\\");
+    return a;
+}\", \"b\");
+Program a = b.callFunction(\"make\", em);
+call_function(\"dbg_wait_bg_compile_idle\");
+int d0 = call_function(\"dbg_get_bg_compile_discarded_count\");
+call_function(\"dbg_hold_bg_compile\", \"commit\", \"f\");
+# f is submitted at its first call, which calls neither g nor h, so its batch is the first compile of both
+int f0 = a.callFunction(\"f\", 0);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"commit\", T);
+delete b;
+bool deleted_while_held = call_function(\"dbg_bg_compile_held\");
+bool continued = call_function(\"dbg_continue_bg_compile\", T);
+call_function(\"dbg_wait_bg_compile_idle\");
+int discarded = call_function(\"dbg_get_bg_compile_discarded_count\") - d0;
+# g, whose standard entry the discarded batch defined, is compiled on its own
+int g1 = a.callFunction(\"g\", 1);
+call_function(\"dbg_wait_bg_compile_idle\");
+int r0 = call_function(\"dbg_get_bg_compile_refused_count\");
+int sum = 0;
+for (int i = 0; i < 3; ++i) {
+    sum += a.callFunction(\"f\", 10);
+}
+call_function(\"dbg_wait_bg_compile_idle\");
+int resubmitted = call_function(\"dbg_get_bg_compile_refused_count\") - r0;
+printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded=%d resubmitted=%y\\n\", f0, g1, sum,
+    held, deleted_while_held, continued, discarded, resubmitted > 0);
+", mode);
+        assertEq(0, r.rc, r.output);
+        assertRegex("f0=0 g1=2 sum=435 held=True deleted_while_held=True continued=True discarded=1 "
+            "resubmitted=True",
+            r.output, "the compile was detached by the callee's Program and discarded, and f was submitted again");
+        assertRegex("\\[BG-JIT\\] discarded the compile of 'f@", r.output);
+        # g was defined by the discarded batch; it compiles under the same symbol only if that module was removed
+        assertRegex("\\[BG-JIT\\] compiled 'g@[^']*' and promoted to JIT tier", r.output,
+            "g compiled again after the batch that defined it was discarded");
+        assertNRegex("failed to compile", r.output);
+        assertNRegex("compiled 'f@[^']*' and promoted", r.output, "f's discarded code was not installed");
+    }
+
+    #! the process exits while a compile is stopped in LLVM and never continued
+    /** The compile thread is left running: process exit neither waits for it nor destroys the JIT under it.  The
+        compile belongs to a child Program deleted before the exit, to the main Program, which is deleted at the exit,
+        or to a Program that is not deleted, as exit() ends the process without tearing Programs down.
+    */
+    exitWithBlockedCompile(string mode) {
+        checkDebug();
+        # a child Program deleted at the end of the script
+        hash<auto> r = runChild(Header + "
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+int sum = p.callFunction(\"f\", 10);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+printf(\"sum=%d held=%y\\n\", sum, held);
+", mode);
+        assertEq(0, r.rc, "child Program: " + r.output);
+        assertRegex("sum=45 held=True", r.output, "child Program");
+
+        # a function of the main Program, which is deleted when the script ends
+        r = runChild("%modern
+const T = " + StepTimeout + ";
+int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+int sum = f(10);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+printf(\"sum=%d held=%y\\n\", sum, held);
+", mode, mode);
+        assertEq(0, r.rc, "main Program: " + r.output);
+        assertRegex("sum=45 held=True", r.output, "main Program");
+
+        # exit() while the Program of the compile exists
+        r = runChild(Header + "
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+int sum = p.callFunction(\"f\", 10);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+printf(\"sum=%d held=%y\\n\", sum, held);
+exit(0);
+", mode);
+        assertEq(0, r.rc, "exit(): " + r.output);
+        assertRegex("sum=45 held=True", r.output, "exit()");
+    }
+
+    #! an unknown hold point, a second hold at the same point, and continuing without a held compile are errors
+    holdErrors() {
+        checkDebug();
+        assertThrows("DBG-ARGUMENT-ERROR", "unknown background compile hold point",
+            sub () { call_function("dbg_hold_bg_compile", "x"); });
+        assertThrows("DBG-ARGUMENT-ERROR", "no background compile is held",
+            sub () { call_function("dbg_continue_bg_compile", 100); });
+        assertFalse(call_function("dbg_bg_compile_held"), "no compile is held");
+        hash<auto> r = runChild("%modern
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+try {
+    call_function(\"dbg_hold_bg_compile\", \"llvm\");
+    printf(\"second=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"second=%s\\n\", ex.err);
+}
+", "tiered", "ast");
+        assertEq(0, r.rc, r.output);
+        assertRegex("second=DBG-ARGUMENT-ERROR", r.output, "a second hold at the same point is refused");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the background compile holds require a debug build");
+        }
+    }
+
+    #! runs a child script and returns its exit status and output
+    /** @param code the script
+        @param mode the execution mode of the child Programs, given to the script as its argument
+        @param main_mode the execution mode of the child process's own Program; \c ast keeps its code out of the JIT,
+        so that only the child Programs' functions are compiled in the background
+    */
+    private hash<auto> runChild(string code, string mode, string main_mode = "ast") {
+        TmpDir tmp("qore-bg-compile-teardown-detach-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        # every function is submitted for native compilation at its first call
+        hash<string, string> env = {"QORE_JIT_THRESHOLD": "1", "QORE_JIT_TIMING": "1"};
+        list<string> args = ("--enable-debug", "--exec-mode=" + main_mode, script, mode);
+%ifdef NoProcess
+        string output = backquote(sprintf("env %s %s %s 2>&1; echo \"rc=$?\"",
+            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "), qore_bin, args.join(" ")));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertTrue(exists rc, "the child's status is known: " + output);
+        return {"rc": rc[0].toInt(), "output": output};
+%else
+        StringOutputStream out();
+        StringOutputStream err();
+        Process p(qore_bin, args, {"stdout": out, "stderr": err, "env": Process::getEnvironment() + env});
+        # a hang fails the case instead of stalling the run
+        bool done = p.wait(ChildTimeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        string output = out.getData() + err.getData();
+        assertTrue(done, "the child ended: " + output);
+        return {"rc": p.exitCode(), "output": output};
+%endif
+    }
+}
