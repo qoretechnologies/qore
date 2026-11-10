@@ -152,6 +152,12 @@ for (int i = 0; i < 3; ++i) {
         # an inherited final method reads the private:internal member of its own class
         assertEq(2, (select out.split("\n"), $1 =~ /^inherited final method.*: 7$/).size(), out);
         assertRegex("static method of another class called from a method: denied\n", out);
+        # the return value of a plain function is checked in its own context: an object of the caller's class read
+        # from a hash is not the class that the caller's class inherits privately; an argument is checked in the
+        # caller's
+        assertRegex("plain function returning an object read from a hash, called from a method: "
+            "RUNTIME-TYPE-ERROR\n", out);
+        assertRegex("plain function taking an object of the caller's class: took RC\n", out);
     }
 
     executionModes() {

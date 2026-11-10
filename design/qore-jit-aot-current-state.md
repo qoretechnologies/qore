@@ -77,7 +77,8 @@ inside the frame of the call (`qore_rt_push_native_function_context_v1()`, with 
 thread's data that the caller got when it was entered) when the caller can run with an
 object or a class (`QoreIRToLLVM::nativeCallNeedsFunctionContext()`: methods, closures
 and top-level code) and the callee's body can observe it: a body that the analysis of
-context-independent fast entries proves free of it (`qore_aot_fast_entry_is_context_independent()`;
+context-independent fast entries proves free of it, including the check of its return value, which must
+return only scalars and strings (`QoreTypeInfo::returnsOnlyScalars()`, `qore_aot_fast_entry_is_context_independent()`;
 `BatchCalleeInfo::context_independent_fast_entry` in AOT code, `context_free_body` in a
 JIT batch, `qore_ir_resolve_context_free_fast_entries()`; disabled with
 `QORE_DISABLE_JIT_CONTEXT_FREE_CALLS`) needs no switch, nor does a plain function called

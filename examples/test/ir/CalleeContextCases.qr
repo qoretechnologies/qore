@@ -138,6 +138,46 @@ class B {
     }
 }
 
+class RBase {}
+
+class RC inherits private RBase {
+    # a plain function returning an object read from a hash as a class that this class inherits privately
+    string returnFromHash() {
+        hash<auto> h = {"o": self};
+        string r;
+        for (int i = 0; i < 40; ++i) {
+            try {
+                RBase b = retbase(h);
+                r = "returned " + b.className();
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+        }
+        return r;
+    }
+
+    # a plain function taking this object as a class that this class inherits privately
+    string passAsParam() {
+        string r;
+        for (int i = 0; i < 40; ++i) {
+            try {
+                r = "took " + takebase(self);
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+        }
+        return r;
+    }
+}
+
+RBase sub retbase(hash<auto> h) {
+    return h.o;
+}
+
+string sub takebase(RBase b) {
+    return b.className();
+}
+
 sub check_static(string label, code c) {
     string rv;
     for (int i = 0; i < 40; ++i) {
@@ -184,3 +224,6 @@ printf("inherited final method: %d\n", s.callInherited());
 printf("inherited final method through self: %d\n", s.callInheritedSelf());
 B b();
 printf("static method of another class called from a method: %s\n", b.viaStatic());
+RC rc();
+printf("plain function returning an object read from a hash, called from a method: %s\n", rc.returnFromHash());
+printf("plain function taking an object of the caller's class: %s\n", rc.passAsParam());

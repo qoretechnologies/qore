@@ -6273,6 +6273,13 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
     if (!sig) {
         return false;
     }
+    // the check of the return value runs in the context the entry runs in, which decides whether an object is
+    // accepted as a class that the caller's class inherits privately: a function that can return an object or a
+    // container (one read from a hash, for example) needs its own context; the return type of a generic function is
+    // the one of the specialization the IR is lowered for
+    if (!QoreTypeInfo::returnsOnlyScalars(ir_func.specializeType(sig->getReturnTypeInfo()))) {
+        return false;
+    }
     const bool allow_body_locals =
         !q_env_is_set("QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_BODY_LOCALS");
     if (!allow_body_locals && !ir_func.all_body_locals.empty()) {
