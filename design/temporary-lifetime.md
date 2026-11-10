@@ -189,6 +189,26 @@ that release was removed, so a method chain keeps its receivers to the end of th
 reference that a load of a weak local variable takes is still released at its last use (`weak_load_result_ids`,
 `weak_load_temp_slots`): in the AST interpreter, a variable read is not held either.
 
+A read of an IR-only local (`ir_only_locals`: no closure binds it and no reference reaches it) holds a reference of
+the frame, while the AST interpreter borrows the value from the variable; the two differ only when the statement writes
+the variable after the read, which destroys the value in the AST interpreter (qore#5712):
+
+- a read that is a call argument is released when the call returns (`read_needs_release_at_return()` in the IR
+  interpreter's `buildValueUseCounts()`);
+- a read whose uses are all later in its block and only take values from it - an element of a list or hash literal
+  (`MakeList`, `MakeHash`, `MakeHashConstKeys`), the receiver of a member read (`HashKeyAccess`) and an operand of
+  `AddAny` - is released after its last use: `QoreIRFunction::releasePlainLocalReadsBeforeWrites()`, which runs after
+  `computeIROnlyLocals()`, inserts `ReleaseOwnedTemp`.  So `f((o,)) + (o = NOTHING) + mark()` and
+  `o.n + (o = NOTHING) + mark()` destroy the object before `mark()` runs.  A slice is not such a use: as the source of
+  a functional operator, the AST interpreter iterates the sequence itself (`map $1, l[0..(l = ()).size()]`).
+
+A list or hash literal, the result of `AddAny` and the value that `remove`, `shift` or `pop` takes, passed to a call
+as its argument, are released when the call returns, as every argument is, when that release can be observed: when
+they hold a value that nothing else holds, such as an object that the expression created or the value of a local that
+the statement writes later (`qore_ir_find_observable_temp_call_args()`, used by the IR interpreter and by
+`QoreIRToLLVM::releaseConsumedCallArgs()`).  A literal of scalars, constants and reads of locals that keep their values
+is released at the end of the statement, which costs the call nothing.
+
 A method call reference to a temporary (`\make().getName()`) is created from the receiver that the lowering
 evaluated (`qore_rt_create_object_method_ref()`, `ParseObjectMethodReferenceNode::makeReference()`); the interpreter
 and JIT code used to evaluate the AST node again, which evaluated the receiver expression a second time.
@@ -236,4 +256,5 @@ released with the statement's temporaries, before the variable.
 worker in each execution mode, as an AOT program and from a compiled module, and compares the traces with the AST
 interpreter's (`temporary-lifetime-results.qi`).  `examples/test/ir/ReferenceReadLifetime.qtest` runs the reads of
 [Values read from variables](#values-read-from-variables) in every execution mode, on the IR tier and as a qcc
-executable.
+executable. `examples/test/ir/temp-release-points/` runs the release points of reads of locals that the statement writes later
+and of the temporary arguments above (qore#5712).

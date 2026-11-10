@@ -4005,6 +4005,20 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+    //! Releases a read of an IR-only local after its last use when the statement writes the local later
+    /** A read of a local that no closure binds and no reference reaches (ir_only_locals) holds a reference of the
+        frame until the statement's DiscardTemps, while the AST interpreter borrows the value from the variable; the
+        difference can be observed only if the statement writes the variable after the read, which then destroys
+        the value in the AST interpreter: f((o,)) + (o = NOTHING) + mark(), o.n + (o = NOTHING) + mark().  For such
+        a read whose uses are all later in its block and only take values from it (MakeList, MakeHash,
+        MakeHashConstKeys, HashKeyAccess, AddAny; not a slice, which the AST interpreter iterates from the
+        sequence as the source of a functional operator), ReleaseOwnedTemp is inserted after its last use; a read used as a call argument is
+        released when the call returns instead (see the IR interpreter's buildValueUseCounts()).  The pass can run
+        again on the same function (qore#5712).
+
+        Must run after computeIROnlyLocals().
+    */
+    void releasePlainLocalReadsBeforeWrites();
 
     //! Derives the handler's own closure-bound parent-slot locals from its IR, for an artifact without them
     /** These are the closure-bound parent-slot locals that the handler instantiates or uninstantiates itself.  This is

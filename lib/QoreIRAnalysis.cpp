@@ -17625,3 +17625,237 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
     }
     return fusions.size() + switch_fusions.size();
 }
+
+// documented in QoreIR.h
+void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
+    if (ir_only_locals.empty() || detectCreatesReference()) {
+        return;
+    }
+    // the uses of each value, by the instruction that uses it
+    std::unordered_map<uint32_t, std::vector<const QoreIRInstruction*>> uses;
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (operand.isValid()) {
+                    uses[operand.id].push_back(inst.get());
+                }
+            });
+        }
+    }
+    auto takes_value = [](const QoreIRInstruction* use) -> bool {
+        switch (use->opcode) {
+            case QoreIROpcode::MakeList:
+            case QoreIROpcode::MakeHash:
+            case QoreIROpcode::MakeHashConstKeys:
+            case QoreIROpcode::HashKeyAccess:
+            case QoreIROpcode::AddAny:
+                return true;
+            default:
+                return false;
+        }
+    };
+    for (const auto& block : blocks) {
+        auto& insts = block->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            const QoreIRInstruction* inst = insts[i].get();
+            if (inst->opcode != QoreIROpcode::LoadLocal || !inst->result.isValid()) {
+                continue;
+            }
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!load->local || load->is_ref || load->is_closure
+                    || !ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
+                continue;
+            }
+            auto uses_it = uses.find(load->result.id);
+            if (uses_it == uses.end() || uses_it->second.empty()) {
+                continue;
+            }
+            // every use is a later instruction of this block that takes values from the read
+            size_t last_use = 0;
+            bool eligible = true;
+            for (const QoreIRInstruction* use : uses_it->second) {
+                if (!takes_value(use)) {
+                    eligible = false;
+                    break;
+                }
+                size_t pos = i + 1;
+                while (pos < insts.size() && insts[pos].get() != use) {
+                    ++pos;
+                }
+                if (pos == insts.size()) {
+                    eligible = false;
+                    break;
+                }
+                if (pos > last_use) {
+                    last_use = pos;
+                }
+            }
+            if (!eligible) {
+                continue;
+            }
+            // already released by an earlier run of the pass
+            if (last_use + 1 < insts.size() && insts[last_use + 1]->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    && !insts[last_use + 1]->operands.empty()
+                    && insts[last_use + 1]->operands[0].id == load->result.id) {
+                continue;
+            }
+            // the statement writes the local after the read, before it ends
+            const uint32_t scope = inst->temp_scope_id;
+            if (!scope) {
+                continue;
+            }
+            bool written = false;
+            for (size_t j = i + 1; j < insts.size(); ++j) {
+                const QoreIRInstruction* next = insts[j].get();
+                if (qore_ir_get_written_local(next) == load->local) {
+                    written = true;
+                    break;
+                }
+                if ((next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
+                        && next->temp_scope_id == scope) {
+                    break;
+                }
+            }
+            if (!written) {
+                continue;
+            }
+            auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
+            release->operands.push_back(load->result);
+            release->loc = insts[last_use]->loc;
+            release->temp_scope_id = insts[last_use]->temp_scope_id;
+            insts.insert(insts.begin() + last_use + 1, std::move(release));
+        }
+    }
+}
+
+// documented in QoreIRAnalysis.h
+void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vector<uint8_t>& observable) {
+    observable.clear();
+    struct Def {
+        const QoreIRInstruction* inst = nullptr;
+        const QoreIRBasicBlock* block = nullptr;
+        size_t pos = 0;
+    };
+    std::unordered_map<uint32_t, Def> defs;
+    uint32_t max_id = 0;
+    for (const auto& block : func.blocks) {
+        for (size_t i = 0; i < block->instructions.size(); ++i) {
+            const QoreIRInstruction* inst = block->instructions[i].get();
+            if (inst->result.isValid()) {
+                defs[inst->result.id] = {inst, block.get(), i};
+                if (inst->result.id > max_id) {
+                    max_id = inst->result.id;
+                }
+            }
+        }
+    }
+    observable.assign(max_id + 1, 0);
+    auto is_temp_container = [](const QoreIRInstruction* inst) -> bool {
+        switch (inst->opcode) {
+            case QoreIROpcode::MakeList:
+            case QoreIROpcode::MakeHash:
+            case QoreIROpcode::MakeHashConstKeys:
+            case QoreIROpcode::AddAny:
+                return true;
+            default:
+                return false;
+        }
+    };
+    // the statement writes the local after the read at pos in block, before the statement ends
+    auto written_later = [](const QoreIRBasicBlock* block, size_t pos, const LocalVar* local, uint32_t scope) {
+        const auto& insts = block->instructions;
+        for (size_t j = pos + 1; j < insts.size(); ++j) {
+            const QoreIRInstruction* next = insts[j].get();
+            if (qore_ir_get_written_local(next) == local) {
+                return true;
+            }
+            if (scope && (next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
+                    && next->temp_scope_id == scope) {
+                return false;
+            }
+        }
+        // the statement continues in another block: assume a write
+        return true;
+    };
+    // a value that the temporary holds whose release can be observed
+    std::function<bool(QoreIRValue, unsigned)> holds_observable = [&](QoreIRValue value, unsigned depth) -> bool {
+        auto it = defs.find(value.id);
+        if (it == defs.end() || depth > 16) {
+            return true;
+        }
+        const QoreIRInstruction* def = it->second.inst;
+        if (def->opcode == QoreIROpcode::ConstInt || def->opcode == QoreIROpcode::ConstFloat
+                || def->opcode == QoreIROpcode::ConstBool || def->opcode == QoreIROpcode::ConstNothing
+                || def->opcode == QoreIROpcode::ConstNull || def->opcode == QoreIROpcode::ConstString
+                || def->opcode == QoreIROpcode::ConstDate || def->opcode == QoreIROpcode::ConstChar) {
+            return false;
+        }
+        if (const QoreIRValueFacts* facts = func.getValueFacts(value)) {
+            if (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat
+                    || facts->representation == QoreIRValueRepresentation::NativeBool) {
+                return false;
+            }
+            const QoreTypeInfo* ti = facts->type_info;
+            if (ti && (ti == bigIntTypeInfo || ti == floatTypeInfo || ti == boolTypeInfo || ti == stringTypeInfo
+                    || ti == dateTypeInfo || ti == binaryTypeInfo || ti == numberTypeInfo)) {
+                return false;
+            }
+        }
+        if (def->opcode == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
+            // a read that is not an IR-only local's lives until the end of the statement; the value of an IR-only
+            // local that the statement does not write stays in the local
+            if (!load->local || load->is_ref || load->is_closure
+                    || !func.ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
+                return false;
+            }
+            return written_later(it->second.block, it->second.pos, load->local, def->temp_scope_id);
+        }
+        if (is_temp_container(def)) {
+            for (const QoreIRValue& operand : def->operands) {
+                if (operand.isValid() && holds_observable(operand, depth + 1)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return true;
+    };
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            int arg_start = qore_ir_call_arg_start(inst.get());
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+                QoreIRValue arg = inst->operands[i];
+                if (!arg.isValid() || arg.id >= observable.size() || observable[arg.id]) {
+                    continue;
+                }
+                auto it = defs.find(arg.id);
+                if (it == defs.end()) {
+                    continue;
+                }
+                // a value taken out of a container by remove, shift or pop holds what the container held: its
+                // release can be observed
+                if (it->second.inst->opcode == QoreIROpcode::LValuePathUnary) {
+                    LVUnaryOp op = static_cast<const QoreIRLValuePathInstruction*>(it->second.inst)->unary_op;
+                    if (op == LVUnaryOp::Remove || op == LVUnaryOp::Shift || op == LVUnaryOp::Pop) {
+                        observable[arg.id] = 1;
+                    }
+                    continue;
+                }
+                if (!is_temp_container(it->second.inst)) {
+                    continue;
+                }
+                for (const QoreIRValue& operand : it->second.inst->operands) {
+                    if (operand.isValid() && holds_observable(operand, 0)) {
+                        observable[arg.id] = 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -2496,8 +2496,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }
             for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
                 QoreIRValue arg = inst->operands[i];
-                if (arg.isValid() && arg.id < def_block.size()
-                        && (def_by_call[arg.id] || def_by_variable_read[arg.id])
+                if (arg.isValid() && arg.id < def_block.size() && def_inst[arg.id]
                         && !(arg.id < reused_call_args.size() && reused_call_args[arg.id])
                         && (def_block[arg.id] == block.get()
                             || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
@@ -2556,14 +2555,23 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             ++counts[i];
         }
     }
+    std::vector<uint8_t> observable_temps;
+    qore_ir_find_observable_temp_call_args(func, observable_temps);
     dot_eval_only_bases.assign(counts.size(), 0);
     consumed_call_args.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
         }
+        // a temporary passed to a call as its argument is released when the call returns, as the AST interpreter
+        // releases the argument list (see design/temporary-lifetime.md): a call result, a Phi, a list or hash
+        // literal or the result of AddAny whose release can be observed (f((o,)), f(l + o);
+        // qore_ir_find_observable_temp_call_args(), qore#5712), and a value read from a variable as
+        // read_needs_release_at_return() says; only a value whose slot holds a reference of the frame is released
+        // (releaseConsumedCallArgs())
         if (same_block_call_args[i] && counts[i] == 1
-                && (def_by_call[i] || read_needs_release_at_return(static_cast<uint32_t>(i)))) {
+                && (def_by_call[i] || (i < observable_temps.size() && observable_temps[i])
+                    || (def_by_variable_read[i] && read_needs_release_at_return(static_cast<uint32_t>(i))))) {
             consumed_call_args[i] = 1;
         }
     }

@@ -179,6 +179,17 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 
 //! Return the local directly written or invalidated by one instruction.
 //! Covers ordinary stores, fused scalar writes, and local-rooted lvalue paths.
+//! Marks in \a observable (by value id) the list and hash literals, the results of AddAny and the values taken by
+//! remove, shift and pop that a call takes as its argument and whose release when the call returns can be observed
+/** The AST interpreter releases the argument list of a call when the call returns (see design/temporary-lifetime.md);
+    the IR interpreter and native code release such a temporary then only if its release can destroy a value: if it
+    holds a value that nothing else holds, such as an object created by the expression, or the value of a local that
+    the statement writes later (whose read releasePlainLocalReadsBeforeWrites() releases); a temporary of scalar and
+    constant values and of reads of locals that keep their values to the end of the statement is released at the end
+    of the statement, which costs no release at the call (qore#5712).
+*/
+DLLLOCAL void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vector<uint8_t>& observable);
+
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
 
