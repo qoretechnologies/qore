@@ -2262,7 +2262,8 @@ public:
    //! returns the thread's local data of a Program with module lifetime cached by cacheModuleProgramData(), or nullptr
    /** Only for an entry into the Program without its thread count (see qore_stop_module_uncounted_entries()): the
        Program is not torn down while such entries are allowed, so the thread's local data in it stays in place until
-       the thread ends.  Called in the thread itself only
+       the thread's data is deleted (del(), which disables the cache: at the end of the thread, and for the signal
+       thread after each signal handler).  Called in the thread itself only
    */
    DLLLOCAL ThreadLocalProgramData* findModuleProgramData(const QoreProgram* pgm) const {
       for (const ModuleProgramDataCacheEntry& e : module_pgm_cache) {

@@ -3675,25 +3675,20 @@ void qore_stop_module_uncounted_entries() {
     ModuleUncountedEntries& e = module_uncounted_entries();
     e.active.store(false, std::memory_order_seq_cst);
     ThreadData* self = thread_data.get();
+    // the cleanup does not run in module code that it entered without the thread count: the module's Program would be
+    // torn down under it
+    assert(!self || !self->module_uncounted.load(std::memory_order_relaxed));
     while (true) {
         unsigned gen;
         {
             std::lock_guard<std::mutex> l(e.m);
             gen = e.gen;
         }
-        // the threads are checked with the thread list lock held, which keeps their thread data in place, but without
-        // the leaf lock
-        bool busy = false;
-        {
-            QoreThreadListIterator i;
-            while (i.next()) {
-                ThreadData* td = thread_list.getThreadData(*i);
-                if (td && td != self && td->module_uncounted.load(std::memory_order_seq_cst)) {
-                    busy = true;
-                    break;
-                }
-            }
-        }
+        // every thread is checked, also the signal thread and threads being deregistered, which can run module code
+        // too, with the thread list lock held, which keeps their thread data in place, but without the leaf lock
+        bool busy = thread_list.anyThreadData([self](ThreadData* td) -> bool {
+            return td != self && td->module_uncounted.load(std::memory_order_seq_cst);
+        });
         if (!busy) {
             return;
         }
@@ -3819,6 +3814,8 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         // the Program of a module is deleted only by the module manager's cleanup, which stops these entries first:
         // a call into module code then needs neither the Program's lock nor its thread count, so concurrent calls do
         // not contend for them (see qore_stop_module_uncounted_entries())
+        // the checks of incThreadCount() do not apply: the Program is not being torn down while these entries are
+        // allowed, and a module's Program is not parsed again once the module is registered
         if (runtime && pp->module_lifetime.load(std::memory_order_acquire) && qore_module_uncounted_entry(td)) {
             module_uncounted = true;
         } else {

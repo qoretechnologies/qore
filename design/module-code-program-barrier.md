@@ -86,7 +86,9 @@ The Program of a registered user module (source or AOT) is deleted only by the m
    lifetime takes no thread count; each thread counts its own entries (`ThreadData::module_uncounted`).
    `QoreModuleManager::delUser()` calls `qore_stop_module_uncounted_entries()` before it clears the module Programs:
    later entries take the thread count (and fail once the teardown has started), and it waits on a condition variable
-   until every thread has left the entries it made without it.  The sequentially consistent increment-then-check of
+   until every thread has left the entries it made without it.  It checks the data of every thread, whatever its
+   status (`QoreThreadList::anyThreadData()`): the signal thread (TID 0, not on the TID list) runs a handler set by
+   module code in the module's Program, and a foreign thread being deregistered can still run module code.  The sequentially consistent increment-then-check of
    the thread and store-then-scan of the stopping thread guarantee that one of them sees the other.
 3. **Thread data cache** (`ThreadProgramData::findModuleProgramData()`): during an uncounted entry, the thread's local
    data in the module's Program is cached in the thread, so the entry takes no lock of the Program; the cache is
@@ -97,6 +99,15 @@ The Program of a registered user module (source or AOT) is deleted only by the m
 4. **No debugger** (`qore_program_private::getDebugProgram()`): every entry into a Program checks whether a debug
    program is attached to it; a Program without one is checked without its `tlock`.  This applies to every Program.
 
-Consequences: a module's Program does not count the threads running its code for calls made this way, so
-`Program::getThreadList()` and the thread activity events of a module's Program do not show them.  Thread entry
-handlers and thread initialization of the module's Program still run.
+Consequences:
+
+- a module's Program does not count the threads running its code for calls made this way: `Program::getThreadList()`,
+  the idle and active transitions of the module's Program (`ProgramThreadHub`) and the debugger's view of the threads
+  in the module's Program (`getThreadsInProgram()`, `breakProgram()`, `breakProgramThread()`, which use the thread
+  count's `tidmap`) do not include them; they are threads of the calling Programs, which count them
+- the module cleanup waits for every thread in module code before it clears any module's data, where it used to wait
+  for the threads of each module's Program just before clearing that Program.  A thread that is not ended before the
+  cleanup (an asynchronous I/O, foreign or signal thread) and waits in one module's code for another module's data to
+  be destroyed now keeps the cleanup waiting; before, that depended on the order in which the modules were cleared.
+  A thread blocked in module code with nothing to release it kept the cleanup waiting before as well
+- thread entry handlers and thread initialization of the module's Program still run
