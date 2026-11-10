@@ -50,6 +50,9 @@ print_usage () {
   echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
   echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
   echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
+  echo "                           Otherwise they are appended to QORE_MODULE_DIR (those it already holds are not"
+  echo "                           added again), so they are searched after it and before the module directories"
+  echo "                           compiled into the qore of the build (its installation prefix)."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -596,18 +599,28 @@ fi
 # The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
 # requires the modules it was compiled with, and the build's qore does not search these directories when they are
 # outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
-# last, so the modules of the build and of this tree come first.  With QORE_MODULE_DIR_ONLY set, the caller gives the
+# last in QORE_MODULE_DIR, so the modules of the build and of this tree come first; qore searches QORE_MODULE_DIR before
+# the module directories compiled into it, so they also come before those of its installation prefix.  A directory
+# that QORE_MODULE_DIR already holds is not added again.  With QORE_MODULE_DIR_ONLY set, the caller gives the
 # complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
 # as set even when it is empty.
 if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
     _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
-    if [ -n "$_external_module_dirs" ]; then
-        case "$QORE_MODULE_DIR" in
-            *:) export QORE_MODULE_DIR=$QORE_MODULE_DIR$_external_module_dirs ;;
-            *) export QORE_MODULE_DIR=$QORE_MODULE_DIR:$_external_module_dirs ;;
+    _old_ifs=$IFS
+    IFS=:
+    for _external_module_dir in $_external_module_dirs; do
+        case ":$QORE_MODULE_DIR:" in
+            *":$_external_module_dir:"*) ;;
+            *)
+                case "$QORE_MODULE_DIR" in
+                    ""|*:) export QORE_MODULE_DIR=$QORE_MODULE_DIR$_external_module_dir ;;
+                    *) export QORE_MODULE_DIR=$QORE_MODULE_DIR:$_external_module_dir ;;
+                esac
+                ;;
         esac
-    fi
-    unset _external_module_dirs
+    done
+    IFS=$_old_ifs
+    unset _external_module_dirs _external_module_dir _old_ifs
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.

@@ -162,9 +162,16 @@ class ModulePathTest(unittest.TestCase):
         self.assertEqual(["/user/modules", "/ext/one"], path[-2:], path)
         self.assertLess(path.index(root + "/qlib"), path.index("/user/modules"), path)
 
-    def test_external_dirs_are_listed_once(self):
-        path, _ = self.run_record("/ext/one\n")
+    def test_external_dir_in_module_dir_is_not_added_again(self):
+        # a directory that QORE_MODULE_DIR already holds keeps its place; the others are appended in order
+        path, _ = self.run_record("/ext/one:/user/modules:/ext/two\n", QORE_MODULE_DIR="/user/modules")
+        self.assertEqual(1, path.count("/user/modules"), path)
+        self.assertEqual(["/user/modules", "/ext/one", "/ext/two"], path[-3:], path)
+
+    def test_external_dir_listed_twice_is_added_once(self):
+        path, _ = self.run_record("/ext/one:/ext/one:/ext/two\n")
         self.assertEqual(1, path.count("/ext/one"), path)
+        self.assertEqual(["/ext/one", "/ext/two"], path[-2:], path)
 
     # the path ends with an empty entry when QORE_MODULE_DIR is not set, as it did before the external directories
     def test_empty_file_adds_nothing(self):
