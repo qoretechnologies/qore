@@ -32,6 +32,14 @@
     only run on an exception, which are never lowered inline: their own locals had no slots in the function, so qcc
     could not compile a closure whose handler references one (qore#5657), and AOT gave wrong results for loops in
     them (qore#5658).
+
+    handler-parent-locals.q has handlers of closures that read and update the closure-bound variables of the closure
+    they belong to.  An AOT executable also runs every script with its closures run from their serialized IR (with
+    the IR read when a closure is first called and when it is created, and from an executable compiled without native
+    closure bodies): a handler read from serialized IR had no pre-instantiated variables, so after #5653 the IR
+    interpreter took every closure-bound variable of the closure for one of the handler's own, which started with no
+    value (\c add30(\\e) left \c e at 30 instead of 31, and a thread started by the handler read no value), and the
+    handler's updates were lost.
 */
 class OnBlockExitClosureLocalsTest inherits QUnit::Test {
     public {
@@ -61,6 +69,27 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
                 "two handlers: exit [0, 1, 2]",
                 "two handlers: error [0, 1]; exit [0, 1, 2]; caught TH",
             ),
+            "handler-parent-locals": (
+                "error ref: error e=31; caught ER",
+                "error closure: error e=31; caught EC",
+                "error background: background e=31; caught EB",
+                "exit ref: exit e=31",
+                "exit ref: exit e=31; caught XR",
+                "success ref: success e=31",
+                "success ref: caught SR",
+                "block handlers: block exit b=32 e=31; after the block e=31",
+                "block handlers: block error b=102 e=101; block exit b=132 e=131; caught BH",
+                "own and parent: exit h=35 e=31 sum=66",
+                "own and parent: exit h=35 e=31 sum=66; caught OP",
+            ),
+        };
+
+        #! the ways an AOT executable runs its closures, by the environment that selects them: native closure bodies,
+        #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created
+        const AOTClosureModes = {
+            "native closures": "",
+            "closures from IR": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
+            "closures from IR read eagerly": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1",
         };
 
         #! each script prints its lines this many times
@@ -85,6 +114,11 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         addTestCase("execution modes: handlers that only run on an exception", sub () { modesTest("handler-modes"); });
         # qcc could not compile the on_error case (qore#5657), and AOT gave wrong results for the loops (qore#5658)
         addTestCase("AOT executable: handlers that only run on an exception", sub () { aotTest("handler-modes"); });
+        addTestCase("execution modes: handlers that update the variables of their closure",
+            sub () { modesTest("handler-parent-locals"); });
+        # run from serialized IR, the handlers lost their updates of the closure's variables
+        addTestCase("AOT executable: handlers that update the variables of their closure",
+            sub () { aotTest("handler-parent-locals"); });
         set_return_value(main());
     }
 
@@ -101,7 +135,8 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
             name + ": " + ExecModeHarness::IRTierName);
     }
 
-    #! compiles a script with qcc and checks that the executable gives the output of the AST interpreter
+    #! compiles a script with qcc and checks that the executable gives the output of the AST interpreter with each
+    #! way of running its closures, and that an executable compiled without native closure bodies does as well
     private aotTest(string name) {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
@@ -110,7 +145,16 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         string exe = dir.path + "/" + name;
         string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, scriptPath(name)));
         assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
-        assertEq(expected(name), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), name + ": AOT");
+        string exp = expected(name);
+        foreach hash<auto> i in (AOTClosureModes.pairIterator()) {
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s %s", env, i.value, exe)), name + ": AOT: " + i.key);
+        }
+        string ir_exe = exe + "-ir";
+        out = ExecModeHarness::run_any(sprintf("%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -O3 -o %s %s", env, qcc_bin,
+            ir_exe, scriptPath(name)));
+        assertTrue(is_file(ir_exe), name + ": qcc compiles the script without native closure bodies: " + out);
+        assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, ir_exe)),
+            name + ": AOT compiled without native closure bodies");
     }
 
     private string scriptPath(string name) {

@@ -3859,6 +3859,35 @@ public:
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
 
+    //! Returns the closure-bound locals of the parent slots of an on_block_exit handler that the handler declares
+    /** These are the variables that the handler instantiates or uninstantiates itself: closure-bound block locals
+        (InstantiateLocal at their block, UninstantiateLocal at its exit) and catch, foreach, for and switch variables
+        (UninstantiateLocal at the end of their statement).  The lowering of a handler gets the same set from the
+        variables that the handler code declares (see QoreIRLowering::compileBlockHandlerIRs()), which a handler read
+        from serialized IR does not have.
+
+        @return the handler's own closure-bound parent-slot locals; empty if this is not a handler (it has no parent
+        slots)
+    */
+    std::unordered_set<const LocalVar*> getHandlerOwnClosureLocals() const;
+
+    //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
+    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
+        handler declares (see getHandlerOwnClosureLocals()), and the IR interpreter reads and writes back the values of
+        the parent's variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a
+        handler read from it (an AOT closure run from its IR, or lazy debugger IR) has to derive them: without them,
+        the handler took every closure-bound variable of the function it belongs to for one of its own, which started
+        with no value, and its updates were lost.
+    */
+    void restoreHandlerPreInstantiatedLocals();
+
+    //! Returns true if the pre-instantiated parent-slot locals of a lowered handler are those that its IR gives
+    /** The pre-instantiated locals of a handler read from serialized IR are derived from its IR (see
+        restoreHandlerPreInstantiatedLocals()), so they must be the ones that the lowering gives it; for an assertion
+        after the lowering of a handler.
+    */
+    bool handlerPreInstantiatedLocalsMatchIR() const;
+
     //! Computes reference_store_locals: the locals of a StoreLocal whose operand can be a reference
     /** An operand can be a reference unless the instruction that produces it is known never to give one (a
         constant, a load of a variable, which dereferences a reference it holds, an arithmetic, comparison or string

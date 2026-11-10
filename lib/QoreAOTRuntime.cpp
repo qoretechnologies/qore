@@ -7730,6 +7730,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     return nullptr;
                 }
                 nested_handler->computeSlotIdsAndEmbed();
+                // the parent's variables are pre-instantiated in the handler, as its lowering marks them; without
+                // them the IR interpreter took the closure-bound variables of the function for the handler's own
+                nested_handler->restoreHandlerPreInstantiatedLocals();
             } else {
                 error = "OnBlockExit without handler IR in deserialized context";
                 return nullptr;

@@ -4627,6 +4627,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
+        // a handler read from serialized IR derives its pre-instantiated locals from its IR, which must give the ones
+        // that the lowering marked (see QoreIRFunction::restoreHandlerPreInstantiatedLocals())
+        assert(handler_func->handlerPreInstantiatedLocalsMatchIR());
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
@@ -4759,6 +4762,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
+        // a handler read from serialized IR derives its pre-instantiated locals from its IR, which must give the ones
+        // that the lowering marked (see QoreIRFunction::restoreHandlerPreInstantiatedLocals())
+        assert(handler_func->handlerPreInstantiatedLocalsMatchIR());
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
