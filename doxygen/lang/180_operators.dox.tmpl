@@ -436,6 +436,14 @@ list<int> l1 = new list<int>(2);
     - it is illegal to make changes to a local variable anywhere in a background expression, or to assign or modify a member
       of the object of the code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a
       class with member \c x); a parse exception will be thrown
+    - the same holds for a value held by such a local variable or member, which the new thread takes when it starts: an
+      element of a list, a key of a hash or a character of a string (<tt><b>background</b> (l[0] = 9)</tt>,
+      <tt><b>background</b> (h.a = 2)</tt>) is refused at parse time; a member of an object that the path reaches through a
+      value statically typed as an object or class is the object's member, which the thread shares, and is allowed
+      (<tt><b>background</b> (o.x = 5)</tt> with <tt>C o</tt>, <tt><b>background</b> (l[0].x = 5)</tt> with
+      <tt>list&lt;C&gt; l</tt>), as a method call on the object is; a path through a value whose type is not known
+      (\c auto, \c any or no type) is refused, as it could be either: declare the variable with an object type, or call a
+      method of the object
     - the whole expression is evaluated in the new thread, in every @ref exec_mode_intro "execution mode": the arguments of a
       call and its target (the object of a method call, such as the <tt><b>new</b> T()</tt> of
       <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the expression that gives the call reference to call) are

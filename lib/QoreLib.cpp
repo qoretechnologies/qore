@@ -36,6 +36,8 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/AbstractPollableIoObjectBase.h"
 #include "qore/intern/qore_qd_private.h"
 #include "qore/intern/ql_crypto.h"
@@ -2662,21 +2664,180 @@ bool parse_is_readonly_receiver_expression(QoreValue n, int pflag) {
     return n.hasNode() && parse_is_readonly_receiver_node(n.getInternalNode(), pflag);
 }
 
-bool parse_is_self_member_lvalue(QoreValue n) {
-    if (n.getType() != NT_OPERATOR) {
+//! true if a value of the type is an object (or no value: an element or key that the path names may be missing)
+static bool qore_background_is_object_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti) && (QoreTypeInfo::isType(ti, NT_OBJECT)
+        || QoreTypeInfo::getUniqueReturnClassOrNothing(ti) || ti == objectOrNothingTypeInfo);
+}
+
+//! true if a value of the type can never be an object: a list, a hash, a string or another value container
+static bool qore_background_is_value_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseReturns(ti, NT_OBJECT) == QTI_NOT_EQUAL;
+}
+
+//! returns the constant member name of a dereference, or nullptr
+static const char* qore_background_member_name(QoreValue right, QoreString& buf) {
+    if (right.getType() != NT_STRING) {
+        return nullptr;
+    }
+    buf.concat(right.get<const QoreStringNode>()->c_str());
+    return buf.c_str();
+}
+
+//! returns the declared type of a member of a class, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_class_member_type(const QoreTypeInfo* class_ti, const char* mem) {
+    const QoreClass* qc = QoreTypeInfo::getReturnClass(class_ti);
+    if (!qc || !mem) {
+        return nullptr;
+    }
+    const qore_class_private* member_class = nullptr;
+    ClassAccess access;
+    const QoreMemberInfo* mi = qore_class_private::get(*qc)->parseFindMember(mem, member_class, access);
+    return mi ? mi->parseGetTypeInfo() : nullptr;
+}
+
+//! returns the type of the value of a key of a hash of the given type, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_hash_value_type(const QoreTypeInfo* hash_ti, const char* key) {
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(hash_ti)) {
+        if (!key) {
+            return nullptr;
+        }
+        const HashDeclMemberInfo* mi = typed_hash_decl_private::get(*hd)->findMember(key);
+        return mi ? mi->parseGetTypeInfo() : nullptr;
+    }
+    const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexHashOrNothing(hash_ti);
+    return vti ? get_or_nothing_type_check(vti) : nullptr;
+}
+
+//! returns the type of an element of a list, string or binary of the given type, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_element_type(const QoreTypeInfo* container_ti) {
+    if (const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(container_ti)) {
+        return get_or_nothing_type_check(eti);
+    }
+    if (QoreTypeInfo::isType(container_ti, NT_STRING)) {
+        return stringOrNothingTypeInfo;
+    }
+    if (QoreTypeInfo::isType(container_ti, NT_BINARY)) {
+        return bigIntOrNothingTypeInfo;
+    }
+    return nullptr;
+}
+
+//! returns true if the expression is the local variable self
+static bool qore_background_is_self(QoreValue n) {
+    if (n.getType() != NT_VARREF) {
         return false;
     }
-    const QoreHashObjectDereferenceOperatorNode* op =
-        dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
-    if (!op) {
-        return false;
-    }
-    QoreValue left = op->getLeft();
-    if (left.getType() != NT_VARREF) {
-        return false;
-    }
-    const VarRefNode* vrn = left.get<const VarRefNode>();
+    const VarRefNode* vrn = n.get<const VarRefNode>();
     return vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf();
+}
+
+//! walks the access path of an lvalue from its root: returns what it modifies and sets the type of its value
+/** The types are derived from the declared type of the root along the path, as the nodes of an lvalue do not keep the
+    types of their values (they are parsed for assignment).
+*/
+static qore_background_lvalue_e qore_background_lvalue_walk(QoreValue n, const QoreTypeInfo*& ti) {
+    ti = nullptr;
+    switch (n.getType()) {
+        case NT_VARREF: {
+            const VarRefNode* vrn = n.get<const VarRefNode>();
+            if (vrn->getType() != VT_LOCAL) {
+                return qore_background_lvalue_e::SHARED;
+            }
+            ti = vrn->getParseTypeInfo();
+            return qore_background_is_self(n) ? qore_background_lvalue_e::MEMBER : qore_background_lvalue_e::LOCAL;
+        }
+        case NT_SELF_VARREF: {
+            const SelfVarrefNode* svn = n.get<const SelfVarrefNode>();
+            ti = svn->getParseTypeInfo();
+            return qore_background_lvalue_e::MEMBER;
+        }
+        case NT_OPERATOR:
+            break;
+        default:
+            return qore_background_lvalue_e::SHARED;
+    }
+    const AbstractQoreNode* node = n.getInternalNode();
+    if (const QoreCastOperatorNode* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        const QoreTypeInfo* inner_ti;
+        qore_background_lvalue_e kind = qore_background_lvalue_walk(cast->getExp(), inner_ti);
+        ti = cast->getParseTypeInfo();
+        return kind;
+    }
+
+    QoreValue container;
+    bool element = false;
+    bool range = false;
+    const char* key = nullptr;
+    QoreString key_buf;
+    if (const QoreSquareBracketsOperatorNode* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        container = op->getLeft();
+        element = true;
+    } else if (const QoreHashObjectDereferenceOperatorNode* op =
+            dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        container = op->getLeft();
+        key = qore_background_member_name(op->getRight(), key_buf);
+    } else if (const QoreSquareBracketsRangeOperatorNode* op =
+            dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        container = op->get(0);
+        range = true;
+    } else {
+        return qore_background_lvalue_e::SHARED;
+    }
+
+    const QoreTypeInfo* cti;
+    qore_background_lvalue_e kind = qore_background_lvalue_walk(container, cti);
+    if (kind == qore_background_lvalue_e::SHARED || kind == qore_background_lvalue_e::UNKNOWN) {
+        return kind;
+    }
+    // a member of the object of the code that starts the thread named through self (self.x): the thread takes its value
+    if (!element && !range && qore_background_is_self(container)) {
+        ti = qore_background_class_member_type(cti, key);
+        return qore_background_lvalue_e::MEMBER;
+    }
+    // a step through an object: the rest of the path is part of the object, which the thread shares
+    if (qore_background_is_object_type(cti)) {
+        return qore_background_lvalue_e::SHARED;
+    }
+    // a value container that cannot hold an object only changes the thread's copy of the local or member
+    if (!qore_background_is_value_type(cti)) {
+        return qore_background_lvalue_e::UNKNOWN;
+    }
+    if (range) {
+        ti = cti;
+    } else if (element) {
+        ti = qore_background_element_type(cti);
+    } else {
+        ti = qore_background_hash_value_type(cti, key);
+    }
+    return kind;
+}
+
+qore_background_lvalue_e parse_check_background_lvalue(QoreValue n) {
+    const QoreTypeInfo* ti;
+    return qore_background_lvalue_walk(n, ti);
+}
+
+void parse_raise_background_lvalue_error(const QoreProgramLocation* loc, qore_background_lvalue_e kind,
+        const char* what) {
+    switch (kind) {
+        case qore_background_lvalue_e::LOCAL:
+            parse_error(*loc, "illegal local variable modification with the background operator in %s", what);
+            break;
+        case qore_background_lvalue_e::MEMBER:
+            // the expression takes the member's value when the thread starts, as it does for local variables
+            parse_error(*loc, "illegal member modification with the background operator in %s", what);
+            break;
+        case qore_background_lvalue_e::UNKNOWN:
+            parse_error(*loc, "illegal modification with the background operator in %s: a value of a local "
+                "variable or member whose type is not known: the thread modifies its own copy of a container, but "
+                "an object's member in the object; declare the variable with an object type, or call a method of "
+                "the object", what);
+            break;
+        default:
+            assert(false);
+            break;
+    }
 }
 
 int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n) {

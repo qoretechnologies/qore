@@ -171,16 +171,13 @@ public:
                 return lvalue_err;
             } else if ((pflag & PF_CONST_METHOD) && check_const_method_lvalue(loc, exp)) {
                 return -2;
-            } else if ((pflag & PF_BACKGROUND_EXPR) && exp.getType() == NT_VARREF
-                && exp.get<const VarRefNode>()->getType() == VT_LOCAL) {
-                parse_error(*loc, "illegal local variable modification with the background operator in %s",
-                    getTypeName());
-                return -1;
-            } else if ((pflag & PF_BACKGROUND_EXPR)
-                    && (exp.getType() == NT_SELF_VARREF || parse_is_self_member_lvalue(exp))) {
-                // the expression takes the member's value when the thread starts, as it does for local variables
-                parse_error(*loc, "illegal member modification with the background operator in %s", getTypeName());
-                return -1;
+            } else if (pflag & PF_BACKGROUND_EXPR) {
+                // a local, a member, or a value contained in one, which the thread copies (issue #5723)
+                qore_background_lvalue_e kind = parse_check_background_lvalue(exp);
+                if (kind != qore_background_lvalue_e::SHARED) {
+                    parse_raise_background_lvalue_error(loc, kind, getTypeName());
+                    return -1;
+                }
             }
         }
         return 0;

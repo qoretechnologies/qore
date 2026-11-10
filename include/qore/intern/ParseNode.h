@@ -102,6 +102,11 @@ public:
         return parse_analysis;
     }
 
+    //! Returns the type of the node's value as parse initialization gave it (nullptr if it is not known)
+    DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
+        return getTypeInfo();
+    }
+
     DLLLOCAL void setParseAnalysis(const QoreParseAnalysis& analysis) {
         parse_analysis = analysis;
         parse_init = true;

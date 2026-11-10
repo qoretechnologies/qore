@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BackgroundLvaluePathTest
+
+#! the execution modes, by name
+const ExecModes = {
+    "ast": EM_AST,
+    "ir": EM_IR,
+    "jit": EM_JIT,
+    "tiered": EM_TIERED,
+};
+
+#! the declarations of the Programs
+const Decls = "%modern
+class C {
+    public {
+        int x = 0;
+    }
+}
+sub record(Queue q, int g, auto v) { q.push(v); }
+";
+
+#! modifications of a value held by a local of the code that starts the thread, which the thread copies, by name, with
+#! the error that refuses them
+const Refused = {
+    "list element": ("list<int> l = (1, 2); background (l[0] = 9)", "illegal local variable modification"),
+    "hash key": ("hash<auto> h = {\"a\": 1}; background (h.a = 2)", "illegal local variable modification"),
+    "nested hash key": ("hash<string, hash<string, int>> h = {\"a\": {\"b\": 1}}; background (h.a.b = 2)",
+        "illegal local variable modification"),
+    "element of a list in a hash": ("hash<string, list<int>> h = {\"a\": (1,)}; background (h.a[0] = 2)",
+        "illegal local variable modification"),
+    "auto local": ("auto a = new C(); background (a.x = 5)", "a value of a local variable or member whose type is not "
+        "known"),
+    "any local": ("any a = new C(); background (a.x = 5)", "a value of a local variable or member whose type is not "
+        "known"),
+    "element of an untyped list": ("list<auto> l = (new C(),); background (l[0].x = 5)",
+        "a value of a local variable or member whose type is not known"),
+    "list element in a call argument": ("Queue q(); list<int> l = (1, 2); background record(q, 0, (l[0] = 9))",
+        "illegal local variable modification"),
+    "hash key in a call argument": ("Queue q(); hash<auto> h = {\"a\": 1}; background record(q, 0, (h.a = 2))",
+        "illegal local variable modification"),
+    "auto local in a call argument": ("Queue q(); auto a = new C(); background record(q, 0, (a.x += 2))",
+        "a value of a local variable or member whose type is not known"),
+};
+
+#! the same for a member of the object of the code that starts the thread, in a method
+const RefusedMembers = {
+    "member hash key": "background (m.a = 2)",
+    "member hash key through self": "background (self.m.a = 2)",
+    "member hash key in a call argument": "Queue q(); background record(q, 0, (m.a = 2))",
+};
+
+#! Regression test for issue #5723: modifications by their access path in a background expression
+/** The background operator takes the values of the locals and of the members of the code that starts the thread when
+    the thread starts: a modification of a value that one of them holds (an element, a key) changes the thread's copy
+    only, and is refused at parse time; one through an object, statically known, changes the object, which the
+    thread shares, and is allowed in every execution mode; one through a value whose type is not known is refused.
+    The AST interpreter crashed on all of them (as Qore 2.x did), and the other modes modified the copy or the object.
+*/
+class BackgroundLvaluePathTest inherits QUnit::Test {
+    constructor() : QUnit::Test("background lvalue access paths", "1.0", \ARGV) {
+        foreach hash<auto> mode in (ExecModes.pairIterator()) {
+            string name = mode.key;
+            ExecMode em = mode.value;
+            addTestCase("refused: " + name, sub () { checkRefused(name, em); });
+            addTestCase("allowed: " + name, sub () { checkAllowed(name, em); });
+        }
+        addTestCase("allowed with qcc", \checkQcc());
+
+        set_return_value(main());
+    }
+
+    private checkRefused(string mode, ExecMode em) {
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            string label = sprintf("%s: %s: %s", mode, i.key, i.value[0]);
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            p.setExecMode(em);
+            assertThrows("PARSE-EXCEPTION", i.value[1], sub () {
+                p.parse(Decls + sprintf("sub t() { %s; }\n", i.value[0]), label);
+            }, NOTHING, label);
+        }
+        foreach hash<auto> i in (RefusedMembers.pairIterator()) {
+            string label = sprintf("%s: %s: %s", mode, i.key, i.value);
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            p.setExecMode(em);
+            assertThrows("PARSE-EXCEPTION", "illegal member modification", sub () {
+                p.parse(Decls + sprintf("class M { private { hash<auto> m = {\"a\": 1}; } t() { %s; } }\n",
+                    i.value), label);
+            }, NOTHING, label);
+        }
+    }
+
+    private checkAllowed(string mode, ExecMode em) {
+        Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+        p.setExecMode(em);
+        p.parse(Decls + AllowedCode, mode);
+        assertEq(Expected, p.callFunction("allowed"), mode);
+    }
+
+    private checkQcc() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string src = dir + "/allowed.q";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Decls + AllowedCode + "printf(\"%y\\n\", allowed());\n");
+        f.close();
+        foreach int opt in ((0, 3)) {
+            string program = sprintf("%s/allowed-O%d", dir, opt);
+            string output = backquote(sprintf("'%s' -O%d -o '%s' '%s' 2>&1", qcc_bin, opt, program, src));
+            assertTrue(is_file(program), sprintf("-O%d: compiled: %s", opt, output));
+            assertEq(sprintf("%y\n", Expected), backquote(sprintf("'%s' 2>&1", program)), sprintf("qcc -O%d", opt));
+        }
+    }
+}
+
+#! modifications through an object, which the thread shares; returns what the code that starts the thread sees
+const AllowedCode = "
+hash<auto> sub allowed() {
+    C o();
+    thread_join(background (o.x = 5));
+    list<C> l = (new C(),);
+    thread_join(background (l[0].x = 7));
+    hash<string, C> h = {\"a\": new C()};
+    thread_join(background (h.a.x += 3));
+    C o2();
+    Queue q();
+    background record(q, 0, (o2.x = 9));
+    q.get(10s);
+    return {\"o.x\": o.x, \"l[0].x\": l[0].x, \"h.a.x\": h.a.x, \"o2.x\": o2.x};
+}
+";
+
+#! what the code that starts the threads sees
+const Expected = {"o.x": 5, "l[0].x": 7, "h.a.x": 3, "o2.x": 9};

@@ -1577,6 +1577,42 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
     return rc;
 }
 
+//! Returns true if the root of an lvalue's access path is a value, not a variable: a value that the background
+//! operator took for a local variable or a member when the thread started (see copy_value_and_resolve_lvar_refs())
+static bool qore_lvalue_rooted_in_value(QoreValue n) {
+    while (true) {
+        switch (n.getType()) {
+            case NT_VARREF:
+            case NT_SELF_VARREF:
+            case NT_CLASS_VARREF:
+            case NT_REFERENCE:
+                return false;
+            case NT_OPERATOR:
+                break;
+            default:
+                return true;
+        }
+        const AbstractQoreNode* node = n.getInternalNode();
+        if (const QoreSquareBracketsOperatorNode* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            n = op->getLeft();
+        } else if (const QoreHashObjectDereferenceOperatorNode* op =
+                dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            n = op->getLeft();
+        } else if (const QoreCastOperatorNode* op = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            n = op->getExp();
+        } else {
+            return false;
+        }
+    }
+}
+
+//! Raises the exception for the modification of a value that the background operator took when the thread started
+static void qore_raise_background_value_lvalue_error(ExceptionSink* xsink, const QoreValue& v) {
+    xsink->raiseException("BACKGROUND-LVALUE-ERROR", "a background expression cannot modify the value of a local "
+        "variable or member that it took when the thread started (type '%s'); only the members of an object that "
+        "it holds can be modified", v.getFullTypeName());
+}
+
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes
@@ -1598,6 +1634,28 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
+    }
+
+    // a member of an object that a background expression holds in the value of a local or member that it took when
+    // the thread started (issue #5723): the member is modified in the object, which the thread shares
+    if (qore_lvalue_rooted_in_value(op->getLeft())) {
+        ValueEvalOptimizedRefHolder lh(op->getLeft(), vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        QoreValue container = lh.takeReferencedValue();
+        // held by this helper for as long as the lvalue is used
+        saveTemp(container);
+        QoreObject* o = container.getType() == NT_OBJECT ? container.get<QoreObject>()
+            : (container.getType() == NT_WEAKREF ? container.get<const WeakReferenceNode>()->get() : nullptr);
+        if (!o) {
+            qore_raise_background_value_lvalue_error(vl.xsink, container);
+            clearPtr();
+            return -1;
+        }
+        read_only_resolution = false;
+        write_protected = false;
+        return doObjLValue(o, mem.c_str(), for_remove);
     }
 
     bool final_assignment = assignment_only;
@@ -1648,6 +1706,27 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
+    }
+
+    // a member of an object held in a value that a background expression took (issue #5723): see above
+    if (qore_lvalue_rooted_in_value(op->getLeft())) {
+        ValueEvalOptimizedRefHolder lh(op->getLeft(), vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        QoreValue container = lh.takeReferencedValue();
+        saveTemp(container);
+        QoreObject* o = container.getType() == NT_OBJECT ? container.get<QoreObject>()
+            : (container.getType() == NT_WEAKREF ? container.get<const WeakReferenceNode>()->get() : nullptr);
+        if (!o) {
+            qore_raise_background_value_lvalue_error(vl.xsink, container);
+            clearPtr();
+            return -1;
+        }
+        read_only_resolution = false;
+        write_protected = false;
+        const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
+        return doObjLValue(o, mem.c_str(), for_remove, class_ctx);
     }
 
     bool final_assignment = assignment_only;
@@ -1790,8 +1869,13 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             clearPtr();
             return -1;
         }
+    } else if (ntype != NT_OPERATOR) {
+        // a value that a background expression took for a local variable or a member when the thread started: it
+        // is not a variable, and the parse-time check refuses its modification (issue #5723)
+        qore_raise_background_value_lvalue_error(vl.xsink, n);
+        clearPtr();
+        return -1;
     } else {
-        assert(ntype == NT_OPERATOR);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
             read_access = RA_ELEMENT;
@@ -1907,8 +1991,13 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             clearPtr();
             return -1;
         }
+    } else if (ntype != NT_OPERATOR) {
+        // a value that a background expression took for a local variable or a member when the thread started: it
+        // is not a variable, and the parse-time check refuses its modification (issue #5723)
+        qore_raise_background_value_lvalue_error(vl.xsink, n);
+        clearPtr();
+        return -1;
     } else {
-        assert(ntype == NT_OPERATOR);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
             read_access = RA_ELEMENT;
