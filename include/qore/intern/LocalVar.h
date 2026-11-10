@@ -642,7 +642,7 @@ public:
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
-            weak_assigned(old.weak_assigned),
+            weak_assigned(old.weak_assigned), ever_deleted(old.ever_deleted),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
             ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
@@ -665,6 +665,20 @@ public:
 
     DLLLOCAL bool isAssigned() const {
         return parse_assigned;
+    }
+
+    //! Records that the variable itself is the operand of \c delete or \c remove, which leaves it without a value
+    /** Unlike the flow-sensitive \c parse_assigned, this is never reset: the parse is a single forward pass, so a
+        \c delete or \c remove later in a loop body leaves the variable without a value at a read earlier in the
+        body, in the next iteration, while the read is parsed as definitely assigned (qore#5665)
+    */
+    DLLLOCAL void parseDeleted() {
+        ever_deleted = true;
+    }
+
+    //! Returns true if the variable itself is the operand of a \c delete or \c remove anywhere in its scope
+    DLLLOCAL bool everDeleted() const {
+        return ever_deleted;
     }
 
     //! Records that the variable is assigned with the weak (:=) or the opaque (@=) assignment operator
@@ -1206,7 +1220,9 @@ private:
         no_narrowing = false,       // true if declared with auto! to disable type narrowing
         read_only = false,
         //! assigned with := or @=; see parseWeakAssigned()
-        weak_assigned = false;
+        weak_assigned = false,
+        //! the operand of delete or remove; see parseDeleted()
+        ever_deleted = false;
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)

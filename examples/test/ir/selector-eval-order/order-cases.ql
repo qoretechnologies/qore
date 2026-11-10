@@ -148,6 +148,52 @@ auto sub deleted_reference() {
     return m[f("start")..1, 0];
 }
 
+# a typed local deleted or removed later in a loop body: in the next iteration it has no value where the selectors
+# read it, and no selector is evaluated
+auto sub loop_catch_delete() {
+    list<int> m = (0, 1, 2);
+    list<auto> rv;
+    for (int i = 0; i < 3; ++i) {
+        try {
+            push rv, m[f("start " + i)..1, (i == 1 ? thr() : 0)];
+        } catch (hash<ExceptionInfo> ex) {
+            push rv, ex.err;
+            delete m;
+        }
+    }
+    return rv;
+}
+auto sub loop_delete() {
+    list<int> m = (0, 1, 2);
+    list<auto> rv;
+    for (int i = 0; i < 2; ++i) {
+        push rv, m[f("loop " + i)..1, 0];
+        delete m;
+    }
+    return rv;
+}
+auto sub while_remove() {
+    string m = "abc";
+    list<auto> rv;
+    int i = 0;
+    while (i < 2) {
+        push rv, m[f("while " + i)..1, 0];
+        remove m;
+        ++i;
+    }
+    return rv;
+}
+auto sub do_while_delete() {
+    string m = "abc";
+    list<auto> rv;
+    int i = 0;
+    do {
+        push rv, m[f("do " + i)..1, 0];
+        delete m;
+    } while (++i < 2);
+    return rv;
+}
+
 # a sequence that no selector applies to: no selector is evaluated
 auto sub nothing_seq(auto seq) { return seq[f("start")..2, f("later")]; }
 
@@ -199,6 +245,10 @@ sub main() {
         t("local release", \local_release());
         t("deleted top-level", \deleted_toplevel());
         t("deleted reference", \deleted_reference());
+        t("loop catch delete", \loop_catch_delete());
+        t("loop delete", \loop_delete());
+        t("while remove", \while_remove());
+        t("do while delete", \do_while_delete());
         t("nothing", auto sub () { return nothing_seq(); });
         t("hash", auto sub () { return nothing_seq(h); });
         t("int", auto sub () { return nothing_seq(1); });

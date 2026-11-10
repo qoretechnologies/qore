@@ -890,7 +890,8 @@ static bool qoreIrGetSinglePositionalCallArgNoHoles(const FunctionCallBase* call
 }
 
 static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -898,7 +899,8 @@ static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
 }
 
 static bool qoreIrIsAssignedPlainStringLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -6588,11 +6590,15 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
             // takes a "reference<string>" argument), at a point the analysis does not see - even before the read,
             // in an earlier iteration of a loop.  Such a read can be NOTHING whatever its declared type, so it
             // must not let compiled code skip the checks for NOTHING.
+            // The state comes from a single forward pass of the parse, so it also misses a delete or remove of the
+            // variable later in a loop body, which leaves the variable without a value at this read in the next
+            // iteration: a local that is ever the operand of delete or remove is not definitely assigned anywhere
+            // (qore#5665).
             const VarRefNode* var = dynamic_cast<const VarRefNode*>(node);
             if (var) {
                 qore_var_t var_type = var->getType();
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->closureUse()) {
+                        && var->ref.id && (var->ref.id->closureUse() || var->ref.id->everDeleted())) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
@@ -10733,10 +10739,14 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
 
 bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
     // a local variable of the function, definitely assigned where it is read, whose declared type is a list, a
-    // string or a binary object; a local variable that other code can reach (a closure-bound or top-level local)
-    // can be deleted by it
+    // string or a binary object; a local variable that other code can reach (a closure-bound or top-level local, or
+    // one passed by reference) can be deleted by it, and getAnalysis() then reports it as not definitely assigned.
+    // A variable of such a type is without a value only before it is assigned and after it is the operand of delete
+    // or remove; the definite-assignment state is from a single forward pass of the parse, which does not see a
+    // delete or remove later in a loop body that leaves the variable without a value in the next iteration, so a
+    // variable that is ever deleted or removed does not qualify (qore#5665)
     const VarRefNode* var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
-    if (!var || var->getType() != VT_LOCAL || !var->ref.id) {
+    if (!var || var->getType() != VT_LOCAL || !var->ref.id || var->ref.id->everDeleted()) {
         return false;
     }
     QoreParseAnalysis analysis;
