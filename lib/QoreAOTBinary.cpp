@@ -11891,6 +11891,15 @@ bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* l
 
 } // anonymous namespace
 
+//! Appends the parameters that the background helpers in \a func own, in instruction order (see
+//! qoreAOTForEachBackgroundHelperParam()); used by the debug check of the closure slot tables in QoreAOT.cpp
+void qoreAOTCollectBackgroundHelperParams(const QoreIRFunction& func, std::vector<const LocalVar*>& params) {
+    qoreAOTForEachBackgroundHelperParam(func, [&params](const LocalVar* param) {
+        params.push_back(param);
+        return true;
+    });
+}
+
 //! Records why an expression slot writer failed (QoreAOTExprSlotHandlers.cpp)
 /** The caller of the slot writer reports it as a compile error; the first diagnostic recorded is kept, so a nested
     writer's more specific message is not replaced by its caller's.
