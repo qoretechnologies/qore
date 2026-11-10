@@ -704,8 +704,10 @@ const PO_ASSUME_LOCAL = PO_ASSUME_LOCAL;
 //! This option is the empty option, meaning no options are set
 const PO_DEFAULT = PO_DEFAULT;
 
-//! mask of options that have no effect on code access or code safety but just affect programming style
-/** made up of @ref PO_ALLOW_BARE_REFS | @ref PO_ASSUME_LOCAL
+//! mask of options that have no effect on code access or code safety but only select programming style or language behavior
+/** made up of @ref PO_ALLOW_BARE_REFS, @ref PO_ASSUME_LOCAL, @ref PO_STRICT_BOOLEAN_EVAL and the compatibility options
+    (\c PO_BROKEN_*); such options can be set on a Program whose parse options are locked, a user module does not
+    inherit them from the Program loading it, and they cannot be used in a module parse option mask
  */
 const PO_FREE_OPTIONS = PO_FREE_OPTIONS;
 
