@@ -9757,7 +9757,12 @@ llvm::Value* QoreIRToLLVM::emitFastEntryDateKindGuards(llvm::Module& module, llv
         matches_fn->addFnAttr(llvm::Attribute::WillReturn);
         matches_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
     }
-    for (size_t i = 0; i < date_kind_guards.size() && i < raw_args.size(); ++i) {
+    // every guarded argument must be checked: a call without the values of all of them takes the generic call
+    assert(raw_args.size() >= date_kind_guards.size() && raw_arg_ids.size() >= date_kind_guards.size());
+    if (raw_args.size() < date_kind_guards.size() || raw_arg_ids.size() < date_kind_guards.size()) {
+        return llvm::ConstantInt::getFalse(ctx);
+    }
+    for (size_t i = 0; i < date_kind_guards.size(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "fast-entry date kind guard lowering")) {
             // a call whose checks are not all emitted takes the generic call
