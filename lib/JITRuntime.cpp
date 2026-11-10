@@ -5006,7 +5006,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
 /** The builtin is called with the value, so the error is that of the AST interpreter, which resolves the variant at
     runtime: RUNTIME-OVERLOAD-ERROR
 */
-static void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionSink* xsink) {
+void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionSink* xsink) {
     static const char* names[] = {"Qore::string", "Qore::int", "Qore::float"};
     assert(kind >= 0 && kind <= QORE_RT_BUILTIN_CONVERSION_FLOAT);
     QoreProgram* pgm = getProgram();
@@ -5023,71 +5023,93 @@ static void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionS
     }
 }
 
-QoreValue qore_rt_builtin_conversion_checked(int kind, QoreValue val, ExceptionSink* xsink) {
+// The checked int and float conversions cost no more than the unchecked ones for the values that the builtin accepts:
+// an int or float value is converted inline, and any other value is converted first and its type is checked only when
+// the result is 0, as every value that the builtin does not accept converts to 0
+
+//! the checked int() conversion; returns false if the value is not accepted, with the error raised
+static bool qore_rt_to_int_checked_intern(QoreValue val, int64_t& rv, ExceptionSink* xsink) {
+    if (val.isInt()) {
+        rv = val.getAsBigInt();
+        return true;
+    }
+    rv = val.getAsBigInt();
+    if (!rv && !qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_INT, val.getType())) {
+        qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_INT, val, xsink);
+        return false;
+    }
+    return true;
+}
+
+//! the checked float() conversion; returns false if the value is not accepted, with the error raised
+static bool qore_rt_to_float_checked_intern(QoreValue val, double& rv, ExceptionSink* xsink) {
+    if (val.isFloat() || val.isInt()) {
+        rv = val.getAsFloat();
+        return true;
+    }
+    rv = val.getAsFloat();
+    if (rv == 0.0 && !qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_FLOAT, val.getType())) {
+        qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_FLOAT, val, xsink);
+        return false;
+    }
+    return true;
+}
+
+//! the checked string() conversion; returns nullptr if the value is not accepted, with the error raised
+/** The string conversion dispatches on the type of the value in any case (qore_rt_to_string() for the unchecked
+    conversion)
+*/
+static QoreStringNode* qore_rt_to_string_checked_intern(QoreValue val, ExceptionSink* xsink) {
+    qore_type_t t = val.getType();
+    if (!qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_STRING, t)) {
+        qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_STRING, val, xsink);
+        return nullptr;
+    }
+    return qore_rt_value_to_string_node(val, t);
+}
+
+bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink) {
     switch (kind) {
-        case QORE_RT_BUILTIN_CONVERSION_STRING:
-            return fromBits(qore_rt_to_string_checked(toBits(val), xsink));
-        case QORE_RT_BUILTIN_CONVERSION_INT:
-            return QoreValue(qore_rt_to_int_checked(toBits(val), xsink));
-        default:
-            return QoreValue(qore_rt_to_float_checked(toBits(val), xsink));
+        case QORE_RT_BUILTIN_CONVERSION_STRING: {
+            QoreStringNode* str = qore_rt_to_string_checked_intern(val, xsink);
+            if (!str) {
+                return false;
+            }
+            rv = str;
+            return true;
+        }
+        case QORE_RT_BUILTIN_CONVERSION_INT: {
+            int64_t i;
+            if (!qore_rt_to_int_checked_intern(val, i, xsink)) {
+                return false;
+            }
+            rv = i;
+            return true;
+        }
+        default: {
+            double f;
+            if (!qore_rt_to_float_checked_intern(val, f, xsink)) {
+                return false;
+            }
+            rv = f;
+            return true;
+        }
     }
 }
 
-// the checked conversions dispatch once on the type of the value: the types that the builtin accepts are converted,
-// any other raises the error of the builtin call
-
 extern "C" DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    qore_type_t t = val.getType();
-    switch (t) {
-        case NT_STRING:
-        case NT_INT:
-        case NT_FLOAT:
-        case NT_BOOLEAN:
-        case NT_NOTHING:
-        case NT_NUMBER:
-        case NT_DATE:
-            return toBits(QoreValue(qore_rt_value_to_string_node(val, t)));
-        default:
-            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_STRING, val, xsink);
-            return toBits(QoreValue());
-    }
+    QoreStringNode* str = qore_rt_to_string_checked_intern(fromBits(val_bits), xsink);
+    return str ? toBits(QoreValue(str)) : toBits(QoreValue());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    switch (val.getType()) {
-        case NT_STRING:
-        case NT_INT:
-        case NT_FLOAT:
-        case NT_BOOLEAN:
-        case NT_NOTHING:
-        case NT_NUMBER:
-        case NT_DATE:
-        case NT_NULL:
-            return val.getAsBigInt();
-        default:
-            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_INT, val, xsink);
-            return 0;
-    }
+    int64_t rv;
+    return qore_rt_to_int_checked_intern(fromBits(val_bits), rv, xsink) ? rv : 0;
 }
 
 extern "C" DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    switch (val.getType()) {
-        case NT_STRING:
-        case NT_INT:
-        case NT_FLOAT:
-        case NT_BOOLEAN:
-        case NT_NOTHING:
-        case NT_NUMBER:
-        case NT_DATE:
-            return val.getAsFloat();
-        default:
-            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_FLOAT, val, xsink);
-            return 0.0;
-    }
+    double rv;
+    return qore_rt_to_float_checked_intern(fromBits(val_bits), rv, xsink) ? rv : 0.0;
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits,

@@ -2937,6 +2937,29 @@ static bool preserveInterpreterFastCallArg(QoreValue val) {
     }
 }
 
+//! Returns the string conversion of a value of the given type (the type of \a val), as ToString does
+static inline QoreStringNode* qore_ir_value_to_string_node(QoreValue val, qore_type_t t) {
+    switch (t) {
+        case NT_STRING: {
+            QoreStringNodeValueHelper val_str(val);
+            return val_str.getReferencedValue();
+        }
+        case NT_INT:
+        case NT_BOOLEAN:
+            return new QoreStringNodeMaker(QLLD, val.getAsBigInt());
+        case NT_FLOAT:
+            return q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
+        case NT_NOTHING:
+        case NT_NULL:
+            return new QoreStringNode();
+        default: {
+            // General fallback: use QoreStringValueHelper
+            QoreStringValueHelper sv(val);
+            return new QoreStringNode(*sv);
+        }
+    }
+}
+
 //! Gives the parameter type error of a fast call the outcome of the AST interpreter; see qore_fast_call_param_mismatch()
 static void qore_ir_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
         unsigned nargs, const uint64_t* args, ExceptionSink* xsink) {
@@ -5335,7 +5358,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 : (op == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
                     : QORE_RT_BUILTIN_CONVERSION_FLOAT);
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
-            return qore_rt_builtin_conversion_checked(kind, val, xsink);
+            QoreValue res;
+            qore_rt_builtin_conversion_checked(kind, val, res, xsink);
+            return res;
         }
         case QoreIROpcode::ToString: {
                 QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
@@ -13706,8 +13731,23 @@ load_local_done:
                 int kind = inst->opcode == QoreIROpcode::ToStringChecked ? QORE_RT_BUILTIN_CONVERSION_STRING
                     : (inst->opcode == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
                         : QORE_RT_BUILTIN_CONVERSION_FLOAT);
-                QoreValue res = qore_rt_builtin_conversion_checked(kind, getIRValue(values, inst->operands[0]), xsink);
-                if (*xsink) {
+                QoreValue res;
+                bool converted;
+                if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
+                    // as the unchecked string conversion does, with the check of the type
+                    QoreValue val = getIRValue(values, inst->operands[0]);
+                    qore_type_t t = val.getType();
+                    converted = qore_rt_builtin_conversion_accepts(kind, t);
+                    if (converted) {
+                        res = qore_ir_value_to_string_node(val, t);
+                    } else {
+                        qore_rt_builtin_conversion_error(kind, val, xsink);
+                    }
+                } else {
+                    converted = qore_rt_builtin_conversion_checked(kind, getIRValue(values, inst->operands[0]), res,
+                        xsink);
+                }
+                if (!converted) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
@@ -13733,33 +13773,7 @@ load_local_done:
                     ++ip;
                     break;
                 }
-                QoreStringNode* str;
-                switch (val.getType()) {
-                    case NT_STRING: {
-                        QoreStringNodeValueHelper val_str(val);
-                        str = val_str.getReferencedValue();
-                        break;
-                    }
-                    case NT_INT:
-                        str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
-                        break;
-                    case NT_FLOAT:
-                        str = q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
-                        break;
-                    case NT_BOOLEAN:
-                        str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
-                        break;
-                    case NT_NOTHING:
-                    case NT_NULL:
-                        str = new QoreStringNode();
-                        break;
-                    default: {
-                        // General fallback: use QoreStringValueHelper
-                        QoreStringValueHelper sv(val);
-                        str = new QoreStringNode(*sv);
-                        break;
-                    }
-                }
+                QoreStringNode* str = qore_ir_value_to_string_node(val, val.getType());
                 setValueSlot(values, inst->result.id, QoreValue(str), xsink);
                 cleanup.push_back(inst->result.id);
                 ++ip;

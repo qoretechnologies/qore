@@ -2106,10 +2106,36 @@ enum : int {
 };
 
 //! string(), int() or float() of a value that the builtin may not accept (QoreIROpcode::ToStringChecked etc.)
-/** @return the conversion of a value that the builtin accepts; any other value raises the error of the builtin call
-    (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
+/** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
+    call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
+
+    @return false if the value is not accepted and the error was raised
 */
-DLLLOCAL QoreValue qore_rt_builtin_conversion_checked(int kind, QoreValue val, ExceptionSink* xsink);
+DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Returns true if the builtin conversion of the given kind accepts a value of the given type
+/** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a
+    date and NOTHING; int() also accepts NULL
+*/
+static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
+    switch (t) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+        case NT_DATE:
+        case NT_NOTHING:
+            return true;
+        case NT_NULL:
+            return kind == QORE_RT_BUILTIN_CONVERSION_INT;
+        default:
+            return false;
+    }
+}
+
+//! Raises the error of the builtin conversion call for a value that it does not accept (RUNTIME-OVERLOAD-ERROR)
+DLLLOCAL void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionSink* xsink);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);
