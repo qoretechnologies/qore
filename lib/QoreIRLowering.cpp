@@ -191,8 +191,11 @@ static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, c
         if (lv && lv->closureUse()) {
             handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
             handler_func.pre_instantiated_cache.erase(lv);
+            // serialized with the handler's IR, so that a handler read from it is not given them pre-instantiated
+            handler_func.handler_own_locals.insert(lv);
         }
     }
+    handler_func.handler_own_locals_known = true;
 }
 
 static bool blockHasTerminator(const QoreIRBasicBlock* block) {

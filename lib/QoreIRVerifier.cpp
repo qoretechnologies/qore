@@ -2621,6 +2621,47 @@ QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
     return usage;
 }
 
+std::unordered_set<const LocalVar*> QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR() const {
+    std::unordered_set<const LocalVar*> own;
+    if (!parent_slot_count) {
+        return own;
+    }
+    // the instructions of the handler itself: a nested handler is a function of its own (handler_ir), and the IR of
+    // a closure created in the handler is not part of it either
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::InstantiateLocal && inst->opcode != QoreIROpcode::UninstantiateLocal) {
+                continue;
+            }
+            const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(inst.get())->local;
+            if (!lv || !lv->closureUse()) {
+                continue;
+            }
+            auto i = local_var_slots.find(lv);
+            if (i != local_var_slots.end() && i->second < parent_slot_count) {
+                own.insert(lv);
+            }
+        }
+    }
+    return own;
+}
+
+void QoreIRFunction::restoreHandlerPreInstantiatedLocals() {
+    if (!parent_slot_count) {
+        return;
+    }
+    if (!handler_own_locals_known) {
+        handler_own_locals = deriveHandlerOwnClosureLocalsFromIR();
+    }
+    for (const auto& [lv, slot_id] : local_var_slots) {
+        if (!lv || slot_id >= parent_slot_count || handler_own_locals.count(lv)) {
+            continue;
+        }
+        pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        pre_instantiated_cache.insert(lv);
+    }
+}
+
 void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter

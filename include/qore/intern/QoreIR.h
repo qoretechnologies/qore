@@ -3608,6 +3608,18 @@ public:
     // At runtime, parent's local values are copied into these inherited slots
     uint32_t parent_slot_count = 0;
 
+    //! For handler IR functions: the closure-bound parent-slot locals that the handler declares itself
+    /** The lowering of a handler records the closure-bound locals of the handler code (including those of its
+        nested handlers), which it does not mark pre-instantiated, and the IR serialization writes their slots
+        (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from serialized IR gets the same
+        pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
+    */
+    std::unordered_set<const LocalVar*> handler_own_locals;
+
+    //! True if handler_own_locals is the set that the lowering gave (lowered IR, or IR read from an artifact that
+    //! records it)
+    bool handler_own_locals_known = false;
+
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
@@ -3858,6 +3870,28 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Derives the handler's own closure-bound parent-slot locals from its IR, for an artifact without them
+    /** These are the closure-bound parent-slot locals that the handler instantiates or uninstantiates itself.  This is
+        only an approximation of the set that the lowering gives (handler_own_locals): a catch variable of a catch
+        block that ends in a throw or rethrow has no UninstantiateLocal, and the locals of a nested handler that is not
+        lowered inline appear only in the nested handler's IR; it is used only for handlers read from an artifact older
+        than QORE_AOT_HANDLER_OWN_LOCALS_VERSION.
+
+        @return the handler's own closure-bound parent-slot locals as its IR gives them; empty if this is not a handler
+    */
+    std::unordered_set<const LocalVar*> deriveHandlerOwnClosureLocalsFromIR() const;
+
+    //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
+    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
+        handler declares (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's
+        variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
+        from it (an AOT closure run from its IR, or lazy debugger IR) has to restore them from the handler's own locals
+        that the artifact records (or, for an older artifact, that its IR gives; see
+        deriveHandlerOwnClosureLocalsFromIR()): without them, the handler took every closure-bound variable of the
+        function it belongs to for one of its own, which started with no value, and its updates were lost.
+    */
+    void restoreHandlerPreInstantiatedLocals();
 
     //! Computes reference_store_locals: the locals of a StoreLocal whose operand can be a reference
     /** An operand can be a reference unless the instruction that produces it is known never to give one (a
