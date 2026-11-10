@@ -15,15 +15,16 @@
 %exec-class ModuleOwnedAsyncTest
 
 #! Module code running for a restricted caller schedules its own code and uses calling-thread builtins in every mode
-/** Module code runs with the restrictions of its caller as well as its own, so a Qorus service (a caller with
-    \c PO_NO_THREAD_CONTROL and \c PO_NO_PROCESS_CONTROL) using DiscordWebSocketClient failed in its \c init method:
+/** Module code runs with the restrictions of a sandboxed caller as well as its own, so a sandboxed Qorus service (a
+    caller with \c PO_NO_THREAD_CONTROL and \c PO_NO_PROCESS_CONTROL) using DiscordWebSocketClient failed in its
+    \c init method:
     the client's HELLO watchdog timer, which AsyncSocketIoController::addTimer() adds with the native
     AsyncIoController::addTimer(), was refused with \c INVALID-FUNCTION-ACCESS.
 
     Builtins flagged with \c QCF_MODULE_OWNED run code passed to them asynchronously or with thread cancellation
     deferred (AsyncIoController::addTimer() and submitTask(), call_async(), parallel_map(), parallel_foreach() and
-    defer_thread_cancel()), or act on timers (AsyncIoController::cancelTimer()).  Called by module code for a caller
-    with restrictions, they accept only code whose own Program allows what the caller may not, so the module's own
+    defer_thread_cancel()), or act on timers (AsyncIoController::cancelTimer()).  Called by module code for a
+    sandboxed caller with restrictions, they accept only code whose own Program allows what the caller may not, so the module's own
     closures run and a restricted caller's closure is refused with an error that says why, and a timer can be
     cancelled only by the application it was created for.  Builtins flagged with \c QCF_CURRENT_THREAD_ONLY (sleep(),
     usleep(), thread_yield(), active_exception(), Program::getCallerCapabilityMask() and channel_select()) affect or
@@ -33,8 +34,9 @@
     The tests include the two probes that found the regression: the Discord HELLO watchdog of an unconnected client
     is armed and cancelled for a restricted caller, and a caller adding a timer with its own closure through
     AsyncSocketIoController: scheduling code is thread control (the timer methods' domain), so the probe's own
-    caller, which has \c PO_NO_PROCESS_CONTROL only, adds it, while a caller with \c PO_NO_THREAD_CONTROL, and one
-    with the options of a Qorus service, is refused.  Each case runs with the test module as source and AOT-compiled, with the AsyncSocketIo,
+    caller, which has \c PO_NO_PROCESS_CONTROL only, adds it, while a sandboxed caller with \c PO_NO_THREAD_CONTROL,
+    and one with the options of a Qorus service, is refused; a caller restricted only by its parse options restricts
+    its own code only, so module code schedules its code for it.  Each case runs with the test module as source and AOT-compiled, with the AsyncSocketIo,
     WebSocketClient and DiscordWebSocketClient modules from source and (when the build has them) AOT-compiled, in
     every execution mode, against the output of the source module with the AST interpreter.
 */
@@ -109,14 +111,23 @@ restricted current_thread: \"ok False True 1\"
 restricted current_thread: \"ok False True 1\"
 restricted http2_mode: True
 restricted http2_mode: True
+unsandboxed controller_caller_timer: \"added\"
+unsandboxed controller_caller_timer: \"added\"
+unsandboxed caller_timer: True
+unsandboxed caller_timer: True
+unsandboxed caller_call_async: \"caller\"
+unsandboxed caller_call_async: \"caller\"
+unsandboxed caller_defer: \"caller\"
+unsandboxed caller_defer: \"caller\"
 restricted cancel_unowned: False
 restricted cancel_unowned: False
 main cancel_unowned_after: True
 other_app cancel_other_app_timer: False
 restricted cancel_own_app_timer: True
 hoppy timer probe: \"added\"
-hoppy timer probe without thread control: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
-            "schedule") + "
+hoppy timer probe without thread control: \"added\"
+sandboxed hoppy timer probe without thread control: " + sprintf(CallerClosureRefusal,
+            "AsyncIoController::addTimer()", "schedule") + "
 restricted direct parse: PARSE-EXCEPTION
 user caller_timer: True
 user caller_timer: True
@@ -324,8 +335,13 @@ printf(\"qlib: %s %s %s\\n\", form(\"AsyncSocketIo\"), form(\"WebSocketClient\")
 # a Qorus service's restrictions
 const ServiceOptions = PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL;
 
-Program sub restricted(string label, string code) {
+# restrictions that apply to module code are those of a sandboxed caller; a caller restricted only by its parse
+# options restricts its own code only
+Program sub restricted(string label, string code, bool sandboxed = True) {
     Program p(PO_NEW_STYLE);
+    if (sandboxed) {
+        p.setSandboxManager(new SandboxManager());
+    }
     p.loadModule(\"OwnedAsyncMod\");
     p.loadModule(\"AsyncSocketIo\");
     p.loadModule(\"DiscordWebSocketClient\");
@@ -349,7 +365,7 @@ sub call(string label, Program pgm, string f, *softlist<auto> args) {
     }
 }
 
-Program p = restricted(\"restricted\", \"
+const ServiceCode = \"
 class Probe inherits DiscordWebSocketClient {
     constructor() : DiscordWebSocketClient({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder'}) {}
     run() { armHelloWatchdog(); cancelHelloWatchdog(); }
@@ -394,13 +410,21 @@ class OverridingWatcher inherits OwnedAsyncMod::Watcher {
 }
 auto sub module_method_timer() { PlainWatcher w(); return w.armAndCancel(); }
 auto sub overridden_method_timer() { OverridingWatcher w(); return w.armAndCancel(); }
-\");
+\";
+Program p = restricted(\"restricted\", ServiceCode);
 
 foreach string f in (\"discord_watchdog\", \"discord_watchdog_call_wrapper\", \"controller_caller_timer\", \"own_timer\", \"own_native_timer\",
         \"module_method_timer\", \"overridden_method_timer\", \"caller_timer\", \"data_timer\", \"own_task\", \"caller_task\", \"own_call_async\", \"caller_call_async\",
         \"own_parallel_map\", \"caller_parallel_map\", \"own_parallel_foreach\", \"caller_parallel_foreach\",
         \"own_defer\", \"caller_defer\", \"current_thread\", \"http2_mode\") {
     call(\"restricted\", p, f);
+}
+
+# the same caller restricted only by its parse options: module code runs with the module's own options and schedules
+# the caller's code
+Program up = restricted(\"unsandboxed\", ServiceCode, False);
+foreach string f in (\"controller_caller_timer\", \"caller_timer\", \"caller_call_async\", \"caller_defer\") {
+    call(\"unsandboxed\", up, f);
 }
 
 # a timer that the main Program adds: module code running for a restricted caller cannot cancel it
@@ -418,9 +442,13 @@ printf(\"restricted cancel_own_app_timer: %s\\n\", result(auto sub () { return p
     app_timer); }));
 
 # the hoppy timer probe: a caller adds a timer with its own closure; scheduling code is thread control, so a caller
-# that may control threads (with PO_NO_PROCESS_CONTROL, as in the probe) may, and one with PO_NO_THREAD_CONTROL may not
-sub timer_probe(string label, int po) {
+# that may control threads (with PO_NO_PROCESS_CONTROL, as in the probe) may, and a sandboxed one with
+# PO_NO_THREAD_CONTROL may not; one restricted only by its parse options restricts its own code only
+sub timer_probe(string label, int po, *bool sandboxed) {
     Program h(PO_NEW_STYLE | po);
+    if (sandboxed) {
+        h.setSandboxManager(new SandboxManager());
+    }
     h.parse(\"%requires AsyncSocketIo
 sub probe() {
     AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
@@ -432,6 +460,7 @@ sub probe() {
 }
 timer_probe(\"hoppy timer probe\", PO_NO_PROCESS_CONTROL);
 timer_probe(\"hoppy timer probe without thread control\", PO_NO_THREAD_CONTROL);
+timer_probe(\"sandboxed hoppy timer probe without thread control\", PO_NO_THREAD_CONTROL, True);
 
 # restricted code calling a flagged builtin directly
 string direct_err;
