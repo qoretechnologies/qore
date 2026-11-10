@@ -543,11 +543,12 @@ public:
 
     //! Evaluates the default arguments (ARG_DEF) and checks and converts the others (ARG_OTHER) for the variant
     /** @param saved if not null, receives a reference to the original value of each argument before it is converted
-        (see init(): a variant resolved again gets the arguments as the caller gave them)
+        (see init(): a variant resolved again gets the arguments as the caller gave them); the list is created with
+        the first argument converted, so that a call whose arguments need no conversion allocates nothing
     */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
         AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
-        arg_restore_vec_t* saved = nullptr);
+        std::unique_ptr<arg_restore_vec_t>* saved = nullptr);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use

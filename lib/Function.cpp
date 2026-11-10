@@ -1119,25 +1119,31 @@ namespace {
 //! Keeps the original values of the arguments converted for a variant (see CodeEvaluationHelper::prepareDefaultArgs())
 class CodeEvaluationArgRestoreHelper {
 public:
-    CodeEvaluationHelper::arg_restore_vec_t args;
+    //! the original values of the converted arguments; created with the first one (see prepareDefaultArgs())
+    std::unique_ptr<CodeEvaluationHelper::arg_restore_vec_t> args;
 
     DLLLOCAL CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
     }
 
     DLLLOCAL ~CodeEvaluationArgRestoreHelper() {
-        for (auto& i : args) {
-            i.second.discard(xsink);
+        if (args) {
+            for (auto& i : *args) {
+                i.second.discard(xsink);
+            }
         }
     }
 
     //! Puts the original values back into the argument list, which then holds them
     DLLLOCAL void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
-        for (auto i = args.rbegin(), e = args.rend(); i != e; ++i) {
+        if (!args) {
+            return;
+        }
+        for (auto i = args->rbegin(), e = args->rend(); i != e; ++i) {
             QoreValue& p = tmp.getEntryReference(i->first);
             p.discard(xsink);
             p = i->second;
         }
-        args.clear();
+        args->clear();
     }
 
 private:
@@ -1429,7 +1435,8 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
 }
 
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, arg_restore_vec_t* saved) {
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
+        std::unique_ptr<arg_restore_vec_t>* saved) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1521,7 +1528,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
                 if (saved) {
-                    saved->emplace_back(i, p.refSelf());
+                    if (!*saved) {
+                        saved->reset(new arg_restore_vec_t);
+                    }
+                    (*saved)->emplace_back(i, p.refSelf());
                 }
                 QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
