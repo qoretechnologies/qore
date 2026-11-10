@@ -2805,9 +2805,15 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
         case QoreIROpcode::IteratorCreateIterate:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
             break;
-        case QoreIROpcode::IteratorNext:
-            qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
+        case QoreIROpcode::IteratorNext: {
+            auto& next = static_cast<QoreIRIteratorNextInstruction&>(inst);
+            qore_ir_rewrite_value(next.iterator, replacements);
+            // the values that it releases follow their replacements (QoreIRIteratorNextInstruction::release_values)
+            for (QoreIRValue& rv : next.release_values) {
+                qore_ir_rewrite_value(rv, replacements);
+            }
             break;
+        }
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:

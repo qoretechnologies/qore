@@ -624,6 +624,23 @@ private:
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
     //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
     std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
+    //! The release of the previous element of each IteratorNext with release values (QoreIRIteratorNextInstruction::
+    //! release_values), and the values: the loop's body defines them after the instruction, so their cleanup slots
+    //! are known only once the function is lowered (see finalizeIteratorReleases())
+    std::vector<std::pair<llvm::CallInst*, std::vector<uint32_t>>> pending_iterator_releases;
+
+    //! Emits, after the release of the previous element of each IteratorNext with release values, the release of the
+    //! reference that the cleanup slot of each value holds, in their order, as ReleaseOwnedTemp releases it; a value
+    //! without a cleanup slot of its own is left to its usual release
+    void finalizeIteratorReleases(llvm::Module& module, llvm::Function* llvm_func);
+
+    //! Emits the exception check of \a inst on the path where its helper's \a result is NOTHING, which the helpers of
+    //! operations that can raise (DivAny, ModAny, DivNumber, AddString, StringConcat) return when they raise, so that
+    //! the exception leaves the code where it is raised, as in the AST interpreter, at the cost of a comparison on the
+    //! normal path: left pending, it let the code after it run, and a functional operator's next() took it for its
+    //! own (qore#5670)
+    void emitExceptionCheckIfNothing(llvm::Module& module, llvm::Function* llvm_func, const QoreIRInstruction* inst,
+            llvm::Value* result);
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows

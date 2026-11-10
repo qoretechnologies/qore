@@ -333,8 +333,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
+//! v23: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
+//!      release_values).  A v9-v22 record has none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 23;
+//! First format version whose IteratorNext records have release values (see v23 above).
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)

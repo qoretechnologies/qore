@@ -858,6 +858,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if (iter->done_target) {
                         out << " done " << iter->done_target->name;
                     }
+                    if (!iter->release_values.empty()) {
+                        out << " release";
+                        for (const QoreIRValue& rv : iter->release_values) {
+                            out << " %" << rv.id;
+                        }
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::RefForeachInit) {
                 auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());

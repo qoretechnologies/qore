@@ -13007,6 +13007,40 @@ load_local_done:
                         }
                     }
                 }
+                // then the values that the loop derived from the previous element, in their order (a fused pipeline's
+                // map stage values), as ReleaseOwnedTemp releases a temporary: only a slot that holds a reference that
+                // the frame owns
+                if (!iter_inst->release_values.empty()) {
+                    bool raised = false;
+                    for (const QoreIRValue& rv : iter_inst->release_values) {
+                        uint32_t id = rv.id;
+                        if (id >= values.size() || !values[id].needsRef() || !hasCleanupEntry(cleanup, id)
+                                || (!weak_load_temp_slots.empty() && weak_load_temp_slots.count(id))
+                                || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                            continue;
+                        }
+                        removeAllCleanupEntries(cleanup, id);
+                        QoreValue v = values[id];
+                        values[id] = QoreValue();
+                        // every value is released; an exception that a destructor raises is added to any other
+                        v.discard(xsink);
+                        if (xsink && *xsink) {
+                            raised = true;
+                        }
+                    }
+                    if (raised) {
+                        if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {

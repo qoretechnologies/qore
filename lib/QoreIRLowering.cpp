@@ -19419,8 +19419,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     // the values that map stages gave from the element and that can hold an object, in the order of the stages: the
     // AST interpreter's functional iterators release the element when a map stage has evaluated its value, and the
-    // value when the next element is taken, so that each is released before the next element is taken (and the last
-    // ones before the iterator and the source); see stage_value() below
+    // value when the next element is taken, so that each is released before the next element is taken (by the
+    // IteratorNext instruction, which releases the previous element first: QoreIRIteratorNextInstruction::
+    // release_values) and the last ones before the iterator and the source (at the pipeline's end); see stage_value()
+    // below
     std::vector<QoreIRValue> stage_values;
     // the element that the iterator gave, once next() has given one (see below)
     QoreIRValue iter_element;
@@ -19428,20 +19430,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // the stages give from the element (the element's or the last map stage's), or nullptr if they are unknown
     const QoreTypeInfo* base_source_element_type = QoreTypeInfo::getUniqueReturnComplexList(base_source_type);
     const QoreTypeInfo* element_value_type = base_source_element_type;
-    // releases the element and the values of the stages lowered so far, in that order, if any stage gave a value
-    // that can hold an object
-    auto release_stage_values = [&](const QoreProgramLocation* release_loc) {
-        if (stage_values.empty()) {
-            return;
-        }
-        builder.createReleaseOwnedTemp(iter_element, release_loc);
-        for (const QoreIRValue& v : stage_values) {
-            builder.createReleaseOwnedTemp(v, release_loc);
-        }
-    };
-
     auto add_continue = [&](const FusedLoopState& state, const QoreProgramLocation* branch_loc) {
-        release_stage_values(branch_loc);
         QoreIRBasicBlock* block = builder.getBlock();
         auto* br = builder.createBranch(header_block, branch_loc);
         setLoopCheckpointExceptionTarget(br, header_block);
@@ -19915,6 +19904,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
 
     body_scope.end();
+    // the next element is taken once the previous one and the values that the stages gave from it are released
+    next_inst->release_values = stage_values;
 
     for (size_t i = 0; i < stage_phis.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming incoming lowering")) {
