@@ -176,18 +176,25 @@ void QoreSourceProgramHolder::release() {
     pgm->deref(xsink);
 }
 
-QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
-        QoreSourceProgramHolder& holder, QoreProgram* call_pgm) {
-    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    if (!variant && func->hasUser()) {
-        // the variant is resolved when the call is made: all user variants of a function are defined by one Program
-        QoreFunctionIterator i(*func);
-        while (i.next()) {
-            if ((uvb = i.getVariant()->getUserVariantBase())) {
-                break;
-            }
+const UserVariantBase* QoreFunction::findProgramVariant() const {
+    if (!has_user) {
+        return nullptr;
+    }
+    QoreFunctionIterator i(*this);
+    while (i.next()) {
+        if (const UserVariantBase* uvb = i.getVariant()->getUserVariantBase()) {
+            program_uvb.store(uvb, std::memory_order_release);
+            return uvb;
         }
     }
+    return nullptr;
+}
+
+QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        QoreSourceProgramHolder& holder, QoreProgram* call_pgm) {
+    // the variant is resolved when the call is made if it is not known: all user variants of a function are defined
+    // by one Program
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : func->getProgramVariant();
     if (!uvb) {
         // builtin code has no Program of its own; it runs in the Program of the call
         return call_pgm;

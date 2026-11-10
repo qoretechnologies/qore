@@ -10841,10 +10841,7 @@ public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
     DLLLOCAL QORE_ALWAYS_INLINE QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb,
             QoreProgram* caller_pgm) {
-        QoreCallParseOptionsOverride o;
-        if (qore_get_user_call_runtime_po_override(exec_pgm, uvb, nullptr, caller_pgm, o)) {
-            helper.set(o);
-        }
+        qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
     }
 
 private:
@@ -11090,7 +11087,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     if (exec_pgm != caller_pgm
             || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
         ptcch.emplace(xsink, exec_pgm, true);
-        if (*xsink) {
+        // the Program is entered unless an exception was raised
+        if (!ptcch->entered() && *xsink) {
             return toBits(QoreValue());
         }
     }
@@ -15847,7 +15845,8 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         if (exec_pgm != caller_pgm
                 || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
             ptcch.emplace(xsink, exec_pgm, true);
-            if (*xsink) {
+            // the Program is entered unless an exception was raised
+            if (!ptcch->entered() && *xsink) {
                 return toBits(QoreValue());
             }
         }

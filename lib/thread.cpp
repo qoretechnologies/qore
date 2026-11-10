@@ -429,8 +429,9 @@ public:
     bool runtime_po_sandboxed = false;
     //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
     const QoreProgram* runtime_po_override_pgm = nullptr;
-    //! the thread's RuntimeConfig (rc_get_tls_ref()), once it has been looked up; see sync_runtime_config_program()
-    mutable RuntimeConfig* rc = nullptr;
+    //! the data of the thread's RuntimeConfig (rc_get_tls_impl()), once it has been looked up; see
+    //! sync_runtime_config_program()
+    mutable RuntimeConfig::Impl* rc = nullptr;
     //! the number of entries of the thread into Programs with module lifetime that took no thread count; see
     //! qore_module_uncounted_entry(); written by the thread, read by qore_stop_module_uncounted_entries()
     std::atomic<unsigned> module_uncounted{0};
@@ -3159,12 +3160,15 @@ LVarStackBreakHelper::~LVarStackBreakHelper() {
 // in the same way as the object and class context helpers below; otherwise the caller keeps seeing the Program of
 // the last cross-Program call it made
 static void sync_runtime_config_program(const ThreadData* td) {
-    // the thread's RuntimeConfig, which is the same for the life of the thread, is looked up once
+    // the data of the thread's RuntimeConfig, which stays in place for the life of the thread, is looked up once and
+    // updated directly, without the calls of the RuntimeConfig's exported interface
     if (!td->rc) {
-        td->rc = &rc_get_tls_ref();
+        td->rc = rc_get_tls_impl();
     }
-    td->rc->setProgram(td->current_pgm);
-    td->rc->setThreadLocalProgramData(td->tlpd);
+    td->rc->pgm = td->current_pgm;
+    td->rc->tlpd = td->tlpd;
+    // the thread's RuntimeConfig keeps its data (it is never assigned)
+    assert(rc_get_tls_ref().getProgram() == td->current_pgm);
 }
 
 ProgramCallContextHelper::ProgramCallContextHelper(QoreProgram* new_pgm) {
@@ -3629,11 +3633,6 @@ void ThreadEntryHandlerFrame::exitHandlers(ThreadData* td, ExceptionSink* xsink)
     }
 }
 
-ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
-        bool runtime) {
-    set(xsink, pgm, runtime);
-}
-
 namespace {
 //! the state of the entries into Programs with module lifetime without their thread count
 struct ModuleUncountedEntries {
@@ -3726,7 +3725,7 @@ void qore_stop_module_uncounted_entries() {
 
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
-        printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
+        printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p no restore\n", this);
         // the Program was current but not entered: set() entered it without switching
         if (entry_frame.isActive()) {
             entry_frame.exit(ctx_td, xsink);
@@ -3809,7 +3808,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (pgm == td->current_pgm && td->tlpd) {
         // sandboxed code never runs with cancellation deferred, also when it is called in its own Program from
         // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown)
-        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_sandboxed(pgm)) {
+        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
             suspendDeferral(td);
         }
         // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
@@ -3825,6 +3824,8 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
     old_ctx = td->current_pgm_ctx;
+    // no sandbox lookup has been made in the context yet (see sandboxChainClear())
+    sandbox_clear_gen = 0;
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
         "pgmid:" QLLD " new_pgm: %p new_pgmid:" QLLD " cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
@@ -3884,7 +3885,8 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
 
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
-    {
+    // (almost every Program has no manager, which is checked without the call that takes a reference to it)
+    if (pp->sandbox_manager.load(std::memory_order_acquire)) {
         ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
         if (sm) {
             td->sandbox_budgets.enter(td->tid, *sm, this);
@@ -3892,7 +3894,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
-    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_sandboxed(pgm)) {
+    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
         suspendDeferral(td);
     }
 
@@ -5029,8 +5031,8 @@ bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const Qore
             return true;
         }
     }
-    return qore_program_is_sandboxed(caller_pgm)
-        || (td->current_pgm != caller_pgm && qore_program_is_sandboxed(td->current_pgm));
+    return qore_program_private::isSandboxed(caller_pgm)
+        || (td->current_pgm != caller_pgm && qore_program_private::isSandboxed(td->current_pgm));
 }
 
 qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
@@ -5171,6 +5173,30 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
     td->runtime_po_sandboxed = o.sandboxed;
     td->runtime_po_override_pgm = o.override_pgm;
     td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
+}
+
+void RuntimeParseOptionsOverrideHelper::setCleared() {
+    assert(!active);
+    td = thread_data.get();
+    active = true;
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    old_replace = td->runtime_po_override_replace;
+    old_po = td->runtime_po;
+    old_caller_restrictions = td->runtime_po_caller_restrictions;
+    old_module_pgm = td->runtime_po_module_pgm;
+    old_app_pgm_id = td->runtime_po_app_pgm_id;
+    old_sandboxed = td->runtime_po_sandboxed;
+    old_override_pgm = td->runtime_po_override_pgm;
+    td->runtime_po_override_mask = QoreParseOptions();
+    td->runtime_po_override_value = QoreParseOptions();
+    td->runtime_po_override_replace = QoreParseOptions();
+    td->runtime_po_caller_restrictions = QoreParseOptions();
+    td->runtime_po_module_pgm = nullptr;
+    td->runtime_po_app_pgm_id = 0;
+    td->runtime_po_sandboxed = false;
+    td->runtime_po_override_pgm = nullptr;
+    // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
 }
 
 void RuntimeParseOptionsOverrideHelper::restore() {

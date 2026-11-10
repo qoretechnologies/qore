@@ -5033,9 +5033,11 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     }
 }
 
-bool qore_get_user_call_runtime_po_override_slow(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
+void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelper& helper,
+        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
+        const QoreProgram* caller_pgm) {
     bool module_code = qore_program_is_module(uvb->pgm);
+    QoreCallParseOptionsOverride o;
     if (exec_pgm && exec_pgm != uvb->pgm) {
         // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
         // released it (see qore_get_method_pgm_context() and qore_get_function_pgm_context()), which runs in its
@@ -5049,7 +5051,8 @@ bool qore_get_user_call_runtime_po_override_slow(const QoreProgram* exec_pgm, co
         } else {
             o.value = exec_pgm->getParseOptions();
         }
-        return true;
+        helper.set(o);
+        return;
     }
     assert(module_code);
     ThreadData* td = qore_get_thread_data();
@@ -5057,10 +5060,10 @@ bool qore_get_user_call_runtime_po_override_slow(const QoreProgram* exec_pgm, co
     // the one in effect, which was set where the thread entered the module's code (see
     // runtime_module_call_override_in_effect())
     if (caller_pgm == uvb->pgm && runtime_module_call_override_in_effect(td, uvb->pgm)) {
-        return false;
+        return;
     }
     qore_set_module_call_runtime_po_override(o, uvb->pgm, caller_po, caller_pgm, td);
-    return true;
+    helper.set(td, o);
 }
 
 // Thread-local stack-top pointer for the "current builtin source location"
@@ -7383,10 +7386,7 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     // a call that entered a module's Program from another Program has the override of the crossing already
     RuntimeParseOptionsOverrideHelper po_override;
     if (!ceh || !ceh->hasModuleCallOverride()) {
-        QoreCallParseOptionsOverride po_o;
-        if (qore_get_user_call_runtime_po_override(uveh.getProgram(), this, &caller_po, caller_pgm, po_o)) {
-            po_override.set(po_o);
-        }
+        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     // This is a normal function/method call, not a closure invocation.  If the
@@ -7419,10 +7419,7 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     // a call that entered a module's Program from another Program has the override of the crossing already
     RuntimeParseOptionsOverrideHelper po_override;
     if (!ceh.hasModuleCallOverride()) {
-        QoreCallParseOptionsOverride po_o;
-        if (qore_get_user_call_runtime_po_override(uveh.getProgram(), this, &caller_po, caller_pgm, po_o)) {
-            po_override.set(po_o);
-        }
+        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);

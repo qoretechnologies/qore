@@ -903,9 +903,9 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
 /** The part of qore_get_user_call_runtime_po_override() for module code and for code that runs in a Program other
     than the one that defined it
 */
-DLLLOCAL QORE_INTERN_NOINLINE bool qore_get_user_call_runtime_po_override_slow(const QoreProgram* exec_pgm,
-        const UserVariantBase* uvb, const QoreParseOptions* caller_po, const QoreProgram* caller_pgm,
-        QoreCallParseOptionsOverride& o);
+DLLLOCAL QORE_INTERN_NOINLINE void qore_set_user_call_runtime_po_override_slow(
+        RuntimeParseOptionsOverrideHelper& helper, const QoreProgram* exec_pgm, const UserVariantBase* uvb,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm);
 
 //! returns the override for module code entered in its own Program \a module_pgm from \a caller_pgm
 /** Module code runs with its module's options; for a sandboxed caller (see
@@ -1454,24 +1454,24 @@ public:
     Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
     interpreter.
 
+    @param helper the helper that sets the override, created without one; it sets none if the call keeps the
+    thread's override
     @param exec_pgm the Program that the variant runs in, or nullptr for the Program that defined it
     @param uvb the variant
     @param caller_po the effective options of the code making the call, or nullptr if they are those of \a caller_pgm
     (see runtime_get_effective_parse_options_for()), which are then determined only if they are needed
     @param caller_pgm the Program making the call, before the call switched to \a exec_pgm
-    @param o the override, which the caller creates without one; set if the function returns true
-
-    @return true if the call sets the override in \a o, false if it keeps the thread's override
 */
-DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm,
-        const UserVariantBase* uvb, const QoreParseOptions* caller_po, const QoreProgram* caller_pgm,
-        QoreCallParseOptionsOverride& o) {
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(RuntimeParseOptionsOverrideHelper& helper,
+        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
+        const QoreProgram* caller_pgm) {
     // the usual case: code that is not module code runs in the Program that defined it and clears the caller's
-    // override, which \a o, as created, does
+    // override
     if ((!exec_pgm || exec_pgm == uvb->pgm) && !qore_program_is_module(uvb->pgm)) {
-        return true;
+        helper.setCleared();
+        return;
     }
-    return qore_get_user_call_runtime_po_override_slow(exec_pgm, uvb, caller_po, caller_pgm, o);
+    qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
 }
 
 // the following defines the pure virtual functions that are common to all user variants
@@ -1955,6 +1955,17 @@ public:
             addPendingVariant(*(other.vlist.begin()));
             other.vlist.pop_front();
         }
+        other.program_uvb.store(nullptr, std::memory_order_relaxed);
+    }
+
+    //! returns a committed user variant of the function, or nullptr if it has none
+    /** All user variants of a function are defined by one Program, so any of them identifies the Program that the
+        function runs in (see qore_get_function_pgm_context()); the variant found first is kept, as committed variants
+        stay with the function for its life
+    */
+    DLLLOCAL const UserVariantBase* getProgramVariant() const {
+        const UserVariantBase* uvb = program_uvb.load(std::memory_order_acquire);
+        return uvb ? uvb : findProgramVariant();
     }
 
     DLLLOCAL bool hasUser() const {
@@ -2027,6 +2038,12 @@ protected:
     const QoreTypeInfo* nn_uniqueReturnType = nullptr;
 
     std::string from_module;
+
+    //! a committed user variant of the function, once one has been looked up; see getProgramVariant()
+    mutable std::atomic<const UserVariantBase*> program_uvb{nullptr};
+
+    //! finds a committed user variant and keeps it; see getProgramVariant()
+    DLLLOCAL QORE_INTERN_NOINLINE const UserVariantBase* findProgramVariant() const;
 
     DLLLOCAL int parseCheckReturnType() {
         if (parse_rt_done)

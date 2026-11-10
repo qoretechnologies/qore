@@ -4521,10 +4521,7 @@ private:
     class CalleeOverride {
     public:
         DLLLOCAL CalleeOverride(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
-            QoreCallParseOptionsOverride o;
-            if (qore_get_user_call_runtime_po_override(exec_pgm, uvb, nullptr, caller_pgm, o)) {
-                helper.set(o);
-            }
+            qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
         }
 
     private:

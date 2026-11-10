@@ -3698,6 +3698,17 @@ public:
         return pgm.priv;
     }
 
+    //! returns true if the code of the Program is sandboxed (see qore_program_is_sandboxed()), inline
+    DLLLOCAL static bool isSandboxed(const QoreProgram* pgm) {
+        if (!pgm) {
+            return false;
+        }
+        const qore_program_private* pp = pgm->priv;
+        // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
+        // the order of the two stores
+        return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+    }
+
     //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
     //! library's exported interface
     DLLLOCAL static const QoreParseOptions& getParseOptions(const QoreProgram& pgm) {

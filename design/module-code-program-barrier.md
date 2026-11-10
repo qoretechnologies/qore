@@ -132,6 +132,15 @@ crossing pays for entering the Program, and nothing else:
   context skip the chain; not under a module initialization or policy barrier, which end the walk early.
 - **Context**: `ProgramThreadCountContextHelper` keeps the thread's data for its exit, and the override helper for its
   restore (`RuntimeParseOptionsOverrideHelper`, which is also embedded in `CodeEvaluationHelper` instead of allocated).
+  The context leaves the members that `set()` writes before they are read uninitialized, as one is created on every
+  call; the Program switch updates the data of the thread's `RuntimeConfig` directly (`rc_get_tls_impl()`, looked up
+  once per thread) and checks the sandbox manager and sandbox flags of a Program inline.
+- **Override**: a call of code that is not module code clears the caller's override without building an override
+  (`RuntimeParseOptionsOverrideHelper::setCleared()`); a crossing into module code builds it in place
+  (`qore_set_user_call_runtime_po_override_slow()`).
+- **Function Program**: a call without a resolved variant (a call reference, `call_function()`) takes the Program of
+  the function from a user variant that the function keeps once it has looked one up
+  (`QoreFunction::getProgramVariant()`).
 - **IR inlining**: the IR interpreter inlines the body of a function of another Program as it does a static method of
   another Program: it takes the function's Program with `setVariant()` and enters it.  A call with an explicit Program
   that did not define the function is not inlined, and a call into another Program is never evaluated as a native leaf

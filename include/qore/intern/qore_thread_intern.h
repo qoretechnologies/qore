@@ -902,24 +902,28 @@ public:
     //! sets the override of a call for a helper created without one on \a td, the current thread; may be called once
     DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o);
 
+    //! clears the override of the caller for a call, as set() with an empty override does; may be called once
+    DLLLOCAL void setCleared();
+
     //! returns true if the override has been set
     DLLLOCAL bool isSet() const {
         return active;
     }
 
 private:
-    ThreadData* td = nullptr;
+    //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
+    //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
+    bool active = false;
+    bool old_sandboxed;
+    ThreadData* td;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
     QoreParseOptions old_po;
     QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm = nullptr;
-    qore_program_id_t old_app_pgm_id = 0;
-    bool old_sandboxed = false;
-    //! true if the override has been set
-    bool active = false;
-    const QoreProgram* old_override_pgm = nullptr;
+    const QoreProgram* old_module_pgm;
+    qore_program_id_t old_app_pgm_id;
+    const QoreProgram* old_override_pgm;
 
     DLLLOCAL void restore();
 };
@@ -1799,7 +1803,9 @@ DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
 class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
-    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+        set(xsink, pgm, runtime);
+    }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
@@ -1807,6 +1813,12 @@ public:
     DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink);
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
+
+    //! returns true if set() switched to the Program or entered it without a switch; false if it did neither, as when
+    //! entering the Program failed with an exception
+    DLLLOCAL bool entered() const {
+        return restore || entry_frame.isActive();
+    }
 
     //! returns the program active before this context was entered
     DLLLOCAL QoreProgram* getOldProgram() const {
@@ -1835,24 +1847,27 @@ public:
     }
 
 protected:
-    //! see sandboxChainClear(); written and read by the thread itself only
-    mutable const QoreProgram* sandbox_clear_pgm = nullptr;
-    mutable uint64_t sandbox_clear_gen = 0;
+    // a context is created on every call; the members without an initializer are written by set() before they are
+    // read: those of a switch (read only while restore is set, for the contexts on the thread's chain), xsink in
+    // every path of set() that enters the Program, and the saved deferral depths by suspendDeferral()
+    //! see sandboxChainClear(); written and read by the thread itself only, set when set() switches the Program
+    mutable const QoreProgram* sandbox_clear_pgm;
+    mutable uint64_t sandbox_clear_gen;
     //! the data of the thread, which set() entered the Program in, or nullptr if set() did nothing
     ThreadData* ctx_td = nullptr;
     QoreProgram* old_pgm = nullptr;
-    ThreadLocalProgramData* old_tlpd = nullptr;
-    ProgramThreadCountContextHelper* old_ctx = nullptr;
+    ThreadLocalProgramData* old_tlpd;
+    ProgramThreadCountContextHelper* old_ctx;
     // frame count of tlpd when context is started
-    int save_frameCount = 0;
-    int old_frameCount = 0;
+    int save_frameCount;
+    int old_frameCount;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
-    ExceptionSink* xsink = nullptr;
+    ExceptionSink* xsink;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
     //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
-    unsigned saved_defer = 0;
-    unsigned saved_dtor_defer = 0;
+    unsigned saved_defer;
+    unsigned saved_dtor_defer;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
@@ -2366,10 +2381,14 @@ public:
        thread after each signal handler).  Called in the thread itself only
    */
    DLLLOCAL ThreadLocalProgramData* findModuleProgramData(const QoreProgram* pgm) const {
-      for (const ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+      // the entry cached last first: a thread usually calls into one module at a time
+      unsigned i = (module_pgm_cache_next + ModuleProgramDataCacheSize - 1) % ModuleProgramDataCacheSize;
+      for (unsigned n = 0; n < ModuleProgramDataCacheSize; ++n) {
+         const ModuleProgramDataCacheEntry& e = module_pgm_cache[i];
          if (e.pgm == pgm) {
             return e.tlpd;
          }
+         i = i ? i - 1 : ModuleProgramDataCacheSize - 1;
       }
       return nullptr;
    }
