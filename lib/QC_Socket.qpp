@@ -7743,6 +7743,26 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
     s->setHttp2ConnectProtocolEnabled(enabled);
 }
 
+//! Sets whether the HTTP/3 server sessions of this QUIC socket advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+/** Applies to the server sessions that the socket creates for the clients that connect after the call.  When
+    \c enabled is @ref False, the sessions do not advertise RFC 9220 extended CONNECT support, so clients do not
+    attempt WebSocket over HTTP/3: a Qore client raises \c HTTP3-EXTENDED-CONNECT-UNSUPPORTED instead of sending the
+    request (see @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()").
+
+    @param enabled @ref True to advertise SETTINGS_ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+
+    @par Example:
+    @code{.py}
+# a QUIC server whose HTTP/3 sessions do not accept WebSocket connections
+udp_sock.setHttp3ConnectProtocolEnabled(False);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED_ARGS] {
+    s->setHttp3ConnectProtocolEnabled(enabled);
+}
+
 //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
 /** Queues the CONNECT response in the nghttp2 session without END_STREAM on the
     async I/O controller, keeping the stream open for bidirectional data transfer
@@ -8421,6 +8441,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-REQUEST-ERROR the headers have a \c ":protocol" pseudo-header: an extended CONNECT request (RFC 9220) must be made with @ref Qore::Socket::submitQuicRequestStreaming() "submitQuicRequestStreaming()" (since %Qore 3.0); the request was not sent
 
     @note This method requires an active QUIC session, typically established via
     @ref startPollQuicConnect()
@@ -8472,6 +8493,8 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the headers have a \c ":protocol" pseudo-header (an extended CONNECT request, RFC 9220), and the server's SETTINGS did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL; the request was not sent
+    @throw HTTP3-EXTENDED-CONNECT-ERROR the headers have a \c ":protocol" pseudo-header, and the server's HTTP/3 SETTINGS have not been received yet (see @ref Qore::Socket::waitForQuicSettings() "waitForQuicSettings()"); the request was not sent
 
     @since %Qore 3.0
 */
@@ -8504,6 +8527,44 @@ int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> h
 */
 bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
     return s->isQuicSessionClosed();
+}
+
+//! Waits until the HTTP/3 SETTINGS of the server of this QUIC client connection have been received
+/** The server's SETTINGS frame, the first frame of its control stream (RFC 9114 section 6.2.1), can arrive after the
+    QUIC handshake.  An ordinary request can be sent before (RFC 9114 section 7.2.4.2), but an extended CONNECT request
+    (RFC 9220, a request with a \c ":protocol" pseudo-header made with
+    @ref Qore::Socket::submitQuicRequestStreaming() "submitQuicRequestStreaming()") only after them, as they tell
+    whether the server supports it; call this method before such a request.  The HTTP clients
+    (@ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()", \c HttpClientIo, \c WebSocketClient)
+    wait by themselves.
+
+    @par Example:
+    @code{.py}
+if (!sock.waitForQuicSettings(10s)) {
+    throw "TIMEOUT", "the server's HTTP/3 SETTINGS did not arrive within 10 seconds";
+}
+int stream_id = sock.submitQuicRequestStreaming("CONNECT", "/ws", {":protocol": "websocket"});
+    @endcode
+
+    @param timeout_ms the maximum time to wait; a negative value (the default) waits until the SETTINGS arrive or the
+    connection is closed
+
+    @return @ref True if the SETTINGS have been received, @ref False if the timeout expired before
+
+    @throw HTTP3-ERROR the socket has no QUIC client connection
+    @throw HTTP3-STATE-ERROR called in the async I/O thread or in a \c continuePoll() worker, which read the
+    SETTINGS, while they have not been received
+    @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer before the SETTINGS were received
+    @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server before the SETTINGS were received
+    @throw HTTP3-LOCAL-CLOSE the QUIC connection or the socket was closed locally before the SETTINGS were received
+    @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
+    @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
+
+    @since %Qore 3.0
+*/
+bool Socket::waitForQuicSettings(timeout timeout_ms = -1) [flags=NAMED_ARGS;dom=NETWORK] {
+    int rc = qore_socket_object_wait_for_quic_settings(s, timeout_ms, xsink);
+    return rc > 0;
 }
 
 //! Returns the trailers received after the request body of an HTTP/2 stream

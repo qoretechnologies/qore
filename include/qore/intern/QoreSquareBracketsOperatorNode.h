@@ -100,7 +100,10 @@ class QoreFunctionalSquareBracketsOperator : public FunctionalOperatorInterface 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsOperator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
               rightList(rhs->get<const QoreListNode>()),
               string_index_char(string_index_char),
               negative_offsets(negative_offsets) {
@@ -126,7 +129,10 @@ class QoreFunctionalSquareBracketsComplexOperator : public FunctionalOperatorInt
 public:
     DLLLOCAL QoreFunctionalSquareBracketsComplexOperator(ValueEvalRefHolder& lhs, const QoreParseListNode* rpl,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
             rightParseList(rpl),
             string_index_char(string_index_char),
             negative_offsets(negative_offsets) {
@@ -143,9 +149,21 @@ protected:
     ValueOptionalRefHolder leftValue;
     const QoreParseListNode* rightParseList;
     qore_offset_t offset = -1;
-    std::unique_ptr<class QoreFunctionalRangeOperator> rangeIter;
+    //! true while the indices of a range selector are iterated
+    bool inRange = false;
+    //! true if the range is the effective range of a range with a negative bound, which checks for cancellation
+    bool rangeCheckCancel = false;
+    //! the next index and the last index of the current range, and the step between them
+    int64 rangeIndex = 0;
+    int64 rangeStop = 0;
+    int64 rangeStep = 1;
+    //! counts the indices of an effective range for the cancellation check
+    unsigned cancelCheck = 0;
     bool string_index_char = true;
     bool negative_offsets = false;
+
+    //! Starts the iteration of the range selector \a range, whose bounds it evaluates; returns -1 for an exception
+    DLLLOCAL int startRange(const class QoreRangeOperatorNode* range, ExceptionSink* xsink);
 };
 
 #endif

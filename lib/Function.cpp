@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 // for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
@@ -1143,14 +1144,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             old_call_program_context = get_set_program_call_context(old_pgm);
             restore_call_program_context = true;
         }
-        // code entered in a module's Program from another Program (a method of a module class, a call reference
-        // to a method of an object that module code created, or a closure created in module code) keeps the
-        // module's Program, and so its name resolution, but runs with the caller's restrictions as well as its
-        // own, as a module function does in the caller's Program: both the functional-domain check of the call and
-        // its body see them
-        if (old_pgm && old_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
-            module_po_override.reset(new RuntimeParseOptionsOverrideHelper(
-                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, old_pgm)));
+        // code entered in a module's Program from another Program (a function or a method of the module, a call
+        // reference to a method of an object that module code created, or a closure created in module code) runs in
+        // the module's Program, and so resolves names in it; its runtime parse options are set at this boundary
+        // (qore_get_module_call_runtime_po_override()), once for the crossing (see hasModuleCallOverride()): its
+        // own, and for a sandboxed caller the caller's restrictions as well, which both the functional-domain check
+        // of the call and its body see.  The caller is the call's Program context, unless that names the module's
+        // Program already, otherwise the Program running on the thread
+        QoreProgram* caller_pgm = (old_pgm && old_pgm != pgm_ctx) ? old_pgm : ::getProgram();
+        if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
+            module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
@@ -1171,12 +1174,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 // only the parse options change: the thread's current statement and location are kept; the
                 // RuntimeConfig has them only for the AST interpreter, which keeps both current, while the IR
                 // interpreter and native code update only the thread's
-                swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
-                    old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+                // (the stack was checked above)
+                swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
                 restore_runtime_ctx = true;
-                if (*xsink) {
-                    return;
-                }
             }
         }
     }
@@ -1269,12 +1269,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             old_rc_po = rc.getParseOptions();
             rc.setParseOptions(pgm_po);
             // only the parse options change: the thread's current statement and location are kept (see above)
-            swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
-                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
             restore_runtime_ctx = true;
-            if (*xsink) {
-                return;
-            }
         }
     }
 
@@ -1423,9 +1419,14 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                p = defaultArgList[i].eval(xsink);
-                if (*xsink) {
-                    return -1;
+                {
+                    // the default value is evaluated by the callee, as a statement of its own: a value that it reads
+                    // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
+                    QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    p = dv.takeReferencedValue();
                 }
 
                 // process default argument with accepting type's filter; a typed param is always checked, since a
@@ -4746,6 +4747,49 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     return variant;
 }
 
+//! enters the explicit Program of a call of a user function that the Program does not define
+/** A call made in another Program (QoreProgram::callFunction()) of a function defined elsewhere (an imported
+    function, a module function) runs in the Program that defined the function, and is made from the call's Program:
+    that Program is entered first, so that it is the caller of the function, with its restrictions and its sandbox,
+    as for a call that its own code makes.  Nothing is done if the call's Program is the current one or the function's
+
+    The arguments of the call are the caller's: arguments that need evaluation (an AST call through a call reference,
+    whose Program is the one that created the reference, gives its argument expressions) are evaluated in the
+    caller's context before the call's Program is entered, as the locals they read exist only there; see getArgs()
+*/
+class QoreCallProgramEntryHelper {
+public:
+    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, QoreProgram* call_pgm, QoreProgram* exec_pgm,
+            const QoreListNode* args = nullptr) : eval_args(xsink) {
+        if (call_pgm && exec_pgm && call_pgm != exec_pgm && call_pgm != ::getProgram()) {
+            if (args && args->needs_eval()) {
+                eval_args.assignEval(args);
+                if (*xsink) {
+                    return;
+                }
+                evaluated = true;
+            }
+            ptcch.emplace(xsink, call_pgm, true);
+        }
+    }
+
+    //! returns the arguments to give the call: those evaluated before the call's Program was entered, if any, else
+    //! \a args
+    DLLLOCAL const QoreListNode* getArgs(const QoreListNode* args) const {
+        return evaluated ? *eval_args : args;
+    }
+
+    QoreCallProgramEntryHelper(const QoreCallProgramEntryHelper&) = delete;
+    QoreCallProgramEntryHelper& operator=(const QoreCallProgramEntryHelper&) = delete;
+
+private:
+    //! the arguments evaluated in the caller's context; declared before the entry, so that they are released after
+    //! the thread has left the call's Program, in the caller's context
+    QoreListNodeEvalOptionalRefHolder eval_args;
+    std::optional<ProgramThreadCountContextHelper> ptcch;
+    bool evaluated = false;
+};
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
@@ -4771,10 +4815,23 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
         return QoreValue();
     }
 
+    // a user function runs in the Program that defined it, as a method runs in its class's (see
+    // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm, args);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
+        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
@@ -4787,10 +4844,23 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
+    // a user function runs in the Program that defined it, as a method runs in its class's (see
+    // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
@@ -4801,8 +4871,15 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
 // program parse options
 QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
     const char* fname = getName();
-    const AbstractQoreFunctionVariant* variant = 0;
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    // see evalFunction(); a builtin function runs in the current Program, as before
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, nullptr);
+    if (*xsink) {
+        return QoreValue();
+    }
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
+        exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -4813,8 +4890,21 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         ExceptionSink* xsink) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
+    // see evalFunction()
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     ProgramCallContextHelper pcch(pgm);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
+        exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -4901,53 +4991,100 @@ QoreParseOptions get_module_own_access_parse_options() {
 static QoreParseOptions keep_module_own_access_parse_options(const QoreParseOptions& po,
         const QoreProgram* module_pgm) {
     const QoreParseOptions own_access = get_module_own_access_parse_options();
-    return (po & ~own_access) | (module_pgm->getParseOptions() & own_access);
+    return (po & ~own_access) | (qore_program_private::getParseOptions(*module_pgm) & own_access);
 }
 
 bool qore_program_is_module(const QoreProgram* pgm) {
-    return pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
+    // runs on every call of a user variant (see qore_get_user_call_runtime_po_override())
+    return pgm && qore_program_private::getParseOptions(*pgm).hasAny(QoreParseOptions(PO_IN_MODULE));
 }
+
+//! sets \a o, which the caller creates without an override, to the override of a call of module code; see
+//! qore_get_module_call_runtime_po_override()
+static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverride& o, const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td);
 
 QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
         const QoreParseOptions& caller_po, const QoreProgram* caller_pgm) {
-    assert(qore_program_is_module(module_pgm));
+    return qore_get_module_call_runtime_po_override(module_pgm, &caller_po, caller_pgm, qore_get_thread_data());
+}
+
+QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td) {
     QoreCallParseOptionsOverride o;
+    qore_set_module_call_runtime_po_override(o, module_pgm, caller_po, caller_pgm, td);
+    return o;
+}
+
+static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverride& o, const QoreProgram* module_pgm,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td) {
+    assert(qore_program_is_module(module_pgm));
+    o.td = td;
     o.mask = get_user_variant_runtime_po_override_mask();
-    const QoreParseOptions& own_po = module_pgm->getParseOptions();
-    o.value = keep_module_own_access_parse_options(qore_compose_module_call_parse_options(own_po, caller_po),
-        module_pgm);
+    const QoreParseOptions& own_po = qore_program_private::getParseOptions(*module_pgm);
     o.replace = get_module_own_access_parse_options();
+    o.override_pgm = module_pgm;
+    // this is the boundary of every call into module code from another Program, for functions and methods alike, and
+    // of every call of module code by module code that does not keep the override in effect (see
+    // runtime_module_call_override_in_effect()).  A module is a capability: once it is loaded, any caller can use
+    // it, and its code runs with its own options; only the sandbox governs it at run time
+    if (!runtime_module_call_inherits_caller_restrictions(td, caller_pgm)) {
+        o.value = own_po;
+        return;
+    }
+    // for a sandboxed caller, the caller's restrictions are part of its sandbox: the module code also runs with them
+    // (the restricting options of both and only the explicitly-allowed options that both have), and passes them on to
+    // the module code it calls, also when the module's own options have them already.  Only then are the caller's
+    // restrictions composed and recorded in the override (caller_restrictions); no record of a caller's restrictions
+    // is made here for any other caller
+    o.sandboxed = true;
+    QoreParseOptions composed = keep_module_own_access_parse_options(
+        qore_compose_module_call_parse_options(own_po,
+            caller_po ? *caller_po : runtime_get_effective_parse_options_for(td, caller_pgm)), module_pgm);
+    if ((composed & o.mask) == (own_po & o.mask)) {
+        o.value = own_po;
+        return;
+    }
+    o.value = composed;
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
         o.module_pgm = module_pgm;
         o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
-    return o;
 }
 
-void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
+void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelper& helper,
+        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
+        const QoreProgram* caller_pgm) {
     bool module_code = qore_program_is_module(uvb->pgm);
+    QoreCallParseOptionsOverride o;
     if (exec_pgm && exec_pgm != uvb->pgm) {
-        // the code runs in another Program, so its caller restrictions all apply: a module function runs in its
+        // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
+        // released it (see qore_get_method_pgm_context() and qore_get_function_pgm_context()), which runs in its
         // caller's Program, whose state it would change
-        o = QoreCallParseOptionsOverride();
         o.mask = get_user_variant_runtime_po_override_mask();
-        o.value = module_code
-            ? keep_module_own_access_parse_options(
-                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(), caller_po), uvb->pgm)
-            : exec_pgm->getParseOptions();
         if (module_code) {
+            o.value = keep_module_own_access_parse_options(
+                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(),
+                    caller_po ? *caller_po : runtime_get_effective_parse_options_for(caller_pgm)), uvb->pgm);
             o.replace = get_module_own_access_parse_options();
+        } else {
+            o.value = exec_pgm->getParseOptions();
         }
+        helper.set(o);
         return;
     }
-    if (module_code) {
-        o = qore_get_module_call_runtime_po_override(uvb->pgm, caller_po, caller_pgm);
+    assert(module_code);
+    ThreadData* td = qore_get_thread_data();
+    // module code called by code of its own module in the module's Program: the override that the call would set is
+    // the one in effect, which was set where the thread entered the module's code (see
+    // runtime_module_call_override_in_effect())
+    if (caller_pgm == uvb->pgm && runtime_module_call_override_in_effect(td, uvb->pgm)) {
         return;
     }
-    o = QoreCallParseOptionsOverride();
+    qore_set_module_call_runtime_po_override(o, uvb->pgm, caller_po, caller_pgm, td);
+    helper.set(td, o);
 }
 
 // Thread-local stack-top pointer for the "current builtin source location"
@@ -5009,11 +5146,18 @@ QoreBuiltinSrcLocHelper::~QoreBuiltinSrcLocHelper() {
     t_builtin_src_loc = static_cast<const QoreProgramLocation*>(saved);
 }
 
+uint64_t UserVariantBase::getNextSerial() {
+    // a 64-bit counter is never exhausted, so a serial is never reused; nothing is ordered by it, so relaxed order
+    static std::atomic<uint64_t> next_serial{1};
+    return next_serial.fetch_add(1, std::memory_order_relaxed);
+}
+
 UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
         RetTypeInfo* rv, bool synced)
         : signature(n_sig_first_line, n_sig_last_line, params, rv,
             b ? b->pwo.parse_options : parse_get_parse_options()), statements(b),
         gate(synced ? new VRMutex : nullptr), pgm(getProgram()), pgm_id(pgm ? pgm->getProgramId() : 0),
+        serial(getNextSerial()),
         recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);
@@ -7267,10 +7411,11 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
-    RuntimeParseOptionsOverrideHelper po_override(po_o);
+    // a call that entered a module's Program from another Program has the override of the crossing already
+    RuntimeParseOptionsOverrideHelper po_override;
+    if (!ceh || !ceh->hasModuleCallOverride()) {
+        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    }
 
     // This is a normal function/method call, not a closure invocation.  If the
     // caller is a closure body, do not let its captured LocalVar* map shadow this
@@ -7299,10 +7444,11 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
-    RuntimeParseOptionsOverrideHelper po_override(po_o);
+    // a call that entered a module's Program from another Program has the override of the crossing already
+    RuntimeParseOptionsOverrideHelper po_override;
+    if (!ceh.hasModuleCallOverride()) {
+        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
 

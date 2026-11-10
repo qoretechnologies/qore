@@ -170,6 +170,14 @@ struct QoreAOTHashDeclPathCacheKeyHash {
     }
 };
 
+//! The keys of a path cache of an AOT context in the order they were added, for first-in first-out eviction
+/** A ring of pointers to the keys in the map's nodes; \a next is the slot of the oldest key once the ring is full
+*/
+struct QoreAOTPathCacheOrder {
+    std::vector<const QoreAOTHashDeclPathCacheKey*> keys;
+    size_t next = 0;
+};
+
 //! Immutable object-member metadata resolved for one AOT call site.
 struct QoreAOTObjectMemberDescriptor {
     const QoreMemberInfo* info = nullptr;
@@ -302,12 +310,17 @@ struct QoreAOTContext {
     //! most QORE_AOT_PATH_CACHE_MAX_ENTRIES entries; guarded by hashdecl_path_cache_mutex
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;
+    //! The keys of hashdecl_path_cache in the order they were added, evicted first in first out once it is full
+    //! (they point into the map's nodes, which do not move); guarded by hashdecl_path_cache_mutex
+    QoreAOTPathCacheOrder hashdecl_path_cache_order;
 
     //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
     std::mutex type_path_cache_mutex;
     //! Keyed as hashdecl_path_cache; guarded by type_path_cache_mutex
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
+    //! The keys of type_path_cache in the order they were added; see hashdecl_path_cache_order
+    QoreAOTPathCacheOrder type_path_cache_order;
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;

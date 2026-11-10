@@ -160,6 +160,8 @@ Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
 void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     // a requester waiting for a migration must not wait for an operation that is gone
     failMigrations();
+    // nor a requester waiting for the server's SETTINGS
+    wakeSettingsWaiters();
     // Clean up stream actions — reject pending Promises so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
@@ -653,6 +655,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     failMigrations();
+    wakeSettingsWaiters();
     if (inner_op) {
         inner_op->abort(xsink);
     }
@@ -691,6 +694,7 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     failMigrations();
+    wakeSettingsWaiters();
     // Socket cleanup is handled by the I/O controller's Phase3 close logic
     // via needsCloseOnComplete() returning true when h3_state == CLOSED.
     // Happy-eyeballs: if an owner is armed (handshake-phase racing), hand
@@ -801,6 +805,62 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
     }
 }
 
+void Http3ClientPollOperationPriv::wakeSettingsWaiters() {
+    // plain "//" comments only here: see the note at the top of the file
+    if (!inner_op) {
+        return;
+    }
+    auto session = inner_op->getSession();
+    if (session) {
+        // the operation is closed for good: a request that waits for the SETTINGS is submitted now, and the
+        // submission reports the closed connection
+        session->releaseSettingsWaiters();
+    }
+}
+
+int Http3ClientPollOperationPriv::waitForExtendedConnectSettings(ExceptionSink* xsink) {
+    // plain "//" comments only here: see the note at the top of the file
+    auto session = inner_op ? inner_op->getSession() : nullptr;
+    if (!session || session->isRemoteSettingsReceived()) {
+        return 0;
+    }
+    // the I/O thread reads the SETTINGS, and a continuePoll() worker holds up the operation that it runs: neither
+    // waits; QuicSession::checkExtendedConnectAllowed() refuses the request
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        return 0;
+    }
+    int64_t timeout_ms = -1;
+    if (settings_deadline_us) {
+        int64_t remaining_us = settings_deadline_us - q_clock_getmicros_monotonic();
+        // round up, so the wait never ends before the deadline
+        timeout_ms = remaining_us > 0 ? (remaining_us + 999) / 1000 : 0;
+    }
+    printd(5, "Http3ClientPollOperationPriv::waitForExtendedConnectSettings() waiting " QLLD " ms\n",
+        (int64)timeout_ms);
+    QuicSession::SettingsWait rc = session->waitForRemoteSettings(timeout_ms, xsink);
+    switch (rc) {
+        case QuicSession::SettingsWait::Timeout:
+            xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC "
+                "9220): the server's HTTP/3 SETTINGS did not arrive within the connect timeout, so it is not known "
+                "whether the server supports it");
+            return -1;
+        case QuicSession::SettingsWait::Interrupted:
+            // THREAD-CANCELLED or PROGRAM-INTERRUPTED has been raised
+            return -1;
+        default:
+            break;
+    }
+    // a connection closed while the request waited: the error of the close, which the HTTP clients repeat on a new
+    // connection, and the operation is closed with it, so that a retry finds a new connection
+    if (rc == QuicSession::SettingsWait::Closed || isClosed()) {
+        const char* err = session->raiseSettingsWaitCloseError(xsink);
+        QoreValue desc = xsink->getExceptionDesc();
+        setSubmitError(err, desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
+        return -1;
+    }
+    return 0;
+}
+
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     // Happy-eyeballs: if an owner is armed, route the success through its
     // coordinator so losing attempts can be cancelled atomically before the
@@ -909,6 +969,16 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         action->deref(xsink);
         xsink->raiseException("HTTP3-STATE-ERROR", "cannot submit request: connection is not ready");
         return -1;
+    }
+
+    // RFC 9220: an extended CONNECT request waits for the server's SETTINGS, which say whether it may be sent
+    if (headers) {
+        QoreValue protocol = headers->getKeyValue(":protocol");
+        if (protocol.getType() == NT_STRING && !protocol.get<const QoreStringNode>()->empty()
+                && waitForExtendedConnectSettings(xsink)) {
+            action->deref(xsink);
+            return -1;
+        }
     }
 
     // Phase 1: capacity check
@@ -1336,6 +1406,7 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
         }
     }
     failMigrations();
+    wakeSettingsWaiters();
 }
 
 int64_t Http3ClientPollOperationPriv::requestMigration(ExceptionSink* xsink) {
@@ -1642,8 +1713,10 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     // Extract the raw C++ priv pointer for direct I/O-thread calls
     AbstractHttpPollConnectionPriv* conn_priv = *connection;
     sock_ptr->ref();
-    self->setPrivate(CID_HTTP3CLIENTPOLLOPERATIONBASE,
-        new Http3ClientPollOperationPriv(self, sock_ptr, inner_ptr, conn_priv));
+    Http3ClientPollOperationPriv* priv_ptr = new Http3ClientPollOperationPriv(self, sock_ptr, inner_ptr, conn_priv);
+    // the connect timeout also bounds the wait of an extended CONNECT for the server's SETTINGS
+    priv_ptr->setConnectTimeout(static_cast<int64_t>(connect_timeout));
+    self->setPrivate(CID_HTTP3CLIENTPOLLOPERATIONBASE, priv_ptr);
 }
 
 //! Destroys the object
@@ -2175,6 +2248,30 @@ bool Http3ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS
 */
 nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) [flags=NAMED_ARGS] {
     priv->waitStreamCapacity(timeout_ms);
+}
+
+//! Waits for the server's HTTP/3 SETTINGS before an extended CONNECT request (RFC 9220)
+/** The connection is ready at the end of the QUIC handshake, and the server's SETTINGS, which say whether it supports
+    extended CONNECT, can arrive after it.  A subclass that submits an extended CONNECT request (a streaming request
+    with a \c ":protocol" pseudo-header) with @ref Qore::Socket::submitQuicRequestStreaming() calls this method first;
+    @ref submitRequest() and its variants wait by themselves.
+
+    The wait ends when the SETTINGS arrive or the connection is closed (then the submission reports why), or at the
+    deadline given by the connect timeout of the constructor, counted from the construction.  It does not wait in the
+    async I/O thread or in a \c continuePoll() worker, which read the SETTINGS.
+
+    @throw HTTP3-EXTENDED-CONNECT-ERROR the server's SETTINGS did not arrive within the connect timeout
+    @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer while the request waited; the operation
+    is closed, and the request can be repeated on a new connection
+    @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server while the request waited; as above
+    @throw HTTP3-LOCAL-CLOSE the QUIC connection or the operation was closed locally while the request waited
+    @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
+    @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
+
+    @since %Qore 3.0
+*/
+nothing Http3ClientPollOperationBase::waitForExtendedConnectSettings() {
+    priv->waitForExtendedConnectSettings(xsink);
 }
 
 //! Set error state from submit failure

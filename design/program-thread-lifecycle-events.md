@@ -199,8 +199,10 @@ With `PTE_ACTIVITY`, `ACTIVITY` is published when the Program's thread count (`t
 `getThreadCount()` returns and `waitForThreads()` waits on) becomes zero (`idle: True`) and when it leaves zero
 (`idle: False`).
 Every function that changes `thread_count` - `incThreadCount()`, `decThreadCount()`, `preregisterNewThread()` (a
-parent starting a background thread) and `cancelPreregistration()` (a thread that failed to start) - detects the
-transition under `plock` and publishes after releasing it; `parse_count`, which `waitForThreads()` also waits on, is
+parent starting a background thread), `cancelPreregistration()` (a thread that failed to start),
+`enterWithoutContext()` (a thread releasing its thread_local values of the Program or using a lvalue of the Program
+through a reference) and `incThreadCountForCopy()` (`ProgramControl::createEvalProgram()` copying its code) - detects
+the transition under `plock` and publishes after releasing it; `parse_count`, which `waitForThreads()` also waits on, is
 not part of it: the event reports code running in the Program, not parsing. This is what lets an embedder resume a
 request blocked by active Program code without a waiting thread; as an idle event does not reserve the Program, the
 embedder must still recheck before parsing.

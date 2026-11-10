@@ -125,12 +125,13 @@ BinaryNode* QoreSSLCertificate::getDER(ExceptionSink* xsink) const {
     return bio.getAsBinary();
 }
 
+// OpenSSL 4 returns the subject and issuer names as const; X509_NAME_to_hash() only reads them
 QoreHashNode* QoreSSLCertificate::getSubjectHash() const {
-    return X509_NAME_to_hash(X509_get_subject_name(priv->cert));
+    return X509_NAME_to_hash(const_cast<X509_NAME*>(X509_get_subject_name(priv->cert)));
 }
 
 QoreHashNode* QoreSSLCertificate::getIssuerHash() const {
-    return X509_NAME_to_hash(X509_get_issuer_name(priv->cert));
+    return X509_NAME_to_hash(const_cast<X509_NAME*>(X509_get_issuer_name(priv->cert)));
 }
 
 int64 QoreSSLCertificate::getSerialNumber() const {

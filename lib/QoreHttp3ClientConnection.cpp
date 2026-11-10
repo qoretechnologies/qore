@@ -258,6 +258,8 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
             /* conn_priv */ this),
         xsink);
     Http3ClientPollOperationPriv* priv_raw = *priv_holder;
+    // the connect timeout also bounds the wait of an extended CONNECT for the server's SETTINGS
+    priv_raw->setConnectTimeout(handshake_timeout_ns_ / 1000000LL);
 
     // 4. Wrap in QoreObject.
     ReferenceHolder<QoreObject> poll_obj_holder(

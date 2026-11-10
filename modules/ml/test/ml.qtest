@@ -5543,11 +5543,17 @@ bool sub identity_complete(string path, *hash<auto> config) {
         assertTrue(leader > 0, "leader TID");
         assertTrue(leader != gettid());
 
-        # the second request completes the batch; the timeouts are only hang guards
+        # the second request completes the batch; the leader may run it and clear its TID before the stats are read,
+        # so the stats are checked only after both requests are done; the timeouts are only hang guards
         Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)});
-        assertEq(leader, pool.getPoolStats().async_leader_tid, "the same leader batches the second request");
         assertFloat(3.0, f1.get(60s).Y[0], 1e-5);
         assertFloat(5.0, f2.get(60s).Y[0], 1e-5);
+        # the batch counters are updated before the results are delivered: one batch of both requests shows that the
+        # same leader batched the second request
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(1, stats.async_batches, "one batch");
+        assertEq(2, stats.async_batch_items, "both requests in the batch");
+        assertEq(2, stats.async_completed);
     }
 
     onnxSessionPoolAsyncLeaderCancelTest() {
