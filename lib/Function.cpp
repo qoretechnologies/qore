@@ -963,7 +963,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
-        loc(get_runtime_location()),
+        loc(take_runtime_call_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
@@ -990,9 +990,11 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        bool n_hide_call_site)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
-        loc(get_runtime_location()),
+        loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
+            : take_runtime_call_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
@@ -1104,6 +1106,10 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
+    }
+    // the call site that was pending when the code started, hidden while it ran
+    if (hidden_call_site) {
+        *hidden_call_site_slot = hidden_call_site;
     }
 }
 

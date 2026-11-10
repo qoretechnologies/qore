@@ -491,6 +491,11 @@ public:
     //! Construct the value without assigning to the variable (for JIT split)
     DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
 
+    //! returns true if the declaration creates an object of a class known at parse time with its constructor
+    DLLLOCAL bool isObjectConstruct() const {
+        return vrn_type == VRN_OBJECT;
+    }
+
     //! Returns true if this is a hashdecl construction
     DLLLOCAL bool isHashDeclConstruct() const {
         return vrn_type == VRN_HASHDECL;

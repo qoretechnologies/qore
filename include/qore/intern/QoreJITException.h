@@ -42,6 +42,9 @@
 
 #include <exception>
 
+//! Clears the current thread's call site (see QoreRcCallSiteHelper)
+DLLLOCAL void clear_runtime_call_site();
+
 //! C++ exception thrown by JIT/AOT-compiled code when xsink has an exception
 /** Used with LLVM's invoke/landingpad mechanism for proper stack unwinding.
     The exception carries a pointer to the ExceptionSink that was set.
@@ -49,7 +52,14 @@
 */
 class QoreJITException : public std::exception {
 public:
-    DLLLOCAL QoreJITException() noexcept {}
+    //! Creates the exception; the call site of a call that raised it is cleared
+    /** Native code clears the call site after each call on the normal path; when a call raises an exception
+        before the frame of the called code has taken the call site, the exception clears it, so that it is never
+        taken by another frame.
+    */
+    DLLLOCAL QoreJITException() noexcept {
+        clear_runtime_call_site();
+    }
     DLLLOCAL const char* what() const noexcept override {
         return "QoreJITException";
     }

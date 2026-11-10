@@ -2344,6 +2344,9 @@ public:
     QoreMemberMap members;
     // member initialization list in hierarchy initialization order
     member_init_list_t member_init_list;
+    //! whether a member initializer of member_init_list is evaluated when an object is created: -1 not yet known,
+    //! 0 no, 1 yes; determined when the first object is created, as the initializers do not change at runtime
+    mutable std::atomic<int8_t> member_init_evaluates{-1};
 
     // static var list (map)
     QoreVarMap vars;
@@ -3621,6 +3624,8 @@ public:
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
+    //! initializes the members of member_init_list; called by initMembers() with the object context set
+    DLLLOCAL int initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
 
     DLLLOCAL int initMember(QoreObject& o, bool& need_scan, const char* member_name, const QoreMemberInfo& info, const qore_class_private* member_class_ctx, ExceptionSink* xsink) const;
 

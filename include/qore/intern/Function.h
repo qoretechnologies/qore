@@ -518,6 +518,11 @@ public:
 
         saves current program location in case there's an exception;
         performs destructive evaluation of "args"
+
+        @param n_hide_call_site true for code that no call expression calls, such as a destructor: its frame is
+        located at the runtime location, and a pending call site (see QoreRcCallSiteHelper) is hidden while it runs
+        and restored afterwards, as the code can run between a call site and the frame that takes it, such as when
+        a temporary value is released
     */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
@@ -525,7 +530,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            bool n_defer_domain_po = false, bool n_hide_call_site = false);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -657,6 +662,9 @@ protected:
     RuntimeConfig& rc;
     // method class
     const qore_class_private* qc;
+    //! the slot and the value of a call site hidden while the code runs (n_hide_call_site); before loc, which sets them
+    const QoreProgramLocation** hidden_call_site_slot = nullptr;
+    const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
