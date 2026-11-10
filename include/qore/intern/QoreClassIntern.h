@@ -271,6 +271,10 @@ public:
         return false;
     }
 
+    DLLLOCAL virtual const MethodVariantBase* getMethodVariantBase() const override {
+        return this;
+    }
+
     //! Returns true when this method variant can use a fast call entry.
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastMethodCallEligible(bool allow_type_parameters = false) const {

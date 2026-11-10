@@ -80,6 +80,12 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
+    flagged @ref NOOP are no longer resolved at run time, as at parse time: <tt>sort(NOTHING)</tt>, for example with
+    an unassigned member, and the other no-op calls raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant
+    value; <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing keep returning \c 0 (regular variants now).
+
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
     \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the
@@ -1559,6 +1565,10 @@
     - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
       pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
       links them by their full paths
+    - a call whose argument is returned as a reference from another call (ex: <tt>d.m(c.get())</tt>, with
+      <tt>reference&lt;int&gt; get()</tt>) could select a variant with a parameter of the referenced type at parse
+      time, which does not accept the reference; the variant resolved at run time instead was called without its
+      arguments; such a call is now resolved at run time (see @ref overloading)
     - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
       @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
       without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for

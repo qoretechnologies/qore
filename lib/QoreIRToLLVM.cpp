@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 426,
+static_assert(QORE_IR_MAX_OPCODE == 429,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -279,7 +279,8 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
     }
     const auto* call = dynamic_cast<const FunctionCallNode*>(
         expr.getInternalNode());
-    if (!call || call->hasExplicitTypeArgs()) {
+    // only a call of the Qore builtin, never a user or module function with the same name
+    if (!call || call->hasExplicitTypeArgs() || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();
@@ -1083,7 +1084,8 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
 static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
         ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
-    if (!call) {
+    // only the Qore builtins, never a user or module function with the same name
+    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();
@@ -1100,6 +1102,12 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
     }
     const char* name = call->getName();
     if (!name) {
+        return nullptr;
+    }
+    // the helpers return what the Qore builtin returns: they handle the values that its variants take without
+    // conversion and call the builtin with any other value, so its variant resolution, soft-type conversions and
+    // errors are those of the AST interpreter; a user or module function with the same name is called normally
+    if (!qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return nullptr;
     }
     if (!strcmp(name, "length")) {
@@ -15129,6 +15137,147 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ToStringChecked:
+        case QoreIROpcode::ToIntChecked:
+        case QoreIROpcode::ToFloatChecked: {
+            // string(), int() or float() of a value that the builtin may not accept (issue #5660): a native operand
+            // has a type that the builtin accepts and is converted inline, as with the unchecked opcodes; a boxed int
+            // or float is converted inline too, and any other value goes to the checked helper, which converts the
+            // types that the builtin accepts and raises the error of the builtin call for any other
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            uint32_t operand_id = inst->operands[0].id;
+            bool boxed = val->getType() == i64_type && nanboxed_values.count(operand_id);
+            if (!boxed) {
+                if (inst->opcode == QoreIROpcode::ToIntChecked) {
+                    values[inst->result.id] = ensureIntTypeInline(val, operand_id);
+                } else if (inst->opcode == QoreIROpcode::ToFloatChecked) {
+                    values[inst->result.id] = ensureFloatType(val, operand_id, module);
+                } else {
+                    llvm::Value* result;
+                    if (val->getType() == i64_type) {
+                        auto helper = module.getOrInsertFunction("qore_rt_int_to_string",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        result = builder->CreateCall(helper, {val});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_to_string",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        result = builder->CreateCall(helper, {boxValue(val, operand_id)});
+                    }
+                    values[inst->result.id] = result;
+                    nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(result, inst->result.id, llvm_func);
+                }
+                return true;
+            }
+            const char* helper_name;
+            const char* throwing_name;
+            llvm::Type* result_type;
+            if (inst->opcode == QoreIROpcode::ToStringChecked) {
+                helper_name = "qore_rt_to_string_checked";
+                throwing_name = "qore_rt_to_string_checked_throwing";
+                result_type = i64_type;
+            } else if (inst->opcode == QoreIROpcode::ToIntChecked) {
+                helper_name = "qore_rt_to_int_checked";
+                throwing_name = "qore_rt_to_int_checked_throwing";
+                result_type = i64_type;
+            } else {
+                helper_name = "qore_rt_to_float_checked";
+                throwing_name = "qore_rt_to_float_checked_throwing";
+                result_type = double_type;
+            }
+            auto ft = llvm::FunctionType::get(result_type, {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction(helper_name, ft);
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            if (inst->opcode == QoreIROpcode::ToStringChecked) {
+                // the checked helper converts every boxed value, an int too: no inline branch, so that a loop that
+                // converts keeps the shape of the unchecked conversion (a single call) and LLVM can still unswitch it
+                // on its loop-invariant conditions (a reference argument, for example); an inline int branch made the
+                // loop too large for that, and a release of the unused reference read ran in every iteration
+                llvm::Value* result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module, llvm_func,
+                    inst);
+                // the helper returns a string node, or no value (VAL_NOTHING) only when it raised an exception: the
+                // exception is checked on that path only, which keeps the loop small
+                {
+                    auto* raised_bb = llvm::BasicBlock::Create(ctx, "checked_str_raised", llvm_func);
+                    auto* ok_bb = llvm::BasicBlock::Create(ctx, "checked_str_ok", llvm_func);
+                    builder->CreateCondBr(builder->CreateICmpEQ(result,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING)), raised_bb, ok_bb,
+                        llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+                    builder->SetInsertPoint(raised_bb);
+                    // the path leaves the loop that it is in, so that LLVM still unswitches the loop on its
+                    // loop-invariant conditions: the helper makes sure that an exception is raised, and the
+                    // exception check then always branches to the error target
+                    bool check_branches = !(deferred_exception_checking && !inst->exception_target)
+                        && !skip_next_exception_check;
+                    if (check_branches) {
+                        auto ensure_fn = module.getOrInsertFunction("qore_rt_ensure_exception",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                        builder->CreateCall(ensure_fn, {xsink_arg});
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                    if (check_branches) {
+                        builder->CreateUnreachable();
+                    } else {
+                        builder->CreateBr(ok_bb);
+                    }
+                    builder->SetInsertPoint(ok_bb);
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                return true;
+            }
+            // inline fast paths for a boxed int (both) and a boxed float (float()): the checked helper only for any
+            // other value
+            auto* fast_int_bb = llvm::BasicBlock::Create(ctx, "checked_conv_int", llvm_func);
+            auto* not_int_bb = llvm::BasicBlock::Create(ctx, "checked_conv_not_int", llvm_func);
+            auto* slow_bb = llvm::BasicBlock::Create(ctx, "checked_conv_slow", llvm_func);
+            auto* merge_bb = llvm::BasicBlock::Create(ctx, "checked_conv_merge", llvm_func);
+            llvm::Value* tag = builder->CreateLShr(val, llvm::ConstantInt::get(i64_type, 48));
+            llvm::Value* is_int48 = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, 0xFFF9));
+            builder->CreateCondBr(is_int48, fast_int_bb, not_int_bb);
+
+            builder->SetInsertPoint(fast_int_bb);
+            llvm::Value* payload = builder->CreateAnd(val, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+            llvm::Value* shifted = builder->CreateShl(payload, llvm::ConstantInt::get(i64_type, 16));
+            llvm::Value* int_value = builder->CreateAShr(shifted, llvm::ConstantInt::get(i64_type, 16));
+            llvm::Value* fast_int_result = inst->opcode == QoreIROpcode::ToIntChecked
+                ? int_value : builder->CreateSIToFP(int_value, double_type);
+            llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+            builder->CreateBr(merge_bb);
+
+            builder->SetInsertPoint(not_int_bb);
+            llvm::Value* fast_float_result = nullptr;
+            llvm::BasicBlock* fast_float_end = nullptr;
+            if (inst->opcode == QoreIROpcode::ToFloatChecked) {
+                auto* fast_float_bb = llvm::BasicBlock::Create(ctx, "checked_conv_float", llvm_func);
+                builder->CreateCondBr(emitIsBoxedFloat(val), fast_float_bb, slow_bb);
+                builder->SetInsertPoint(fast_float_bb);
+                fast_float_result = unboxFloat(val);
+                fast_float_end = builder->GetInsertBlock();
+                builder->CreateBr(merge_bb);
+            } else {
+                builder->CreateBr(slow_bb);
+            }
+
+            builder->SetInsertPoint(slow_bb);
+            llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module, llvm_func,
+                inst);
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+            builder->CreateBr(merge_bb);
+
+            builder->SetInsertPoint(merge_bb);
+            auto* result = builder->CreatePHI(result_type, fast_float_end ? 3 : 2);
+            result->addIncoming(fast_int_result, fast_int_end);
+            if (fast_float_end) {
+                result->addIncoming(fast_float_result, fast_float_end);
+            }
+            result->addIncoming(slow_result, slow_end);
+            values[inst->result.id] = result;
             return true;
         }
         case QoreIROpcode::Sprintf: {

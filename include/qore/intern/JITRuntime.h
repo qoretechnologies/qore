@@ -41,6 +41,7 @@ class ExceptionSink;
 struct QoreProgramLocation;
 class QoreIRFunction;
 class AbstractStatement;
+class FunctionEntry;
 class QoreIRBackgroundInstruction;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
@@ -2145,6 +2146,77 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 } // extern "C"
+
+//! The kinds of qore_rt_builtin_conversion_checked(): string(), int() and float()
+enum : int {
+    QORE_RT_BUILTIN_CONVERSION_STRING = 0,
+    QORE_RT_BUILTIN_CONVERSION_INT = 1,
+    QORE_RT_BUILTIN_CONVERSION_FLOAT = 2,
+};
+
+//! string(), int() or float() of a value that the builtin may not accept (QoreIROpcode::ToStringChecked etc.)
+/** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
+    call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
+
+    @return false if the value is not accepted and the error was raised
+*/
+DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Returns true if the builtin conversion of the given kind accepts a value of the given type
+/** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a
+    date, a char and NOTHING; int() also accepts NULL
+*/
+static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
+    switch (t) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+        case NT_DATE:
+        case NT_CHAR:
+        case NT_NOTHING:
+            return true;
+        case NT_NULL:
+            return kind == QORE_RT_BUILTIN_CONVERSION_INT;
+        default:
+            return false;
+    }
+}
+
+//! Calls the builtin conversion with a value that the checked conversion does not convert itself
+/** For a value that the builtin does not accept, the call raises its error (RUNTIME-OVERLOAD-ERROR); for any other,
+    the builtin's result is returned, so a type that a checked conversion does not handle costs speed, never
+    correctness
+
+    @return true with the result in \a rv, false if the builtin raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_conversion_call(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Calls the single-argument builtin function with the given qualified name (ex: \c "Qore::length") with a value
+/** The builtin resolves its variant with the value, as the AST interpreter does, so a value that no variant accepts
+    raises the error of the AST interpreter (RUNTIME-OVERLOAD-ERROR); the fast paths of the builtins in the compiled
+    modes call it for the values that they do not handle themselves
+
+    @return true with the result in \a rv, false if the call raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_function_call(const char* qualified_name, QoreValue val, QoreValue& rv,
+        ExceptionSink* xsink);
+
+//! Returns true if the function entry is a builtin function of the Qore namespace and has no user variants
+/** The compiled modes take the fast path of a builtin (ex: length()) only for a call that this function is called by;
+    a user or module function with the same name is called normally
+*/
+DLLLOCAL bool qore_rt_is_qore_builtin_function(const FunctionEntry* fe);
+
+extern "C" {
+DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+}
 
 //! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_size();

@@ -1010,7 +1010,9 @@ static LocalVar* qoreIrGetHoistableGlobalStringLengthLocal(const QoreValue& expr
         return nullptr;
     }
     auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
-    if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())) {
+    // only a call of the Qore builtin, never a user or module function with the same name
+    if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())
+            || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return nullptr;
     }
     QoreValue arg_expr;
@@ -7010,8 +7012,10 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
             ? var->ref.id->getTypeInfo() : nullptr;
         facts.type_info = analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
             ? analysis.known_type : declared_type;
+        // a local that is the target of a reference or captured by a closure can be cleared where the parse does not
+        // see it (see getAnalysis()), so its parse-end state does not make it assigned either
         bool local_definitely_assigned = parse_context && var->getType() == VT_LOCAL && var->ref.id
-            && parse_context->isLocalDefinitelyAssigned(var->ref.id);
+            && !var->ref.id->closureUse() && parse_context->isLocalDefinitelyAssigned(var->ref.id);
         bool plain_local = declared_type && !QoreTypeInfo::getReferenceTarget(declared_type);
         bool definitely_assigned = analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || (local_definitely_assigned && plain_local);
@@ -14001,6 +14005,41 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     return result;
 }
 
+static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const QoreListNode* args, size_t i);
+
+//! Returns true if every value of the given type is accepted by the builtin conversion function of the opcode
+/** string(), int() and float() accept a string, an int, a float, a number, a boolean, a date, a char and NOTHING, and
+    int() also NULL (the soft types of their parameters); a type that also has other values (auto, an object, a hash,
+    a union with such a type, ...) or no known type is not accepted: see QoreIRLowering::lowerBuiltinTypeConversion()
+*/
+static bool qore_ir_conversion_accepts_type(QoreIROpcode opcode, const QoreTypeInfo* type) {
+    if (!type || !QoreTypeInfo::hasType(type)) {
+        return false;
+    }
+    // every type that the type can have must be accepted (a union, for example, may also have types that are not)
+    for (const auto& ret : type->return_vec) {
+        switch (ret.spec.getType()) {
+            case NT_NOTHING:
+            case NT_STRING:
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_BOOLEAN:
+            case NT_DATE:
+            case NT_CHAR:
+                break;
+            case NT_NULL:
+                if (opcode == QoreIROpcode::ToInt) {
+                    break;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+    return !type->return_vec.empty();
+}
+
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
@@ -14032,10 +14071,42 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     if (nargs != 1) {
         return QoreIRValue();
     }
+    // The inline conversion accepts every value; the builtins take soft types that do not (string(softstring),
+    // int(*softint), float(softfloat)): an object, for example, matches no variant, and the call raises
+    // RUNTIME-OVERLOAD-ERROR.  The unchecked conversion is used when the argument's type only has values that the
+    // builtin accepts; any other call uses the checked conversion, which raises the error of the AST interpreter
+    // (issue #5660)
+    // a variant resolved at parse time does not prove it: for an argument of a union type, the parser resolves the
+    // variant if one of the types matches, and the AST interpreter resolves it again with the value at runtime
+    bool checked = false;
+    // named arguments (a mapped argument list) have no positional view here: the checked conversion is used
+    const qore_list_private* args_priv = args ? qore_list_private::get(args) : nullptr;
+    if (opcode != QoreIROpcode::ToBool && !parse_args && args_priv && args_priv->hasCallArgEvalMap()) {
+        checked = true;
+    } else if (opcode != QoreIROpcode::ToBool) {
+        QoreValue arg = qore_ir_get_call_arg(parse_args, args, 0);
+        // the type of a local variable as the parse analysis guarantees it, otherwise the parse-time type of the
+        // expression (e.g. "-i" for an int i)
+        const QoreTypeInfo* arg_type = getGuaranteedTypeForValue(&arg, nullptr);
+        checked = !qore_ir_conversion_accepts_type(opcode, arg_type)
+            && !qore_ir_conversion_accepts_type(opcode, getExprTypeInfo(arg));
+    }
     // Lower the single argument
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(parse_args, args, operands, error)) {
         return QoreIRValue();
+    }
+    if (checked) {
+        // the checked conversion converts a value that the builtin accepts as the unchecked one does and raises the
+        // error of the builtin call for any other: as fast as the unchecked conversion for the values it accepts
+        QoreIROpcode checked_opcode = opcode == QoreIROpcode::ToString ? QoreIROpcode::ToStringChecked
+            : (opcode == QoreIROpcode::ToInt ? QoreIROpcode::ToIntChecked : QoreIROpcode::ToFloatChecked);
+        QoreIRInstruction* inst = builder.createExprOp(checked_opcode, expr, operands, call->loc);
+        if (!exception_stack.empty()) {
+            inst->exception_target = exception_stack.back();
+        }
+        never_nothing_values.insert(inst->result.id);
+        return inst->result;
     }
     // These conversions never throw; always emit as plain ExprOps, not Invoke.
     // The argument's call (if any) is already lowered as Invoke by lowerCallArgs.
@@ -14505,6 +14576,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return hoisted;
     }
     const char* func_name = call->getName();
+    // the rewrites below that are keyed on the name of a builtin apply only to a call of the Qore builtin, never to a
+    // user or module function with the same name
+    bool qore_builtin_call = qore_rt_is_qore_builtin_function(call->getFunctionEntry());
     if (func_name && !strcmp(func_name, "join") && !call->hasExplicitTypeArgs()) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         const FunctionEntry* fe = call->getFunctionEntry();
@@ -14623,8 +14697,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
+    // only a call of the Qore builtin, never a user or module function with the same name
     if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
-            && !call->hasExplicitTypeArgs()) {
+            && !call->hasExplicitTypeArgs() && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
@@ -14655,7 +14730,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
@@ -14731,7 +14806,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     const char* string_find_method_name = nullptr;
-    if (func_name && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !call->hasExplicitTypeArgs()) {
         if (!strcmp(func_name, "index")) {
             string_find_method_name = "find";
         } else if (!strcmp(func_name, "rindex")) {
@@ -14814,7 +14889,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
@@ -15202,7 +15277,9 @@ static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const Q
     // Check for min/max function calls: min($1, $2) or max($1, $2)
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         const char* func_name = call->getName();
-        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)) {
+        // only the Qore builtins, never a user or module function with the same name
+        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)
+                && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
             bool is_min = strcmp(func_name, "min") == 0;
             const QoreListNode* args = call->getArgs();
             if (args && args->size() == 2) {

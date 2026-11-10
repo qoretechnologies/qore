@@ -149,6 +149,18 @@ public:
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
     DLLLOCAL qore_var_t getType() const { return type; }
+
+    //! Returns true if the variable is a local variable that is definitely assigned at this point of the parse
+    /** The parse state of a local variable is flow-sensitive (see AssignedStateHelper): it is assigned on every path
+        to this read and not cleared by \c remove or \c delete since; a variable of a closure or the target of a
+        reference is not included, as the closure or the code given the reference can clear it where the parse does
+        not see it, and neither is a variable of a reference type (such as a \c reference<int> parameter), which is
+        assigned with the reference, while a read gives the referenced value, which can have no value
+    */
+    DLLLOCAL bool parseIsDefinitelyAssignedLocal() const {
+        return type == VT_LOCAL && ref.id && !ref.id->closureUse() && ref.id->isAssigned()
+            && !QoreTypeInfo::getReferenceTarget(ref.id->getTypeInfo());
+    }
     DLLLOCAL const char* getName() const { return name.ostr; }
     // called when a list of variables is declared
     DLLLOCAL void makeLocal() {

@@ -58,6 +58,7 @@ using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
+class MethodVariantBase;
 class LocalVar;
 class VarRefNode;
 class BCAList;
@@ -71,6 +72,25 @@ class UserSignature;
 
 typedef std::vector<QoreParseTypeInfo*> ptype_vec_t;
 typedef std::vector<LocalVar*> lvar_vec_t;
+//! for each argument of a call, true if its expression always has a value of its type (see
+//! parse_arg_always_has_value())
+typedef std::vector<bool> arg_value_vec_t;
+
+//! Returns true if the parse-initialized argument expression always has a value of its type at run time
+/** Such an argument cannot have no value at run time when its type excludes it: a value, a list or hash expression, a
+    constant, a call (whose return type is enforced), a new object, a closure or call reference, a local variable that
+    is definitely assigned at the call (see VarRefNode::parseIsDefinitelyAssignedLocal()), and a conditional
+    expression whose branches are such expressions.  A member, a global variable, a dereference and the other
+    operators can have no value, as an unassigned member or a removed hash key has none.
+
+    Two cases are not strict: a local variable assigned before a loop and removed later in its body is taken as
+    assigned at a read earlier in the body, as the parse analyzes the body once, and a method call can call an
+    overriding method whose return type accepts no value (a \c *int method overriding an \c int one).  At run time,
+    a committed variant that its argument does not match because it has no value is resolved again
+    (CodeEvaluationHelper::init()), so the call has the result of the AST interpreter's run-time resolution in these
+    cases too.
+*/
+DLLLOCAL bool parse_arg_always_has_value(QoreValue arg);
 
 class AbstractFunctionSignature {
 public:
@@ -227,6 +247,9 @@ protected:
 struct QoreNamedArgBinding {
     std::vector<size_t> source_to_param;
     size_t result_size = 0;
+    //! the variant whose parameter names the arguments are bound to; set if the binding is valid, also when the
+    //! variant of the call is resolved at run time (see QoreFunction::parseFindVariantNamed())
+    const AbstractQoreFunctionVariant* variant = nullptr;
 };
 
 class UserSignatureTypeParamContextHelper {
@@ -515,8 +538,17 @@ public:
         ct = n_ct;
     }
 
+    //! The arguments that prepareDefaultArgs() converted for a variant, by index, as the caller gave them
+    typedef std::vector<std::pair<unsigned, QoreValue>> arg_restore_vec_t;
+
+    //! Evaluates the default arguments (ARG_DEF) and checks and converts the others (ARG_OTHER) for the variant
+    /** @param saved if not null, receives a reference to the original value of each argument before it is converted
+        (see init(): a variant resolved again gets the arguments as the caller gave them); the list is created with
+        the first argument converted, so that a call whose arguments need no conversion allocates nothing
+    */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
+        std::unique_ptr<arg_restore_vec_t>* saved = nullptr);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
@@ -760,6 +792,13 @@ public:
     DLLLOCAL void parseResolveUserSignature();
 
     DLLLOCAL virtual UserVariantBase* getUserVariantBase() {
+        return nullptr;
+    }
+
+    //! Returns the method variant (MethodVariantBase) of a method, nullptr for any other variant
+    /** A virtual call instead of a dynamic_cast, for the fast call paths
+    */
+    DLLLOCAL virtual const MethodVariantBase* getMethodVariantBase() const {
         return nullptr;
     }
 
@@ -1165,6 +1204,11 @@ public:
             const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
         return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
     }
+    //! Returns the function that owns the variant, if known
+    DLLLOCAL const QoreFunction* getSourceFunction() const {
+        return source_qf;
+    }
+
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }
@@ -1755,6 +1799,13 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
+    //! variants); inline for the fast call paths, as functions and most methods have only themselves in the
+    //! inheritance list
+    DLLLOCAL bool hasSingleCallVariant() const {
+        return vlist.size() == 1 && (ilist.size() <= 1 || !hasInheritedVariants());
+    }
+
     DLLLOCAL QoreListNode* runtimeGetCallVariants() const;
 
     // returns 0 for OK, -1 for error
@@ -1895,11 +1946,25 @@ public:
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
+    //! Returns true if a variant other than the given one could be resolved at run time for the argument types
+    /** An argument can have no value at run time whatever its type (a member or variable of the type that is not
+        assigned), so a variant whose every parameter accepts the type of its argument or no value is a possible match
+        at run time; then the given variant is not committed at parse time (see parseFindVariant())
+
+        @param args_with_value if given, true for each argument whose expression always has a value of its type (see
+        parse_arg_always_has_value()); such an argument cannot select another variant by having no value
+    */
+    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
+            const qore_class_private* class_ctx, QoreParseOptions po,
+            const arg_value_vec_t* args_with_value = nullptr,
+            const std::vector<bool>* named_positions = nullptr) const;
+
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const type_vec_t* explicit_type_args = nullptr) const;
+            const type_vec_t* explicit_type_args = nullptr,
+            const arg_value_vec_t* args_with_value = nullptr) const;
 
     //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
@@ -1912,7 +1977,27 @@ public:
             const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const type_vec_t* explicit_type_args = nullptr) const;
+            const type_vec_t* explicit_type_args = nullptr,
+            const arg_value_vec_t* args_with_value = nullptr) const;
+
+    //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
+    //! names of the binding at the positions of the arguments, or nullptr if there is none
+    /** The arguments of a named call are passed at the positions of the binding's variant at run time; resolving the
+        variant at run time (for a call without a committed variant, or again for a committed variant that an
+        argument without a value or a deleted object does not match) selects among all variants by position, which
+        is resolution by name only if each variant it can select has the same parameter names at those positions.
+
+        @param bind_variant the variant of the binding
+        @param param_types the argument types by parameter position of the binding (no type for a position not given)
+        @param supplied true for each parameter position that an argument is given for
+        @param param_with_value true for each parameter position whose argument always has a value of its type
+        @param committed true if the variant is committed at parse time, so it is resolved again only for an argument
+        that has no value or is a deleted object
+    */
+    DLLLOCAL const AbstractQoreFunctionVariant* parseNamedBindingConflict(
+            const AbstractQoreFunctionVariant* bind_variant, const type_vec_t& param_types,
+            const std::vector<bool>& supplied, const arg_value_vec_t& param_with_value, bool committed,
+            const qore_class_private* class_ctx, QoreParseOptions po) const;
 
     //! Infers a concrete receiver type for a raw generic class constructor or static method call
     /** @param loc source location for diagnostics
@@ -2171,6 +2256,22 @@ private:
 
 class MethodVariantBase;
 class MethodFunctionBase;
+
+//! Gives the parameter type error of a fast call path the outcome of the AST interpreter (issue #5686)
+/** A call whose variant was resolved at parse time binds its arguments in the native and IR fast call paths, which
+    raise the parameter type error when an argument does not match.  The AST interpreter checks the arguments before it
+    evaluates anything and, when they do not match, resolves the variant again with the arguments (see
+    CodeEvaluationHelper::init()): when no variant matches them, the call raises RUNTIME-OVERLOAD-ERROR instead.  This
+    function makes the same decision: called with the type error in \a xsink, it replaces it with the overload error
+    when no variant of \a func matches \a args, and leaves it otherwise.
+
+    @param func the function or method called; nothing is done if it is nullptr
+    @param receiver_type_info the type of the receiver of a method of a generic class, if any
+    @param args the arguments of the call, as passed (before parameter type conversions)
+    @param xsink holds the parameter type error of the fast call path
+*/
+DLLLOCAL void qore_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
+        const QoreListNode* args, ExceptionSink* xsink);
 #define METHFB(f) (reinterpret_cast<MethodFunctionBase*>(f))
 #define METHFB_const(f) (reinterpret_cast<const MethodFunctionBase*>(f))
 

@@ -6399,6 +6399,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::CmpFloat:
                 case QoreIROpcode::ToInt:
                 case QoreIROpcode::ToFloat:
+                case QoreIROpcode::ToIntChecked:
+                case QoreIROpcode::ToFloatChecked:
                 case QoreIROpcode::ToBool:
                 case QoreIROpcode::Not:
                 case QoreIROpcode::IsNullOrNothing:
@@ -6420,6 +6422,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     break;
                 case QoreIROpcode::ConstString:
                 case QoreIROpcode::ToString:
+                case QoreIROpcode::ToStringChecked:
                 case QoreIROpcode::AddAny:
                 case QoreIROpcode::AddString:
                 case QoreIROpcode::StringConcat:
