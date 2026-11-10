@@ -410,6 +410,8 @@ code sub get_closure() {
         addTestCase("the memory limit stops growing data", \testMemoryGrowth());
         addTestCase("a large allocation is refused in advance", \testMemoryPreCheck());
         addTestCase("data passed out stays charged until it is freed", \testMemoryPassedOut());
+        addTestCase("data that the host appends to in a loop and removes later stays charged",
+            \testMemoryHostLoopAppend());
         addTestCase("code that frees memory recovers from the memory limit", \testMemoryRecover());
         addTestCase("the memory limit with threads and nested sandboxes", \testMemoryNested());
         addTestCase("the memory account outlives its manager", \testMemoryOutlivesManager());
@@ -581,6 +583,22 @@ code sub get_closure() {
         string host_data = strmul("z", 200000);
         assertEq(200000, p.callFunction("call", int sub () { return host_data.size(); }));
         assertEq(0, sm.getMemoryUsage(), "host data is not charged");
+    }
+
+    testMemoryHostLoopAppend() {
+        # the host appends to the sandbox's string in a loop and removes the string after the loop: compiled code
+        # appends in place, as the AST interpreter does, so the growth is charged to the sandbox; the remove after
+        # the loop does not keep the appends in the loop from being made in place (qore#5665)
+        SandboxManager sm = memoryLimited(16 * 1024 * 1024);
+        Program p = sandboxed(sm);
+        string str = p.callFunction("make_string", 100000);
+        for (int i = 0; i < 4; ++i) {
+            str += strmul("y", 100000);
+        }
+        assertEq(500000, str.size());
+        assertGe(500000, sm.getMemoryUsage(), "growth of the data by the host in a loop is charged to the sandbox");
+        remove str;
+        assertEq(0, sm.getMemoryUsage(), "freeing the data on the host releases it");
     }
 
     testMemoryRecover() {
