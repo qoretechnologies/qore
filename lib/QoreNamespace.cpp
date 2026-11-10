@@ -121,7 +121,7 @@ class ParseCommitRuntimeInitFlagHelper {
 public:
     ParseCommitRuntimeInitFlagHelper(QoreProgram* pgm)
             : p(pgm ? qore_program_private::get(*pgm) : nullptr),
-            old(p ? p->parse_commit_runtime_init : false) {
+            old(p ? p->parse_commit_runtime_init.load() : false) {
         if (p) {
             p->parse_commit_runtime_init = true;
         }
@@ -4345,7 +4345,103 @@ bool qore_ns_private::hasUserExports() const {
     return false;
 }
 
-void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
+//! Returns the name of the module whose namespace is merged, for the declarations that do not record it
+/** A module compiled with qcc does not record its name in its variables; nullptr if unknown
+*/
+static const char* get_merged_module_name(const qore_ns_private& mns) {
+    const char* rv = get_module_context_name();
+    if (rv) {
+        return rv;
+    }
+    const std::vector<std::string>& mods = mns.getModuleNames();
+    return mods.size() == 1 ? mods[0].c_str() : nullptr;
+}
+
+//! Returns the name of the module that declares a public variable of a module namespace, or nullptr if unknown
+static const char* get_module_var_module_name(const Var& v, const qore_ns_private& mns) {
+    const char* rv = v.getModuleName();
+    return rv ? rv : get_merged_module_name(mns);
+}
+
+//! Records the static variables of the classes of a trusted module's Program as the module's (qore#5664)
+/** A class that a module exports is the same class in every Program that imports it, with the same static
+    variables, which restricted code may then read but not change; see QoreVarInfo::checkTrustedModuleWrite()
+*/
+static void mark_trusted_module_statics(const qore_root_ns_private& mod_root) {
+    assert(mod_root.pgm);
+    qore_program_id_t pgm_id = mod_root.pgm->getProgramId();
+    QorePrivateNamespaceIterator qpni(const_cast<qore_root_ns_private*>(&mod_root));
+    while (qpni.next()) {
+        const qore_ns_private* ns = qpni.get();
+        ConstClassListIterator cli(ns->classList);
+        while (cli.next()) {
+            qore_class_private* qc = qore_class_private::get(*const_cast<QoreClass*>(cli.get()));
+            // only the classes that the module declares in Qore: not the system classes, which every Program has,
+            // nor the classes of other modules that the module imported (their own module records them), nor the
+            // classes of binary modules, which hold their static state in C++ and decide themselves who may change
+            // it (an accessor-backed static calls the module's code for every read and write)
+            if (qc->vars.empty() || qc->sys || qc->spgm.load(std::memory_order_acquire) != mod_root.pgm) {
+                continue;
+            }
+            const char* module_name = qc->getModuleName();
+            if (!module_name) {
+                module_name = get_merged_module_name(*ns);
+            }
+            // the class path without the root namespace's "::" prefix
+            std::string class_path = qc->path.compare(0, 2, "::") ? qc->path : qc->path.substr(2);
+            for (auto& v : qc->vars.member_list) {
+                if (v.second) {
+                    v.second->setTrustedModule(pgm_id, module_name, class_path, v.first);
+                }
+            }
+        }
+    }
+}
+
+void qore_root_ns_private::copyMergeCommittedModuleNamespace(const qore_root_ns_private& mns) {
+    // the public variables of a trusted module are shared by all its importers, which may not change them when they
+    // are restricted (qore#5664); a module whose Program has a sandbox manager is a tenant's own module
+    QoreProgram* module_var_importer = pgm && mns.pgm && qore_program_private::isTrustedModuleProgram(*mns.pgm)
+        ? pgm : nullptr;
+    if (module_var_importer) {
+        // and so are the static variables of its classes
+        mark_trusted_module_statics(mns);
+    }
+    qore_ns_private::copyMergeCommittedNamespace(mns, module_var_importer);
+}
+
+void qore_ns_private::markCopiedModuleVarImports(QoreProgram* importer, bool src_trusted_module) {
+    for (auto& i : var_list.vmap) {
+        Var* v = i.second;
+        if (!v->isRef() || v->isTrustedModuleVarImport()) {
+            continue;
+        }
+        const Var* target = v->getRefTarget();
+        if (target->isTrustedModuleVarImport()) {
+            // the same module variable that the source Program imported
+            v->setTrustedModuleVarImport(importer, *target, path);
+        } else if (src_trusted_module && !target->isRef() && target->isPublic()) {
+            // a public variable of the trusted module whose Program created the new Program
+            v->setTrustedModuleVarImport(importer, get_module_var_module_name(*target, *this), path);
+        }
+    }
+}
+
+void qore_root_ns_private::markCopiedModuleVarImportsFrom(const qore_root_ns_private& src) {
+    assert(pgm);
+    const QoreProgram* src_pgm = src.pgm;
+    bool src_trusted_module = src_pgm && qore_program_private::isTrustedModuleProgram(*src_pgm);
+    if (src_trusted_module) {
+        // the new Program shares the classes of the trusted module that created it, with their static variables
+        mark_trusted_module_statics(src);
+    }
+    QorePrivateNamespaceIterator qpni(this);
+    while (qpni.next()) {
+        qpni.get()->markCopiedModuleVarImports(pgm, src_trusted_module);
+    }
+}
+
+void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns, QoreProgram* module_var_importer) {
     printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
 
     const size_t old_constant_size = constant.size();
@@ -4368,8 +4464,10 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     // merge in source functions
     func_list.mergeUserPublic(mns.func_list, this);
 
-    // merge in global variables
-    var_list.mergePublic(mns.var_list);
+    // merge in global variables; a trusted module's public variables are read-only in the importer when it is
+    // restricted (qore#5664)
+    var_list.mergePublic(mns.var_list, module_var_importer,
+        module_var_importer ? get_merged_module_name(mns) : nullptr, path);
 
     // merge in source enums
     enumList.mergeUserPublic(mns.enumList, this);
@@ -4523,7 +4621,7 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             nns->priv->addModuleName(m);
         }
 
-        nns->priv->copyMergeCommittedNamespace(*i->second->priv);
+        nns->priv->copyMergeCommittedNamespace(*i->second->priv, module_var_importer);
         //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s::' merged %p '%s::'\n", this,
         //    name.c_str(), nns, nns->getName());
     }

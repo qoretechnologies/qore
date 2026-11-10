@@ -353,6 +353,82 @@ std::string QuicSession::getCipherVersion() const {
 // ===== Timestamp helper =====
 
 #ifdef DEBUG
+//! Protects the state of qore_quic_test_hold_client_settings() and qore_quic_test_wait_settings_waiters()
+static std::mutex quic_test_settings_m;
+// a leaf lock: its holder takes only the settings_wait_lock_ of sessions; a test process can fork (see QoreForkHandlers.h)
+static QoreForkStdMutex quic_test_settings_fork_handler(quic_test_settings_m, QFLR_LEAF, "quic_test_settings");
+//! Signaled when quic_test_settings_waiters changes
+static std::condition_variable quic_test_settings_cond;
+//! True while the server's SETTINGS are held back from client sessions
+static bool quic_test_hold_settings = false;
+//! The client sessions whose SETTINGS are held; a session removes itself in its destructor
+static std::map<QuicSession*, std::weak_ptr<QuicSession>> quic_test_held_sessions;
+//! The number of threads waiting in QuicSession::waitForRemoteSettings()
+static int64_t quic_test_settings_waiters = 0;
+
+//! Counts a thread waiting in QuicSession::waitForRemoteSettings() while it exists
+class QuicTestSettingsWaiter {
+public:
+    DLLLOCAL QuicTestSettingsWaiter() {
+        {
+            std::lock_guard<std::mutex> g(quic_test_settings_m);
+            ++quic_test_settings_waiters;
+        }
+        quic_test_settings_cond.notify_all();
+    }
+
+    DLLLOCAL ~QuicTestSettingsWaiter() {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        --quic_test_settings_waiters;
+    }
+};
+
+void qore_quic_test_hold_client_settings(bool hold) {
+    std::lock_guard<std::mutex> g(quic_test_settings_m);
+    quic_test_hold_settings = hold;
+    if (hold) {
+        return;
+    }
+    // record the held SETTINGS as they were received; applyRemoteSettings() takes only settings_wait_lock_
+    for (auto& i : quic_test_held_sessions) {
+        QuicSession* session = i.first;
+        session->test_settings_held_ = false;
+        session->applyRemoteSettings(session->test_held_enable_connect_);
+    }
+    quic_test_held_sessions.clear();
+}
+
+int64_t qore_quic_test_idle_close_held_client_sessions() {
+    // the sessions are kept alive by the references taken here; mtx_ is not taken with quic_test_settings_m held, as
+    // the SETTINGS callback takes them in the other order
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        for (auto& i : quic_test_held_sessions) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            if (session) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    for (auto& session : sessions) {
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        session->closeIdleLocked();
+    }
+    return static_cast<int64_t>(sessions.size());
+}
+
+int64_t qore_quic_test_held_client_settings() {
+    std::lock_guard<std::mutex> g(quic_test_settings_m);
+    return static_cast<int64_t>(quic_test_held_sessions.size());
+}
+
+bool qore_quic_test_wait_settings_waiters(int64_t count, int64_t timeout_ms) {
+    std::unique_lock<std::mutex> ul(quic_test_settings_m);
+    return quic_test_settings_cond.wait_for(ul, std::chrono::milliseconds(timeout_ms),
+        [count] () { return quic_test_settings_waiters >= count; });
+}
+
 //! The total advance of the QUIC test clock in nanoseconds; see qore_quic_test_advance_clock()
 static std::atomic<int64_t> quic_test_clock_offset_ns{0};
 
@@ -907,6 +983,12 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 }
 
 QuicSession::~QuicSession() {
+#ifdef DEBUG
+    {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        quic_test_held_sessions.erase(this);
+    }
+#endif
     {
         ExceptionSink xsink;
         std::unordered_map<QoreObject*, size_t> waiters;
@@ -1147,9 +1229,145 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
                             ssl_verify_mode, ssl_accept_all_certs, retry_odcid) != 0) {
         return nullptr;
     }
+    // whether the session advertises extended CONNECT (RFC 9220); setupHttp3() runs after the session is created
+    session->enable_connect_protocol_ = sock->h3_enable_connect_protocol.load(std::memory_order_acquire);
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
     return session;
+}
+
+int QuicSession::checkExtendedConnectAllowed(ExceptionSink* xsink) const {
+    if (!remote_settings_received_.load(std::memory_order_acquire)) {
+        // the HTTP clients wait for the SETTINGS before they submit an extended CONNECT (see
+        // Http3ClientPollOperationPriv::waitForExtendedConnectSettings()); a request gets here when it was made on the
+        // I/O thread, which cannot wait, or directly on a QUIC socket (see Socket::waitForQuicSettings())
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC 9220): "
+            "the server's HTTP/3 SETTINGS have not been received yet, so it is not known whether the server supports "
+            "it");
+        return -1;
+    }
+    // a definitive answer of the server, with an error code of its own, which callers do not retry on a fresh
+    // connection (issue #5678)
+    if (!remote_enable_connect_protocol_.load(std::memory_order_acquire)) {
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-UNSUPPORTED", "server does not support extended CONNECT "
+            "protocol (RFC 9220); SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
+        return -1;
+    }
+    return 0;
+}
+
+void QuicSession::onRemoteSettings(bool enable_connect_protocol) {
+#ifdef DEBUG
+    if (!is_server_) {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        if (quic_test_hold_settings) {
+            test_settings_held_ = true;
+            test_held_enable_connect_ = enable_connect_protocol;
+            quic_test_held_sessions[this] = weak_from_this();
+            return;
+        }
+    }
+#endif
+    applyRemoteSettings(enable_connect_protocol);
+}
+
+void QuicSession::applyRemoteSettings(bool enable_connect_protocol) {
+    // the setting before the flag: a thread that sees the SETTINGS received sees what they advertised
+    if (enable_connect_protocol) {
+        remote_enable_connect_protocol_.store(true, std::memory_order_release);
+    }
+    remote_settings_received_.store(true, std::memory_order_release);
+    wakeSettingsWaiters();
+}
+
+void QuicSession::wakeSettingsWaiters() {
+    AutoLocker al(settings_wait_lock_);
+    ++settings_wait_gen_;
+    settings_wait_cond_.broadcast();
+}
+
+const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const {
+    switch (getCloseReason()) {
+        case CloseReason::Idle:
+            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
+                "server's HTTP/3 SETTINGS were received; the request was not sent");
+            return "HTTP3-IDLE-CLOSE";
+        case CloseReason::PeerClose:
+            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-PEER-CLOSE";
+        default:
+            // closed locally, or the session was released from its waiters (its client operation was closed, or the
+            // socket dropped it)
+            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the server's HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-LOCAL-CLOSE";
+    }
+}
+
+void QuicSession::releaseSettingsWaiters() {
+    settings_wait_released_.store(true, std::memory_order_release);
+    wakeSettingsWaiters();
+}
+
+QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms, ExceptionSink* xsink) {
+    const bool has_deadline = timeout_ms >= 0;
+    // on the monotonic clock, so a wall-clock step does not change it, and not restarted by a wakeup
+    const int64 deadline_us = has_deadline ? q_clock_getmicros_monotonic() + timeout_ms * 1000 : 0;
+#ifdef DEBUG
+    std::unique_ptr<QuicTestSettingsWaiter> test_waiter;
+#endif
+    while (true) {
+        // the generation is read before the state is checked, so a change after the check ends the wait below
+        uint64_t gen;
+        {
+            AutoLocker al(settings_wait_lock_);
+            gen = settings_wait_gen_;
+        }
+        if (remote_settings_received_.load(std::memory_order_acquire)) {
+            return SettingsWait::Received;
+        }
+        // isClosed() takes mtx_, so not with settings_wait_lock_ held: wakeSettingsWaiters() is called with mtx_ held
+        if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
+            return SettingsWait::Closed;
+        }
+#ifdef DEBUG
+        if (!test_waiter) {
+            test_waiter.reset(new QuicTestSettingsWaiter);
+        }
+#endif
+        bool deadline_reached = false;
+        {
+            AutoLocker al(settings_wait_lock_);
+            while (settings_wait_gen_ == gen) {
+                int64 wait_ms = -1;
+                if (has_deadline) {
+                    int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+                    if (remaining_us <= 0) {
+                        deadline_reached = true;
+                        break;
+                    }
+                    // round up, so the wait never ends before the deadline
+                    wait_ms = (remaining_us + 999) / 1000;
+                }
+                // a cancelled thread or an interrupted Program ends the wait (THREAD-CANCELLED, PROGRAM-INTERRUPTED)
+                if (settings_wait_cond_.waitWithInterrupt(settings_wait_lock_, wait_ms, xsink)
+                        == QORE_COND_RESULT_INTERRUPTED) {
+                    return SettingsWait::Interrupted;
+                }
+            }
+        }
+        if (deadline_reached) {
+            // what happened until the deadline wins over the timeout: the SETTINGS, then a close
+            if (remote_settings_received_.load(std::memory_order_acquire)) {
+                return SettingsWait::Received;
+            }
+            if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
+                return SettingsWait::Closed;
+            }
+            return SettingsWait::Timeout;
+        }
+    }
 }
 
 // ===== SSL Context Setup =====
@@ -1873,8 +2091,8 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     // Disable QPACK dynamic table — eliminates the need for deferred_consume
     h3_settings.qpack_max_dtable_capacity = 0;
     h3_settings.qpack_blocked_streams = 0;
-    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3
-    if (is_server_) {
+    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3 unless its socket disabled it
+    if (is_server_ && enable_connect_protocol_) {
         h3_settings.enable_connect_protocol = 1;
     }
     // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
@@ -2033,6 +2251,8 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
+            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed
+            wakeSettingsWaiters();
             return 0;  // connection closing gracefully
         }
         // A server receives these for a client Initial whose CRYPTO data does not start the
@@ -2161,6 +2381,8 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
                                        packets[i].data, packets[i].len, last_rx_ts_);
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
+                // see readPacketLocked()
+                wakeSettingsWaiters();
                 break;  // connection shutting down — no more packets can be processed
             }
             // see readPacketLocked(): drop silently so the client's retransmitted Initial starts
@@ -2688,6 +2910,16 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 int64_t QuicSession::submitRequest(const char* method, const char* path,
                                    const qore_http_header_pairs_t& headers,
                                    const void* body, size_t body_len, ExceptionSink* xsink) {
+    // the pseudo-headers of the request are built here, and others are not sent: an extended CONNECT request
+    // (RFC 9220) without its :protocol would be a malformed CONNECT (RFC 9114 section 4.4)
+    {
+        const std::string* protocol = qore_find_http_header(headers, ":protocol");
+        if (protocol && !protocol->empty()) {
+            xsink->raiseException("HTTP3-REQUEST-ERROR", "an extended CONNECT request (RFC 9220, with a "
+                "\":protocol\" pseudo-header) must be made as a streaming request; the request was not sent");
+            return -1;
+        }
+    }
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 4 pseudo-headers + user headers).
     //
@@ -2935,6 +3167,12 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     if (refuseRequestOnClosedLocked(xsink)) {
         return -1;
     }
+    // RFC 9220: an extended CONNECT request only when the server advertised support for it; after the check of a
+    // closed connection, whose error (HTTP3-PEER-CLOSE, ...) tells the caller that the request can be repeated on a
+    // new connection
+    if (proto_val && !proto_val->empty() && checkExtendedConnectAllowed(xsink)) {
+        return -1;
+    }
 
     // Open a new bidirectional stream
     int64_t stream_id;
@@ -2976,133 +3214,6 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     }
 
     // Signal that there's data to write (headers)
-    pending_write_.store(true, std::memory_order_release);
-
-    return stream_id;
-}
-
-int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
-                                           const char* protocol, ExceptionSink* xsink) {
-    // Build header name-value pairs OUTSIDE the lock
-    // Reserve: 5 pseudo-headers (:method, :path, :scheme, :authority, :protocol) + user headers
-    std::vector<nghttp3_nv> nva;
-    nva.reserve(headers.size() + 5);
-    auto add_nv = [&nva](const char* name, size_t namelen,
-                          const char* value, size_t valuelen) {
-        nva.push_back({
-            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
-            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
-            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
-        });
-    };
-
-    // Defensive path normalization — RFC 9220 Section 3: extended CONNECT
-    // includes :path, which follows the same absolute-path rule as other
-    // request methods (RFC 9114 §4.3.1).  See submitRequest() for rationale.
-    std::string path_norm;
-    if (path && *path && *path != '/') {
-        qore_async_io_log(QORE_LOG_LEVEL_WARN,
-            "QuicSession::submitConnectRequest: caller passed non-absolute "
-            ":path %s for extended CONNECT :protocol %s — auto-prepending "
-            "leading '/' to avoid H3_MALFORMED_HTTP_HEADER rejection; fix "
-            "the caller to pass an absolute path",
-            path, protocol);
-        path_norm.reserve(strlen(path) + 1);
-        path_norm.push_back('/');
-        path_norm.append(path);
-        path = path_norm.c_str();
-    }
-
-    // Pseudo-headers — RFC 9220 Section 3: extended CONNECT includes all 5
-    add_nv(":method", 7, "CONNECT", 7);
-    add_nv(":path", 5, path, strlen(path));
-    add_nv(":scheme", 7, "https", 5);
-
-    // Authority from headers or fallback to stored host:port
-    std::string authority;
-    if (const std::string* auth_val = qore_find_http_header(headers, "host")) {
-        authority = *auth_val;
-    } else if (!host_.empty()) {
-        authority = host_;
-        if (port_ != 0 && port_ != 443) {
-            authority += ":" + std::to_string(port_);
-        }
-    }
-    if (!authority.empty()) {
-        add_nv(":authority", 10, authority.c_str(), authority.size());
-    }
-
-    // RFC 9220: :protocol pseudo-header for extended CONNECT
-    add_nv(":protocol", 9, protocol, strlen(protocol));
-
-    // Regular headers (same filtering as submitRequest)
-    std::vector<std::string> lower_keys;
-    lower_keys.reserve(headers.size());
-    for (const auto& h : headers) {
-        if (h.first.empty() || h.first[0] == ':' || strcasecmp(h.first.c_str(), "host") == 0) {
-            continue;
-        }
-        std::string lower_key = h.first;
-        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        if (h3_forbidden_headers.count(lower_key)) {
-            continue;
-        }
-        lower_keys.push_back(std::move(lower_key));
-        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
-                h.second.c_str(), h.second.size());
-    }
-
-    // Deferred data reader — CONNECT tunnel keeps the stream open indefinitely
-    nghttp3_data_reader dr;
-    dr.read_data = h3ReadDataCallback;
-
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
-
-    if (!h3_conn_) {
-        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
-        return -1;
-    }
-    if (refuseRequestOnClosedLocked(xsink)) {
-        return -1;
-    }
-
-    // Open a new bidirectional stream
-    int64_t stream_id;
-    int rv = ngtcp2_conn_open_bidi_stream(conn_, &stream_id, nullptr);
-    if (rv != 0) {
-        xsink->raiseException("QUIC-ERROR", "failed to open bidi stream: %s",
-                              ngtcp2_strerror(rv));
-        return -1;
-    }
-    noteBidiStreamOpenLocked(stream_id);
-
-    // Set up deferred streaming body data — h3ReadDataCallback returns
-    // NGHTTP3_ERR_WOULDBLOCK until data is pushed via sendStreamData()
-    streaming_body_data_[stream_id] = QuicStreamingBodyData{};
-    streaming_body_data_[stream_id].deferred = true;
-
-    rv = nghttp3_conn_submit_request(h3_conn_, stream_id, nva.data(), nva.size(),
-                                     &dr, nullptr);
-    if (rv != 0) {
-        xsink->raiseException("QUIC-HTTP3-ERROR",
-            "nghttp3_conn_submit_request failed for CONNECT: %s",
-            nghttp3_strerror(rv));
-        streaming_body_data_.erase(stream_id);
-        ngtcp2_conn_shutdown_stream_write(conn_, 0, stream_id, NGHTTP3_H3_INTERNAL_ERROR);
-        return -1;
-    }
-
-    // Create stream info — mark as CONNECT so h3EndHeadersCallback and
-    // h3RecvDataCallback handle the bidirectional tunnel correctly
-    auto* stream = getOrCreateStream(stream_id);
-    stream->method = "CONNECT";
-    stream->path = path;
-    stream->connect_protocol = protocol;
-    stream->is_connect = true;
-    stream->connect_tunnel_active = true;
-    stream->state = QuicStreamState::Open;
-
     pending_write_.store(true, std::memory_order_release);
 
     return stream_id;
@@ -4347,6 +4458,9 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
 
 void QuicSession::markClosed() {
     closed_.store(true, std::memory_order_release);
+
+    // Wake the threads waiting for the peer's SETTINGS
+    wakeSettingsWaiters();
 
     // Wake controller-backed stream data waiters.
     notifyStreamData();
@@ -6201,10 +6315,7 @@ int QuicSession::h3RecvSettings2Callback(nghttp3_conn* /* conn */,
                                           const nghttp3_proto_settings* settings,
                                           void* conn_user_data) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    session->remote_settings_received_.store(true, std::memory_order_release);
-    if (settings->enable_connect_protocol) {
-        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
-    }
+    session->onRemoteSettings(settings->enable_connect_protocol);
     return 0;
 }
 #else
@@ -6212,10 +6323,7 @@ int QuicSession::h3RecvSettingsCallback(nghttp3_conn* /* conn */,
                                          const nghttp3_settings* settings,
                                          void* conn_user_data) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    session->remote_settings_received_.store(true, std::memory_order_release);
-    if (settings->enable_connect_protocol) {
-        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
-    }
+    session->onRemoteSettings(settings->enable_connect_protocol);
     return 0;
 }
 #endif

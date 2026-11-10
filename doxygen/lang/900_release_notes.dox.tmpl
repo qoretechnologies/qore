@@ -86,11 +86,24 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Restricted Code Cannot Change a Module's State
+    The code of a sandboxed %Program, or of a %Program with \c PO_NO_PROCESS_CONTROL set, can read but no longer
+    change the public variables of a trusted module or the static members of its classes, which every importer
+    shares: a change raises \c MODULE-VARIABLE-READ-ONLY, and such code must call a function or method that the
+    module exports to set the value; see @ref module_public_variables.
+
     @par Modules May Not Declare Public thread_local Variables
     A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
     compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module
     compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
     %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
+
+    @par Destructors Cannot Assign Thread-Local Variables While a Worker Thread Releases Its Values
+    A worker thread of a @ref Qore::Thread::ThreadPool "ThreadPool" or of the
+    @ref Qore::AsyncIoController "AsyncIoController" releases the values of its @ref thread_local variables between
+    its tasks; as at the end of a thread, the destructors that the release runs now cannot assign
+    <tt><b>thread_local</b></tt> variables (\c DESTRUCTOR-ERROR): a destructor giving a variable a value whose
+    destructor gave it a value again kept the worker releasing values for ever (see @ref thread_local_lifetime)
 
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
@@ -103,10 +116,10 @@
     caller's %Program, where only the module's exported names exist; see @ref user_module_runtime_context.
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of
-    member accesses and method calls, lives until the end of its statement instead of until the call that used it
-    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  See
-    @ref temporary_lifetime.
+    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
+    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
+    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
+    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1501,10 +1514,38 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the value of a @ref thread_local "thread_local" variable could be read by the code of a
+      @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
+      another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
+      threads other than the deleting one were kept until the threads ended, and their destructors could raise
+      \c PROGRAM-ERROR; the values of every thread are now released with the variable, and a thread that ends or
+      clears its values while the Program is deleted in another thread releases them while the Program can still run
+      their destructors (see @ref thread_local_lifetime)
+    - a thread that ended made every @ref thread_local "thread_local" variable that a destructor read while it ended
+      read-only in every thread ("illegal variable assignment after second phase of variable destruction")
+    - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
+      function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
+      @ref references_overview)
+    - a thread running the code of a @ref Qore::Program "Program" whose deletion waited for it could not call into the
+      Program again through the code of another Program (\c PROGRAM-ERROR); see @ref threads_and_program_deletion
+    - in the IR, JIT and tiered execution modes, leaving the scope of a variable holding a reference to a lvalue that
+      was gone, such as a member of a deleted object, raised an exception that the AST interpreter does not raise
     - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
       @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
       without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
       its whole timeout again; it now waits only for the rest of it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a list of selectors with ranges
+      (ex: <tt>l[f(), 1..g()]</tt>) iterated by \c foreach or by the @ref map "map", @ref select "select", @ref foldl
+      "foldl" or a streaming operator was evaluated as a whole before the first value was used; each selector is now
+      evaluated when the values of the previous ones have been used, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, @ref remove "remove" and @ref delete "delete"
+      with a list of selectors whose later selector raised an exception removed nothing; they now remove what the
+      earlier selectors selected, as with the AST interpreter
+    - iterating a list of selectors with a range (ex: <tt>foreach x in (l[0, 1..-1])</tt>) with negative offsets gave
+      other elements than the same expression as a value; it now gives the same elements
+    - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
+      selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
+      \c foreach or a functional operator could read a list that the loop had released, which could crash
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
@@ -1645,6 +1686,9 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
+    - in the IR, JIT and tiered execution modes, a closure of an @ref Qore::Expression "Expression" or a
+      @ref Qore::Program "Program" created after another one had been deleted could run the freed closure's code,
+      giving wrong results, exceptions or a crash; a closure now runs its own code (see @ref closure)
     - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
       read after an assignment or an in-place change in the same function could give a value it does not hold, such
       as the unconverted value assigned or its value before the change; the variable's value is now given, as with
@@ -1799,6 +1843,12 @@
       value in the new thread, and modifying a member of the object is a parse error
     - fixed crashes, leaks and unhandled destructor exceptions of @ref background "background" when preparing its
       expression failed, its thread could not be created, or it released the last reference to an object
+    - fixed @ref background "background" expressions that use a local variable in the arguments of a
+      @ref new "new" expression or in the object of an object method reference (such as
+      <tt><b>background</b> f(<b>new</b> C(x))</tt> or <tt><b>background</b> (\\o.m())()</tt>): the thread raised
+      \c LVALUE-ERROR or used no value for the variable instead of the value it had when the thread started; with the
+      IR, JIT, tiered and AOT execution modes this happened with <tt>new hash<K, V>(...)</tt> and
+      <tt>new list<T>(...)</tt>
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",

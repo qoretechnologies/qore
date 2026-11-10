@@ -1598,8 +1598,8 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
-    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own
-    qore_program_set_creator_sandbox(*pgm);
+    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)
@@ -1628,8 +1628,8 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options->get());
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
-    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own
-    qore_program_set_creator_sandbox(*pgm);
+    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)
@@ -2790,9 +2790,24 @@ pgm.setSandboxManager(sm);
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
 
+    @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
+    cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
+    which only adds restrictions (since %Qore 3.0)
+
     @since Qore 3.0
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
+   // sandboxed or restricted code could otherwise loosen the sandbox of a Program that it can reach, its own included,
+   // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
+   // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
+   // longer be the one that its owner's limits, interrupt requests and configuration changes act on
+   if (qore_calling_code_is_untrusted()) {
+       QoreSandboxManagerHelper current(p);
+       if (current && current.get() != *sandbox_manager) {
+           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+               "are restricted, cannot replace the sandbox manager of a Program");
+       }
+   }
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
    p->setSandboxManager(*sandbox_manager);
 }
@@ -2839,6 +2854,9 @@ pgm.setExecMode(EM_JIT);
 
     @note IR, JIT, and tiered modes require @ref PO_MODERN "%modern" parse options.
 
+    @note A child Program created afterwards inherits the mode for as long as its own parse options support it; see
+    @ref exec_mode_child_programs
+
     @see Program::getExecMode()
 
     @since %Qore 3.0
@@ -2857,6 +2875,9 @@ if (mode == EM_JIT) {
     printf("Using JIT compilation\n");
 }
     @endcode
+
+    @note The mode of a child Program that inherited an explicitly requested mode depends on its current parse options;
+    see @ref exec_mode_child_programs
 
     @see Program::setExecMode()
 
@@ -3898,7 +3919,7 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
 
     @since %Qore 0.9
 */
-nothing Program::issueModuleCmd(string module_name, string command) [flags=NAMED_ARGS] {
+nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES; flags=NAMED_ARGS] {
     TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();

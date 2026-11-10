@@ -59,12 +59,15 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param offer_http11 if @ref True, TLS ALPN offers \c http/1.1 after \c h2 (for an automatic protocol
+        selection that falls back to HTTP/1.1)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path)
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            bool offer_http11 = False)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     max_streams, proxy_info) {
 
@@ -74,7 +77,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
             client_cert ? True : False);
 
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path);
+            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path,
+            offer_http11);
     }
 
     #! Returns the protocol identifier

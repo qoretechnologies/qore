@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -127,7 +128,7 @@ QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgram
     // the source Program has released the class (see qore_class_private::deleteClassData()): its namespace is
     // destroyed with it, possibly in another thread, so it is not used; the method runs in the caller's Program, as
     // it does once the namespace has been destroyed
-    if (c->released_spgm.load()) {
+    if (c->released_spgm_id.load()) {
         return nullptr;
     }
     // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
@@ -1558,7 +1559,9 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
-        ValueEvalOptimizedRefHolder val(info.exp, xsink);
+        // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
+        // temporary of the statement that creates the object (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(info.exp, true, xsink);
         if (*xsink) {
             return -1;
         }
@@ -4522,10 +4525,12 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         QoreProgram* source_pgm = source_pgm_holder.get();
         // once the source Program has released the class (see deleteClassData()), its namespace is destroyed with
         // it, possibly in another thread, so it is not used: the method can only be called by that Program itself
-        const QoreProgram* released = source_pgm ? nullptr : released_spgm.load();
+        const qore_program_id_t released = source_pgm ? 0 : released_spgm_id.load();
+        QoreProgram* current_pgm = released ? getProgram() : nullptr;
         // a source Program being deleted (see QoreSourceProgramHolder::sourceDeleted()) cannot run the method either
         if (source_pgm_holder.sourceDeleted()
-                || (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted))) {
+                || (released ? (!current_pgm || released != current_pgm->getProgramId())
+                    : (!source_pgm && !ns && ns_deleted))) {
             xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
                 "that owns class '%s' has already been deleted and therefore cannot be accessed at "
                 "runtime", name.c_str(), nme, name.c_str());
@@ -7610,7 +7615,8 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
-        ValueEvalOptimizedRefHolder val(exp, &init_xsink);
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {
             assignInitFiltered(name, val.takeReferencedValue(), &init_xsink);
         }

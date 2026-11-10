@@ -172,6 +172,23 @@ public:
     */
     DLLEXPORT int setValue(const QoreValue val, ExceptionSink* xsink) const;
 
+    //! sets the value of the member for the code of a given Program
+    /** The write is refused with \c MODULE-VARIABLE-READ-ONLY when the member belongs to a class of a trusted module
+        and \a writer is another Program that may not change a module's state: one that is sandboxed or has
+        \c PO_NO_PROCESS_CONTROL set (see @ref module_public_variables).  Code that writes for another Program, such
+        as the reflection API, which runs in the Program that defines the class, passes the Program of the code that
+        asks for the write.
+
+        @param val the value to set
+        @param writer the Program of the code that asks for the write
+        @param xsink Qore-language exception info is stored here
+
+        @return 0 = no error, -1 Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setValue(const QoreValue val, const QoreProgram* writer, ExceptionSink* xsink) const;
+
 private:
     //! not implemented
     DLLLOCAL QoreExternalStaticMember();
@@ -381,6 +398,25 @@ public:
         @return 0 = no error, -1 Qore-language exception raised
     */
     DLLEXPORT int setValue(const QoreValue val, ExceptionSink* xsink) const;
+
+    //! sets the value of the global variable for the code of a given Program
+    /** The write is refused with \c MODULE-VARIABLE-READ-ONLY when the variable is a trusted module's (a variable of
+        the module's Program, or an import of a module's public variable) and \a writer is another Program that may
+        not change a module's state: one that is sandboxed or has \c PO_NO_PROCESS_CONTROL set (see
+        @ref module_public_variables).  Code that writes for another Program, such as the reflection API, which runs
+        in the Program that holds the variable, passes the Program of the code that asks for the write.
+
+        @param val the value to set
+        @param writer the Program of the code that asks for the write
+        @param owner the Program that holds the variable
+        @param xsink Qore-language exception info is stored here
+
+        @return 0 = no error, -1 Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setValue(const QoreValue val, const QoreProgram* writer, const QoreProgram* owner,
+            ExceptionSink* xsink) const;
 
 private:
     //! not implemented

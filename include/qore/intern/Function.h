@@ -980,6 +980,15 @@ public:
     QoreProgram* pgm;
     //! the ID of \a pgm, which identifies it after it has been deleted; see setProgram()
     qore_program_id_t pgm_id;
+    //! the identity of the variant, which is never reused, unlike its address
+    /** The caches of calls that outlive variants are keyed by it: a variant is freed with the code that parsed it,
+        also while its Program lives (the code of an Expression), and the allocator can give its memory, and that of its
+        IR, to a variant parsed after it; see design/program-teardown-lifetime.md, "Caches that outlive their objects"
+    */
+    const uint64_t serial;
+
+    //! returns a new serial for a variant or a closure function; serials start at 1 and are never reused
+    DLLLOCAL static uint64_t getNextSerial();
 
     //! sets the Program of the variant
     DLLLOCAL void setProgram(QoreProgram* p) {
@@ -2299,10 +2308,22 @@ protected:
     const QoreTypeInfo* classTypeInfo;
     bool has_nested_closures = false;  // set during parse if body contains nested closures
     bool const_method_context = false; // true when created inside a const method
+    //! the identity of the closure function and of its one variant, which is never reused, unlike their addresses
+    /** The IR interpreter's cache of closure calls is keyed by it, as the call has the closure function at hand: a
+        closure function is freed with the code that parsed it, also while its Program lives (the code of an
+        Expression), and the allocator can give its memory, and that of its variant and the variant's IR, to a closure
+        function parsed after it; see UserVariantBase::serial
+    */
+    const uint64_t serial;
 
 public:
-    DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0) {
+    DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0), serial(UserVariantBase::getNextSerial()) {
         addPendingVariant(new UserClosureVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags));
+    }
+
+    //! returns the identity of the closure function and of its variant, which is never reused; see \a serial
+    DLLLOCAL uint64_t getSerial() const {
+        return serial;
     }
 
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;

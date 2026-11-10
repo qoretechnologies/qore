@@ -2343,6 +2343,14 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // path above remains lock-free.
     QoreModuleLoadLockHelper aot_init_al;
 
+    // the module is loaded for the caller, also when it is loaded into another Program (Program::loadModule()): the
+    // switch to that Program below must not hide a sandboxed caller from the checks of the load and from the code
+    // that the load runs (issue #5659)
+    QoreCallerSandboxHelper caller_sandbox(pgm, &xsink);
+    if (xsink) {
+        return -1;
+    }
+
     // slow path: grab the exclusive parse lock for actual module loading
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
@@ -2420,6 +2428,11 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     // AOT-specific and can otherwise participate in the same cross-Program
     // initializer deadlock.
     QoreModuleLoadLockHelper aot_init_al;
+    // see runTimeLoadModule()
+    QoreCallerSandboxHelper caller_sandbox(tpgm, &xsink);
+    if (xsink) {
+        return -1;
+    }
     ProgramRuntimeParseContextHelper pah(&xsink, tpgm);
     if (xsink) {
         return -1;
@@ -3551,10 +3564,17 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (!sm) {
         sm = qore_module_init_lift_manager_ref();
     }
+    // a module that sandboxed code chose, loaded into a Program that has no manager (Program::loadModule() on a
+    // Program that it was handed, or trusted code that it called), has the sandbox of that code, as when it loads the
+    // module into its own Program; the tenant chose the path (see checkShadowingLoad()) (issue #5659)
+    const bool sandboxed_caller = qore_caller_is_sandboxed();
+    if (!sm && sandboxed_caller) {
+        sm = qore_caller_sandbox_ref();
+    }
     module_pgm.setSandboxManager(sm);
-    // a module that a sandboxed Program without a manager of its own (one that sandboxed code created) chose is
-    // sandboxed as well; its code is governed by the sandbox of its callers
-    if (qore_program_is_sandboxed(parent_pgm)) {
+    // a module that a sandboxed Program without a manager of its own (one that sandboxed code created), or a
+    // sandboxed caller, chose is sandboxed as well; its code is governed by the sandbox of its callers
+    if (sandboxed_caller || qore_program_is_sandboxed(parent_pgm)) {
         qore_program_mark_sandboxed(module_pgm);
     }
     if (sm) {
@@ -3713,8 +3733,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -4700,8 +4720,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -4822,8 +4842,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
     // inherit execution mode from parent program
     if (p) {
-        qore_program_private* ppriv = qore_program_private::get(*p);
-        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
+        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
+        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -5927,12 +5947,58 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
         ExceptionSink* xsink) {
-    // ensure the program is in context
-    QoreProgramContextHelper pch(pgm);
+    // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
+    // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
+    QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+    if (*xsink) {
+        return -1;
+    }
 
-    // issue #4254: must run module commands unlocked
-    QoreAbstractModule* mi;
-    {
+    // a command issued to another Program runs there, and the module decides what it allows by that Program's
+    // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
+    // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
+    // own Program is not sandboxed and the target has every restriction that its code has
+    if (pgm && pgm != getProgram()) {
+        static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+            & ~QoreParseOptions(QDOM_IN_MODULE);
+        if (qore_program_is_sandboxed(getProgram())) {
+            xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
+                "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
+                mname));
+            return -1;
+        }
+        QoreParseOptions missing = runtime_get_effective_program_parse_options() & restricting
+            & ~pgm->getParseOptions();
+        if (!!missing) {
+            xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
+                "module '%s' to another Program: the target Program lacks restrictions that the calling code has "
+                "(parse options 0x" QLLX ")", mname, missing.getLo()));
+            return -1;
+        }
+    }
+
+    QoreAbstractModule* mi = nullptr;
+    // a module that the Program has already loaded is not loaded again: as in runTimeLoadModule(), its parse lock is
+    // not needed then, so the command does not wait for a parse of the Program in another thread
+    const std::string feature = get_module_feature_name(mname);
+    if (pgm && qore_program_private::get(*pgm)->hasCommittedFeature(feature.c_str())) {
+        OptLocker ol(&mutex);
+        mi = findModuleUnlocked(feature.c_str());
+        // a module that a tenant chose is used only as for any lookup of it (see mayUseTenantModule())
+        if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, pgm)) {
+            mi = nullptr;
+        }
+    }
+    if (!mi) {
+        // the module is loaded as with Program::loadModule() (see runTimeLoadModule()), with the target Program's
+        // parse lock held; the lock is not waited for: a parse of the Program in another thread could be waiting for
+        // this thread (two commits that issue module commands to each other's Program, or a parse that waits for a
+        // lock that this thread's caller holds, such as the Python GIL), so the command is refused then
+        QoreModuleLoadLockHelper aot_init_al;
+        ProgramRuntimeParseContextHelper pah(xsink, pgm, true);
+        if (*xsink) {
+            return -1;
+        }
         OptLocker ol(&mutex);
         mi = loadModuleIntern(*xsink, *xsink, mname, pgm);
         if (!mi && !*xsink) {
@@ -5945,6 +6011,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
         assert(mi);
     }
 
+    // ensure the program is in context
+    QoreProgramContextHelper pch(pgm);
+
+    // issue #4254: module commands run unlocked
     mi->issueModuleCmd(&loc_builtin, cmd, xsink);
     // enrich exception description if present
     if (*xsink) {

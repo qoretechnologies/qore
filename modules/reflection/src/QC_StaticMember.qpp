@@ -91,6 +91,9 @@ m.setValue(val);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw RUNTIME-TYPE-ERROR value type is not compatible with the assigned static member's type
+    @throw MODULE-VARIABLE-READ-ONLY the member belongs to a class of a trusted module, and the calling code's
+    @ref Qore::Program "Program" is sandboxed or has @ref Qore::PO_NO_PROCESS_CONTROL set (see
+    @ref module_public_variables)
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 nothing StaticMember::setValue(auto val) {
@@ -116,5 +119,7 @@ nothing StaticMember::setValue(auto val) {
         return QoreValue();
     }
 
-    reinterpret_cast<const QoreExternalStaticMember*>(m->mem)->setValue(val, xsink);
+    // the module-state rule applies to the calling code's Program, not to the class's Program that the write runs in
+    // (qore#5664)
+    reinterpret_cast<const QoreExternalStaticMember*>(m->mem)->setValue(val, caller.getProgram(), xsink);
 }

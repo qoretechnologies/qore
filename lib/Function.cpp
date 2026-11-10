@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 // for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
@@ -1423,9 +1424,14 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                p = defaultArgList[i].eval(xsink);
-                if (*xsink) {
-                    return -1;
+                {
+                    // the default value is evaluated by the callee, as a statement of its own: a value that it reads
+                    // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
+                    QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    p = dv.takeReferencedValue();
                 }
 
                 // process default argument with accepting type's filter; a typed param is always checked, since a
@@ -5009,11 +5015,18 @@ QoreBuiltinSrcLocHelper::~QoreBuiltinSrcLocHelper() {
     t_builtin_src_loc = static_cast<const QoreProgramLocation*>(saved);
 }
 
+uint64_t UserVariantBase::getNextSerial() {
+    // a 64-bit counter is never exhausted, so a serial is never reused; nothing is ordered by it, so relaxed order
+    static std::atomic<uint64_t> next_serial{1};
+    return next_serial.fetch_add(1, std::memory_order_relaxed);
+}
+
 UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
         RetTypeInfo* rv, bool synced)
         : signature(n_sig_first_line, n_sig_last_line, params, rv,
             b ? b->pwo.parse_options : parse_get_parse_options()), statements(b),
         gate(synced ? new VRMutex : nullptr), pgm(getProgram()), pgm_id(pgm ? pgm->getProgramId() : 0),
+        serial(getNextSerial()),
         recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);

@@ -48,6 +48,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -836,6 +837,10 @@ void QoreNetworkSecurityManager::allowHTTPSOnly() {
     addAllowedPort(443, QSEC_NET_TCP);
 }
 
+bool QoreNetworkSecurityManager::allowsPort(int port, int proto) const {
+    return priv->isPortAllowed(port, proto);
+}
+
 void QoreNetworkSecurityManager::setDefaultPolicy(bool allow) {
     priv->default_allow = allow;
 }
@@ -1045,7 +1050,52 @@ QoreSandboxManager::QoreSandboxManager()
     mem_account(new QoreSandboxMemoryAccount), active_threads(0) {
 }
 
+namespace {
+//! the managers that code that is not trusted created, with the ID of the Program it ran in (issue #5659)
+/** Kept apart from QoreSandboxManager, so that its layout, which is part of the C++ API, does not change
+*/
+std::mutex untrusted_creators_lock;
+std::unordered_map<const QoreSandboxManager*, qore_program_id_t> untrusted_creators;
+
+//! returns the ID of the current Program, or QORE_NO_PROGRAM_ID
+qore_program_id_t qore_sandbox_caller_pgm_id() {
+    QoreProgram* pgm = getProgram();
+    return pgm ? pgm->getProgramId() : QORE_NO_PROGRAM_ID;
+}
+}
+
+void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
+    if (!sm || !qore_calling_code_is_untrusted()) {
+        return;
+    }
+    qore_program_id_t id = qore_sandbox_caller_pgm_id();
+    std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+    untrusted_creators[sm] = id;
+}
+
+int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
+    if (!qore_calling_code_is_untrusted()) {
+        return 0;
+    }
+    qore_program_id_t id = qore_sandbox_caller_pgm_id();
+    {
+        std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+        auto i = untrusted_creators.find(sm);
+        if (i != untrusted_creators.end() && i->second == id) {
+            return 0;
+        }
+    }
+    xsink->raiseException("SANDBOX-ACCESS-ERROR", "%s: sandboxed code, or code whose functional domains are "
+        "restricted, can lift a restriction only of a SandboxManager that its own Program created; not of one that "
+        "governs it or another Program", what);
+    return -1;
+}
+
 QoreSandboxManager::~QoreSandboxManager() {
+    {
+        std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+        untrusted_creators.erase(this);
+    }
     // the account lives on while data charged to it is alive
     mem_account->deref();
 }
@@ -1541,19 +1591,6 @@ bool qore_program_is_sandboxed(const QoreProgram* pgm) {
 
 void qore_program_mark_sandboxed(QoreProgram& pgm) {
     qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
-}
-
-void qore_program_set_creator_sandbox(QoreProgram& pgm) {
-    // a Program created by sandboxed code: by code of a sandboxed Program, or by any code that a sandbox governs
-    // (trusted library code called by sandboxed code, which can be given the source to parse)
-    if (qore_program_is_sandboxed(getProgram())) {
-        qore_program_mark_sandboxed(pgm);
-        return;
-    }
-    ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
-    if (sm) {
-        qore_program_mark_sandboxed(pgm);
-    }
 }
 
 //------------------------------------------------------------------------------

@@ -609,21 +609,38 @@ public:
     TopLevelStatementBlock sb;
 
     // bit field flags
+    // written only by the thread that holds the parse lock, or before the Program can be reached by other threads;
+    // a flag that another thread can write or read concurrently is an atomic below instead, as a write to a bit field
+    // rewrites its neighbors as well
     bool only_first_except : 1,
-        po_locked : 1,
         po_allow_restrict : 1,
-        exec_class : 1,
         base_object : 1,
         requires_exception : 1,
         parsing_done : 1,
-        parsing_in_progress : 1,
-        parse_commit_runtime_init : 1,
-        parse_commit_in_progress : 1,
         ns_const : 1,
         ns_vars : 1,
         expression_mode : 1,
         parsing_stub_declarations : 1
         ;
+
+    //! true while code is parsed in the Program or is pending (parsePending() before parseCommit() or parseRollback())
+    /** Written only by the thread that holds the parse lock (see lockParsing()), and read by other threads without it
+        (incThreadCount() refuses to run code in a Program that is being parsed), so it is not part of the bit field
+        above, whose other members the parsing thread writes as well
+    */
+    std::atomic<bool> parsing_in_progress{false};
+
+    //! true if the parse options cannot be changed; set by QoreProgram::lockOptions() from any thread
+    std::atomic<bool> po_locked{false};
+
+    //! true if the Program has an exec class; set by QoreProgram::setExecClass() from any thread
+    std::atomic<bool> exec_class{false};
+
+    //! true while the commit of a parse runs initialization code; read by other threads (QoreAOT.cpp)
+    std::atomic<bool> parse_commit_runtime_init{false};
+
+    //! true while the commit of a parse initializes constants; read by other threads (findHashDecl(), findEnum())
+    std::atomic<bool> parse_commit_in_progress{false};
 
     //! Set once the program cleanup callbacks have been run for this Program
     /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
@@ -631,15 +648,23 @@ public:
     */
     std::atomic<bool> pgm_cleanup_called{false};
 
-    qore_exec_mode_t exec_mode = QEM_AST;
-    bool user_requested_exec_mode = false;
-    bool inherited_user_requested_exec_mode = false;
+    //! the execution mode of the Program's code; set again by every commit (applyDefaultExecMode()), and read by other
+    //! threads that call the Program's functions (UserVariantBase::recordFastCallExecution())
+    std::atomic<qore_exec_mode_t> exec_mode{QEM_AST};
+    //! true if the execution mode applies as requested (by --exec-mode, setExecMode(), or inherited and supported)
+    /** atomic: written whenever the parse options change, and read by a thread that loads a module (see
+        getInheritableExecMode())
+    */
+    std::atomic<bool> user_requested_exec_mode{false};
+    //! true if the Program inherited an explicitly requested execution mode from its parent (inherited_exec_mode)
+    std::atomic<bool> inherited_user_requested_exec_mode{false};
+    //! the explicitly requested execution mode of the parent; see syncExecModeWithParseOptions()
+    qore_exec_mode_t inherited_exec_mode = QEM_AST;
     // LLVM optimization level applied to this Program's JIT-compiled functions;
     // -1 means "unset", in which case the process-wide default is used
     // (QoreJIT::getJITOptLevel(), QORE_JIT_OPT_LEVEL); see QoreProgram::setJitOptimizationLevel()
     // atomic: read by the background JIT compile thread while the API may set it from another
     std::atomic<int> jit_opt_level{-1};
-    QoreParseOptions inherited_exec_mode_parse_options;
 
     //! the parent whose external data is copied once this Program is fully constructed
     /** nullptr when the Program does not inherit it (PO_NO_INHERIT_PROGRAM_DATA); see copyExternalData()
@@ -963,9 +988,10 @@ public:
 
     //! true if the code of the Program is sandboxed; never cleared once set (see qore_program_is_sandboxed())
     /** Set when a sandbox manager is set on the Program, when the Program is created by code that a sandbox governs
-        or by a sandboxed Program (Program::constructor()), and for a user module that a sandboxed Program loads by a
-        path it chose (inherit_module_sandbox_manager()).  A Program that sandboxed code creates has no manager of its
-        own (the code it runs is governed by its callers), so the manager alone cannot tell that its code is not
+        or by the code of a sandboxed Program, by Qore code or by C++ code acting for it (decided in the constructor
+        for every Program; see qore_caller_is_sandboxed()), and for a user module that a sandboxed Program loads by
+        a path it chose (inherit_module_sandbox_manager()).  A Program that sandboxed code creates has no manager of
+        its own (the code it runs is governed by its callers), so the manager alone cannot tell that its code is not
         trusted; the flag also outlives the manager, which is cleared when the Program is deleted.
     */
     std::atomic<bool> sandboxed{false};
@@ -1047,15 +1073,10 @@ public:
             : plock(&ma_recursive),
             sb(this),
             only_first_except(false),
-            po_locked(false),
             po_allow_restrict(true),
-            exec_class(false),
             base_object(false),
             requires_exception(false),
             parsing_done(false),
-            parsing_in_progress(false),
-            parse_commit_runtime_init(false),
-            parse_commit_in_progress(false),
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
@@ -1148,10 +1169,53 @@ public:
         exec_mode = hasModernParseOptions() ? QEM_TIERED : QEM_AST;
     }
 
+    //! Sets the execution mode after the parse options are set or changed
+    /** An execution mode that the parent requested explicitly (--exec-mode, Program::setExecMode()) is kept for as long
+        as the Program's parse options support it, whatever else changes in them (the Program's own %modern, for
+        example): AST supports all parse options, the other modes need %modern (qore_parse_options_support_ir()).
+        Otherwise the Program has its automatic mode (applyDefaultExecMode()), and gets the inherited mode back when
+        its parse options support it again (issue #5687).
+    */
+    //! Returns the execution mode that a child or module Program of this Program inherits, if any
+    /** The explicitly requested mode: the Program's own (--exec-mode, setExecMode()), or the one it inherited, also
+        while its own parse options do not support it, so that a Program created from a legacy child, for example,
+        inherits it as well (issue #5687)
+
+        @return true if a mode was requested explicitly, with the mode in \a mode
+    */
+    DLLLOCAL bool getInheritableExecMode(qore_exec_mode_t& mode) const {
+        if (user_requested_exec_mode.load(std::memory_order_acquire)
+                && !inherited_user_requested_exec_mode.load(std::memory_order_acquire)) {
+            mode = exec_mode;
+            return true;
+        }
+        if (inherited_user_requested_exec_mode.load(std::memory_order_acquire)) {
+            mode = inherited_exec_mode;
+            return true;
+        }
+        return false;
+    }
+
+    //! Inherits the explicitly requested execution mode of the given parent, if any, and sets the mode
+    /** Used for child Programs (setParent()) and for the Programs of user modules (see ModuleManager.cpp); see
+        syncExecModeWithParseOptions()
+    */
+    DLLLOCAL void inheritExecMode(const qore_program_private_base* parent) {
+        qore_exec_mode_t mode = QEM_AST;
+        bool inherited = parent && parent->getInheritableExecMode(mode);
+        inherited_exec_mode = inherited ? mode : QEM_AST;
+        inherited_user_requested_exec_mode.store(inherited, std::memory_order_release);
+        user_requested_exec_mode.store(false, std::memory_order_release);
+        syncExecModeWithParseOptions();
+    }
+
     DLLLOCAL void syncExecModeWithParseOptions() {
-        if (inherited_user_requested_exec_mode
-            && pwo.parse_options != inherited_exec_mode_parse_options) {
-            inherited_user_requested_exec_mode = false;
+        if (inherited_user_requested_exec_mode) {
+            if (inherited_exec_mode == QEM_AST || hasModernParseOptions()) {
+                exec_mode = inherited_exec_mode;
+                user_requested_exec_mode = true;
+                return;
+            }
             user_requested_exec_mode = false;
         }
 
@@ -1534,6 +1598,56 @@ public:
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
+    //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
+    /** The state of a trusted module is its public variables and the static members of its classes: one value that
+        every importer shares, so a sandboxed Program, and a Program that may not control the process
+        (\c PO_NO_PROCESS_CONTROL), may only read it.  A child Program inherits PO_NO_PROCESS_CONTROL from its parent
+        (unless the parent has PO_NO_CHILD_PO_RESTRICTIONS, which a restricted Program must never have).  The Program
+        of a library module is not restricted by its parse options, which it inherits from the Program that loaded it
+        first, but only by being sandboxed, which it never is.
+
+        Decided when the state is written, as the sandbox manager and the parse options can be set after the code that
+        writes it was parsed and the module imported; reads never call it.
+    */
+    DLLLOCAL static bool restrictsModuleVarWrites(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        if (isSandboxedForModuleState(*pp)) {
+            return true;
+        }
+        return !pp->library_module && pp->pwo.parse_options.hasAny(QoreParseOptions(PO_NO_PROCESS_CONTROL));
+    }
+
+    //! Returns true if the Program is sandboxed, for restrictsModuleVarWrites()
+    /** A Program with a sandbox manager is sandboxed; where the Program also has a permanent \c sandboxed flag, which
+        a Program that sandboxed code creates gets as well (qore#5659), the flag counts too (see
+        programSandboxedFlag())
+    */
+    DLLLOCAL static bool isSandboxedForModuleState(const qore_program_private& pp) {
+        return pp.sandbox_manager.load(std::memory_order_acquire) || programSandboxedFlag(pp, 0);
+    }
+
+    //! Returns the permanent \c sandboxed flag of the Program where the Program has one (qore#5659)
+    template <typename T>
+    DLLLOCAL static auto programSandboxedFlag(const T& pp, int)
+            -> decltype(pp.sandboxed.load(std::memory_order_acquire)) {
+        return pp.sandboxed.load(std::memory_order_acquire);
+    }
+
+    //! Without the \c sandboxed flag, only a sandbox manager makes a Program sandboxed
+    template <typename T>
+    DLLLOCAL static bool programSandboxedFlag(const T&, long) {
+        return false;
+    }
+
+    //! Returns true if the Program is the Program of a trusted module (see restrictsModuleVarWrites())
+    /** A module whose Program has a sandbox manager is the module of a tenant, which only that tenant can import
+        (see QoreModuleManager::mayUseTenantModule()), so its variables are not shared with other importers
+    */
+    DLLLOCAL static bool isTrustedModuleProgram(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        return pp->pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE)) && !isSandboxedForModuleState(*pp);
+    }
+
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
@@ -1638,21 +1752,175 @@ public:
     }
     */
 
-    // returns 0 for OK, -1 for error
-    DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
-        int tid = q_gettid();
+    //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
+        must stay valid while the thread uses it, but none of its code runs as the Program's: the release of a
+        thread's thread_local values of the Program's variables when the thread ends or clears its values (see
+        ThreadLocalVarRegistry in lib/thread.cpp), and the use of a lvalue of the Program through a reference (see
+        QoreReferenceProgramHelper).  Code that runs meanwhile, such as destructors, enters the Programs of its classes
+        itself, which it can while the thread is in the Program, also once the teardown has marked it (see
+        canEnterIntern()).  Unlike incThreadCount(), a parse in progress does not refuse the entry: no code of the
+        Program runs.
 
+        @return true if the thread entered the Program, false if its teardown has marked it (the thread is not in it)
+        or has ended
+    */
+    DLLLOCAL bool enterWithoutContext() {
+        return enterWithoutContext(q_gettid());
+    }
+
+    //! see enterWithoutContext(); \a tid is the current thread's TID
+    DLLLOCAL bool enterWithoutContext(int tid) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            return false;
+        }
+        ++tidmap[tid];
+        // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return true;
+    }
+
+    //! Returns true if the given thread can enter the Program; called with plock held
+    /** Once the teardown has marked the Program (ptid, see waitForTerminationAndClear()), no other thread can enter it,
+        but a thread that is in it can enter it again while the teardown waits for it to leave: its nested calls into
+        the Program, as those of the destructors run while it is in the Program (see enterWithoutContext()), must not
+        fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
+    */
+    DLLLOCAL bool canEnterIntern(int tid) const {
+        return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
+    }
+
+    //! Takes the parse lock without waiting for another thread that holds it
+    /** @return 0 if the lock was taken (also if this thread holds it already), 1 if another thread holds it, -1 if
+        the Program is deleted or being deleted by another thread (\c PROGRAM-ERROR is raised then)
+    */
+    DLLLOCAL int tryLockParsing(ExceptionSink* xsink) {
+        assert(xsink);
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        assert(parse_tid == tid || !qore_root_ns_private::threadHoldsRuntimeNamespaceReadLock());
+        if (ptid && ptid != tid) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed");
+            return -1;
+        }
+        if (parse_tid != -1 && parse_tid != tid) {
+            return 1;
+        }
+        ++parse_count;
+        parse_tid = tid;
+        return 0;
+    }
+
+    //! Holds a Program while ProgramControl::createEvalProgram() copies its code
+    /** Takes the Program's thread count (incThreadCountForCopy()), so that its data are not cleared during the copy,
+        and its parse lock, so that no code is parsed in it meanwhile, nor is pending; raises \c PROGRAM-ERROR if the
+        Program is deleted or being parsed.
+
+        The parse lock is never waited for: if another thread holds it (it parses code in the Program, commits it or
+        loads a module into it), the copy is refused as for a Program that is being parsed.  Waiting would block the
+        caller for all of another thread's parse, could not be cancelled, and could deadlock: two Programs whose
+        commits each create an evaluation Program of the other would wait for each other forever.
+
+        Released by release() or the destructor: the thread count first, then the parse lock, so that a parse that
+        waits for the lock does not find this thread still counted in the Program (see checkParse())
+    */
+    class EvalCopyHolder {
+    public:
+        DLLLOCAL EvalCopyHolder(QoreProgram& p, ExceptionSink* xsink) : p(p), xsink(xsink) {
+            qore_program_private* pp = qore_program_private::get(p);
+            if (pp->incThreadCountForCopy(xsink)) {
+                return;
+            }
+            counted = true;
+            int rc = pp->tryLockParsing(xsink);
+            if (rc < 0) {
+                return;
+            }
+            if (!rc) {
+                locked = true;
+                // stable while the parse lock is held: it is only written with it
+                if (!pp->parsing_in_progress) {
+                    return;
+                }
+            }
+            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code cannot "
+                "be inherited");
+        }
+
+        DLLLOCAL ~EvalCopyHolder() {
+            release();
+        }
+
+        DLLLOCAL void release() {
+            if (counted) {
+                counted = false;
+                qore_program_private::decThreadCount(p, q_gettid(), xsink);
+            }
+            if (locked) {
+                locked = false;
+                qore_program_private::unlockParsing(p, xsink);
+            }
+        }
+
+    private:
+        QoreProgram& p;
+        ExceptionSink* xsink;
+        bool counted = false;
+        bool locked = false;
+    };
+
+    //! Enters the Program's thread count for a copy of its code (ProgramControl::createEvalProgram())
+    /** Refuses a Program that is deleted or being deleted, also by the current thread, with \c PROGRAM-ERROR; while
+        the count is held, the Program's data are not cleared (see waitForTerminationAndClear()).  Released with
+        decThreadCount().  Whether the Program is being parsed is checked by the caller with the parse lock held.
+
+        @return 0 if the count was taken, -1 if an exception was raised
+    */
+    DLLLOCAL int incThreadCountForCopy(ExceptionSink* xsink) {
+        assert(xsink);
+        int tid = q_gettid();
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (ptid) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
+                "inherited");
+            return -1;
+        }
+        ++tidmap[tid];
+        // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return 0;
+    }
+
+    // returns 0 for OK, -1 for error; the exceptions are not raised without \a xsink
+    DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
+        return incThreadCount(q_gettid(), xsink);
+    }
+
+    //! see incThreadCount(ExceptionSink*); \a tid is the current thread's TID
+    DLLLOCAL int incThreadCount(int tid, ExceptionSink* xsink) {
         // declared before the lock, so that a transition is published after it is released
         ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
-            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
-                "cannot be accessed at runtime");
+        if (!canEnterIntern(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
             return -1;
         }
-        if (parsing_in_progress) {
+        if (parsing_in_progress && xsink) {
             xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and cannot "
                 "be accessed at runtime");
         }
@@ -1673,7 +1941,7 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
+        if (!canEnterIntern(tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
                 "therefore cannot be accessed at runtime");
         }
@@ -2011,6 +2279,17 @@ public:
         return rc;
     }
 
+    //! Marks the Program sandboxed if sandboxed code, or code acting for it, adds code to it (issue #5659)
+    /** Called by every parse of source code (parse(), parsePending(), parseExpression()) before it switches to the
+        Program, so that the caller's code is looked at (see qore_caller_is_sandboxed()).  Whether a Program is trusted
+        is decided when it is created, but code that sandboxed code supplies later is the sandbox's as well: a
+        trusted Program that sandboxed code parses its own code in (one that it was handed, one that library code's
+        initialization created, a child Program created before its parent had a sandbox manager) is sandboxed from
+        then on.  This fails safe: the classes that the Program already had, which trusted code defined, lose the
+        paths reserved for trusted code as well.
+    */
+    DLLLOCAL void markSandboxedParse();
+
     DLLLOCAL void startParsing(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         warnSink = wS;
         pwo.warn_mask = wm;
@@ -2061,12 +2340,18 @@ public:
     //! Returns the number of error (not warning) diagnostics rendered.  Implemented in QoreProgram.cpp.
     DLLLOCAL unsigned renderParseDiagnosticFrames(const char* source_text, FILE* os) const;
 
-    DLLLOCAL int checkParse(ExceptionSink* xsink) const {
+    DLLLOCAL int checkParse(ExceptionSink* xsink) {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
         // The calling thread (doing the parsing) is not attached to this Program,
         // so any thread_count > 0 means background threads are still active
         if (pwo.parse_options & PO_ALLOW_REPARSE) {
-            if (thread_count > 0) {
+            // the thread count is changed by other threads under the lock (incThreadCount(), decThreadCount())
+            int count;
+            {
+                AutoLocker al(plock);
+                count = thread_count;
+            }
+            if (count > 0) {
                 xsink->raiseException("PARSE-ERROR", "cannot parse while threads are active in the Program "
                     "(for REPL mode, wait for all threads to finish before parsing)");
                 return -1;
@@ -2082,6 +2367,13 @@ public:
     DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
+
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        markSandboxedParse();
 
         ProgramRuntimeParseContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -2138,8 +2430,14 @@ public:
     }
 
     DLLLOCAL int parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
-        ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         assert(xsink);
+        // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that
+        // the commit runs (see QoreCallerSandboxHelper); inactive when QoreProgram::parseCommit() switched already
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
             return -1;
         }
@@ -2194,6 +2492,15 @@ public:
 
         yyscan_t lexer;
         QoreParseState state;
+        // the number of exceptions not shown, reported when the parse lock has been released
+        int skipped = 0;
+
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
+        markSandboxedParse();
 
         {
             ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -2244,12 +2551,14 @@ public:
             parseSink = nullptr;
 #endif
             warnSink = nullptr;
+            // read with the parse lock held, which is released below
+            skipped = only_first_except && exceptions_raised > 1 ? exceptions_raised : 0;
             // release program-level parse lock
         }
 
         yylex_destroy(lexer);
-        if (only_first_except && exceptions_raised > 1)
-            fprintf(stderr, "\n%d exception(s) skipped\n\n", exceptions_raised);
+        if (skipped)
+            fprintf(stderr, "\n%d exception(s) skipped\n\n", skipped);
     }
 
     DLLLOCAL void parse(const QoreString *str, const QoreString *lstr, ExceptionSink* xsink, ExceptionSink* wS,
@@ -2281,6 +2590,13 @@ public:
 
         assert(code && code[0]);
         assert(xsink);
+
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
+        markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
@@ -2400,6 +2716,13 @@ public:
         assert(code && code[0]);
         assert(xsink);
 
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        markSandboxedParse();
+
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
             return nullptr;
@@ -2444,31 +2767,41 @@ public:
         if (should_auto_enable_modern(filename)) {
             pwo.parse_options |= PO_MODERN;
             applyParseOptionImplications();
+            syncExecModeWithParseOptions();
             pgm->setWarningMask(QP_WARN_ALL);
         }
     }
 
-    DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+            bool first_except_only = false) {
         QORE_TRACE("QoreProgram::parseFile()");
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
         FILE *fp;
         if (!(fp = fopen(filename, "r"))) {
-            if ((only_first_except && !exceptions_raised) || !only_first_except)
+            if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;
             return;
         }
         ON_BLOCK_EXIT(fclose, fp);
 
-        applyModernSourceDefault(filename);
-
-        setScriptPath(filename);
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
+        markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink)
             return;
+
+        // the Program's parse state is changed with the parse lock held, which pch holds
+        only_first_except = first_except_only;
+        applyModernSourceDefault(filename);
+        setScriptPath(filename);
 
         parse(fp, filename, xsink, wS, wm);
     }
@@ -3124,6 +3457,8 @@ public:
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
             pwo.parse_options = i->second;
             ppo.erase(i);
+            // the options restored may not support an inherited execution mode that the ones of the file did
+            syncExecModeWithParseOptions();
         }
     }
 
@@ -3693,6 +4028,14 @@ public:
         return pgm.priv->TZ;
     }
 
+    DLLLOCAL static int tryLockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
+        return pgm.priv->tryLockParsing(xsink);
+    }
+
+    DLLLOCAL static int incThreadCountForCopy(QoreProgram& pgm, ExceptionSink* xsink) {
+        return pgm.priv->incThreadCountForCopy(xsink);
+    }
+
     DLLLOCAL static int lockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
         return pgm.priv->lockParsing(xsink);
     }
@@ -4030,6 +4373,7 @@ public:
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
         pgm.priv->applyParseOptionImplications();
+        pgm.priv->syncExecModeWithParseOptions();
         return rv;
     }
 

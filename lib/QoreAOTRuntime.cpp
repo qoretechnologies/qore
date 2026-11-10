@@ -2420,6 +2420,28 @@ static const QoreClass* findAOTClassByPathInContext(QoreProgram* pgm, const char
     return findAOTClassByPath(pgm, class_path, pseudo);
 }
 
+//! Returns the method of the class that declares a recorded variant, as the parser bound it
+/** A recorded variant names the class that declares it (variant_class_path), so the method is that class's own
+    method of the name, with the static-ness of the call; only a class without one inherited it.  The class's own
+    method may be private:internal: a lookup through the class hierarchy without a class context skips it and finds
+    a base class method of the same name, whose variant with the same signature text (a method without parameters
+    has an empty one) would then be called instead.
+*/
+static const QoreMethod* findAOTVariantClassLocalMethod(const QoreClass* qc, const char* method_name,
+        bool is_static) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    const char* name = method_name;
+    if (const char* last_sep = strrchr(method_name, ':')) {
+        if (last_sep > method_name && *(last_sep - 1) == ':') {
+            name = last_sep + 1;
+        }
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    return is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -2439,7 +2461,12 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
     if (method_ref.variant_class_path && *method_ref.variant_class_path) {
         const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
         if (variant_qc) {
-            if (const QoreMethod* m = findAOTMethodByName(variant_qc, method_ref.method_name)) {
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = findAOTMethodByName(variant_qc, method_ref.method_name);
+            }
+            if (m) {
                 variant_method = m;
             }
         }
@@ -2483,9 +2510,13 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
             // signatures).  The static issueModuleCmd operates on getProgram() (the AOT module's
             // own program) instead of the receiver object, sending the command to the wrong
             // QoreProgram.  Match the original method kind: instance -> instance, static -> static.
-            const QoreMethod* m = method->isStatic()
-                ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
-                : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = method->isStatic()
+                    ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
+                    : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            }
             if (m) {
                 variant_method = m;
             }
@@ -7377,7 +7408,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* cci = new QoreIRCreateClosureInstruction(nullptr, expr);
+            // the closure node is the expression's, as in lowered IR: native code compiled from this IR creates the
+            // closure from it
+            auto* cci = new QoreIRCreateClosureInstruction(
+                dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode()), expr);
             cci->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(cci);
@@ -7413,7 +7447,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* cri = new QoreIRCreateParseRefInstruction(nullptr, expr);
+            auto* cri = new QoreIRCreateParseRefInstruction(
+                dynamic_cast<const ParseReferenceNode*>(expr.getInternalNode()), expr);
             cri->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(cri);
@@ -7425,7 +7460,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* ni = new QoreIRNewHashDeclInstruction(nullptr, expr);
+            auto* ni = new QoreIRNewHashDeclInstruction(
+                dynamic_cast<const NewHashDeclNode*>(expr.getInternalNode()), expr);
             ni->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(ni);
@@ -7437,7 +7473,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* ni = new QoreIRNewComplexHashInstruction(nullptr, expr);
+            auto* ni = new QoreIRNewComplexHashInstruction(
+                dynamic_cast<const NewComplexHashNode*>(expr.getInternalNode()), expr);
             ni->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(ni);
@@ -7449,7 +7486,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* ni = new QoreIRNewComplexListInstruction(nullptr, expr);
+            auto* ni = new QoreIRNewComplexListInstruction(
+                dynamic_cast<const NewComplexListNode*>(expr.getInternalNode()), expr);
             ni->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(ni);
@@ -7461,7 +7499,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
+            auto* ni = new QoreIRNewComplexBufferInstruction(
+                dynamic_cast<const NewComplexBufferNode*>(expr.getInternalNode()), expr);
             ni->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(ni);
@@ -7473,7 +7512,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* vi = new QoreIRVrnConstructInstruction(nullptr, expr);
+            auto* vi = new QoreIRVrnConstructInstruction(
+                dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode()), expr);
             vi->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(vi);
@@ -7730,6 +7770,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     return nullptr;
                 }
                 nested_handler->computeSlotIdsAndEmbed();
+                // the parent's variables are pre-instantiated in the handler, as its lowering marks them; without
+                // them the IR interpreter took the closure-bound variables of the function for the handler's own
+                nested_handler->restoreHandlerPreInstantiatedLocals();
             } else {
                 error = "OnBlockExit without handler IR in deserialized context";
                 return nullptr;
@@ -8224,6 +8267,41 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             }
             rememberCreatedSlotLocal(lname, ltype, lv);
         }
+    }
+
+    // the handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
+    // declares itself, which restoreHandlerPreInstantiatedLocals() does not mark pre-instantiated
+    if (reader.getHeader().version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
+        if (!need(4, "handler-own local slot count")) {
+            return nullptr;
+        }
+        uint32_t num_own_slots = QoreAOTBinaryReader::readU32(ptr);
+        if (num_own_slots > remaining() / 4) {
+            error = "malformed IR function '";
+            error += display_func_name;
+            error += "': handler-own local slot count " + std::to_string(num_own_slots)
+                + " exceeds remaining payload";
+            return nullptr;
+        }
+        std::unordered_map<uint32_t, const LocalVar*> slot_locals;
+        if (num_own_slots) {
+            for (const auto& [lv, slot_id] : func->local_var_slots) {
+                slot_locals.emplace(slot_id, lv);
+            }
+        }
+        for (uint32_t i = 0; i < num_own_slots; ++i) {
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
+            auto it = slot_locals.find(slot_id);
+            if (slot_id >= parent_slot_count || it == slot_locals.end()) {
+                error = "malformed IR function '";
+                error += display_func_name;
+                error += "': handler-own local slot " + std::to_string(slot_id)
+                    + " is not a parent slot with a local";
+                return nullptr;
+            }
+            func->handler_own_locals.insert(it->second);
+        }
+        func->handler_own_locals_known = true;
     }
 
     if (extended_closure_locals) {
