@@ -9,6 +9,17 @@ targeted cancel/close of `AsyncIoControllerPriv` (`getSocketThreadIndexes()`) in
 - `socket-loop.qr`: a single-threaded `Socket` accept/recv/send/close loop (1500 requests after a warm-up); prints
   microseconds per request.
   `LD_LIBRARY_PATH=build QORE_IO_THREADS=8 build/qore design/benchmarks/5587/socket-loop.qr`
+- `socket-close-loop.qr [<connections>]`: makes the connections of `socket-loop.qr` first and closes them all
+  afterwards, and prints the cost of a connect and accept and of the two closes per connection separately
+  (`CLOSE_ONLY=1` leaves the closes out of the measurement).  An accept cost about 47,000 user-space instructions,
+  of which about 18,000 per pollable object (each `Socket` object and accepted socket) were the SHA-1 digest of its
+  I/O identity, which a sequence number replaces now.
+- `socket-wait-loop.qr [<round trips>]`: a `Socket` ping-pong between two threads over one connection in which every
+  receive waits (each side receives before the other side sends); prints microseconds per round trip;
+  `socket-wait-loop.py` is the same loop in Python.  On 2026-11-10, release build: about 50 us, 444,000 user-space
+  instructions and 18.4 `futex` calls per round trip (each send and receive goes through the async I/O controller);
+  Python about 7.5 us.  `socket-loop.qr`: about 250 us, 1.578 G user-space instructions for the 1500 requests and 65
+  `futex` calls per request (2.036 G and 157 after #5613).
 - `run-http.sh <keepalive 0|1> <requests>`: an `HttpServer` with a trivial handler in its own process and a client
   loop in another; prints the client's microseconds per request and the server process' CPU time (clock ticks of
   10 ms) read when the client asks it to quit.  Server CPU per request is `(user + sys) * 10000 / (requests + 51)`
@@ -75,6 +86,8 @@ all within 0.2%; independent of the load of the host):
 |---|---|---|
 | before | 8.74 M | 10.83 M |
 | `getContentEncodingPreferences()` cached by header value | 7.75 M (-11%) | 9.84 M (-9%) |
+| 2026-11-10, #5587 with develop merged (re-measured) | 7.42 M | |
+| a listener without a logger of its own builds no message that the server's logger drops (`HttpListener::log()`; the benchmark's server logger is at the ERROR level, so the four INFO messages of each request were built and passed to the server for nothing) | 7.09 M (-4.5%) | |
 
 ## Calls that no longer go to the I/O thread
 
