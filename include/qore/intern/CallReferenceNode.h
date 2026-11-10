@@ -408,4 +408,14 @@ private:
 */
 DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
 
+//! Gets the parse options of the Program whose code a call reference runs (see qore_call_reference_code_program())
+/** The Program of a user function is the Program that defined it, which can have been deleted while a Program that
+    imported the function still holds it: it is taken with a reference while its options are read.
+
+    @return 1 if the code has a Program (\a po is set to its options), 0 if it has none (builtin code), -1 if the
+    Program of its code has been deleted
+*/
+DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
+        ExceptionSink* xsink);
+
 #endif

@@ -698,6 +698,47 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
     return pgm ? pgm : cls->getProgram();
 }
 
+//! returns the user variant of a call reference to a user function (not a closure or a method), or nullptr
+static const UserVariantBase* qore_call_reference_function_variant(const ResolvedCallReferenceNode* rcr) {
+    if (rcr->getType() == NT_RUNTIME_CLOSURE) {
+        return nullptr;
+    }
+    const QoreFunction* f = rcr->getFunction();
+    if (!f || f->getClass() || !f->hasUser()) {
+        return nullptr;
+    }
+    QoreFunctionIterator i(*f);
+    while (i.next()) {
+        if (const UserVariantBase* uvb = i.getVariant()->getUserVariantBase()) {
+            return uvb;
+        }
+    }
+    return nullptr;
+}
+
+int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
+        ExceptionSink* xsink) {
+    // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
+    // can have been deleted: it is taken with a reference while its options are read
+    if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
+        QoreSourceProgramHolder holder(xsink);
+        holder.setVariant(uvb);
+        if (QoreProgram* pgm = holder.get()) {
+            po = pgm->getParseOptions();
+            return 1;
+        }
+        if (holder.sourceDeleted()) {
+            return -1;
+        }
+    }
+    const QoreProgram* pgm = qore_call_reference_code_program(rcr);
+    if (!pgm) {
+        return 0;
+    }
+    po = pgm->getParseOptions();
+    return 1;
+}
+
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
     return vc && obj == vc->obj && method == vc->method;
