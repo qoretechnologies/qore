@@ -51,6 +51,8 @@
 #include "qore/intern/QorePollCompat.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -539,6 +541,8 @@ public:
     //! the ID of the application Program that the code of runtime_po_module_pgm runs for
     qore_program_id_t runtime_po_app_pgm_id = 0;
     int tid;
+    //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
+    unsigned pgm_teardown_depth = 0;
 
     VLock vlock;     // for deadlock detection
 
@@ -812,9 +816,11 @@ public:
         foreign : 1, // true if the thread is a foreign thread
         try_reexport : 1,
         finalizing : 1,
-        //! true while the values of a task are cleared between the tasks of a pool worker
-        /** see clear_all_program_thread_local_data(): the code run by the clearing (destructors) cannot give the
-            thread's thread_local variables values, as at the end of a thread (finalizing)
+        //! true while a pool worker releases the thread_local values of its task between tasks
+        /** see clear_all_program_thread_local_data(): the destructors run by the release cannot give the thread's
+            thread_local variables values, as at the end of a thread (finalizing); set for each release only, so that
+            the code that clears the other data of the task (thread resources, the thread-local data of the Programs)
+            can assign them, and the next release takes those values
         */
         tlv_clearing : 1;
 
@@ -1110,14 +1116,17 @@ private:
         }
     }
 
-    //! Releases the thread's values of the variables of a Program in the Program
+    //! Releases the thread's values of the variables of a Program
     /** The thread enters the Program before it takes the values out of the registry, so that the Program's
-        teardown, which can run in another thread at the same time, waits until the values have been released, and
-        the Program can run their destructors.  If the Program's teardown has passed the point after which no other
-        thread can enter it, or the Program has been deleted, the values are handed over to the registry: the release
-        of the variable, which follows in the Program's teardown or has followed while the variable's values were in
-        the registry, releases them, or, for a variable that another Program imports, the release by the last Program
-        holding it.
+        teardown, which can run in another thread at the same time, cannot release them as well, and waits while the
+        thread releases the values whose release runs code of the Program (tlvReleaseRunsCodeOf()): an object of a
+        class of the Program, whose destructor would raise PROGRAM-ERROR once the teardown has marked the Program.
+        The thread leaves the Program before it releases the other values, so that the teardown does not wait for
+        code of other Programs, which can wait for the thread deleting the Program (a lock that it holds).  If the
+        Program's teardown has passed the point after which no other thread can enter it, or the Program has been
+        deleted, the values are handed over to the registry: the release of the variable, which follows in the
+        Program's teardown or has followed while the variable's values were in the registry, releases them, or, for
+        a variable that another Program imports, the release by the last Program holding it.
 
         The values were released here in whichever state the Program was, often after it had been deleted in
         another thread, and their destructors raised PROGRAM-ERROR.
@@ -1129,28 +1138,104 @@ private:
     DLLLOCAL void releaseThreadLocalVarsOfProgram(const ThreadLocalVarRelease* v, size_t n, ExceptionSink* xsink) {
         // the Program is referenced while it is used; no lock is held when it is looked up and entered, as its
         // teardown releases the variable with the registry's lock
+        // the values taken, which are released below; allocated before the Program is entered and any value is taken
+        std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values(new QoreLValue<qore_gvar_ref_u>[n]);
         ReferenceHolder<QoreProgram> pgm(v->pgm ? qore_program_private::getReferencedProgram(v->pgm, v->pgm_id)
             : nullptr, xsink);
-        const bool entered = *pgm && qore_program_private::get(**pgm)->enterForThreadLocalRelease();
+        bool entered = *pgm && qore_program_private::get(**pgm)->enterWithoutContext();
         // values that the thread cannot release in the Program are handed over to the registry
         const bool hand_over = v->pgm && !entered;
         for (size_t i = 0; i < n; ++i) {
-            releaseThreadLocalVar(v[i].serial, hand_over, xsink);
+            takeThreadLocalVar(v[i].serial, hand_over, values[i]);
         }
         if (entered) {
+            // the values whose release runs code of the Program are released while the thread is in it
+            for (size_t i = 0; i < n; ++i) {
+                if (values[i].assigned && values[i].type == QV_Node && tlvReleaseRunsCodeOf(values[i].v.n, **pgm)) {
+                    values[i].removeValue(true).discard(xsink);
+                }
+            }
             qore_program_private::decThreadCount(**pgm, tid, xsink);
+        }
+        for (size_t i = 0; i < n; ++i) {
+            values[i].removeValue(true).discard(xsink);
         }
     }
 
-    //! Releases the thread's value of the given variable, or hands it over to the registry
+    //! Returns true if releasing the given value can run code of the given Program
+    /** An object of a class of the Program, or created in it, and a closure of the Program; the elements of lists
+        and hashes are checked as well, to a bounded depth (deeper elements count as code of the Program).  The
+        members of an object of another class are not checked: their release follows the destructor of the object,
+        which runs code of another Program, and the destructors of members of the Program's classes enter it
+        themselves.
+
+        @param n the value
+        @param pgm the Program
+        @param depth the depth of the value in the containers checked
+    */
+    DLLLOCAL static bool tlvReleaseRunsCodeOf(const AbstractQoreNode* n, const QoreProgram& pgm, unsigned depth = 0) {
+        if (!n) {
+            return false;
+        }
+        switch (n->getType()) {
+            case NT_OBJECT: {
+                const QoreObject* o = static_cast<const QoreObject*>(n);
+                if (o->getProgram() == &pgm) {
+                    return true;
+                }
+                const QoreClass* qc = o->getClass();
+                return qc && qore_class_private::get(*qc)->spgm.load() == &pgm;
+            }
+            case NT_RUNTIME_CLOSURE:
+                return static_cast<const QoreClosureBase*>(n)->getProgram() == &pgm;
+            case NT_LIST: {
+                const QoreListNode* l = static_cast<const QoreListNode*>(n);
+                if (!qore_list_private::getScanCount(*l)) {
+                    return false;
+                }
+                if (depth >= 8) {
+                    return true;
+                }
+                for (size_t i = 0, e = l->size(); i < e; ++i) {
+                    QoreValue ev = l->retrieveEntry(i);
+                    if (ev.hasNode() && tlvReleaseRunsCodeOf(ev.getInternalNode(), pgm, depth + 1)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = static_cast<const QoreHashNode*>(n);
+                if (!qore_hash_private::getScanCount(*h)) {
+                    return false;
+                }
+                if (depth >= 8) {
+                    return true;
+                }
+                ConstHashIterator hi(h);
+                while (hi.next()) {
+                    QoreValue ev = hi.get();
+                    if (ev.hasNode() && tlvReleaseRunsCodeOf(ev.getInternalNode(), pgm, depth + 1)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            default:
+                break;
+        }
+        return false;
+    }
+
+    //! Takes the thread's value of the given variable out of its entry, or hands it over to the registry
     /** The entry is left without a value, and erased by the next pass of releaseThreadLocalVars().
 
         @param serial the serial of the variable
         @param hand_over true if the value is handed over to the registry, false if the thread releases it: it has
         entered the variable's Program, or the variable has no Program
-        @param xsink for the exceptions of the destructors
+        @param value an lvalue without a value, which takes the value that the thread releases
     */
-    DLLLOCAL void releaseThreadLocalVar(uint64_t serial, bool hand_over, ExceptionSink* xsink) {
+    DLLLOCAL void takeThreadLocalVar(uint64_t serial, bool hand_over, QoreLValue<qore_gvar_ref_u>& value) {
         tlvmap_t::iterator i = tlvmap.find(serial);
         if (i == tlvmap.end()) {
             return;
@@ -1160,35 +1245,30 @@ private:
         if (hand_over) {
             orphan.reset(new ThreadLocalVarRegistry::Orphan);
         }
-        QoreLValue<qore_gvar_ref_u> value;
-        {
-            AutoLocker al(tlv_registry.lck);
-            auto hi = tlv_registry.vars.find(serial);
-            bool registered = false;
-            if (hi != tlv_registry.vars.end()) {
-                if (orphan) {
-                    // reserved before anything changes
-                    hi->second.orphans.reserve(hi->second.orphans.size() + 1);
-                }
-                registered = ThreadLocalVarRegistry::removeHolder(hi->second, this);
-                if (registered && orphan) {
-                    if (tv.lv.assigned) {
-                        tv.lv.moveValueTo(orphan->lv);
-                        hi->second.orphans.push_back(std::move(orphan));
-                    }
-                }
-                if (hi->second.holders.empty() && hi->second.orphans.empty()) {
-                    tlv_registry.vars.erase(hi);
+        AutoLocker al(tlv_registry.lck);
+        auto hi = tlv_registry.vars.find(serial);
+        bool registered = false;
+        if (hi != tlv_registry.vars.end()) {
+            if (orphan) {
+                // reserved before anything changes
+                hi->second.orphans.reserve(hi->second.orphans.size() + 1);
+            }
+            registered = ThreadLocalVarRegistry::removeHolder(hi->second, this);
+            if (registered && orphan) {
+                if (tv.lv.assigned) {
+                    tv.lv.moveValueTo(orphan->lv);
+                    hi->second.orphans.push_back(std::move(orphan));
                 }
             }
-            // the value of an entry that is not registered was taken by the release of its variable, which leaves
-            // the entry without a value; the entry has no value afterwards in any case, so the next pass erases it
-            if (!registered || !orphan) {
-                tv.lv.moveValueTo(value);
+            if (hi->second.holders.empty() && hi->second.orphans.empty()) {
+                tlv_registry.vars.erase(hi);
             }
         }
-        // the entry has no value now; the value is released outside the lock
-        value.removeValue(true).discard(xsink);
+        // the value of an entry that is not registered was taken by the release of its variable, which leaves the
+        // entry without a value; the entry has no value afterwards in any case, so the next pass erases it
+        if (!registered || !orphan) {
+            tv.lv.moveValueTo(value);
+        }
     }
 
 public:
@@ -4046,6 +4126,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
+        thread_count_incremented = false;
         qore_program_private::decThreadCount(*pgm, td->tid, xsink);
     }
 }
@@ -4073,10 +4154,21 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         // call within the entered Program, the usual case, costs only this comparison
         if (td->entry_pgm != pgm) {
             this->xsink = xsink;
-            entry_frame.enter(td, pgm, xsink);
+            if (entry_frame.enter(td, pgm, xsink)) {
+                failed = true;
+            }
         }
         return;
     }
+    setOtherProgram(td, xsink, pgm, runtime);
+    // the entry, the entry handler or the thread initialization code raised an exception
+    if (*xsink) {
+        failed = true;
+    }
+}
+
+void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime) {
     old_pgm = td->current_pgm;
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
@@ -4096,11 +4188,13 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     const bool skip_thread_count = pp->parsingLocked();
     if (!skip_thread_count) {
         // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
+        if (pp->incThreadCount(td->tid, xsink)) {
             printd(5, "ProgramThreadCountContextHelper::set() failed\n");
             return;
         }
         thread_count_incremented = true;
+        count_pgm = pgm;
+        count_tid = td->tid;
     }
 
     // set up thread stacks
@@ -5272,6 +5366,34 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     td->current_pgm = old_pgm;
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
+}
+
+bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    if (p == td->current_pgm) {
+        return false;
+    }
+    // the list of the Programs that the thread deletes is searched only while it deletes one
+    if (td->pgm_teardown_depth && qore_program_torn_down_by_current_thread(p)) {
+        return false;
+    }
+    tid = td->tid;
+    return true;
+}
+
+bool qore_thread_program_teardown_enter() {
+    if (ThreadData* td = thread_data.get()) {
+        ++td->pgm_teardown_depth;
+        return true;
+    }
+    return false;
+}
+
+void qore_thread_program_teardown_leave() {
+    ThreadData* td = thread_data.get();
+    assert(td && td->pgm_teardown_depth > 0);
+    --td->pgm_teardown_depth;
 }
 
 QoreProgram* getProgram() {
@@ -6904,15 +7026,15 @@ void clear_all_program_thread_local_data() {
     // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
     // generation if subsequent cleanup code (e.g. object destructors) throws
 
-    // while the task's data is cleared, the code that the clearing runs (destructors) cannot give the thread's
-    // thread_local variables values, as at the end of a thread (see thread_local_vars_finalizing()): a destructor
-    // that gave a variable a value whose destructor gave it a value again kept the release going for ever between
-    // two tasks of a ThreadPool or AsyncIoController worker, and stopWait() never returned; the thread is not
-    // finalized, so its next task assigns them again
-    ThreadLocalVarClearingHelper tlvch(*td);
-
-    // clear all thread_local variable values
-    td->releaseThreadLocalVars(nullptr);
+    // while the task's thread_local values are released, the destructors that the release runs cannot give the
+    // thread's thread_local variables values, as at the end of a thread (see thread_local_vars_finalizing()): a
+    // destructor that gave a variable a value whose destructor gave it a value again kept the release going for ever
+    // between two tasks of a ThreadPool or AsyncIoController worker, and stopWait() never returned; the thread is not
+    // finalized, so the clearing of its other data below and its next task assign them again
+    {
+        ThreadLocalVarClearingHelper tlvch(*td);
+        td->releaseThreadLocalVars(nullptr);
+    }
 
     // clear thread-local hash (tld) in all programs this thread has data in
     {
@@ -6928,8 +7050,12 @@ void clear_all_program_thread_local_data() {
         xsink.handleExceptions();
     }
 
-    // the code run above can have looked variables up, which gave the thread entries without values
-    td->releaseThreadLocalVars(nullptr);
+    // the code run above can have assigned variables, or looked them up, which gave the thread entries without
+    // values: they are released as the values of the task were
+    {
+        ThreadLocalVarClearingHelper tlvch(*td);
+        td->releaseThreadLocalVars(nullptr);
+    }
     td->tlvmap.clear();
 }
 

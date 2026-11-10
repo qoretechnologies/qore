@@ -1752,19 +1752,25 @@ public:
     }
     */
 
-    //! Enters the Program to release the current thread's value of one of its thread_local variables
-    /** A thread that ends, or whose values are cleared between tasks, releases its values in the Program owning the
-        variable (see ThreadLocalVarRegistry in lib/thread.cpp): its teardown waits for the thread to leave it with
-        decThreadCount(QoreProgram&, int, ExceptionSink*), as for every thread in the Program, so that it can still
-        run the destructors of the value.  No code of the Program runs and the thread's current Program does not
-        change: the destructors enter the Programs of their classes themselves, which they can while the thread is
-        in the Program, also once the teardown has marked it (see canEnterIntern()).
+    //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
+        must stay valid while the thread uses it, but none of its code runs as the Program's: the release of a
+        thread's thread_local values of the Program's variables when the thread ends or clears its values (see
+        ThreadLocalVarRegistry in lib/thread.cpp), and the use of a lvalue of the Program through a reference (see
+        QoreReferenceProgramHelper).  Code that runs meanwhile, such as destructors, enters the Programs of its classes
+        itself, which it can while the thread is in the Program, also once the teardown has marked it (see
+        canEnterIntern()).  Unlike incThreadCount(), a parse in progress does not refuse the entry: no code of the
+        Program runs.
 
-        @return true if the thread entered the Program, false if its teardown has passed the point after which no
-        other thread can enter it (it releases the variable itself then, or has released it)
+        @return true if the thread entered the Program, false if its teardown has marked it (the thread is not in it)
+        or has ended
     */
-    DLLLOCAL bool enterForThreadLocalRelease() {
-        int tid = q_gettid();
+    DLLLOCAL bool enterWithoutContext() {
+        return enterWithoutContext(q_gettid());
+    }
+
+    //! see enterWithoutContext(); \a tid is the current thread's TID
+    DLLLOCAL bool enterWithoutContext(int tid) {
         AutoLocker al(plock);
         if (!canEnterIntern(tid)) {
             return false;
@@ -1776,12 +1782,12 @@ public:
 
     //! Returns true if the given thread can enter the Program; called with plock held
     /** Once the teardown has marked the Program (ptid, see waitForTerminationAndClear()), no other thread can enter it,
-        but a thread that is in it can enter it again: the teardown waits for it to leave, and its nested calls into
-        the Program, as those of the destructors of the thread_local values that it releases in the Program when it
-        ends (see enterForThreadLocalRelease()), must not fail while the Program's data is valid
+        but a thread that is in it can enter it again while the teardown waits for it to leave: its nested calls into
+        the Program, as those of the destructors run while it is in the Program (see enterWithoutContext()), must not
+        fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
     */
     DLLLOCAL bool canEnterIntern(int tid) const {
-        return !ptid || ptid == tid || tidmap.find(tid) != tidmap.end();
+        return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
     //! Takes the parse lock without waiting for another thread that holds it
@@ -1887,8 +1893,11 @@ public:
 
     // returns 0 for OK, -1 for error; the exceptions are not raised without \a xsink
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
-        int tid = q_gettid();
+        return incThreadCount(q_gettid(), xsink);
+    }
 
+    //! see incThreadCount(ExceptionSink*); \a tid is the current thread's TID
+    DLLLOCAL int incThreadCount(int tid, ExceptionSink* xsink) {
         // declared before the lock, so that a transition is published after it is released
         ProgramThreadActivityPublisher activity;
         // grab program-level lock

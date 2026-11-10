@@ -162,6 +162,15 @@ x=null@endverbatim
     thread-local data.  For this reason, module code running in its own Program can use these functions even when
     its caller may not (see @ref OWN_PROGRAM_STATE).
 
+    @subsection threads_and_program_deletion Threads in a Program That Is Deleted
+    The deletion of a @ref Qore::Program "Program" waits for the threads running its code to leave it; once it has
+    started to delete the Program's data, no other thread can enter the Program, and a call into it raises a
+    \c PROGRAM-ERROR exception.  A thread that is still running the Program's code while the deletion waits for it can
+    call into the Program again, also through code of other Programs (a closure of the Program called by a child
+    Program, for example), until it leaves the Program.  The values of @ref thread_local variables of the Program
+    that other threads release when they end or between their tasks are released before the Program's data is
+    deleted (see @ref thread_local_lifetime).
+
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
     @anchor synchronized

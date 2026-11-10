@@ -1126,8 +1126,9 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
 
     Unlike delete_thread_local_data(), this does not unregister the thread from any
     QoreProgram or set the finalizing flag — the thread continues to be available for
-    new tasks.  While it clears the data, the code it runs (destructors) cannot assign the
-    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing()).
+    new tasks.  While it releases the thread_local values, the destructors it runs cannot assign the
+    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing());
+    the values assigned while the other data is cleared are released afterwards.
 */
 DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);
@@ -1756,6 +1757,15 @@ private:
 */
 DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
 
+//! A thread's entry into a Program, counted with its thread count, which is left with
+//! qore_program_private::decThreadCount(*pgm, tid, xsink)
+struct QoreReferenceProgramEntry {
+    //! the Program entered, or nullptr if none was
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+};
+
 class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
@@ -1778,8 +1788,36 @@ public:
         return old_ctx;
     }
 
+    //! Hands the thread count that set() took in the Program over to the caller
+    /** The caller leaves the Program with qore_program_private::decThreadCount(); the context is still restored
+        when the helper is destroyed, without leaving the Program.  Used to keep the Program of a reference entered
+        until its lvalue has been used (see LValueHelper::adoptReferenceProgram()).
+
+        @return the Program entered, with no Program if set() did not count the thread in it (it was already in it,
+        or the entry failed)
+    */
+    DLLLOCAL QoreReferenceProgramEntry takeThreadCount() {
+        QoreReferenceProgramEntry rv;
+        if (thread_count_incremented) {
+            thread_count_incremented = false;
+            rv.pgm = count_pgm;
+            rv.tid = count_tid;
+        }
+        return rv;
+    }
+
+    //! Returns true if set() raised an exception: the thread did not enter the Program, or its entry or thread
+    //! initialization code failed
+    DLLLOCAL bool enterFailed() const {
+        return failed;
+    }
+
 protected:
     QoreProgram* old_pgm = nullptr;
+    //! the Program that set() counted the thread in; set, and read, only if thread_count_incremented
+    QoreProgram* count_pgm;
+    //! the TID of the thread counted in \a count_pgm; set, and read, only if thread_count_incremented
+    int count_tid;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
     // frame count of tlpd when context is started
@@ -1798,6 +1836,9 @@ protected:
     //! true if the cancellation deferral of the thread was suspended when the Program was entered
     bool defer_suspended = false;
 
+    //! set() raised an exception; see enterFailed()
+    bool failed = false;
+
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
@@ -1812,6 +1853,9 @@ private:
 
     //! Restores the deferral suspended by suspendDeferral()
     DLLLOCAL void restoreDeferral();
+
+    //! switches the thread's context to a Program that is not its current one; see set()
+    DLLLOCAL void setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 };
 
 class ProgramRuntimeParseContextHelper {
@@ -1863,50 +1907,50 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
-//! Keeps the Program of a reference while the reference's lvalue is used
+//! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
-    Program's variables and code are freed with the Program, while the reference keeps their addresses
-    (lvalue_ref::pgm and its lvalue expression).  Its Program is identified by its ID as well (lvalue_ref::pgm_id), as
-    a Program created after it was deleted can have its address, and a reference to a lvalue of a deleted Program
-    raises PROGRAM-ERROR: its use entered the freed Program and crashed.
+    Program's variables and code are freed with the Program, while the reference keeps their addresses (its lvalue
+    expression).  The reference keeps the Program allocated with a dependency reference (lvalue_ref::pgm), and its
+    use enters the Program: a reference to a lvalue of a Program that is being deleted, or has been, raises
+    PROGRAM-ERROR; its use entered the freed Program and crashed.
 
-    The Program is referenced while the helper exists, unless it is the current Program, which the thread is in, or
-    one that the current thread deletes.  A helper that enters another Program (\a enter) keeps its teardown from
-    deleting its data while the helper exists, which raises PROGRAM-ERROR as well once the teardown has marked it;
-    RuntimeReferenceHelperBase enters it with its context.
+    The helper enters the Program without switching to it (qore_program_private::enterWithoutContext()) unless it is
+    the current Program, which the thread is in, or one that the thread deletes, so that its teardown waits while the
+    helper exists; RuntimeReferenceHelperBase enters it with its context.  An LValueHelper keeps the entry until the
+    lvalue has been used (LValueHelper::keepReferenceProgram()): the teardown released the variable while another
+    thread assigned it through a reference.
 */
 class QoreReferenceProgramHelper {
 public:
-    //! Takes the Program of the reference; raises PROGRAM-ERROR in \a xsink if it has been deleted
+    //! Enters the Program of the reference; raises PROGRAM-ERROR in \a xsink if it is being deleted or has been
     /** @param r the reference
-        @param xsink for exceptions; also used to release the Program
-        @param enter true to enter the Program without switching to it (its thread count)
+        @param xsink for exceptions; also used to leave the Program
     */
-    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink, bool enter);
+    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink);
 
+    //! Leaves the Program if it was entered and not taken with release()
     DLLLOCAL ~QoreReferenceProgramHelper();
 
     DLLLOCAL QoreReferenceProgramHelper(const QoreReferenceProgramHelper&) = delete;
     DLLLOCAL QoreReferenceProgramHelper& operator=(const QoreReferenceProgramHelper&) = delete;
 
-    //! Returns false if the reference's Program has been deleted, or could not be entered
+    //! Returns false if the reference's Program is being deleted or has been
     DLLLOCAL operator bool() const {
         return valid;
     }
 
-    //! Returns the reference's Program, or nullptr if it has none or has been deleted
-    DLLLOCAL QoreProgram* getProgram() const {
-        return valid ? pgm : nullptr;
+    //! Returns the entry into the Program, which the caller leaves with qore_program_private::decThreadCount()
+    DLLLOCAL QoreReferenceProgramEntry release() {
+        QoreReferenceProgramEntry rv = entry;
+        entry.pgm = nullptr;
+        return rv;
     }
 
 private:
-    //! the Program of the reference, if it is valid
-    QoreProgram* pgm = nullptr;
-    //! the reference taken to the Program, if any
-    QoreProgram* ref = nullptr;
+    //! the entry into the Program, if any
+    QoreReferenceProgramEntry entry;
     ExceptionSink* xsink;
     bool valid = true;
-    bool entered = false;
 };
 
 class QoreStatementTempScope;
@@ -1940,13 +1984,31 @@ private:
     DLLLOCAL QoreStatementTempScopeSuspension& operator=(const QoreStatementTempScopeSuspension&) = delete;
 };
 
+//! Returns true if the current thread must enter a reference's Program to use the reference's lvalue
+/** It need not if the Program is its current Program, which it is in, or one that it deletes (see
+    qore_program_torn_down_by_current_thread()); one lookup of the thread's data
+
+    @param p the reference's Program
+    @param tid set to the thread's TID if the return value is true
+*/
+DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid);
+
+//! records in the thread's data that it deletes a Program's data, which qore_reference_program_needs_entry() reads
+/** @return false if the thread has no data (it is not recorded then)
+*/
+DLLLOCAL bool qore_thread_program_teardown_enter();
+//! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
+//! returned true
+DLLLOCAL void qore_thread_program_teardown_leave();
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
-            : ref(&r), pgm_holder(r, n_xsink, false), pch(n_xsink, pgm_holder.getProgram(), true),
-              osh(r.self, r.cls) {
-        // the Program of the reference has been deleted
-        if (!pgm_holder) {
+            : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
+        // the reference's Program is allocated while the reference exists (see lvalue_ref::pgm); a Program that is
+        // being deleted refuses the entry with PROGRAM-ERROR.  Read from the helper, which is cheaper than the
+        // exception sink: a reference to a lvalue of the current Program costs only this test
+        if (pch.enterFailed()) {
             ref = nullptr;
             valid = false;
             return;
@@ -1978,12 +2040,18 @@ public:
         return valid;
     }
 
+    //! Hands the entry into the reference's Program over to the caller, which leaves it with decThreadCount()
+    /** see ProgramThreadCountContextHelper::takeThreadCount(); no Program if the thread was not counted in it (it was
+        already in the Program, as the current Program)
+    */
+    DLLLOCAL QoreReferenceProgramEntry takeProgramEntry() {
+        return pch.takeThreadCount();
+    }
+
 protected:
     //! the reference is resolved with no temp scope of a statement; constructed first, so it is restored last
     QoreStatementTempScopeSuspension temps_suspension;
     const lvalue_ref* ref;
-    //! keeps the reference's Program; declared before pch, which enters it and leaves it before it is released
-    QoreReferenceProgramHelper pgm_holder;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;
     bool valid = true;

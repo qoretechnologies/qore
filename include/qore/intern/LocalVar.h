@@ -51,18 +51,11 @@ DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue
 
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {
-protected:
-    // used to skip the var entry in case it's a recursive reference
-    bool valid;
-
 public:
+    //! the helper is valid unless the reference cannot be resolved (see RuntimeReferenceHelperBase), which raises an
+    //! exception
     DLLLOCAL LocalRefHelper(const T* val, ReferenceNode& ref, ExceptionSink* xsink)
-        : RuntimeReferenceHelper(ref, xsink),
-            valid(!*xsink) {
-    }
-
-    DLLLOCAL operator bool() const {
-        return valid;
+        : RuntimeReferenceHelper(ref, xsink) {
     }
 };
 
