@@ -86,6 +86,15 @@ public:
     */
     DLLLOCAL bool parseEqualTo(const VarRefNode& other) const;
 
+    //! evaluates the variable as an argument of a call
+    /** A value that the read gives a reference of its own to is a temporary of the statement (see evalImpl()), but a
+        temporary given to a call as an argument is released when the call returns: the argument list takes the
+        read's reference over and the statement does not hold the value, as for any argument
+
+        @return the value read, referenced for the caller
+    */
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 
@@ -228,6 +237,13 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! reads the value of the variable without handing it to the statement
+    /** @param needs_deref set to true if the read gave the caller a reference of its own: the value was read through
+        a reference, or from a closure-bound, global or thread-local variable, which is read under the variable's
+        lock
+    */
+    DLLLOCAL QoreValue evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL void resolve(const QoreTypeInfo* typeInfo);
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool is_new = false);
@@ -507,6 +523,9 @@ public:
     DLLLOCAL const QoreValue& getNewArgs() const {
         return new_args;
     }
+
+    //! a declaration that creates an object, given as an argument, is evaluated as any other expression
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const override;
 
 protected:
     enum vrn_type_e : unsigned char {

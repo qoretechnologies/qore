@@ -994,6 +994,14 @@ extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
     v.discard(xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink) {
+    if (!val || *slot != val) {
+        return;
+    }
+    *slot = 0;
+    qore_rt_decref(val, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
     QoreValue v = fromBits(val);
     v.discard(nullptr);

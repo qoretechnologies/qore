@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <unordered_set>
 
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
@@ -2184,6 +2185,28 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
     }
 }
 
+//! Visits the exception edges of a block: the exception target of each instruction and of each throw
+/** A target can be visited more than once.  With \a check_count, polls cancellation and returns false if it is
+    requested; without it, runs without check points.
+*/
+static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const QoreIRBlockVisitor& visitor,
+        size_t* check_count, const char* operation) {
+    for (const auto& inst : block.instructions) {
+        if (check_count && qore_ir_analysis_cancelled(*check_count, operation)) {
+            return false;
+        }
+        if (inst->exception_target) {
+            visitor(inst->exception_target);
+        }
+        if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+            if (throw_inst->exception_target) {
+                visitor(throw_inst->exception_target);
+            }
+        }
+    }
+    return true;
+}
+
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
         bool include_exception_edges) {
     blocks.reserve(func.blocks.size());
@@ -2229,17 +2252,10 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 successors[block_id].push_back(it->second);
                 predecessors[it->second].push_back(block_id);
             };
-            for (const auto& inst : block->instructions) {
-                if (qore_ir_analysis_cancelled(check_count,
-                        "IR exceptional control-flow analysis")) {
-                    cancelled = true;
-                    return;
-                }
-                add_exception_successor(inst->exception_target);
-                if (const auto* throw_inst =
-                        dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
-                    add_exception_successor(throw_inst->exception_target);
-                }
+            if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
+                    "IR exceptional control-flow analysis")) {
+                cancelled = true;
+                return;
             }
         }
     }
@@ -2325,6 +2341,179 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
 bool QoreIRControlFlowGraph::dominates(size_t dominator, size_t block) const {
     return dominator < blocks.size() && block < blocks.size() && reachable[block]
         && (dominators[block][dominator / 64] & (uint64_t(1) << (dominator % 64)));
+}
+
+bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
+    static const char* const operation = "IR reused call argument analysis";
+    auto cancelled = [&]() -> bool {
+        return check_count && qore_ir_analysis_cancelled(*check_count, operation);
+    };
+    reused.assign(func.max_value_id + 1, 0);
+    const size_t nblocks = func.blocks.size();
+    std::unordered_map<const QoreIRBasicBlock*, size_t> block_ids;
+    block_ids.reserve(nblocks);
+    for (size_t i = 0; i < nblocks; ++i) {
+        block_ids.emplace(func.blocks[i].get(), i);
+    }
+    // the defining block of each value
+    std::vector<uint32_t> def_block(reused.size(), UINT32_MAX);
+    // the successors of each block: the edges of QoreIRControlFlowGraph with include_exception_edges, which also
+    // computes dominators (not needed here) and always polls cancellation
+    std::vector<std::vector<size_t>> succ(nblocks);
+    for (size_t i = 0; i < nblocks; ++i) {
+        const QoreIRBasicBlock* block = func.blocks[i].get();
+        auto add = [&](QoreIRBasicBlock* target) {
+            auto it = block_ids.find(target);
+            if (it != block_ids.end()
+                    && std::find(succ[i].begin(), succ[i].end(), it->second) == succ[i].end()) {
+                succ[i].push_back(it->second);
+            }
+        };
+        if (!block->instructions.empty()) {
+            qore_ir_visit_successors(*block->instructions.back(), add);
+        }
+        if (!qore_ir_visit_exception_targets(*block, add, check_count, operation)) {
+            return false;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid() && inst->result.id < def_block.size()) {
+                def_block[inst->result.id] = static_cast<uint32_t>(i);
+            }
+        }
+    }
+
+    // the strongly connected components (iterative Tarjan); a block can only run again through a cycle of its
+    // component
+    std::vector<size_t> comp(nblocks, SIZE_MAX);
+    std::vector<uint8_t> comp_cyclic;
+    {
+        std::vector<size_t> index(nblocks, SIZE_MAX);
+        std::vector<size_t> low(nblocks, 0);
+        std::vector<uint8_t> on_stack(nblocks, 0);
+        std::vector<size_t> stack;
+        std::vector<std::pair<size_t, size_t>> work;
+        size_t next_index = 0;
+        for (size_t root = 0; root < nblocks; ++root) {
+            if (index[root] != SIZE_MAX) {
+                continue;
+            }
+            work.emplace_back(root, 0);
+            index[root] = low[root] = next_index++;
+            stack.push_back(root);
+            on_stack[root] = 1;
+            while (!work.empty()) {
+                if (cancelled()) {
+                    return false;
+                }
+                size_t v = work.back().first;
+                size_t& pos = work.back().second;
+                if (pos < succ[v].size()) {
+                    size_t w = succ[v][pos++];
+                    if (index[w] == SIZE_MAX) {
+                        index[w] = low[w] = next_index++;
+                        stack.push_back(w);
+                        on_stack[w] = 1;
+                        work.emplace_back(w, 0);
+                    } else if (on_stack[w]) {
+                        low[v] = std::min(low[v], index[w]);
+                    }
+                    continue;
+                }
+                work.pop_back();
+                if (!work.empty()) {
+                    size_t parent = work.back().first;
+                    low[parent] = std::min(low[parent], low[v]);
+                }
+                if (low[v] == index[v]) {
+                    size_t c = comp_cyclic.size();
+                    size_t members = 0;
+                    size_t w;
+                    do {
+                        w = stack.back();
+                        stack.pop_back();
+                        on_stack[w] = 0;
+                        comp[w] = c;
+                        ++members;
+                    } while (w != v);
+                    bool self_loop = std::find(succ[v].begin(), succ[v].end(), v) != succ[v].end();
+                    comp_cyclic.push_back(members > 1 || self_loop);
+                }
+            }
+        }
+    }
+
+    // (call block, defining block) -> whether the call's block can run again without the defining block
+    std::unordered_map<uint64_t, bool> answers;
+    // the blocks visited by the current search, by the search's stamp
+    std::vector<uint32_t> visited(nblocks, 0);
+    uint32_t stamp = 0;
+    std::vector<size_t> worklist;
+    bool search_cancelled = false;
+    // the call's block is in a cyclic component (the caller checks)
+    auto reentered = [&](size_t use, size_t def) -> bool {
+        // every cycle through the call's block stays in its component: if the defining block is outside, any of
+        // them runs the call again without it; only a defining block in the component needs the search
+        if (comp[def] != comp[use]) {
+            return true;
+        }
+        uint64_t key = (static_cast<uint64_t>(use) << 32) | static_cast<uint64_t>(def);
+        auto it = answers.find(key);
+        if (it != answers.end()) {
+            return it->second;
+        }
+        bool found = false;
+        ++stamp;
+        worklist.clear();
+        worklist.push_back(use);
+        while (!found && !worklist.empty()) {
+            if (cancelled()) {
+                search_cancelled = true;
+                return true;
+            }
+            size_t b = worklist.back();
+            worklist.pop_back();
+            for (size_t s : succ[b]) {
+                if (s == use) {
+                    found = true;
+                    break;
+                }
+                if (s == def || visited[s] == stamp || comp[s] != comp[use]) {
+                    continue;
+                }
+                visited[s] = stamp;
+                worklist.push_back(s);
+            }
+        }
+        answers.emplace(key, found);
+        return found;
+    };
+
+    for (size_t i = 0; i < nblocks; ++i) {
+        for (const auto& inst : func.blocks[i]->instructions) {
+            if (cancelled()) {
+                return false;
+            }
+            int arg_start = qore_ir_call_arg_start(inst.get());
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t op = static_cast<size_t>(arg_start); op < inst->operands.size(); ++op) {
+                QoreIRValue arg = inst->operands[op];
+                if (!arg.isValid() || arg.id >= def_block.size() || def_block[arg.id] == UINT32_MAX
+                        || def_block[arg.id] == i || comp[i] == SIZE_MAX || !comp_cyclic[comp[i]]) {
+                    continue;
+                }
+                bool again = reentered(i, def_block[arg.id]);
+                if (search_cancelled) {
+                    return false;
+                }
+                if (again) {
+                    reused[arg.id] = 1;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg) {
@@ -2588,9 +2777,12 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
     This asks the question structurally rather than through the ownership facts, which are only
     approximate here - a native float carries QoreIRValueOwnership::Unknown rather than an answer -
     and getting it wrong means releasing a value another consumer still holds.  A LoadLocal result
-    is never tracked for cleanup, so it is the case that can be admitted without any of that
-    reasoning, and it is the one that matters: it is what stops a loop-invariant call whose argument
-    is a local or a parameter from leaving the loop.
+    is the case that can be admitted without any of that reasoning, and it is the one that matters:
+    it is what stops a loop-invariant call whose argument is a local or a parameter from leaving the
+    loop.  A call does release a LoadLocal argument that has a reference of its own when the call
+    returns (design/temporary-lifetime.md), but only one defined again for each execution of the
+    call: a load hoisted to the preheader is defined once for all iterations, which the interpreter
+    and native code check with qore_ir_find_reused_call_args(), so for them it stays a plain read.
 */
 static bool qore_ir_call_cannot_consume_operand(
         const std::unordered_map<uint32_t, QoreIRInstruction*>* definitions, QoreIRValue value) {

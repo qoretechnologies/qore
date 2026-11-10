@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -1558,7 +1559,9 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
-        ValueEvalOptimizedRefHolder val(info.exp, xsink);
+        // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
+        // temporary of the statement that creates the object (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(info.exp, true, xsink);
         if (*xsink) {
             return -1;
         }
@@ -7612,7 +7615,8 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
-        ValueEvalOptimizedRefHolder val(exp, &init_xsink);
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {
             assignInitFiltered(name, val.takeReferencedValue(), &init_xsink);
         }

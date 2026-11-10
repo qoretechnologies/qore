@@ -13106,6 +13106,15 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     // The argument's call (if any) is already lowered as Invoke by lowerCallArgs.
     QoreIRValue result = builder.createExprOp(opcode, expr, operands, call->loc)->result;
     never_nothing_values.insert(result.id);
+    // the argument is released when the conversion returns, as the argument of a call is (a temporary, or a value
+    // that a read of a variable gave a reference of its own to; a value borrowed from a variable has no cleanup), see
+    // design/temporary-lifetime.md
+    QoreValue arg_expr = parse_args ? parse_args->get(0) : args->retrieveEntry(0);
+    if ((arg_expr.getType() == NT_VARREF || arg_expr.getType() == NT_SELF_VARREF
+                || arg_expr.getType() == NT_CLASS_VARREF || qore_ir_expr_is_temporary(arg_expr))
+            && !isImmediateCleanupFreeType(getExprTypeInfo(arg_expr))) {
+        builder.createReleaseOwnedTemp(operands[0], call->loc);
+    }
     return result;
 }
 

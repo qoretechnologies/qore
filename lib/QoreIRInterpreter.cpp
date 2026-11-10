@@ -114,9 +114,28 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
     return enabled;
 }
 
+// Casts of the call nodes that the call paths read on every call.  The node type identifies the class
+// (include/qore/node_types.h): FunctionCallNode is the only class constructed with NT_FUNCTION_CALL and the base of the
+// only one with NT_PROGRAM_FUNC_CALL (ProgramFunctionCallNode), and StaticMethodCallNode the only class with
+// NT_STATIC_METHOD_CALL; a copy keeps the type of the node copied.  A test of the type replaces a dynamic_cast, which
+// compares the names of the classes (strcmp) on every call, at a cost that depends on where the names are in memory.
+static inline const FunctionCallNode* qore_ir_function_call_node(const AbstractQoreNode* node) {
+    const FunctionCallNode* rv = node && (node->getType() == NT_FUNCTION_CALL
+            || node->getType() == NT_PROGRAM_FUNC_CALL)
+        ? static_cast<const FunctionCallNode*>(node) : nullptr;
+    assert(rv == dynamic_cast<const FunctionCallNode*>(node));
+    return rv;
+}
+
+static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const AbstractQoreNode* node) {
+    const StaticMethodCallNode* rv = node && node->getType() == NT_STATIC_METHOD_CALL
+        ? static_cast<const StaticMethodCallNode*>(node) : nullptr;
+    assert(rv == dynamic_cast<const StaticMethodCallNode*>(node));
+    return rv;
+}
+
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
-    const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    const auto* call = expr.hasNode() ? qore_ir_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call) {
         return false;
     }
@@ -2301,16 +2320,65 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
     point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
+// returns true for an instruction that reads a variable or a member of self, whose value a call that takes it as an
+// argument releases
+// when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
+// reads its element slot again
+static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadArg:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::LoadGlobal:
+        case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::LoadSelfMember:
+        case QoreIROpcode::LoadStaticVar:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// returns true for an operator whose value holds no reference to its operands, so that an operand read from a local
+// can be borrowed from it for the operator: a conversion to bool, a negation, a comparison, a type test, exists,
+// elements and keys
+static bool qore_ir_operator_keeps_no_operand(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming, ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming,
+        const std::vector<uint8_t>& reused_call_args, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
     // values used as call arguments by a call in the block or the temp scope (the statement) that defines them: a
     // call in a try block is an invoke that ends its block, and its arguments are defined in the blocks before it, as
-    // is an argument given by a Phi (c ? new T() : new T()); a loop invariant hoisted out of a loop is defined in a
-    // temp scope of its own
+    // is an argument given by a Phi (c ? new T() : new T()).  A loop invariant hoisted out of a loop keeps the temp
+    // scope of the statement in the loop body that it was moved from: it is in reused_call_args
+    // (qore_ir_find_reused_call_args()) and is never consumed, as the next iteration uses it again
     std::vector<uint8_t> same_block_call_args(counts.size(), 0);
     // the block and the temp scope defining each value
     std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
@@ -2318,10 +2386,21 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
     // constant is not a temporary, and the interpreter can read it again from its slot
     std::vector<uint8_t> def_by_call(counts.size(), 0);
+    // values read from a variable: a read that gives the frame a reference of its own (through a reference, or of a
+    // closure-bound, global or thread-local variable) and that a call takes as an argument is released when the call
+    // returns, as any argument; a read borrowed from the variable has no cleanup entry and is left as it is
+    std::vector<uint8_t> def_by_variable_read(counts.size(), 0);
+    // the instruction defining each value, and the block and position of the call that uses a value as an argument
+    std::vector<const QoreIRInstruction*> def_inst(counts.size(), nullptr);
+    std::vector<uint32_t> def_pos(counts.size(), 0);
+    std::vector<const QoreIRBasicBlock*> call_block(counts.size(), nullptr);
+    std::vector<uint32_t> call_pos(counts.size(), 0);
+    // a function that creates a reference can write a variable through it with any call or store
+    bool creates_reference = false;
     std::vector<const QoreIRPhiInstruction*> phis;
     for (const auto& block : func.blocks) {
-        for (const auto& inst_uptr : block->instructions) {
-            const QoreIRInstruction* inst = inst_uptr.get();
+        for (size_t inst_pos = 0; inst_pos < block->instructions.size(); ++inst_pos) {
+            const QoreIRInstruction* inst = block->instructions[inst_pos].get();
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
             });
@@ -2352,6 +2431,15 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
                 def_by_call[inst->result.id] = arg_start >= 0;
+                def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
+                def_inst[inst->result.id] = inst;
+                def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
+            }
+            if (inst->opcode == QoreIROpcode::CreateParseRef
+                    || (inst->opcode == QoreIROpcode::Invoke
+                        && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode
+                            == QoreIROpcode::CreateParseRef)) {
+                creates_reference = true;
             }
         }
     }
@@ -2399,20 +2487,73 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
         }
     }
     for (const auto& block : func.blocks) {
-        for (const auto& inst_uptr : block->instructions) {
-            const QoreIRInstruction* inst = inst_uptr.get();
+        const auto& insts = block->instructions;
+        for (size_t pos = 0; pos < insts.size(); ++pos) {
+            const QoreIRInstruction* inst = insts[pos].get();
             int arg_start = qore_ir_call_arg_start(inst);
             if (arg_start < 0) {
                 continue;
             }
             for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
                 QoreIRValue arg = inst->operands[i];
-                if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
+                if (arg.isValid() && arg.id < def_block.size()
+                        && (def_by_call[arg.id] || def_by_variable_read[arg.id])
+                        && !(arg.id < reused_call_args.size() && reused_call_args[arg.id])
                         && (def_block[arg.id] == block.get()
                             || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
                     same_block_call_args[arg.id] = 1;
+                    call_block[arg.id] = block.get();
+                    call_pos[arg.id] = static_cast<uint32_t>(pos);
                 }
             }
+        }
+    }
+    // A read of an IR-only local (no reference to it exists, no closure binds it) holds a reference that only the
+    // statement's DiscardTemps would otherwise release; releasing it when the call returns, instead, is observable
+    // only if the statement writes the variable after the read: after the call (f(o) + (o = NOTHING) + mark()) or
+    // before it, in a later argument (c.m(o, o = NOTHING) + mark()), the write or the call's return must destroy the
+    // object, as in the AST interpreter, whose argument list then holds the only reference.  Without a write from the
+    // read to the end of the statement, the variable holds the value until then, and the read is left to the end of
+    // the statement, which costs the call path nothing at run time.  A write in another block, or a function that
+    // creates a reference (through which a call or a store can write any variable), keeps the release at call return.
+    auto read_needs_release_at_return = [&](uint32_t id) -> bool {
+        const QoreIRInstruction* def = def_inst[id];
+        if (creates_reference || !def || def->opcode != QoreIROpcode::LoadLocal || !call_block[id]
+                || call_block[id] != def_block[id]) {
+            return true;
+        }
+        const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
+        if (!load->local || load->is_ref || load->is_closure
+                || !func.ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
+            return true;
+        }
+        const auto& insts = call_block[id]->instructions;
+        const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
+        if (!scope) {
+            return true;
+        }
+        // from the read (the call is after it in the same block) to the end of the call's statement
+        assert(def_pos[id] < call_pos[id]);
+        for (size_t j = def_pos[id] + 1; j < insts.size(); ++j) {
+            const QoreIRInstruction* next = insts[j].get();
+            if (qore_ir_get_written_local(next) == load->local) {
+                return true;
+            }
+            if (j > call_pos[id]
+                    && (next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
+                    && next->temp_scope_id == scope) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // a call argument that a later execution of the call uses again counts one use more, for that execution: the
+    // use counts are then the uses of each definition at run time, so the call paths that take the slot of an
+    // argument used only by the call (consumeLastUseCallArgSlots()), and the moves of a value used once, leave it
+    // alone with no check of their own at run time
+    for (size_t i = 0; i < counts.size() && i < reused_call_args.size(); ++i) {
+        if (reused_call_args[i]) {
+            ++counts[i];
         }
     }
     dot_eval_only_bases.assign(counts.size(), 0);
@@ -2421,7 +2562,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
         }
-        if (same_block_call_args[i] && counts[i] == 1) {
+        if (same_block_call_args[i] && counts[i] == 1
+                && (def_by_call[i] || read_needs_release_at_return(static_cast<uint32_t>(i)))) {
             consumed_call_args[i] = 1;
         }
     }
@@ -2445,8 +2587,16 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint8_t> dot_eval_only_bases;
     std::vector<uint8_t> consumed_call_args;
     std::vector<uint8_t> phi_takes_incoming;
+    // the call arguments that a later execution of the call uses again (a read hoisted out of a loop): no call
+    // releases them (see design/temporary-lifetime.md); computed without check points, as the use counts above, since
+    // the result is cached for every thread that runs the function: a cancellation pending in the thread that runs
+    // it first must not change it
+    std::vector<uint8_t> reused_call_args;
+    bool reuse_complete = qore_ir_find_reused_call_args(func, reused_call_args, nullptr);
+    assert(reuse_complete);
+    (void)reuse_complete;
     if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, phi_takes_incoming,
-            xsink)) {
+            reused_call_args, xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -2639,8 +2789,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         // a write to the local between the load and the call (o.m(o = new T()), o.m(remove o)) can release the value
         // borrowed; the analysis also sees writes that are not stores (an lvalue path rooted at the local) and the
         // writes through a reference; if it is cancelled, it gives every load, and none is borrowed
-        // the candidates: the loads of IR-only locals used only as the base of a method call; the analysis runs only
-        // for a function that has one
+        // the candidates: the loads of IR-only locals used only as the base of a method call, or used once (as the
+        // operand of an operator that keeps no reference to it, see below); the analysis runs only for a function
+        // that has one
         std::vector<std::pair<const QoreIRBasicBlock*, size_t>> candidates;
         for (const auto& block : func.blocks) {
             const auto& insts = block->instructions;
@@ -2650,7 +2801,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     continue;
                 }
                 const uint32_t rid = load->result.id;
-                if (rid >= bases.size() || !bases[rid]) {
+                // the base of a method call, or the operand of an operator that does not keep it, used once
+                if (rid >= bases.size() || (!bases[rid] && (rid >= func.interpreter_value_use_counts.size()
+                        || func.interpreter_value_use_counts[rid] != 1))) {
                     continue;
                 }
                 const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
@@ -2679,8 +2832,26 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
                         static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
                 if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
-                    borrowed_bases[rid] = 1;
+                    if (bases[rid]) {
+                        borrowed_bases[rid] = 1;
+                    }
                     break;
+                }
+                // the operand of an operator whose value holds no reference to it is borrowed, as the AST
+                // interpreter and native code borrow a value read from a local: an assignment to the local later in
+                // the statement releases the value, which no part of the statement uses any more
+                if (qore_ir_operator_keeps_no_operand(next->opcode)) {
+                    bool uses = false;
+                    for (const QoreIRValue& op : next->operands) {
+                        if (op.id == rid) {
+                            uses = true;
+                            break;
+                        }
+                    }
+                    if (uses) {
+                        borrowed_bases[rid] = 1;
+                        break;
+                    }
                 }
                 // a write to the local can release the value borrowed (one between the load and the call puts the
                 // load in overwritten)
@@ -15752,8 +15923,7 @@ load_local_done:
                     const QoreTypeParamInstantiation* explicit_inst =
                         direct_inst->explicit_type_param_inst;
                     if (!explicit_inst) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
-                            direct_inst->expr.getInternalNode());
+                        const auto* call = qore_ir_function_call_node(direct_inst->expr.getInternalNode());
                         explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation()
                             : nullptr;
@@ -15876,7 +16046,7 @@ load_local_done:
             case QoreIROpcode::CallStaticDirect: {
                 // Fast path: bypass AST for resolved static method calls with IR/JIT
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                const StaticMethodCallNode* static_call_expr = dynamic_cast<const StaticMethodCallNode*>(
+                const StaticMethodCallNode* static_call_expr = qore_ir_static_method_call_node(
                     static_inst->expr.getInternalNode());
                 if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
@@ -16441,8 +16611,7 @@ load_local_done:
                     const auto* synthetic_global_call =
                         direct_inst->fallback_method_name
                             && direct_inst->expr.hasNode()
-                        ? dynamic_cast<const FunctionCallNode*>(
-                            direct_inst->expr.getInternalNode()) : nullptr;
+                        ? qore_ir_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = direct_inst->method
                         ? direct_inst->method->getName()
@@ -16636,8 +16805,7 @@ load_local_done:
                     const auto* synthetic_global_call =
                         de_invoke_inst->fallback_method_name
                             && de_invoke_inst->expr.hasNode()
-                        ? dynamic_cast<const FunctionCallNode*>(
-                            de_invoke_inst->expr.getInternalNode()) : nullptr;
+                        ? qore_ir_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = de_invoke_inst->method
                         ? de_invoke_inst->method->getName()

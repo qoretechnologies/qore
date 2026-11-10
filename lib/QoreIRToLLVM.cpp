@@ -2316,6 +2316,10 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_def_block.clear();
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
+    value_defined_by_variable_read.clear();
+    reused_call_args.clear();
+    reference_read_slots.clear();
+    last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -5302,6 +5306,7 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), previous);
     registerInvokeCleanupAlloca(current);
     registerInvokeCleanupAlloca(previous);
+    last_reference_read_slot = current;
 
     llvm::Value* is_ref = builder->CreateICmpNE(builder->CreateLoad(i8_type, ref_flag),
         llvm::ConstantInt::get(i8_type, 0));
@@ -5701,21 +5706,29 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             (void)qore_check_cancel(nullptr, "LLVM call argument release");
         }
         uint32_t id = inst->operands[i - 1].id;
-        // only a value created by a call, or a Phi of such values that took their references over (see
-        // consumable_phis), is a temporary whose release is observable; a value loaded from a variable or a constant
-        // is not
-        if (!id || weak_load_result_ids.count(id) || (!value_defined_by_call.count(id) && !consumable_phis.count(id))
-                || invoke_alloca_map.find(id) == invoke_alloca_map.end()) {
+        // a value created by a call, a Phi of such values that took their references over (see consumable_phis), and
+        // a value read from a variable that the read gave a reference of its own to are released; a value borrowed
+        // from a variable or a constant has no cleanup slot.  A read through a reference keeps its reference in the
+        // slot of its read site, which is released if it still holds the value
+        if (!id || weak_load_result_ids.count(id)) {
+            continue;
+        }
+        auto ref_read_it = reference_read_slots.find(id);
+        bool reference_read = ref_read_it != reference_read_slots.end() && ref_read_it->second;
+        if (!reference_read && ((!value_defined_by_call.count(id) && !consumable_phis.count(id)
+                    && !value_defined_by_variable_read.count(id))
+                || invoke_alloca_map.find(id) == invoke_alloca_map.end())) {
             continue;
         }
         auto uses_it = operand_remaining_uses.find(id);
         if (uses_it == operand_remaining_uses.end() || uses_it->second > (use_pending ? 1 : 0)) {
             continue;
         }
-        // a value defined outside the block, such as a loop invariant hoisted out of a loop, is used again by each
-        // execution of the block; one defined in another block of the same temp scope (statement) is not: a call in
-        // a try block is an invoke that ends its block, and its arguments are defined in the blocks before it,
-        // while a hoisted invariant is defined in a temp scope of its own
+        // a value defined outside the block can be used again by the next execution of the block; one defined in
+        // another block of the same temp scope (statement) is not, as a call in a try block is an invoke that ends its
+        // block, and its arguments are defined in the blocks before it, unless the call's block can run again
+        // without the defining block: a loop invariant hoisted out of a loop keeps the temp scope of the statement
+        // in the loop body that it was moved from (reused_call_args, see qore_ir_find_reused_call_args())
         auto def_it = value_def_block.find(id);
         if (def_it == value_def_block.end()) {
             continue;
@@ -5726,8 +5739,26 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
                     || scope_it->second != inst->temp_scope_id) {
                 continue;
             }
+            if (id < reused_call_args.size() && reused_call_args[id]) {
+                continue;
+            }
         }
-        releaseCleanupForValueId(id, module);
+        if (reference_read) {
+            auto val_it = values.find(id);
+            if (val_it == values.end() || !val_it->second) {
+                continue;
+            }
+            auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
+                    llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+            builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, id), xsink_arg});
+            // a read that a later write to the local can release before its last use took a reference of its own
+            // as well (overwritten_local_reads), in a cleanup slot of the value
+            if (invoke_alloca_map.find(id) != invoke_alloca_map.end()) {
+                releaseCleanupForValueId(id, module);
+            }
+        } else {
+            releaseCleanupForValueId(id, module);
+        }
         released = true;
     }
     return released;
@@ -5993,10 +6024,13 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
             // multiple calls (for example, map (f($1), g($1)), (map make($1), xs)).
             // Only let the callee release its cleanup at the final use; otherwise
             // the first call frees the value while later operands still refer to it.
+            // An argument that a later execution of the call uses again (a read hoisted out of a loop, whose one
+            // static use runs on every iteration) is not given to the callee either.
             auto uses_it = operand_remaining_uses.find(value_id);
             auto alloca_it = invoke_alloca_map.find(value_id);
             if (alloca_it != invoke_alloca_map.end()
-                    && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)) {
+                    && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
+                    && !(value_id < reused_call_args.size() && reused_call_args[value_id])) {
                 cleanup_ptr = alloca_it->second;
                 if (!cleanup_ptr) {
                     cleanup_ptr = promoteSsaEntryToAlloca(value_id,
@@ -11830,6 +11864,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_def_block.clear();
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
+    value_defined_by_variable_read.clear();
+    {
+        // the call arguments that a later execution of the call uses again, such as a read hoisted out of a loop:
+        // no call releases them (see design/temporary-lifetime.md); a cancelled analysis fails the compilation, as
+        // compiling with a partial answer would make it permanent
+        size_t reuse_check_count = 0;
+        if (!qore_ir_find_reused_call_args(func, reused_call_args, &reuse_check_count)) {
+            error = "cancelled during LLVM reused call argument analysis";
+            return false;
+        }
+    }
+    reference_read_slots.clear();
+    last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -12044,6 +12091,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 value_def_temp_scope[inst_ptr->result.id] = inst_ptr->temp_scope_id;
                 if (qore_ir_call_arg_start(inst_ptr.get()) >= 0) {
                     value_defined_by_call.insert(inst_ptr->result.id);
+                }
+                switch (inst_ptr->opcode) {
+                    case QoreIROpcode::LoadLocal:
+                    case QoreIROpcode::LoadArg:
+                    case QoreIROpcode::LoadClosure:
+                    case QoreIROpcode::LoadGlobal:
+                    case QoreIROpcode::LoadThreadLocal:
+                    case QoreIROpcode::LoadSelfMember:
+                    case QoreIROpcode::LoadStaticVar:
+                        value_defined_by_variable_read.insert(inst_ptr->result.id);
+                        break;
+                    default:
+                        break;
                 }
             }
             if (inst_ptr->opcode == QoreIROpcode::ToBool
@@ -15269,6 +15329,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // its consumers until the next read at this site (see emitReferenceLocalRead())
                     if (localReferenceFlag(key, llvm_func)) {
                         loaded = emitReferenceLocalRead(key, loaded, module, llvm_func, inst);
+                        reference_read_slots[inst->result.id] = last_reference_read_slot;
                     }
                     nanboxed_values.insert(inst->result.id);
                     if (assigned_non_nothing_locals.count(key)) {
@@ -32314,8 +32375,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // of the frame release
             llvm::Value* slot = nullptr;
             auto element_it = iterator_element_allocas.find(value_id);
+            auto ref_read_it = reference_read_slots.find(value_id);
             if (element_it != iterator_element_allocas.end()) {
                 slot = element_it->second;
+            } else if (ref_read_it != reference_read_slots.end() && ref_read_it->second) {
+                // a read through a reference keeps its reference in the slot of its read site, which is released if
+                // it still holds the value (see releaseConsumedCallArgs())
+                auto val_it = values.find(value_id);
+                if (val_it == values.end() || !val_it->second) {
+                    return true;
+                }
+                auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
+                        llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+                builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, value_id),
+                    xsink_arg});
+                // the reference of its own that a read overwritten before its last use took (overwritten_local_reads)
+                auto alloca_it = invoke_alloca_map.find(value_id);
+                if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
+                    llvm::Value* own_slot = alloca_it->second;
+                    llvm::Value* own_val = builder->CreateLoad(i64_type, own_slot);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), own_slot);
+                    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(decref_fn, {own_val, xsink_arg});
+                }
+                return true;
             } else {
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it == invoke_alloca_map.end() || !alloca_it->second || !nanboxed_values.count(value_id)
