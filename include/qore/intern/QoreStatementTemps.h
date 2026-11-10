@@ -190,17 +190,21 @@ public:
         the value (bad_alloc), the holder still owns it and releases it.
 
         @param exp the operand, which must outlive the holder (the operand of an operator node)
-        @param xs the exception sink of the evaluation, which must not be null
+        @param xs the exception sink of the evaluation; null when an operator is folded at parse time (keys), when
+        nothing is held
     */
-    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(exp, xs) {
-        assert(xs);
-        if (needs_deref && v.needsRef()) {
-            QoreStatementTempScope::holdReceiver(exp, *this, xs);
-        }
+    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+        evalOperand(exp);
     }
 
     QoreOperandEvalHolder(const QoreOperandEvalHolder&) = delete;
     QoreOperandEvalHolder& operator=(const QoreOperandEvalHolder&) = delete;
+
+private:
+    //! evaluates the operand as ValueEvalOptimizedRefHolder::eval() does, and hands a temporary node to the
+    //! innermost scope of the thread (QoreStatementTempScope::holdReceiver()); one call, so that an operand that holds
+    //! no reference costs only a test of the value that it has at hand
+    DLLLOCAL void evalOperand(const QoreValue& exp);
 };
 
 //! returns true if the operand of a change to an lvalue is evaluated as a statement of its own

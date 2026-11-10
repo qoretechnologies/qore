@@ -165,18 +165,18 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
 }
 
 bool QoreLogicalLessThanOperatorNode::floatLessThan(ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsFloat() < rh->getAsFloat();
 }
 
 bool QoreLogicalLessThanOperatorNode::bigIntLessThan(ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBigInt() < rh->getAsBigInt();

@@ -50,6 +50,14 @@ string sub g3(auto a, auto b, auto c) {
     return "g3";
 }
 
+hash<auto> sub mkh(string n) {
+    return {"a": new E(n)};
+}
+
+E sub mke(string n) {
+    return new E(n);
+}
+
 #! runs a case
 sub t(string name, code<auto()> c) {
     printf("%s:\n", name);
@@ -126,6 +134,10 @@ sub main() {
     t("operand in map", auto sub () { list<auto> r = map (new E("m" + $1) == mark("m" + $1)), (1, 2); });
     # an exception after the operator: the interrupted argument list is released first
     t("operand exception", auto sub () { string s = g3(new E("arg"), new E("op") == NOTHING, raise()); });
+    # keys, and a comparison with a float, whose AST node takes a typed path
+    t("operand of keys", auto sub () { string s = f1(keys mkh("k")) + mark("k"); });
+    t("operand of float compare", auto sub () { string s = f1(mke("lt") < 1.0) + mark("lt"); });
+    t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });
     # a statement in a try block, or with a branch, continues in other blocks after a call

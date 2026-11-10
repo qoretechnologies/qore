@@ -17679,6 +17679,27 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
 }
 
 // documented in QoreIRAnalysis.h
+bool qore_ir_value_may_be_observable(const QoreIRFunction& func, QoreIRValue value, const QoreTypeInfo* declared) {
+    auto scalar = [](const QoreTypeInfo* ti) -> bool {
+        return ti && (ti == bigIntTypeInfo || ti == floatTypeInfo || ti == boolTypeInfo || ti == stringTypeInfo
+            || ti == dateTypeInfo || ti == binaryTypeInfo || ti == numberTypeInfo || ti == softBigIntTypeInfo
+            || ti == softFloatTypeInfo || ti == softBoolTypeInfo || ti == softStringTypeInfo);
+    };
+    if (scalar(declared)) {
+        return false;
+    }
+    if (const QoreIRValueFacts* facts = func.getValueFacts(value)) {
+        if (facts->representation == QoreIRValueRepresentation::NativeInt
+                || facts->representation == QoreIRValueRepresentation::NativeFloat
+                || facts->representation == QoreIRValueRepresentation::NativeBool
+                || scalar(facts->type_info)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// documented in QoreIRAnalysis.h
 bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load) {
     return load.local && !load.is_ref && !load.is_closure && !load.local->closureUse() && !load.local->isTopLevel()
         && !QoreTypeInfo::isReference(load.local->getTypeInfo());
@@ -17786,7 +17807,8 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
                 continue;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
-            if (!qore_ir_is_plain_local_read(*load)) {
+            if (!qore_ir_is_plain_local_read(*load) || !qore_ir_value_may_be_observable(*this, load->result,
+                    load->local->getTypeInfo())) {
                 continue;
             }
             auto uses_it = uses.find(load->result.id);

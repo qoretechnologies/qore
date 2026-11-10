@@ -123,10 +123,10 @@
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
-    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
-    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
-    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
+    A temporary value, such as an object returned by a call in a chain of member accesses and method calls, the operand
+    of an operator or a value read through a reference, lives until the end of its statement; given to a call as an
+    argument, it is released when the call returns.  Code that relies on earlier destruction must assign the value to
+    a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1554,10 +1554,6 @@
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
-    - with the AST interpreter, a temporary value that is the operand of an arithmetic, comparison, logical or other
-      operator, or the condition of <tt>?:</tt> (ex: the object in <tt>f(new T() == x, g())</tt>), was released when
-      the operator returned; it now lives until the end of the statement, as in the other execution modes (see
-      @ref temporary_lifetime)
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to

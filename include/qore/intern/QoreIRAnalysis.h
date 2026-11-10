@@ -227,6 +227,12 @@ DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFuncti
 */
 DLLLOCAL bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load);
 
+//! Returns false if \a value (of a local declared with type \a declared, if not null) can only be a value whose
+//! release cannot be observed: an int, a float, a bool, a string, a date, a binary or a number, which hold no other
+//! values, so that releasing it early is not worth an instruction
+DLLLOCAL bool qore_ir_value_may_be_observable(const QoreIRFunction& func, QoreIRValue value,
+    const QoreTypeInfo* declared);
+
 //! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
 constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 

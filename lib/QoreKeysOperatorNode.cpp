@@ -131,10 +131,35 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
+//! returns the iterator of the keys of the evaluated operand \a marg, or nullptr if it has no keys
+static FunctionalOperatorInterface* qore_keys_iterator(ValueOptionalRefHolder& marg,
+        FunctionalOperator::FunctionalValueType& value_type,
+        ExceptionSink* xsink) {
+    qore_type_t t = marg->getType();
+    if (t == NT_HASH) {
+        value_type = FunctionalOperator::list;
+        return new QoreFunctionalKeysOperator(marg.takeReferencedNode<QoreHashNode>(), xsink);
+    }
+    if (t == NT_OBJECT) {
+        value_type = FunctionalOperator::list;
+        return new QoreFunctionalKeysOperator(
+            qore_object_private::get(*marg->get<QoreObject>())->getRuntimeMemberHash(xsink), xsink
+        );
+    }
+    value_type = FunctionalOperator::nothing;
+    return nullptr;
+}
+
 QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    // the operand is a temporary of the statement, which lives until the statement ends (qore#5712)
+    // (also evaluated at parse time, without an exception sink: QoreKeysOperatorNode::parseInitImpl())
+    QoreOperandEvalHolder marg(exp, xsink);
+    if (xsink && *xsink) {
+        return QoreValue();
+    }
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
-    if ((xsink && *xsink) || value_type != list || !ref_rv)
+    std::unique_ptr<FunctionalOperatorInterface> f(qore_keys_iterator(marg, value_type, xsink));
+    if ((xsink && *xsink) || value_type != FunctionalOperator::list || !ref_rv)
         return QoreValue();
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
@@ -159,20 +184,7 @@ FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(Fun
     ValueEvalOptimizedRefHolder marg(exp, xsink);
     if (xsink && *xsink)
         return nullptr;
-
-    qore_type_t t = marg->getType();
-    if (t == NT_HASH) {
-        value_type = list;
-        return new QoreFunctionalKeysOperator(marg.takeReferencedNode<QoreHashNode>(), xsink);
-    }
-    if (t == NT_OBJECT) {
-        value_type = list;
-        return new QoreFunctionalKeysOperator(
-            qore_object_private::get(*marg->get<QoreObject>())->getRuntimeMemberHash(xsink), xsink
-        );
-    }
-    value_type = nothing;
-    return nullptr;
+    return qore_keys_iterator(marg, value_type, xsink);
 }
 
 bool QoreFunctionalKeysOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {

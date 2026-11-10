@@ -50,7 +50,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(35, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -62,6 +62,9 @@ class TempReleasePointsTest inherits QUnit::Test {
         assertTrue(out =~ /\noperand in map:\n  mark m1\n  dtor m1\n  mark m2\n  dtor m2\n/, "operand in map");
         assertTrue(out =~ /\noperand exception:\n  dtor arg\n  dtor op\n  ! X\n/, "operand and an exception");
         assertTrue(out =~ /\ncondition:\n  mark q\n  dtor q\n/, "condition of ?:");
+        assertTrue(out =~ /\noperand of keys:\n  mark k\n  dtor k\n/, "operand of keys");
+        assertTrue(out =~ /\noperand of float compare:\n  mark lt\n  dtor lt\n/, "operand of a float comparison");
+        assertTrue(out =~ /\nfloat compare exception:\n  dtor arg\n  dtor gt\n  ! X\n/, "float comparison and an exception");
         assertTrue(out =~ /\ntry block:\n  dtor try\n  mark try\n/, "try block");
         assertTrue(out =~ /\nbranch:\n  dtor br\n  mark br\n/, "branch");
     }

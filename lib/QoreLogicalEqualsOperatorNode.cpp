@@ -314,27 +314,27 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
 }
 
 bool QoreLogicalEqualsOperatorNode::floatSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsFloat() == rh->getAsFloat();
 }
 
 bool QoreLogicalEqualsOperatorNode::bigIntSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBigInt() == rh->getAsBigInt();
 }
 
 bool QoreLogicalEqualsOperatorNode::boolSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBool() == rh->getAsBool();
