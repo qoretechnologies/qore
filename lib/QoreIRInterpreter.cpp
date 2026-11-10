@@ -1585,6 +1585,51 @@ struct IRCallFrame {
     }
 };
 
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_IR_COLD_NOINLINE __attribute__((noinline, cold))
+#else
+#define QORE_IR_COLD_NOINLINE
+#endif
+
+//! Returns the temp scope that an exception that \a raising raised drains to before it branches to its handler
+/** See exceptionBranchTempScope() in the interpreter loop; only the paths of an exception call it, so it is kept out
+    of the loop, whose normal path is then the same as without it (qore#5689).
+
+    An instruction that closes its temp scope (DiscardTemps, DiscardTempsKeep) raises when a temporary's destructor
+    does, once its scope's mark is gone: the scopes that the exception leaves are then those after the handler's among
+    the scopes that remain, and none if the handler's scope is the innermost one left (0).
+
+    @param raising the instruction that raised the exception
+    @param marks the marks of the temp scopes open in the frame, innermost last
+*/
+static QORE_IR_COLD_NOINLINE uint32_t qore_ir_exception_branch_temp_scope(const QoreIRInstruction* raising,
+        const std::vector<IRCallFrame::TempCleanupMark>& marks) {
+    bool scope_closed = raising->opcode == QoreIROpcode::DiscardTemps
+        || raising->opcode == QoreIROpcode::DiscardTempsKeep;
+    uint32_t scope_id = scope_closed ? 0 : raising->temp_scope_id;
+    if (!raising->exception_target || (!scope_id && !scope_closed)) {
+        return scope_id;
+    }
+    uint32_t handler_scope_id = raising->exception_target->getHandlerTempScopeId();
+    if (!handler_scope_id || handler_scope_id == scope_id) {
+        return scope_id;
+    }
+    size_t i = marks.size();
+    if (!scope_closed) {
+        while (i > 0 && marks[i - 1].scope_id != scope_id) {
+            --i;
+        }
+    }
+    // i - 1 is the index of the raising instruction's mark, or of the innermost one left; the handler's mark is below
+    // it
+    for (; i > 1; --i) {
+        if (marks[i - 2].scope_id == handler_scope_id) {
+            return marks[i - 1].scope_id;
+        }
+    }
+    return scope_id;
+}
+
 struct IRCallFramePool {
     std::vector<std::unique_ptr<IRCallFrame>> frames;
     size_t top = 0;
@@ -7743,35 +7788,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // temporaries are released before the rest of its statement runs); they are drained from the first of them, as
     // the AST interpreter releases the temporaries of every expression and statement that the exception unwinds
     // before the handler runs.  The raising instruction's own scope otherwise (see
-    // design/ir-exception-branch-temp-scope.md).
-    // An instruction that closes its temp scope (DiscardTemps, DiscardTempsKeep) raises when a temporary's destructor
-    // does, once its scope's mark is gone: the scopes that the exception leaves are then those after the handler's
-    // among the scopes that remain, and none if the handler's scope is the innermost one left (0).
+    // design/ir-exception-branch-temp-scope.md).  The computation is out of line, as only exceptions need it
+    // (qore_ir_exception_branch_temp_scope()).
     auto exceptionBranchTempScope = [&](const QoreIRInstruction* raising) -> uint32_t {
-        bool scope_closed = raising->opcode == QoreIROpcode::DiscardTemps
-            || raising->opcode == QoreIROpcode::DiscardTempsKeep;
-        uint32_t scope_id = scope_closed ? 0 : raising->temp_scope_id;
-        if (!raising->exception_target || (!scope_id && !scope_closed)) {
-            return scope_id;
-        }
-        uint32_t handler_scope_id = raising->exception_target->getHandlerTempScopeId();
-        if (!handler_scope_id || handler_scope_id == scope_id) {
-            return scope_id;
-        }
-        size_t i = temp_cleanup_marks.size();
-        if (!scope_closed) {
-            while (i > 0 && temp_cleanup_marks[i - 1].scope_id != scope_id) {
-                --i;
-            }
-        }
-        // i - 1 is the index of the raising instruction's mark, or of the innermost one left; the handler's mark is
-        // below it
-        for (; i > 1; --i) {
-            if (temp_cleanup_marks[i - 2].scope_id == handler_scope_id) {
-                return temp_cleanup_marks[i - 1].scope_id;
-            }
-        }
-        return scope_id;
+        return qore_ir_exception_branch_temp_scope(raising, temp_cleanup_marks);
     };
 
     // Routes an exception that the given instruction raised to its handler in this frame, if it has one: the temps
