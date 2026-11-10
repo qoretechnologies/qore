@@ -2,7 +2,24 @@
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 
-Status: proposed; nothing in this document is implemented yet.
+## Status
+
+Implemented: sections 2 and 3, problems 1 to 3 (phase 1), and section 5 ("As implemented (phase 3)").
+
+**Shelved: section 1 (phase 2) and section 4 (phase 4).**  Both were implemented and measured on the branch
+`design/5587-sync-socket-inline` (the `socket-loop.qr` request went from about 251 to about 51 us, Python about 24),
+and are not merged.  They make system calls on a socket from the calling thread (the first step, the close), so a
+socket is no longer used only by its I/O thread, in the order of its controller's commands: a close by another thread
+can then interleave with a step, which the controller's ordering excludes.  That branch had to handle the
+interleavings one by one (a close shuts the descriptor down while a step runs, a connect could close or take over a
+descriptor number it no longer owned, a registration could race a close); the model that every system call on a
+socket is made by its I/O thread, which excludes them all, is the one the I/O design relies on, and the I/O work of
+the project is on the asynchronous paths, which the shelved phases do not make faster.  Sections 1 and 4 are kept
+below as the record of the design and its measurements.
+
+The error for synchronous and asynchronous operations on the same socket is unchanged: each operation claims its
+direction (`NB_SEND`, `NB_RECV`, `NB_CONNECT`), and a synchronous call made while an operation of the socket holds the
+claim fails with `SOCKET-NON-BLOCK-ERROR` or `SOCKET-ASYNC-MODE-ERROR`.
 
 ## Goal
 
