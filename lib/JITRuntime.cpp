@@ -7416,7 +7416,7 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
     for (int i = 0; i < nargs; ++i) {
         QoreValue value = fromBits(args[i]);
         if (value.isNothing() || value.needsEval()
-                || !QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
+                || !QoreTypeInfo::acceptsInputUnchecked(sig->getParamTypeInfo(i),
                     value.getTypeInfo())
                 // no-narrow container params must bind through the TLS paths so
                 // applyNoNarrowContainerType() gives them assignment semantics

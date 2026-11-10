@@ -3434,7 +3434,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     func.specializeType(facts->type_info));
                 if (!QoreTypeInfo::hasType(member_type)
                         || !QoreTypeInfo::hasType(value_type)
-                        || !QoreTypeInfo::isInputIdentical(
+                        || !QoreTypeInfo::acceptsInputUnchecked(
                             member_type, value_type)) {
                     exact_values = false;
                     break;
@@ -9811,7 +9811,7 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         const QoreTypeInfo* value_type =
             qore_get_value_type(func.specializeType(facts->type_info));
         if (!QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(
+                || !QoreTypeInfo::acceptsInputUnchecked(
                     target_value_type, value_type)) {
             return false;
         }
@@ -9890,7 +9890,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
         }
         if (!QoreTypeInfo::hasType(member_type)
                 || !QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(member_type, value_type)) {
+                || !QoreTypeInfo::acceptsInputUnchecked(member_type, value_type)) {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: hashdecl literal value mismatch for '%s': "
