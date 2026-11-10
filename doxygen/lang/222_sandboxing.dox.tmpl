@@ -653,6 +653,51 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     |@ref Qore::QSEC_NET_UNIX "QSEC_NET_UNIX"|4|UNIX domain sockets
     |@ref Qore::QSEC_NET_ALL "QSEC_NET_ALL"|7|All protocols
 
+    @section sandbox_external_io I/O That Qore Does Not See: Java Code
+
+    The filesystem and network policies of a sandbox are enforced for the I/O that goes through %Qore: sockets,
+    QUIC, and file and directory operations.  Code that does its own I/O is not subject to them: Java code called
+    through the <a href="https://github.com/qoretechnologies/module-jni">jni</a> module uses the JVM's own network
+    and file APIs (\c java.net, \c java.nio, \c java.io, JDBC drivers and other Java libraries), which %Qore never
+    sees, and the JDK has no in-process replacement for its removed Security Manager (JEP 411, JEP 486).  The same
+    applies to any module that embeds another runtime or a library that opens connections or files itself.
+
+    For this reason, Java classes imported through the \c jni module are tagged with the
+    \c QDOM_UNCONTROLLED_API functional domain, so a Program with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" cannot use them directly.  Sandboxed code can still
+    reach Java code indirectly, for example through a data provider action implemented in Java that connects to a
+    destination taken from a connection, so such Java code must apply the policy itself.  The \c jni module provides
+    the class \c org.qore.jni.QoreSandbox for this; its checks apply the policy of the %Qore code that called into
+    Java:
+    - \c checkNetworkAccess(host, port) resolves the host name once with the %Qore resolver and checks every
+      address it resolves to with the policy of %Qore sockets (see @ref sandbox_net_rules), with the host name, so
+      that allowed host patterns apply; it raises \c NETWORK-ACCESS-DENIED naming a denied address, and returns the
+      checked addresses, which the Java code must connect to instead of resolving the host name again, so that no
+      DNS rebinding can occur between the check and the connection
+    - \c checkFileAccess(path, mode) checks a path with the policy of %Qore file operations (see
+      @ref sandbox_fs_path_resolution) and raises \c FILESYSTEM-ACCESS-DENIED
+    - \c capture() captures the policy for work that Java runs on threads of its own (executors, connection pools,
+      the I/O threads of a library); a check on a Java thread that has no %Qore caller and no captured policy
+      raises \c JNI-SANDBOX-ERROR instead of allowing the operation
+
+    In a system-policy capability (@ref Qore::SandboxManager::createSystemPolicyCall() "createSystemPolicyCall()")
+    the checks apply the system policy, as they do for %Qore sockets and files.  %Qore code that Java calls back on
+    a Java thread runs under the sandbox of the code that handed it to Java (see @ref sandbox_provenance), so the
+    checks it makes through Java use that sandbox.
+
+    The checks constrain only Java code that makes them.  Java code may be offered to sandboxed callers only if it
+    has been audited to check every network destination and every path it uses before using them; the audit rules
+    are in \c design/module-sandboxing-audit-guide.md in the %Qore source and in the "Sandboxing Java I/O" section
+    of the \c jni module documentation.
+
+    A data provider app declares this when it is registered: \c external_io in its
+    @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" says that it does I/O that the sandbox does not
+    see, and \c sandbox_aware that it has been audited to check all of that I/O against its caller's policy.  Data
+    provider consumers refuse a sandboxed caller an app that sets \c external_io without \c sandbox_aware, with an
+    \c APP-SANDBOX-ACCESS-DENIED exception naming the app, using
+    @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()";
+    trusted callers are not affected.
+
     @section sandbox_resources Resource Limits
 
     A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from

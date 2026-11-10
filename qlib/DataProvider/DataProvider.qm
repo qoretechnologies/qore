@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.11";
+    version = "3.12";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -723,6 +723,40 @@ set QORE_DATA_PROVIDERS=MyDataProvider;OtherDataProvider
     @verbatim
 $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @endverbatim
+
+    @section dataprovider_external_io Apps With I/O That the Sandbox Does Not See
+
+    The filesystem and network policy of a sandbox (@ref Qore::SandboxManager "SandboxManager") is enforced for the
+    I/O that goes through %Qore.  An app whose actions do their own I/O - in Java code called through the \c jni
+    module, in Python or JavaScript code, or in a native client library that opens connections or files itself -
+    is not subject to it unless the app checks that I/O itself.  Two fields of
+    @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" declare this when the app is registered:
+    - @ref DataProvider::DataProviderAppInfo::external_io "external_io": the app does network or filesystem I/O that
+      the sandbox does not see
+    - @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware": the app has been audited to check all of
+      that I/O against the policy of its caller's sandbox (for Java code, with the \c jni module's
+      \c org.qore.jni.QoreSandbox class, following the audit rules in \c design/module-sandboxing-audit-guide.md)
+
+    The rule for data provider consumers: a sandboxed caller is refused an app that sets \c external_io without
+    \c sandbox_aware, with an \c APP-SANDBOX-ACCESS-DENIED exception naming the app; trusted callers are never
+    refused, and apps without \c external_io are not affected.  Consumers apply the rule with
+    @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()"
+    before they use an app on behalf of a caller (run one of its actions, create a provider or a connection for it),
+    or decide with @ref DataProvider::DataProviderActionCatalog::isSandboxAllowed()
+    "DataProviderActionCatalog::isSandboxAllowed()" which apps to offer to sandboxed callers.
+
+    @code{.py}
+DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+    "name": "MyJavaApp",
+    # ...
+    # the actions connect with a Java client library, and every connection is checked with org.qore.jni.QoreSandbox
+    "external_io": True,
+    "sandbox_aware": True,
+});
+    @endcode
+
+    The fields are carried with the rest of the app's info, also in the provider index; an index built before an
+    app declared them describes it without them until it is rebuilt.
 
     @section dataprovider_retries Retries of Failed Requests
 
@@ -1655,6 +1689,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 */
 /** @page dataprovider_relnotes Release Notes
 
+
+    @section dataprovider_v3_12 DataProvider v3.12
+    - added the @ref DataProvider::DataProviderAppInfo::external_io "external_io" and
+      @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" fields to
+      @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo", which declare that an app does I/O that the
+      sandbox does not see and that it checks that I/O against its caller's policy, and
+      @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess()
+      "DataProviderActionCatalog::checkSandboxAccess()" and
+      @ref DataProvider::DataProviderActionCatalog::isSandboxAllowed()
+      "DataProviderActionCatalog::isSandboxAllowed()", which apply the rule for sandboxed callers (see
+      @ref dataprovider_external_io)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

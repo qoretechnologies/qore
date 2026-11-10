@@ -185,6 +185,34 @@ public hashdecl DataProviderAppInfo {
         @since %DataProvider 3.5
     */
     *bool disable_generic_api_call;
+
+    #! The app does network or filesystem I/O that the %Qore sandbox does not see
+    /** Set this to @ref True for an app whose actions open connections or files outside %Qore's own I/O: in Java
+        code called through the \c jni module, in Python or JavaScript code, or in a native client library that
+        connects or opens files itself.  The filesystem and network policy of a sandbox
+        (@ref Qore::SandboxManager "SandboxManager") is enforced only for the I/O that goes through %Qore, so such
+        I/O is not checked unless the app checks it itself (see "I/O That Qore Does Not See" in the %Qore sandboxing
+        documentation).
+
+        A sandboxed caller cannot use an app with this flag set unless the app also sets
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware"; see
+        @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess()
+        "DataProviderActionCatalog::checkSandboxAccess()" and @ref dataprovider_external_io.
+
+        @since %DataProvider 3.12
+    */
+    *bool external_io;
+
+    #! The app checks all of its external I/O against the policy of its caller's sandbox
+    /** Set this to @ref True only for an app whose external I/O has been audited to check every network destination
+        and every path against the filesystem and network policy of the caller's sandbox before using it; for Java
+        code this is done with the \c jni module's \c org.qore.jni.QoreSandbox class, following the audit rules in
+        \c design/module-sandboxing-audit-guide.md.  It allows sandboxed callers to use an app with
+        @ref DataProvider::DataProviderAppInfo::external_io "external_io" set; it has no effect on an app without it.
+
+        @since %DataProvider 3.12
+    */
+    *bool sandbox_aware;
 }
 
 #! Data Provider Action Type Codes
@@ -4030,6 +4058,69 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
             return rv;
         }
         throw "APP-ERROR", sprintf("application %y is not registered", app);
+    }
+
+    #! Returns @ref True if sandboxed callers may use the given app
+    /** An app that declares @ref DataProvider::DataProviderAppInfo::external_io "external_io" (network or filesystem
+        I/O that the %Qore sandbox does not see) may be used by sandboxed callers only if it also declares
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" (it checks that I/O against the
+        caller's policy itself); every other app may be used by them.  This is the rule of
+        @ref dataprovider_external_io, without deciding whether the caller is sandboxed.
+
+        @param app the app's info as returned by the catalog or by the provider index; only its \c external_io and
+        \c sandbox_aware keys are read
+
+        @return @ref True if sandboxed callers may use the app, @ref False if they must be refused
+
+        @see checkSandboxAccess()
+
+        @since %DataProvider 3.12
+    */
+    static bool isSandboxAllowed(hash<auto> app) {
+        return !app.external_io || app.sandbox_aware;
+    }
+
+    #! Refuses a sandboxed caller the use of an app whose external I/O the sandbox cannot control
+    /** Data provider consumers call this before they use an app (run one of its actions, create a provider or a
+        connection for it) on behalf of a caller.  A sandboxed caller is refused an app that declares
+        @ref DataProvider::DataProviderAppInfo::external_io "external_io" without
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware"; trusted callers are never refused;
+        see @ref dataprovider_external_io.
+
+        @param app the app's info as returned by the catalog or by the provider index; its \c name and
+        \c display_name name it in the error
+        @param sandboxed whether the caller is sandboxed; if not given, the caller is sandboxed if a sandbox governs
+        the current thread's code (Qore::SandboxManager::isSandboxed()), also through a policy barrier or a
+        system-policy capability, so that the check fails closed: trusted code that uses the app on purpose in a
+        capability called by sandboxed code passes @ref False.  Consumers that serve a sandboxed caller from a
+        thread that no sandbox governs (for example a server thread that runs a request for a tenant) pass
+        @ref True.  Qore::SandboxManager::isSandboxed() is used because it is not restricted, so the module can be
+        loaded first by a Program restricted with @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"
+
+        @throw APP-SANDBOX-ACCESS-DENIED the caller is sandboxed, and the app does I/O that the sandbox does not
+        control and is not declared sandbox-aware
+
+        @par Example:
+        @code{.py}
+hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(app_name);
+# a tenant's request: its caller is sandboxed, whatever thread serves it
+DataProviderActionCatalog::checkSandboxAccess(app, True);
+        @endcode
+
+        @see isSandboxAllowed()
+
+        @since %DataProvider 3.12
+    */
+    static checkSandboxAccess(hash<auto> app, *bool sandboxed) {
+        if (DataProviderActionCatalog::isSandboxAllowed(app)) {
+            return;
+        }
+        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+            return;
+        }
+        throw "APP-SANDBOX-ACCESS-DENIED", sprintf("application %y (%s) does network or filesystem I/O that the "
+            "sandbox does not control and is not declared sandbox-aware, so sandboxed code cannot use it",
+            app.name, app.display_name ?? app.name);
     }
 
     #! Searches for applications whose names or descriptions match a regular expression pattern
