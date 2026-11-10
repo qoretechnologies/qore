@@ -41,8 +41,11 @@
     value (\c add30(\\e) left \c e at 30 instead of 31, and a thread started by the handler read no value), and the
     handler's updates were lost.  The handler's own variables are those that its lowering gives it, which the
     serialized IR records: they include a catch variable of a catch block that ends in a rethrow, and the variables of
-    a nested handler, which its IR alone does not show.  A closure read from its IR and compiled with the JIT crashed
-    when it created a closure, as the IR read had no closure node for it.
+    a nested handler, which its IR alone does not show.
+
+    closure-ir-nodes.q has closures that create values from parse nodes (a closure, a reference, typed hashes and
+    lists, a hashdecl hash and an object declared with its constructor arguments).  A closure read from its IR and
+    compiled with the JIT crashed when it created one of them, as the IR read had no parse node for it.
 */
 class OnBlockExitClosureLocalsTest inherits QUnit::Test {
     public {
@@ -89,11 +92,18 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
                 "nested error function: nested error z=36 e=31; caught N1+N2",
                 "nested error closure: nested error z=36 e=31; caught N1+N2",
             ),
+            "closure-ir-nodes": (
+                "typed hash: {x: 7}",
+                "typed list: [7]",
+                "hashdecl hash: 8 x",
+                "object: 7",
+                "reference: 37",
+                "closure: 37",
+            ),
         };
 
         #! the ways an AOT executable runs its closures, by the environment that selects them: native closure bodies,
-        #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created, and
-        #! compiled with the JIT on its first call
+        #! and the closure's serialized IR, read when the closure is first called (lazily) or when it is created
         #! (an executable runs with ExecModeHarness::TraceEnv, which compiles a function with the JIT after its first
         #! call; the IR modes raise the JIT threshold, so that the closures keep running on the IR interpreter)
         const AOTClosureModes = {
@@ -101,8 +111,11 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
             "closures from IR": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_JIT_THRESHOLD=1000000000",
             "closures from IR read eagerly": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1 "
                 "QORE_JIT_THRESHOLD=1000000000",
-            "closures from IR compiled with the JIT": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
         };
+
+        #! the environment of an AOT executable whose closures are read from their IR and compiled with the JIT after
+        #! their first call (with ExecModeHarness::TraceEnv)
+        const AOTClosureJITEnv = "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_IR_TRACE_FALLBACK=1";
 
         #! each script prints its lines this many times
         const Iterations = 3;
@@ -131,6 +144,11 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         # run from serialized IR, the handlers lost their updates of the closure's variables
         addTestCase("AOT executable: handlers that update the variables of their closure",
             sub () { aotTest("handler-parent-locals"); });
+        addTestCase("execution modes: closures that create values from parse nodes",
+            sub () { modesTest("closure-ir-nodes"); });
+        # read from serialized IR and compiled with the JIT, the closures crashed
+        addTestCase("AOT executable: closures that create values from parse nodes",
+            sub () { aotTest("closure-ir-nodes"); });
         set_return_value(main());
     }
 
@@ -161,6 +179,14 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         foreach hash<auto> i in (AOTClosureModes.pairIterator()) {
             assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s %s", env, i.value, exe)), name + ": AOT: " + i.key);
         }
+        # every closure is compiled with the JIT, and none falls back from it
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env,
+            AOTClosureJITEnv, exe));
+        assertEq(exp, r.out, name + ": AOT: closures from IR compiled with the JIT");
+        assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1)).size() > 0,
+            name + ": AOT: closures from IR compiled with the JIT: native code was compiled");
+        list<string> fallbacks = select r.trace, ExecModeHarness::is_ast_trace_line($1);
+        assertEq((), fallbacks, name + ": AOT: closures from IR compiled with the JIT: no fallback");
         string ir_exe = exe + "-ir";
         out = ExecModeHarness::run_any(sprintf("%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -O3 -o %s %s", env, qcc_bin,
             ir_exe, scriptPath(name)));

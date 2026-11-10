@@ -34,6 +34,9 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/NewComplexTypeNode.h"
+#include "qore/intern/ParseReferenceNode.h"
+#include "qore/intern/VarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
@@ -2378,7 +2381,8 @@ static std::unique_ptr<QoreIRInstruction> readCreateParseRef(
         ctx.error = error;
         return nullptr;
     }
-    auto* cri = new QoreIRCreateParseRefInstruction(nullptr, expr);
+    auto* cri = new QoreIRCreateParseRefInstruction(
+        dynamic_cast<const ParseReferenceNode*>(expr.getInternalNode()), expr);
     cri->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     cri->result = QoreIRValue(result_id);
@@ -2409,7 +2413,8 @@ static std::unique_ptr<QoreIRInstruction> readNewHashDecl(
         ctx.error = error;
         return nullptr;
     }
-    auto* ni = new QoreIRNewHashDeclInstruction(nullptr, expr);
+    auto* ni = new QoreIRNewHashDeclInstruction(
+        dynamic_cast<const NewHashDeclNode*>(expr.getInternalNode()), expr);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     ni->result = QoreIRValue(result_id);
@@ -2440,7 +2445,8 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexHash(
         ctx.error = error;
         return nullptr;
     }
-    auto* ni = new QoreIRNewComplexHashInstruction(nullptr, expr);
+    auto* ni = new QoreIRNewComplexHashInstruction(
+        dynamic_cast<const NewComplexHashNode*>(expr.getInternalNode()), expr);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     ni->result = QoreIRValue(result_id);
@@ -2471,7 +2477,8 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexList(
         ctx.error = error;
         return nullptr;
     }
-    auto* ni = new QoreIRNewComplexListInstruction(nullptr, expr);
+    auto* ni = new QoreIRNewComplexListInstruction(
+        dynamic_cast<const NewComplexListNode*>(expr.getInternalNode()), expr);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     ni->result = QoreIRValue(result_id);
@@ -2502,7 +2509,8 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexBuffer(
         ctx.error = error;
         return nullptr;
     }
-    auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
+    auto* ni = new QoreIRNewComplexBufferInstruction(
+        dynamic_cast<const NewComplexBufferNode*>(expr.getInternalNode()), expr);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     ni->result = QoreIRValue(result_id);
@@ -2623,7 +2631,8 @@ static std::unique_ptr<QoreIRInstruction> readVrnConstruct(
         ctx.error = error;
         return nullptr;
     }
-    auto* vi = new QoreIRVrnConstructInstruction(nullptr, expr);
+    auto* vi = new QoreIRVrnConstructInstruction(
+        dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode()), expr);
     vi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     vi->result = QoreIRValue(result_id);

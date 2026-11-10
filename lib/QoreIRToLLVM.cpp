@@ -28295,8 +28295,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else {
                 // a closure node is required: the runtime creates the closure from it
                 if (!ccinst->closure_node) {
-                    error = "CreateClosure without a closure node";
-                    return false;
+                    return setExpressionFallbackError(error, inst,
+                            "CreateClosure instruction has no QoreClosureParseNode metadata");
                 }
                 llvm::Value* cn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ccinst->closure_node));
@@ -28663,6 +28663,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // the runtime evaluates the node: native code never embeds a null one
+                if (!nhdinst->node) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewHashDecl instruction has no NewHashDeclNode metadata");
+                }
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nhdinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
@@ -28697,6 +28702,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // the runtime evaluates the node: native code never embeds a null one
+                if (!nchinst->node) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexHash instruction has no NewComplexHashNode metadata");
+                }
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nchinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
@@ -28731,6 +28741,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // the runtime evaluates the node: native code never embeds a null one
+                if (!nclinst->node) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexList instruction has no NewComplexListNode metadata");
+                }
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nclinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
@@ -28802,6 +28817,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // the runtime evaluates the node: native code never embeds a null one
+                if (!ncbinst->node) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexBuffer instruction has no NewComplexBufferNode metadata");
+                }
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ncbinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
@@ -28923,6 +28943,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                         module, llvm_func, inst);
             } else {
+                // the runtime evaluates the node: native code never embeds a null one
+                if (!vrninst->vrn) {
+                    return setExpressionFallbackError(error, inst,
+                            "VrnConstruct instruction has no VarRefNewObjectNode metadata");
+                }
                 llvm::Value* vrn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(vrninst->vrn));
                 llvm::Value* vrn_as_ptr = builder->CreateIntToPtr(vrn_ptr, ptr_type);
