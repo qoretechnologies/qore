@@ -82,6 +82,9 @@ DLLLOCAL uint64_t qore_get_method_dispatch_epoch();
 DLLLOCAL void qore_bump_method_dispatch_epoch();
 
 //! Returns a new process-unique class instance serial number; never 0 and never reused
+/** Private hashdecls and enums take their serial numbers from the same sequence, so no two classes, hashdecls or
+    enums ever have the same serial number; see qore_get_type_identity_serial()
+*/
 DLLLOCAL uint64_t qore_get_next_class_instance_serial();
 
 // map from abstract signature to variant for fast tracking of abstract variants

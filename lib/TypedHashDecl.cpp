@@ -309,11 +309,18 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         return nullptr;
     }
 
+    // the type arguments are live, so their identities can be read; see parameterized_hashdecl_key_t
+    parameterized_hashdecl_key_t key;
+    key.reserve(args.size());
+    for (const QoreTypeInfo* arg : args) {
+        key.emplace_back(arg, qore_get_type_identity_serial(arg));
+    }
+
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
-        auto i = parameterized_hashdecl_cache.lower_bound(args);
+        auto i = parameterized_hashdecl_cache.lower_bound(key);
         if (i != parameterized_hashdecl_cache.end()
-                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
+                && !(parameterized_hashdecl_cache.key_comp()(key, i->first))) {
             return i->second;
         }
     }
@@ -340,16 +347,23 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
     }
 
+    TypedHashDecl* existing = nullptr;
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
-        auto i = parameterized_hashdecl_cache.lower_bound(args);
+        auto i = parameterized_hashdecl_cache.lower_bound(key);
         if (i != parameterized_hashdecl_cache.end()
-                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
-            typed_hash_decl_private::get(*priv->thd)->deref();
-            return i->second;
+                && !(parameterized_hashdecl_cache.key_comp()(key, i->first))) {
+            existing = i->second;
+        } else {
+            parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
+                priv->thd));
         }
-        parameterized_hashdecl_cache.insert(i,
-            std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*>::value_type(args, priv->thd));
+    }
+    if (existing) {
+        // another thread made the declaration first; the unpublished one is released outside the lock, as its
+        // destruction purges the derived types of its own type
+        typed_hash_decl_private::get(*priv->thd)->deref();
+        return existing;
     }
     return priv->thd;
 }

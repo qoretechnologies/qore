@@ -511,7 +511,17 @@ public:
         return false;
     }
 
+    //! Returns the process-unique serial number of this private hashdecl instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
+    }
+
 protected:
+    //! the identity of this private hashdecl instance for the lifetime of the process
+    /** Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
+        class or enum ever has this serial number (see qore_get_type_identity_serial()).
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
     // references
     mutable QoreReferenceCounter refs;
     const QoreProgramLocation* loc;
@@ -535,8 +545,15 @@ protected:
 
     // Source generic type parameters and cached concrete instantiations.
     std::vector<QoreGenericTypeParam> type_params;
+    //! the key of a concrete declaration of this generic hashdecl: each type argument with its identity serial
+    /** A type argument can be a class, hashdecl or enum of another Program, which is freed with its Program while
+        this cache keeps the concrete declaration; a later type can be allocated at the same address, so the address
+        alone would match the declaration made for the destroyed type.  qore_get_type_identity_serial() makes the
+        key unique for the lifetime of the process.
+    */
+    typedef std::vector<std::pair<const QoreTypeInfo*, uint64_t>> parameterized_hashdecl_key_t;
     mutable std::mutex parameterized_hashdecl_cache_lock;
-    mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
+    mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*> parameterized_hashdecl_cache;
     const TypedHashDecl* parameterized_base = nullptr;
     std::vector<const QoreTypeInfo*> type_args;
 

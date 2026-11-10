@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The fixture of generic-hashdecl-programs.qtest: a generic hashdecl of a library Program is instantiated at run time
+# for classes of a series of Programs, each destroyed after its calls; every instantiation must be the declaration for
+# its own Program's class, never the one made for a destroyed Program's class, whose type a later class can be given
+# the address of.  Prints one line per execution mode.
+
+%modern
+%no-child-restrictions
+
+#! the number of Programs created and destroyed behind the library Program in each mode
+const Generations = 200;
+
+#! the library Program's generic hashdecl, instantiated at run time by its generic function for the caller's class
+const LibrarySource = "%modern
+public hashdecl CachePair<T> {
+    T value;
+}
+
+public auto sub make_pair<T>(T v) {
+    hash<CachePair<T>> h((\"value\": v));
+    return h;
+}
+
+sub export_to(Program pgm) {
+    pgm.importFunction(\"make_pair\");
+}
+";
+
+#! Runs the calls of the Programs in one execution mode and returns the errors
+list<string> sub run_mode(ExecMode mode) {
+    list<string> errors = ();
+    Program lib(PO_NO_CHILD_PO_RESTRICTIONS);
+    lib.setExecMode(mode);
+    lib.parse(LibrarySource, "generic-hashdecl-library");
+    for (int id = 0; id < Generations; ++id) {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.setExecMode(mode);
+        lib.callFunction("export_to", pgm);
+        # each Program's class has a name of its own, so its declaration is named after it
+        pgm.parse(sprintf("%%modern
+class Foo%d {
+    public {
+        int value = %d;
+    }
+}
+
+string sub run() {
+    auto h = make_pair<Foo%d>(new Foo%d());
+    return sprintf(\"%%s %%d\", h.fullType(), h.value.value);
+}
+", id, id, id, id), sprintf("generic-hashdecl-user-%d", id));
+        string expected = sprintf("hash<CachePair<object<Foo%d>>> %d", id, id);
+        try {
+            string actual = pgm.callFunction("run");
+            if (actual != expected) {
+                push errors, sprintf("Program %d: %y; expected %y", id, actual, expected);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push errors, sprintf("Program %d: %s: %s", id, ex.err, ex.desc);
+        }
+        # the Program and its class are destroyed here; the library's generic hashdecl remains
+        delete pgm;
+    }
+    return errors;
+}
+
+foreach hash<auto> m in (("name": "ast", "mode": EM_AST), ("name": "ir", "mode": EM_IR), ("name": "jit", "mode": EM_JIT),
+        ("name": "tiered", "mode": EM_TIERED)) {
+    list<string> errors = run_mode(m.mode);
+    printf("%s: %s\n", m.name, errors ? sprintf("%d errors, first: %s", errors.size(), errors[0]) : "ok");
+}
