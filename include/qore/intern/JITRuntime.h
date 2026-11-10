@@ -2097,7 +2097,6 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
 
 } // extern "C"
 
-//! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
 //! The kinds of qore_rt_builtin_conversion_checked(): string(), int() and float()
 enum : int {
     QORE_RT_BUILTIN_CONVERSION_STRING = 0,
@@ -2115,7 +2114,7 @@ DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreVa
 
 //! Returns true if the builtin conversion of the given kind accepts a value of the given type
 /** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a
-    date and NOTHING; int() also accepts NULL
+    date, a char and NOTHING; int() also accepts NULL
 */
 static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
     switch (t) {
@@ -2125,6 +2124,7 @@ static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
         case NT_NUMBER:
         case NT_BOOLEAN:
         case NT_DATE:
+        case NT_CHAR:
         case NT_NOTHING:
             return true;
         case NT_NULL:
@@ -2134,8 +2134,14 @@ static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
     }
 }
 
-//! Raises the error of the builtin conversion call for a value that it does not accept (RUNTIME-OVERLOAD-ERROR)
-DLLLOCAL void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionSink* xsink);
+//! Calls the builtin conversion with a value that the checked conversion does not convert itself
+/** For a value that the builtin does not accept, the call raises its error (RUNTIME-OVERLOAD-ERROR); for any other,
+    the builtin's result is returned, so a type that a checked conversion does not handle costs speed, never
+    correctness
+
+    @return true with the result in \a rv, false if the builtin raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_conversion_call(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);
@@ -2146,6 +2152,7 @@ DLLEXPORT int64_t qore_rt_to_int_checked_throwing(uint64_t val_bits, ExceptionSi
 DLLEXPORT double qore_rt_to_float_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
 }
 
+//! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_size();
 //! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_align();

@@ -1695,6 +1695,13 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
+    //! variants); inline for the fast call paths, as functions and most methods have only themselves in the
+    //! inheritance list
+    DLLLOCAL bool hasSingleCallVariant() const {
+        return vlist.size() == 1 && (ilist.size() <= 1 || !hasInheritedVariants());
+    }
+
     DLLLOCAL QoreListNode* runtimeGetCallVariants() const;
 
     // returns 0 for OK, -1 for error

@@ -13930,6 +13930,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     return projections.size() + virtualized.size()
         + virtualized_phis.size();
 }
+//! Returns true if every type of the given type is accepted by the builtin conversion string(), int()
+//! (\a int_conversion) or float(); see qore_ir_conversion_accepts_type() in QoreIRLowering.cpp
+static bool qore_ir_analysis_conversion_accepts_type(bool int_conversion, const QoreTypeInfo* type) {
+    if (!type || !QoreTypeInfo::hasType(type) || type->return_vec.empty()) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        switch (ret.spec.getType()) {
+            case NT_NOTHING:
+            case NT_STRING:
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_BOOLEAN:
+            case NT_DATE:
+            case NT_CHAR:
+                break;
+            case NT_NULL:
+                if (int_conversion) {
+                    break;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+    return true;
+}
+
 
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         size_t* exception_edges_elided) {
@@ -14041,6 +14070,19 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             QoreIRValueFacts* specialized_facts = nullptr,
             bool commit = true) {
         if (!inst || !inst->result.isValid()) {
+            return;
+        }
+        // a checked builtin conversion of a value whose type has only types that the builtin accepts is the unchecked
+        // conversion (issue #5660): e.g. "auto i = 7; string(i)"
+        if (inst->operands.size() == 1
+                && (inst->opcode == QoreIROpcode::ToStringChecked || inst->opcode == QoreIROpcode::ToIntChecked
+                    || inst->opcode == QoreIROpcode::ToFloatChecked)) {
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+            if (facts && qore_ir_analysis_conversion_accepts_type(inst->opcode == QoreIROpcode::ToIntChecked,
+                    facts->type_info)) {
+                inst->opcode = inst->opcode == QoreIROpcode::ToStringChecked ? QoreIROpcode::ToString
+                    : (inst->opcode == QoreIROpcode::ToIntChecked ? QoreIROpcode::ToInt : QoreIROpcode::ToFloat);
+            }
             return;
         }
         if (inst->operands.size() == 1

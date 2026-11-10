@@ -14867,10 +14867,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction(helper_name, ft);
             auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
             if (inst->opcode == QoreIROpcode::ToStringChecked) {
-                // a string conversion calls a helper in any case (qore_rt_to_string() for the unchecked opcode)
-                llvm::Value* result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module, llvm_func,
-                    inst);
+                // inline fast path: an int is converted directly; any other value goes to the checked helper (a short
+                // string is converted by the helper too, as the pseudo-methods called on the result take a string node)
+                auto* int_bb = llvm::BasicBlock::Create(ctx, "checked_str_int", llvm_func);
+                auto* slow_bb = llvm::BasicBlock::Create(ctx, "checked_str_slow", llvm_func);
+                auto* merge_bb = llvm::BasicBlock::Create(ctx, "checked_str_merge", llvm_func);
+                llvm::Value* tag16 = builder->CreateLShr(val, llvm::ConstantInt::get(i64_type, 48));
+                llvm::Value* is_int48 = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFF9));
+                builder->CreateCondBr(is_int48, int_bb, slow_bb);
+
+                builder->SetInsertPoint(int_bb);
+                llvm::Value* payload = builder->CreateAnd(val, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+                llvm::Value* shifted = builder->CreateShl(payload, llvm::ConstantInt::get(i64_type, 16));
+                llvm::Value* int_value = builder->CreateAShr(shifted, llvm::ConstantInt::get(i64_type, 16));
+                auto int_to_string = module.getOrInsertFunction("qore_rt_int_to_string",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* int_result = builder->CreateCall(int_to_string, {int_value});
+                llvm::BasicBlock* int_end = builder->GetInsertBlock();
+                builder->CreateBr(merge_bb);
+
+                builder->SetInsertPoint(slow_bb);
+                llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module,
+                    llvm_func, inst);
                 emitExceptionCheck(module, llvm_func, inst);
+                llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+                builder->CreateBr(merge_bb);
+
+                builder->SetInsertPoint(merge_bb);
+                auto* result = builder->CreatePHI(i64_type, 2);
+                result->addIncoming(int_result, int_end);
+                result->addIncoming(slow_result, slow_end);
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);

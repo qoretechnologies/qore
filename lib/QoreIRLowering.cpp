@@ -13010,23 +13010,36 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
 static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const QoreListNode* args, size_t i);
 
 //! Returns true if every value of the given type is accepted by the builtin conversion function of the opcode
-/** string(), int() and float() accept a string, an int, a float, a number, a boolean, a date and NOTHING, and int()
-    also NULL (the soft types of their parameters); a type that also has other values (auto, an object, a hash, ...)
-    or no known type is not accepted: see QoreIRLowering::lowerBuiltinTypeConversion()
+/** string(), int() and float() accept a string, an int, a float, a number, a boolean, a date, a char and NOTHING, and
+    int() also NULL (the soft types of their parameters); a type that also has other values (auto, an object, a hash,
+    a union with such a type, ...) or no known type is not accepted: see QoreIRLowering::lowerBuiltinTypeConversion()
 */
 static bool qore_ir_conversion_accepts_type(QoreIROpcode opcode, const QoreTypeInfo* type) {
     if (!type || !QoreTypeInfo::hasType(type)) {
         return false;
     }
-    // NOTHING is accepted, so "*T" is accepted if T is
-    const QoreTypeInfo* base = qore_get_value_type(type);
-    static constexpr qore_type_t accepted[] = {NT_STRING, NT_INT, NT_FLOAT, NT_NUMBER, NT_BOOLEAN, NT_DATE};
-    for (qore_type_t t : accepted) {
-        if (QoreTypeInfo::parseReturns(base, t) == QTI_IDENT) {
-            return true;
+    // every type that the type can have must be accepted (a union, for example, may also have types that are not)
+    for (const auto& ret : type->return_vec) {
+        switch (ret.spec.getType()) {
+            case NT_NOTHING:
+            case NT_STRING:
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_BOOLEAN:
+            case NT_DATE:
+            case NT_CHAR:
+                break;
+            case NT_NULL:
+                if (opcode == QoreIROpcode::ToInt) {
+                    break;
+                }
+                return false;
+            default:
+                return false;
         }
     }
-    return opcode == QoreIROpcode::ToInt && QoreTypeInfo::parseReturns(base, NT_NULL) == QTI_IDENT;
+    return !type->return_vec.empty();
 }
 
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
@@ -13062,13 +13075,19 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     }
     // The inline conversion accepts every value; the builtins take soft types that do not (string(softstring),
     // int(*softint), float(softfloat)): an object, for example, matches no variant, and the call raises
-    // RUNTIME-OVERLOAD-ERROR.  The unchecked conversion is used when the parser resolved the variant (the argument's
-    // type matches it statically) or when the argument's type only has values that the builtin accepts; any other
-    // call uses the checked conversion, which raises the error of the AST interpreter (issue #5660)
+    // RUNTIME-OVERLOAD-ERROR.  The unchecked conversion is used when the argument's type only has values that the
+    // builtin accepts; any other call uses the checked conversion, which raises the error of the AST interpreter
+    // (issue #5660)
+    // a variant resolved at parse time does not prove it: for an argument of a union type, the parser resolves the
+    // variant if one of the types matches, and the AST interpreter resolves it again with the value at runtime
     bool checked = false;
-    if (opcode != QoreIROpcode::ToBool && !call->getVariant()) {
+    if (opcode != QoreIROpcode::ToBool) {
         QoreValue arg = qore_ir_get_call_arg(parse_args, args, 0);
-        checked = !qore_ir_conversion_accepts_type(opcode, getGuaranteedTypeForValue(&arg, nullptr));
+        // the type of a local variable as the parse analysis guarantees it, otherwise the parse-time type of the
+        // expression (e.g. "-i" for an int i)
+        const QoreTypeInfo* arg_type = getGuaranteedTypeForValue(&arg, nullptr);
+        checked = !qore_ir_conversion_accepts_type(opcode, arg_type)
+            && !qore_ir_conversion_accepts_type(opcode, getExprTypeInfo(arg));
     }
     // Lower the single argument
     std::vector<QoreIRValue> operands;
