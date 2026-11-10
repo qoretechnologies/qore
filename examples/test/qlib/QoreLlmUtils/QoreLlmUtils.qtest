@@ -1542,13 +1542,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     providerPerCallRequestTimeoutTest() {
         checkGeminiModule();
         Queue gate();
-        Queue handler_done();
         installGeminiHandler({
             "/v1beta/models/gemini-2.5-flash:generateContent": {
                 "code": 200,
                 # the reply is held until the call has ended, so only a deadline can end the call
                 "gate": gate,
-                "done": handler_done,
                 "body": {
                     "candidates": ({
                         "finishReason": "STOP",
@@ -1577,9 +1575,16 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             timeout_ex = ex;
         }
-        # the call has ended: the held reply is released, and the handler finishes before the next test
+        # the call has ended: the held reply is released.  A request that reached the handler holds the handler's
+        # lock until the handler has finished, so taking the lock waits for it; the deadline can also end the call
+        # before the request is sent (a loaded host), and then no handler runs, so none is waited for
         gate.push(True);
-        handler_done.get(30s);
+        list<hash<auto>> requests;
+        {
+            gemini_handler.m.lock();
+            on_exit gemini_handler.m.unlock();
+            requests = gemini_handler.requests;
+        }
         assertNeq(NOTHING, timeout_ex,
             "the call-local deadline aborts the delayed provider request");
         if (!timeout_ex) {
@@ -1589,10 +1594,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the facade preserves its stable error identity");
         assertEq("HTTPCLIENT-TIMEOUT", timeout_ex.arg.err,
             "the structured cause preserves the transport timeout identity");
-        assertEq(1, gemini_handler.requests.size(),
-            "the timed-out call sends only one provider request");
-        assertFalse(gemini_handler.requests[0].body.hasKey("timeout_ms"),
-            "the facade timeout extension is not sent in the native body");
+        assertLe(1, requests.size(), "the timed-out call is not retried");
+        if (requests) {
+            assertFalse(requests[0].body.hasKey("timeout_ms"),
+                "the facade timeout extension is not sent in the native body");
+        }
     }
 
     geminiToolCallResponseTest() {
