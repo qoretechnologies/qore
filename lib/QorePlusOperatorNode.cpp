@@ -285,6 +285,16 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         QoreBufferBinaryOperation::Add);
     bool is_list_left = QoreTypeInfo::isType(leftTypeInfo, NT_LIST);
     bool is_list_right = QoreTypeInfo::isType(rightTypeInfo, NT_LIST);
+    // issue #3157: try to handle timeout + date specially; an operand of a type that is not known at parse time (the
+    // argument of a map expression, for example) can be a date, so the flag does not depend on the other operand's
+    // type being known, as it does not for the subtraction operator (qore#5735)
+    if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+        && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
+        check_timeout_date_variant = true;
+    } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+        && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
+        check_date_timeout_variant = true;
+    }
     if (bufferResultTypeInfo) {
         returnTypeInfo = bufferResultTypeInfo;
     }
@@ -314,15 +324,6 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     else if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)
         && !QoreTypeInfo::parseReturns(leftTypeInfo, NT_LIST)
         && !QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-        // issue #3157: try to handle timeout + date specially
-        if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
-            && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
-            check_timeout_date_variant = true;
-        } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
-            && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
-            check_date_timeout_variant = true;
-        }
-
         if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
                 QoreStringMaker desc("cannot mix %s and %s types with the + operator",
