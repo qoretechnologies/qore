@@ -1,0 +1,54 @@
+deleted member store: RUNTIME-TYPE-ERROR
+removed key store: RUNTIME-TYPE-ERROR
+removed variable store: RUNTIME-TYPE-ERROR
+try deleted member store: "RUNTIME-TYPE-ERROR"
+try removed variable store: "RUNTIME-TYPE-ERROR"
+assigned store: 5
+deleted member return: RUNTIME-TYPE-ERROR
+removed key return: RUNTIME-TYPE-ERROR
+removed variable return: RUNTIME-TYPE-ERROR
+try deleted member return: "null"
+try removed variable return: "null"
+assigned return: 5
+deleted member add: 1
+removed key add: 1
+removed variable add: 1
+try deleted member add: "1"
+try removed variable add: "1"
+assigned add: 6
+deleted member compare: True
+removed key compare: True
+removed variable compare: True
+try deleted member compare: "True"
+try removed variable compare: "True"
+assigned compare: False
+deleted member increment: OBJECT-ALREADY-DELETED
+removed key increment: 1
+removed variable increment: 1
+try deleted member increment: "OBJECT-ALREADY-DELETED"
+try removed variable increment: "1"
+assigned increment: 6
+deleted member add-assign: OBJECT-ALREADY-DELETED
+removed key add-assign: 2
+removed variable add-assign: 2
+try deleted member add-assign: "OBJECT-ALREADY-DELETED"
+try removed variable add-assign: "2"
+assigned add-assign: 7
+deleted member format: "0"
+removed key format: "0"
+removed variable format: "0"
+try deleted member format: "\"0\""
+try removed variable format: "\"0\""
+assigned format: "5"
+deleted member float: RUNTIME-TYPE-ERROR
+removed key float: RUNTIME-TYPE-ERROR
+removed variable float: RUNTIME-TYPE-ERROR
+try deleted member float: "RUNTIME-TYPE-ERROR"
+try removed variable float: "RUNTIME-TYPE-ERROR"
+assigned float: 5.0
+deleted member auto: null
+removed key auto: null
+removed variable auto: null
+try deleted member auto: "null"
+try removed variable auto: "null"
+assigned auto: 5
