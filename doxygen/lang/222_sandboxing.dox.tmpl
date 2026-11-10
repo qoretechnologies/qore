@@ -695,10 +695,19 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     see, and \c sandbox_aware that it has been audited to check all of that I/O against its caller's policy.  A
     sandboxed caller is refused an app that sets \c external_io without \c sandbox_aware, with an
     \c APP-SANDBOX-ACCESS-DENIED exception naming the app: the data provider catalog refuses it itself the providers
-    of such an app's actions and the factories of the module that registers it, and data provider consumers that
+    of such an app's actions, and the factories and connections of the module that registers it refuse their I/O
+    (also when trusted code created them, and also as subclasses defined elsewhere), and data provider consumers that
     serve a sandboxed caller on another thread apply the rule with
-    @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()";
-    trusted callers are not affected.  A Program that is only restricted with parse options (ex:
+    @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()"
+    or \c AbstractConnection::checkSandboxAccess(); trusted callers are not affected.
+
+    The module commands of the \c jni module follow the same model: a Program's own classpath entries
+    (\c add-classpath, \c add-relative-classpath, and the \c classpath option of the \c jdbc database driver) are
+    checked against its filesystem policy, and the commands that change state of the JVM that every Program shares
+    (\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that
+    run Java code (\c kotlin-eval) are refused to sandboxed code and in a Program with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", where \c define-class and \c define-pending-class
+    are refused too; a sandboxed Program defines classes only in its own class loader.  A Program that is only restricted with parse options (ex:
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") and has no @ref Qore::SandboxManager "SandboxManager" is not
     sandboxed for this rule; such a Program cannot use the \c jni module's Java classes itself.

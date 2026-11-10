@@ -745,31 +745,45 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     Qore::SandboxManager::isSandboxed()), so sandboxed code cannot get around it by using the catalog directly:
     - @ref DataProvider::DataProviderActionCatalog::getDataProviderForAction()
       "DataProviderActionCatalog::getDataProviderForAction()" refuses the provider of an action of such an app, and of
-      an app that is not registered
+      an app that is not registered; the caller passes the action, so the class that it creates must be the one that
+      the catalog registered for the action, or its own class hierarchy decides as for a factory, and an action hash
+      that names an allowed app with the class of another app is refused like that app
     - every factory method that creates a provider (@ref DataProvider::AbstractDataProviderFactory::create()
       "AbstractDataProviderFactory::create()", \c createWithTemplate(), \c getProviderFromExample() and
       \c getExampleProviderRecordOutput()) refuses a factory whose class belongs to a module that registers such an
       app, however the factory was obtained (@ref DataProvider::DataProvider::getFactoryObject()
       "DataProvider::getFactoryObject()", @ref DataProvider::DataProvider::getFactoryEx() "DataProvider::getFactoryEx()"
       or creating it); reading its info is not refused
+    - every connection method that does I/O (\c ConnectionProvider::AbstractConnection::get(), \c getAsync(),
+      \c ping(), \c getFileLocationHandler() and \c getFileLocationRedirect()) refuses a connection whose class
+      belongs to such a module, also when trusted code created the connection; a refused ping does not change the
+      connection's status for its other users
+
+    These checks use @ref DataProvider::DataProviderSandboxCheck "DataProviderSandboxCheck", which a module's own
+    objects that do I/O for their callers can use too.  The declarations of a deferred app
+    (@ref DataProvider::DataProviderActionCatalog::registerPendingApp() "registerPendingApp()") are known only once it
+    is initialized: a sandboxed caller of a factory or a connection of its module initializes it first, and is
+    refused if it cannot be initialized.
 
     The declarations are made per app.  A factory reached by name is refused as described above, by the module that
     defines its class: a factory of a module that registers no app, or only apps without uncontrolled external I/O,
     is not refused, and an action that a module contributes to the app of another module is decided by that app's
-    declarations.  The checks are cheap: the common path is one hash lookup, with no lock.
+    declarations.  The checks are cheap: for a trusted caller, the common path is one
+    @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()" call, with no lock.
 
     Data provider consumers that serve a sandboxed caller on a thread that the caller's sandbox does not govern (a
     server thread that runs a tenant's request, for example) apply the rule themselves with
     @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()"
     and an explicit \c sandboxed argument, before they use an app on behalf of the caller (run one of its actions,
-    create a provider or a connection for it), and decide with
+    create a provider or a connection for it), or with \c ConnectionProvider::AbstractConnection::checkSandboxAccess()
+    before they use a connection for it, and decide with
     @ref DataProvider::DataProviderActionCatalog::isSandboxAllowed() "DataProviderActionCatalog::isSandboxAllowed()"
     which apps to offer to sandboxed callers.  They pass the app's name, so that the decision is made from its
     registered info and not from info that the caller supplied, and decide the \c sandboxed argument from what they
     know about the caller: they never forward a value that the caller supplied.
 
     Sandboxed code registers nothing in the process-wide catalog and removes nothing from it
-    (\c APP-SANDBOX-ACCESS-DENIED): no app, pending app, action, pending or lazy action registration, file API,
+    (\c DATA-PROVIDER-REGISTRATION-DENIED): no app, pending app, action, pending or lazy action registration, file API,
     factory, type or discovery inventory provider, so that it cannot take a name from the module that owns it, add an
     action to an app that it does not own, or remove one; modules register them in their initialization, which no
     sandbox governs.  A deferred initialization that trusted code registered may still register when it runs on a
@@ -1748,7 +1762,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       \c registerPendingApp(), \c registerAction(), \c registerPendingAppAction(), \c registerLazyAppActions(),
       \c registerAppFileApi(), \c registerDiscoveryInventoryProvider(), their \c deregister*() counterparts,
       \c deregisterDynamicApp(), @ref DataProvider::DataProvider::registerFactory() "DataProvider::registerFactory()"
-      and \c DataProvider::registerType() raise \c APP-SANDBOX-ACCESS-DENIED
+      and \c DataProvider::registerType() raise \c DATA-PROVIDER-REGISTRATION-DENIED
+    - added @ref DataProvider::DataProviderSandboxCheck "DataProviderSandboxCheck", which refuses sandboxed callers an
+      object of a module with an app with external I/O that is not sandbox-aware, by the object's class hierarchy;
+      factories and connections use it, and the decision for a module with a deferred app is made from the app's
+      declarations once it is initialized
+    - @ref DataProvider::DataProviderActionCatalog::getDataProviderForAction()
+      "DataProviderActionCatalog::getDataProviderForAction()" decides by the class that it creates when it is not the
+      one registered for the action, so that an action hash cannot name an allowed app with another app's class
+    - added @ref DataProvider::DataProviderActionCatalog::checkModuleSandboxAccess()
+      "DataProviderActionCatalog::checkModuleSandboxAccess()" and
+      @ref DataProvider::DataProviderActionCatalog::initLoadedApps() "DataProviderActionCatalog::initLoadedApps()"
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

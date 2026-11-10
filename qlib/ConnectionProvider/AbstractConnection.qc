@@ -299,6 +299,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
     */
+    private:internal {
+        #! Refuses sandboxed callers a connection of a module with uncontrolled external I/O
+        /** Created with the connection, also when it is deserialized, so that it runs with the connection's
+            provenance; created while serving a sandboxed caller, it would run under that caller's sandbox for every
+            caller
+        */
+        transient DataProvider::DataProviderSandboxCheck sandbox_check();
+    }
+
     constructor(hash<auto> config, *hash<auto> attr) {
         constructorInit(config, attr);
     }
@@ -378,6 +387,42 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         # intentionally empty
     }
 
+    #! Refuses a sandboxed caller a connection of a module that registers an app with uncontrolled external I/O
+    /** A connection of a module that registers an app with
+        @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" (see the DataProvider module's
+        documentation of apps with external I/O) does that I/O for its callers, so a sandboxed caller
+        is refused it, also when trusted code created the connection: get(), getAsync(), ping(),
+        getFileLocationHandler() and getFileLocationRedirect() call this method first.  The connection's class
+        hierarchy decides, as DataProvider::DataProviderSandboxCheck describes, so a subclass defined elsewhere is
+        refused like the class that it inherits.
+
+        A connection subclass calls this method in any other public method that does I/O.  Code that serves a
+        sandboxed caller on a thread that no sandbox governs (ex: a request of a sandboxed user handled by a server
+        thread) calls it with @p sandboxed set to @ref True.
+
+        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isSandboxed() decides
+
+        @throw APP-SANDBOX-ACCESS-DENIED the caller is sandboxed, and the connection's module registers an app with
+        network or filesystem I/O that the sandbox does not control and that is not declared sandbox-aware
+
+        @par Example:
+        @code{.py}
+# a sandboxed user's request, served on a server thread
+conn.checkSandboxAccess(True);
+        @endcode
+
+        @since %ConnectionProvider 3.1
+    */
+    checkSandboxAccess(*bool sandboxed) {
+        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+            return;
+        }
+        if (sandbox_check.needsCheck(True)) {
+            sandbox_check.check("connection", name, (Class::getClass(self),), True);
+        }
+    }
+
     #! Returns a redirect to an existing file location scheme for the given path, if supported
     /** @param path the path relative to the connection's own base location
         @param write @ref True if the location will be written to, @ref False if it will be read
@@ -404,6 +449,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         - @ref getFileLocationHandler()
     */
     *hash<FileLocationRedirect> getFileLocationRedirect(string path, bool write) {
+        # the common path is one call: only a sandboxed caller is checked
+        if (SandboxManager::isSandboxed()) {
+            checkSandboxAccess(True);
+        }
         return getFileLocationRedirectImpl(path, write);
     }
 
@@ -439,6 +488,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         - @ref getFileLocationRedirect()
     */
     object getFileLocationHandler() {
+        # the common path is one call: only a sandboxed caller is checked
+        if (SandboxManager::isSandboxed()) {
+            checkSandboxAccess(True);
+        }
         return getFileLocationHandlerImpl();
     }
 
@@ -496,6 +549,11 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @since %ConnectionProvider 2.0
     */
     hash<PingInfo> ping(int ping_flags = 0) {
+        # before the ping: a refused caller does not change the status of the connection for its other users
+        # the common path is one call: only a sandboxed caller is checked
+        if (SandboxManager::isSandboxed()) {
+            checkSandboxAccess(True);
+        }
         hash<PingInfo> rv(self{"name", "desc", "opts"} + {
             "ping_flags": ping_flags,
         });
@@ -748,6 +806,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     /** calls @ref getImpl() to actually acquire the connection object
     */
     object get(bool connect = True, *hash<auto> rtopts) {
+        # the common path is one call: only a sandboxed caller is checked
+        if (SandboxManager::isSandboxed()) {
+            checkSandboxAccess(True);
+        }
         if (!connect) {
             object o = getImpl(False, rtopts);
             if (post_processing) {
@@ -791,6 +853,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @see getAsyncImpl()
     */
     object getAsync(bool connect = True, *hash<auto> rtopts) {
+        # the common path is one call: only a sandboxed caller is checked
+        if (SandboxManager::isSandboxed()) {
+            checkSandboxAccess(True);
+        }
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
             if (post_processing) {

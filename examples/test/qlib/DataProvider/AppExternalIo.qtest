@@ -69,6 +69,10 @@ public class AppExternalIoTest inherits QUnit::Test {
         string external_factory_module = normalize_dir(get_script_dir()) + "/ExternalIoFactoryFixture.qm";
         # registers a factory and an app with sandbox-aware external I/O
         string aware_factory_module = normalize_dir(get_script_dir()) + "/SandboxAwareFactoryFixture.qm";
+        # registers a factory and a deferred app with external I/O that is not sandbox-aware
+        string pending_module = normalize_dir(get_script_dir()) + "/PendingExternalIoFixture.qm";
+        # registers a factory and a deferred app whose initialization fails
+        string pending_fail_module = normalize_dir(get_script_dir()) + "/PendingFailFixture.qm";
         # an index published by origin/develop's DataProvider before the declarations existed
         string develop_index = normalize_dir(get_script_dir()) + "/ProviderIndexDevelopFixture";
 
@@ -100,6 +104,9 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("sandboxed code registers nothing in the process-wide catalog", \sandboxedRegistrationTest());
         addTestCase("a trusted lazy registration runs for a sandboxed reader", \trustedLazyRegistrationTest());
         addTestCase("a subclass of a refused factory is refused", \factorySubclassTest());
+        addTestCase("an action hash naming an allowed app is decided by the class it creates", \forgedActionTest());
+        addTestCase("a factory of a module with a deferred app is decided by the app's declarations",
+            \pendingAppTest());
         addTestCase("the declarations survive the provider index", \indexRoundTripTest());
         addTestCase("an index published before the declarations existed is read", \developIndexTest());
         addTestCase("an index of an app that is not registered reports it as unavailable", \indexMissingAppTest());
@@ -474,7 +481,7 @@ public class AppExternalIoTest inherits QUnit::Test {
             },
         }.pairIterator()) {
             code reg = i.value;
-            assertThrows("APP-SANDBOX-ACCESS-DENIED", "sandboxed code cannot register", sub () {
+            assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", "sandboxed code cannot register", sub () {
                 p.callFunction("through", reg);
             }, NOTHING, i.key);
         }
@@ -489,17 +496,17 @@ public class AppExternalIoTest inherits QUnit::Test {
         assertFalse(DataProviderActionCatalog::isSandboxAllowed(name));
         # the same registrations through a system-policy capability called by sandboxed code, or under a policy
         # barrier, are refused too
-        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
             p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
                 DataProviderActionCatalog::registerApp(appInfo(newName("AppExternalIoSquat")));
             }));
         });
-        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
             p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
                 DataProviderActionCatalog::registerAction(action);
             }));
         }, NOTHING, "registerAction in a capability");
-        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
             p.callFunction("through", sub () {
                 SandboxManager::callWithSystemPolicy(sub () { DataProviderActionCatalog::registerAction(action); });
             });
@@ -550,6 +557,60 @@ public class AppExternalIoTest inherits QUnit::Test {
         });
         # trusted code creates the provider
         assertEq("ExternalIoFixtureProvider", factory.create().getName());
+    }
+
+    forgedActionTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        hash<DataProviderActionInfo> aware = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestSandboxAwareFactoryApp", "run");
+        hash<DataProviderActionInfo> external = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestExternalIoFactoryApp", "run");
+        # the allowed app's action with the class of the app that is not allowed
+        hash<DataProviderActionInfo> forged = cast<hash<DataProviderActionInfo>>(aware + external{"cls", "cls_mod"});
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(forged); });
+        }, NOTHING, "a forged action");
+        # an action that is not registered, with the class of the app that is not allowed
+        hash<DataProviderActionInfo> unregistered = cast<hash<DataProviderActionInfo>>(forged
+            + {"action": newName("unregistered")});
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(unregistered); });
+        }, NOTHING, "an unregistered action");
+        # the registered action is allowed
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getDataProviderForAction(aware).getName();
+        }), "the registered action");
+        # trusted code is not refused
+        assertEq("ExternalIoFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(forged).getName(),
+            "trusted code");
+    }
+
+    pendingAppTest() {
+        load_module(pending_module);
+        load_module(pending_fail_module);
+        Program p = getSandboxed();
+        # trusted code is not refused and does not initialize the app
+        assertEq("PendingExternalIoProvider", DataProvider::getFactoryObject("qoretestpendingexternalio").getName(),
+            "trusted code");
+        # a sandboxed caller initializes the deferred app first, and is refused by its declarations
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestPendingExternalIoApp", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingexternalio"); });
+        }, NOTHING, "a deferred external I/O app");
+        assertTrue(DataProviderActionCatalog::getAppEx("QoreTestPendingExternalIoApp").external_io,
+            "the deferred app was initialized");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestPendingExternalIoApp", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingexternalio"); });
+        }, NOTHING, "the decision after the initialization");
+
+        # a deferred app that cannot be initialized cannot be decided: a sandboxed caller is refused
+        assertEq("PendingFailProvider", DataProvider::getFactoryObject("qoretestpendingfail").getName(),
+            "trusted code: a failing deferred app");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "could not be initialized", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingfail"); });
+        }, NOTHING, "a deferred app that cannot be initialized");
+        assertNothing(DataProviderActionCatalog::getApp("QoreTestPendingFailApp"), "the app was not registered");
     }
 
     indexRoundTripTest() {

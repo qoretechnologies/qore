@@ -329,7 +329,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         tenant.setSandboxManager(sm);
         # the capability is called by sandboxed code, which registers nothing in the catalog (qore#5632), also through
         # a capability
-        assertThrows("APP-SANDBOX-ACCESS-DENIED", \tenant.callFunction(), ("run", cap, app, get_script_path()));
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \tenant.callFunction(), ("run", cap, app, get_script_path()));
         assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
         assertEq((), (map $1.action, DataProviderActionCatalog::getActionsNoInit(app)) ?? (), "nothing is registered");
     }
@@ -656,7 +656,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             "    });\n"
             "}\n", "lazy-registrar");
         registrar.setSandboxManager(sm);
-        assertThrows("APP-SANDBOX-ACCESS-DENIED", \registrar.callFunction(), ("reg", app, script));
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \registrar.callFunction(), ("reg", app, script));
         assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
         # a sandboxed reader reads the trusted registrations only
         Program reader = readerProgram(sm);
@@ -1021,7 +1021,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "}\n", "governed-now");
         registrar.setSandboxManager(sm);
         # sandboxed code registers no deferred initialization (qore#5632): it is refused at once, on its own thread
-        assertEq("APP-SANDBOX-ACCESS-DENIED", registrar.callFunction("reg", app));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", registrar.callFunction("reg", app));
         assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
         # trusted code reading the app is not held by the refused registration
         Counter read(1);
@@ -1184,10 +1184,11 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "tenant-change");
         tenant.setSandboxManager(sm);
         int revision = DataProviderActionCatalog::getCatalogRevision();
-        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("reg", app), "the tenant adds no action");
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("reg", app), "the tenant adds no action");
         string tenant_app = "SafeGovernedChange_" + get_random_string(8);
-        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("regApp", tenant_app), "the tenant registers no app");
-        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("dereg", app), "the tenant removes no app");
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("regApp", tenant_app),
+            "the tenant registers no app");
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("dereg", app), "the tenant removes no app");
         # nothing changed: there is no change of the tenant's for a listener to receive
         assertEq(revision, DataProviderActionCatalog::getCatalogRevision(), "the catalog did not change");
         assertEq(app, DataProviderActionCatalog::getAppEx(app).name, "the app is still registered");
@@ -1506,7 +1507,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         tenant.setSandboxManager(new SandboxManager());
         hash<auto> rv = tenant.callFunction("reg", app);
         # sandboxed code registers no action (qore#5632): it is refused before either callback runs
-        assertEq("APP-SANDBOX-ACCESS-DENIED", rv.err);
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", rv.err);
         assertNothing(rv.output_type, "the output type callback did not run");
         assertNothing(rv.options, "the options callback did not run");
         assertEq((), DataProviderActionCatalog::getActionsNoInit(app) ?? ());

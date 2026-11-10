@@ -1574,7 +1574,7 @@ public class DataProviderActionCatalog {
         sandboxed code, or by code that may not create the worker's capability), \a init runs at once for every
         caller.
 
-        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers a pending app (since %DataProvider 3.12)
+        @throw DATA-PROVIDER-REGISTRATION-DENIED sandboxed code registers a pending app (since %DataProvider 3.12)
 
         @since DataProvider 3.0
     */
@@ -1609,14 +1609,20 @@ public class DataProviderActionCatalog {
             throw "APP-ERROR", sprintf("Application %y is already pending", app);
         }
 
+        *string module_path = module_context ?? DataProviderActionCatalog::registrationModulePath();
         initmap{app} = {
             "init": DataProviderActionCatalog::makeLazyCall(init),
             "kind": "app",
             "app": app,
-            "module_context": module_context
-                ?? DataProviderActionCatalog::registrationModulePath(),
+            "module_context": module_path,
             "governed": DataProviderActionCatalog::isGoverned(),
         };
+        # its declarations are not known until it is initialized: a sandboxed caller of an object of the module
+        # initializes it first (see DataProviderSandboxCheck)
+        if (module_path) {
+            DataProviderSandboxState::setAppPending(DataProviderActionCatalog::moduleNameFromPath(module_path), app,
+                True);
+        }
         expected_initialization_map{app}{""} = True;
         remove unregistered_init_map{app};
         DataProviderActionCatalog::addOpenDiscoveryExpectedIdentity(app,
@@ -1632,7 +1638,7 @@ public class DataProviderActionCatalog {
         When the module has no catalog worker, \a init runs at once, on the calling thread (see registerPendingApp());
         sandboxed code cannot register a pending action (see registerAction())
 
-        @throw APP-SANDBOX-ACCESS-DENIED the code registering the action is sandboxed (since %DataProvider 3.12)
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the action is sandboxed (since %DataProvider 3.12)
 
         @since DataProvider 3.0
     */
@@ -1707,7 +1713,8 @@ public class DataProviderActionCatalog {
         reader calls \a init again
 
         @throw APP-ERROR the application is not registered
-        @throw APP-SANDBOX-ACCESS-DENIED the code making the registration is sandboxed (since %DataProvider 3.12)
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code making the registration is sandboxed (since %DataProvider
+        3.12)
 
         @par Example
         @code{.py}
@@ -3040,8 +3047,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param app the application to register
 
         @throw APP-ERROR missing or invalid attributes, app already registered
-        @throw APP-SANDBOX-ACCESS-DENIED the code registering the app is sandboxed (Qore::SandboxManager::isSandboxed())
-        (since %DataProvider 3.12)
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the app is sandboxed
+        (Qore::SandboxManager::isSandboxed()) (since %DataProvider 3.12)
     */
     static registerApp(hash<DataProviderAppInfo> app) {
         # an app name taken by sandboxed code would be denied to the module that owns it
@@ -3167,6 +3174,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 appmodmap{app.name}{module_path} = True;
                 DataProviderActionCatalog::addExternalIoModuleApp(app, module_path);
             }
+            # after its declarations are recorded, so that no check sees the module neither pending nor decided
+            DataProviderSandboxState::clearAppPending(app.name);
 
             # Register a module-init rollback so that a failed module load automatically undoes this
             # registration. This is only meaningful inside a module-load transaction (see
@@ -3618,6 +3627,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             || exists actionmodmap{name}
             || exists pending_generic_api_call_apps{name};
         remove initmap{name};
+        DataProviderSandboxState::clearAppPending(name);
         remove initialization_failure_map{name};
         remove expected_initialization_map{name};
         remove unregistered_init_map{name};
@@ -3690,8 +3700,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param action the action to register
 
         @throw ACTION-ERROR missing or invalid attributes, action already registered
-        @throw APP-SANDBOX-ACCESS-DENIED the code registering the action is sandboxed, also through a policy barrier
-        or a system-policy capability (since %DataProvider 3.12)
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the action is sandboxed, also through a policy
+        barrier or a system-policy capability (since %DataProvider 3.12)
 
         The \c app and \c action attributes must be unique for every action registered
     */
@@ -4067,6 +4077,33 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         return appcache.values();
     }
 
+    #! Completes the deferred initialization of apps whose modules are loaded, as getApp() does
+    /** Unlike getApp(), the provider index is not consulted and no module is loaded: an app whose module is not
+        loaded, or that is not registered, is ignored.  An initialization that fails is recorded as getApp() records
+        it, and does not raise an exception here, unless the thread is stopped (interrupted, cancelled or over a
+        sandbox limit).
+
+        @param apps the names of the apps
+
+        @see DataProviderSandboxCheck, which initializes the deferred apps of a module before deciding whether a
+        sandboxed caller may use its objects
+
+        @since %DataProvider 3.12
+    */
+    static initLoadedApps(list<string> apps) {
+        foreach string app in (apps) {
+            try {
+                DataProviderActionCatalog::initApp(app);
+            } catch (hash<ExceptionInfo> ex) {
+                # a stopped thread stops here too
+                if (DataProviderActionCatalog::isTransientFailure(ex)) {
+                    rethrow;
+                }
+                # otherwise the failure is recorded with the app's initialization state, and the app stays pending
+            }
+        }
+    }
+
     #! Returns the application definition for the given application name
     /** @param app the app name
 
@@ -4243,6 +4280,28 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @since %DataProvider 3.12
     */
     static checkFactorySandboxAccess(string factory_name, *string module_name, *bool sandboxed) {
+        DataProviderActionCatalog::checkModuleSandboxAccess("data provider factory", factory_name, module_name,
+            sandboxed);
+    }
+
+    #! Refuses a sandboxed caller an object of a module that registers an app with uncontrolled external I/O
+    /** An object of a module that registers an app with
+        @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware", such as its connections and factories,
+        reaches the same I/O, so a sandboxed caller is refused it.  DataProviderSandboxCheck makes this check for
+        the modules of an object's class hierarchy.
+
+        @param what what the object is, for the error (ex: \c "connection")
+        @param name the name of the object, for the error
+        @param module_name the name of the module that defines the object's class, if known
+        @param sandboxed whether the caller is sandboxed; see checkSandboxAccess(hash<DataProviderAppInfo>, *bool)
+
+        @throw APP-SANDBOX-ACCESS-DENIED the caller is sandboxed, and the module registers an app with external I/O
+        that is not sandbox-aware
+
+        @since %DataProvider 3.12
+    */
+    static checkModuleSandboxAccess(string what, string name, *string module_name, *bool sandboxed) {
         # the common path: one lookup, no lock
         if (!module_name || !exists external_io_module_apps{module_name}) {
             return;
@@ -4250,10 +4309,33 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         if (!(sandboxed ?? SandboxManager::isSandboxed())) {
             return;
         }
-        throw "APP-SANDBOX-ACCESS-DENIED", sprintf("data provider factory %y belongs to module %y, which registers "
-            "application(s) %y that do network or filesystem I/O that the sandbox does not control and are not "
-            "declared sandbox-aware, so sandboxed code cannot use it", factory_name, module_name,
+        throw "APP-SANDBOX-ACCESS-DENIED", sprintf("%s %y belongs to module %y, which registers application(s) %y "
+            "that do network or filesystem I/O that the sandbox does not control and are not declared sandbox-aware, "
+            "so sandboxed code cannot use it", what, name, module_name,
             sort(keys external_io_module_apps{module_name}));
+    }
+
+    #! Refuses a sandboxed caller the provider of an action, as getDataProviderForAction() describes
+    /** The caller passes the action, so its app does not decide alone: the class that is created must be the one
+        that the catalog registered for the action, or its own class hierarchy decides (see DataProviderSandboxCheck),
+        so that an action hash naming an allowed app with the class of another app is refused like that app.
+
+        @throw APP-SANDBOX-ACCESS-DENIED the app or the class reaches I/O that the sandbox does not control
+    */
+    private:internal static checkActionSandboxAccess(hash<DataProviderActionInfo> action) {
+        if (!app_sandbox_state{action.app}) {
+            DataProviderActionCatalog::checkSandboxAccess(action.app, True);
+        }
+        if (!exists action.cls) {
+            return;
+        }
+        *hash<DataProviderActionInfo> registered = app_actionmap{action.app}{action.action};
+        if (registered && registered.cls == action.cls && registered.cls_mod == action.cls_mod) {
+            return;
+        }
+        # a class that the catalog did not register for the action
+        DataProviderSandboxCheck check();
+        check.check("data provider class", action.cls, (Class::forName(action.cls),), True);
     }
 
     #! Records an app with uncontrolled external I/O under the module that registers it; the catalog lock is held
@@ -4744,10 +4826,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         }
         # the provider reaches the app's I/O: a sandboxed caller is refused an app whose external I/O its sandbox does
         # not control (see @ref dataprovider_external_io); checked after the module is loaded, which can register the
-        # app; an app that is not registered is refused to sandboxed callers too.  The common path is one hash
-        # lookup, with no lock; only an app that is not allowed asks whether the caller is sandboxed.
-        if (!app_sandbox_state{action.app} && SandboxManager::isSandboxed()) {
-            DataProviderActionCatalog::checkSandboxAccess(action.app, True);
+        # app; an app that is not registered is refused to sandboxed callers too
+        if (SandboxManager::isSandboxed()) {
+            DataProviderActionCatalog::checkActionSandboxAccess(action);
         }
         hash<auto> constructor_opts;
         map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),

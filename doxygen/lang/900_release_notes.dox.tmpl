@@ -792,10 +792,10 @@
     @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread".
 
     @par Sandboxing I/O That Qore Does Not See
-    Java code called through the \c jni module checks its own I/O with \c org.qore.jni.QoreSandbox, and data
-    provider apps declare I/O that the sandbox does not see with the new \c external_io and \c sandbox_aware
-    fields; \c DataProviderActionCatalog::checkSandboxAccess() refuses sandboxed callers such an app that is not
-    sandbox-aware (see @ref sandbox_external_io).
+    Java code called through the \c jni module checks its own I/O with \c org.qore.jni.QoreSandbox; data provider
+    apps declare I/O that the sandbox does not see with the new \c external_io and \c sandbox_aware fields, and
+    sandboxed callers are refused the actions, factories and connections of an app that is not sandbox-aware (see
+    @ref sandbox_external_io).
 
     @par C++ API: Cancellable Waits in Binary Modules
     \c qore_cancellable_poll() and the \c QoreCancelWakeupHelper class let a binary module's waits end when the

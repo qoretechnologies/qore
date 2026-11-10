@@ -578,7 +578,7 @@ public class DataProvider {
         @param factory the new data provider factory
 
         @throw PROVIDER-ERROR the given provider has already been registered
-        @throw APP-SANDBOX-ACCESS-DENIED the code registering the factory is sandboxed
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the factory is sandboxed
         (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
     static registerFactory(AbstractDataProviderFactory factory) {

@@ -715,15 +715,23 @@ and without `sandbox_aware` (`APP-SANDBOX-ACCESS-DENIED`); trusted callers are n
 
 The catalog enforces this itself, for code that a sandbox governs:
 `DataProviderActionCatalog::getDataProviderForAction()` refuses the provider of such an app's action (and of an app
-that is not registered), and every factory method that creates a provider (`AbstractDataProviderFactory::create()`,
+that is not registered; the class it creates must be the one registered for the action, or its own class hierarchy
+decides, so an action hash cannot name an allowed app with another app's class), and every factory method that creates a provider (`AbstractDataProviderFactory::create()`,
 `createWithTemplate()`, `getProviderFromExample()`, `getExampleProviderRecordOutput()`) refuses a factory whose class
 belongs to a module that registers such an app, however the factory was obtained (`DataProvider::getFactoryObject()`,
-`getFactory()`, `getFactoryEx()`, or creating it); reading its info is not refused. The flag is per app: a factory of a
-module without such an app is not refused, and an action that a module contributes to another module's app is decided
-by that app. The checks are one hash lookup on the common path, with no lock.
+`getFactory()`, `getFactoryEx()`, or creating it); reading its info is not refused. Every `AbstractConnection` method
+that does I/O (`get()`, `getAsync()`, `ping()`, `getFileLocationHandler()`, `getFileLocationRedirect()`) refuses a
+connection whose class belongs to such a module, also when trusted code created it, and a refused ping does not
+change the connection's status. Factories and connections decide with `DataProviderSandboxCheck` by their class
+hierarchy, so a subclass defined elsewhere is refused too; a module's deferred app (`registerPendingApp()`) is
+initialized for a sandboxed caller before the decision, and a sandboxed caller is refused if it cannot be
+initialized. The flag is per app: a factory or connection of a module without such an app is not refused, and an
+action that a module contributes to another module's app is decided by that app. For a trusted caller the checks cost
+one `SandboxManager::isSandboxed()` call, with no lock.
 
 Consumers that serve a sandboxed caller on a thread its sandbox does not govern call
-`DataProviderActionCatalog::checkSandboxAccess(app_name, sandboxed)` before using an app for the caller. They pass the
+`DataProviderActionCatalog::checkSandboxAccess(app_name, sandboxed)` before using an app for the caller, and
+`AbstractConnection::checkSandboxAccess(sandboxed)` before using a connection for it. They pass the
 app's name, so the registered info decides, never a hash the caller supplied, and decide `sandboxed` from what they
 know about the caller, never from a value the caller supplied. Without an explicit `sandboxed` argument, the caller
 is sandboxed if
@@ -746,19 +754,30 @@ Audit findings for apps:
    caller supplied lets the caller decide for itself
 5. **Direct use of a provider module's classes**: sandboxed code that loads a provider module and creates its
    connection or provider classes itself does not go through the catalog; a module with an `external_io` app must
-   refuse sandboxed callers in its own entry points as well (its connection and provider constructors, with
-   `DataProviderActionCatalog::checkSandboxAccess(<app name>)`)
+   refuse sandboxed callers in its own entry points as well: its connection and provider constructors, with
+   `DataProviderActionCatalog::checkSandboxAccess(<app name>)`, and every public method that does I/O and is not one
+   of the `AbstractConnection` methods that check already: an object that trusted code created can be used by
+   sandboxed code later (a connection that a server pings on a tenant's behalf, for example). An object of such a
+   module that does I/O for its callers and is neither a factory nor a connection uses `DataProviderSandboxCheck`,
+   created with the object (in a member initializer, not lazily while serving a caller, as its methods run with the
+   provenance of the code that created it)
 6. **Uncontrolled actions in a controlled app**: an action's provider is decided by the declarations of the app it
    belongs to, so a module must not contribute an action whose class does uncontrolled external I/O to the app of
    another module that does not declare `external_io` (or that is `sandbox_aware`); register such an action in an
    app of its own that declares it
 7. **Registrations by sandboxed code**: the catalog refuses every process-wide registration and removal to sandboxed
-   code (`registerApp()`, `registerPendingApp()`, `registerAction()`, `registerPendingAppAction()`,
-   `registerLazyAppActions()`, `registerAppFileApi()`, `registerDiscoveryInventoryProvider()` and their removals,
+   code (`DATA-PROVIDER-REGISTRATION-DENIED`: `registerApp()`, `registerPendingApp()`, `registerAction()`,
+   `registerPendingAppAction()`, `registerLazyAppActions()`, `registerAppFileApi()`,
+   `registerDiscoveryInventoryProvider()` and their removals,
    `deregisterDynamicApp()`, `DataProvider::registerFactory()`, `DataProvider::registerType()`), so that a tenant
    cannot take a name from the module that owns it, add an action to an app it does not own, or remove one; register
    them in module initialization, which no sandbox governs (a deferred initialization that trusted code registered may
    still register on a sandboxed reader's thread)
+8. **Uncontrolled module commands**: a module command runs in the Program that it is issued in, whoever issues it,
+   so it follows that Program's sandbox and restrictions like the module's functions do: a command that changes
+   process-wide state or runs code is refused to a sandbox and in a Program with `PO_NO_UNCONTROLLED_APIS`, and a
+   command that reads files checks them against the filesystem policy (see the jni module's `add-classpath`,
+   `set-property`, `kotlin-eval` and `define-class` commands)
 
 #### Common Java audit findings
 

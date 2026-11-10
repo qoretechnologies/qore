@@ -1,0 +1,85 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ExternalIoConnectionFixture.qm registers an app with external I/O that is not sandbox-aware, and defines its
+# connection, for ConnectionExternalIo.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider >= 3.12
+%requires ConnectionProvider >= 3.1
+
+module ExternalIoConnectionFixture {
+    version = "1.0";
+    desc = "external I/O connection fixture: not sandbox-aware";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(cast<hash<DataProviderAppInfo>>({
+            "name": ExternalIoFixtureConnection::AppName,
+            "display_name": ExternalIoFixtureConnection::AppName,
+            "short_desc": "external I/O connection fixture",
+            "desc": "external I/O connection fixture",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "fixture",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "fixture.svg",
+        } + {"external_io": True}));
+    };
+}
+
+#! The object that the fixture's connection returns
+public class ExternalIoFixtureClient {
+}
+
+#! The fixture's connection: it belongs to this module, which registers the app; it counts the I/O it would make
+public class ExternalIoFixtureConnection inherits AbstractConnection {
+    public {
+        #! The app of the connection
+        const AppName = "QoreTestExternalIoConnectionApp";
+
+        #! The number of connection objects acquired: the I/O of the connection
+        static int io_count = 0;
+    }
+
+    constructor(string name = "external-io-fixture") : AbstractConnection({
+        "name": name,
+        "desc": "external I/O connection fixture",
+        "url": "externaliofixture://localhost",
+    }) {
+    }
+
+    #! Returns the number of connection objects acquired
+    static int getIoCount() {
+        return io_count;
+    }
+
+    string getType() {
+        return "externaliofixture";
+    }
+
+    *string getAppName() {
+        return AppName;
+    }
+
+    private ExternalIoFixtureClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        ++io_count;
+        return new ExternalIoFixtureClient();
+    }
+
+    private ExternalIoFixtureClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        ++io_count;
+        return new ExternalIoFixtureClient();
+    }
+
+    private *hash<FileLocationRedirect> getFileLocationRedirectImpl(string path, bool write) {
+        ++io_count;
+        return <FileLocationRedirect>{"scheme": "file", "location": "file:///" + path};
+    }
+
+    private object getFileLocationHandlerImpl() {
+        ++io_count;
+        return new ExternalIoFixtureClient();
+    }
+}

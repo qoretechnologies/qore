@@ -41,7 +41,14 @@ class DataProviderSandboxState {
         */
         static hash<string, bool> uncontrolled_modules = {};
 
-        #! Incremented after each change of @ref uncontrolled_modules, so that the factories can cache their decision
+        #! The modules that registered a deferred app that is not initialized yet: module name -> app name -> True
+        /** Its declarations are not known yet; read without a lock by DataProviderSandboxCheck, changed only by
+            setAppPending()
+        */
+        static hash<string, hash<string, bool>> pending_modules = {};
+
+        #! Incremented after each change of @ref uncontrolled_modules or @ref pending_modules, so that
+        #! DataProviderSandboxCheck objects can cache their decision
         static int generation = 0;
     }
 
@@ -68,13 +75,13 @@ class DataProviderSandboxState {
         @param name the name registered or removed
         @param removal @ref True if the registration is removed
 
-        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers or removes a registration
+        @throw DATA-PROVIDER-REGISTRATION-DENIED sandboxed code registers or removes a registration
     */
     static checkRegistration(string what, string name, *bool removal) {
         # a deferred initialization that trusted code registered runs also on a sandboxed reader's thread
         if (SandboxManager::isSandboxed() && !Priv::_trusted_deferred_init) {
-            throw "APP-SANDBOX-ACCESS-DENIED", sprintf("sandboxed code cannot %s %s %y in the process-wide data "
-                "provider catalog", removal ? "remove" : "register", what, name);
+            throw "DATA-PROVIDER-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s %s %y in the "
+                "process-wide data provider catalog", removal ? "remove" : "register", what, name);
         }
     }
 
@@ -88,6 +95,52 @@ class DataProviderSandboxState {
         }
         # after the change: a factory that read the old generation scans the modules again
         ++generation;
+    }
+
+    #! The module's deferred app is now, or is no longer, pending
+    /** @param module_name the module that registered the app
+        @param app the app
+        @param pending @ref True if the app is pending, @ref False if it was initialized or removed
+    */
+    static setAppPending(string module_name, string app, bool pending) {
+        AutoLock al(lck);
+        if (pending) {
+            pending_modules{module_name}{app} = True;
+        } else {
+            if (!exists pending_modules{module_name}{app}) {
+                return;
+            }
+            remove pending_modules{module_name}{app};
+            if (!pending_modules{module_name}) {
+                remove pending_modules{module_name};
+            }
+        }
+        ++generation;
+    }
+
+    #! The app is no longer pending, in whichever module registered it
+    static clearAppPending(string app) {
+        AutoLock al(lck);
+        bool changed;
+        foreach string module_name in (keys pending_modules) {
+            if (exists pending_modules{module_name}{app}) {
+                remove pending_modules{module_name}{app};
+                if (!pending_modules{module_name}) {
+                    remove pending_modules{module_name};
+                }
+                changed = True;
+            }
+        }
+        if (changed) {
+            ++generation;
+        }
+    }
+
+    #! Returns the deferred apps of the given modules that are still pending
+    static hash<string, bool> getPendingApps(list<string> modules) {
+        hash<string, bool> rv = {};
+        map rv += pending_modules{$1}, modules, pending_modules{$1};
+        return rv;
     }
 
     #! Returns the names of the modules of the given classes and of all of their parent classes, each once
