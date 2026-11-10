@@ -1031,7 +1031,9 @@ static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
         return false;
     }
     const char* name = call->getName();
-    return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
+    // the first character is checked before the names are compared: the interpreter checks every call with one
+    // argument, and almost no callee is one of these
+    return name && name[0] == 't' && (!strcmp(name, "type") || !strcmp(name, "typename"));
 }
 
 static const char* qore_llvm_get_single_arg_fast_builtin_helper(
