@@ -5279,6 +5279,49 @@ static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector
     return false;
 }
 
+//! Takes the value of an operand out of its slot when the instruction is its only use and the slot holds a reference
+/** As consumeLastUseCallArgSlots() releases an argument; the caller takes the reference over: a typed hash or list
+    construction retypes a unique initializer in place, as the AST interpreter does, instead of copying it (#5704).
+
+    @param owned set to the value's bits if the value was taken, 0 otherwise
+
+    @return the address of \a owned for qore_rt_new_complex_from_value_consume(), or nullptr if nothing was taken
+*/
+static uint64_t* takeSoleUseOperand(IRValueSlots& values, IRCleanupSlots& cleanup, QoreIRValue operand,
+        const std::vector<uint32_t>& value_use_counts, const std::unordered_map<uint32_t, int32_t>& borrowed_slots,
+        uint64_t& owned) {
+    owned = 0;
+    uint32_t id = operand.id;
+    if (!operand.isValid() || id >= values.size() || id >= value_use_counts.size() || value_use_counts[id] != 1
+            || borrowed_slots.find(id) != borrowed_slots.end()) {
+        return nullptr;
+    }
+    QoreValue& slot = values[id];
+    if (!slot.needsRef()) {
+        return nullptr;
+    }
+    removeAllCleanupEntries(cleanup, id);
+    owned = toBits(slot);
+    slot = QoreValue();
+    return &owned;
+}
+
+//! Builds a typed hash or list from its initializer operand, taking the initializer over at its only use (#5704)
+static QoreValue newComplexFromOperand(IRValueSlots& values, IRCleanupSlots& cleanup, QoreIRValue operand,
+        const QoreTypeInfo* type_info, bool is_hash, const std::vector<uint32_t>& value_use_counts,
+        const std::unordered_map<uint32_t, int32_t>& borrowed_slots, ExceptionSink* xsink) {
+    uint64_t init_bits = toBits(getIRValue(values, operand));
+    uint64_t owned;
+    uint64_t* cleanup_slot = takeSoleUseOperand(values, cleanup, operand, value_use_counts, borrowed_slots, owned);
+    QoreValue rv = fromBits(qore_rt_new_complex_from_value_consume(type_info, init_bits, cleanup_slot,
+        is_hash ? QORE_RT_COMPLEX_INIT_HASH : 0, xsink));
+    // a value taken from its slot that the construction did not take over is released here
+    if (owned) {
+        fromBits(owned).discard(xsink);
+    }
+    return rv;
+}
+
 static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
         const QoreIRInstruction* inst, QoreIROpcode invoke_opcode, const QoreValue& expr) {
@@ -5983,6 +6026,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         case QoreIROpcode::NewComplexHash: {
             if (auto* node = dynamic_cast<const NewComplexHashNode*>(inv->expr.getInternalNode())) {
+                // the initializer is lowered as the operand (issue #5704)
+                if (!inv->operands.empty()) {
+                    QoreValue init = getIRValue(values, inv->operands[0]);
+                    return fromBits(qore_rt_new_complex_hash_from_hash(node->typeInfo, toBits(init), xsink));
+                }
                 return fromBits(qore_rt_new_complex_hash(node, xsink));
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -5990,6 +6038,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         case QoreIROpcode::NewComplexList: {
             if (auto* node = dynamic_cast<const NewComplexListNode*>(inv->expr.getInternalNode())) {
+                // the initializer is lowered as the operand (issue #5704)
+                if (!inv->operands.empty()) {
+                    QoreValue init = getIRValue(values, inv->operands[0]);
+                    return fromBits(qore_rt_new_complex_list_from_value(node->typeInfo, toBits(init), xsink));
+                }
                 return fromBits(qore_rt_new_complex_list(node, xsink));
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -8945,7 +8998,21 @@ next_instruction:
                 bool preserve_hash_key_weak_result = (inv->invoke_opcode == QoreIROpcode::HashKeyAccess
                     || inv->invoke_opcode == QoreIROpcode::LoadSelfMember
                     || inv->invoke_opcode == QoreIROpcode::LoadStaticVar) && isDotEvalOnlyBase(inst);
-                QoreValue res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
+                QoreValue res;
+                const NewComplexHashNode* inv_nch = nullptr;
+                const NewComplexListNode* inv_ncl = nullptr;
+                if (!inv->operands.empty() && (inv->invoke_opcode == QoreIROpcode::NewComplexHash
+                        ? (inv_nch = dynamic_cast<const NewComplexHashNode*>(inv->expr.getInternalNode())) != nullptr
+                        : (inv->invoke_opcode == QoreIROpcode::NewComplexList
+                            && (inv_ncl = dynamic_cast<const NewComplexListNode*>(inv->expr.getInternalNode()))
+                                != nullptr))) {
+                    // the initializer is taken over at its only use, as without the try block (#5704)
+                    res = newComplexFromOperand(values, cleanup, inv->operands[0],
+                        inv_nch ? inv_nch->typeInfo : inv_ncl->typeInfo, inv_nch != nullptr, value_use_counts,
+                        weak_load_temp_slots, xsink);
+                } else {
+                    res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
+                }
                 // a temporary argument of a call is released when the call returns, as in the AST
                 releaseConsumedCallArgs(inv);
                 // Post-invalidation: ensure slot cache is cleared after the lvalue
@@ -11316,9 +11383,16 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue out = const_cast<NewComplexHashNode*>(nch)->eval(needs_deref, xsink);
-                if (!needs_deref && out.needsRef()) {
-                    out = out.refSelf();
+                QoreValue out;
+                if (!nch_inst->operands.empty()) {
+                    // the initializer is lowered as the operand (issue #5704)
+                    out = newComplexFromOperand(values, cleanup, nch_inst->operands[0], nch->typeInfo, true,
+                        value_use_counts, weak_load_temp_slots, xsink);
+                } else {
+                    out = const_cast<NewComplexHashNode*>(nch)->eval(needs_deref, xsink);
+                    if (!needs_deref && out.needsRef()) {
+                        out = out.refSelf();
+                    }
                 }
                 if (xsink && *xsink) {
                     unwindForException();
@@ -11345,9 +11419,16 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue out = const_cast<NewComplexListNode*>(ncl)->eval(needs_deref, xsink);
-                if (!needs_deref && out.needsRef()) {
-                    out = out.refSelf();
+                QoreValue out;
+                if (!ncl_inst->operands.empty()) {
+                    // the initializer is lowered as the operand (issue #5704)
+                    out = newComplexFromOperand(values, cleanup, ncl_inst->operands[0], ncl->typeInfo, false,
+                        value_use_counts, weak_load_temp_slots, xsink);
+                } else {
+                    out = const_cast<NewComplexListNode*>(ncl)->eval(needs_deref, xsink);
+                    if (!needs_deref && out.needsRef()) {
+                        out = out.refSelf();
+                    }
                 }
                 if (xsink && *xsink) {
                     unwindForException();

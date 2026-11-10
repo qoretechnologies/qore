@@ -6109,6 +6109,21 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
                 hash_val, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        if (new_ch->args && !new_ch->args->empty()) {
+            // the initializer is lowered as an operand, so that it runs as IR (issue #5704: its writes to locals were
+            // made to the AST interpreter's copies) and is compiled natively (issue #5705); the instruction's node
+            // carries only the type, so that AOT serializes no initializer expression
+            if (new_ch->args->size() != 1) {
+                error = "complex hash constructor argument count mismatch";
+                return QoreIRValue();
+            }
+            QoreIRValue init = lowerExpression(new_ch->args->get(0), error);
+            if (!init.isValid()) {
+                return QoreIRValue();
+            }
+            ValueHolder type_only(new NewComplexHashNode(new_ch->loc, new_ch->typeInfo, nullptr), nullptr);
+            return lowerNewComplexFromOperand(QoreIROpcode::NewComplexHash, *type_only, init, new_ch->loc, error);
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -6124,6 +6139,15 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
         return builder.createNewComplexHash(new_ch, expr, new_ch->loc)->result;
     }
     if (auto* new_cl = dynamic_cast<const NewComplexListNode*>(node)) {
+        if (!new_cl->args.isNothing()) {
+            // the initializer is lowered as an operand: see NewComplexHashNode above (issues #5704 and #5705)
+            QoreIRValue init = lowerExpression(new_cl->args, error);
+            if (!init.isValid()) {
+                return QoreIRValue();
+            }
+            ValueHolder type_only(new NewComplexListNode(new_cl->loc, new_cl->typeInfo, QoreValue()), nullptr);
+            return lowerNewComplexFromOperand(QoreIROpcode::NewComplexList, *type_only, init, new_cl->loc, error);
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -13018,6 +13042,31 @@ QoreIRValue QoreIRLowering::lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValu
         maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
     }
     return result;
+}
+
+QoreIRValue QoreIRLowering::lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only,
+        QoreIRValue init, const QoreProgramLocation* loc, std::string& error) {
+    assert(opcode == QoreIROpcode::NewComplexHash || opcode == QoreIROpcode::NewComplexList);
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(type_only, {init}, normal_block, handler, loc);
+        inst->invoke_opcode = opcode;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    QoreIRInstruction* inst;
+    if (opcode == QoreIROpcode::NewComplexHash) {
+        inst = builder.createNewComplexHash(type_only.get<const NewComplexHashNode>(), type_only, loc);
+    } else {
+        inst = builder.createNewComplexList(type_only.get<const NewComplexListNode>(), type_only, loc);
+    }
+    inst->operands.push_back(init);
+    return inst->result;
 }
 
 QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error) {

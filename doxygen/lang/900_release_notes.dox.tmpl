@@ -1800,6 +1800,9 @@
       value in the new thread, and modifying a member of the object is a parse error
     - fixed crashes, leaks and unhandled destructor exceptions of @ref background "background" when preparing its
       expression failed, its thread could not be created, or it released the last reference to an object
+    - a @ref list_assignment "list assignment" had the type of its last assigned value instead of the type of
+      its right-hand side, so that using its value where a type is checked, as in a typed hash initializer, raised a
+      type error
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",

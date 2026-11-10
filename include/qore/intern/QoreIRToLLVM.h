@@ -983,6 +983,19 @@ private:
             llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
 
+    //! Emits the construction of a typed hash or list from its lowered initializer (the instruction's operand 0)
+    /** For NewComplexHash and NewComplexList with their initializer lowered as an operand (issue #5704): calls the
+        runtime helper that builds the value from the initializer, by type pointer (JIT) or type path (AOT), with the
+        hash initializer's precheck as for VrnConstruct.
+
+        @param maybe_invoke true to emit the call with emitMaybeInvoke(), false for a plain call (in an Invoke)
+
+        @return the NaN-boxed result, or nullptr with \a error set
+    */
+    llvm::Value* emitComplexConstructFromOperand(const QoreTypeInfo* type_info, bool is_hash,
+            const QoreIRInstruction* inst, bool maybe_invoke, llvm::Module& module, llvm::Function* llvm_func,
+            std::string& error);
+
     // AOT batch fast entries are only valid when the callee's own AOT context
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is

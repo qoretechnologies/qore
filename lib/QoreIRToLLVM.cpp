@@ -6339,6 +6339,74 @@ llvm::BasicBlock* QoreIRToLLVM::getOrCreateFunctionUnwindLP(llvm::Module& module
     return function_unwind_lp;
 }
 
+llvm::Value* QoreIRToLLVM::emitComplexConstructFromOperand(const QoreTypeInfo* type_info, bool is_hash,
+        const QoreIRInstruction* inst, bool maybe_invoke, llvm::Module& module, llvm::Function* llvm_func,
+        std::string& error) {
+    assert(inst && !inst->operands.empty());
+    type_info = specializeType(type_info);
+    if (!type_info) {
+        error = "typed hash/list construction with a lowered initializer has no target type";
+        return nullptr;
+    }
+    uint32_t init_id = inst->operands[0].id;
+    llvm::Value* init_val = getVal(init_id, error);
+    if (!init_val) {
+        return nullptr;
+    }
+    llvm::Value* init_boxed = boxValue(init_val, init_id);
+    auto initializer_definition = value_definitions.find(init_id);
+    bool hash_prechecked = is_hash && current_ir_func
+        && initializer_definition != value_definitions.end()
+        && qore_ir_complex_hash_initializer_prechecked(*current_ir_func, initializer_definition->second, type_info);
+
+    // the construction takes over the initializer's reference when it is its last use and the initializer has a
+    // cleanup slot, so that a unique initializer is retyped in place and not copied, as the AST interpreter does (see
+    // buildArgCleanupArray())
+    llvm::Value* cleanup_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    {
+        auto uses_it = operand_remaining_uses.find(init_id);
+        auto alloca_it = invoke_alloca_map.find(init_id);
+        if (alloca_it != invoke_alloca_map.end()
+                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)) {
+            llvm::Value* slot = alloca_it->second;
+            if (!slot) {
+                slot = promoteSsaEntryToAlloca(init_id, module, llvm_func);
+            }
+            if (slot) {
+                cleanup_ptr = slot;
+            }
+        }
+    }
+    int32_t flags = (is_hash ? QORE_RT_COMPLEX_INIT_HASH : 0) | (hash_prechecked ? QORE_RT_COMPLEX_INIT_PRECHECKED : 0);
+    llvm::Value* flags_val = llvm::ConstantInt::get(i32_type, flags);
+
+    std::vector<llvm::Value*> args;
+    std::vector<llvm::Type*> arg_types;
+    const char* helper_name;
+    const char* helper_throwing_name;
+    if (aot_mode) {
+        helper_name = "qore_rt_new_complex_from_value_consume_by_type_path_cached";
+        helper_throwing_name = "qore_rt_new_complex_from_value_consume_by_type_path_cached_throwing";
+        std::string type_path = qore_ir_get_type_path(type_info);
+        llvm::Value* type_path_ptr = qore_ir_create_global_string_ptr(builder, type_path);
+        args = {aot_ctx_arg, type_path_ptr, init_boxed, cleanup_ptr, flags_val, xsink_arg};
+        arg_types = {ptr_type, ptr_type, i64_type, ptr_type, i32_type, ptr_type};
+    } else {
+        helper_name = "qore_rt_new_complex_from_value_consume";
+        helper_throwing_name = "qore_rt_new_complex_from_value_consume_throwing";
+        llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(type_info));
+        args = {builder->CreateIntToPtr(type_ptr, ptr_type), init_boxed, cleanup_ptr, flags_val, xsink_arg};
+        arg_types = {ptr_type, i64_type, ptr_type, i32_type, ptr_type};
+    }
+    auto ft = llvm::FunctionType::get(i64_type, arg_types, false);
+    auto helper = module.getOrInsertFunction(helper_name, ft);
+    if (!maybe_invoke) {
+        return builder->CreateCall(helper, args);
+    }
+    auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, ft);
+    return emitMaybeInvoke(helper, helper_throwing, args, module, llvm_func, inst);
+}
+
 llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
         llvm::FunctionCallee throwing_helper,
         llvm::ArrayRef<llvm::Value*> args,
@@ -19248,6 +19316,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         result = emitMaybeInvoke(helper, helper_throwing,
                                 {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
                     }
+                } else if ((inv->invoke_opcode == QoreIROpcode::NewComplexHash
+                        || inv->invoke_opcode == QoreIROpcode::NewComplexList) && !inv->operands.empty()) {
+                    // the initializer is lowered as the operand (issue #5704)
+                    const AbstractQoreNode* node = inv->expr.getInternalNode();
+                    const QoreTypeInfo* type_info = nullptr;
+                    bool is_hash = inv->invoke_opcode == QoreIROpcode::NewComplexHash;
+                    if (is_hash) {
+                        if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                            type_info = nch->typeInfo;
+                        }
+                    } else if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                        type_info = ncl->typeInfo;
+                    }
+                    if (!type_info) {
+                        return setExpressionFallbackError(error, inst,
+                                "typed hash/list construction invoke with a lowered initializer has no target node");
+                    }
+                    result = emitComplexConstructFromOperand(type_info, is_hash, inst, false, module, llvm_func,
+                        error);
+                    if (!result) {
+                        return false;
+                    }
                 } else if (aot_mode) {
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
@@ -28731,7 +28821,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::NewComplexHash: {
             const auto* nchinst = static_cast<const QoreIRNewComplexHashInstruction*>(inst);
             llvm::Value* result;
-            if (aot_mode) {
+            if (!inst->operands.empty()) {
+                // the initializer is lowered as the operand (issue #5704)
+                const auto* nch = dynamic_cast<const NewComplexHashNode*>(nchinst->node
+                    ? nchinst->node : nchinst->expr.getInternalNode());
+                if (!nch) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexHash with a lowered initializer has no NewComplexHashNode");
+                }
+                result = emitComplexConstructFromOperand(nch->typeInfo, true, inst, true, module, llvm_func, error);
+                if (!result) {
+                    return false;
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = nchinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -28765,7 +28867,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::NewComplexList: {
             const auto* nclinst = static_cast<const QoreIRNewComplexListInstruction*>(inst);
             llvm::Value* result;
-            if (aot_mode) {
+            if (!inst->operands.empty()) {
+                // the initializer is lowered as the operand (issue #5704)
+                const auto* ncl = dynamic_cast<const NewComplexListNode*>(nclinst->node
+                    ? nclinst->node : nclinst->expr.getInternalNode());
+                if (!ncl) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexList with a lowered initializer has no NewComplexListNode");
+                }
+                result = emitComplexConstructFromOperand(ncl->typeInfo, false, inst, true, module, llvm_func, error);
+                if (!result) {
+                    return false;
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = nclinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));

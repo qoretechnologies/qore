@@ -4669,6 +4669,66 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value_by_type_path(c
     return qore_rt_new_complex_list_from_value(typeInfo, value_bits, xsink);
 }
 
+//! Builds a typed hash or list from its initializer, taking over the initializer's reference from its cleanup slot
+/** The generated code gives the cleanup slot of the initializer when the construction is its last use (issue #5704:
+    the initializer of new hash<K,V>(...) and new list<T>(...) is a lowered operand); the reference in the slot is
+    taken over, so that a unique initializer is retyped in place as the AST interpreter does, and not copied.  An
+    initializer without a reference in the slot (borrowed) is referenced as by the helpers without a slot.
+
+    @param flags QORE_RT_COMPLEX_INIT_HASH for a hash (else a list), QORE_RT_COMPLEX_INIT_PRECHECKED for a hash
+    initializer whose values are known to have the hash's value type
+*/
+static uint64_t qore_rt_new_complex_from_value_consume_impl(const QoreTypeInfo* typeInfo, uint64_t value_bits,
+        uint64_t* cleanup, int32_t flags, ExceptionSink* xsink) {
+    // the reference of the slot is taken over before anything can fail, so that the initializer is released once
+    bool owned = cleanup && *cleanup && *cleanup == value_bits;
+    if (owned) {
+        *cleanup = 0;
+    }
+    QoreValue value = fromBits(value_bits);
+    ValueHolder holder(owned ? value : (value.needsRef() ? value.refSelf() : value), xsink);
+
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
+    const bool is_hash = flags & QORE_RT_COMPLEX_INIT_HASH;
+    if (!typeInfo) {
+        if (xsink) {
+            xsink->raiseException(is_hash ? "HASH-INIT-ERROR" : "LIST-INIT-ERROR", "typed %s initializer is missing "
+                "target type metadata", is_hash ? "hash" : "list");
+        }
+        return toBits(QoreValue());
+    }
+    if (is_hash) {
+        if (holder->getType() != NT_HASH) {
+            if (xsink) {
+                xsink->raiseException("HASH-INIT-ERROR",
+                    "typed hash initializer value must be a hash; got type '%s' instead", holder->getTypeName());
+            }
+            return toBits(QoreValue());
+        }
+        QoreHashNode* result = qore_hash_private::newComplexHashFromHash(typeInfo,
+            holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED));
+        return toBits(result ? QoreValue(result) : QoreValue());
+    }
+    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, holder.release(), xsink);
+    return toBits(result ? QoreValue(result) : QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_from_value_consume(const QoreTypeInfo* typeInfo,
+        uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink) {
+    return qore_rt_new_complex_from_value_consume_impl(typeInfo, value_bits, cleanup, flags, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_from_value_consume_by_type_path_cached(QoreAOTContext* ctx,
+        const char* type_path, uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path,
+        (flags & QORE_RT_COMPLEX_INIT_HASH) ? "NewComplexHash" : "NewComplexList", xsink);
+    if (xsink && *xsink) {
+        // the initializer's reference stays in its slot, which the caller's cleanup releases
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_from_value_consume_impl(type_info, value_bits, cleanup, flags, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
         uint64_t value_bits, ExceptionSink* xsink) {
     return qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits,
@@ -20828,6 +20888,26 @@ qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked_throwing(
     uint64_t result =
         qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(
             ctx, type_path, hash_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_from_value_consume_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_from_value_consume(typeInfo, value_bits, cleanup, flags, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_from_value_consume_by_type_path_cached_throwing(QoreAOTContext* ctx, const char* type_path,
+        uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_from_value_consume_by_type_path_cached(ctx, type_path, value_bits, cleanup,
+        flags, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

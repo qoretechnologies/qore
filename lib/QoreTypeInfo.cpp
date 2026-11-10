@@ -313,6 +313,7 @@ public:
                 makeReturnVec(hashdecl, or_nothing)),
             qore_path(std::move(qore_path)), type_path(std::move(type_path)), hashdecl(hashdecl),
             or_nothing(or_nothing) {
+        aot_deferred_placeholder = true;
     }
 
     bool samePlaceholder(const QoreAOTDeferredTypeInfo& other) const {
@@ -462,12 +463,18 @@ const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLocation* l
 }
 
 bool qore_type_info_is_aot_deferred(const QoreTypeInfo* ti) {
-    return dynamic_cast<const QoreAOTDeferredTypeInfo*>(ti);
+    return ti && ti->isAotDeferredPlaceholder();
 }
 
 bool qore_type_info_aot_deferred_compare(const QoreTypeInfo* a, const QoreTypeInfo* b, bool& result) {
-    const QoreAOTDeferredTypeInfo* da = dynamic_cast<const QoreAOTDeferredTypeInfo*>(a);
-    const QoreAOTDeferredTypeInfo* db = dynamic_cast<const QoreAOTDeferredTypeInfo*>(b);
+    // neither type is a placeholder: the comparison is not deferred (the common case, without a dynamic_cast)
+    if (!qore_type_info_is_aot_deferred(a) && !qore_type_info_is_aot_deferred(b)) {
+        return false;
+    }
+    const QoreAOTDeferredTypeInfo* da = qore_type_info_is_aot_deferred(a)
+        ? static_cast<const QoreAOTDeferredTypeInfo*>(a) : nullptr;
+    const QoreAOTDeferredTypeInfo* db = qore_type_info_is_aot_deferred(b)
+        ? static_cast<const QoreAOTDeferredTypeInfo*>(b) : nullptr;
     if (!da && !db) {
         return false;
     }

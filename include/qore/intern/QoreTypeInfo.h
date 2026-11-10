@@ -1123,6 +1123,20 @@ protected:
 
     DLLLOCAL static void stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
 
+public:
+    //! Returns true for an AOT deferred placeholder type (QoreAOTDeferredTypeInfo in QoreTypeInfo.cpp)
+    /** Every type comparison asks it (see qore_type_info_aot_deferred_compare()), so it is a flag that the
+        placeholder's constructor sets, and not a dynamic_cast, which cost about 400 instructions per comparison of
+        two types that are not placeholders.
+    */
+    DLLLOCAL bool isAotDeferredPlaceholder() const {
+        return aot_deferred_placeholder;
+    }
+
+protected:
+    //! true for an AOT deferred placeholder type only
+    bool aot_deferred_placeholder = false;
+
 private:
     const q_accept_vec_t accept_vec;
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};

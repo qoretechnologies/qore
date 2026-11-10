@@ -291,6 +291,10 @@ public:
     QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    //! Lowers a typed hash or list construction whose initializer is lowered as the operand \a init
+    /** @param type_only a NewComplexHashNode or NewComplexListNode of the type without an initializer */
+    QoreIRValue lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only, QoreIRValue init,
+            const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
     QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);

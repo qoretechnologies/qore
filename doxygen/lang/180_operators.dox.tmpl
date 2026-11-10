@@ -2273,6 +2273,11 @@ if (x || y)
     refused for it as well (ex: <tt>*string s; s -= 1;</tt>, whose message is
     <tt>lvalue has type '*string', but the -= operator will assign it an integer value</tt>).
 
+    @anchor list_assignment
+    @note A list assignment (<tt>(a, b) = (1, 2)</tt>) assigns the elements of its right-hand side to its lvalues in
+    order and returns its right-hand side, with the type of the right-hand side (ex: <tt>list&lt;int&gt;</tt> for
+    <tt>(c, d) = (7, 8)</tt>, which can initialize a key of type \c auto in <tt>new hash&lt;string, auto&gt;</tt>).
+
     <hr>
     @subsection weak_assignment_operator Weak Reference Assignment Operator (:=)
 
