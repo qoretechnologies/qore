@@ -16,7 +16,7 @@
 
 %exec-class TimeoutDateUntypedOperandTest
 
-#! A timeout operand of date arithmetic counts milliseconds in every mode, also when the other operand has no type (qore#5735)
+#! A timeout or *timeout operand of date arithmetic counts milliseconds in every mode, also when the other has no type (qore#5735)
 /** A @ref timeout_type "timeout" is an integer of milliseconds, and an integer added to a date is a number of seconds,
     so <tt>date + timeout</tt> and <tt>date - timeout</tt> treat a timeout variable used directly in the operation as
     milliseconds.  The AST interpreter set that up at parse time only when the type of the other operand was known; the
@@ -60,6 +60,21 @@ class TimeoutDateUntypedOperandTest inherits QUnit::Test {
             + "printf(\"19 map over floats:         %y\\n\", (map $1 + t, (fl, 2.5)));\n"
             + "printf(\"20 untyped list plus:       %y\\n\", (map $1 + t, (l,)));\n"
             + "printf(\"21 date plus timeout twice: %y\\n\", d + t + t);\n"
+            + "\n"
+            + "*timeout ot = 5;\n"
+            + "*timeout none;\n"
+            + "softint si = 5;\n"
+            + "printf(\"22 date plus *timeout:        %y\\n\", d + ot);\n"
+            + "printf(\"23 *timeout plus date:        %y\\n\", ot + d);\n"
+            + "printf(\"24 date minus *timeout:       %y\\n\", d - ot);\n"
+            + "printf(\"25 *timeout minus date:       %y\\n\", ot - d);\n"
+            + "printf(\"26 map plus *timeout:         %y\\n\", (map $1 + ot, (d,))[0]);\n"
+            + "printf(\"27 map minus *timeout:        %y\\n\", (map $1 - ot, (d,))[0]);\n"
+            + "printf(\"28 date plus NOTHING:         %y\\n\", d + none);\n"
+            + "printf(\"29 date minus NOTHING:        %y\\n\", d - none);\n"
+            + "printf(\"31 auto *timeout:             %y\\n\", (auto sub (auto x, *timeout y) { return x + y; })(d, ot));\n"
+            + "printf(\"32 softint stays seconds:     %y\\n\", d + si);\n"
+            + "printf(\"33 int stays seconds:         %y\\n\", d + i);\n"
             + "";
 
         const Expected = "01 direct plus:             <time: 2 seconds 5 milliseconds>\n"
@@ -83,6 +98,17 @@ class TimeoutDateUntypedOperandTest inherits QUnit::Test {
             + "19 map over floats:         [6.5, 7.5]\n"
             + "20 untyped list plus:       [[1, 2, 5]]\n"
             + "21 date plus timeout twice: <time: 2 seconds 10 milliseconds>\n"
+            + "22 date plus *timeout:        <time: 2 seconds 5 milliseconds>\n"
+            + "23 *timeout plus date:        <time: 2 seconds 5 milliseconds>\n"
+            + "24 date minus *timeout:       <time: 1 second 995 milliseconds>\n"
+            + "25 *timeout minus date:       <time: -1 seconds -995 milliseconds>\n"
+            + "26 map plus *timeout:         <time: 2 seconds 5 milliseconds>\n"
+            + "27 map minus *timeout:        <time: 1 second 995 milliseconds>\n"
+            + "28 date plus NOTHING:         <time: 2 seconds>\n"
+            + "29 date minus NOTHING:        <time: 2 seconds>\n"
+            + "31 auto *timeout:             <time: 2 seconds 5 milliseconds>\n"
+            + "32 softint stays seconds:     <time: 7 seconds>\n"
+            + "33 int stays seconds:         <time: 7 seconds>\n"
             + "";
     }
 
