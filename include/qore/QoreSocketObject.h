@@ -879,7 +879,6 @@ if (accepted) {
 
     DLLEXPORT long verifyPeerCertificate();
     DLLLOCAL long verifyPeerCertificate(ExceptionSink* xsink);
-    DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);
     DLLEXPORT const QoreEncoding* getEncoding() const;
     DLLEXPORT bool isDataAvailable(ExceptionSink* xsink, int timeout = 0);

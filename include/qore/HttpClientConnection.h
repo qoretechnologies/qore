@@ -542,11 +542,20 @@ public:
     DLLLOCAL void inheritOpener(const HttpClientConnectionBase& from);
 
     //! Sets the pool key for O(1) eviction by the connection manager
-    /** Called by the manager when inserting the connection into the pool.
+    /** Called by the manager when inserting the connection into the pool, with the pool's lock held.
+
+        The key is set with the lock of the close notification (onClosedHook()), which reads it: a connection whose
+        close notification has been sent already, which happens when a connection that is still connecting fails
+        while it is added to the pool, gets no key, and the manager must not pool it, as no notification would
+        remove it; a connection that gets the key sends its notification with it.
+
         @param key the pool key string
+
+        @return true if the key was set, false if the connection's close notification has been sent already
+
         @since %Qore 3.0
     */
-    DLLEXPORT void setPoolKey(const std::string& key);
+    DLLEXPORT bool setPoolKey(const std::string& key);
 
     //! Returns the pool key (empty if not in a pool)
     /** @since %Qore 3.0
@@ -755,9 +764,13 @@ protected:
     */
     HttpClientConnectionManagerBase* manager_ = nullptr;
 
-    //! Pool key for O(1) eviction.  Set by setPoolKey(), read by the
-    //! manager's onConnectionClosed / closeAndEvict.
+    //! Pool key for O(1) eviction.  Set by setPoolKey() with @ref onclose_lock and the manager's pool lock held,
+    //! read by the manager's onConnectionClosed (with @ref onclose_lock held) and closeAndEvict (with the pool lock
+    //! held).
     std::string pool_key_;
+
+    //! True once the close notification (onClosedHook()) has run; protected by @ref onclose_lock
+    bool close_notified_ = false;
 
     //! Lifetime barrier state — see @ref MethodGuard.
     /** Packed: top bit @ref INVALIDATED_BIT + low 31 bits in-flight count.

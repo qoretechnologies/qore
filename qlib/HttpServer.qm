@@ -6645,8 +6645,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     log(string fmt, ...) {
-        # this is called several times for every request: the message is built only if the logger logs it
-        if (logger && !logger.isEnabledFor(LoggerLevel::INFO)) {
+        # this is called several times for every request: the message is built only if it is logged, by the
+        # listener's logger or, for a listener without one, by the server's
+        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : (!serv || !serv.isLogInfoEnabled())) {
             return;
         }
         softlist<auto> args = fmt;
