@@ -2613,7 +2613,7 @@ static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketP
 
 //! Runs a synchronous call's operation that has no output
 /** @param closed_if_canceled true if a canceled operation that has not reached its goal raises SOCKET-CLOSED (see
-    qore_socket_object_exec_check_canceled()), as for a connect
+    qore_socket_object_exec_check_canceled()), as for a connect, a TLS upgrade or a TLS shutdown
 */
 static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPollOperationBase* poller,
         int timeout_ms, const char* owner_name, const char* goal, ExceptionSink* xsink,
@@ -3015,7 +3015,8 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
         return -1;
     }
 
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, "shutdownSSL", "shutdown-ssl", xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, "shutdownSSL", "shutdown-ssl", xsink,
+        true);
 }
 
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,

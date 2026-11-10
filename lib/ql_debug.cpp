@@ -15538,13 +15538,20 @@ namespace {
 //! Waits for its object a given number of times without using what is reported, and then reaches its goal
 /** As Socket::poll()'s operation does when it is reported ready before its caller waits for the result: its steps
     wait for the same object and events again, which the I/O thread keeps registered as they are.  Its output is the
-    number of its continuePoll() calls.
+    number of its continuePoll() calls.  Given an extra entry (ExtraPollFdInfo), its first step returns it in the
+    poll info's \c extra_fds.
 */
 class DbgWaitAgainPollOperation : public SocketPollOperationBase {
 public:
-    //! @p obj is kept by the operation's object, whose \c sock member references it
-    DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
-            waits(waits) {
+    //! @p obj is kept by the operation's object, whose \c sock member references it; @p extra is referenced
+    DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits, QoreHashNode* extra = nullptr) : obj(obj),
+            events(events), waits(waits), extra(extra) {
+    }
+
+    virtual ~DbgWaitAgainPollOperation() {
+        if (extra) {
+            extra->deref(nullptr);
+        }
     }
 
     virtual bool goalReached() const override {
@@ -15561,6 +15568,11 @@ public:
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
         info->setKeyValue("events", events, xsink);
         info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+        if (extra && calls == 1) {
+            ReferenceHolder<QoreListNode> extra_fds(new QoreListNode(autoTypeInfo), xsink);
+            extra_fds->push(extra->hashRefSelf(), xsink);
+            info->setKeyValue("extra_fds", extra_fds.release(), xsink);
+        }
         return *xsink ? nullptr : info.release();
     }
 
@@ -15576,12 +15588,15 @@ private:
     QoreObject* obj;
     int events;
     int waits;
+    //! an entry returned in the first step's extra_fds (referenced), or nullptr
+    QoreHashNode* extra;
     int calls = 0;
 };
 }
 
 //! Debug-only: returns an operation that waits for an object @p waits times without using what is reported
-/** See DbgWaitAgainPollOperation; the operation runs on the I/O thread
+/** See DbgWaitAgainPollOperation; the operation runs on the I/O thread.  An optional fourth argument, an
+    ExtraPollFdInfo hash, is returned in the first step's \c extra_fds.
 */
 static QoreValue f_dbg_wait_again_poll_operation(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -15597,7 +15612,9 @@ static QoreValue f_dbg_wait_again_poll_operation(const QoreListNode* params, Run
         xsink->raiseException("DBG-WAIT-AGAIN-ERROR", "waits must be from 1 to 1000; got %lld", (long long)waits);
         return QoreValue();
     }
-    DbgWaitAgainPollOperation* op = new DbgWaitAgainPollOperation(obj, events, static_cast<int>(waits));
+    QoreValue ev = get_param_value(params, 3);
+    QoreHashNode* extra = ev.getType() == NT_HASH ? ev.get<QoreHashNode>()->hashRefSelf() : nullptr;
+    DbgWaitAgainPollOperation* op = new DbgWaitAgainPollOperation(obj, events, static_cast<int>(waits), extra);
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
     op->setSelf(*op_obj);
     op_obj->setValue("sock", obj->objectRefSelf(), xsink);
@@ -20346,6 +20363,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTPOLLABLEIOOBJECTBASE->getTypeInfo(), QORE_PARAM_NO_ARG, "obj",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits");
+    qns.addBuiltinVariant("dbg_wait_again_poll_operation", f_dbg_wait_again_poll_operation,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, QC_SOCKETPOLLOPERATION->getTypeInfo(), 4,
+        QC_ABSTRACTPOLLABLEIOOBJECTBASE->getTypeInfo(), QORE_PARAM_NO_ARG, "obj",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits",
+        hashTypeInfo, QORE_PARAM_NO_ARG, "extra");
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

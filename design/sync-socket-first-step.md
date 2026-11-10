@@ -210,9 +210,10 @@ streams are not sockets and keep their rule (`design/nonblocking-descriptor-io.m
 
 A non-blocking TCP `connect()` returns `EINPROGRESS`, also on the loopback interface, where the handshake is done by
 the time the call returns: measured on Linux, 200 of 200 loopback connects returned `EINPROGRESS`, and 500 of 500
-sockets were writable at a `poll()` with a timeout of 0 right after.  The connect state checks for writability with
-a timeout of 0 (and reads `SO_ERROR`) before it returns `SOCK_POLLOUT`, so a connect that is already done completes
-in its first step.  This helps the I/O thread too: it saves a registration and a pass of its loop for every loopback
+sockets were writable at a `poll()` with a timeout of 0 right after.  The connect state checks for completion before
+it returns `SOCK_POLLOUT` (`qore_socket_check_connect_ready()`: it reads `SO_ERROR`, and confirms the connection with
+a send of zero bytes, as `poll()` can report a socket writable on macOS before its connect has completed), so a
+connect that is already done completes in its first step.  This helps the I/O thread too: it saves a registration and a pass of its loop for every loopback
 or LAN connect.  A UNIX socket connects at once and needs nothing.
 
 ### 4. A close that the controller has nothing to do for

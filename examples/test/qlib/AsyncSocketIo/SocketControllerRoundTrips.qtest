@@ -336,8 +336,8 @@ qiurSfIBhXYMDdqWsl9GD+c=
     }
 
     #! A TLS upgrade operation of a socket that already has a TLS connection finds it without a round trip
-    /** The operation's initialization runs with the socket's mutex held, on the thread that creates the operation (or
-        on the thread that runs its first step); it asked the socket's I/O thread whether the socket was secure, a
+    /** The operation's initialization runs with the socket's mutex held, on the thread that creates the operation;
+        it asked the socket's I/O thread whether the socket was secure, a
         round trip with the mutex held, and on a thread that drives poll operations the round trip is refused and the
         socket was reported as not secure, so the upgrade failed instead of completing at once.
     */

@@ -1528,8 +1528,8 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     //! Returns true if the socket has a TLS connection; for a step of a poll operation of the socket
     /** QoreSocket::isSecure() asks the socket's I/O thread when it is called on another thread, which a step on a
-        callback worker (or on the thread that submitted the operation) must not do: the round trip is refused there,
-        and isSecure() reports false.  The step reads the state directly, as the I/O thread does.
+        callback worker, or the initialization of an operation on the thread that creates it, must not do: the round
+        trip is refused there, and isSecure() reports false.  The state is read directly, as the I/O thread does.
     */
     DLLLOCAL bool hasSsl() const {
         return ssl.load(std::memory_order_acquire) != nullptr;

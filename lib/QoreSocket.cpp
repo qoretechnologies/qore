@@ -6316,7 +6316,10 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
             && SSL_is_init_finished(ssl)) {
         // one attempt that cannot block: the write side is closed right after
 #ifdef _Q_WINDOWS
-        // the sockets of the library are non-blocking (qore_socket_cloexec_nonblock()), so there is nothing to restore
+        // the blocking mode of a socket cannot be read on Windows: the sockets of the library are non-blocking from
+        // their creation (qore_socket_cloexec_nonblock()), and one that it did not create (adopted with
+        // QoreSocket(int, ...)) is blocking until it is made non-blocking (qore_socket_private::fd_nonblocking)
+        bool restore = !qs.fd_nonblocking.load(std::memory_order_relaxed);
         u_long mode = 1;
         ioctlsocket(fd, FIONBIO, &mode);
 #else
@@ -6331,11 +6334,14 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
 #ifdef DEBUG
         qore_dbg_ssl_close_notify_count.fetch_add(1, std::memory_order_relaxed);
 #endif
-#ifndef _Q_WINDOWS
         if (restore) {
+#ifdef _Q_WINDOWS
+            mode = 0;
+            ioctlsocket(fd, FIONBIO, &mode);
+#else
             fcntl(fd, F_SETFL, flags);
-        }
 #endif
+        }
     }
     // a layered connection is shut down before the connection that carries it
     if (outer) {

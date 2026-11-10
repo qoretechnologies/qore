@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the descriptors of extra pollable objects in the async I/O controller's event loop (kqueue)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -129,6 +130,8 @@ class AsyncIoExtraPollableTest inherits QUnit::Test {
         addTestCase("a closed extra pollable object is not waited for", \testClosed());
         addTestCase("Socket::poll() polls an extra pollable object", \testSocketPoll());
         addTestCase("an extra pollable object implemented in Qore", \testQorePollable());
+        addTestCase("an extra pollable object implemented in Qore from a step on the I/O thread",
+            \testQorePollableIoThread());
         addTestCase("an extra entry with neither a descriptor nor an object is ignored", \testEmptyEntry());
         set_return_value(main());
     }
@@ -263,6 +266,33 @@ class AsyncIoExtraPollableTest inherits QUnit::Test {
         });
         hash<auto> h = rq.get(HangGuard);
         assertEq("SOCKET-POLL-ERROR", h.ex.err, "the controller refuses an extra object implemented in Qore");
+    }
+
+    #! The step of a C++ operation runs on the I/O thread; an extra object implemented in Qore that it returns is refused
+    #! there, as after a step on a callback worker: the I/O thread cannot read its descriptor, and the operation would
+    #! otherwise wait without it
+    testQorePollableIoThread() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_wait_again_poll_operation() is only registered in a library-debug build");
+        }
+%ifdef Windows
+        testSkip("skipping because File::getPipe() is not available on Windows");
+%endif
+        hash<PipeInfo> pipe = File::getPipe();
+        QorePipePollable qp(pipe.read);
+        EventNotifier notifier();
+        SocketPollOperation op = call_function("dbg_wait_again_poll_operation", notifier, SOCK_POLLIN, 3,
+            <ExtraPollFdInfo>{"pollable": qp, "events": SOCK_POLLIN});
+        string owner = getName("extra-pollable-qore-io-thread");
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": owner,
+            "key": owner + "-key",
+            "to": -1s,
+        });
+        hash<auto> h = rq.get(HangGuard);
+        assertEq("SOCKET-POLL-ERROR", h.ex.err, "the I/O thread refuses an extra object implemented in Qore");
     }
 
     testEmptyEntry() {

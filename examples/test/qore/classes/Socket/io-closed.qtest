@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a close of a socket by another thread while its operation waits on the async I/O controller
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -48,8 +49,7 @@ class IoClosedTest inherits QUnit::Test {
         }, sub (int i, Socket server, Socket client) {
             if (i & 1) {
                 if (Option::HAVE_LIBRARY_DEBUGGING) {
-                    assertTrue(call_function("dbg_socket_wait_controller_op", client, 10s),
-                        "the send waits on the controller");
+                    waitOnController(client);
                 } else {
                     assertTrue(server.isDataAvailable(10s), "the send writes data");
                 }
@@ -102,6 +102,11 @@ class IoClosedTest inherits QUnit::Test {
                 }
             }();
             started.waitForZero();
+            # in every other iteration the close comes once the connect is on the I/O thread, which makes its first
+            # step (that opens the descriptor and starts the connection) before it processes the close
+            if ((i & 1) && Option::HAVE_LIBRARY_DEBUGGING) {
+                waitOnController(client);
+            }
             client.close();
             done.waitForZero();
             ++results{result};
@@ -112,24 +117,47 @@ class IoClosedTest inherits QUnit::Test {
                 || (Platform.OS != "Linux" && result == "SOCKET-CONNECT-ERROR"),
                 sprintf("%s in %d of 30 iterations", result, results{result}));
         }
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertGt(0, results."SOCKET-CLOSED" ?? 0, "a close cancels a connect that waits");
+        }
     }
 
     testRecvSize() {
-        checkClosed(sub (Socket s) {
+        checkRecvClosed(sub (Socket s) {
             s.recv(1);
         });
     }
 
     testRecvAvailable() {
-        checkClosed(sub (Socket s) {
+        checkRecvClosed(sub (Socket s) {
             s.recv(0);
         });
     }
 
     testRecvUntilClose() {
-        checkClosed(sub (Socket s) {
+        checkRecvClosed(sub (Socket s) {
             s.recv(-1);
         });
+    }
+
+    #! A receive that waits (the peer sends nothing): in every other iteration the close comes once the receive is on
+    #! the I/O thread, and cancels it
+    private checkRecvClosed(code use) {
+        hash<string, int> results = checkClosed(use, sub (int i, Socket server, Socket client) {
+            if ((i & 1) && Option::HAVE_LIBRARY_DEBUGGING) {
+                waitOnController(client);
+            }
+        });
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertGt(0, results."SOCKET-CLOSED" ?? 0, "a close cancels a receive that waits");
+        }
+    }
+
+    #! Waits until the operation of the call made with @p client is on its I/O thread (debug builds only): a close
+    #! made after that is processed after the operation has been taken
+    private waitOnController(Socket client) {
+        assertTrue(call_function("dbg_socket_wait_controller_op", client, 10s),
+            "the call's operation is on the controller");
     }
 
     #! The end of the connection by the peer is not taken for a close by another thread

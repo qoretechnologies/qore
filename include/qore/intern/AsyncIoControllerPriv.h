@@ -1203,6 +1203,10 @@ private:
         //! completion when this is still false at teardown so a waiting
         //! Queue::get() can never block forever on a lost completion.
         bool completion_delivered;
+#ifdef DEBUG
+        //! Debug-only: true if the operation is counted for its socket's debug hook (dbgNoteControllerOp())
+        bool dbg_counted = false;
+#endif
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
         bool socket_async_io;           //!< True if this operation owns a Socket async I/O claim
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)

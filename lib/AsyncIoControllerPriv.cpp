@@ -351,6 +351,26 @@ static int start_socket_async_io_owner(AbstractPollableIoObjectBase* sock, Excep
     return sp->startAsyncIo(xsink);
 }
 
+#ifdef DEBUG
+//! Debug-only: counts an operation of a Socket that enters (+1) or leaves (-1) the cache of its I/O thread; see
+//! my_socket_priv::dbgWaitForControllerOp()
+/** @param sock the operation's pollable object
+    @param counted the operation's flag (PollInfo::dbg_counted), which makes each operation count once
+    @param dt +1 when the operation enters the cache, -1 when it leaves it (PollInfo::cleanup())
+*/
+static void dbg_note_socket_controller_op(AbstractPollableIoObjectBase* sock, bool& counted, int dt) {
+    if ((dt > 0) == counted) {
+        return;
+    }
+    QoreSocketObject* socket = dynamic_cast<QoreSocketObject*>(sock);
+    if (!socket) {
+        return;
+    }
+    counted = dt > 0;
+    my_socket_priv::getPriv(*socket)->dbgNoteControllerOp(dt);
+}
+#endif
+
 static void clear_socket_async_io_owner(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
     QoreSocketObject* socket = dynamic_cast<QoreSocketObject*>(sock);
     if (!socket) {
@@ -504,6 +524,9 @@ QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsin
 // --- PollInfo implementation ---
 
 void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
+#ifdef DEBUG
+    dbg_note_socket_controller_op(sock, dbg_counted, -1);
+#endif
     // the last state event precedes any result, including the backstop completion below; on the paths that deliver
     // a result before cleanup() (doCancelIntern()), it has been pushed already
     if (controller && state_queue && !state_end_delivered) {
@@ -3186,6 +3209,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
         pinfo.sock = sock;
+#ifdef DEBUG
+        dbg_note_socket_controller_op(pinfo.sock, pinfo.dbg_counted, 1);
+#endif
         sock_holder.release();
         pinfo.spop_obj = spop_obj;
         spop_obj->ref();
@@ -6191,6 +6217,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     poll_xsink.clear();
                 } else if (!new_info) {
                     result.completed = true;
+                } else if (qore_extra_poll_entries_check(new_info, &poll_xsink)) {
+                    // an extra pollable object that the I/O thread cannot read ends the operation, as it does after a
+                    // step on a callback worker; the check runs no Qore code, and the poll info, which can hold the
+                    // last reference to the object, is released off the I/O thread
+                    QoreException* ex_obj = poll_xsink.getException();
+                    if (ex_obj) {
+                        result.ex_hash = ex_obj->makeExceptionObject();
+                    }
+                    poll_xsink.clear();
+                    AsyncIoDeferredRelease refs;
+                    refs.poll_info = new_info;
+                    releaseOffIoThread(refs, xsink);
                 } else {
                     result.new_poll_info = new_info;
                 }
@@ -8091,6 +8129,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.continue_poll_in_flight = step_in_flight;
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
+#ifdef DEBUG
+                    dbg_note_socket_controller_op(pinfo.sock, pinfo.dbg_counted, 1);
+#endif
                     pinfo.spop_obj = cmd.submit_spop_obj;       // ownership transferred
                     pinfo.spop_base = cmd.submit_spop_base;     // ownership transferred
                     pinfo.poll_info = cmd.submit_poll_info;     // ownership transferred
