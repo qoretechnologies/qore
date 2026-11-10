@@ -171,12 +171,12 @@ public:
                 return lvalue_err;
             } else if ((pflag & PF_CONST_METHOD) && check_const_method_lvalue(loc, exp)) {
                 return -2;
-            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_VARREF
+            } else if ((pflag & PF_BACKGROUND_EXPR) && exp.getType() == NT_VARREF
                 && exp.get<const VarRefNode>()->getType() == VT_LOCAL) {
                 parse_error(*loc, "illegal local variable modification with the background operator in %s",
                     getTypeName());
                 return -1;
-            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_SELF_VARREF) {
+            } else if ((pflag & PF_BACKGROUND_EXPR) && exp.getType() == NT_SELF_VARREF) {
                 // the expression takes the member's value when the thread starts, as it does for local variables
                 parse_error(*loc, "illegal member modification with the background operator in %s", getTypeName());
                 return -1;

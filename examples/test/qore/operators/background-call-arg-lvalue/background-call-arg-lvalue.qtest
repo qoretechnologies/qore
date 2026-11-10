@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BackgroundCallArgLvalueTest
+
+#! the execution modes, by name
+const ExecModes = {
+    "ast": EM_AST,
+    "ir": EM_IR,
+    "jit": EM_JIT,
+    "tiered": EM_TIERED,
+};
+
+#! the declarations of the Programs: functions and a class whose calls take the modified values as arguments
+const Decls = "%modern
+sub record(Queue q, int g, auto v) { q.push(v); }
+sub set_ref(reference<list<auto>> r) { r += 4; }
+class Recorder {
+    constructor(auto v) { }
+    record(Queue q, auto v) { q.push(v); }
+    static srecord(Queue q, auto v) { q.push(v); }
+}
+auto sub wrap(auto v) { return v; }
+";
+
+#! modifications of a local variable of the code that starts the thread, by the name of the operator
+const Modifications = {
+    "assignment": "i = 2",
+    "+=": "i += 5",
+    "-=": "i -= 5",
+    "*=": "i *= 5",
+    "++ (pre)": "++i",
+    "++ (post)": "i++",
+    "-- (pre)": "--i",
+    "-- (post)": "i--",
+    "list assignment": "(i, s) = (7, \"x\")",
+    "pop": "pop l",
+    "shift": "shift l",
+    "push": "push l, 4",
+    "unshift": "unshift l, 0",
+    "extract": "extract l, 0, 1",
+    "splice": "splice l, 0, 1",
+    "remove": "remove i",
+    "delete": "delete s",
+    "s///": "s =~ s/a/b/",
+    "tr///": "s =~ tr/a/b/",
+    "trim": "trim s",
+    "chomp": "chomp s",
+    "+= (string)": "s += \"x\"",
+    "+= (hash)": "h += {\"b\": 2}",
+};
+
+#! the places in a background expression that a modification is checked in, by name; %s is the modification
+const Places = {
+    "function argument": "background record(q, 0, (%s))",
+    "nested call argument": "background record(q, 0, wrap((%s)))",
+    "method argument": "background r.record(q, (%s))",
+    "static method argument": "background Recorder::srecord(q, (%s))",
+    "new argument": "background new Recorder((%s))",
+    "call argument in a hash argument": "background record(q, 0, {\"k\": wrap((%s))})",
+};
+
+#! Regression test for issue #5698: a background expression may not modify a local of the code that starts the thread
+/** The background operator refused the modification of a local variable of the code that starts the thread only
+    outside of the arguments of a call: call arguments were parsed without the background flag, so a modification
+    there was accepted.  The AST interpreter then crashed (an assertion in debug builds, SIGSEGV in release builds)
+    and the other execution modes modified a copy.  A modification anywhere in the expression is a parse error in
+    every mode, as documented; a reference argument (\c \\l) and the locals of a closure in the expression remain
+    allowed.
+*/
+class BackgroundCallArgLvalueTest inherits QUnit::Test {
+    constructor() : QUnit::Test("background call argument lvalue", "1.0", \ARGV) {
+        foreach hash<auto> mode in (ExecModes.pairIterator()) {
+            string name = mode.key;
+            ExecMode em = mode.value;
+            addTestCase("modifications refused: " + name, sub () { checkRefused(name, em); });
+            addTestCase("allowed forms: " + name, sub () { checkAllowed(name, em); });
+        }
+        addTestCase("qcc refuses a modification in a call argument", \checkQcc());
+
+        set_return_value(main());
+    }
+
+    private string body(string expr) {
+        return sprintf("sub t() { Queue q(); Recorder r(1); list<auto> l = (1, 2, 3); hash<auto> h = {\"a\": 1}; "
+            "string s = \"abc \"; int i = 1; %s; }\n", expr);
+    }
+
+    private checkRefused(string mode, ExecMode em) {
+        foreach hash<auto> place in (Places.pairIterator()) {
+            foreach hash<auto> modification in (Modifications.pairIterator()) {
+                string expr = sprintf(place.value, modification.value);
+                Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+                p.setExecMode(em);
+                string label = sprintf("%s: %s (%s): %s", mode, modification.key, place.key, expr);
+                assertThrows("PARSE-EXCEPTION", "illegal local variable modification with the background operator",
+                    sub () { p.parse(Decls + body(expr), label); }, NOTHING, label);
+            }
+        }
+    }
+
+    private checkAllowed(string mode, ExecMode em) {
+        Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+        p.setExecMode(em);
+        p.parse(Decls + "
+list<auto> sub by_reference() {
+    list<auto> l = (1, 2, 3);
+    thread_join(background set_ref(\\l));
+    return l;
+}
+auto sub closure_locals() {
+    Queue q();
+    background record(q, 0, int sub () { int x = 1; x += 2; ++x; return x; }());
+    return q.get(10s);
+}
+list<auto> sub values_taken() {
+    Queue q();
+    int i = 1;
+    list<auto> l = (1, 2);
+    background record(q, 0, (i + 1, l + 3));
+    i = 10;
+    return q.get(10s);
+}
+", mode);
+        # a reference argument shares the local explicitly
+        assertEq((1, 2, 3, 4), p.callFunction("by_reference"), mode + ": reference argument");
+        # a closure's own locals can be modified
+        assertEq(4, p.callFunction("closure_locals"), mode + ": closure locals");
+        # reading the locals takes their values when the thread starts
+        assertEq((2, (1, 2, 3)), p.callFunction("values_taken"), mode + ": values read");
+    }
+
+    private checkQcc() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach string modification in (("pop l", "i += 5", "s =~ s/a/b/", "extract l, 0, 1")) {
+            string src = dir + "/bg.q";
+            File f();
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Decls + body(sprintf("background record(q, 0, (%s))", modification)) + "t();\n");
+            f.close();
+            string program = dir + "/bg";
+            string output = backquote(sprintf("'%s' -O0 -o '%s' '%s' 2>&1", qcc_bin, program, src));
+            assertRegex("illegal local variable modification with the background operator", output, modification);
+            assertFalse(is_file(program), modification + ": no program compiled");
+        }
+    }
+}
