@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+# test-exec-mode: parent - the scripts run in child processes that set their own --exec-mode, or as AOT executables, and the named binding checks parse and call Programs in its own process
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

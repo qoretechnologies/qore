@@ -310,7 +310,7 @@ public:
         return qmethod;
     }
 
-    DLLLOCAL const QoreClass* getClass() const {
+    DLLLOCAL const QoreClass* getClass() const override {
         return qmethod->getClass();
     }
 
