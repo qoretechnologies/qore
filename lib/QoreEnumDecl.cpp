@@ -72,12 +72,14 @@ qore_type_t QoreTypeSpec::getType() const {
 
 // QoreEnumTypeInfo constructor implementation
 // Only accepts enum type - base type values require explicit cast
-QoreEnumTypeInfo::QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path)
+QoreEnumTypeInfo::QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial)
         : QoreTypeInfo(q_accept_vec_t {
             {ed, nullptr, true},
         }, q_return_vec_t {{ed, true}},
         QoreStringMaker("enum<%s>", name)) {
     assert(path && *path);
+    assert(serial);
+    identity_serial = serial;
     pname = "enum<";
     pname.append(path);
     pname.append(">");
@@ -85,12 +87,15 @@ QoreEnumTypeInfo::QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, con
 
 // QoreEnumOrNothingTypeInfo constructor implementation
 // Only accepts enum type or NOTHING - base type values require explicit cast
-QoreEnumOrNothingTypeInfo::QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path)
+QoreEnumOrNothingTypeInfo::QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path,
+        uint64_t serial)
         : QoreEnumTypeInfo(q_accept_vec_t {
             {ed, nullptr},
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
         }, q_return_vec_t {{ed}, {NT_NOTHING}}, QoreStringMaker("*enum<%s>", name), path) {
+    assert(serial);
+    identity_serial = serial;
     pname = "*enum<";
     pname.append(path);
     pname.append(">");
@@ -143,8 +148,8 @@ void QoreEnumMember::deref() const {
 qore_enum_decl_private::qore_enum_decl_private(const QoreProgramLocation* loc, const char* n, const char* p,
         const QoreTypeInfo* baseType, QoreEnumDecl* ed)
         : loc(loc), name(n), path(p), ed(ed), orig(this), baseTypeInfo(baseType),
-          typeInfo(new QoreEnumTypeInfo(ed, n, p)),
-          orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, n, p)) {
+          typeInfo(new QoreEnumTypeInfo(ed, n, p, instance_serial)),
+          orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, n, p, instance_serial)) {
     setParseLocation(loc);
     assignModule();
 }
@@ -152,8 +157,9 @@ qore_enum_decl_private::qore_enum_decl_private(const QoreProgramLocation* loc, c
 qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old, QoreEnumDecl* ed)
         : loc(old.loc), name(old.name), path(old.path), ed(ed),
           from_module(old.from_module), orig(old.orig), baseTypeInfo(old.baseTypeInfo),
-          typeInfo(new QoreEnumTypeInfo(ed, old.name.c_str(), old.path.c_str())),
-          orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, old.name.c_str(), old.path.c_str())),
+          typeInfo(new QoreEnumTypeInfo(ed, old.name.c_str(), old.path.c_str(), instance_serial)),
+          orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, old.name.c_str(), old.path.c_str(),
+              instance_serial)),
           pub(old.pub), sys(old.sys), mod_imported(old.mod_imported) {
     setParseLocation(old.loc);
     // Copy members - must ref the value since constructor takes ownership
@@ -182,8 +188,8 @@ QoreEnumDecl* qore_enum_decl_private::newEnumDecl(const char* n, const QoreTypeI
     path = get_ns_path(n);
     baseTypeInfo = baseType;
     ed = new QoreEnumDecl(this);
-    typeInfo = new QoreEnumTypeInfo(ed, name.c_str(), path.c_str());
-    orNothingTypeInfo = new QoreEnumOrNothingTypeInfo(ed, name.c_str(), path.c_str());
+    typeInfo = new QoreEnumTypeInfo(ed, name.c_str(), path.c_str(), instance_serial);
+    orNothingTypeInfo = new QoreEnumOrNothingTypeInfo(ed, name.c_str(), path.c_str(), instance_serial);
     return ed;
 }
 

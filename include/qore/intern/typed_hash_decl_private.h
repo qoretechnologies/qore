@@ -90,8 +90,8 @@ public:
     DLLLOCAL typed_hash_decl_private(const QoreProgramLocation* loc, const char* n, const char* p,
             TypedHashDecl* thd) :
             loc(loc), name(n), path(p), thd(thd), orig(this),
-            typeInfo(new QoreHashDeclTypeInfo(thd, n, p)),
-            orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, n, p)) {
+            typeInfo(new QoreHashDeclTypeInfo(thd, n, p, instance_serial)),
+            orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, n, p, instance_serial)) {
         assignModule();
     }
 
@@ -517,13 +517,16 @@ public:
     }
 
 protected:
+    // references
+    mutable QoreReferenceCounter refs;
     //! the identity of this private hashdecl instance for the lifetime of the process
-    /** Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
+    /** Declared after refs so that the reference count stays at the start of the object, as ref() and deref()
+        are frequent; it must be declared before the types, as their constructors take it.
+
+        Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
         class or enum ever has this serial number (see qore_get_type_identity_serial()).
     */
     const uint64_t instance_serial = qore_get_next_class_instance_serial();
-    // references
-    mutable QoreReferenceCounter refs;
     const QoreProgramLocation* loc;
     std::string name;
     std::string path;

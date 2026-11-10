@@ -362,8 +362,8 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         thd(thd),
         from_module(old.from_module),
         orig(old.orig),
-        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
-        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
+        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
+        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
         parentHashDecl(old.parentHashDecl),
         // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
         // Use getPath() to get the full namespace path for cross-namespace inheritance
@@ -1016,8 +1016,9 @@ TypedHashDecl::TypedHashDecl(typed_hash_decl_private* p) : priv(p) {
     assert(!priv->typeInfo);
     assert(!priv->orNothingTypeInfo);
 
-    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath());
-    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath());
+    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath(), priv->instance_serial);
+    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath(),
+        priv->instance_serial);
 }
 
 TypedHashDecl::TypedHashDecl(const TypedHashDecl& old) : priv(new typed_hash_decl_private(*old.priv, this)) {

@@ -41,10 +41,10 @@
 
 class qore_ns_private;
 class QoreEnumTypeInfo;
+class QoreEnumOrNothingTypeInfo;
 
 // declared in QoreClassIntern.h
 DLLLOCAL uint64_t qore_get_next_class_instance_serial();
-class QoreEnumOrNothingTypeInfo;
 
 // Internal representation of an enum member
 class qore_enum_member_private {
@@ -273,13 +273,16 @@ public:
     }
 
 protected:
+    // references
+    mutable QoreReferenceCounter refs;
     //! the identity of this private enum instance for the lifetime of the process
-    /** Unlike the address, which a later enum can reuse after this one is freed, no other private enum, class or
+    /** Declared after refs so that the reference count stays at the start of the object, as ref() and deref()
+        are frequent; it must be declared before the types, as their constructors take it.
+
+        Unlike the address, which a later enum can reuse after this one is freed, no other private enum, class or
         hashdecl ever has this serial number (see qore_get_type_identity_serial()).
     */
     const uint64_t instance_serial = qore_get_next_class_instance_serial();
-    // references
-    mutable QoreReferenceCounter refs;
     // The declaration can outlive the Program's interned source locations.
     QoreExternalProgramLocationWrapper saved_location;
     const QoreProgramLocation* loc;
