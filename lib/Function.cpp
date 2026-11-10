@@ -6595,10 +6595,12 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
 */
 static void qore_append_generic_specialization_type(std::string& key, const QoreTypeInfo* ti) {
     key += QoreTypeInfo::getPath(ti);
-    key += "@";
-    key += std::to_string(reinterpret_cast<uintptr_t>(ti));
-    key += "#";
-    key += std::to_string(qore_get_type_identity_serial(ti));
+    // the address and the serial are appended as raw bytes: the key is only compared, and a call computes it
+    const uintptr_t address = reinterpret_cast<uintptr_t>(ti);
+    const uint64_t serial = qore_get_type_identity_serial(ti);
+    key += '@';
+    key.append(reinterpret_cast<const char*>(&address), sizeof(address));
+    key.append(reinterpret_cast<const char*>(&serial), sizeof(serial));
 }
 
 std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
