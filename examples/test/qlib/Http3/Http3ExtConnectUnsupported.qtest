@@ -188,6 +188,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("Socket: a closed connection is reported before a missing setting", \socketClosedGateTest());
         addTestCase("Socket: a close ends waitForQuicSettings()", \socketCloseWakesTest());
         addTestCase("Socket: submitQuicRequest() refuses :protocol", \socketNonStreamingProtocolTest());
+        addTestCase("Socket: a cancelled waitForQuicSettings() raises THREAD-CANCELLED", \socketCancelTest());
+        addTestCase("HTTPClient: a cancelled wait without a connect timeout raises THREAD-CANCELLED",
+            \httpClientCancelTest());
+        addTestCase("HTTPClient: a peer close while waiting gives HTTP3-PEER-CLOSE", \peerCloseWhileWaitingTest());
+        addTestCase("HTTPClient: an idle close while waiting gives HTTP3-IDLE-CLOSE", \idleCloseWhileWaitingTest());
+        addTestCase("WebSocketClient: connects over HTTP/3 once the awaited SETTINGS arrive",
+            \webSocketSettingsWaitTest());
         set_return_value(main());
     }
 
@@ -445,6 +452,137 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(0, handler.connects.getCount(), "the server got no request");
     }
 
+    #! a thread waiting in Socket::waitForQuicSettings() is cancelled: THREAD-CANCELLED (not only the release)
+    socketCancelTest() {
+        checkDebugHooks();
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+
+        holdSettings();
+        on_exit releaseSettings();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+        Socket sock = openConnection(mgr, srv.port);
+
+        Queue result();
+        int tid = background sub () {
+            try {
+                result.push(sock.waitForQuicSettings());
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        assertTrue(call_function("dbg_quic_wait_settings_waiters", 1, 20s), "waitForQuicSettings() waits");
+        cancel_thread(tid, "settings wait test");
+        auto rv = result.get(20s);
+        assertEq("THREAD-CANCELLED", rv.err, "the cancellation ends the wait");
+    }
+
+    #! an extended CONNECT without a connect timeout waits with no deadline: a cancellation ends it
+    httpClientCancelTest() {
+        checkDebugHooks();
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+        CountingHandler handler = srv.handler;
+
+        holdSettings();
+        on_exit releaseSettings();
+        HTTPClient client = getClient(srv.port, -1);
+        assertEq("page", client.get("/page"), "an ordinary request is answered while the SETTINGS are held");
+
+        Queue result();
+        int tid = background connectInBackground(client, result);
+        assertTrue(call_function("dbg_quic_wait_settings_waiters", 1, 20s),
+            "the extended CONNECT waits for the server's SETTINGS");
+        cancel_thread(tid, "settings wait test");
+        auto rv = result.get(20s);
+        assertEq("THREAD-CANCELLED", rv.err, "the cancellation ends the wait");
+        assertEq(0, handler.connects.getCount(), "the server got no extended CONNECT");
+    }
+
+    #! the server closes the connection while an extended CONNECT waits: the error of the close, which callers retry
+    peerCloseWhileWaitingTest() {
+        checkDebugHooks();
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+
+        holdSettings();
+        on_exit releaseSettings();
+        HTTPClient client = getClient(srv.port);
+        assertEq("page", client.get("/page"), "an ordinary request is answered while the SETTINGS are held");
+
+        Queue result();
+        background connectInBackground(client, result);
+        assertTrue(call_function("dbg_quic_wait_settings_waiters", 1, 20s),
+            "the extended CONNECT waits for the server's SETTINGS");
+        delete srv.server;
+        auto rv = result.get(20s);
+        assertEq("HTTP3-PEER-CLOSE", rv.err, "the close ends the wait with the error of the close");
+    }
+
+    #! the connection is closed by its idle timer while an extended CONNECT waits: HTTP3-IDLE-CLOSE
+    idleCloseWhileWaitingTest() {
+        checkDebugHooks();
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+
+        holdSettings();
+        on_exit releaseSettings();
+        HTTPClient client = getClient(srv.port);
+        assertEq("page", client.get("/page"), "an ordinary request is answered while the SETTINGS are held");
+
+        Queue result();
+        background connectInBackground(client, result);
+        assertTrue(call_function("dbg_quic_wait_settings_waiters", 1, 20s),
+            "the extended CONNECT waits for the server's SETTINGS");
+        assertEq(1, call_function("dbg_quic_idle_close_held_client_sessions"), "the waiting session is idle-closed");
+        auto rv = result.get(20s);
+        assertEq("HTTP3-IDLE-CLOSE", rv.err, "the idle close ends the wait with the error of the close");
+    }
+
+    #! a WebSocket connection over HTTP/3 waits for the server's SETTINGS and connects when they arrive
+    webSocketSettingsWaitTest() {
+        checkDebugHooks();
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+        CountingHandler handler = srv.handler;
+
+        holdSettings();
+        on_exit releaseSettings();
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": "wss://127.0.0.1:" + srv.port,
+            "logger": logger,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+            "timeout": 20s,
+            "connect_timeout": 20s,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        Queue result();
+        background sub () {
+            try {
+                result.push(wsc.connect());
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        assertTrue(call_function("dbg_quic_wait_settings_waiters", 1, 20s),
+            "the WebSocket handshake waits for the server's SETTINGS");
+        assertEq(0, handler.connects.getCount(), "the server got no extended CONNECT before the SETTINGS");
+        releaseSettings();
+        auto rv = result.get(20s);
+        if (rv.typeCode() == NT_HASH && rv.err) {
+            fail(sprintf("connect() failed: %s: %s", rv.err, rv.desc));
+        }
+        assertTrue(wsc.isHttp3(), "the WebSocket connection is over HTTP/3");
+        assertEq(1, handler.connects.getCount(), "the server got the extended CONNECT");
+    }
+
     #! skips the case in a build without the DEBUG test hooks
     private checkDebugHooks() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
@@ -464,7 +602,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
     }
 
-    #! sends an extended CONNECT with the client and pushes the response or the exception to the queue
+    #! sends an extended CONNECT with the client and pushes the response or the exception to the queue; returns at
+    #! once in the thread that runs it
     private connectInBackground(HTTPClient client, Queue result) {
         try {
             result.push(client.sendHttp3Connect("/tunnel", NOTHING, "bidi-stream"));

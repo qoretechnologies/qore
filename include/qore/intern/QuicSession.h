@@ -234,7 +234,7 @@ struct QuicReceivedPacket {
 };
 
 //! QUIC session wrapper around ngtcp2 + nghttp3 (parallel to Http2Session)
-class QuicSession {
+class QuicSession : public std::enable_shared_from_this<QuicSession> {
 public:
     //! Named constants for QUIC transport parameters
     static constexpr int QUIC_INITIAL_MAX_STREAMS_UNI = 3;
@@ -1077,9 +1077,10 @@ public:
 
     //! The result of waitForRemoteSettings()
     enum class SettingsWait {
-        Received,   //!< the peer's SETTINGS have been received
-        Closed,     //!< the connection was closed before
-        Timeout,    //!< the timeout expired before
+        Received,       //!< the peer's SETTINGS have been received
+        Closed,         //!< the connection was closed before
+        Timeout,        //!< the timeout expired before
+        Interrupted,    //!< the thread was cancelled or its Program interrupted; the exception is raised
     };
 
     //! Waits until the peer's HTTP/3 SETTINGS have been received or the connection is closed
@@ -1087,14 +1088,24 @@ public:
         receive them.  A close of the connection that the session itself does not see (a client poll operation that is
         closed, a socket that drops the session) wakes the waiters with wakeSettingsWaiters().
 
-        @param timeout_ms the maximum time to wait; negative = no limit, 0 = check only
+        The wait can be interrupted (QoreCondition::waitWithInterrupt(): Qore::cancel_thread(), a Program interrupt),
+        and a close found at the deadline wins over the timeout.
 
-        @return Received, Closed or Timeout
+        @param timeout_ms the maximum time to wait; negative = no limit, 0 = check only
+        @param xsink receives THREAD-CANCELLED or PROGRAM-INTERRUPTED when the wait is interrupted
+
+        @return Received, Closed, Timeout or Interrupted
     */
-    DLLLOCAL SettingsWait waitForRemoteSettings(int64_t timeout_ms);
+    DLLLOCAL SettingsWait waitForRemoteSettings(int64_t timeout_ms, ExceptionSink* xsink);
+
+    //! Raises the error of a closed connection for a thread that waited for the peer's SETTINGS; returns its code
+    /** HTTP3-IDLE-CLOSE, HTTP3-PEER-CLOSE or HTTP3-LOCAL-CLOSE (also for a session released from its waiters, see
+        releaseSettingsWaiters()), which the HTTP clients repeat on a new connection
+    */
+    DLLLOCAL const char* raiseSettingsWaitCloseError(ExceptionSink* xsink) const;
 
     //! Wakes the threads in waitForRemoteSettings(), which check the SETTINGS and the connection again
-    /** May be called with mtx_ held: a waiter never holds settings_wait_mtx_ while it takes mtx_
+    /** May be called with mtx_ held: a waiter never holds settings_wait_lock_ while it takes mtx_
     */
     DLLLOCAL void wakeSettingsWaiters();
 
@@ -1997,9 +2008,9 @@ private:
     std::atomic<bool> remote_settings_received_{false};
 
     //! Protects settings_wait_gen_ for waitForRemoteSettings(); never held while mtx_ is taken
-    std::mutex settings_wait_mtx_;
-    //! Signaled when settings_wait_gen_ changes
-    std::condition_variable settings_wait_cv_;
+    QoreThreadLock settings_wait_lock_;
+    //! Signaled when settings_wait_gen_ changes; waited on with waitWithInterrupt()
+    QoreCondition settings_wait_cond_;
     //! Incremented by wakeSettingsWaiters(): the SETTINGS were received or the connection may have been closed
     uint64_t settings_wait_gen_ = 0;
     //! Set by releaseSettingsWaiters(): waitForRemoteSettings() returns SettingsWait::Closed
@@ -2011,6 +2022,7 @@ private:
     //! DEBUG: whether the held SETTINGS advertised SETTINGS_ENABLE_CONNECT_PROTOCOL
     bool test_held_enable_connect_ = false;
     friend void qore_quic_test_hold_client_settings(bool hold);
+    friend int64_t qore_quic_test_idle_close_held_client_sessions();
 #endif
 
     //! Records the peer's HTTP/3 SETTINGS (RFC 9114 section 7.2.4) and wakes the waiters; from the SETTINGS callback
@@ -2168,6 +2180,12 @@ DLLLOCAL void qore_quic_test_hold_client_settings(bool hold);
 
 //! Debug-only: the number of client sessions whose SETTINGS are held (see qore_quic_test_hold_client_settings())
 DLLLOCAL int64_t qore_quic_test_held_client_settings();
+
+//! Debug-only: closes the client sessions whose SETTINGS are held as their idle timer does; returns their number
+/** As if the idle timeout had expired (RFC 9000 section 10.1), without waiting for it; the threads waiting for the
+    SETTINGS are woken (see QuicSession::waitForRemoteSettings())
+*/
+DLLLOCAL int64_t qore_quic_test_idle_close_held_client_sessions();
 
 //! Debug-only: waits until \a count threads of the process wait in QuicSession::waitForRemoteSettings(); returns
 //! false on timeout

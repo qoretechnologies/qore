@@ -837,13 +837,27 @@ int Http3ClientPollOperationPriv::waitForExtendedConnectSettings(ExceptionSink* 
     }
     printd(5, "Http3ClientPollOperationPriv::waitForExtendedConnectSettings() waiting " QLLD " ms\n",
         (int64)timeout_ms);
-    if (session->waitForRemoteSettings(timeout_ms) == QuicSession::SettingsWait::Timeout) {
-        xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC 9220): "
-            "the server's HTTP/3 SETTINGS did not arrive within the connect timeout, so it is not known whether the "
-            "server supports it");
+    QuicSession::SettingsWait rc = session->waitForRemoteSettings(timeout_ms, xsink);
+    switch (rc) {
+        case QuicSession::SettingsWait::Timeout:
+            xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC "
+                "9220): the server's HTTP/3 SETTINGS did not arrive within the connect timeout, so it is not known "
+                "whether the server supports it");
+            return -1;
+        case QuicSession::SettingsWait::Interrupted:
+            // THREAD-CANCELLED or PROGRAM-INTERRUPTED has been raised
+            return -1;
+        default:
+            break;
+    }
+    // a connection closed while the request waited: the error of the close, which the HTTP clients repeat on a new
+    // connection, and the operation is closed with it, so that a retry finds a new connection
+    if (rc == QuicSession::SettingsWait::Closed || isClosed()) {
+        const char* err = session->raiseSettingsWaitCloseError(xsink);
+        QoreValue desc = xsink->getExceptionDesc();
+        setSubmitError(err, desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
         return -1;
     }
-    // the SETTINGS arrived, or the connection was closed: the submission reports which
     return 0;
 }
 
@@ -2247,6 +2261,12 @@ nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) [flags=
     async I/O thread or in a \c continuePoll() worker, which read the SETTINGS.
 
     @throw HTTP3-EXTENDED-CONNECT-ERROR the server's SETTINGS did not arrive within the connect timeout
+    @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer while the request waited; the operation
+    is closed, and the request can be repeated on a new connection
+    @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server while the request waited; as above
+    @throw HTTP3-LOCAL-CLOSE the QUIC connection or the operation was closed locally while the request waited
+    @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
+    @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
 
     @since %Qore 3.0
 */

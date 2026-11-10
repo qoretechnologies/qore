@@ -15097,6 +15097,13 @@ static QoreValue f_dbg_quic_held_client_settings(const QoreListNode* params, Run
     return qore_quic_test_held_client_settings();
 }
 
+//! Debug-only: idle-closes the client sessions whose SETTINGS are held; see
+//! qore_quic_test_idle_close_held_client_sessions()
+static QoreValue f_dbg_quic_idle_close_held_client_sessions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_quic_test_idle_close_held_client_sessions();
+}
+
 //! Debug-only: waits for threads waiting for the server's SETTINGS; see qore_quic_test_wait_settings_waiters()
 static QoreValue f_dbg_quic_wait_settings_waiters(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -19745,6 +19752,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_quic_held_client_settings", f_dbg_quic_held_client_settings,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_idle_close_held_client_sessions", f_dbg_quic_idle_close_held_client_sessions,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_settings_waiters", f_dbg_quic_wait_settings_waiters,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,

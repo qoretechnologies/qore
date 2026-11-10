@@ -8557,6 +8557,8 @@ int stream_id = sock.submitQuicRequestStreaming("CONNECT", "/ws", {":protocol": 
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer before the SETTINGS were received
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server before the SETTINGS were received
     @throw HTTP3-LOCAL-CLOSE the QUIC connection or the socket was closed locally before the SETTINGS were received
+    @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
+    @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
 
     @since %Qore 3.0
 */

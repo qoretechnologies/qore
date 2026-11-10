@@ -6652,29 +6652,17 @@ int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int64 timeout
             "thread or in a continuePoll() worker, which read them");
         return -1;
     }
-    switch (session->waitForRemoteSettings(timeout_ms)) {
+    switch (session->waitForRemoteSettings(timeout_ms, xsink)) {
         case QuicSession::SettingsWait::Received:
             return 1;
         case QuicSession::SettingsWait::Timeout:
             return 0;
+        case QuicSession::SettingsWait::Interrupted:
+            return -1;
         case QuicSession::SettingsWait::Closed:
             break;
     }
-    switch (session->getCloseReason()) {
-        case QuicSession::CloseReason::Idle:
-            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
-                "server's HTTP/3 SETTINGS were received");
-            break;
-        case QuicSession::CloseReason::PeerClose:
-            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
-                "SETTINGS were received");
-            break;
-        default:
-            // closed locally, or the socket dropped the session
-            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the server's HTTP/3 "
-                "SETTINGS were received");
-            break;
-    }
+    session->raiseSettingsWaitCloseError(xsink);
     return -1;
 }
 

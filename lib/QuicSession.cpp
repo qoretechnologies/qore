@@ -355,14 +355,14 @@ std::string QuicSession::getCipherVersion() const {
 #ifdef DEBUG
 //! Protects the state of qore_quic_test_hold_client_settings() and qore_quic_test_wait_settings_waiters()
 static std::mutex quic_test_settings_m;
-// a leaf lock: its holder takes only the settings_wait_mtx_ of sessions; a test process can fork (see QoreForkHandlers.h)
+// a leaf lock: its holder takes only the settings_wait_lock_ of sessions; a test process can fork (see QoreForkHandlers.h)
 static QoreForkStdMutex quic_test_settings_fork_handler(quic_test_settings_m, QFLR_LEAF, "quic_test_settings");
 //! Signaled when quic_test_settings_waiters changes
 static std::condition_variable quic_test_settings_cond;
 //! True while the server's SETTINGS are held back from client sessions
 static bool quic_test_hold_settings = false;
 //! The client sessions whose SETTINGS are held; a session removes itself in its destructor
-static std::set<QuicSession*> quic_test_held_sessions;
+static std::map<QuicSession*, std::weak_ptr<QuicSession>> quic_test_held_sessions;
 //! The number of threads waiting in QuicSession::waitForRemoteSettings()
 static int64_t quic_test_settings_waiters = 0;
 
@@ -389,12 +389,33 @@ void qore_quic_test_hold_client_settings(bool hold) {
     if (hold) {
         return;
     }
-    // record the held SETTINGS as they were received; applyRemoteSettings() takes only settings_wait_mtx_
-    for (QuicSession* session : quic_test_held_sessions) {
+    // record the held SETTINGS as they were received; applyRemoteSettings() takes only settings_wait_lock_
+    for (auto& i : quic_test_held_sessions) {
+        QuicSession* session = i.first;
         session->test_settings_held_ = false;
         session->applyRemoteSettings(session->test_held_enable_connect_);
     }
     quic_test_held_sessions.clear();
+}
+
+int64_t qore_quic_test_idle_close_held_client_sessions() {
+    // the sessions are kept alive by the references taken here; mtx_ is not taken with quic_test_settings_m held, as
+    // the SETTINGS callback takes them in the other order
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        for (auto& i : quic_test_held_sessions) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            if (session) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    for (auto& session : sessions) {
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        session->closeIdleLocked();
+    }
+    return static_cast<int64_t>(sessions.size());
 }
 
 int64_t qore_quic_test_held_client_settings() {
@@ -1242,7 +1263,7 @@ void QuicSession::onRemoteSettings(bool enable_connect_protocol) {
         if (quic_test_hold_settings) {
             test_settings_held_ = true;
             test_held_enable_connect_ = enable_connect_protocol;
-            quic_test_held_sessions.insert(this);
+            quic_test_held_sessions[this] = weak_from_this();
             return;
         }
     }
@@ -1260,11 +1281,28 @@ void QuicSession::applyRemoteSettings(bool enable_connect_protocol) {
 }
 
 void QuicSession::wakeSettingsWaiters() {
-    {
-        std::lock_guard<std::mutex> lg(settings_wait_mtx_);
-        ++settings_wait_gen_;
+    AutoLocker al(settings_wait_lock_);
+    ++settings_wait_gen_;
+    settings_wait_cond_.broadcast();
+}
+
+const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const {
+    switch (getCloseReason()) {
+        case CloseReason::Idle:
+            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
+                "server's HTTP/3 SETTINGS were received; the request was not sent");
+            return "HTTP3-IDLE-CLOSE";
+        case CloseReason::PeerClose:
+            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-PEER-CLOSE";
+        default:
+            // closed locally, or the session was released from its waiters (its client operation was closed, or the
+            // socket dropped it)
+            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the server's HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-LOCAL-CLOSE";
     }
-    settings_wait_cv_.notify_all();
 }
 
 void QuicSession::releaseSettingsWaiters() {
@@ -1272,9 +1310,10 @@ void QuicSession::releaseSettingsWaiters() {
     wakeSettingsWaiters();
 }
 
-QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms) {
+QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms, ExceptionSink* xsink) {
     const bool has_deadline = timeout_ms >= 0;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(has_deadline ? timeout_ms : 0);
+    // on the monotonic clock, so a wall-clock step does not change it, and not restarted by a wakeup
+    const int64 deadline_us = has_deadline ? q_clock_getmicros_monotonic() + timeout_ms * 1000 : 0;
 #ifdef DEBUG
     std::unique_ptr<QuicTestSettingsWaiter> test_waiter;
 #endif
@@ -1282,13 +1321,13 @@ QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms)
         // the generation is read before the state is checked, so a change after the check ends the wait below
         uint64_t gen;
         {
-            std::lock_guard<std::mutex> lg(settings_wait_mtx_);
+            AutoLocker al(settings_wait_lock_);
             gen = settings_wait_gen_;
         }
         if (remote_settings_received_.load(std::memory_order_acquire)) {
             return SettingsWait::Received;
         }
-        // isClosed() takes mtx_, so not with settings_wait_mtx_ held: wakeSettingsWaiters() is called with mtx_ held
+        // isClosed() takes mtx_, so not with settings_wait_lock_ held: wakeSettingsWaiters() is called with mtx_ held
         if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
             return SettingsWait::Closed;
         }
@@ -1297,15 +1336,36 @@ QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms)
             test_waiter.reset(new QuicTestSettingsWaiter);
         }
 #endif
-        std::unique_lock<std::mutex> ul(settings_wait_mtx_);
-        auto changed = [this, gen] () { return settings_wait_gen_ != gen; };
-        if (has_deadline) {
-            if (!settings_wait_cv_.wait_until(ul, deadline, changed)) {
-                return remote_settings_received_.load(std::memory_order_acquire)
-                    ? SettingsWait::Received : SettingsWait::Timeout;
+        bool deadline_reached = false;
+        {
+            AutoLocker al(settings_wait_lock_);
+            while (settings_wait_gen_ == gen) {
+                int64 wait_ms = -1;
+                if (has_deadline) {
+                    int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+                    if (remaining_us <= 0) {
+                        deadline_reached = true;
+                        break;
+                    }
+                    // round up, so the wait never ends before the deadline
+                    wait_ms = (remaining_us + 999) / 1000;
+                }
+                // a cancelled thread or an interrupted Program ends the wait (THREAD-CANCELLED, PROGRAM-INTERRUPTED)
+                if (settings_wait_cond_.waitWithInterrupt(settings_wait_lock_, wait_ms, xsink)
+                        == QORE_COND_RESULT_INTERRUPTED) {
+                    return SettingsWait::Interrupted;
+                }
             }
-        } else {
-            settings_wait_cv_.wait(ul, changed);
+        }
+        if (deadline_reached) {
+            // what happened until the deadline wins over the timeout: the SETTINGS, then a close
+            if (remote_settings_received_.load(std::memory_order_acquire)) {
+                return SettingsWait::Received;
+            }
+            if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
+                return SettingsWait::Closed;
+            }
+            return SettingsWait::Timeout;
         }
     }
 }
