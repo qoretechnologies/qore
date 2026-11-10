@@ -1164,23 +1164,39 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     }
 
     governedChangeDeliveryTest() {
+        # registered before the listener is added, so that the listener sees only the tenant's change
+        string app = registerApp("SafeGovernedChange");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
         QueueListener listener(get_script_path());
         int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
         on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
         Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        # sandboxed code registers no app (qore#5632), so its change is an action of an app that trusted code
+        # registered
         tenant.parse("%requires DataProvider\n"
             "int sub reg(string app) {\n"
-            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
-            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
-            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
-            "        \"dynamic\": True});\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"x\",\n"
+            "        \"path\": \"/x\", \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\",\n"
+            "        \"action_code\": DPAT_API});\n"
             "    return gettid();\n"
+            "}\n"
+            "string sub regApp(string app) {\n"
+            "    try {\n"
+            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app,\n"
+            "            \"display_name\": app, \"short_desc\": app, \"desc\": app,\n"
+            "            \"groups\": (AppGroup::DataTransformation,),\n"
+            "            \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "            \"dynamic\": True});\n"
+            "        return \"registered\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
             "}\n", "tenant-change");
         tenant.setSandboxManager(sm);
-        string app = "SafeGovernedChange_" + get_random_string(8);
-        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        string tenant_app = "SafeGovernedChange_" + get_random_string(8);
+        assertEq("APP-SANDBOX-ACCESS-DENIED", tenant.callFunction("regApp", tenant_app), "the tenant registers no app");
         int tenant_tid = tenant.callFunction("reg", app);
         # the tenant's own change is delivered by a worker, not on the tenant's thread
         hash<auto> call = listener.calls.get(Deadline);

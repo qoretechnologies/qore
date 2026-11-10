@@ -768,6 +768,11 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     registered info and not from info that the caller supplied, and decide the \c sandboxed argument from what they
     know about the caller: they never forward a value that the caller supplied.
 
+    Sandboxed code registers no app and no factory in the process-wide catalog (\c APP-SANDBOX-ACCESS-DENIED), so
+    that it cannot take an app or factory name from the module that owns it; modules register them in their
+    initialization, which no sandbox governs.  A factory is refused also as a subclass defined elsewhere or under
+    another name: the classes of its class hierarchy, and of the hierarchy of the class of its providers, decide.
+
     A Program that is only restricted with parse options (ex: @ref Qore::PO_NO_UNCONTROLLED_APIS
     "PO_NO_UNCONTROLLED_APIS", @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or @ref Qore::PO_NO_FILESYSTEM
     "PO_NO_FILESYSTEM") and has no @ref Qore::SandboxManager "SandboxManager" is not sandboxed for this rule; such a
@@ -1735,6 +1740,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       a factory returned by @ref DataProvider::DataProvider::getFactoryEx() "DataProvider::getFactoryEx()") refuse
       sandboxed code an app with external I/O that is not sandbox-aware, and the factories of the module that
       registers it (\c APP-SANDBOX-ACCESS-DENIED)
+    - sandboxed code registers no app and no factory (@ref DataProvider::DataProviderActionCatalog::registerApp()
+      "DataProviderActionCatalog::registerApp()", \c registerPendingApp() and
+      @ref DataProvider::DataProvider::registerFactory() "DataProvider::registerFactory()" raise
+      \c APP-SANDBOX-ACCESS-DENIED)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

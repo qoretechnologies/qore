@@ -1568,16 +1568,19 @@ public class DataProviderActionCatalog {
         @param init the initialization code that will register the app
         @param module_context optional module path to associate with the app while running \a init
 
-        Called by code that a sandbox governs (also under a policy barrier), \a init runs at once, on the calling
-        thread, so that no code registered under a sandbox runs later on another thread, where it could block other
-        tenants or trusted code; for a sandboxed reader, the registrations that trusted code made run on a catalog
+        Code that a sandbox governs (also under a policy barrier) cannot register a pending app, as it registers no
+        app (see registerApp()); for a sandboxed reader, the registrations that trusted code made run on a catalog
         worker (see @ref dataprovider_lazy_actions).  When the module has no catalog worker (it was loaded first by
         sandboxed code, or by code that may not create the worker's capability), \a init runs at once for every
         caller.
 
+        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers a pending app (since %DataProvider 3.12)
+
         @since DataProvider 3.0
     */
     static registerPendingApp(string app, code init, *string module_context) {
+        # an app name taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("application", app);
         # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs, the registration runs
         # now, on this thread, so that no code registered under a sandbox runs later on another thread, where it could
         # block other tenants or trusted code
@@ -3022,11 +3025,19 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Registers a data provider application
-    /** @param app the application to register
+    /** Sandboxed code registers no app: an app name that it took would be denied to the module that owns it, and it
+        would decide the declarations of a name that it does not own; modules register their apps in their
+        initialization, which no sandbox governs (see @ref dataprovider_external_io)
+
+        @param app the application to register
 
         @throw APP-ERROR missing or invalid attributes, app already registered
+        @throw APP-SANDBOX-ACCESS-DENIED the code registering the app is sandboxed (Qore::SandboxManager::isSandboxed())
+        (since %DataProvider 3.12)
     */
     static registerApp(hash<DataProviderAppInfo> app) {
+        # an app name taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("application", app.name ?? "");
         # check for required keys
         if (*hash<auto> missing = RequiredAppKeys - keys app) {
             throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",

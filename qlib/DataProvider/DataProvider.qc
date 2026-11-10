@@ -573,11 +573,17 @@ public class DataProvider {
     }
 
     #! Register a new data provider factory
-    /** @param factory the new data provider factory
+    /** Sandboxed code registers no factory: a factory name that it took would be denied to the module that owns it
+
+        @param factory the new data provider factory
 
         @throw PROVIDER-ERROR the given provider has already been registered
+        @throw APP-SANDBOX-ACCESS-DENIED the code registering the factory is sandboxed
+        (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
     static registerFactory(AbstractDataProviderFactory factory) {
+        # a factory name taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider factory", factory.getName());
         # Resolve object-backed metadata before taking the shared registry Gate. AOT module
         # initialization can register factories concurrently in separate Programs, and these
         # calls can acquire the factory class's Program parse lock. Holding the Gate while
@@ -607,7 +613,6 @@ public class DataProvider {
                 factory_module_map{new_class_name} = new_module_name;
             }
             factory_cache{name} = factory;
-            DataProviderSandboxState::factoryRegistered(name, new_module_name);
             return True;
         });
 
@@ -625,17 +630,15 @@ public class DataProvider {
                     if (exists previous_module_name) {
                         factory_module_map{previous_class_name} = previous_module_name;
                     }
-                    DataProviderSandboxState::factoryRegistered(name, previous_module_name);
                 } else {
                     remove factory_cache{name};
-                    DataProviderSandboxState::factoryRemoved(name);
                 }
                 return True;
             });
         });
     }
 
-        #! Returns the given data provider factory or @ref nothing if not present
+    #! Returns the given data provider factory or @ref nothing if not present
     static *AbstractDataProviderFactory getFactory(string name) {
         DataProvider::checkRequest();
         *AbstractDataProviderFactory factory;
@@ -2386,7 +2389,6 @@ if (action.data_provider_info) {
             if (!factory) {
                 return False;
             }
-            DataProviderSandboxState::factoryRemoved(name);
             # the factory's QoreProgram may already be destroyed if module init failed;
             # handle PROGRAM-ERROR gracefully during rollback cleanup
             try {

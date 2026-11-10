@@ -69,8 +69,14 @@ public class AbstractDataProviderFactory {
     public {}
 
     private:internal {
-        #! The factory's name, read once for checkSandboxCreate()
-        *string sandbox_factory_name;
+        #! The modules of the classes of the factory's and its providers' class hierarchies, for checkSandboxCreate()
+        *list<string> sandbox_modules;
+
+        #! The module that makes the factory refused to sandboxed callers, if any, as of @ref sandbox_generation
+        *string sandbox_refused_module;
+
+        #! The DataProviderSandboxState::generation that @ref sandbox_refused_module was decided for
+        int sandbox_generation = -1;
     }
 
     #! Creates an object from the given constructor options
@@ -124,15 +130,34 @@ public class AbstractDataProviderFactory {
     #! Refuses a sandboxed caller a provider of a factory of a module that registers an app with uncontrolled I/O
     /** Every method that creates a provider calls this first, whether the factory was found with
         DataProvider::getFactory(), DataProvider::getFactoryEx() or a factory getter, or created directly; reading
-        the factory's info is not refused.  The common path is one hash lookup, with no lock.
+        the factory's info is not refused.  A factory is refused if a class of its own class hierarchy, or of the
+        hierarchy of the class of the providers it creates, belongs to a module that registers an app with
+        @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
+        @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware", so a subclass defined elsewhere is
+        refused like the class it inherits.  The modules are found once per factory, and the decision is cached until
+        the modules with uncontrolled I/O change; the common path compares a generation, with no lock.
 
         @throw APP-SANDBOX-ACCESS-DENIED see DataProviderActionCatalog::checkFactorySandboxAccess()
     */
     private:internal checkSandboxCreate() {
-        string name = sandbox_factory_name ?? (sandbox_factory_name = getName());
-        if (DataProviderSandboxState::refused_factories{name} && SandboxManager::isSandboxed()) {
-            DataProviderActionCatalog::checkFactorySandboxAccess(name,
-                DataProviderSandboxState::refused_factories{name}, True);
+        if (sandbox_generation != DataProviderSandboxState::generation) {
+            # the generation is read before the modules: a change made meanwhile makes the next call scan again
+            int generation = DataProviderSandboxState::generation;
+            if (!exists sandbox_modules) {
+                sandbox_modules = DataProviderSandboxState::getHierarchyModules((Class::getClass(self), getClass()));
+            }
+            *string refused;
+            foreach string module_name in (sandbox_modules) {
+                if (DataProviderSandboxState::uncontrolled_modules{module_name}) {
+                    refused = module_name;
+                    break;
+                }
+            }
+            sandbox_refused_module = refused;
+            sandbox_generation = generation;
+        }
+        if (sandbox_refused_module && SandboxManager::isSandboxed()) {
+            DataProviderActionCatalog::checkFactorySandboxAccess(getName(), sandbox_refused_module, True);
         }
     }
 

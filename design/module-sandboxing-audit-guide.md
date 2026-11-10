@@ -748,6 +748,13 @@ Audit findings for apps:
    connection or provider classes itself does not go through the catalog; a module with an `external_io` app must
    refuse sandboxed callers in its own entry points as well (its connection and provider constructors, with
    `DataProviderActionCatalog::checkSandboxAccess(<app name>)`)
+6. **Uncontrolled actions in a controlled app**: an action's provider is decided by the declarations of the app it
+   belongs to, so a module must not contribute an action whose class does uncontrolled external I/O to the app of
+   another module that does not declare `external_io` (or that is `sandbox_aware`); register such an action in an
+   app of its own that declares it
+7. **Registrations by sandboxed code**: the catalog refuses `registerApp()`, `registerPendingApp()` and
+   `DataProvider::registerFactory()` to sandboxed code, so that a tenant cannot take an app or factory name from the
+   module that owns it; register apps and factories in module initialization, which no sandbox governs
 
 #### Common Java audit findings
 

@@ -97,6 +97,8 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
         addTestCase("the catalog refuses sandboxed code the factories of a module with such an app",
             \centralFactoryTest());
+        addTestCase("sandboxed code registers no app and no factory", \sandboxedRegistrationTest());
+        addTestCase("a subclass of a refused factory is refused", \factorySubclassTest());
         addTestCase("the declarations survive the provider index", \indexRoundTripTest());
         addTestCase("an index published before the declarations existed is read", \developIndexTest());
         addTestCase("an index of an app that is not registered reports it as unavailable", \indexMissingAppTest());
@@ -424,6 +426,66 @@ public class AppExternalIoTest inherits QUnit::Test {
         assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
             return DataProvider::getFactoryEx("qoretestsandboxaware").create().getName();
         }));
+    }
+
+    sandboxedRegistrationTest() {
+        load_module(external_factory_module);
+        Program p = getSandboxed();
+        # a name that the tenant would take from the module that owns it
+        string name = newName("AppExternalIoSquat");
+        hash<DataProviderAppInfo> info = appInfo(name);
+        foreach hash<auto> i in ({
+            "registerApp": sub () { DataProviderActionCatalog::registerApp(info); },
+            "registerPendingApp": sub () {
+                DataProviderActionCatalog::registerPendingApp(name, sub () {
+                    DataProviderActionCatalog::registerApp(info);
+                });
+            },
+            "registerFactory": sub () {
+                DataProvider::registerFactory(Class::forName("ExternalIoFixtureFactory").newObject());
+            },
+        }.pairIterator()) {
+            code reg = i.value;
+            assertThrows("APP-SANDBOX-ACCESS-DENIED", "sandboxed code cannot register", sub () {
+                p.callFunction("through", reg);
+            }, NOTHING, i.key);
+        }
+        # the name is not taken: the owner registers it with its own declarations
+        assertNothing(DataProviderActionCatalog::getApp(name), "the refused registration left nothing");
+        DataProviderActionCatalog::registerApp(appInfo(name, {"external_io": True}));
+        assertTrue(DataProviderActionCatalog::getAppEx(name).external_io);
+        assertFalse(DataProviderActionCatalog::isSandboxAllowed(name));
+        # the same registrations through a system-policy capability called by sandboxed code are refused too
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
+                DataProviderActionCatalog::registerApp(appInfo(newName("AppExternalIoSquat")));
+            }));
+        });
+    }
+
+    factorySubclassTest() {
+        load_module(external_factory_module);
+        # a factory class defined outside the module, inheriting the refused one under another name
+        Program sub_pgm(PO_NEW_STYLE);
+        sub_pgm.loadModule("DataProvider");
+        sub_pgm.loadModule(external_factory_module);
+        sub_pgm.parse("class RenamedFactory inherits ExternalIoFixtureFactory {\n"
+            "    private hash<DataProviderFactoryInfo> getInfoImpl() {\n"
+            "        return <DataProviderFactoryInfo>{\"name\": \"renamed-external-io\", \"desc\": \"renamed\"};\n"
+            "    }\n"
+            "}\n"
+            "AbstractDataProviderFactory sub make() { return new RenamedFactory(); }\n", "factory-subclass");
+        AbstractDataProviderFactory factory = sub_pgm.callFunction("make");
+        assertEq("renamed-external-io", factory.getName());
+        Program p = getSandboxed();
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { factory.create(); });
+        });
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () { factory.createWithTemplate({}, {}); });
+        });
+        # trusted code creates the provider
+        assertEq("ExternalIoFixtureProvider", factory.create().getName());
     }
 
     indexRoundTripTest() {

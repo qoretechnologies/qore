@@ -24,54 +24,49 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
-#! The factories that sandboxed callers are refused, shared by the factory registry and the action catalog
-/** A factory is refused if the module that defines its class registers an app with
+#! Sandbox state shared by the factories and the action catalog (see @ref dataprovider_external_io)
+/** The catalog reports the modules that register an app with
     @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
-    @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" (see
-    @ref dataprovider_external_io).  The factory registry reports the factories and their modules, and the catalog
-    reports the modules that register such an app; the factory methods that create a provider
-    (AbstractDataProviderFactory::create() and the others) read @ref refused_factories, one lookup with no lock.
+    @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" in @ref uncontrolled_modules; a factory
+    refuses a sandboxed caller a provider if a class of its own class hierarchy, or of the hierarchy of the class of
+    the providers it creates, belongs to one of them (AbstractDataProviderFactory::checkSandboxCreate()).  A subclass
+    defined elsewhere, a factory created directly, and a factory registered under another name are refused alike.
 
     This class is not exported: code that imports the module cannot change what it refuses.
 */
 class DataProviderSandboxState {
     public {
-        #! Factories that sandboxed callers are refused: factory name -> module name
-        static hash<string, string> refused_factories = {};
+        #! The modules that register an app with uncontrolled external I/O: module name -> True
+        /** Read without a lock by the factories; changed only by setModuleUncontrolled()
+        */
+        static hash<string, bool> uncontrolled_modules = {};
+
+        #! Incremented after each change of @ref uncontrolled_modules, so that the factories can cache their decision
+        static int generation = 0;
     }
 
     private:internal {
-        #! The factories of each module: module name -> factory name -> True
-        static hash<string, hash<string, bool>> module_factories = {};
-
-        #! The module of each factory: factory name -> module name
-        static hash<string, string> factory_modules = {};
-
-        #! The modules that register an app with uncontrolled external I/O: module name -> True
-        static hash<string, bool> uncontrolled_modules = {};
-
-        #! Serializes the changes, which the factory registry and the catalog make under different locks
+        #! Serializes the changes
         static Mutex lck();
     }
 
-    #! A factory was registered; \a module_name is the module that defines its class, if any
-    static factoryRegistered(string name, *string module_name) {
-        AutoLock al(lck);
-        DataProviderSandboxState::removeFactoryIntern(name);
-        if (!module_name) {
-            return;
-        }
-        factory_modules{name} = module_name;
-        module_factories{module_name}{name} = True;
-        if (uncontrolled_modules{module_name}) {
-            refused_factories{name} = module_name;
-        }
-    }
+    #! Refuses a registration in the process-wide catalog to sandboxed code
+    /** An app or factory name registered by sandboxed code would be taken from the module that owns it: that
+        module's later registration would fail, denying its apps to everyone, or a sandboxed caller could decide the
+        declarations of a name that it does not own.  Sandboxed code (Qore::SandboxManager::isSandboxed(), also
+        through a policy barrier or a system-policy capability) therefore registers no app and no factory; modules
+        register them in their initialization, which no sandbox governs.
 
-    #! A factory was removed
-    static factoryRemoved(string name) {
-        AutoLock al(lck);
-        DataProviderSandboxState::removeFactoryIntern(name);
+        @param what the kind of registration, for the error: \c "application" or \c "data provider factory"
+        @param name the name registered
+
+        @throw APP-SANDBOX-ACCESS-DENIED sandboxed code registers an app or a factory
+    */
+    static checkRegistration(string what, string name) {
+        if (SandboxManager::isSandboxed()) {
+            throw "APP-SANDBOX-ACCESS-DENIED", sprintf("sandboxed code cannot register %s %y in the process-wide "
+                "data provider catalog", what, name);
+        }
     }
 
     #! The module now does, or no longer does, register an app with uncontrolled external I/O
@@ -79,22 +74,34 @@ class DataProviderSandboxState {
         AutoLock al(lck);
         if (uncontrolled) {
             uncontrolled_modules{module_name} = True;
-            map refused_factories{$1} = module_name, keys module_factories{module_name};
         } else {
             remove uncontrolled_modules{module_name};
-            map remove refused_factories{$1}, keys module_factories{module_name};
         }
+        # after the change: a factory that read the old generation scans the modules again
+        ++generation;
     }
 
-    #! Removes a factory; the lock is held
-    private:internal static removeFactoryIntern(string name) {
-        if (*string module_name = remove factory_modules{name}) {
-            remove module_factories{module_name}{name};
-            if (!module_factories{module_name}) {
-                remove module_factories{module_name};
+    #! Returns the names of the modules of the given classes and of all of their parent classes, each once
+    /** @param classes the classes whose hierarchies are walked
+
+        @return the module names; a class that belongs to no module contributes none
+    */
+    static list<string> getHierarchyModules(list<Class> classes) {
+        hash<string, bool> modules = {};
+        hash<string, bool> seen = {};
+        while (classes) {
+            Class cls = shift classes;
+            string name = cls.getPathName();
+            if (seen{name}) {
+                continue;
             }
+            seen{name} = True;
+            if (*string module_name = cls.getModuleName()) {
+                modules{module_name} = True;
+            }
+            map classes += cast<Class>($1.cls), cls.getParentClasses();
         }
-        remove refused_factories{name};
+        return keys modules;
     }
 }
 }
