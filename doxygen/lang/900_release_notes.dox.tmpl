@@ -1519,6 +1519,10 @@
     - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
       dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
       at exit; the records of the module that the reload replaces are now kept until the module is deleted
+    - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
+      @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
+      and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output
+      now matches the AST interpreter
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
