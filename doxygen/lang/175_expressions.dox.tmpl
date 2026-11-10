@@ -132,7 +132,8 @@
     user class runs in its class's @ref Qore::Program "Program" as always, and a builtin method (also one that a user
     class inherits) runs in the %Program that made the reference, with that %Program's parse options and sandbox,
     wherever the reference is called; a reference that the restricted code of one %Program makes and passes to
-    another therefore gets no more access than its direct call has.  A reference to a builtin method that a %Program
+    another therefore gets no more access than its direct call has, also when the object was created by the code of a
+    module, whose own calls run with the module's options (a reference is the code of the %Program that makes it).  A reference to a builtin method that a %Program
     made for an object of another %Program keeps that %Program's data; if the %Program that made it has been deleted
     when the reference is called, a \c PROGRAM-ERROR exception is thrown, as for a @ref closure "closure" created in
     it.

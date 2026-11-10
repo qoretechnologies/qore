@@ -529,7 +529,8 @@
 
     @par Call References to Builtin Methods Run in the Program That Made Them
     A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
-    %Program that made it, wherever it is called, and raises \c PROGRAM-ERROR once that %Program is deleted; see
+    %Program that made it, wherever it is called, so restricted code's reference is refused like its direct call, also
+    for an object that module code created, and it raises \c PROGRAM-ERROR once that %Program is deleted; see
     @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
 
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
