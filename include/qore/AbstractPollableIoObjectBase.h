@@ -51,7 +51,7 @@
 class MyConnection : public AbstractPollableIoObjectBase {
 public:
     int getPollableDescriptor() const override {
-        return socket.getSocket();
+        return socket.getDescriptorForLibrary();
     }
 
     int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
@@ -153,8 +153,8 @@ if (fd >= 0 && !io->holdPollableDescriptor(fd, hold)) {
     DLLEXPORT virtual bool hasPendingData() const { return false; }
 
     //! Returns the unique hash for this I/O object
-    /** Computed once at construction from an atomic sequence + pointer,
-        so it remains stable even if malloc reuses the same address.
+    /** Made once at construction from an atomic sequence number, so it is unique for the life of the process, also
+        if malloc reuses the object's address; it contains no address.
 
         @return unique hash string
 
