@@ -1848,8 +1848,10 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             getClassPath().c_str(), getName());
         return QoreValue();
     }
-    // Pass the class context so that private static methods called from within the same class are visible
-    const qore_class_private* cctx = qore_class_private::get(*qore_method_private::get(*method)->parent_class);
+    // the class context of the variant resolved at run time is that of the caller (see
+    // CodeEvaluationHelper::findVariant()): a private variant is visible only in the class and the classes with private
+    // access to it, not to a call from outside (issue #5717)
+    const qore_class_private* cctx = nullptr;
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);

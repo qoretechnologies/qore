@@ -23,6 +23,14 @@ string sub example(string str) {
 
     When types are declared in the source, %Qore uses this information to perform overloaded function and method resolution at parse time, which speeds up runtime execution.  If there is not enough information to match the function or method variant at parse time, then %Qore has to perform variant resolution at runtime, therefore it's advisable to declare types whenever possible.
 
+    A variant is selected at parse time only when the declared types guarantee that it matches at run time; when an
+    argument might not match it, as an argument returned as a reference from a call (a value of a
+    <tt>reference&lt;</tt><em>type</em><tt>&gt;</tt> type, which a parameter of the referenced type does not accept),
+    the variant is resolved at run time with the evaluated arguments.  A variant selected at parse time can still not
+    match at run time only because of the state of a value, which declared types do not describe: an argument that has
+    no value (a member or variable of the type that was not assigned) or a deleted object; then the variant is resolved
+    again at run time, as for a call resolved at run time, with the arguments as given.
+
     @section overloading_no_value Arguments With No Value And Overloading
     An argument with no value is an argument: it counts toward the number of arguments of the call, whether it is a
     literal @ref nothing "NOTHING" or a variable or expression holding no value, so the call selects the same variant

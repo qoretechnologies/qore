@@ -1114,6 +1114,36 @@ void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
     callName += func->getName();
 }
 
+namespace {
+//! Keeps the original values of the arguments converted for a variant (see CodeEvaluationHelper::prepareDefaultArgs())
+class CodeEvaluationArgRestoreHelper {
+public:
+    CodeEvaluationHelper::arg_restore_vec_t args;
+
+    DLLLOCAL CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
+    }
+
+    DLLLOCAL ~CodeEvaluationArgRestoreHelper() {
+        for (auto& i : args) {
+            i.second.discard(xsink);
+        }
+    }
+
+    //! Puts the original values back into the argument list, which then holds them
+    DLLLOCAL void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
+        for (auto i = args.rbegin(), e = args.rend(); i != e; ++i) {
+            QoreValue& p = tmp.getEntryReference(i->first);
+            p.discard(xsink);
+            p = i->second;
+        }
+        args.clear();
+    }
+
+private:
+    ExceptionSink* xsink;
+};
+}
+
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
     sandbox_provenance.set(self);
@@ -1199,8 +1229,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
+        // the arguments as the caller gave them, for a variant resolved again
+        CodeEvaluationArgRestoreHelper saved(xsink);
         // first process all non-default args; no evaluation, so we can try to find another variant
-        if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER)) {
+        if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER, &saved.args)) {
+            // A variant is committed at parse time only if every argument matches it, so the arguments do not match
+            // it here only because of a state of a value that the types do not tell: an argument that is NOTHING (a
+            // member or variable of the type that is not assigned) or a deleted object.  The variant is resolved
+            // again, as for a call without a committed variant, and called with the arguments as the caller gave
+            // them, not as they were converted for the variant that does not match (issue #5686).
+            saved.restore(tmp);
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
                 xsink2.clear();
@@ -1211,7 +1249,23 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 return;
             }
             xsink2.clear();
-            tmp.discard();
+#ifdef DEBUG
+            // the invariant of the parse-time variant commitment (see QoreFunction::parseFindVariant())
+            {
+                bool runtime_state = false;
+                for (size_t i = 0, e = tmp.size(); i < e && !runtime_state; ++i) {
+                    QoreValue a = tmp->retrieveEntry(i);
+                    runtime_state = a.isNothing() || (a.getType() == NT_OBJECT && !a.get<const QoreObject>()->isValid());
+                }
+                if (!runtime_state) {
+                    printd(0, "CodeEvaluationHelper::init() %s(): the variant committed at parse time %s(%s) does "
+                        "not accept arguments whose types it was committed for; another variant %s(%s) was "
+                        "resolved\n", func->getName(), func->getName(), v->getSignature()->getSignatureText(),
+                        func->getName(), variant->getSignature()->getSignatureText());
+                    assert(false);
+                }
+            }
+#endif
             sig = variant->getSignature();
             if (setup_type_param_instantiation()) {
                 return;
@@ -1379,7 +1433,7 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
 }
 
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, arg_restore_vec_t* saved) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1465,6 +1519,9 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
                 // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
+                if (saved) {
+                    saved->emplace_back(i, p.refSelf());
+                }
                 QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
                     return -1;
@@ -3044,6 +3101,16 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     return best.type_info;
 }
 
+//! Returns true if a noop variant is skipped at run time for a caller with the given parse options
+/** With strict arguments (PO_REQUIRE_TYPES or PO_STRICT_ARGS, both in PO_MODERN), the noop variants (QCF_NOOP,
+    QCF_RUNTIME_NOOP), which return a constant value for arguments that the other variants do not accept (ex:
+    sort(auto), length(auto)), are not candidates at run time, as at parse time: the call raises the error of the
+    arguments that no variant accepts, not a silent result (issue #5686)
+*/
+static inline bool qore_runtime_skip_noop_variant(QoreParseOptions po, int64 vflags) {
+    return (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP)) && (po & (PO_REQUIRE_TYPES | PO_STRICT_ARGS));
+}
+
 QoreListNode* QoreFunction::runtimeGetCallVariants() const {
    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoHashTypeInfo), nullptr);
 
@@ -3061,7 +3128,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
         // ignore "runtime noop" variants if necessary
-        if (strict_args && (vflags & QCF_RUNTIME_NOOP)) {
+        if (qore_runtime_skip_noop_variant(po, vflags)) {
             printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip runtime noop, vflags: 0x%llx\n", this,
                 (unsigned long long)vflags);
             continue;
@@ -3187,7 +3254,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int64 vflags = (*i)->getFlags();
 
             // ignore "runtime noop" variants if necessary
-            if (strict_args && (vflags & QCF_RUNTIME_NOOP)) {
+            if (qore_runtime_skip_noop_variant(po, vflags)) {
                 continue;
             }
 
@@ -3348,6 +3415,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
                     }
+                    // a noop variant that is not a candidate for the caller was not tested
+                    if (qore_runtime_skip_noop_variant((*i)->getParseOptions(ppo), (*i)->getFlags())) {
+                        continue;
+                    }
                     desc->concat("\n   ");
                     QoreTypeParamInstantiation candidate_inst;
                     const QoreTypeParamInstantiation* display_inst =
@@ -3465,7 +3536,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int64 vflags = (*i)->getFlags();
 
             // ignore "runtime noop" variants if necessary
-            if (strict_args && (vflags & QCF_RUNTIME_NOOP))
+            if (qore_runtime_skip_noop_variant(po, vflags))
                 continue;
 
             sig = (*i)->getSignature();
@@ -3664,7 +3735,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
             int64 vflags = (*i)->getFlags();
 
             // ignore "runtime noop" variants if necessary
-            if (strict_args && (vflags & QCF_RUNTIME_NOOP))
+            if (qore_runtime_skip_noop_variant(po, vflags))
                 continue;
 
             sig = (*i)->getSignature();
@@ -4327,6 +4398,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
     if (!variant && pvariant) {
         variant = pvariant;
     }
+    // a variant is committed only when no other variant could be resolved at run time (see parseFindVariant())
+    if (variant && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, parse_get_parse_options())) {
+        variant = nullptr;
+    }
 
     if (variant && type_param_inst) {
         *type_param_inst = best_type_param_inst;
@@ -4336,6 +4411,85 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
 }
 
 // finds a variant at parse time
+bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
+        const qore_class_private* class_ctx, QoreParseOptions po) const {
+    unsigned num_args = argTypeInfo.size();
+    AbstractFunctionSignature* chosen_sig = chosen->getSignature();
+    // true if the chosen variant accepts no value for the given parameter
+    auto chosen_sig_accepts_nothing = [chosen_sig] (unsigned pi) -> bool {
+        if (pi >= chosen_sig->numParams()) {
+            return true;
+        }
+        const QoreTypeInfo* t = chosen_sig->getParamTypeInfo(pi);
+        return !QoreTypeInfo::hasType(t) || chosen_sig->hasDefaultArg(pi)
+            || QoreTypeInfo::parseAcceptsReturns(t, NT_NOTHING);
+    };
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            const AbstractQoreFunctionVariant* v = *i;
+            if (v == chosen || (last_class && skip_method_variant(v, class_ctx, internal_access))) {
+                continue;
+            }
+            bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (v->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+            AbstractFunctionSignature* sig = v->getSignature();
+            // a variant with type parameters is taken as a possible match
+            if (sig->needsTypeParameterSubstitution()) {
+                return true;
+            }
+            if (sig->numParams() < num_args && !v->hasVarargs() && strict_args
+                    && check_extra_args(sig, argTypeInfo)) {
+                continue;
+            }
+            // the variant is resolved instead of the chosen one at run time only for an argument without a value
+            // that it accepts and the chosen variant does not; for arguments with values of their types, the
+            // parse-time match already prefers the chosen one
+            bool may_match = true;
+            bool takes_nothing_instead = false;
+            for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+                const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                bool accepts_nothing = !QoreTypeInfo::hasType(t) || sig->hasDefaultArg(pi)
+                    || QoreTypeInfo::parseAcceptsReturns(t, NT_NOTHING);
+                if (accepts_nothing) {
+                    if (pi < num_args && !takes_nothing_instead && !chosen_sig_accepts_nothing(pi)) {
+                        takes_nothing_instead = true;
+                    }
+                    continue;
+                }
+                const QoreTypeInfo* a = pi < num_args ? argTypeInfo[pi] : nothingTypeInfo;
+                if (!QoreTypeInfo::hasType(a) || QoreTypeInfo::parseAccepts(t, a) != QTI_NOT_EQUAL) {
+                    continue;
+                }
+                may_match = false;
+                break;
+            }
+            if (may_match && takes_nothing_instead) {
+                return true;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return false;
+}
+
+// The variant of a call is committed at parse time only when the match is guaranteed at run time: every possible
+// run-time value of each argument type matches the variant, and no other variant could be preferred.  A match that is
+// only possible (an argument type that may not match, as a reference returned from a call to a parameter of the
+// referenced type, see QoreTypeSpec::tryMatchReferenceType()) leaves the variant unassigned, and the call is resolved
+// at run time with the evaluated arguments.  The arguments can then not match the committed variant only because of
+// the state of a value (no value in an unassigned member or variable, a deleted object), which
+// CodeEvaluationHelper::init() handles by resolving the variant again (issue #5686).
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
@@ -4644,7 +4798,18 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     // if we only have one possible variant, then assign it, even it it's not a guaranteed match
     if (!variant && pvariant) {
         variant = pvariant;
-    } else if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+    }
+    // a variant is committed only when no other variant could be resolved at run time; an argument can have no
+    // value then whatever its type (issue #5686)
+    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po)) {
+        printd(5, "QoreFunction::parseFindVariant() %s(): another variant could match at run time\n", getName());
+        variant = nullptr;
+        runtime_match = true;
+        if (type_param_inst) {
+            type_param_inst->clear();
+        }
+    }
+    if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, argTypeInfo, explicit_type_args, receiver_type_info);
         desc->concat("' can be found; ");

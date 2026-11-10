@@ -515,8 +515,16 @@ public:
         ct = n_ct;
     }
 
+    //! The arguments that prepareDefaultArgs() converted for a variant, by index, as the caller gave them
+    typedef std::vector<std::pair<unsigned, QoreValue>> arg_restore_vec_t;
+
+    //! Evaluates the default arguments (ARG_DEF) and checks and converts the others (ARG_OTHER) for the variant
+    /** @param saved if not null, receives a reference to the original value of each argument before it is converted
+        (see init(): a variant resolved again gets the arguments as the caller gave them)
+    */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
+        arg_restore_vec_t* saved = nullptr);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
@@ -1842,6 +1850,14 @@ public:
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
+    //! Returns true if a variant other than the given one could be resolved at run time for the argument types
+    /** An argument can have no value at run time whatever its type (a member or variable of the type that is not
+        assigned), so a variant whose every parameter accepts the type of its argument or no value is a possible match
+        at run time; then the given variant is not committed at parse time (see parseFindVariant())
+    */
+    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
+            const qore_class_private* class_ctx, QoreParseOptions po) const;
+
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,

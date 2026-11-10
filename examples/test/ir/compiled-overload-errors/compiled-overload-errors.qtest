@@ -21,13 +21,18 @@
       parameter; the AST interpreter resolves the variant again and raises RUNTIME-OVERLOAD-ERROR when none matches
       (functions, methods, static methods, recursive calls)
 
+    - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
+      with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
+      arguments converted for the variant that did not match
+
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
-    their output must be that of the AST interpreter, which the test runs first.
+    their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
+    for a script with a <script>.expected file must be that of the file.
 */
 class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("conversions", "call-kinds");
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static");
     }
 
     private {
@@ -60,7 +65,12 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     #! runs the script in every execution mode and on the IR tier
     private modesTest(string script) {
         string exp = astOutput(script);
-        assertRegex("RUNTIME-OVERLOAD-ERROR", exp, script + ": the AST interpreter raises the overload error");
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            assertRegex("RUNTIME-OVERLOAD-ERROR", exp, script + ": the AST interpreter raises the overload error");
+        }
         foreach string mode in (ExecModeHarness::ExecModes) {
             assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
                 script)), script + ": " + mode);
