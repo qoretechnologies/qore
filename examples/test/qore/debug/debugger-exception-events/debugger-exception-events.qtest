@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerExceptionEventsTest
+
+#! A debugger gets the same exception events in every execution mode (#5795)
+/** The AST interpreter calls the debugger's onException() callback for each statement that an exception leaves: the
+    statement that raised it, each statement that contains it, and the statement of each caller, until a try
+    statement catches it.  The script DebuggerExceptionEvents.q records these events for programs that raise
+    exceptions in top-level code, functions, methods, nested statements, loops and catch blocks, and its output with
+    the AST interpreter is the reference for the other execution modes.
+
+    The debugged programs run on the AST interpreter while a debugger is attached, also their top-level code: the IR
+    interpreter and native code made no event for most of these statements, and top-level code with JIT execution made
+    none at all.  The tiered run of ExecModeHarness::run_ir_tier() is not used: it requires that no call runs on the
+    AST tier.
+*/
+class DebuggerExceptionEventsTest inherits QUnit::Test {
+    public {
+        #! the output of DebuggerExceptionEvents.q with the AST interpreter
+        const Expected = "top-level throw: [\"A@2\"]
+function: [\"B@3\", \"B@5\"]
+nested statements: [\"C@4\", \"C@3\", \"C@7\"]
+top-level builtin: [\"DIVISION-BY-ZERO@3\"]
+builtin in a function: [\"DIVISION-BY-ZERO@4\", \"DIVISION-BY-ZERO@6\"]
+top-level try: [\"E@3\", \"F@6\"]
+caught from a function: [\"G@3\", \"G@6\"]
+top-level loop: [\"H@3\", \"H@2\"]
+method: [\"I@4\", \"I@8\"]
+rethrow in a catch block: [\"J@3\", \"K@5\", \"K@2\"]
+loop in a function: [\"L@5\", \"L@4\", \"L@3\", \"L@9\"]
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+    }
+
+    constructor() : QUnit::Test("DebuggerExceptionEventsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/DebuggerExceptionEvents.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": exception events", \eventsTest(), (mode,));
+        }
+        set_return_value(main());
+    }
+
+    eventsTest(string mode) {
+        # the debugged programs run on the AST interpreter; only the script's own code is compiled with JIT execution
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script), NativeCheck::Jit);
+        assertEq(Expected, output, mode + ": the exception events of the AST interpreter");
+    }
+}
