@@ -88,7 +88,7 @@ QoreSwitchStringValue::QoreSwitchStringValue(QoreValue v) {
         v.getShortString(short_buf);
         buf = short_buf;
         len = v.shortStringLen();
-        ascii_compat = true;
+        ascii_identical = true;
         return;
     }
     if (v.getType() == NT_STRING) {
@@ -106,14 +106,16 @@ void QoreSwitchStringValue::setString(const QoreString& value) {
     str = &value;
     buf = p->effective_buf();
     len = p->len;
-    ascii_compat = qore_encoding_private::get(*p->getEncoding())->isAsciiCompat();
+    ascii_identical = qore_encoding_private::get(*p->getEncoding())->isKnownAsciiIdentical();
 }
 
 bool QoreSwitchStringValue::equalsConverted(const char* case_str, size_t case_len) const {
     assert(str);
-    // another encoding (UTF-16, UTF-32, a stateful encoding): compared as the AST interpreter compares the strings
-    // (QoreValue::isEqualHard()), for which an encoding conversion error means that they are not equal
-    QoreString case_string(case_str, case_len, QCS_DEFAULT);
+    // determines the encoding's property, so that the next lookup can compare bytes if it has it
+    qore_encoding_private::get(*str->getEncoding())->isAsciiIdentical();
+    // compared as the AST interpreter compares the strings (QoreValue::isEqualHard()), for which an encoding conversion
+    // error means that they are not equal; the case is ASCII, and in UTF-8 whatever the default encoding is
+    QoreString case_string(case_str, case_len, QCS_UTF8);
     ExceptionSink xsink;
     bool rv = str->equalSoft(case_string, &xsink);
     if (xsink) {

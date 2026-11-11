@@ -43,9 +43,12 @@ DLLLOCAL bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, E
 //! The value of a switch on a string value whose cases are ASCII strings without null bytes, compared with the cases as
 //! qore_switch_case_equal() compares them
 /** The compiled tiers dispatch such a switch (QoreIRSwitchString) with this comparison: a case is the value if they
-    have the same characters, in any encoding of the value.  A value in an ASCII-compatible encoding has the length and
-    the bytes of the case then; another value is compared with the case converted to its encoding
-    (QoreString::equalSoft()).  The value's data and encoding are got once, for all the cases of a lookup.
+    have the same characters, in any encoding of the value.  A value in an encoding in which every ASCII character is
+    known to be the same byte (qore_encoding_private::isKnownAsciiIdentical()) has the length and the bytes of the case
+    then; any other value is compared with the case converted to its encoding (QoreString::equalSoft()), as the AST
+    interpreter compares it: the same bytes are other characters in some encodings that are otherwise ASCII-compatible
+    (0x5c is U+00E7 in ISO646-FR), and text in an encoding that iconv does not know cannot be converted, which means
+    that it is not the case.  The value's data and encoding are got once, for all the cases of a lookup.
 
     A comparison never raises an exception: as with QoreValue::isEqualHard(), which compares a plain case in the AST
     interpreter, a conversion error means that the value is not the case, so a lookup needs no exception check and its
@@ -61,13 +64,17 @@ public:
     //! For a string
     DLLLOCAL QoreSwitchStringValue(const QoreString& value);
 
+    //! a copy's data could be the original's inline short string
+    QoreSwitchStringValue(const QoreSwitchStringValue&) = delete;
+    QoreSwitchStringValue& operator=(const QoreSwitchStringValue&) = delete;
+
     //! Returns true if the value is the case
     /** @param case_str the case: ASCII characters without a null byte
         @param case_len the length of the case in bytes
     */
     DLLLOCAL bool equals(const char* case_str, size_t case_len) const {
         assert(case_str);
-        if (ascii_compat) {
+        if (ascii_identical) {
             return len == case_len && bytesEqual(buf, case_str, len);
         }
         return str && equalsConverted(case_str, case_len);
@@ -79,8 +86,8 @@ private:
     //! the data of the value; null if it is not a string
     const char* buf = nullptr;
     size_t len = 0;
-    //! true if the value's encoding is ASCII-compatible; false for a value that is not a string
-    bool ascii_compat = false;
+    //! true if every ASCII character is known to be the same byte in the value's encoding; false if it is not a string
+    bool ascii_identical = false;
     //! the data of an inline short string
     char short_buf[QoreValue::SHORTSTR_MAX_BYTES + 1];
 
@@ -119,7 +126,7 @@ private:
         return true;
     }
 
-    //! Compares a value that is not in an ASCII-compatible encoding with the case converted to its encoding
+    //! Compares a value with the case converted to its encoding
     /** an encoding conversion error means that the strings are not equal
     */
     DLLLOCAL bool equalsConverted(const char* case_str, size_t case_len) const;

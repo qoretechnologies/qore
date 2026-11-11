@@ -103,6 +103,43 @@ string sub const_switch(string s) {
 # a constant declared after the function that uses it as a case
 const LATE_UTF7_A = convert_encoding("a+", "UTF-7");
 
+# cases folded at parse time to strings with a null byte or in another encoding: they are not constants of the program
+const FOLD_UTF16 = convert_encoding("a", "UTF-16LE");
+const FOLD_NUL = "x" + binary_to_string(<00>) + "y";
+
+string sub folded_switch(string s) {
+    switch (s) {
+        case "a\000b": return "nul-literal";
+        case FOLD_UTF16 + "c": return "utf16";
+        case FOLD_NUL + "z": return "nul";
+        case "a": return "a";
+    }
+    return "default";
+}
+
+# the same strings outside a switch
+string sub folded_utf16() { return FOLD_UTF16 + "c"; }
+string sub literal_nul() { return "p\000q"; }
+string sub long_literal_nul() { return "pqrstuvwxyz\000q"; }
+string sub default_utf16(string s = FOLD_UTF16 + "d") { return s; }
+list<string> sub folded_list() { return (FOLD_UTF16 + "e", "x\000y"); }
+hash<auto> sub folded_hash() { return {"utf16": FOLD_UTF16 + "f", "nul": "u\000v"}; }
+
+class SwitchMembers {
+    public {
+        string utf16 = FOLD_UTF16 + "g";
+        string nul = "m\000n";
+    }
+
+    static string staticDefault(string s = "s\000t") {
+        return s;
+    }
+}
+
+string sub describe(string s) {
+    return sprintf("%s %y", s.encoding(), binary(s));
+}
+
 string sub safe(code c) {
     try {
         return c();
@@ -133,6 +170,25 @@ list<string> sub conversion_values() {
         force_encoding(binary_to_string(<5c>), "SHIFT_JIS"),
         "\\", "+", "+-", "a+", "ab",
     );
+    # the bytes of ASCII characters in encodings in which they can be other characters or that iconv may not know: such
+    # a value is compared with the case converted to the encoding
+    foreach string enc in (("ISO646-FR", "ISO646-DE", "ISO646-ES", "ISO646-JP", "JOHAB", "JIS_X0201", "NEXTSTEP", "HZ",
+            "UTF-7-IMAP", "NO-SUCH-ENCODING", "ISO-8859-1", "KOI8-R", "US-ASCII")) {
+        foreach string v in (("\\", "~", "+", "a")) {
+            push l, force_encoding(v, enc);
+        }
+    }
+    # characters whose byte in the encoding is an ASCII character
+    foreach list<string> t in ((("\u00e7", "ISO646-FR"), ("\u00d6", "ISO646-DE"), ("\u00d1", "ISO646-ES"),
+            ("\u20a9", "JOHAB"))) {
+        try {
+            push l, convert_encoding(t[0], t[1]);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                rethrow;
+            }
+        }
+    }
     foreach string v in (("+", "A", "ABC", "\\", "a", "ab", "a+")) {
         foreach string enc in (("SHIFT_JIS", "UTF-7", "UTF-16LE")) {
             # a character that the encoding does not have (libiconv's SHIFT_JIS has no backslash) is left out
@@ -167,6 +223,9 @@ list<string> sub length_values() {
 
 list<string> vl = values();
 list<string> ll = length_values();
+list<string> fl = ("a", binary_to_string(<610062>), "ac", convert_encoding("ac", "UTF-16LE"),
+    convert_encoding("ac", "UTF-16BE"), binary_to_string(<7800797a>), binary_to_string(<780079>));
+SwitchMembers members();
 list<string> cl = conversion_values();
 # enough rounds for the functions to be compiled in the tiered modes
 for (int round = 0; round < 3; ++round) {
@@ -178,6 +237,13 @@ for (int round = 0; round < 3; ++round) {
         printf("%d %s %y: try=%s eq=%s const=%s\n", round, v.encoding(), binary(v), safe(string sub () { return try_switch(v); }),
             safe(string sub () { return eq_switch(v); }), safe(string sub () { return const_switch(v); }));
     }
+    foreach string v in (fl) {
+        printf("%d %s %y: folded=%s\n", round, v.encoding(), binary(v), folded_switch(v));
+    }
+    printf("%d nonswitch: %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s\n", round, describe(folded_utf16()),
+        describe(literal_nul()), describe(long_literal_nul()), describe(default_utf16()), describe(folded_list()[0]),
+        describe(folded_list()[1]), describe(folded_hash().utf16), describe(folded_hash().nul),
+        describe(SwitchMembers::staticDefault()), describe(members.utf16), describe(members.nul));
     printf("%d lengths:", round);
     foreach string v in (ll) {
         printf(" %s", length_switch(v));
@@ -185,6 +251,14 @@ for (int round = 0; round < 3; ++round) {
     printf("\n");
     for (int i = 0; i < 100; ++i) {
         length_switch("abcdefghijklmnop");
+        folded_switch("a");
+        folded_utf16();
+        literal_nul();
+        long_literal_nul();
+        default_utf16();
+        folded_list();
+        folded_hash();
+        SwitchMembers::staticDefault();
         typed_switch("abc");
         lwr_switch("ABC");
         auto_switch("abc");

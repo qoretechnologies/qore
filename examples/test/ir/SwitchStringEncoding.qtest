@@ -6,8 +6,10 @@
 # compares the value with the cases as the AST interpreter does: with the value's encoding and length, so a UTF-16
 # value matches the case with its characters and a value with a null byte after a case does not match the case; a
 # value that cannot be converted for the comparison is not the case (and "case ==" raises the conversion error), and
-# a constant case in another encoding is compared with its characters (SwitchStringEncoding.qr, in every execution
-# mode and as qcc executables)
+# a constant case in another encoding is compared with its characters; the bytes of ASCII characters in an encoding in
+# which they are other characters, or that iconv does not know, are not the case; and a string with a null byte or in
+# another encoding keeps them in AOT code, in a case and elsewhere (SwitchStringEncoding.qr, in every execution mode and
+# as qcc executables)
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
@@ -79,6 +81,22 @@ class SwitchStringEncodingTest inherits QUnit::Test {
             lens += sprintf(" %s default default default %s default %s", c[0], c[1], c[0]);
         }
         assertRegex("\n0 lengths:" + lens + "\n", out, "case lengths");
+        # the bytes of a case are not the case in an encoding that iconv does not know, and are in an ASCII superset
+        assertRegex("\n0 NO-SUCH-ENCODING !!binary YQ==: try=default ", out, "unknown encoding");
+        assertRegex("\n0 ISO-8859-1 !!binary XA==: try=bs ", out, "ISO-8859-1 backslash");
+        assertRegex("\n0 US-ASCII !!binary YQ==: try=a ", out, "US-ASCII a");
+        # cases folded to a string with a null byte or in another encoding
+        assertRegex("\n0 UTF-8 !!binary YQ==: folded=a\n", out, "a is not the case with a null byte");
+        assertRegex("\n0 UTF-8 !!binary YQBi: folded=nul-literal\n", out, "literal null byte");
+        assertRegex("\n0 UTF-8 !!binary YWM=: folded=utf16\n", out, "folded UTF-16 case");
+        assertRegex("\n0 UTF-16BE !!binary AGEAYw==: folded=utf16\n", out, "folded UTF-16 case, UTF-16BE value");
+        assertRegex("\n0 UTF-8 !!binary eAB5eg==: folded=nul\n", out, "folded case with a null byte");
+        assertRegex("\n0 UTF-8 !!binary eAB5: folded=default\n", out, "prefix of a folded case");
+        # the same strings outside a switch keep their encoding and null bytes
+        assertRegex("\n0 nonswitch: UTF-16LE !!binary YQBjAA== \\| UTF-8 !!binary cABx \\| UTF-8 !!binary "
+            "cHFyc3R1dnd4eXoAcQ== \\| UTF-16LE !!binary YQBkAA== \\| UTF-16LE !!binary YQBlAA== \\| UTF-8 !!binary eAB5 "
+            "\\| UTF-16LE !!binary YQBmAA== \\| UTF-8 !!binary dQB2 \\| UTF-8 !!binary cwB0 \\| UTF-16LE !!binary "
+            "YQBnAA== \\| UTF-8 !!binary bQBu\n", out, "strings outside a switch");
         # a value that cannot be converted for a comparison with a plain case is not the case, and the switch raises
         # no exception (as QoreValue::isEqualHard() compares them); "case ==" raises the conversion error
         assertRegex("\n0 ISO-2022-JP !!binary GyRC/w==: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n",
