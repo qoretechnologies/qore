@@ -2981,12 +2981,22 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
 }
 
 qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bool& may_not_match) const {
+    // an expression whose type is a reference (a call returning a reference) gives a reference at run time, and a
+    // reference is not accepted for a target that is not a reference (a parameter, an lvalue), whose type is this
+    // one; reading a variable of a reference type gives the referenced value, whose type is the referenced type.
+    // So a match is possible at most, never guaranteed: a variant whose parameter is matched so is not committed at
+    // parse time (see QoreFunction::parseFindVariant()), and the call is resolved at run time (issue #5686)
     switch (t.typespec) {
         case QTS_TYPE: {
-            return t.u.t == NT_REFERENCE ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+            if (t.u.t == NT_REFERENCE) {
+                may_not_match = true;
+                return QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
         }
 
         case QTS_COMPLEXREF: {
+            may_not_match = true;
             // check if types match
             if (!t.u.ti || t.u.ti->return_vec.empty()) {
                 return QTI_AMBIGUOUS;
@@ -3001,9 +3011,6 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
                 if (res > rv) {
                     rv = res;
                 }
-            }
-            if (t.u.ti->return_vec.size() == 1) {
-                return rv;
             }
             if (rv > QTI_AMBIGUOUS) {
                 return QTI_AMBIGUOUS;

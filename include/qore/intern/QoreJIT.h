@@ -196,6 +196,7 @@ public:
         started = false;
     }
 
+
 private:
     pthread_t tid;
     bool started = false;
@@ -720,6 +721,32 @@ public:
         FallbackToInterpreter,
         DisableJit,
     };
+
+    //! The phases of the in-progress background compile; see waitForBgCompileQueue(QoreProgram*)
+    enum class BgCompilePhase {
+        //! lowers the Qore IR to LLVM IR, reading the IR, types and callees of the Programs: teardown waits
+        Lowering,
+        //! optimizes the self-contained LLVM module, generates and emits its code: teardown detaches the compile
+        Llvm,
+        //! publishes the result to the variants (no LLVM code runs): teardown waits
+        Installing,
+        //! a teardown detached the compile in the LLVM phase: its result is discarded when that phase ends
+        Detached,
+    };
+
+    //! The points where a test can stop the background compile thread (debug builds only; see dbgHoldBgCompile())
+    enum class BgCompileHoldPoint {
+        //! at the start of the lowering phase, before any Program data is read
+        Lowering,
+        //! at the start of the LLVM phase, before the module is optimized
+        Llvm,
+        //! at the end of the LLVM phase, after the code was generated and looked up, before the result is published
+        //! or discarded
+        Commit,
+        //! in the installing phase, before the result is published to the variants
+        Install,
+    };
+
     //! Returns the process-wide JIT
     /** It is created by init() when the library is initialized
     */
@@ -768,12 +795,36 @@ public:
     /** Shutdown callbacks can still execute hot Qore functions after compilation must stop.  This
         phase makes queued IR safe for Program teardown while keeping every published native entry
         point valid until the owning functions have been destroyed.
+
+        A compile in progress is awaited only while it reads Program data (see waitForBgCompileQueue(QoreProgram*));
+        one in the LLVM phase is detached, and its thread is not joined, so that the process can exit while LLVM runs
+        without bound.  As exit() would destroy LLVM's static objects under that thread, the process then ends with
+        \c _exit() if the thread still runs at the end (exitQuickly(), called by qore_fork_child_quick_exit()), or the
+        \c atexit() handler of the library waits for it (joinAbandonedCompileThread()).
     */
     void stopBackgroundCompiler();
+
+    //! Returns true if the process must end without running exit-time handlers; called at the end of the process
+    /** True if stopBackgroundCompiler() left a compile running in LLVM and it still runs: \c exit() would destroy
+        LLVM's static objects under it, so the process ends with \c _exit() (see qore_fork_child_quick_exit()).  If the
+        compile thread has finished, it is joined, and the process can exit normally.
+    */
+    static bool exitQuickly();
+
+    //! Waits for a compile thread that stopBackgroundCompiler() left running, if any, to end
+    /** Called by the \c atexit() handler of the library for a process that exits without
+        qore_fork_child_quick_exit(): it waits for LLVM, so that the static objects of LLVM destroyed after the handler
+        are not destroyed under the compile.  Function-local statics that LLVM creates during its first compile are
+        destroyed before the handler, so a process should end with qore_fork_child_quick_exit() instead.
+    */
+    void joinAbandonedCompileThread();
 
     //! Stop compilation and release the LLVM execution engine.
     /** Every UserVariantBase that can call a published native entry point must already be destroyed
         before this function is called.
+
+        The engine is not released if stopBackgroundCompiler() left a detached compile running: it cannot be destroyed
+        under an active compile, and the process is exiting.
     */
     void shutdown();
     void setDeoptPolicy(DeoptPolicy policy);
@@ -858,10 +909,50 @@ public:
         return startBackgroundThread();
     }
 
-    //! For tests: the number of background compiles refused because a Program they refer to is being deleted
+    //! For tests: the number of background compiles refused because a Program they refer to is being or was deleted
     unsigned bgCompileRefusedClosedCount() const {
         return dbg_bg_compile_refused_closed.load(std::memory_order_relaxed);
     }
+
+    //! For tests: the number of background compiles whose result was discarded because they were detached
+    /** See waitForBgCompileQueue(QoreProgram*)
+    */
+    unsigned bgCompileDiscardedCount() const {
+        return dbg_bg_compile_discarded.load(std::memory_order_relaxed);
+    }
+
+    //! For tests: the next background compile stops at the given point until dbgContinueBgCompile() is called
+    /** The compile thread holds compile_mutex while it is stopped, as a compile that takes a long time does.
+
+        @param point the hold point
+        @param func if not empty, only the compile of the function with this name (the name of its IR function up to
+        the \c "@" that precedes the address) stops; other compiles pass the point
+
+        @return false if a hold is already armed at this point
+    */
+    bool dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func);
+
+    //! For tests: waits until the background compile thread is stopped at the given hold point
+    /** @return false if it was not stopped there within \a timeout_ms milliseconds
+    */
+    bool dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms);
+
+    //! For tests: returns true if the background compile thread is stopped at a hold point
+    bool dbgBgCompileHeld();
+
+    //! For tests: lets the held background compile continue and waits until it has left the hold point
+    /** @return -1 if no compile is held, 0 if it did not leave the hold point within \a timeout_ms milliseconds,
+        1 if it did
+    */
+    int dbgContinueBgCompile(int64_t timeout_ms);
+
+    //! For tests: waits until a Program teardown waits for the in-progress background compile
+    /** Only a teardown that has to wait counts: one that finds the compile in the LLVM phase detaches it and does
+        not wait.  The count of such waits is reset when this returns true.
+
+        @return false if no teardown waited within \a timeout_ms milliseconds
+    */
+    bool dbgWaitBgCompileTeardownWaiting(int64_t timeout_ms);
 #endif
 
     //! Compile an IR function to native code, assuming compile_mutex is already held.
@@ -889,12 +980,20 @@ public:
     void waitForBgCompileQueue();
 
     //! Drain only the background compilations that reference the given Program.
-    //! Called when a Program is being destroyed: its IR functions (and the
-    //! program-owned data they reference, e.g. LocalVars and AST) are about to be
-    //! freed, so any queued compile that touches this Program must be cancelled
-    //! and any in-progress compile that touches it must be awaited — but compiles
-    //! belonging to OTHER Programs are left running.  This avoids serializing every
-    //! Program teardown behind the entire global compile queue.
+    /** Called when a Program is being destroyed: its IR functions (and the program-owned data they reference, e.g.
+        LocalVars and AST) are about to be freed, so any queued compile that touches this Program is cancelled, but
+        compiles belonging to OTHER Programs are left running.  This avoids serializing every Program teardown behind
+        the entire global compile queue.
+
+        An in-progress compile that touches this Program is awaited only while it reads Program data: while it lowers
+        the IR to LLVM IR (BgCompilePhase::Lowering) or publishes its result (BgCompilePhase::Installing, which is
+        short and runs no LLVM code).  A compile in the LLVM phase (optimization, code generation and the emission of
+        the code by LLJIT), which works on a self-contained llvm::Module and can take without bound, is detached
+        instead: this function releases the compile's references to the variants and its private IR (while the
+        Program still exists, as the compile thread did before it finished), and returns without waiting.  When the
+        LLVM phase ends, the compile thread discards the result: it removes the module from the JIT, installs no
+        entry point and caches no symbol.  See "Background JIT compiles" in design/program-teardown-lifetime.md.
+    */
     void waitForBgCompileQueue(QoreProgram* pgm);
 
 private:
@@ -994,8 +1093,9 @@ private:
     //! The work item currently being compiled by the bg thread (nullptr when
     //! idle).  Protected by bg_queue_mutex; points at the bg thread's local while
     //! it holds compile_mutex.  Used by waitForBgCompileQueue(QoreProgram*) to
-    //! decide whether the in-progress compile must be awaited.
-    const BgCompileWork* bg_in_progress = nullptr;
+    //! decide whether the in-progress compile must be awaited or can be detached;
+    //! a waiter that detaches it takes its references (variant_refs, owned_ir_func).
+    BgCompileWork* bg_in_progress = nullptr;
 
     //! The Programs that the in-progress work item refers to, taken when the item was claimed
     /** Protected by bg_queue_mutex.  The bg thread releases the references of the item (which can free the IR
@@ -1004,10 +1104,146 @@ private:
     */
     std::vector<const QoreProgram*> bg_in_progress_pgms;
 
+    //! The phase of the in-progress work item; protected by bg_queue_mutex, meaningful while bg_in_progress is set
+    BgCompilePhase bg_in_progress_phase = BgCompilePhase::Lowering;
+
+    //! true once the in-progress work item is detached (bg_in_progress_phase is BgCompilePhase::Detached)
+    /** Set under bg_queue_mutex with release ordering after the references of the item were taken, and read by the
+        compile thread without the lock (acquire) to stop the LLVM work of a detached compile early: the optimizer
+        skips its optional passes, and the module is not added to the JIT or not looked up.  Cleared when the next
+        item is claimed.
+    */
+    std::atomic<bool> bg_in_progress_detached{false};
+
+    //! The Programs of detached or cancelled work items whose references are being released; protected by
+    //! bg_queue_mutex
+    /** A Program appears once for each such item.  The waiter that detaches or cancels an item releases its references
+        outside the lock, which can destroy variants of every Program the item refers to; the teardown of another of
+        these Programs waits until the release is done, as it waits for the compile thread to release the references
+        of an item it finishes.  A releaser waits for nothing while it releases, so two teardowns cannot wait for each
+        other.
+    */
+    std::vector<const QoreProgram*> bg_detach_releases;
+
+    //! true once stopBackgroundCompiler() left the compile thread running a detached compile in the LLVM phase
+    /** The thread is not joined then: it ends when LLVM returns, without touching the JIT again.  shutdown() leaves
+        the LLVM execution engine to the operating system, as it cannot be destroyed under an active compile, and the
+        process ends with \c _exit() if the thread still runs at the end (see exitQuickly()).
+    */
+    std::atomic<bool> bg_thread_abandoned{false};
+
+    //! true once the compile thread has left its loop: it touches nothing of the JIT or LLVM any more
+    std::atomic<bool> bg_thread_done{false};
+
+    //! The state of a background compile seen by compileFunctionInternal() and compileFunctionBatchInternal()
+    struct BgCompileContext {
+        //! true once the compile entered BgCompilePhase::Installing: its result is published
+        bool installing = false;
+        //! true once the compile found itself detached: its result is discarded
+        bool discarded = false;
+    };
+
+    //! The context of the background compile in progress; protected by compile_mutex
+    /** Set by the compile thread around a background compile and nullptr otherwise, so the synchronous compiles,
+        which hold compile_mutex as well, never see it
+    */
+    BgCompileContext* bg_compile_ctx = nullptr;
+
+    //! The references of a detached work item, taken by the waiter that detaches it
+    /** Released by QoreJIT::releaseDetachedRefs(), or by the destructor if that was not called, so that the Programs
+        of the item are always removed from bg_detach_releases
+    */
+    struct BgDetachedRefs {
+        //! the JIT, set when the references are taken
+        QoreJIT* jit = nullptr;
+        //! the root function, whose state is reset so that it can be submitted again
+        const UserVariantBase* uvb = nullptr;
+        //! the references that keep the variants alive
+        std::vector<AbstractQoreFunctionVariant*> variant_refs;
+        //! the private IR of the compile
+        std::shared_ptr<QoreIRFunction> owned_ir_func;
+        //! the Programs of the item, added to bg_detach_releases while the references are released
+        std::vector<const QoreProgram*> pgms;
+
+        DLLLOCAL BgDetachedRefs() = default;
+        DLLLOCAL BgDetachedRefs(const BgDetachedRefs&) = delete;
+        DLLLOCAL BgDetachedRefs& operator=(const BgDetachedRefs&) = delete;
+
+        DLLLOCAL ~BgDetachedRefs() {
+            if (jit) {
+                jit->releaseDetachedRefs(*this);
+            }
+        }
+    };
+
 #ifdef DEBUG
-    //! the number of background compiles refused because a Program they refer to is being deleted
+    //! the number of background compiles refused because a Program they refer to is being or was deleted
     std::atomic<unsigned> dbg_bg_compile_refused_closed{0};
+    //! the number of detached background compiles whose result was discarded
+    std::atomic<unsigned> dbg_bg_compile_discarded{0};
+    //! the hold points armed for the next compile, as a bit mask; protected by bg_queue_mutex
+    unsigned dbg_bg_hold_armed = 0;
+    //! the hold point where the compile thread is stopped, -1 if none; protected by bg_queue_mutex
+    int dbg_bg_held = -1;
+    //! set to let the held compile thread continue; protected by bg_queue_mutex
+    bool dbg_bg_hold_release = false;
+    //! the number of times the compile thread left a hold point; protected by bg_queue_mutex
+    unsigned dbg_bg_hold_exits = 0;
+    //! the number of Program teardowns that waited for the in-progress compile; protected by bg_queue_mutex
+    unsigned dbg_bg_teardown_waits = 0;
+    //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
+    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
+    //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
+    std::string dbg_bg_in_progress_func;
+
+    //! Stops the compile thread at \a point if a test armed a hold there; bg_queue_mutex is held
+    void dbgBgHoldLocked(std::unique_lock<std::mutex>& lock, BgCompileHoldPoint point);
 #endif
+
+    //! Stops the compile thread at \a point if a test armed a hold there (debug builds only); no lock is held
+    void dbgBgHold(BgCompileHoldPoint point);
+
+    //! Ends the lowering phase of the background compile in progress, if any; compile_mutex is held
+    /** Called by compileFunctionInternal() and compileFunctionBatchInternal() once the LLVM module is complete and
+        no Program data is read any more.  From here on, a Program teardown detaches the compile instead of waiting.
+    */
+    void bgEndLowering();
+
+    //! Enters the installing phase of the background compile in progress, if any; compile_mutex is held
+    /** @return true if the result can be published (always for a synchronous compile), false if the compile was
+        detached: the result must be discarded
+    */
+    bool bgBeginInstall();
+
+    //! Returns true if the background compile in progress was detached; compile_mutex is held
+    /** A cheap check without bg_queue_mutex, made between the steps of the LLVM phase; a detached compile is
+        recorded in its context as discarded
+    */
+    bool bgCheckDetached();
+
+    //! Removes the module of a discarded background compile from the JIT; compile_mutex is held
+    void bgDiscardModule(llvm::orc::ResourceTracker* rt, const std::string& func_name);
+
+    //! Detaches the in-progress work item, which is in the LLVM phase; bg_queue_mutex is held
+    /** Takes the item's references into \a refs and records its Programs in bg_detach_releases.
+
+        @return false if the references could not be taken (no memory): the caller waits for the compile instead
+    */
+    bool detachInProgressLocked(BgDetachedRefs& refs) noexcept;
+
+    //! Takes compile_mutex for a synchronous compile
+    /** A synchronous compile does not wait for a detached background compile, for the compile thread abandoned at
+        process exit, or for anything once the compiler stops: they can hold compile_mutex without bound.
+
+        @return false with \a error set if the lock is held by such a compile: the caller runs the code in the IR tier
+    */
+    bool lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string& error);
+
+    //! Releases the references of a detached work item; no lock is held
+    void releaseDetachedRefs(BgDetachedRefs& refs) noexcept;
+
+    //! Removes the Programs of released work items from bg_detach_releases and wakes the waiting teardowns
+    void endRelease(const std::vector<const QoreProgram*>& pgms) noexcept;
 
     //! Background thread worker loop
     void bgCompileThreadLoop();
@@ -1058,6 +1294,9 @@ private:
     //! True if a work item's root or any folded-in callee IR belongs to pgm.
     static bool workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm);
 
+
+    //! Cancel a queued background work item: reset its root's state, release refs, update the active count
+    void cancelQueuedBgCompileWork(BgCompileWork& work);
 
     //! Complete a background work item: release refs, update active count, and notify waiters.
     void finishBgCompileWork(BgCompileWork& work);

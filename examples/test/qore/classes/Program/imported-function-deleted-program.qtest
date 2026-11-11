@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ImportedFunctionDeletedProgramTest
+
+#! Tests calls of a function imported with Program::importFunction() after its Program has been deleted
+/** An imported function runs in the Program it is imported from; once that Program has been deleted, a call raises
+    \c PROGRAM-ERROR (see Program::importFunction()).  The importing Program shares the function's code with that
+    Program, and the code uses the Program's data, which its deletion frees: the native and IR fast call paths ran the
+    code without checking that its Program still existed, and used freed memory (issue #5751; fixed with the
+    execution Program check of these paths in 8620d05de2).
+
+    The child script (imported-function-deleted-program/imported.q) calls the function directly, by name with
+    call_function(), through call references made before and after the deletion, from a loop that runs it inline
+    with the IR interpreter, through an intermediate Program (an import of an import), for the first time after the
+    deletion, and from code compiled after the deletion; with a debug build, also while another thread holds a
+    reference to the deleted Program.  It runs in every execution mode, and compiled with AOT at optimization levels 0
+    and 3, against the same expected output.
+*/
+class ImportedFunctionDeletedProgramTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-imported-function-deleted-program-");
+
+        #! the output of the child script
+        const ExpectedOutput = "warmed: before: \"xy\" counter: True
+warmed: importer deleted: call_direct: \"xy\"
+warmed: after: call_direct: PROGRAM-ERROR
+warmed: after: call_direct: PROGRAM-ERROR
+warmed: after: call_by_name: PROGRAM-ERROR
+warmed: after: call_ref_new: PROGRAM-ERROR
+warmed: after: call_loop: PROGRAM-ERROR
+warmed: after: old ref: PROGRAM-ERROR
+warmed: after: old ref of a deleted importer: PROGRAM-ERROR
+first: user: call_direct: PROGRAM-ERROR
+first: chained: call_direct: PROGRAM-ERROR
+first: user: call_by_name: PROGRAM-ERROR
+first: chained: call_by_name: PROGRAM-ERROR
+first: user: call_ref_new: PROGRAM-ERROR
+first: chained: call_ref_new: PROGRAM-ERROR
+first: user: call_loop: PROGRAM-ERROR
+first: chained: call_loop: PROGRAM-ERROR
+compiled after: 0 PROGRAM-ERROR
+";
+
+        #! the additional output of the child script with a debug build
+        const HeldOutput = "held: user: call_direct: PROGRAM-ERROR
+held: user: call_by_name: PROGRAM-ERROR
+held: user: call_ref_new: PROGRAM-ERROR
+held: user: call_loop: PROGRAM-ERROR
+held: held: True referenced: True continued: True err: \"PROGRAM-ERROR\"
+";
+    }
+
+    constructor() : QUnit::Test("ImportedFunctionDeletedProgram", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/imported-function-deleted-program/imported.q";
+
+        addTestCase("calls of an imported function after its Program's deletion, in every mode", \testModes());
+        addTestCase("calls of an imported function after its Program's deletion, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    #! returns the expected output and the argument of the child script
+    private list<string> expected() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? (ExpectedOutput + HeldOutput, "debug") : (ExpectedOutput, "");
+    }
+
+    testModes() {
+        (string exp, string arg) = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s %s", env(), qore_bin, mode, script, arg));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        (string exp, string arg) = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/imported-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env(), bin,
+                arg));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}
