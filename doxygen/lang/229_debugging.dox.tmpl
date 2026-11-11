@@ -84,8 +84,9 @@
     following code:
     - the top-level code of an AOT-compiled program that has no parse tree runs as native code and gets no event
     - in an AOT-compiled function or closure, after a debugger dismisses the exception of a statement that ends its
-      block (a \c throw, \c rethrow or \c return statement), the code continues after the statement that contains
-      it, as the code that follows such a statement in its block is not compiled
+      block (a \c throw, \c rethrow or \c return statement), the code continues after the innermost statement that
+      contains it and does not end its block, as the code that follows such a statement is not compiled; in the body
+      of a loop, the loop ends, where the AST interpreter continues it
     - code that was already running when the debugger attached keeps running as it did until it returns: on the IR
       interpreter, it gets the events of its statements from its next statement on, but not of the statements that
       contain them and that started before the debugger attached, and after a debugger dismisses an exception, the
