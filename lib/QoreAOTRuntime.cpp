@@ -5747,6 +5747,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::CLOSURE_CREATE: {
+                // Establish a current-Program context for the whole closure record: the types and default values
+                // of its parameters (a default can be an expression tree that calls a function of the Program,
+                // qore#5827), the class-ref resolution below and the closure constructor are all resolved in the
+                // closure's Program, which the value reader takes from the current one.  Class resolution can fall
+                // back to parseFindClass() (for private/internal classes that are not in the committed runtime
+                // maps), which reads the parse options of the *current* Program; without this context
+                // getProgram() is null and the lookup dereferences it — crashing, e.g., for a closure inside a
+                // method capturing a parameter, where the method's class is resolved here at load time.
+                //
+                // A plain current-Program context (not a parse lock) is used: this AOT slot-map reconstruction can
+                // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
+                // order with another loader thread that already holds the Program parse lock and is waiting for AOT
+                // init.
+                QoreProgramContextHelper closure_pch(pgm);
+
                 // Read flags
                 const char* flags_str = reader.readStringRef(ptr);
                 const char* class_type_path = reader.readStringRef(ptr);
@@ -5783,6 +5798,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (has_default) {
                         std::string val_error;
                         defaults[p] = reader.readValue(ptr, end, val_error);
+                        if (!val_error.empty()) {
+                            // a closure without the default would run with another value: the function is not
+                            // registered
+                            setClosureIRError("closure expression slot " + std::to_string(i) + " parameter '"
+                                + param_names[p] + "' default: " + val_error);
+                            closure_ir_missing = true;
+                        }
                     }
                 }
                 bool closure_sig_has_varargs = false;
@@ -5835,23 +5857,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 const uint8_t* ir_end_ptr = ptr + ir_size;
 
-                // Resolve class for method context
-                // Establish a current-Program context for BOTH the class-ref
-                // resolution below and the closure constructor.  Class resolution
-                // can fall back to parseFindClass() (for private/internal classes
-                // that are not in the committed runtime maps), which reads the parse
-                // options of the *current* Program; without this context getProgram()
-                // is null and the lookup dereferences it — crashing, e.g., for a
-                // closure inside a method capturing a parameter, where the method's
-                // class is resolved here at load time.
-                //
-                // A plain current-Program context (not a parse lock) is used: this
-                // AOT slot-map reconstruction can run while the global AOT init lock
-                // is held, and taking a Program parse lock here can invert lock order
-                // with another loader thread that already holds the Program parse lock
-                // and is waiting for AOT init.
-                QoreProgramContextHelper closure_pch(pgm);
-
+                // Resolve class for method context (in the closure's Program; see closure_pch above)
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
