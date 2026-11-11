@@ -95,15 +95,21 @@ public:
     }
 
     //! Returns the referenced socket QoreObject from the "sock" member
+    /** The member can hold an ordinary, a weak or an opaque reference to the object; the operations of the
+        synchronous Socket calls hold a weak one, which costs no scan for recursive references
+    */
     DLLEXPORT QoreObject* getReferencedSocketObject(ExceptionSink* xsink) const {
         assert(self);
         ValueHolder rv((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
-        if (rv->getType() != NT_OBJECT) {
+        QoreValue v = rv->resolveIndirect();
+        if (v.getType() != NT_OBJECT) {
             xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",
-                rv->getFullTypeName());
+                v.getFullTypeName());
             return nullptr;
         }
-        return rv.release().get<QoreObject>();
+        QoreObject* obj = v.get<QoreObject>();
+        obj->ref();
+        return obj;
     }
 
     DLLEXPORT virtual ~SocketPollOperationBase() = default;

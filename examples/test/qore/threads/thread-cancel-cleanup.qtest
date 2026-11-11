@@ -414,25 +414,39 @@ public class ThreadCancelCleanupTest inherits QUnit::Test {
         assertFalse(r.isOwned(), "the ownership was released on an arbitrary error");
     }
 
+    #! A trusted cleanup that sandboxed code calls completes under a program interrupt; a cleanup of the sandboxed
+    #! code itself is not deferred (sandboxed code never runs deferred, issue #5634)
     testProgramInterruptDeferred() {
         SandboxManager sm();
+
+        # the trusted cleanup: called by the sandboxed code
+        Reservation r();
+        code release = sub () {
+            r.release();
+        };
 
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         p.setSandboxManager(sm);
         p.parse("
 %modern
-hash<auto> sub run() {
+hash<auto> sub run(code release, code is_owned) {
     Mutex m();
-    bool owned = True;
     bool released_after_interrupt = False;
     *hash<ExceptionInfo> ex_info;
+    *hash<ExceptionInfo> own_ex;
 
-    defer_thread_cancel(sub () {
-        m.lock();
-        on_exit m.unlock();
-        owned = False;
-    });
-    released_after_interrupt = !owned;
+    release();
+    released_after_interrupt = !is_owned();
+
+    # a cleanup of the sandboxed code itself is not deferred
+    try {
+        defer_thread_cancel(sub () {
+            m.lock();
+            m.unlock();
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        own_ex = ex;
+    }
 
     # the interrupt is still pending: the next check point raises it
     try {
@@ -441,7 +455,7 @@ hash<auto> sub run() {
     } catch (hash<ExceptionInfo> ex) {
         ex_info = ex;
     }
-    return {\"released\": released_after_interrupt, \"err\": ex_info.err};
+    return {\"released\": released_after_interrupt, \"err\": ex_info.err, \"own\": own_ex.err};
 }
 ", "cleanup_interrupt_test");
 
@@ -449,16 +463,20 @@ hash<auto> sub run() {
         # called with the interrupt: preparing a function for the IR interpreter (lowering and analysis) is a
         # cancellation point of its own, depending on the size of the function, which would raise the interrupt
         # before the code of the function runs
-        hash<auto> res = p.callFunction("run");
+        code is_owned = bool sub () { return defer_thread_cancel(\r.isOwned()); };
+        hash<auto> res = p.callFunction("run", release, is_owned);
         assertTrue(res.released, "the cleanup completed without an interrupt");
         assertNothing(res.err, "no exception without an interrupt");
+        assertNothing(res.own, "no exception in the sandboxed cleanup without an interrupt");
 
         # the interrupt is pending before the cleanup starts
+        r = new Reservation();
         sm.requestInterrupt();
         on_exit sm.clearInterrupt();
 
-        res = p.callFunction("run");
-        assertTrue(res.released, "the cleanup completed with a program interrupt pending");
+        res = p.callFunction("run", release, is_owned);
+        assertTrue(res.released, "the trusted cleanup completed with a program interrupt pending");
+        assertEq("PROGRAM-INTERRUPTED", res.own, "the sandboxed code's own cleanup was not deferred");
         assertEq("PROGRAM-INTERRUPTED", res.err, "the interrupt is still raised after the cleanup");
     }
 

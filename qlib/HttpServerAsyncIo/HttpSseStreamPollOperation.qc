@@ -346,7 +346,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "socket": notifier,
             "extra_fds": (
                 <ExtraPollFdInfo>{
-                    "fd": sock.getPollableDescriptor(),
+                    "pollable": sock,
                     "events": SOCK_POLLIN,
                 },
             ),

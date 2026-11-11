@@ -142,6 +142,18 @@ static inline bool isoctaldigit(const char x) {
     return x >= '0' && x <= '7';
 }
 
+//! for the fast path of a hot internal function, whose slow path is a separate function marked QORE_INTERN_NOINLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
+#define QORE_INTERN_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define QORE_INTERN_ALWAYS_INLINE __forceinline
+#define QORE_INTERN_NOINLINE __declspec(noinline)
+#else
+#define QORE_INTERN_ALWAYS_INLINE inline
+#define QORE_INTERN_NOINLINE
+#endif
+
 // here we define virtual types
 #define NT_NONE             -1
 #define NT_ALL              -2
@@ -1006,6 +1018,8 @@ DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use
 DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
+//! Returns true if the lvalue is a member of the current object named through self (self.x), as a bare member (x) is
+DLLLOCAL bool parse_is_self_member_lvalue(QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
         const MethodVariantBase* variant, const QoreFunction* func = nullptr);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);

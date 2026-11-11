@@ -1,0 +1,15 @@
+outside: RUNTIME-OVERLOAD-ERROR: no variant matching 'P::sm(reference<int>)' can be found; the following variants were tested:
+   ::P::sm(int p)
+inside: P::sm(auto) private / P::only(auto) private / P::sm(auto) private
+closure from inside: P::sm(auto) private
+child class: P::sm(auto) private
+outside: RUNTIME-OVERLOAD-ERROR: no variant matching 'P::sm(reference<int>)' can be found; the following variants were tested:
+   ::P::sm(int p)
+inside: P::sm(auto) private / P::only(auto) private / P::sm(auto) private
+closure from inside: P::sm(auto) private
+child class: P::sm(auto) private
+outside: RUNTIME-OVERLOAD-ERROR: no variant matching 'P::sm(reference<int>)' can be found; the following variants were tested:
+   ::P::sm(int p)
+inside: P::sm(auto) private / P::only(auto) private / P::sm(auto) private
+closure from inside: P::sm(auto) private
+child class: P::sm(auto) private

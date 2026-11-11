@@ -107,6 +107,12 @@ public class QoreRepl {
         #! Pending indent level for the next continuation line
         int pending_indent_level = 0;
 
+        #! delivers the session events and keeps the state of the Program's background threads
+        ReplEventDispatcher dispatcher;
+
+        #! the level of thread notices; see ThreadNoticeLevels
+        string thread_notice_level = DefaultThreadNoticeLevel;
+
         #! Completion context: REPL command starting with /
         const CC_COMMAND = 5;
 
@@ -116,7 +122,7 @@ public class QoreRepl {
             "/quit", "/exit", "/q",
             "/version",
             "/reset", "/clear",
-            "/threads", "/cancel", "/join",
+            "/threads", "/cancel", "/join", "/notify",
             "/vars",
             "/functions", "/funcs",
             "/classes",
@@ -141,7 +147,7 @@ public class QoreRepl {
             "/version",
             "/reset",
             "/clear",
-            "/threads", "/cancel", "/join",
+            "/threads", "/cancel", "/join", "/notify",
             "/vars",
             "/functions",
             "/classes",
@@ -163,6 +169,10 @@ public class QoreRepl {
     /** @param options Optional configuration:
         - \c program: Use an existing Program instead of creating a new one
         - \c parse_options: Parse options for the new Program (default: PO_NEW_STYLE)
+        - \c thread_notifications: the level of thread notices (see @ref qorerepl_thread_events): \c "all",
+          \c "summary" (the default), \c "failures" or \c "off"
+
+        @throw REPL-ERROR the \c thread_notifications option is not a valid level
 
         @note When creating a new Program, PO_ALLOW_REPARSE is enabled to allow multiple
         parse/commit cycles required for REPL functionality. The Program is created as
@@ -181,6 +191,10 @@ public class QoreRepl {
             # Create as independent Program (True = no parent) to avoid inheriting restrictions
             pgm = new Program(parse_opts, True);
         }
+        dispatcher = new ReplEventDispatcher(pgm);
+        if (exists opts.thread_notifications) {
+            setThreadNoticeLevel(opts.thread_notifications);
+        }
 
         # Initialize history file path (only if filesystem access is allowed)
         if (!isFilesystemRestricted()) {
@@ -195,6 +209,195 @@ public class QoreRepl {
                 }
             }
         }
+    }
+
+    #! Stops the delivery of session events
+    destructor() {
+        dispatcher.stop();
+    }
+
+    #! Adds a listener for the events of this session and starts their delivery
+    /** Events report the background threads that the session's code starts (when they start, when cancellation is
+        requested and when and how they end), when the Program becomes idle or active, the session's own
+        evaluations, and the replacement of the Program by @c /reset; see @ref QoreRepl::ReplEvent "ReplEvent" and
+        @ref qorerepl_thread_events.
+
+        @param listener called with each event, on a thread of the session that delivers the events in order; it
+        must return quickly (a UI posts the event to its event loop), and it is called without any lock of the
+        session held, so it can call the session's methods; an exception that it raises is ignored
+        @param activity @ref True to receive the Program's activity events (\c "program-busy" and
+        \c "program-idle"), which every call into the Program produces; see
+        @ref QoreRepl::QoreRepl::setEventListenerActivity() "setEventListenerActivity()"
+
+        @return the ID of the listener, for @ref QoreRepl::QoreRepl::removeEventListener() "removeEventListener()"
+
+        @par Example:
+        @code{.py}
+QoreRepl repl();
+Queue notices();
+repl.addEventListener(sub (hash<ReplEvent> ev) { notices.push(ev); });
+        @endcode
+
+        @throw REPL-ERROR the session has been closed
+
+        @note
+        - only background threads started in the session's Program are reported: the threads of the embedding
+          application, such as a worker that calls @ref QoreRepl::QoreRepl::eval() "eval()" or a thread that reads
+          captured output, are not
+        - the session runs a thread that delivers the events while it has listeners; it is stopped before the
+          process waits for its threads to end, so a session kept until then does not keep the process from ending
+          (unless the module was loaded by code that a sandbox governs, which cannot register the exit hook that
+          stops it: remove the listeners or call @ref QoreRepl::QoreRepl::close() "close()" then)
+        - a listener that refers to this object keeps it alive until the listener is removed or the session is
+          closed with @ref QoreRepl::QoreRepl::close() "close()"
+    */
+    int addEventListener(code<nothing(hash<ReplEvent>)> listener, bool activity = False) {
+        return dispatcher.addListener(listener, activity);
+    }
+
+    #! Sets whether a listener receives the Program's activity events (\c "program-busy" and \c "program-idle")
+    /** @param id the ID returned by @ref QoreRepl::QoreRepl::addEventListener() "addEventListener()"
+        @param activity @ref True to receive them
+
+        @return @ref True if the listener exists, @ref False if not
+    */
+    bool setEventListenerActivity(int id, bool activity) {
+        return dispatcher.setListenerActivity(id, activity);
+    }
+
+    #! Removes a listener added with @ref QoreRepl::QoreRepl::addEventListener() "addEventListener()"
+    /** When the last listener is removed, the thread that delivers the events ends (this method waits for it,
+        unless it is called by a listener).
+
+        @return @ref True if the listener was removed, @ref False if there is no such listener
+    */
+    bool removeEventListener(int id) {
+        return dispatcher.removeListener(id);
+    }
+
+    #! Returns the background threads running in the session's Program, in the order they started
+    /** While the session has listeners, the state is that of the last event delivered, so a thread that has just
+        been started may not be reported yet; without listeners, it is a snapshot taken when called.
+
+        @throw REPL-ERROR the session has been closed
+    */
+    list<hash<ProgramThreadInfo>> getBackgroundThreads() {
+        return dispatcher.getThreads();
+    }
+
+    #! Returns @ref True if no code runs in the session's Program
+    /** While a listener receives activity events, the state is that of the last one delivered; otherwise it is a
+        snapshot taken when called.  An idle Program can become active at any time, as when a callback runs in it, so code that needs an idle
+        Program checks again when it parses: @ref QoreRepl::QoreRepl::eval() "eval()" does
+
+        @throw REPL-ERROR the session has been closed
+    */
+    bool isProgramIdle() {
+        return dispatcher.isIdle();
+    }
+
+    #! Ends the session's event delivery: removes the listeners and stops the thread that delivers the events
+    /** Background threads of the Program keep running.  Called by the destructor; after it, the methods that
+        deliver events or report threads raise \c REPL-ERROR.
+    */
+    close() {
+        dispatcher.stop();
+    }
+
+    #! Returns the level of thread notices; see @ref qorerepl_thread_events
+    string getThreadNoticeLevel() {
+        return thread_notice_level;
+    }
+
+    #! Sets the level of thread notices: \c "all", \c "summary", \c "failures" or \c "off"
+    /** @param level the level; see @ref QoreRepl::ThreadNoticeLevels "ThreadNoticeLevels"
+
+        @throw REPL-ERROR the level is not valid
+    */
+    setThreadNoticeLevel(string level) {
+        if (!inlist(level, ThreadNoticeLevels)) {
+            throw "REPL-ERROR", sprintf("unknown thread notice level %y; expecting one of: %s", level,
+                ThreadNoticeLevels.join(", "));
+        }
+        thread_notice_level = level;
+    }
+
+    #! Returns the notices of a batch of events at this session's level; see formatThreadNotices()
+    /** @param events the events, in the order they were delivered
+
+        @return the notices, one line each
+    */
+    list<string> getThreadNotices(list<hash<ReplEvent>> events) {
+        return formatThreadNotices(events, thread_notice_level);
+    }
+
+    #! Returns the notices of a batch of events, for a frontend to display
+    /** A frontend passes the events it received since it last displayed notices; the notices of a burst of
+        activity are grouped:
+        - \c "all": a notice for each thread event
+        - \c "summary": starts, ends and cancellation requests are grouped by kind (for example
+          <tt>3 threads started (17, 18, 19)</tt>); a thread that started and ended in the batch is reported once,
+          when it ended; failures are reported one by one
+        - \c "failures": only threads that ended with an exception, were interrupted or failed to start, and
+          errors in a thread's cleanup
+        - \c "off": nothing
+
+        Events other than thread events produce no notices.
+
+        @param events the events, in the order they were delivered
+        @param level the level of the notices
+
+        @return the notices, one line each
+
+        @par Example:
+        @code{.py}
+foreach string line in (QoreRepl::formatThreadNotices(events, "summary")) {
+    printf("%s\n", line);
+}
+        @endcode
+
+        @throw REPL-ERROR the level is not valid
+    */
+    static list<string> formatThreadNotices(list<hash<ReplEvent>> events, string level = DefaultThreadNoticeLevel) {
+        return ReplThreadNoticeFormatter::format(events, level);
+    }
+
+    #! Returns the list of the threads running the Program's code, for /threads
+    /** The threads are those that block parsing (see @ref Qore::Program::getThreadList() "Program::getThreadList()");
+        background threads started by the session's code are listed with how long they have run, the thread that
+        started them and whether cancellation was requested
+    */
+    private string formatThreadList() {
+        list<int> tids = pgm.getThreadList();
+        if (!tids) {
+            return "No running threads in this Program";
+        }
+        hash<string, hash<ProgramThreadInfo>> bg;
+        try {
+            bg = map {$1.tid: $1}, getBackgroundThreads();
+        } catch (hash<ExceptionInfo> ex) {
+            # the session has been closed; the threads are listed without their details
+        }
+        date now = now_us();
+        list<string> lines = (sprintf("%-7s %-9s %-16s %s", "TID", "Running", "Name", "Notes"),);
+        foreach int tid in (tids) {
+            *hash<ProgramThreadInfo> t = bg{tid};
+            if (t) {
+                list<string> notes();
+                if (t.parent_thread_id) {
+                    notes += sprintf("started by thread %d", t.parent_tid);
+                }
+                if (t.cancel_requested) {
+                    notes += "cancellation requested";
+                }
+                lines += trim(sprintf("%-7d %-9s %-16s %s", tid, ReplThreadNoticeFormatter::formatDuration(
+                    (now - t.start).durationMicroseconds()), t.name, notes.join("; ")));
+            } else {
+                lines += sprintf("%-7d %-9s %-16s %s", tid, "-", get_thread_name(tid) ?? "(unnamed)",
+                    "calling the Program's code");
+            }
+        }
+        return lines.join("\n");
     }
 
     #! Returns True if filesystem access is restricted by parse options
@@ -362,6 +565,12 @@ if (!exists result) {
             # Add command to history
             history += input;
             qhistory.add(input);
+            if (request.requires_idle) {
+                # the command runs code in the Program, or replaces it
+                dispatcher.pushSessionEvent("eval-started", input);
+                on_exit dispatcher.pushSessionEvent("eval-finished", input);
+                return processCommand(input);
+            }
             return processCommand(input);
         }
 
@@ -392,6 +601,10 @@ if (!exists result) {
         if (trim(code) == "") {
             return {"value": NOTHING};
         }
+
+        # the session's code runs in the Program from here on (foreground evaluation)
+        dispatcher.pushSessionEvent("eval-started", code);
+        on_exit dispatcher.pushSessionEvent("eval-finished", code);
 
         # Ensure code ends with proper terminator to avoid parse errors
         # that would roll back program state. We add a semicolon proactively
@@ -724,6 +937,7 @@ if (!exists result) {
         help += helpLine("/threads", "List running thread IDs and names");
         help += helpLine("/cancel <tid|all>", "Request cooperative thread termination");
         help += helpLine("/join <tid|all>", "Wait for threads to leave the Program");
+        help += helpLine("/notify [level]", "Show or set thread notices: " + ThreadNoticeLevels.join(", "));
         help += "Parsing, /type, /load and /reset require an idle Program.\n";
         help += sprintf("\n%s\n", color.key("Introspection:"));
         help += helpLine("/vars", "List global variables");
@@ -816,11 +1030,21 @@ if (!exists result) {
 
             case "/threads":
                 if (args.size()) { return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Usage: /threads"}}; }
-                list<string> lines = ("TID     Name",);
-                foreach int tid in (pgm.getThreadList()) {
-                    lines += sprintf("%-7d %s", tid, get_thread_name(tid) ?? "(unnamed)");
+                return {"value": formatThreadList()};
+
+            case "/notify":
+                if (args.size() > 1) {
+                    return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Usage: /notify [" +
+                        ThreadNoticeLevels.join("|") + "]"}};
                 }
-                return {"value": lines.size() == 1 ? "No running threads in this Program" : lines.join("\n")};
+                if (args) {
+                    try {
+                        setThreadNoticeLevel(args[0].lwr());
+                    } catch (hash<ExceptionInfo> ex) {
+                        return {"error": ex};
+                    }
+                }
+                return {"value": "Thread notices: " + thread_notice_level};
 
             case "/cancel":
             case "/join":
@@ -857,6 +1081,7 @@ if (!exists result) {
                 # Create a new Program with the same options
                 int parse_opts = (opts.parse_options ?? PO_NEW_STYLE) | PO_ALLOW_REPARSE | PO_ALLOW_STATEMENT_NO_EFFECT;
                 pgm = new Program(parse_opts, True);
+                dispatcher.setProgram(pgm);
                 eval_counter = 0;
                 reset();
                 return {"value": "Program state reset"};
@@ -1722,8 +1947,35 @@ if (!exists result) {
         # Delegate history navigation to QoreHistory (single source of truth)
         Linenoise::set_history_provider(new QoreHistory::QoreHistoryProvider(qhistory));
 
+        # thread notices are printed before each prompt
+        Mutex notice_lock();
+        list<hash<ReplEvent>> notice_events();
+        *int listener_id;
+        if (thread_notice_level != "off") {
+            listener_id = addEventListener(sub (hash<ReplEvent> ev) {
+                notice_lock.lock();
+                on_exit notice_lock.unlock();
+                notice_events += ev;
+            });
+        }
+        on_exit if (listener_id) {
+            removeEventListener(listener_id);
+        }
+
         # Main REPL loop
         while (True) {
+            {
+                list<hash<ReplEvent>> events;
+                {
+                    notice_lock.lock();
+                    on_exit notice_lock.unlock();
+                    events = notice_events;
+                    notice_events = ();
+                }
+                foreach string notice in (getThreadNotices(events)) {
+                    printOutput(color.info(notice) + "\n");
+                }
+            }
             *string line = readLine(getPrompt());
 
             # Handle EOF or Ctrl+C

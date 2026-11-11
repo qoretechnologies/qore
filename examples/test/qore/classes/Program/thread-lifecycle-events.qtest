@@ -1,0 +1,962 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - thread creation, cooperative cancellation wakeups and thread teardown order
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadLifecycleEventsTest
+
+#! The code shared by the child Programs: counters the test controls the threads with, and functions that start them
+const ChildCode = "
+our Counter entered;
+our Counter gate;
+our *int main_tid;
+
+#! starts a thread that waits for the gate and then returns
+int sub start_waiting() {
+    return background sub () { entered.dec(); gate.waitForZero(); }();
+}
+
+#! starts a thread that waits for the gate with cancellation deferred and then returns
+int sub start_deferring() {
+    return background sub () { defer_thread_cancel(sub () { entered.dec(); gate.waitForZero(); }); }();
+}
+
+#! starts a thread that returns at once
+int sub start_quick() {
+    return background sub () {}();
+}
+
+#! starts a thread that starts another one and waits for the gate
+int sub start_nested() {
+    return background sub () { start_waiting(); entered.dec(); gate.waitForZero(); }();
+}
+";
+
+#! A value whose destructor raises an exception
+class ThrowingDestructor {
+    destructor() {
+        throw "DESTRUCTOR-ERROR", "destructor error";
+    }
+}
+
+#! Tests Program::subscribeThreadEvents(); see design/program-thread-lifecycle-events.md
+class ThreadLifecycleEventsTest inherits QUnit::Test {
+    private {
+        #! the time to wait for an event before the test fails
+        const EventTimeout = 60s;
+    }
+
+    constructor() : Test("ThreadLifecycleEventsTest", "1.0", \ARGV) {
+        addTestCase("completed", \completed());
+        addTestCase("exception", \exception());
+        addTestCase("exception argument", \exceptionArgument());
+        addTestCase("cancelled", \cancelled());
+        addTestCase("caught cancellation", \caughtCancellation());
+        addTestCase("deferred cancellation", \deferredCancellation());
+        addTestCase("cancellation requested once", \cancellationOnce());
+        addTestCase("cancellation wave", \cancellationWave());
+        addTestCase("cancellation scoped to another Program", \cancellationOtherProgram());
+        addTestCase("thread exit", \threadExit());
+        addTestCase("start failure", \startFailure());
+        addTestCase("cleanup error", \cleanupError());
+        addTestCase("snapshot", \snapshot());
+        addTestCase("nested threads", \nested());
+        addTestCase("thread started by another Program's thread", \otherProgramParent());
+        addTestCase("short-lived threads", \shortLived());
+        addTestCase("concurrent subscriptions", \concurrentSubscriptions());
+        addTestCase("TID reuse", \tidReuse());
+        addTestCase("event mask", \eventMask());
+        addTestCase("activity", \activity());
+        addTestCase("activity with concurrent snapshots", \activitySnapshots());
+        addTestCase("activity of an evaluation Program's copy", \activityEvalCopy());
+        addTestCase("activity of the use of a reference to a lvalue", \activityReference());
+%ifdef QoreDebug
+        addTestCase("activity publication (C++)", \activityPublication());
+        addTestCase("cancellation published after the thread ended", \lateCancelPublication());
+        addTestCase("published cancellation claims released", \cancelClaimsReleased());
+%endif
+        addTestCase("unsubscribe", \unsubscribe());
+        addTestCase("multiple subscriptions", \multipleSubscriptions());
+        addTestCase("deleted queue", \deletedQueue());
+        addTestCase("Program destroyed", \programDestroyed());
+        addTestCase("Program destroyed with threads", \programDestroyedWithThreads());
+        addTestCase("invalid arguments", \invalidArguments());
+        addTestCase("sandbox", \sandbox());
+        set_return_value(main());
+    }
+
+    #! creates a child Program with the shared code and the given code, with its counters
+    private Program makeProgram(string code = "", int entered = 0, int gate = 0) {
+        Program pgm(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        pgm.parse(ChildCode + code, "child");
+        # initializes the global variables declared with values
+        pgm.run();
+        pgm.setGlobalVarValue("entered", new Counter(entered));
+        pgm.setGlobalVarValue("gate", new Counter(gate));
+        pgm.setGlobalVarValue("main_tid", gettid());
+        return pgm;
+    }
+
+    #! returns the next event from the queue
+    private hash<ProgramThreadEvent> next(Queue q) {
+        auto ev = q.get(EventTimeout);
+        assertEq("hash<ProgramThreadEvent>", ev.fullType());
+        return ev;
+    }
+
+    #! returns the events from the queue up to the first with the given type, and that one
+    private list<hash<ProgramThreadEvent>> until(Queue q, string event, *int tid) {
+        list<hash<ProgramThreadEvent>> rv();
+        while (True) {
+            hash<ProgramThreadEvent> ev = next(q);
+            rv += ev;
+            if (ev.event == event && (!exists tid || ev.tid == tid)) {
+                return rv;
+            }
+        }
+    }
+
+    #! returns the FINISHED event of a thread
+    private hash<ProgramThreadEvent> finished(Queue q, int tid) {
+        return until(q, "FINISHED", tid).last();
+    }
+
+    #! returns the events of the given type
+    private static list<hash<ProgramThreadEvent>> select(list<hash<ProgramThreadEvent>> l, string event) {
+        return (map $1, l, $1.event == event) ?? ();
+    }
+
+    completed() {
+        Program pgm = makeProgram();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+        assertEq(pgm.getProgramId(), s.program_id);
+        assertEq((), s.threads);
+        date before = now_us();
+        int tid = pgm.callFunction("start_quick");
+
+        hash<ProgramThreadEvent> start = next(q);
+        assertEq("STARTED", start.event);
+        assertEq(s.id, start.subscription_id);
+        assertEq(pgm.getProgramId(), start.program_id);
+        assertGt(s.seq, start.seq);
+        assertEq(tid, start.tid);
+        assertGt(0, start.thread_id);
+        assertEq(gettid(), start.parent_tid);
+        # the main thread is not a background thread
+        assertEq(0, start.parent_thread_id);
+        assertEq(1, start.running);
+        assertEq("qore/" + tid, start.name);
+        assertTrue(start.start >= before);
+        assertNothing(start.outcome);
+
+        hash<ProgramThreadEvent> end = next(q);
+        assertEq("FINISHED", end.event);
+        assertGt(start.seq, end.seq);
+        assertEq(tid, end.tid);
+        assertEq(start.thread_id, end.thread_id);
+        assertEq(start.start, end.start);
+        assertEq(0, end.running);
+        assertEq("COMPLETED", end.outcome);
+        assertEq(0, end.exception_count);
+        assertNothing(end.error);
+        assertNothing(end.cleanup_error);
+        assertTrue(end.end >= end.start);
+        assertTrue(end.duration_us >= 0);
+        assertEq("qore/" + tid, end.name);
+        # nothing else is published for the thread
+        pgm.waitForThreads();
+        assertEq(0, q.size());
+    }
+
+    exception() {
+        Program pgm = makeProgram("int sub run() { return background sub () { throw \"TEST-ERROR\", "
+            "\"test error\", 42; }(); }");
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        hash<ProgramThreadEvent> end = finished(q, tid);
+        assertEq("EXCEPTION", end.outcome);
+        assertEq(1, end.exception_count);
+        assertEq("TEST-ERROR", end.error.err);
+        assertEq("test error", end.error.desc);
+        assertEq(42, end.error.arg);
+        assertEq("child", end.error.file);
+        # chained exceptions are not included
+        assertNothing(end.error.next);
+        assertNothing(end.cleanup_error);
+    }
+
+    exceptionArgument() {
+        # an argument that refers to an object is left out; the error and description are kept
+        Program pgm = makeProgram("int sub run() { return background sub () { throw \"TEST-ERROR\", "
+            "\"test error\", new Mutex(); }(); }");
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        hash<ProgramThreadEvent> end = finished(q, tid);
+        assertEq("EXCEPTION", end.outcome);
+        assertEq("TEST-ERROR", end.error.err);
+        assertEq("test error", end.error.desc);
+        assertNothing(end.error.arg);
+    }
+
+    cancelled() {
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertTrue(pgm.cancelThread(tid, "test reason"));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "CANCEL_REQUESTED", "FINISHED"), (map $1.event, l));
+        assertEq("test reason", l[1].cancel_reason);
+        assertEq(tid, l[1].tid);
+        assertEq(l[0].thread_id, l[1].thread_id);
+        assertEq(1, l[1].running);
+        assertEq("CANCELLED", l[2].outcome);
+        assertEq("THREAD-CANCELLED", l[2].error.err);
+        assertEq(1, l[2].exception_count);
+    }
+
+    caughtCancellation() {
+        # a thread that catches the cancellation and returns normally completes
+        Program pgm = makeProgram("int sub run() { return background sub () { try { entered.dec(); "
+            "gate.waitForZero(); } catch (hash<ExceptionInfo> ex) { if (ex.err != \"THREAD-CANCELLED\") { "
+            "rethrow; } clear_thread_cancel(); } }(); }", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertTrue(cancel_thread(tid));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "CANCEL_REQUESTED", "FINISHED"), (map $1.event, l));
+        assertNothing(l[1].cancel_reason);
+        assertEq("COMPLETED", l[2].outcome);
+        assertNothing(l[2].error);
+    }
+
+    deferredCancellation() {
+        # a request made while the thread defers cancellation is published at once; how the thread ends depends
+        # on what it does after the deferral
+        Program pgm = makeProgram("int sub run(bool clear) { return background sub () { "
+            "defer_thread_cancel(sub () { entered.dec(); gate.waitForZero(); }); "
+            "if (clear) { clear_thread_cancel(); return; } "
+            # a cancellable wait is a cancellation point
+            "Counter c(1); c.waitForZero(60s); }(); }", 2, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        Counter entered = pgm.getGlobalVariable("entered");
+        Counter gate = pgm.getGlobalVariable("gate");
+        int tid_clear = pgm.callFunction("run", True);
+        int tid_cancel = pgm.callFunction("run", False);
+        entered.waitForZero();
+        assertTrue(pgm.cancelThread(tid_clear));
+        assertTrue(pgm.cancelThread(tid_cancel));
+        # both requests are published while the threads still defer them
+        hash<string, int> requested;
+        while (requested.size() < 2) {
+            hash<ProgramThreadEvent> ev = next(q);
+            if (ev.event == "CANCEL_REQUESTED") {
+                requested{ev.tid} = ev.seq;
+            }
+        }
+        assertEq((tid_clear, tid_cancel), sort(map $1.toInt(), keys requested));
+        gate.dec();
+        hash<string, string> outcomes;
+        while (outcomes.size() < 2) {
+            hash<ProgramThreadEvent> ev = next(q);
+            if (ev.event == "FINISHED") {
+                outcomes{ev.tid} = ev.outcome;
+            }
+        }
+        assertEq("COMPLETED", outcomes{tid_clear});
+        assertEq("CANCELLED", outcomes{tid_cancel});
+    }
+
+    cancellationOnce() {
+        # a request made while one is pending is not published; one made after the thread cleared the request is
+        # published again; the thread defers cancellation while it waits, so the requests stay pending
+        Program pgm = makeProgram("our Counter step(1); our Counter step2(1); int sub run() { return background "
+            "sub () { defer_thread_cancel(sub () { entered.dec(); gate.waitForZero(); }); clear_thread_cancel(); "
+            "step.dec(); defer_thread_cancel(sub () { step2.waitForZero(); }); clear_thread_cancel(); }(); }", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        Counter entered = pgm.getGlobalVariable("entered");
+        Counter gate = pgm.getGlobalVariable("gate");
+        Counter step = pgm.getGlobalVariable("step");
+        Counter step2 = pgm.getGlobalVariable("step2");
+        entered.waitForZero();
+        assertTrue(pgm.cancelThread(tid, "first"));
+        assertTrue(pgm.cancelThread(tid, "second"));
+        gate.dec();
+        step.waitForZero();
+        # the thread has cleared the first request; it now waits with cancellation deferred
+        assertTrue(pgm.cancelThread(tid, "third"));
+        step2.dec();
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        list<hash<ProgramThreadEvent>> requests = select(l, "CANCEL_REQUESTED");
+        assertEq(("first", "third"), (map $1.cancel_reason, requests));
+        assertEq("COMPLETED", l.last().outcome);
+    }
+
+    cancellationWave() {
+        # a thread started during a cancellation wave is cancelled before it is published; its request is
+        # published right after its STARTED event
+        Program pgm = makeProgram("our Counter started(1); our *int child_tid; int sub run() { "
+            "return background sub () { try { entered.dec(); gate.waitForZero(); } catch (hash<ExceptionInfo> ex) "
+            "{ clear_thread_cancel(); } "
+            "child_tid = background sub () { started.dec(); Counter c(1); c.waitForZero(60s); }(); "
+            "started.waitForZero(); }(); }", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertEq(1, pgm.cancelThreads("wave"));
+        pgm.waitForThreads();
+        int child_tid = pgm.getGlobalVariable("child_tid");
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", child_tid);
+        list<hash<ProgramThreadEvent>> child = (map $1, l, $1.tid == child_tid);
+        assertEq(("STARTED", "CANCEL_REQUESTED", "FINISHED"), (map $1.event, child));
+        assertEq("Program thread cancellation requested", child[1].cancel_reason);
+        assertEq("CANCELLED", child[2].outcome);
+        assertEq(tid, child[0].parent_tid);
+    }
+
+    cancellationOtherProgram() {
+        # a request scoped to another Program applies only while the thread runs that Program's code: it is not
+        # published as a request of the thread's Program; FINISHED reports how the thread ended
+        Program pgm = makeProgram("int sub run(code c) { return background c(); }");
+        Program other(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        other.parse("our Counter entered; our Counter gate; code sub waiter() { return sub () { entered.dec(); "
+            "gate.waitForZero(); }; }", "other");
+        Counter entered(1);
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        other.setGlobalVarValue("entered", entered);
+        other.setGlobalVarValue("gate", gate);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        # a thread of the first Program runs the other Program's code
+        int tid = pgm.callFunction("run", other.callFunction("waiter"));
+        entered.waitForZero();
+        assertEq(1, other.cancelThreads("other"));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "FINISHED"), (map $1.event, l));
+        assertEq("CANCELLED", l[1].outcome);
+    }
+
+    threadExit() {
+        Program pgm = makeProgram("int sub run() { return background sub () { thread_exit; }(); }");
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run");
+        hash<ProgramThreadEvent> end = finished(q, tid);
+        assertEq("EXITED", end.outcome);
+        assertEq(0, end.exception_count);
+        assertNothing(end.error);
+    }
+
+    startFailure() {
+        Program pgm = makeProgram();
+        int main_tid = gettid();
+        # the entry handler fails for the threads that the child starts, not for the calls of this thread
+        pgm.setThreadEntryHandler(sub () {
+            if (gettid() != main_tid) {
+                throw "ENTRY-ERROR", "entry refused";
+            }
+        });
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_quick");
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "FINISHED"), (map $1.event, l));
+        assertEq("START_FAILED", l[1].outcome);
+        assertEq("ENTRY-ERROR", l[1].error.err);
+        assertEq(1, l[1].exception_count);
+    }
+
+    cleanupError() {
+        # an exception raised when the thread releases its values after its code returned does not change the
+        # outcome
+        Program pgm = makeProgram("int sub run(code make) { return background make(); }");
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("run", ThrowingDestructor sub () { return new ThrowingDestructor(); });
+        hash<ProgramThreadEvent> end = finished(q, tid);
+        assertEq("COMPLETED", end.outcome);
+        assertEq(0, end.exception_count);
+        assertNothing(end.error);
+        assertEq("DESTRUCTOR-ERROR", end.cleanup_error.err);
+    }
+
+    snapshot() {
+        Program pgm = makeProgram("", 1, 1);
+        Counter entered = pgm.getGlobalVariable("entered");
+        Counter gate = pgm.getGlobalVariable("gate");
+        # a failed assertion must not leave the threads waiting, as the Program waits for them when it is destroyed
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        # the first thread keeps running after its cancellation request; the second one is started only once the
+        # first is running, as the snapshot lists the threads in the order they published STARTED
+        int tid1 = pgm.callFunction("start_deferring");
+        entered.waitForZero();
+        entered.inc();
+        int tid2 = pgm.callFunction("start_waiting");
+        entered.waitForZero();
+        assertTrue(pgm.cancelThread(tid1, "before"));
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+        assertEq((tid1, tid2), (map $1.tid, s.threads));
+        assertEq(("qore/" + tid1, "qore/" + tid2), (map $1.name, s.threads));
+        # the request was published before the subscription
+        assertEq((True, False), (map $1.cancel_requested, s.threads));
+        assertEq((gettid(), gettid()), (map $1.parent_tid, s.threads));
+        assertFalse(s.idle);
+        assertEq(0, q.size());
+        gate.dec();
+        pgm.waitForThreads();
+        list<hash<ProgramThreadEvent>> l;
+        while (l.size() < 2) {
+            l += next(q);
+        }
+        # the threads in the snapshot are not published as started
+        assertEq(("FINISHED", "FINISHED"), (map $1.event, l));
+        assertEq((s.threads[0].thread_id, s.threads[1].thread_id), sort(map $1.thread_id, l));
+        # the request was deferred, and the thread ended without reaching a cancellation point
+        assertEq("COMPLETED", (map $1.outcome, l, $1.tid == tid1)[0]);
+        assertEq("COMPLETED", (map $1.outcome, l, $1.tid == tid2)[0]);
+        foreach hash<ProgramThreadEvent> ev in (l) {
+            assertGt(s.seq, ev.seq);
+        }
+    }
+
+    nested() {
+        Program pgm = makeProgram("", 2, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_nested");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        list<hash<ProgramThreadEvent>> l;
+        while (l.size() < 2) {
+            l += next(q);
+        }
+        assertEq(("STARTED", "STARTED"), (map $1.event, l));
+        assertEq(tid, l[0].tid);
+        assertEq(tid, l[1].parent_tid);
+        assertEq(l[0].thread_id, l[1].parent_thread_id);
+        assertEq(2, l[1].running);
+        Counter gate = pgm.getGlobalVariable("gate");
+        gate.dec();
+        pgm.waitForThreads();
+        while (l.size() < 4) {
+            l += next(q);
+        }
+        assertEq(2, select(l, "FINISHED").size());
+        assertEq(0, l.last().running);
+    }
+
+    otherProgramParent() {
+        # a background thread of this (the test's) Program starts a thread in the child Program: its parent is not a
+        # background thread of the child Program, so the event names only its TID
+        Program pgm = makeProgram();
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        Queue started();
+        int starter = background started.push(pgm.callFunction("start_quick"));
+        int tid = started.get(EventTimeout);
+        hash<ProgramThreadEvent> ev = until(q, "STARTED", tid).last();
+        assertEq(starter, ev.parent_tid);
+        assertEq(0, ev.parent_thread_id);
+        assertEq("COMPLETED", finished(q, tid).outcome);
+    }
+
+    shortLived() {
+        # threads that start and end before anything reads the queue are each published once, in order
+        Program pgm = makeProgram("list<int> sub run(int n) { list<int> l(); for (int i = 0; i < n; ++i) "
+            "{ l += start_quick(); } return l; }");
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int n = 100;
+        list<int> tids = pgm.callFunction("run", n);
+        pgm.waitForThreads();
+        list<hash<ProgramThreadEvent>> l;
+        hash<string, list<string>> by_thread;
+        while (by_thread.size() < n || (select(l, "FINISHED").size() < n)) {
+            hash<ProgramThreadEvent> ev = next(q);
+            l += ev;
+            by_thread{ev.thread_id} += ev.event;
+        }
+        checkSequence(l);
+        assertEq(n, by_thread.size());
+        foreach string id in (keys by_thread) {
+            assertEq(("STARTED", "FINISHED"), by_thread{id}, id);
+        }
+        assertEq(sort(tids), sort(map $1.tid, select(l, "STARTED")));
+    }
+
+    #! checks that event sequence numbers increase and that running counts follow the events
+    private checkSequence(list<hash<ProgramThreadEvent>> l, int running = 0, int seq = 0) {
+        foreach hash<ProgramThreadEvent> ev in (l) {
+            assertGt(seq, ev.seq);
+            seq = ev.seq;
+            switch (ev.event) {
+                case "STARTED": ++running; break;
+                case "FINISHED": --running; break;
+            }
+            assertEq(running, ev.running);
+        }
+    }
+
+    concurrentSubscriptions() {
+        # subscriptions made while threads start and end see each thread exactly once: in the snapshot or by its
+        # STARTED event, and then by its FINISHED event
+        Program pgm = makeProgram("list<int> sub run(int n) { list<int> l(); for (int i = 0; i < n; ++i) "
+            "{ l += start_quick(); } return l; }");
+        int n = 300;
+        # each thread publishes two events; the last one has this sequence number
+        Queue q0();
+        int last_seq = pgm.subscribeThreadEvents(q0).seq + n * 2;
+        Counter starting(1);
+        Queue result();
+        background sub () {
+            try {
+                starting.dec();
+                result.push(pgm.callFunction("run", n));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        starting.waitForZero();
+        list<hash<auto>> subs;
+        for (int i = 0; i < 20; ++i) {
+            Queue q();
+            subs += {"queue": q, "sub": pgm.subscribeThreadEvents(q)};
+        }
+        auto tids = result.get(EventTimeout);
+        assertEq("list<int>", tids.fullType());
+        foreach hash<auto> s in (subs) {
+            hash<string, bool> seen = map {$1.thread_id: True}, s.sub.threads;
+            hash<string, bool> done;
+            Queue q = s.queue;
+            int seq = s.sub.seq;
+            while (seq < last_seq) {
+                hash<ProgramThreadEvent> ev = next(q);
+                assertEq(s.sub.id, ev.subscription_id);
+                assertGt(seq, ev.seq);
+                seq = ev.seq;
+                if (ev.event == "STARTED") {
+                    assertFalse(exists seen{ev.thread_id}, "duplicate start");
+                    seen{ev.thread_id} = True;
+                } else {
+                    assertEq("FINISHED", ev.event);
+                    assertTrue(exists seen{ev.thread_id}, "finished without start");
+                    assertFalse(exists done{ev.thread_id}, "duplicate finish");
+                    done{ev.thread_id} = True;
+                }
+            }
+            assertEq(last_seq, seq);
+            assertEq(seen.size(), done.size());
+            assertEq(0, q.size());
+            assertTrue(pgm.unsubscribeThreadEvents(s.sub.id));
+        }
+    }
+
+    tidReuse() {
+        # TIDs are reused once every TID has been used; a thread publishes FINISHED before its TID is released, so
+        # the events of a TID alternate between STARTED and FINISHED
+        Program pgm = makeProgram("list<int> sub run(int n) { list<int> l(); for (int i = 0; i < n; ++i) "
+            "{ l += start_quick(); thread_join(l.last()); } return l; }");
+        Queue q();
+        pgm.subscribeThreadEvents(q, <ProgramThreadEventOptions>{"events": PTE_STARTED | PTE_FINISHED});
+        # more threads than the thread list holds
+        int n = 8200;
+        list<int> tids = pgm.callFunction("run", n);
+        pgm.waitForThreads();
+        hash<string, bool> unique = map {$1: True}, tids;
+        assertLt(n, unique.size(), "TIDs were reused");
+        hash<string, string> last_event;
+        hash<string, bool> thread_ids;
+        int count;
+        while (count < n * 2) {
+            hash<ProgramThreadEvent> ev = next(q);
+            ++count;
+            if (ev.event == "STARTED") {
+                assertNeq("STARTED", last_event{ev.tid} ?? "");
+                assertFalse(exists thread_ids{ev.thread_id});
+                thread_ids{ev.thread_id} = True;
+            } else {
+                assertEq("STARTED", last_event{ev.tid});
+            }
+            last_event{ev.tid} = ev.event;
+        }
+        assertEq(n, thread_ids.size());
+    }
+
+    eventMask() {
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q, <ProgramThreadEventOptions>{"events": PTE_FINISHED});
+        int tid = pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertTrue(pgm.cancelThread(tid));
+        hash<ProgramThreadEvent> ev = next(q);
+        assertEq("FINISHED", ev.event);
+        pgm.waitForThreads();
+        assertEq(0, q.size());
+
+        # the default delivers no ACTIVITY events, and CLOSED
+        q = new Queue();
+        pgm.subscribeThreadEvents(q);
+        pgm.callFunction("start_quick");
+        pgm.waitForThreads();
+        delete pgm;
+        list<string> events;
+        while (True) {
+            ev = next(q);
+            events += ev.event;
+            if (ev.event == "CLOSED") {
+                break;
+            }
+        }
+        assertEq(("STARTED", "FINISHED", "CLOSED"), events);
+        assertEq(0, q.size());
+    }
+
+    activity() {
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertTrue(s.idle);
+        # calls into the Program make it active and idle again; the background thread keeps it active
+        pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+
+        # a subscription made now sees an active Program; its first event is the end of the thread's activity
+        Queue q2();
+        hash<ProgramThreadSubscription> s2 = pgm.subscribeThreadEvents(q2,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertFalse(s2.idle);
+
+        Counter gate = pgm.getGlobalVariable("gate");
+        gate.dec();
+        hash<ProgramThreadEvent> last = next(q2);
+        assertEq("ACTIVITY", last.event);
+        assertTrue(last.idle);
+        # the thread leaves the Program before it publishes FINISHED, so it can still be running
+        assertLe(1, last.running);
+
+        # every event up to that one has been pushed to the first queue as well: the states alternate, starting
+        # with active, and end with that event
+        list<hash<ProgramThreadEvent>> l;
+        while (q.size()) {
+            l += q.get();
+        }
+        assertGt(1, l.size());
+        assertEq(last.seq, l.last().seq);
+        assertFalse(l[0].idle);
+        for (int i = 1; i < l.size(); ++i) {
+            assertNeq(l[i - 1].idle, l[i].idle);
+            assertGt(l[i - 1].seq, l[i].seq);
+        }
+        assertTrue(l.last().idle);
+        # no thread events are delivered
+        assertEq((), (map $1, l, $1.event != "ACTIVITY") ?? ());
+    }
+
+    #! ProgramControl::createEvalProgram() takes the copied Program's thread count: active, then idle
+    activityEvalCopy() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        pgm.parse("int sub twice(int i) { return i * 2; }", "debugged");
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertTrue(s.idle);
+        Program epgm = pgm.getProgram().createEvalProgram(PO_NEW_STYLE);
+        epgm.parse("int sub e() { return twice(2); }", "eval");
+        assertEq(4, epgm.callFunction("e"));
+        checkActivityAlternates(q);
+    }
+
+    #! the use of a reference to a lvalue of another Program enters that Program: active, then idle
+    activityReference() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse("our *int x = 1; our list<int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
+            "auto sub get_l() { return \\l; }", "referenced");
+        pgm.run();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertTrue(s.idle);
+        auto rx = pgm.callFunction("get_x");
+        auto rl = pgm.callFunction("get_l");
+        # a read, an assignment and removals through references held by local variables
+        assertEq(1, rx);
+        rx = 2;
+        assertEq(2, pgm.getGlobalVariable("x"));
+        # removing a local that holds the reference removes the referenced variable: the AST interpreter enters the
+        # Program without its context then (qore_program_private::enterWithoutContext()), so the removal runs in a
+        # Program with the AST execution mode, whatever the test's mode
+        Program caller(PO_NEW_STYLE);
+        caller.setExecMode(EM_AST);
+        caller.parse("auto sub rm(code get) { auto r = get(); return remove r; }", "caller");
+        assertEq(2, caller.callFunction("rm", pgm.getCallReference("get_x")));
+        assertEq(NOTHING, pgm.getGlobalVariable("x"));
+        assertEq(3, remove rl[2]);
+        # the removed element is left as NOTHING
+        assertEq(NOTHING, pgm.getGlobalVariable("l")[2]);
+        assertEq(2, pgm.getGlobalVariable("l")[1]);
+        checkActivityAlternates(q);
+    }
+
+    #! checks that the ACTIVITY events in the queue alternate, starting with active and ending with idle
+    private checkActivityAlternates(Queue q) {
+        list<hash<ProgramThreadEvent>> l;
+        while (q.size()) {
+            l += q.get();
+        }
+        assertGt(1, l.size());
+        assertFalse(l[0].idle);
+        for (int i = 1; i < l.size(); ++i) {
+            assertNeq(l[i - 1].idle, l[i].idle, sprintf("event %d", i));
+        }
+        assertTrue(l.last().idle);
+    }
+
+    activitySnapshots() {
+        # a subscription made while a transition is being published records the new state in its snapshot; the
+        # transition is still delivered to the other subscriptions, so their last state is the Program's
+        Program pgm = makeProgram("sub f() {}");
+        Queue q();
+        pgm.subscribeThreadEvents(q, <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        Counter done(1);
+        # the calls start once the first snapshot has been taken, so that snapshots are taken however the threads are
+        # scheduled (under valgrind, the calls could otherwise all be made before the first snapshot)
+        Counter first_snapshot(1);
+        background sub () {
+            on_exit done.dec();
+            first_snapshot.waitForZero();
+            for (int i = 0; i < 5000; ++i) {
+                pgm.callFunction("f");
+            }
+        }();
+        int snapshots = 0;
+        do {
+            Queue sq();
+            hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(sq,
+                <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+            pgm.unsubscribeThreadEvents(s.id);
+            if (!snapshots++) {
+                first_snapshot.dec();
+            }
+        } while (done.getCount());
+        assertGt(0, snapshots);
+        pgm.waitForThreads();
+        # the events received so far, then the ones still being published, until the Program's final state: a
+        # transition that a snapshot took from this subscription would never arrive
+        bool idle = False;
+        while (q.size()) {
+            idle = q.get().idle;
+        }
+        while (!idle) {
+            idle = next(q).idle;
+        }
+        assertTrue(idle);
+        # nothing follows the final state
+        assertEq(0, q.size());
+    }
+
+%ifdef QoreDebug
+    lateCancelPublication() {
+        # the canceller publishes after the thread has ended: the thread has published the request before its
+        # FINISHED event, and the canceller's publication adds nothing
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertTrue(call_function("dbg_cancel_thread_after_end", tid, "late"));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "CANCEL_REQUESTED", "FINISHED"), (map $1.event, l));
+        assertEq("late", l[1].cancel_reason);
+        assertEq("CANCELLED", l[2].outcome);
+        # the thread has ended (its TID was released), so nothing can follow
+        pgm.waitForThreads();
+        assertEq(0, q.size());
+    }
+
+    cancelClaimsReleased() {
+        # a thread cancelled many times keeps no claims of requests its canceller has published
+        Program pgm = makeProgram("int sub start_repeated(Queue requests, Queue cleared) { return background sub () "
+            "{ defer_thread_cancel(sub () { entered.dec(); while (requests.get()) { clear_thread_cancel(); cleared.push(1); } }); "
+            "}(); }", 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        Queue requests();
+        Queue cleared();
+        int tid = pgm.callFunction("start_repeated", requests, cleared);
+        # the thread must end also when an assertion fails, as the Program waits for it when it is destroyed
+        on_exit requests.push(0);
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        int thread_id = until(q, "STARTED", tid).last().thread_id;
+        const int Requests = 20;
+        for (int i = 1; i <= Requests; ++i) {
+            assertTrue(pgm.cancelThread(tid, "request " + i));
+            assertEq(0, call_function("dbg_get_lifecycle_cancel_claim_count", tid), "request " + i);
+            # nor does the hub keep the generations of the claims that only their canceller could publish
+            assertEq(0, call_function("dbg_get_program_thread_cancel_generation_count", pgm, thread_id),
+                "request " + i);
+            # the thread clears the request, so that the next one is a new request
+            requests.push(1);
+            assertEq(1, cleared.get(EventTimeout));
+        }
+        requests.push(0);
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(-1, call_function("dbg_get_program_thread_cancel_generation_count", pgm, thread_id));
+        list<hash<ProgramThreadEvent>> cancels = select(l, "CANCEL_REQUESTED");
+        assertEq(Requests, cancels.size());
+        assertEq((map "request " + $1, xrange(1, Requests + 1)), (map $1.cancel_reason, cancels));
+        assertEq("COMPLETED", l.last().outcome);
+    }
+
+    activityPublication() {
+        # a transition published after a subscription read the newer state still reaches the existing
+        # subscriptions; the race cannot be made to happen from Qore code, so the hub is tested directly
+        hash<auto> res = call_function("dbg_run_program_thread_hub_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed: %y", res.test_count,
+            res.failures));
+    }
+%endif
+
+    unsubscribe() {
+        Program pgm = makeProgram();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+        assertTrue(pgm.unsubscribeThreadEvents(s.id));
+        assertFalse(pgm.unsubscribeThreadEvents(s.id));
+        assertFalse(pgm.unsubscribeThreadEvents(-1));
+        pgm.callFunction("start_quick");
+        pgm.waitForThreads();
+        delete pgm;
+        assertEq(0, q.size());
+    }
+
+    multipleSubscriptions() {
+        Program pgm = makeProgram();
+        Queue q1();
+        Queue q2();
+        hash<ProgramThreadSubscription> s1 = pgm.subscribeThreadEvents(q1);
+        hash<ProgramThreadSubscription> s2 = pgm.subscribeThreadEvents(q2,
+            <ProgramThreadEventOptions>{"events": PTE_FINISHED});
+        assertNeq(s1.id, s2.id);
+        int tid = pgm.callFunction("start_quick");
+        hash<ProgramThreadEvent> e1 = finished(q1, tid);
+        hash<ProgramThreadEvent> e2 = next(q2);
+        assertEq(s1.id, e1.subscription_id);
+        assertEq(s2.id, e2.subscription_id);
+        # the same event, with the same sequence number
+        assertEq(e1.seq, e2.seq);
+        assertEq(e1 - "subscription_id", e2 - "subscription_id");
+    }
+
+    deletedQueue() {
+        # a queue deleted by its owner keeps receiving nothing visible; the subscription can still be removed
+        Program pgm = makeProgram();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+        delete q;
+        pgm.callFunction("start_quick");
+        pgm.waitForThreads();
+        assertTrue(pgm.unsubscribeThreadEvents(s.id));
+    }
+
+    programDestroyed() {
+        Program pgm = makeProgram();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+        delete pgm;
+        hash<ProgramThreadEvent> ev = next(q);
+        assertEq("CLOSED", ev.event);
+        assertEq(s.id, ev.subscription_id);
+        assertEq(s.program_id, ev.program_id);
+        assertEq(0, ev.running);
+        assertEq(0, q.size());
+    }
+
+    programDestroyedWithThreads() {
+        # a Program destroyed while a background thread runs is closed after the thread has finished
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        Counter gate = pgm.getGlobalVariable("gate");
+        entered.waitForZero();
+        Counter deleting(1);
+        Queue done();
+        background sub () {
+            deleting.dec();
+            delete pgm;
+            done.push(True);
+        }();
+        deleting.waitForZero();
+        gate.dec();
+        assertTrue(done.get(EventTimeout));
+        list<hash<ProgramThreadEvent>> l = until(q, "CLOSED");
+        assertEq(("STARTED", "FINISHED", "CLOSED"), (map $1.event, l));
+        assertEq(tid, l[1].tid);
+        assertEq("COMPLETED", l[1].outcome);
+        assertEq(0, q.size());
+    }
+
+    invalidArguments() {
+        Program pgm = makeProgram();
+        assertThrows("PROGRAM-THREAD-EVENT-ERROR", "maximum size", \pgm.subscribeThreadEvents(), new Queue(10));
+        assertThrows("PROGRAM-THREAD-EVENT-ERROR", "events", \pgm.subscribeThreadEvents(),
+            (new Queue(), <ProgramThreadEventOptions>{"events": 0}));
+        assertThrows("PROGRAM-THREAD-EVENT-ERROR", "events", \pgm.subscribeThreadEvents(),
+            (new Queue(), <ProgramThreadEventOptions>{"events": PTE_ALL + 1}));
+
+        # code cannot subscribe to its own Program
+        Program child(PO_NEW_STYLE);
+        child.parse("our *Program self; auto sub sub_self() { return self.subscribeThreadEvents(new Queue()); } "
+            "auto sub unsub_self() { return self.unsubscribeThreadEvents(1); }", "self");
+        child.setGlobalVarValue("self", child);
+        on_exit child.setGlobalVarValue("self", NOTHING);
+        assertThrows("PROGRAM-THREAD-EVENT-ERROR", "runs in", \child.callFunction(), "sub_self");
+        assertThrows("PROGRAM-THREAD-EVENT-ERROR", "runs in", \child.callFunction(), "unsub_self");
+    }
+
+    sandbox() {
+        # the methods need both the thread control and the embedded logic domains
+        foreach int po in (PO_NO_THREAD_CONTROL, PO_NO_EMBEDDED_LOGIC) {
+            Program child(PO_NEW_STYLE | po);
+            assertThrows("PARSE-EXCEPTION", \child.parse(), ("sub f(Program p) { p.subscribeThreadEvents(new "
+                "Queue()); }", "sandbox"));
+            child = new Program(PO_NEW_STYLE | po);
+            assertThrows("PARSE-EXCEPTION", \child.parse(), ("sub f(Program p) { p.unsubscribeThreadEvents(1); }",
+                "sandbox"));
+        }
+    }
+}

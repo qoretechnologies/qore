@@ -2086,7 +2086,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
     add("llvm-version", LLVM_VERSION_STRING);
     add("target-triple", target_triple && *target_triple
-        ? target_triple : llvm::sys::getDefaultTargetTriple());
+        ? target_triple : QoreAOT::getDefaultTargetTriple());
     add("opt-level", std::to_string(opt_level));
     add("include-source", include_source ? "true" : "false");
     add("debug-info", q_env_is_set("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
@@ -2143,7 +2143,7 @@ static bool qccAOTVerbose() {
 
 static std::string qccTargetTriple(const char* target_triple) {
     return target_triple && *target_triple
-        ? target_triple : llvm::sys::getDefaultTargetTriple();
+        ? target_triple : QoreAOT::getDefaultTargetTriple();
 }
 
 static int64_t qccFileSize(const std::string& path) {
@@ -2653,6 +2653,9 @@ static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWi
 */
 static bool aotFunctionBodyMayBeOutlined(const QoreIRFunction& func);
 
+// the IR of a closure as it is serialized (QoreAOTBinary.cpp)
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out);
+
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
         QoreIRFunction*& ir_func, std::string& error,
         const QoreFunction* source_qf = nullptr,
@@ -2675,6 +2678,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
+    // the parse-time type checks of the lowering are made in the class context of the code, as in
+    // UserVariantBase::lowerIRFunction() (qore#5750)
+    QoreIRClassContextHelper class_ctx(*ir_func);
     ir_func->return_type_info = qore_substitute_type_params_if_needed(
         uvb->getUserSignature()->getReturnTypeInfo(),
         specialization_receiver_type_info,
@@ -3710,10 +3716,12 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
         }
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             // IteratorCreateReverse carries its iterable in operands (above)
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             cb(static_cast<const QoreIRIteratorNextInstruction*>(inst)->iterator);
             break;
         default:
@@ -6089,7 +6097,7 @@ static bool qore_aot_fast_entry_args_need_no_binding(
                     receiver_type_info
                         ? QoreTypeInfo::getPath(receiver_type_info) : "<none>");
             }
-            if (!arg_ti || !QoreTypeInfo::isInputIdentical(param_ti, arg_ti)) {
+            if (!arg_ti || !QoreTypeInfo::acceptsInputUnchecked(param_ti, arg_ti)) {
                 return false;
             }
         }
@@ -6183,7 +6191,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
         if (!facts || !facts->type_info) {
             return false;
         }
-        if (QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+        if (QoreTypeInfo::acceptsInputUnchecked(param_ti, facts->type_info)) {
             if (allow_relaxed_binding
                     && QoreTypeInfo::parseAcceptsReturns(
                         param_ti, NT_NOTHING)) {
@@ -6203,7 +6211,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
                 || !QoreTypeInfo::parseAcceptsReturns(
                     param_ti, NT_NOTHING)
                 || !QoreTypeInfo::hasType(param_value_type)
-                || !QoreTypeInfo::isInputIdentical(
+                || !QoreTypeInfo::acceptsInputUnchecked(
                     param_value_type, operand_value_type)) {
             return false;
         }
@@ -6394,6 +6402,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::CmpFloat:
                 case QoreIROpcode::ToInt:
                 case QoreIROpcode::ToFloat:
+                case QoreIROpcode::ToIntChecked:
+                case QoreIROpcode::ToFloatChecked:
                 case QoreIROpcode::ToBool:
                 case QoreIROpcode::Not:
                 case QoreIROpcode::IsNullOrNothing:
@@ -6415,6 +6425,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     break;
                 case QoreIROpcode::ConstString:
                 case QoreIROpcode::ToString:
+                case QoreIROpcode::ToStringChecked:
                 case QoreIROpcode::AddAny:
                 case QoreIROpcode::AddString:
                 case QoreIROpcode::StringConcat:
@@ -10959,6 +10970,48 @@ static bool qore_aot_collect_int_expression_summaries(
         return mapped.empty() ? -1 : mapped.back();
     };
 
+    // a walk that reaches a return proves that the function returns a value of its return kind that is never
+    // NOTHING, so the fast entry returns it natively whether or not the summary can be emitted; the summary is
+    // stored only if it can be: a comparison or a string predicate is an i1 that only a Select condition takes
+    // (the summary has no bool -> int conversion), so one used as an operand or a Select value leaves the
+    // function to be called (ex: "(a == b) * 3 + a"); returns true if the summary was stored
+    auto store_summary = [&](BatchCalleeInfo& info, AOTIntExpressionInfo& expression,
+            BatchCalleeReturnKind return_kind) -> bool {
+        info.never_returns_nothing = true;
+        info.return_kind = return_kind;
+        info.approach_b_eligible = true;
+        std::vector<bool> node_is_bool;
+        node_is_bool.reserve(expression.nodes.size());
+        for (const auto& node : expression.nodes) {
+            auto is_bool = [&](uint8_t index) {
+                assert(index < node_is_bool.size());
+                return node_is_bool[index];
+            };
+            bool well_typed = true;
+            if (node.kind == AOTIntExpressionNodeKind::Select) {
+                well_typed = is_bool(node.lhs) && !is_bool(node.rhs) && !is_bool(node.third);
+            } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
+                well_typed = !is_bool(node.lhs);
+            } else if (node.kind == AOTIntExpressionNodeKind::StringFind
+                    || node.kind == AOTIntExpressionNodeKind::StringRFind) {
+                well_typed = node.rhs == UINT8_MAX || !is_bool(node.rhs);
+            } else if (node.kind != AOTIntExpressionNodeKind::Param
+                    && node.kind != AOTIntExpressionNodeKind::Constant
+                    && node.kind != AOTIntExpressionNodeKind::ListSize
+                    && node.kind != AOTIntExpressionNodeKind::StringSize
+                    && node.kind != AOTIntExpressionNodeKind::StringLength
+                    && !is_hash_projection(node.kind) && !is_string_operation(node.kind)) {
+                well_typed = !is_bool(node.lhs) && !is_bool(node.rhs);
+            }
+            if (!well_typed) {
+                return false;
+            }
+            node_is_bool.push_back(is_bool_node(node.kind));
+        }
+        info.int_expression = std::move(expression);
+        return true;
+    };
+
     enum class BoxedSourceParamKind : uint8_t {
         None,
         List,
@@ -11627,12 +11680,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
-                callee->second.int_expression = std::move(expression);
-                callee->second.never_returns_nothing = true;
-                callee->second.return_kind = proven_return_kind;
-                callee->second.approach_b_eligible = true;
-                state = VisitState::Success;
-                return true;
+                bool stored = store_summary(callee->second, expression, proven_return_kind);
+                state = stored ? VisitState::Success : VisitState::Failed;
+                return stored;
             }
             if (func->blocks.size() == 4) {
                 auto get_arm_values = [&](const QoreIRBasicBlock* block,
@@ -11777,12 +11827,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
-                callee->second.int_expression = std::move(expression);
-                callee->second.never_returns_nothing = true;
-                callee->second.return_kind = proven_return_kind;
-                callee->second.approach_b_eligible = true;
-                state = VisitState::Success;
-                return true;
+                bool stored = store_summary(callee->second, expression, proven_return_kind);
+                state = stored ? VisitState::Success : VisitState::Failed;
+                return stored;
             }
             auto get_return = [&](const QoreIRBasicBlock* block) -> int {
                 std::unordered_map<uint32_t, int> block_values = values;
@@ -11821,12 +11868,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 state = VisitState::Failed;
                 return false;
             }
-            callee->second.int_expression = std::move(expression);
-            callee->second.never_returns_nothing = true;
-            callee->second.return_kind = proven_return_kind;
-            callee->second.approach_b_eligible = true;
-            state = VisitState::Success;
-            return true;
+            bool stored = store_summary(callee->second, expression, proven_return_kind);
+            state = stored ? VisitState::Success : VisitState::Failed;
+            return stored;
         }
 
         const QoreIRReturnInstruction* ret = nullptr;
@@ -11862,12 +11906,9 @@ static bool qore_aot_collect_int_expression_summaries(
             state = VisitState::Failed;
             return false;
         }
-        callee->second.int_expression = std::move(expression);
-        callee->second.never_returns_nothing = true;
-        callee->second.return_kind = proven_return_kind;
-        callee->second.approach_b_eligible = true;
-        state = VisitState::Success;
-        return true;
+        bool stored = store_summary(callee->second, expression, proven_return_kind);
+        state = stored ? VisitState::Success : VisitState::Failed;
+        return stored;
     };
 
     for (const auto& [variant, func] : functions) {
@@ -12395,10 +12436,45 @@ static bool qore_aot_collect_float_expression_summaries(
             state = VisitState::Failed;
             return false;
         }
-        callee->second.float_expression = std::move(expression);
+        // the walk proves that the function returns a float that is never NOTHING, so the fast entry returns it
+        // natively whether or not the summary can be emitted; the summary is stored only if it can be: a BoolParam
+        // node is an i1 that only a Select condition takes (the summary has no bool -> float conversion), so a
+        // bool parameter as an operand, a Select value or the result (a function that returns its bool parameter
+        // as a float converts it: True -> 1.0) leaves the function to be called
         callee->second.never_returns_nothing = true;
         callee->second.return_kind = proven_return_kind;
         callee->second.approach_b_eligible = true;
+        auto is_bool_param = [&](size_t index) {
+            assert(index < expression.nodes.size());
+            return expression.nodes[index].kind == AOTFloatExpressionNodeKind::BoolParam;
+        };
+        bool well_typed = !is_bool_param(expression.nodes.size() - 1);
+        for (size_t i = 0; well_typed && i < expression.nodes.size(); ++i) {
+            const auto& node = expression.nodes[i];
+            switch (node.kind) {
+                case AOTFloatExpressionNodeKind::Select:
+                    assert(node.param >= 0);
+                    well_typed = is_bool_param(node.lhs) && !is_bool_param(node.rhs)
+                        && !is_bool_param(static_cast<size_t>(node.param));
+                    break;
+                case AOTFloatExpressionNodeKind::Neg:
+                    well_typed = !is_bool_param(node.lhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Add:
+                case AOTFloatExpressionNodeKind::Sub:
+                case AOTFloatExpressionNodeKind::Mul:
+                case AOTFloatExpressionNodeKind::Div:
+                    well_typed = !is_bool_param(node.lhs) && !is_bool_param(node.rhs);
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (!well_typed) {
+            state = VisitState::Failed;
+            return false;
+        }
+        callee->second.float_expression = std::move(expression);
         state = VisitState::Success;
         return true;
     };
@@ -17993,6 +18069,42 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         }
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
+#ifdef DEBUG
+        // the runtime binds this body's slots to the variables of the serialized IR by index: both must have the same
+        // variable in each slot, or a local of one is bound to another variable (a reservation made in only one of the
+        // two lowerings reorders the table); the parameters of background helpers are created by each lowering, so
+        // they are the same when they have the same name
+        {
+            std::string closure_error;
+            std::unique_ptr<QoreIRFunction> serialized_ir(::lowerClosureForSerialization(variant, &closure_error));
+            if (serialized_ir) {
+                const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
+                if (qoreAOTPrepareClosureIRLocalSlots(serialized_ir.get(), sig, vlist)) {
+                    qoreAOTPruneClosureIRBodyLocals(serialized_ir.get(), sig, vlist);
+                    auto by_slot = [](const QoreIRFunction& f) {
+                        std::map<uint32_t, const LocalVar*> rv;
+                        for (const auto& [lv, slot_id] : f.local_var_slots) {
+                            rv.emplace(slot_id, lv);
+                        }
+                        return rv;
+                    };
+                    std::map<uint32_t, const LocalVar*> native_slots = by_slot(*ir_func);
+                    std::map<uint32_t, const LocalVar*> serialized_slots = by_slot(*serialized_ir);
+                    assert(native_slots.size() == serialized_slots.size()
+                        && "the native closure body and its serialized IR have different local slot tables");
+                    for (const auto& [slot_id, lv] : native_slots) {
+                        auto i = serialized_slots.find(slot_id);
+                        assert(i != serialized_slots.end()
+                            && (i->second == lv
+                                || (lv && i->second && lv->getName() && lv->getName()[0] == '%'
+                                    && !strcmp(lv->getName(), i->second->getName())))
+                            && "the native closure body and its serialized IR have different local slot tables");
+                        (void)i;
+                    }
+                }
+            }
+        }
+#endif
         if (sig) {
             for (unsigned p = 0; p < sig->numParams(); ++p) {
                 if (p && !(p % 100)
@@ -22851,7 +22963,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     if (target_triple) {
         triple = target_triple;
     } else {
-        triple = llvm::sys::getDefaultTargetTriple();
+        triple = QoreAOT::getDefaultTargetTriple();
     }
 #if LLVM_VERSION_MAJOR >= 21
     module.setTargetTriple(llvm::Triple(triple));
@@ -23152,21 +23264,55 @@ struct AOTLinkConfig {
     2. QORE_LIBDIR env var + "/aot-link.conf" (development builds)
     3. Compiled-in QORE_LIBDIR + "/qore/aot-link.conf" (installed builds)
 */
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+//! Return the macOS version this file - and therefore libqore - is being compiled for (e.g. \c "26.6" or \c "10.15.4")
+static std::string qore_aot_libqore_macos_version() {
+    // as MMmmpp (e.g. 260600, 101504)
+    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
+    std::string rv = std::to_string(version / 10000) + "." + std::to_string((version / 100) % 100);
+    if (version % 100) {
+        rv += "." + std::to_string(version % 100);
+    }
+    return rv;
+}
+#endif
+
 std::string QoreAOT::getLinkTargetFlags() {
 #if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
     if (q_env_is_set("MACOSX_DEPLOYMENT_TARGET")) {
         return std::string();
     }
-    // the version this file - and therefore libqore - is being compiled for, as MMmmpp (e.g. 260600, 101500)
-    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
-    std::string rv = "-mmacosx-version-min=" + std::to_string(version / 10000) + "."
-        + std::to_string((version / 100) % 100);
-    if (version % 100) {
-        rv += "." + std::to_string(version % 100);
-    }
-    return rv;
+    return "-mmacosx-version-min=" + qore_aot_libqore_macos_version();
 #else
     return std::string();
+#endif
+}
+
+std::string QoreAOT::getDefaultTargetTriple() {
+    std::string triple = llvm::sys::getDefaultTargetTriple();
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+    llvm::Triple parsed(triple);
+    if (!parsed.isMacOSX()) {
+        return triple;
+    }
+    // the same version the link targets: an explicit MACOSX_DEPLOYMENT_TARGET, else libqore's own version; the
+    // host triple names a Darwin kernel version instead, which LLVM maps to a macOS version that can be newer
+    std::string version;
+    QoreEnvironmentValue deployment_target("MACOSX_DEPLOYMENT_TARGET");
+    if (deployment_target && !deployment_target.str().empty()) {
+        llvm::VersionTuple requested;
+        // tryParse() returns true on error; an invalid value is left to the compiler driver to report at link time
+        if (!requested.tryParse(deployment_target.str())) {
+            version = requested.getAsString();
+        }
+    }
+    if (version.empty()) {
+        version = qore_aot_libqore_macos_version();
+    }
+    parsed.setOSName("macosx" + version);
+    return parsed.str();
+#else
+    return triple;
 #endif
 }
 
@@ -23701,6 +23847,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
         QoreIRLowering lowering(builder, &parse_context, &const_reverse_map);
         std::string lower_error;
         bool toplevel_ok = false;
+        // the phase that failed and why, when the top-level code could not be lowered: an executable without its
+        // top-level code does nothing, so the failure fails the build, as that of a function does
+        const char* toplevel_failed_phase = nullptr;
+        std::string toplevel_failed_reason;
         if (lowering.lowerStatementBlock(&sb, lower_error)) {
             // Ensure terminator for the current block (where the builder is pointing)
             // After lowering control flow constructs like try-catch, the builder may be pointing
@@ -23780,6 +23930,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                             llvm_error.c_str());
                     }
                     printd(2, "AOT: LLVM lowering failed for _toplevel: %s\n", llvm_error.c_str());
+                    toplevel_failed_phase = "LLVM lowering";
+                    toplevel_failed_reason = llvm_error;
                 }
             } else {
                 if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -23787,16 +23939,27 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         verify_error.c_str());
                 }
                 printd(2, "AOT: _toplevel verification failed: %s\n", verify_error.c_str());
+                toplevel_failed_phase = "IR verification";
+                toplevel_failed_reason = verify_error;
             }
         } else {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
             }
             printd(2, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
+            toplevel_failed_phase = "IR lowering";
+            toplevel_failed_reason = lower_error;
         }
         delete ir_func;
         if (!toplevel_ok) {
             ++failed_count;
+            // the executable of a program without its top-level code runs nothing and exits successfully: qcc
+            // fails the build, as it does when a function fails to lower (qore#5738)
+            std::string fatal_error;
+            setAOTCompileFatal(&fatal_error, "top-level code", "_toplevel",
+                toplevel_failed_phase ? toplevel_failed_phase : "lowering", toplevel_failed_reason);
+            error = fatal_error;
+            return false;
         }
     }
 
@@ -25542,7 +25705,7 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
 //! Adds the section holding an encoded AOT module metadata record; see addAOTModuleInfoSection()
 static bool addAOTModuleInfoSectionRecord(llvm::LLVMContext& ctx, llvm::Module& module, std::vector<uint8_t> record,
         const char* target_triple, std::string& error) {
-    llvm::Triple triple(target_triple ? std::string(target_triple) : llvm::sys::getDefaultTargetTriple());
+    llvm::Triple triple(target_triple ? std::string(target_triple) : QoreAOT::getDefaultTargetTriple());
     std::vector<uint8_t> contents;
     const char* section;
     if (triple.isOSBinFormatMachO()) {
@@ -36483,7 +36646,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
 void QoreAOT::printSupportedTargets() {
     qore_llvm_initialize_targets();
 
-    std::string default_triple = llvm::sys::getDefaultTargetTriple();
+    std::string default_triple = QoreAOT::getDefaultTargetTriple();
     printf("Default target: %s\n\n", default_triple.c_str());
     printf("Target triple format: <arch>-<vendor>-<os>[-<environment>]\n\n");
 

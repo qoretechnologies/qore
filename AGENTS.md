@@ -66,6 +66,9 @@
   anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
   child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
   a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+  A test that does not use the harness declares `# test-exec-mode: children - <why>` when its checks run in child
+  processes of its own binary (`QORE_ARGV[0]`) started without an execution mode, which run in the default mode in
+  every job (ex: `qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest`).
 - The Linux CI jobs run every test; the macOS job runs only the tests that declare `# test-platform: macos - <why>` (on
   a line of its own after the `#!` and mode lines; `QORE_TEST_PLATFORM_SUBSET=macos ./run_tests.sh` runs the same
   selection).  Declare it on a test whose checks depend on the platform: the OS-facing C++ code (files, pipes, FIFOs,

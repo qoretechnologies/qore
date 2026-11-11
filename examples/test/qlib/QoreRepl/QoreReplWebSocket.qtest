@@ -35,6 +35,7 @@
 %requires HttpServer
 %requires WebSocketClient
 %requires QoreRepl
+%requires AsyncApi
 
 %exec-class QoreReplWebSocketTest
 
@@ -70,6 +71,9 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         addTestCase("Ping/Pong", \testPingPong());
         addTestCase("Authentication callback", \testAuthCallback());
         addTestCase("Max connections", \testMaxConnections());
+        addTestCase("Thread messages", \testThreadMessages());
+        addTestCase("Activity subscription", \testActivity());
+        addTestCase("AsyncAPI schema", \testAsyncApiSchema());
 
         # Setup logger
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
@@ -453,5 +457,101 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         client3.connect();
         assertTrue(client3.isOpen(), "Connection after disconnect should succeed");
         client3.disconnect();
+    }
+
+    #! connects a client and consumes the session and prompt messages; returns the client
+    private WebSocketClient connectClient(Queue msgs) {
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+        wsc.connect();
+        assertEq("session", parse_json(msgs.get(5s)).type);
+        assertEq("prompt", parse_json(msgs.get(5s)).type);
+        return wsc;
+    }
+
+    #! returns the messages up to the first with the given type for which the predicate is true, and that one
+    private list<hash<auto>> until(Queue msgs, string type, *code<bool(hash<auto>)> predicate) {
+        list<hash<auto>> rv();
+        while (True) {
+            hash<auto> msg = parse_json(msgs.get(60s));
+            rv += msg;
+            if (msg.type == type && (!predicate || predicate(msg))) {
+                return rv;
+            }
+        }
+    }
+
+    testThreadMessages() {
+        checkModule();
+        Queue msgs();
+        WebSocketClient wsc = connectClient(msgs);
+        on_exit wsc.disconnect();
+
+        wsc.send(make_json({"type": "eval", "id": "t1", "code": "background sub () { throw \"WS-ERROR\", "
+            "\"ws error\"; }();"}));
+        list<hash<auto>> l = until(msgs, "thread", bool sub (hash<auto> msg) { return msg.event == "finished"; });
+        list<hash<auto>> threads = (map $1, l, $1.type == "thread");
+        assertEq(("started", "finished"), (map $1.event, threads));
+        hash<auto> start = threads[0];
+        hash<auto> end = threads[1];
+        assertEq(start.tid, end.tid);
+        assertEq(start.threadId, end.threadId);
+        assertEq(1, start.running);
+        assertEq("qore/" + start.tid, start.name);
+        assertEq(("Thread " + start.tid + " started",), start.notices);
+        assertEq(0, end.running);
+        assertEq("EXCEPTION", end.outcome);
+        assertEq("WS-ERROR", end.error.err);
+        assertEq("ws error", end.error.desc);
+        assertTrue(end.durationMs >= 0);
+        assertRegex("^Thread " + end.tid + " failed: WS-ERROR: ws error", end.notices[0]);
+        # activity messages are not sent without a subscription
+        assertEq((), (map $1, l, $1.type == "activity") ?? ());
+    }
+
+    testActivity() {
+        checkModule();
+        Queue msgs();
+        WebSocketClient wsc = connectClient(msgs);
+        on_exit wsc.disconnect();
+
+        wsc.send(make_json({"type": "subscribe", "id": "s1", "activity": "yes"}));
+        hash<auto> err = until(msgs, "error").last();
+        assertEq("s1", err.id);
+        assertEq("INVALID-PARAMETER", err.error);
+
+        wsc.send(make_json({"type": "subscribe", "id": "s2", "activity": True}));
+        hash<auto> subscribed = until(msgs, "subscribed").last();
+        assertEq("s2", subscribed.id);
+        assertTrue(subscribed.activity);
+
+        wsc.send(make_json({"type": "eval", "id": "e1", "code": "1 + 1"}));
+        # the evaluation makes the Program active and idle again
+        list<hash<auto>> l = until(msgs, "activity", bool sub (hash<auto> msg) { return msg.idle; });
+        list<hash<auto>> activity = (map $1, l, $1.type == "activity");
+        assertFalse(activity[0].idle);
+        assertEq(0, activity[0].running);
+        assertTrue(activity.last().idle);
+
+        wsc.send(make_json({"type": "subscribe", "id": "s3", "activity": False}));
+        subscribed = until(msgs, "subscribed").last();
+        assertFalse(subscribed.activity);
+    }
+
+    testAsyncApiSchema() {
+        # the schema describes the messages of the protocol, including the asynchronous ones
+        AsyncApi3Schema schema = AsyncApi3Loader::fromFile(get_script_dir() + "/../../../../qlib/QoreRepl/"
+            "QoreReplApi.asyncapi.yaml");
+        hash<auto> messages = schema.channels.repl.messages;
+        foreach string name in (("subscribeRequest", "subscribedResponse", "threadEvent", "activityEvent",
+                "programReplacedEvent")) {
+            assertTrue(exists messages{name}, name);
+        }
+        foreach string op in (("sendSubscribe", "receiveSubscribed", "receiveThread", "receiveActivity",
+                "receiveProgramReplaced")) {
+            assertTrue(exists schema.operations{op}, op);
+        }
     }
 }

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -115,6 +116,16 @@ const char* StaticClassVarRefNode::getTypeName() const {
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue StaticClassVarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
+    QoreValue v = evalCallArg(xsink);
+    // the read gives the code a reference of its own: the value is a temporary of the statement, which holds it until
+    // it ends, as the other execution modes keep the result of LoadStaticVar (see VarRefNode::evalImpl())
+    if (!*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue StaticClassVarRefNode::evalCallArg(ExceptionSink* xsink) const {
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(vi.getReferencedValue(str.c_str(), xsink), xsink);
     // the value here must always require a dereference
@@ -133,7 +144,82 @@ int StaticClassVarRefNode::getLValue(LValueHelper& lvh) const {
     return vi.getLValue(lvh, str.c_str());
 }
 
+void QoreVarInfo::setTrustedModule(qore_program_id_t pgm_id, const char* module_name, const std::string& class_path,
+        const char* var_name) {
+    if (trusted_module.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::unique_ptr<TrustedModuleStatic> tm(new TrustedModuleStatic{pgm_id, module_name ? module_name : "",
+        class_path + "::" + var_name});
+    TrustedModuleStatic* expected = nullptr;
+    // the first record wins: a class imported into the Program of another module was recorded when its own module
+    // was merged into that Program
+    if (trusted_module.compare_exchange_strong(expected, tm.get(), std::memory_order_acq_rel)) {
+        tm.release();
+    }
+}
+
+bool QoreVarInfo::trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const {
+    // decided on the Program that the writing code runs in: a method of the module's class runs in the module's
+    // Program and may always write; a function of the module currently runs in the Program that calls it, with its
+    // restrictions (until module functions run in the module's Program as methods do)
+    return trustedModuleWriteRestrictedFor(tm, getProgram());
+}
+
+bool QoreVarInfo::trustedModuleWriteRestrictedFor(const TrustedModuleStatic& tm, const QoreProgram* writer) {
+    // the module's own code may always write
+    if (writer && writer->getProgramId() == tm.pgm_id) {
+        return false;
+    }
+    return qore_module_state_write_restricted(writer);
+}
+
+int QoreVarInfo::checkTrustedModuleWriter(const QoreProgram* writer, ExceptionSink* xsink) const {
+    TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+    if (!tm || !trustedModuleWriteRestrictedFor(*tm, writer)) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(xsink, "static member", tm->path.c_str(), tm->module_name.c_str());
+    return -1;
+}
+
+int QoreVarInfo::checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const {
+    switch (lvh.getReadAccess()) {
+        case LValueHelper::RA_VAR:
+            // a reference that only reads the variable needs no write access (see LValueHelper::ReadAccess)
+            if (lvh.tracksWriteProtection() && trustedModuleWriteRestricted(tm)) {
+                lvh.setWriteProtected();
+            }
+            return 0;
+        case LValueHelper::RA_ELEMENT:
+            if (trustedModuleWriteRestricted(tm)) {
+                lvh.setReadOnlyResolution();
+            }
+            return 0;
+        case LValueHelper::RA_NONE:
+            break;
+    }
+    if (!trustedModuleWriteRestricted(tm)) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(lvh.vl.xsink, "static member", tm.path.c_str(), tm.module_name.c_str());
+    return -1;
+}
+
+int QoreVarInfo::checkTrustedModuleRemove(ExceptionSink* xsink) const {
+    TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+    if (!tm || !trustedModuleWriteRestricted(*tm)) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(xsink, "static member", tm->path.c_str(), tm->module_name.c_str());
+    return -1;
+}
+
 void QoreVarInfo::remove(LValueRemoveHelper& lvrh) {
+    // a static variable of a class of a trusted module is shared by every Program that imports it (qore#5664)
+    if (checkTrustedModuleRemove(lvrh.getExceptionSink())) {
+        return;
+    }
     if (get_cb) {
         ExceptionSink* xsink = lvrh.getExceptionSink();
         if (checkFinalized(xsink)) {
@@ -191,6 +277,28 @@ const char* DeferredStaticClassMemberRefNode::getTypeName() const {
 }
 
 QoreValue DeferredStaticClassMemberRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref);
+    QoreValue v = evalValue(needs_deref, xsink);
+    // a read with a reference of its own is held by the statement, as for StaticClassVarRefNode
+    if (needs_deref && !*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue DeferredStaticClassMemberRefNode::evalCallArg(ExceptionSink* xsink) const {
+    bool needs_deref = true;
+    QoreValue v = evalValue(needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    return needs_deref ? v : v.refSelf();
+}
+
+QoreValue DeferredStaticClassMemberRefNode::evalValue(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     std::string full_path = qore_deferred_static_member_path(class_path, member_name);
 

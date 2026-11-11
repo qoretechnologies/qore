@@ -106,6 +106,20 @@ public:
     */
     QoreIRInstruction* createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
         const QoreProgramLocation* loc = nullptr, QoreIRValue limit = QoreIRValue());
+    //! Raises RANGE-ERROR if the bound \a which of a range is NOTHING; see QoreIROpcode::CheckRangeBound
+    QoreIRInstruction* createCheckRangeBound(QoreIRValue bound, QoreIRRangeBound which,
+        const QoreProgramLocation* loc = nullptr);
+    //! Applies selectors of a list of selectors with ranges; see QoreIROpcode::ListSelectorStep
+    /** @param result the result of the Begin step; ignored with QoreIRListSelectorFlag::Begin
+        @param seq the sequence
+        @param flags the QoreIRListSelectorFlag flags
+        @param selectors the indexes and the starts and ends of ranges; can be empty only with
+        QoreIRListSelectorFlag::Begin
+
+        @return the instruction, which has a result only with QoreIRListSelectorFlag::Begin
+    */
+    QoreIRInstruction* createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
+        const std::vector<QoreIRValue>& selectors, const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list
         @param element_type the element type of the list created by the AST interpreter; ignored when \a source is
@@ -417,6 +431,31 @@ public:
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorCreateInstruction* createIteratorCreateIterate(QoreIRValue iterable,
         const QoreProgramLocation* loc = nullptr);
+    //! Creates the iterator of a list of selectors with ranges; see QoreIROpcode::IteratorCreateSelectors
+    /** @param seq the sequence
+        @param flags the QoreIRListSelectorFlag flags (StringIndexChar)
+    */
+    QoreIRIteratorCreateInstruction* createIteratorCreateSelectors(QoreIRValue seq, int64_t flags, int64_t count,
+        const QoreProgramLocation* loc = nullptr);
+    //! Returns the selector that the iterator of a list of selectors needs next; see
+    //! QoreIROpcode::SelectorIteratorPending
+    QoreIRInstruction* createSelectorIteratorPending(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
+    //! Gives the next value of the iterator of a list of selectors, or branches to \a none_target; see
+    //! QoreIROpcode::IteratorNextSelectors
+    QoreIRIteratorNextInstruction* createIteratorNextSelectors(QoreIRValue iterator, QoreIRBasicBlock* none_target,
+        QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
+    //! Gives the iterator of a list of selectors the value of its next selector; see
+    //! QoreIROpcode::SelectorIteratorFeed
+    /** @param iterator the iterator handle
+        @param flags the QoreIRListSelectorFlag flags (Range)
+        @param selector the index or the start and the end of a range
+    */
+    QoreIRInstruction* createSelectorIteratorFeed(QoreIRValue iterator, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc = nullptr);
+    //! Sets the exceptions raised aside; see QoreIROpcode::ExceptionSuspend
+    QoreIRInstruction* createExceptionSuspend(const QoreProgramLocation* loc = nullptr);
+    //! Raises again the exceptions set aside by ExceptionSuspend; see QoreIROpcode::ExceptionResume
+    QoreIRInstruction* createExceptionResume(QoreIRValue handle, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createTypedForeachNext(QoreIRValue list, QoreIRValue index,

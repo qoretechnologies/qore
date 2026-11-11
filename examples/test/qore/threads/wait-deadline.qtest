@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - timed lock, queue and counter waits woken by cancellation wakeups that deliver nothing
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A timed wait of Counter, Queue, Mutex, RWLock and Gate that is woken without what it waits for (here: by the
+# program interrupt of an unrelated SandboxManager, which wakes every cancellable wait) waits again only for the rest
+# of its timeout: the timeout is not restarted (issue #5634).
+#
+# The waits are woken over and over, each time once the waiter is blocked again (dbg_wait_for_cancellable_wait()),
+# for as long as they last: a wait whose timeout is restarted at each wakeup never ends, so it is reported as a
+# failure after Limit.  No case sleeps.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class WaitDeadlineTest
+
+class WaitDeadlineTest inherits QUnit::Test {
+    public {
+        #! the timeout of the waits
+        const Timeout = 400ms;
+
+        #! a wait that lasts longer than this did not end at its timeout
+        const Limit = 20s;
+    }
+
+    constructor() : QUnit::Test("WaitDeadlineTest", "1.0", \ARGV) {
+        addTestCase("Counter::waitForZero()", \waitTest(), "counter");
+        addTestCase("Queue::get()", \waitTest(), "queue");
+        addTestCase("Queue::push() on a full queue", \waitTest(), "queue-push");
+        addTestCase("Mutex::lock()", \waitTest(), "mutex");
+        addTestCase("RWLock::writeLock()", \waitTest(), "write-lock");
+        addTestCase("RWLock::readLock()", \waitTest(), "read-lock");
+        addTestCase("Gate::enter()", \waitTest(), "gate");
+
+        set_return_value(main());
+    }
+
+    waitTest(string kind) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library");
+        }
+        # held by another thread for the lock waits
+        Mutex m();
+        RWLock rw();
+        Gate g();
+        Counter held(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        int holder = background sub () {
+            switch (kind) {
+                case "mutex": m.lock(); break;
+                case "write-lock": rw.readLock(); break;
+                case "read-lock": rw.writeLock(); break;
+                case "gate": g.enter(); break;
+            }
+            held.dec();
+            release.waitForZero();
+            switch (kind) {
+                case "mutex": m.unlock(); break;
+                case "write-lock": rw.readUnlock(); break;
+                case "read-lock": rw.writeUnlock(); break;
+                case "gate": g.exit(); break;
+            }
+        }();
+        held.waitForZero();
+
+        Queue result();
+        int tid = background sub () {
+            date start = now_us();
+            auto rv;
+            try {
+                switch (kind) {
+                    case "counter": {
+                        Counter c(1);
+                        rv = c.waitForZero(Timeout);
+                        break;
+                    }
+                    case "queue": {
+                        Queue q();
+                        rv = q.get(Timeout);
+                        break;
+                    }
+                    case "queue-push": {
+                        Queue q(1);
+                        q.push(1);
+                        q.push(2, Timeout);
+                        break;
+                    }
+                    case "mutex": rv = m.lock(Timeout); break;
+                    case "write-lock": rv = rw.writeLock(Timeout); break;
+                    case "read-lock": rv = rw.readLock(Timeout); break;
+                    case "gate": rv = g.enter(Timeout); break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            result.push({"rv": rv, "ms": (now_us() - start).durationMilliseconds()});
+        }();
+
+        # wakes the wait again each time it is blocked again, until it ends
+        SandboxManager unrelated();
+        date start = now_us();
+        int wakes = 0;
+        while (!result.size() && (now_us() - start) < Limit) {
+            if (!call_function("dbg_wait_for_cancellable_wait", tid, 100)) {
+                continue;
+            }
+            unrelated.requestInterrupt();
+            unrelated.clearInterrupt();
+            ++wakes;
+        }
+        hash<auto> h = result.get(Limit);
+        thread_join(tid);
+        release.dec();
+        thread_join(holder);
+
+        assertGt(0, wakes, "the wait was woken");
+        assertLt(Limit.durationMilliseconds(), h.ms, sprintf("the wait ended at its timeout: %y", h));
+        switch (kind) {
+            case "queue":
+            case "queue-push":
+                assertEq("QUEUE-TIMEOUT", h.rv);
+                break;
+            default:
+                assertTrue(h.rv != 0, sprintf("the wait timed out: %y", h));
+        }
+    }
+}

@@ -42,6 +42,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <vector>
 
 #define TRACK_REFS 0
@@ -620,6 +621,62 @@ static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferen
     return new CallReferenceCallNode(n->loc, exp.release(), args);
 }
 
+//! Copies a parse list of arguments with the values of the local variables of the starting code; nullptr if none
+static QoreParseListNode* crlr_parse_args_copy(RuntimeConfig& rc, const QoreParseListNode* args,
+        ExceptionSink* xsink) {
+    return args ? crlr_list_copy(rc, args, xsink) : nullptr;
+}
+
+//! Copies a new expression (a NT_SCOPE_REF node); the new thread constructs the value with the arguments copied
+/** The arguments are taken when the thread starts, as those of a call are; a node of a type that takes none is
+    returned as it is
+*/
+static QoreValue crlr_new_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = n.getInternalNode();
+    if (auto* soc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        QoreListNode* args = const_cast<QoreListNode*>(soc->getArgs());
+        if (args) {
+            ReferenceHolder<QoreListNode> args_holder(crlr_list_copy(rc, args, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            args = args_holder.release();
+        }
+        return new ScopedObjectCallNode(*soc, args);
+    }
+    if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nhd->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewHashDeclNode(*nhd, args.release()));
+    }
+    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nch->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexHashNode(*nch, args.release()));
+    }
+    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncl->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexListNode(*ncl, args.release()));
+    }
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncb->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexBufferNode(*ncb, args.release()));
+    }
+    return n.refSelf();
+}
+
+//! Copies a reference to a method of an object given by an expression: the expression is taken when the thread starts
+/** A reference to a method of \c self is returned as it is: it is evaluated in the new thread, which has no object
+    context, as in every execution mode (OBJECT-ERROR, whose message says to take the reference before the
+    background operator)
+*/
+static QoreValue crlr_objmethref_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(n.getInternalNode());
+    if (!omr) {
+        return n.refSelf();
+    }
+    ValueHolder exp(copy_value_and_resolve_lvar_refs(rc, omr->getExp(), xsink), xsink);
+    return *xsink ? QoreValue() : QoreValue(new ParseObjectMethodReferenceNode(*omr, exp.release()));
+}
+
 // Non-RuntimeConfig versions - delegate to RuntimeConfig versions
 static QoreListNode* crlr_list_copy(const QoreListNode* n, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -771,6 +828,12 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
         case NT_METHOD_CALL:
             return crlr_mcall_copy(rc, n.get<const MethodCallNode>(), xsink);
 
+        case NT_SCOPE_REF:
+            return crlr_new_copy(rc, n, xsink);
+
+        case NT_OBJMETHREF:
+            return crlr_objmethref_copy(rc, n, xsink);
+
         case NT_STATIC_METHOD_CALL:
             return crlr_smcall_copy(rc, n.get<const StaticMethodCallNode>(), xsink);
 
@@ -827,14 +890,21 @@ struct DeferredRelease {
 };
 
 //! The nested releases of a thread
+/** It has no destructor: a thread's thread-local objects are destroyed before the releases that the end of the
+    thread or of the process still makes (at exit(), the destructors of static objects run after those of the main
+    thread's thread-local objects, and release the code of the Programs that they hold), which would then use a
+    destroyed state.  The list of deferred releases exists only while the outermost release makes them.
+*/
 struct ReleaseState {
     //! the number of releases in progress on the thread's stack
-    unsigned depth = 0;
-    //! the releases nested too deeply to make on the stack, made by the outermost release
-    std::vector<DeferredRelease> deferred;
+    unsigned depth;
+    //! the releases nested too deeply to make on the stack, made by the outermost release; nullptr when there are none
+    std::vector<DeferredRelease>* deferred;
 };
+static_assert(std::is_trivially_destructible<ReleaseState>::value, "the release state of a thread is used until "
+    "the thread's last release, after its thread-local objects have been destroyed");
 
-thread_local ReleaseState t_release;
+thread_local ReleaseState t_release = {0, nullptr};
 }
 
 //! Makes releases; a friend of AbstractQoreNode, whose destructor is protected
@@ -888,26 +958,40 @@ private:
 void release(const DeferredRelease& r, ExceptionSink* xsink) {
     ReleaseState& state = t_release;
     if (state.depth >= QORE_RELEASE_RECURSION_DEPTH) {
-        state.deferred.push_back(r);
+        if (!state.deferred) {
+            state.deferred = new std::vector<DeferredRelease>;
+        }
+        state.deferred->push_back(r);
         return;
     }
     {
         ReleaseDepthHelper rdh(state);
         QoreNodeReleaser::releaseNow(r, xsink);
     }
-    if (state.depth || state.deferred.empty()) {
+    if (state.depth || !state.deferred) {
         return;
     }
     // the outermost release makes the deferred releases; the depth counts one level, so that what each of them
     // releases in turn nests on the stack up to the same bound and defers the rest to this loop
     ReleaseDepthHelper rdh(state);
+    // the list is freed when the last deferred release has been made; if one throws, the rest stay for the next
+    // outermost release
+    struct DeferredListHelper {
+        ReleaseState& state;
+        ~DeferredListHelper() {
+            if (state.deferred->empty()) {
+                delete state.deferred;
+                state.deferred = nullptr;
+            }
+        }
+    } dlh{state};
     // a deferred release can have been requested with an exception sink by a nested release when the outermost
     // release has none, as a statement's has not: an exception it raises is then handled as an unhandled exception
     ExceptionSink local_xsink;
     ExceptionSink* drain_xsink = xsink ? xsink : &local_xsink;
-    while (!state.deferred.empty()) {
-        DeferredRelease next = state.deferred.back();
-        state.deferred.pop_back();
+    while (!state.deferred->empty()) {
+        DeferredRelease next = state.deferred->back();
+        state.deferred->pop_back();
         QoreNodeReleaser::releaseNow(next, drain_xsink);
     }
 }

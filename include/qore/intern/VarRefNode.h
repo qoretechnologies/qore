@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,15 @@ public:
     */
     DLLLOCAL bool parseEqualTo(const VarRefNode& other) const;
 
+    //! evaluates the variable as an argument of a call
+    /** A value that the read gives a reference of its own to is a temporary of the statement (see evalImpl()), but a
+        temporary given to a call as an argument is released when the call returns: the argument list takes the
+        read's reference over and the statement does not hold the value, as for any argument
+
+        @return the value read, referenced for the caller
+    */
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 
@@ -140,6 +149,18 @@ public:
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
     DLLLOCAL qore_var_t getType() const { return type; }
+
+    //! Returns true if the variable is a local variable that is definitely assigned at this point of the parse
+    /** The parse state of a local variable is flow-sensitive (see AssignedStateHelper): it is assigned on every path
+        to this read and not cleared by \c remove or \c delete since; a variable of a closure or the target of a
+        reference is not included, as the closure or the code given the reference can clear it where the parse does
+        not see it, and neither is a variable of a reference type (such as a \c reference<int> parameter), which is
+        assigned with the reference, while a read gives the referenced value, which can have no value
+    */
+    DLLLOCAL bool parseIsDefinitelyAssignedLocal() const {
+        return type == VT_LOCAL && ref.id && !ref.id->closureUse() && ref.id->isAssigned()
+            && !QoreTypeInfo::getReferenceTarget(ref.id->getTypeInfo());
+    }
     DLLLOCAL const char* getName() const { return name.ostr; }
     // called when a list of variables is declared
     DLLLOCAL void makeLocal() {
@@ -167,10 +188,8 @@ public:
             setClosureIntern();
     }
 
-    DLLLOCAL void setPublic() {
-        assert(type == VT_GLOBAL);
-        ref.var->setPublic();
-    }
+    //! marks a declared global or thread_local variable public; a module may not declare a public thread_local
+    DLLLOCAL void setPublic();
 
     DLLLOCAL void parseAssigned() {
         assert(type != VT_IMMEDIATE);
@@ -230,6 +249,13 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! reads the value of the variable without handing it to the statement
+    /** @param needs_deref set to true if the read gave the caller a reference of its own: the value was read through
+        a reference, or from a closure-bound, global or thread-local variable, which is read under the variable's
+        lock
+    */
+    DLLLOCAL QoreValue evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL void resolve(const QoreTypeInfo* typeInfo);
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool is_new = false);
@@ -448,11 +474,11 @@ public:
         new_args.discard(nullptr);
     }
 
-    DLLLOCAL virtual bool stayInTree() const {
+    DLLLOCAL virtual bool stayInTree() const override {
         return true;
     }
 
-    DLLLOCAL const char* parseGetTypeName() const {
+    DLLLOCAL virtual const char* parseGetTypeName() const override {
         return typeInfo ? QoreTypeInfo::getName(typeInfo) : parseTypeInfo->cscope->getIdentifier();
     }
 
@@ -464,6 +490,11 @@ public:
 
     //! Construct the value without assigning to the variable (for JIT split)
     DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
+
+    //! returns true if the declaration creates an object of a class known at parse time with its constructor
+    DLLLOCAL bool isObjectConstruct() const {
+        return vrn_type == VRN_OBJECT;
+    }
 
     //! Returns true if this is a hashdecl construction
     DLLLOCAL bool isHashDeclConstruct() const {
@@ -510,6 +541,9 @@ public:
         return new_args;
     }
 
+    //! a declaration that creates an object, given as an argument, is evaluated as any other expression
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const override;
+
 protected:
     enum vrn_type_e : unsigned char {
         VRN_NONE = 0,
@@ -525,11 +559,11 @@ protected:
     std::string dynamic_hashdecl_name;
     bool runtime_check = false;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override;
 
     // initializes during parsing
-    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) override;
 
     DLLLOCAL int parseInitConstructorCall(const QoreProgramLocation* loc, QoreParseContext& parse_context,
             const QoreClass* qc);

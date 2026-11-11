@@ -8,9 +8,17 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
   is refused by it if its code uses functionality those restrictions forbid. The two forms of a module are loaded
   under the same conditions.
 - A module that is already loaded is **not** checked against the restrictions of a Program that imports it: it is a
-  capability that the host gave the Program, and module code runs with the restrictions of its callers as well as
-  its own (`doxygen/lang/120_modules.dox.tmpl`, "Module Code at Run Time"). Qore's own tests rely on this (a
-  `PO_NO_THREAD_CLASSES` Program importing `QUnit`, a `PO_NO_FILESYSTEM` Program importing `Util`).
+  capability that the host gave the Program. Module code (functions, methods and closures alike) runs in the module's
+  Program with its own options, and only the sandbox governs it at run time: the restrictions of a sandboxed caller
+  are part of its sandbox and are composed into module code at the module-call boundary
+  (`qore_get_module_call_runtime_po_override()` in `lib/Function.cpp`; `doxygen/lang/120_modules.dox.tmpl`, "Module
+  Code at Run Time"). Qore's own tests rely on unchecked imports (a `PO_NO_THREAD_CLASSES` Program importing
+  `QUnit`, a `PO_NO_FILESYSTEM` Program importing `Util`).
+- Restrictions of parse options alone are therefore **not a run-time boundary** for module code: whether a Program
+  restricted only by parse options gets a module depends on whether another Program loaded it first, and once it has
+  it, it can use all the functionality the module's code uses, including names the module resolves at run time on
+  its behalf. A host that runs code that must not reach functionality through modules gives its Program a
+  `SandboxManager` (which makes its restrictions apply to module code as well) or `PO_NO_MODULES`.
 - A `thread_local` declaration in a user module (`PO_IN_MODULE`) is not refused by `PO_NO_THREAD_CONTROL`
   (`qore_ns_private::checkGlobalVarDecl()`): thread-local storage is not thread control. In user code it still is.
 

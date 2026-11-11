@@ -51,6 +51,8 @@
 #include "qore/intern/QorePollCompat.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -386,8 +388,121 @@ typedef std::set<const lvalue_ref*> ref_set_t;
 typedef std::map<int, q_user_tld> u_tld_map_t;
 static Sequence u_tld_seq;
 
-// for thread-local vars
-typedef std::map<void*, QoreLValue<qore_gvar_ref_u>> tlvmap_t;
+//! A thread's value of a thread_local variable, in its map (ThreadData::tlvmap)
+struct ThreadLocalVarValue {
+    QoreLValue<qore_gvar_ref_u> lv;
+    //! the Program that owns the variable (see Var::tl_pgm), for identification only, with its ID
+    /** The thread enters it to release the value when it ends or when its values are cleared between tasks (see
+        ThreadData::releaseThreadLocalVarsOfProgram())
+    */
+    const QoreProgram* pgm;
+    qore_program_id_t pgm_id;
+
+    DLLLOCAL ThreadLocalVarValue(const QoreProgram* pgm, qore_program_id_t pgm_id) : pgm(pgm), pgm_id(pgm_id) {
+    }
+};
+
+// the values of the thread_local variables of a thread, by the serial of the variable (Var::tl_serial), which is
+// never reused; see ThreadLocalVarRegistry
+typedef std::map<uint64_t, ThreadLocalVarValue> tlvmap_t;
+
+//! An entry of a thread with a value, which the thread releases (see ThreadData::releaseThreadLocalVars())
+struct ThreadLocalVarRelease {
+    uint64_t serial;
+    const QoreProgram* pgm;
+    qore_program_id_t pgm_id;
+};
+
+class ThreadData;
+
+namespace {
+//! The values of the thread_local variables of every thread, by variable
+/** A thread_local variable has a value of its own in each thread that uses it, in the thread's map (ThreadData::tlvmap)
+    under the variable's serial.  The value of each thread is released when the variable is deleted, which is when
+    its Program is deleted (or the last Program that imports it), by the thread deleting it: the registry records
+    the value of every thread for this (release_thread_local_var()).  A thread does not use a deleted variable, so
+    the deleting thread can release its value in another thread's map; it does not change the map, which only its
+    thread changes: the thread erases the empty entry the next time it looks up a variable.  A variable's values are
+    released when its Program clears its variables (Var::clearLocal()), or, if another Program imports it, when the
+    last Program holding it releases it (Var::del()).
+
+    A thread that ends, or whose values are cleared between tasks (clear_all_program_thread_local_data()), releases
+    its values itself (ThreadData::releaseThreadLocalVars()).  It enters the Program owning each variable first, so
+    that the Program, which can be deleted in another thread at the same time, can still run the destructors of the
+    value: its teardown waits for the thread, as for every thread in the Program.  The thread takes the value out of
+    the registry once it has entered the Program; a Program whose teardown has passed the point after which no other
+    thread enters it releases the variable itself, or has released it, so a thread that cannot enter it hands the
+    value over to the registry (Entry::orphans), where the release of the variable releases it, while the Program
+    can still run its destructors, or when the last Program importing the variable releases it.
+
+    The map was keyed by the address of the variable, and its entries were left in every thread but the deleting one:
+    a variable of a Program created after the deleted one could have the address of a deleted variable, and its code
+    read the value that the deleted Program's code had stored in the thread, with its type: values crossed Programs
+    and sandboxes in the threads of a shared pool (see design/program-teardown-lifetime.md).
+
+    The lock is a leaf lock: no user code runs and no other lock is taken under it; a value is moved out of an entry
+    as it is under the lock (QoreLValue::moveValueTo()) and released after it has been released, as the release of a
+    value can take other locks (an object's lock, to remove its real reference mark) and wait.
+*/
+struct ThreadLocalVarRegistry {
+    //! a thread's value of a variable
+    struct Holder {
+        ThreadData* td;
+        QoreLValue<qore_gvar_ref_u>* lvar;
+    };
+
+    //! a value that a thread handed over to the registry, as it could not enter the Program of its variable
+    struct Orphan {
+        QoreLValue<qore_gvar_ref_u> lv;
+
+        //! the registry releases the value with its variable (release_thread_local_var())
+        /** A value left when the registry itself is destroyed, at the end of the process, is not released: its
+            variable's Program was never deleted
+        */
+        ~Orphan() {
+            if (lv.assigned) {
+                lv.reset_to_empty();
+            }
+        }
+    };
+
+    //! the values of the threads of a variable
+    struct Entry {
+        //! the values in the maps of the threads
+        std::vector<Holder> holders;
+        //! the values handed over by threads that ended or cleared their values
+        std::vector<std::unique_ptr<Orphan>> orphans;
+    };
+
+    QoreThreadLock lck;
+    //! the values of the threads by the serial of the variable
+    std::unordered_map<uint64_t, Entry> vars;
+
+    //! Removes the holder of the given thread from an entry; called with the lock held
+    /** @return true if the thread's value was registered
+    */
+    static bool removeHolder(Entry& e, const ThreadData* td) {
+        std::vector<Holder>& v = e.holders;
+        for (size_t j = 0; j < v.size(); ++j) {
+            if (v[j].td == td) {
+                v[j] = v.back();
+                v.pop_back();
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+ThreadLocalVarRegistry tlv_registry;
+QoreForkThreadLock tlv_registry_fork_handler(tlv_registry.lck, QFLR_LEAF, "thread_local_vars");
+
+std::atomic<uint64_t> tlv_serial_counter{0};
+}
+
+uint64_t qore_get_next_thread_local_var_serial() {
+    return tlv_serial_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
 static size_t get_stack_size() {
 #ifdef QORE_HAVE_GET_STACK_SIZE
@@ -425,7 +540,24 @@ public:
     const QoreProgram* callback_from_pgm = nullptr;
     //! the ID of the application Program that the code of runtime_po_module_pgm runs for
     qore_program_id_t runtime_po_app_pgm_id = 0;
+    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
+    bool runtime_po_sandboxed = false;
+    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
+    const QoreProgram* runtime_po_override_pgm = nullptr;
+    //! the data of the thread's RuntimeConfig (rc_get_tls_impl()), once it has been looked up; see
+    //! sync_runtime_config_program()
+    mutable RuntimeConfig::Impl* rc = nullptr;
+    //! the number of entries of the thread into Programs with module lifetime that took no thread count; see
+    //! qore_module_uncounted_entry(); written by the thread, read by qore_stop_module_uncounted_entries()
+    std::atomic<unsigned> module_uncounted{0};
+    //! non-zero while the thread runs work that the module cleanup handed over (a ThreadPool task that the cleanup
+    //! thread submitted, a background thread that it started, or such work of such work): the Programs of the modules,
+    //! which the cleanup closes to other threads, stay open to it; see qore_close_module_programs().  Only the thread
+    //! itself reads or writes it
+    unsigned module_cleanup_delegate = 0;
     int tid;
+    //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
+    unsigned pgm_teardown_depth = 0;
 
     VLock vlock;     // for deadlock detection
 
@@ -450,6 +582,12 @@ public:
     QoreThreadLock stack_walk_lck;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
+    //! the location of the call expression being made, for the call stack frame of the called code
+    /** Set by a call site for the duration of the call and taken (and cleared) by the frame of the called code when
+        it is created; see QoreRcCallSiteHelper and take_runtime_call_location().  It follows runtime_loc
+        immediately: IR and native code address it as the runtime location slot + 1 (qore_call_site_slot()).
+    */
+    const QoreProgramLocation* call_site_loc = nullptr;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -500,6 +638,13 @@ public:
 
     //! the number of thread entry or exit handlers running on the thread; while non-zero, entries run no handlers
     unsigned entry_handler_depth = 0;
+
+    //! the process-unique ID of the thread if it is a background thread started in a Program, or 0
+    /** Recorded as the parent of the background threads it starts; see design/program-thread-lifecycle-events.md
+    */
+    int64 bg_thread_id = 0;
+    //! the ID of the Program of the background thread in bg_thread_id; it is the parent only of that Program's threads
+    qore_program_id_t bg_pgm_id = 0;
 
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
@@ -557,6 +702,14 @@ public:
     // See design/cooperative-cancellation.md
     unsigned cancel_defer_count = 0;
 
+    // destructor-deferral depth: non-zero while the destructor of a trusted class runs (QoreDestructorCancelHelper);
+    // qore_check_cancel() then defers a thread cancellation and a program interrupt like cancel_defer_count, but never
+    // a sandbox limit (an expired call budget or a memory limit), so a destructor cannot run unbounded.  Set to zero
+    // while code of a Program with a sandbox manager runs (ProgramThreadCountContextHelper) and while the destructor
+    // of a sandboxed class runs, so sandboxed code never gets it.  Only the owning thread reads or writes it.
+    // See "Destructors" in design/cooperative-cancellation.md
+    unsigned dtor_cancel_defer_count = 0;
+
     // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
     // governs the code that the operation runs, together with the sandboxes of the Programs entered after it was
     // applied (see QoreSandboxContextHelper and find_thread_sandbox_stack_ref_intern())
@@ -571,6 +724,8 @@ public:
     // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+    //! the innermost QoreCallerSandboxHelper that a sandboxed caller created on this thread, if any
+    const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
     // the budgets of the sandbox calls with a time limit that the thread is running (see
     // design/sandbox-resource-limits.md); only used by the thread itself
     QoreSandboxBudgetStack sandbox_budgets;
@@ -669,13 +824,26 @@ public:
     // thread-local values
     tlvmap_t tlvmap;
 
+    //! the serials of the deleted variables whose empty entries this thread erases; guarded by tlv_registry.lck
+    std::vector<uint64_t> tlv_deleted;
+
+    //! set when tlv_deleted has serials
+    std::atomic<bool> tlv_deleted_pending{false};
+
     // active exception counter
     unsigned active_exceptions = 0;
 
     bool
         foreign : 1, // true if the thread is a foreign thread
         try_reexport : 1,
-        finalizing : 1;
+        finalizing : 1,
+        //! true while a pool worker releases the thread_local values of its task between tasks
+        /** see clear_all_program_thread_local_data(): the destructors run by the release cannot give the thread's
+            thread_local variables values, as at the end of a thread (finalizing); set for each release only, so that
+            the code that clears the other data of the task (thread resources, the thread-local data of the Programs)
+            can assign them, and the next release takes those values
+        */
+        tlv_clearing : 1;
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
@@ -685,7 +853,8 @@ public:
             tpd(new ThreadProgramData(this)),
             foreign(n_foreign),
             try_reexport(false),
-            finalizing(false) {
+            finalizing(false),
+            tlv_clearing(false) {
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
             // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
@@ -813,6 +982,9 @@ public:
 #endif
 
     DLLLOCAL ~ThreadData() {
+        // the registry keeps no pointer into the map of a thread whose data is deleted
+        unregisterThreadLocalVars();
+
         // delete all user TLD
         for (auto& i : u_tld_map) {
             if (i.second.destructor) {
@@ -846,17 +1018,281 @@ public:
         return rc;
     }
 
+    //! Erases the empty entries of the deleted variables whose values the thread had
+    /** The deleting thread released the values; the entries are erased by this thread, which alone changes the map
+    */
+    DLLLOCAL void eraseDeletedThreadLocalVars() {
+        std::vector<uint64_t> deleted;
+        {
+            AutoLocker al(tlv_registry.lck);
+            deleted.swap(tlv_deleted);
+            tlv_deleted_pending.store(false, std::memory_order_relaxed);
+        }
+        for (uint64_t serial : deleted) {
+            tlvmap_t::iterator i = tlvmap.find(serial);
+            if (i != tlvmap.end()) {
+                assert(!i->second.lv.hasValue());
+                tlvmap.erase(i);
+            }
+        }
+    }
+
+    //! Releases the thread's values of thread_local variables
+    /** Called while the thread's variables cannot be assigned (finalizing or tlv_clearing, see
+        thread_local_vars_finalizing()): the destructors run by the release cannot give them values again, so the
+        second pass finds none; the destructors can still look variables up, which gives the thread entries without
+        values, which the second pass takes out of the registry and erases.  Each value is released in the Program
+        owning its variable, which it enters once for all of its values (releaseThreadLocalVarsOfProgram()).
+
+        @param xsink for the exceptions of the destructors, or nullptr to handle the exceptions of each value here
+    */
+    DLLLOCAL void releaseThreadLocalVars(ExceptionSink* xsink) {
+        assert(finalizing || tlv_clearing);
+        // ends after the entries without a value were taken out of the registry and erased, when no entry had a
+        // value: no code runs after that
+        while (true) {
+            std::vector<ThreadLocalVarRelease> vals;
+            takeEmptyThreadLocalVars(vals);
+            if (vals.empty()) {
+                break;
+            }
+            // the values are released by Program, which the thread enters once for all of its values
+            std::stable_sort(vals.begin(), vals.end(),
+                [](const ThreadLocalVarRelease& a, const ThreadLocalVarRelease& b) -> bool {
+                    return a.pgm_id < b.pgm_id || (a.pgm_id == b.pgm_id && a.pgm < b.pgm);
+                });
+            for (size_t i = 0, e = vals.size(); i < e;) {
+                size_t j = i + 1;
+                while (j < e && vals[j].pgm == vals[i].pgm && vals[j].pgm_id == vals[i].pgm_id) {
+                    ++j;
+                }
+                if (xsink) {
+                    releaseThreadLocalVarsOfProgram(&vals[i], j - i, xsink);
+                } else {
+                    ExceptionSink local_xsink;
+                    releaseThreadLocalVarsOfProgram(&vals[i], j - i, &local_xsink);
+                    local_xsink.handleExceptions();
+                }
+                i = j;
+            }
+        }
+    }
+
     DLLLOCAL void del(ExceptionSink* xsink) {
         finalizing = true;
-        for (auto& i : tlvmap) {
-            i.second.discard(xsink);
-        }
+        releaseThreadLocalVars(xsink);
 
         tpd->del(xsink);
         tpd->deref();
         tpd = nullptr;
+        // the destructors run by releasing the thread's Program data can look variables up
+        releaseThreadLocalVars(xsink);
     }
 
+    //! Takes the thread's entries out of the thread_local variable registry without releasing their values
+    /** For a thread whose data is deleted without del(): the registry must not keep pointers into its map
+    */
+    DLLLOCAL void unregisterThreadLocalVars() {
+        AutoLocker al(tlv_registry.lck);
+        for (auto& i : tlvmap) {
+            unregisterThreadLocalVarIntern(i.first);
+        }
+        tlv_deleted.clear();
+        tlv_deleted_pending.store(false, std::memory_order_relaxed);
+    }
+
+private:
+    //! Takes the thread's entry of the given variable out of the registry; called with the registry's lock held
+    /** @return true if the entry was registered, false if the variable was released (or it was never registered)
+    */
+    DLLLOCAL bool unregisterThreadLocalVarIntern(uint64_t serial) {
+        auto hi = tlv_registry.vars.find(serial);
+        if (hi == tlv_registry.vars.end()) {
+            return false;
+        }
+        bool rc = ThreadLocalVarRegistry::removeHolder(hi->second, this);
+        if (hi->second.holders.empty() && hi->second.orphans.empty()) {
+            tlv_registry.vars.erase(hi);
+        }
+        return rc;
+    }
+
+    //! Erases the entries without a value, which it takes out of the registry, and returns those with a value
+    /** @param vals the entries with a value
+    */
+    DLLLOCAL void takeEmptyThreadLocalVars(std::vector<ThreadLocalVarRelease>& vals) {
+        AutoLocker al(tlv_registry.lck);
+        // the entries of the variables released in other threads are not registered anymore, and have no value
+        tlv_deleted.clear();
+        tlv_deleted_pending.store(false, std::memory_order_relaxed);
+        for (tlvmap_t::iterator i = tlvmap.begin(), e = tlvmap.end(); i != e;) {
+            // the value cannot change in another thread while the lock is held
+            if (i->second.lv.assigned) {
+                vals.push_back(ThreadLocalVarRelease{i->first, i->second.pgm, i->second.pgm_id});
+                ++i;
+                continue;
+            }
+            unregisterThreadLocalVarIntern(i->first);
+            i = tlvmap.erase(i);
+        }
+    }
+
+    //! Releases the thread's values of the variables of a Program
+    /** The thread enters the Program before it takes the values out of the registry, so that the Program's
+        teardown, which can run in another thread at the same time, cannot release them as well, and waits while the
+        thread releases the values whose release runs code of the Program (tlvReleaseRunsCodeOf()): an object of a
+        class of the Program, whose destructor would raise PROGRAM-ERROR once the teardown has marked the Program.
+        The thread leaves the Program before it releases the other values, so that the teardown does not wait for
+        code of other Programs, which can wait for the thread deleting the Program (a lock that it holds).  If the
+        Program's teardown has passed the point after which no other thread can enter it, or the Program has been
+        deleted, the values are handed over to the registry: the release of the variable, which follows in the
+        Program's teardown or has followed while the variable's values were in the registry, releases them, or, for
+        a variable that another Program imports, the release by the last Program holding it.
+
+        The values were released here in whichever state the Program was, often after it had been deleted in
+        another thread, and their destructors raised PROGRAM-ERROR.
+
+        @param v the entries of the variables of the Program, which v->pgm and v->pgm_id give
+        @param n the number of entries
+        @param xsink for the exceptions of the destructors
+    */
+    DLLLOCAL void releaseThreadLocalVarsOfProgram(const ThreadLocalVarRelease* v, size_t n, ExceptionSink* xsink) {
+        // the Program is referenced while it is used; no lock is held when it is looked up and entered, as its
+        // teardown releases the variable with the registry's lock
+        // the values taken, which are released below; allocated before the Program is entered and any value is taken
+        std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values(new QoreLValue<qore_gvar_ref_u>[n]);
+        ReferenceHolder<QoreProgram> pgm(v->pgm ? qore_program_private::getReferencedProgram(v->pgm, v->pgm_id)
+            : nullptr, xsink);
+        bool entered = *pgm && qore_program_private::get(**pgm)->enterWithoutContext();
+        // values that the thread cannot release in the Program are handed over to the registry
+        const bool hand_over = v->pgm && !entered;
+        for (size_t i = 0; i < n; ++i) {
+            takeThreadLocalVar(v[i].serial, hand_over, values[i]);
+        }
+        if (entered) {
+            // the values whose release runs code of the Program are released while the thread is in it
+            for (size_t i = 0; i < n; ++i) {
+                if (values[i].assigned && values[i].type == QV_Node && tlvReleaseRunsCodeOf(values[i].v.n, **pgm)) {
+                    values[i].removeValue(true).discard(xsink);
+                }
+            }
+            qore_program_private::decThreadCount(**pgm, tid, xsink);
+        }
+        for (size_t i = 0; i < n; ++i) {
+            values[i].removeValue(true).discard(xsink);
+        }
+    }
+
+    //! Returns true if releasing the given value can run code of the given Program
+    /** An object of a class of the Program, or created in it, and a closure of the Program; the elements of lists
+        and hashes are checked as well, to a bounded depth (deeper elements count as code of the Program).  The
+        members of an object of another class are not checked: their release follows the destructor of the object,
+        which runs code of another Program, and the destructors of members of the Program's classes enter it
+        themselves.
+
+        @param n the value
+        @param pgm the Program
+        @param depth the depth of the value in the containers checked
+    */
+    DLLLOCAL static bool tlvReleaseRunsCodeOf(const AbstractQoreNode* n, const QoreProgram& pgm, unsigned depth = 0) {
+        if (!n) {
+            return false;
+        }
+        switch (n->getType()) {
+            case NT_OBJECT: {
+                const QoreObject* o = static_cast<const QoreObject*>(n);
+                if (o->getProgram() == &pgm) {
+                    return true;
+                }
+                const QoreClass* qc = o->getClass();
+                return qc && qore_class_private::get(*qc)->spgm.load() == &pgm;
+            }
+            case NT_RUNTIME_CLOSURE:
+                return static_cast<const QoreClosureBase*>(n)->getProgram() == &pgm;
+            case NT_LIST: {
+                const QoreListNode* l = static_cast<const QoreListNode*>(n);
+                if (!qore_list_private::getScanCount(*l)) {
+                    return false;
+                }
+                if (depth >= 8) {
+                    return true;
+                }
+                for (size_t i = 0, e = l->size(); i < e; ++i) {
+                    QoreValue ev = l->retrieveEntry(i);
+                    if (ev.hasNode() && tlvReleaseRunsCodeOf(ev.getInternalNode(), pgm, depth + 1)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = static_cast<const QoreHashNode*>(n);
+                if (!qore_hash_private::getScanCount(*h)) {
+                    return false;
+                }
+                if (depth >= 8) {
+                    return true;
+                }
+                ConstHashIterator hi(h);
+                while (hi.next()) {
+                    QoreValue ev = hi.get();
+                    if (ev.hasNode() && tlvReleaseRunsCodeOf(ev.getInternalNode(), pgm, depth + 1)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            default:
+                break;
+        }
+        return false;
+    }
+
+    //! Takes the thread's value of the given variable out of its entry, or hands it over to the registry
+    /** The entry is left without a value, and erased by the next pass of releaseThreadLocalVars().
+
+        @param serial the serial of the variable
+        @param hand_over true if the value is handed over to the registry, false if the thread releases it: it has
+        entered the variable's Program, or the variable has no Program
+        @param value an lvalue without a value, which takes the value that the thread releases
+    */
+    DLLLOCAL void takeThreadLocalVar(uint64_t serial, bool hand_over, QoreLValue<qore_gvar_ref_u>& value) {
+        tlvmap_t::iterator i = tlvmap.find(serial);
+        if (i == tlvmap.end()) {
+            return;
+        }
+        ThreadLocalVarValue& tv = i->second;
+        std::unique_ptr<ThreadLocalVarRegistry::Orphan> orphan;
+        if (hand_over) {
+            orphan.reset(new ThreadLocalVarRegistry::Orphan);
+        }
+        AutoLocker al(tlv_registry.lck);
+        auto hi = tlv_registry.vars.find(serial);
+        bool registered = false;
+        if (hi != tlv_registry.vars.end()) {
+            if (orphan) {
+                // reserved before anything changes
+                hi->second.orphans.reserve(hi->second.orphans.size() + 1);
+            }
+            registered = ThreadLocalVarRegistry::removeHolder(hi->second, this);
+            if (registered && orphan) {
+                if (tv.lv.assigned) {
+                    tv.lv.moveValueTo(orphan->lv);
+                    hi->second.orphans.push_back(std::move(orphan));
+                }
+            }
+            if (hi->second.holders.empty() && hi->second.orphans.empty()) {
+                tlv_registry.vars.erase(hi);
+            }
+        }
+        // the value of an entry that is not registered was taken by the release of its variable, which leaves the
+        // entry without a value; the entry has no value afterwards in any case, so the next pass erases it
+        if (!registered || !orphan) {
+            tv.lv.moveValueTo(value);
+        }
+    }
+
+public:
     DLLLOCAL void pushName(const char* name) {
         npvec.push_back(name);
     }
@@ -977,6 +1413,8 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+    // the thread's RuntimeConfig writes the call sites of AST calls directly (QoreRcCallSiteHelper)
+    rc_tls_set_call_site_ptr(&thread_data->call_site_loc);
     // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
     // set (see qore_robject_hazard_register())
     qore_robject_hazard_register(tid);
@@ -1006,6 +1444,12 @@ void ThreadEntry::abandonAfterFork() {
     thread_data = nullptr;
     joined = false;
     clearCancelState();
+    // the thread's reference to the hub is dropped by the hub's own fork fixup (ProgramThreadHub::forkChild())
+    lifecycle_hub = nullptr;
+    lifecycle_thread_id = 0;
+    lifecycle_pgm_id = 0;
+    lifecycle_cancel_gen = 0;
+    lifecycle_cancels.clear();
     waiting_on = nullptr;
     waiting_mutex = nullptr;
     wake_cond = nullptr;
@@ -1034,6 +1478,10 @@ void ThreadEntry::cleanup() {
 
     // clear per-thread cancellation state
     clearCancelState();
+    // a background thread clears its hub and takes its claims before its TID is released
+    assert(!lifecycle_hub);
+    assert(lifecycle_cancels.empty());
+    lifecycle_cancel_gen = 0;
     // a thread in a cancellable condition wait unregisters before it returns
     assert(!waiting_on && !waiting_mutex && !wake_queued && !wake_busy);
     // release the thread's cancellation wakeup channel with its TID
@@ -1304,6 +1752,13 @@ void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
 }
 
 void ThreadProgramData::del(ExceptionSink* xsink) {
+    // the thread's local data in the Programs is deleted now: the cache of the data of module Programs must not return
+    // it to the destructors that run below
+    module_pgm_cache_disabled = true;
+    for (ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+        e = ModuleProgramDataCacheEntry();
+    }
+
     // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
     freeAllThreadData(xsink);
 
@@ -1518,8 +1973,13 @@ public:
     std::vector<QoreObject*> closure_objs;
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
     std::unique_ptr<QoreInheritedSandbox> sandbox;
+    //! true if the starting thread runs the module cleanup or work that it handed over; the new thread is then part
+    //! of the cleanup (see qore_module_cleanup_delegation())
+    bool module_cleanup_delegate = qore_module_cleanup_delegation();
     int tid;
     const QoreProgramLocation* loc;
+    //! the identity of the thread for its Program's lifecycle events
+    ProgramThreadIdentity identity;
     bool registered = false,
         started = false;
 
@@ -1533,6 +1993,7 @@ public:
             call_obj = td->current_obj;
             class_ctx = td->current_class;
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
+            setIdentity(*td);
         }
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
@@ -1593,6 +2054,7 @@ public:
             call_obj = td->current_obj;
             class_ctx = td->current_class;
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
+            setIdentity(*td);
         }
 
         if (preregister(xsink)) {
@@ -1610,6 +2072,16 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! records the identity of the new thread and of the starting thread
+    /** The starting thread is the parent only if it is a background thread of the same Program: the subscribers of
+        a Program never see the threads of another one
+    */
+    DLLLOCAL void setIdentity(const ThreadData& td) {
+        identity.thread_id = program_thread_new_id();
+        identity.parent_tid = q_gettid();
+        identity.parent_thread_id = td.bg_pgm_id == pgm->getProgramId() ? td.bg_thread_id : 0;
     }
 
     //! preregisters the new thread in the Program; returns -1 if an exception was raised
@@ -1973,19 +2445,86 @@ void inc_active_exceptions(int diff) {
     td->active_exceptions += diff;
 }
 
-void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new, bool& finalized) {
+bool thread_local_vars_finalizing() {
     ThreadData* td = thread_data.get();
-    if (td->finalizing) {
-        finalized = true;
+    // the values of a thread are released when it ends, and between the tasks of a pool worker: the destructors run
+    // then cannot give its variables values again, or the release would never end
+    return td && (td->finalizing || td->tlv_clearing);
+}
+
+void get_thread_local_lvalue(uint64_t serial, const QoreProgram* pgm, qore_program_id_t pgm_id,
+        QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new) {
+    assert(serial);
+    ThreadData* td = thread_data.get();
+    // erasing the empty entries of deleted variables leaves the entries of the others in place
+    if (td->tlv_deleted_pending.load(std::memory_order_acquire)) {
+        td->eraseDeletedThreadLocalVars();
     }
-    tlvmap_t::iterator i = td->tlvmap.lower_bound(ptr);
-    if (i == td->tlvmap.end() || i->first != ptr) {
-        i = td->tlvmap.insert(i, tlvmap_t::value_type(ptr, QoreLValue<qore_gvar_ref_u>()));
+    tlvmap_t::iterator i = td->tlvmap.lower_bound(serial);
+    if (i == td->tlvmap.end() || i->first != serial) {
+        i = td->tlvmap.emplace_hint(i, std::piecewise_construct, std::forward_as_tuple(serial),
+            std::forward_as_tuple(pgm, pgm_id));
         is_new = true;
+        try {
+            AutoLocker al(tlv_registry.lck);
+            tlv_registry.vars[serial].holders.push_back(ThreadLocalVarRegistry::Holder{td, &i->second.lv});
+        } catch (...) {
+            // an entry is registered for as long as it is in the map
+            td->tlvmap.erase(i);
+            throw;
+        }
     } else {
         is_new = false;
     }
-    lvar = &i->second;
+    lvar = &i->second.lv;
+}
+
+const QoreProgram* qore_get_thread_local_var_owner(qore_program_id_t& pgm_id) {
+    // a variable is created in the Program that parses or loads it
+    const QoreProgram* pgm = getProgram();
+    pgm_id = pgm ? pgm->getProgramId() : 0;
+    return pgm;
+}
+
+void release_thread_local_var(uint64_t serial, ExceptionSink* xsink) {
+    if (!serial) {
+        return;
+    }
+    // the values as they were in the entries of the threads; released outside the registry's lock
+    std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values;
+    size_t count = 0;
+    // the values that threads handed over to the registry (see ThreadData::releaseThreadLocalVarsOfProgram())
+    std::vector<std::unique_ptr<ThreadLocalVarRegistry::Orphan>> orphans;
+    {
+        AutoLocker al(tlv_registry.lck);
+        auto i = tlv_registry.vars.find(serial);
+        if (i == tlv_registry.vars.end()) {
+            return;
+        }
+        std::vector<ThreadLocalVarRegistry::Holder>& holders = i->second.holders;
+        // the memory is allocated before any entry changes, so that the rest cannot fail
+        values.reset(new QoreLValue<qore_gvar_ref_u>[holders.size()]);
+        for (ThreadLocalVarRegistry::Holder& h : holders) {
+            h.td->tlv_deleted.reserve(h.td->tlv_deleted.size() + 1);
+        }
+        for (ThreadLocalVarRegistry::Holder& h : holders) {
+            // no thread uses a deleted variable: its value is taken out of the thread's entry, which its thread
+            // erases; the value is moved as it is, as releasing it can take other locks (the lock of an object whose
+            // real reference mark is removed) and wait
+            h.lvar->moveValueTo(values[count++]);
+            h.td->tlv_deleted.push_back(serial);
+            h.td->tlv_deleted_pending.store(true, std::memory_order_release);
+        }
+        orphans.swap(i->second.orphans);
+        tlv_registry.vars.erase(i);
+    }
+    // the values are released outside the lock: their destructors can run code
+    for (size_t j = 0; j < count; ++j) {
+        values[j].removeValue(true).discard(xsink);
+    }
+    for (std::unique_ptr<ThreadLocalVarRegistry::Orphan>& o : orphans) {
+        o->lv.removeValue(true).discard(xsink);
+    }
 }
 
 QoreProgram* get_set_program_call_context(QoreProgram* new_pgm) {
@@ -2578,7 +3117,7 @@ const QoreStackLocation* get_runtime_stack_location() {
 // that the mask covers, and removes the explicitly-allowed options that the mask covers and its value lacks.  It never
 // lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
 // closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
-static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
+static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
     if (!td->runtime_po_override_mask) {
         return po;
     }
@@ -2699,6 +3238,8 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
+    // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
+    td->call_site_loc = nullptr;
 
     return publish_pushed_stack_location(td, stack_loc);
 }
@@ -2711,6 +3252,8 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
+    // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
+    td->call_site_loc = nullptr;
 
     old_runtime_loc = td->runtime_loc;
     td->runtime_loc = &loc_builtin;
@@ -2732,7 +3275,15 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     current_pgm = td->current_pgm;
     current_stmt = td->runtime_statement;
     runtime_loc = td->runtime_loc;
-    frame_loc = call_loc ? call_loc : runtime_loc;
+    if (call_loc) {
+        frame_loc = call_loc;
+    } else if (td->call_site_loc) {
+        frame_loc = td->call_site_loc;
+    } else {
+        frame_loc = runtime_loc;
+    }
+    // the location of the call is the location of this frame, not of the frames of calls that the callee makes
+    td->call_site_loc = nullptr;
 
     const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
     if (callee_loc) {
@@ -2770,6 +3321,46 @@ const QoreProgramLocation* get_runtime_location() {
     return thread_data.get()->runtime_loc;
 }
 
+const QoreProgramLocation* take_runtime_call_location() {
+    ThreadData* td = thread_data.get();
+    const QoreProgramLocation* loc = td->call_site_loc;
+    if (loc) {
+        td->call_site_loc = nullptr;
+        return loc;
+    }
+    return td->runtime_loc;
+}
+
+const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev) {
+    ThreadData* td = thread_data.get();
+    slot = &td->call_site_loc;
+    prev = td->call_site_loc;
+    td->call_site_loc = nullptr;
+    return td->runtime_loc;
+}
+
+void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLocation*& prev) {
+    ThreadData* td = thread_data.get();
+    prev = td->call_site_loc;
+    td->call_site_loc = loc;
+    return td;
+}
+
+void clear_runtime_call_site() {
+    ThreadData* td = thread_data.get();
+    // also called on threads being set up or torn down, such as in an exception thrown during initialization
+    if (td) {
+        td->call_site_loc = nullptr;
+    }
+}
+
+void restore_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation* prev) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+    td->call_site_loc = prev;
+}
+
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
         QoreParseOptions po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
@@ -2797,6 +3388,15 @@ void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStateme
     td->runtime_loc = loc;
 }
 
+void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
         const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
@@ -2810,6 +3410,14 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
 }
+
+// IR and native code address the call site as the slot after the runtime location (qore_call_site_slot());
+// ThreadData has no virtual bases, so offsetof() is exact although the class is not standard-layout
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+static_assert(offsetof(ThreadData, call_site_loc) == offsetof(ThreadData, runtime_loc)
+    + sizeof(const QoreProgramLocation*), "the call site must follow the runtime location in ThreadData");
+#pragma GCC diagnostic pop
 
 RuntimeLocationCache get_runtime_location_cache() {
     ThreadData* td = thread_data.get();
@@ -3104,9 +3712,15 @@ LVarStackBreakHelper::~LVarStackBreakHelper() {
 // in the same way as the object and class context helpers below; otherwise the caller keeps seeing the Program of
 // the last cross-Program call it made
 static void sync_runtime_config_program(const ThreadData* td) {
-    RuntimeConfig& rc = rc_get_tls_ref();
-    rc.setProgram(td->current_pgm);
-    rc.setThreadLocalProgramData(td->tlpd);
+    // the data of the thread's RuntimeConfig, which stays in place for the life of the thread, is looked up once and
+    // updated directly, without the calls of the RuntimeConfig's exported interface
+    if (!td->rc) {
+        td->rc = rc_get_tls_impl();
+    }
+    td->rc->pgm = td->current_pgm;
+    td->rc->tlpd = td->tlpd;
+    // the thread's RuntimeConfig keeps its data (it is never assigned)
+    assert(rc_get_tls_ref().getProgram() == td->current_pgm);
 }
 
 ProgramCallContextHelper::ProgramCallContextHelper(QoreProgram* new_pgm) {
@@ -3494,10 +4108,15 @@ int ThreadEntryHandlerFrame::enter(ThreadData* td, QoreProgram* pgm, ExceptionSi
     td->entry_pgm = pgm;
     active = true;
     // no handler runs for a thread that stays in the Program it has entered, or for an entry made by a handler, so
-    // that a handler can call into Programs that have handlers without recursion
-    if (old_entry_pgm == pgm || td->entry_handler_depth) {
+    // that a handler can call into Programs that have handlers without recursion; a Program without handlers, the
+    // usual case, is checked without the call that runs them
+    if (old_entry_pgm == pgm || td->entry_handler_depth || !qore_program_private::hasThreadEntryHandlers(*pgm)) {
         return 0;
     }
+    return enterHandlers(td, pgm, xsink);
+}
+
+int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink) {
     handlers = qore_program_private::refThreadEntryHandlers(*pgm);
     if (!handlers || !handlers->on_enter) {
         return 0;
@@ -3526,55 +4145,225 @@ void ThreadEntryHandlerFrame::exit(ExceptionSink* xsink) {
     if (!active) {
         return;
     }
-    ThreadData* td = thread_data.get();
+    exit(thread_data.get(), xsink);
+}
+
+void ThreadEntryHandlerFrame::exit(ThreadData* td, ExceptionSink* xsink) {
+    if (!active) {
+        return;
+    }
+    assert(td == thread_data.get());
     // the frames of a thread are exited in the reverse order of their entry
     assert(td->entry_pgm);
+    // the exit handler runs only if the entry handler ran
     if (handlers) {
-        // the handler runs even if an exception is pending; it gets a sink of its own, whose exceptions are added
-        // after the pending ones
-        ExceptionSink handler_xsink;
-        if (handlers->on_exit) {
-            ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &handler_xsink);
-            // the list takes the reference to the value returned by the entry handler
-            args->push(token, &handler_xsink);
-            token = QoreValue();
-            ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
-        } else {
-            token.discard(&handler_xsink);
-            token = QoreValue();
-        }
-        handlers->deref(&handler_xsink);
-        handlers = nullptr;
-        if (xsink) {
-            xsink->assimilate(handler_xsink);
-        }
+        exitHandlers(td, xsink);
     }
     td->entry_pgm = old_entry_pgm;
     active = false;
 }
 
-ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
-        bool runtime) {
-    set(xsink, pgm, runtime);
+void ThreadEntryHandlerFrame::exitHandlers(ThreadData* td, ExceptionSink* xsink) {
+    assert(handlers);
+    // the handler runs even if an exception is pending; it gets a sink of its own, whose exceptions are added after
+    // the pending ones
+    ExceptionSink handler_xsink;
+    if (handlers->on_exit) {
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &handler_xsink);
+        // the list takes the reference to the value returned by the entry handler
+        args->push(token, &handler_xsink);
+        token = QoreValue();
+        ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
+    } else {
+        token.discard(&handler_xsink);
+        token = QoreValue();
+    }
+    handlers->deref(&handler_xsink);
+    handlers = nullptr;
+    if (xsink) {
+        xsink->assimilate(handler_xsink);
+    }
+}
+
+namespace {
+//! the state of the entries into Programs with module lifetime without their thread count
+struct ModuleUncountedEntries {
+    //! the waiter in qore_stop_module_uncounted_entries() waits on it; threads leaving their last entry notify it
+    /** A leaf lock: no other lock is taken while it is held
+    */
+    std::mutex m;
+    std::condition_variable cond;
+    //! incremented under \a m by each notification, so that the waiter, which checks the threads without \a m, misses
+    //! none
+    unsigned gen = 0;
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_uncounted_entries", QFLM_ACQUIRE, {&cond}};
+
+    void notify() {
+        {
+            std::lock_guard<std::mutex> l(m);
+            ++gen;
+        }
+        cond.notify_all();
+    }
+};
+
+ModuleUncountedEntries& module_uncounted_entries() {
+    // never destroyed: threads can leave module code while static objects are destroyed
+    static ModuleUncountedEntries* e = new ModuleUncountedEntries;
+    return *e;
+}
+
+//! true until qore_stop_module_uncounted_entries()
+/** A namespace-scope object with constant initialization, which is valid before and after static initialization: it
+    is read on every entry into a module's Program, unlike the waiter's state (ModuleUncountedEntries)
+*/
+std::atomic<bool> module_uncounted_active{true};
+
+//! the TID of the thread that runs the module cleanup once the Programs of the modules are closed to other threads,
+//! or -1; see qore_close_module_programs()
+std::atomic<int> module_programs_closed_tid{-1};
+
+//! returns true if the Programs of the modules are closed to the given thread; see qore_close_module_programs()
+/** They stay open to the thread that runs the module cleanup and to the threads that run the work it handed over
+*/
+bool qore_module_programs_closed(const ThreadData* td) {
+    int tid = module_programs_closed_tid.load(std::memory_order_seq_cst);
+    return tid >= 0 && tid != td->tid && !td->module_cleanup_delegate;
+}
+
+//! enters a Program with module lifetime without its thread count, if such entries are still allowed
+/** The thread counts its own entries; the sequentially consistent increment and load pair with the store and the
+    loads of qore_stop_module_uncounted_entries(), so either the stopping thread sees the entry, or the entry sees that
+    entries without the thread count have stopped and takes the thread count instead
+*/
+bool qore_module_uncounted_entry(ThreadData* td) {
+    if (!module_uncounted_active.load(std::memory_order_acquire)) {
+        return false;
+    }
+    td->module_uncounted.fetch_add(1, std::memory_order_seq_cst);
+    if (module_uncounted_active.load(std::memory_order_seq_cst)) {
+        return true;
+    }
+    // stopped meanwhile: the entry takes the thread count
+    if (td->module_uncounted.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+        module_uncounted_entries().notify();
+    }
+    return false;
+}
+
+//! leaves an entry made with qore_module_uncounted_entry()
+void qore_module_uncounted_exit(ThreadData* td) {
+    if (td->module_uncounted.fetch_sub(1, std::memory_order_seq_cst) == 1
+            && !module_uncounted_active.load(std::memory_order_seq_cst)) {
+        module_uncounted_entries().notify();
+    }
+}
+}
+
+//! raises the exception of an entry into a module's Program that qore_close_module_programs() refuses
+static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ExceptionSink* xsink) {
+    xsink->raiseException("PROGRAM-ERROR", "the Program of a module cannot be entered by another thread while the "
+        "modules are deleted at the end of the process");
+}
+
+void qore_close_module_programs() {
+    module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
+}
+
+bool qore_module_cleanup_delegation() {
+    // the load pairs with the store of qore_close_module_programs(): the thread that runs the cleanup made it, and a
+    // thread running work that it handed over was started or given the work after it
+    if (module_programs_closed_tid.load(std::memory_order_seq_cst) < 0) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    return td && !qore_module_programs_closed(td);
+}
+
+QoreModuleCleanupDelegateHelper::QoreModuleCleanupDelegateHelper(bool delegate) {
+    if (delegate) {
+        td = thread_data.get();
+        assert(td);
+        ++td->module_cleanup_delegate;
+    }
+}
+
+void QoreModuleCleanupDelegateHelper::reset() {
+    if (td) {
+        assert(td->module_cleanup_delegate);
+        --td->module_cleanup_delegate;
+        td = nullptr;
+    }
+}
+
+void qore_stop_module_uncounted_entries() {
+    ModuleUncountedEntries& e = module_uncounted_entries();
+    module_uncounted_active.store(false, std::memory_order_seq_cst);
+    ThreadData* self = thread_data.get();
+    // the cleanup does not run in module code that it entered without the thread count: the module's Program would be
+    // torn down under it
+    assert(!self || !self->module_uncounted.load(std::memory_order_relaxed));
+    while (true) {
+        unsigned gen;
+        {
+            std::lock_guard<std::mutex> l(e.m);
+            gen = e.gen;
+        }
+        // every thread is checked, also the signal thread and threads being deregistered, which can run module code
+        // too, with the thread list lock held, which keeps their thread data in place, but without the leaf lock
+        bool busy = thread_list.anyThreadData([self](ThreadData* td) -> bool {
+            return td != self && td->module_uncounted.load(std::memory_order_seq_cst);
+        });
+        if (!busy) {
+            return;
+        }
+        // a thread that has left its last entry since the generation was read has notified already
+        std::unique_lock<std::mutex> l(e.m);
+        e.cond.wait(l, [&e, gen]() -> bool { return e.gen != gen; });
+    }
 }
 
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
-        printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
+        printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p no restore\n", this);
         // the Program was current but not entered: set() entered it without switching
         if (entry_frame.isActive()) {
-            entry_frame.exit(xsink);
+            entry_frame.exit(ctx_td, xsink);
         }
+        restoreDeferral();
         return;
     }
     // the exit handler runs while the thread is still in the Program, before anything is restored
-    entry_frame.exit(xsink);
+    entry_frame.exit(ctx_td, xsink);
     restoreContext();
+}
+
+void ProgramThreadCountContextHelper::suspendDeferral(ThreadData* td) {
+    assert(!defer_suspended);
+    saved_defer = td->cancel_defer_count;
+    saved_dtor_defer = td->dtor_cancel_defer_count;
+    td->cancel_defer_count = 0;
+    td->dtor_cancel_defer_count = 0;
+    defer_suspended = true;
+}
+
+void ProgramThreadCountContextHelper::restoreDeferral() {
+    if (!defer_suspended) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    // added, not assigned: the deferral pushed for the rest of a thread's life by end_thread_cancellation() can be
+    // pushed while the context is active (the thread function returned in its Program), and stays
+    assert(!td->dtor_cancel_defer_count);
+    td->cancel_defer_count += saved_defer;
+    td->dtor_cancel_defer_count += saved_dtor_defer;
+    defer_suspended = false;
 }
 
 void ProgramThreadCountContextHelper::restoreContext() {
     // restore thread stacks
-    ThreadData* td = thread_data.get();
+    ThreadData* td = ctx_td;
+    assert(td && td == thread_data.get());
 
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramThreadCountContextHelper::restoreContext() this: %p current_pgm: %p " \
@@ -3590,13 +4379,29 @@ void ProgramThreadCountContextHelper::restoreContext() {
     }
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
+    restoreDeferral();
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
     sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
+        thread_count_incremented = false;
         qore_program_private::decThreadCount(*pgm, td->tid, xsink);
+    } else if (module_uncounted) {
+        qore_module_uncounted_exit(td);
+    }
+}
+
+void ProgramThreadCountContextHelper::takeModuleThreadCount(QoreReferenceProgramEntry& rv) {
+    assert(module_uncounted);
+    // the Program's teardown cannot have started: the module cleanup stops the uncounted entries, and waits for this
+    // one to be left, before it clears the data of the module Programs (see qore_stop_module_uncounted_entries())
+    bool entered = qore_program_private::get(*count_pgm)->enterWithoutContext(count_tid);
+    assert(entered);
+    if (entered) {
+        rv.pgm = count_pgm;
+        rv.tid = count_tid;
     }
 }
 
@@ -3608,24 +4413,43 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     assert(!entry_frame.isActive());
 
     ThreadData* td = thread_data.get();
+    ctx_td = td;
     // ProgramRuntimeParseContextHelper can set current_pgm without setting
     // tlpd.  User-code execution still needs tlpd for local and closure
     // variable access, so only skip setup when the current program already has
     // a live thread-local program data frame.
     if (pgm == td->current_pgm && td->tlpd) {
+        // sandboxed code never runs with cancellation deferred, also when it is called in its own Program from
+        // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown)
+        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
+            suspendDeferral(td);
+        }
         // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
         // look up its metadata, and code that runs then enters the Program here, which runs its entry handler; a
         // call within the entered Program, the usual case, costs only this comparison
         if (td->entry_pgm != pgm) {
             this->xsink = xsink;
-            entry_frame.enter(td, pgm, xsink);
+            if (entry_frame.enter(td, pgm, xsink)) {
+                failed = true;
+            }
         }
         return;
     }
+    setOtherProgram(td, xsink, pgm, runtime);
+    // the entry, the entry handler or the thread initialization code raised an exception
+    if (*xsink) {
+        failed = true;
+    }
+}
+
+void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime) {
     old_pgm = td->current_pgm;
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
     old_ctx = td->current_pgm_ctx;
+    // no sandbox lookup has been made in the context yet (see sandboxChainClear())
+    sandbox_clear_gen = 0;
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
         "pgmid:" QLLD " new_pgm: %p new_pgmid:" QLLD " cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
@@ -3638,20 +4462,54 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // from that program while module init is still running; re-entering the
     // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
-    const bool skip_thread_count = pp->parsingLocked();
+    const bool skip_thread_count = pp->parsingLocked(td->tid);
     if (!skip_thread_count) {
-        // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
-            printd(5, "ProgramThreadCountContextHelper::set() failed\n");
-            return;
+        // the Program of a module is deleted only by the module manager's cleanup, which stops these entries first:
+        // a call into module code then needs neither the Program's lock nor its thread count, so concurrent calls do
+        // not contend for them (see qore_stop_module_uncounted_entries())
+        // the checks of incThreadCount() do not apply: the Program is not being torn down while these entries are
+        // allowed, and a module's Program is not parsed again once the module is registered
+        if (runtime && pp->module_lifetime.load(std::memory_order_acquire) && qore_module_uncounted_entry(td)) {
+            module_uncounted = true;
+            count_pgm = pgm;
+            count_tid = td->tid;
+        } else {
+            // once the module cleanup has started to clear the data of the modules, only the thread that runs it can
+            // enter their Programs (see qore_close_module_programs()); the cleanup waits for the threads that
+            // entered before
+            if (pp->module_lifetime.load(std::memory_order_acquire) && qore_module_programs_closed(td)) {
+                qore_raise_module_programs_closed(xsink);
+                return;
+            }
+            // try to increment thread count
+            if (pp->incThreadCount(td->tid, xsink)) {
+                printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+                return;
+            }
+            thread_count_incremented = true;
+            count_pgm = pgm;
+            count_tid = td->tid;
         }
-        thread_count_incremented = true;
     }
 
     // set up thread stacks
     restore = true;
     td->current_pgm = pgm;
-    init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
+    // the thread's local data in a module's Program stays in place while entries without the thread count are
+    // allowed: it is cached in the thread, which then takes no lock of the Program (see findModuleProgramData())
+    ThreadLocalProgramData* cached_tlpd = module_uncounted ? td->tpd->findModuleProgramData(pgm) : nullptr;
+    if (cached_tlpd) {
+        td->tlpd = cached_tlpd;
+        init_tlpd = false;
+        if (runtime) {
+            qore_program_private::instantiateThreadVarData(*pgm, *cached_tlpd);
+        }
+    } else {
+        init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
+        if (module_uncounted) {
+            td->tpd->cacheModuleProgramData(pgm, td->tlpd);
+        }
+    }
     if (init_tlpd && runtime) {
         // the thread initialization code runs on the thread's first entry that succeeds
         td->tlpd->thread_init_pending = true;
@@ -3662,11 +4520,17 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
 
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
-    {
+    // (almost every Program has no manager, which is checked without the call that takes a reference to it)
+    if (pp->sandbox_manager.load(std::memory_order_acquire)) {
         ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
         if (sm) {
             td->sandbox_budgets.enter(td->tid, *sm, this);
         }
+    }
+    // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
+    // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
+    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
+        suspendDeferral(td);
     }
 
     // the entry handler runs once the thread is in the Program, and before any of the Program's code, including its
@@ -3689,7 +4553,9 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         "init_tlpd:%d\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd
     );
 
-    if (td->tpd->canRunDebugCallbacks() && !td->tlpd->dbgIsAttached()) {
+    // a Program without a debug program attached needs no attach notification: it would find none and leave the
+    // thread's data detached (a debug program attached later marks the thread's data for a pending attach)
+    if (pp->hasDebuggerAttached() && td->tpd->canRunDebugCallbacks() && !td->tlpd->dbgIsAttached()) {
         // find if tlpd is in lower context and if not then notify dbgAttach()
         if (isFirstThreadLocalProgramData(td->tlpd)) {
             td->tlpd->dbgAttach(xsink);
@@ -3776,6 +4642,8 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     return tlpd;
 }
 
+std::atomic<uint64_t> qore_sandbox_manager_generation{1};
+
 //! Resolves the sandbox manager governing the current thread, optionally reporting the ID of its Program
 /** The resolution order is: the current Program, then the enclosing caller Programs innermost
     first, then the call-program context fallback, and finally the sandbox the thread inherited from
@@ -3801,6 +4669,14 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
     // under a lift, resolution ignores the barriers below it
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    // the current Program and the Programs that the thread's contexts left are known to have no manager if a lookup in
+    // the current context found none in the same generation: then they are not checked again (see
+    // ProgramThreadCountContextHelper::sandboxChainClear()).  Not under a module initialization barrier or a policy
+    // barrier, which end the walk of the chain early
+    const ProgramThreadCountContextHelper* cur_ctx = td->current_pgm_ctx;
+    const bool cacheable = cur_ctx && !mib && !(policy && td->sandbox_policy_barrier);
+    const uint64_t gen = cacheable ? qore_sandbox_manager_generation.load(std::memory_order_seq_cst) : 0;
+    const bool chain_clear = cacheable && cur_ctx->sandboxChainClear(td->current_pgm, gen);
     // an operation continued for another thread is governed by the sandbox of the thread that started it; the
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
     const QoreSandboxContext* continued = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context;
@@ -3837,20 +4713,23 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
                 *pgm_id = p->getProgramId();
             }
         };
-        if (td->current_pgm) {
-            if (QoreSandboxManager* m = qore_program_private::get(*td->current_pgm)->getSandboxManagerRef()) {
-                inner.push_back(m);
-                note_pgm(td->current_pgm);
+        // a reference taken is held until the vector owns it, so that it is released if the vector cannot grow
+        auto add_pgm = [&](QoreProgram* p) {
+            ReferenceHolder<QoreSandboxManager> m(qore_program_private::get(*p)->getSandboxManagerRef(), nullptr);
+            if (m) {
+                inner.push_back(*m);
+                m.release();
+                note_pgm(p);
             }
+        };
+        if (td->current_pgm && !chain_clear) {
+            add_pgm(td->current_pgm);
         }
-        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
+        for (const ProgramThreadCountContextHelper* ch = chain_clear ? nullptr : td->current_pgm_ctx;
                 ch && ch != td->sandbox_context_pgm_ctx && ch != barrier_ctx; ch = ch->getOldContext()) {
             QoreProgram* p = ch->getOldProgram();
             if (p) {
-                if (QoreSandboxManager* m = qore_program_private::get(*p)->getSandboxManagerRef()) {
-                    inner.push_back(m);
-                    note_pgm(p);
-                }
+                add_pgm(p);
             }
         }
         if (inner.empty()) {
@@ -3875,33 +4754,39 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         }
         return sm;
     };
-    // 1) the current program context; under a module initialization barrier, not the Program that loads the module
-    // while no Program has been entered since
-    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
-        if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
-            return sm;
+    if (!chain_clear) {
+        // 1) the current program context; under a module initialization barrier, not the Program that loads the
+        // module while no Program has been entered since
+        if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+            if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
+                return sm;
+            }
         }
-    }
-    // 2) enclosing caller programs via the program-context (call) stack, innermost first
-    //
-    // a policy barrier stops the walk at the program context that was current when it was pushed: the
-    // Programs entered inside the barrier still govern, so a callback that re-enters sandboxed code is
-    // checked against its own sandbox, and so is any module code that callback calls, but the caller's
-    // sandbox is not inherited by the trusted code running under the barrier
-    const ProgramThreadCountContextHelper* barrier_ctx = barrier
-        ? td->sandbox_policy_barrier_ctx.back()
-        : nullptr;
-    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
-        if (barrier && ch == barrier_ctx) {
-            return nullptr;
+        // 2) enclosing caller programs via the program-context (call) stack, innermost first
+        //
+        // a policy barrier stops the walk at the program context that was current when it was pushed: the
+        // Programs entered inside the barrier still govern, so a callback that re-enters sandboxed code is
+        // checked against its own sandbox, and so is any module code that callback calls, but the caller's
+        // sandbox is not inherited by the trusted code running under the barrier
+        const ProgramThreadCountContextHelper* barrier_ctx = barrier
+            ? td->sandbox_policy_barrier_ctx.back()
+            : nullptr;
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+            if (barrier && ch == barrier_ctx) {
+                return nullptr;
+            }
+            // a module initialization barrier: the Program that was current when it was set is the old Program of
+            // the first context entered after it
+            if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+                return nullptr;
+            }
+            if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
+                return sm;
+            }
         }
-        // a module initialization barrier: the Program that was current when it was set is the old Program of the
-        // first context entered after it
-        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
-            return nullptr;
-        }
-        if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
-            return sm;
+        // the whole chain was checked: none of its Programs has a manager in this generation
+        if (cacheable) {
+            cur_ctx->setSandboxChainClear(td->current_pgm, gen);
         }
     }
     if (barrier) {
@@ -4027,6 +4912,66 @@ QoreSandboxManager* qore_caller_sandbox_ref() {
         }
     }
     return find_thread_sandbox_manager_ref_intern();
+}
+
+bool qore_calling_code_is_untrusted() {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->current_pgm) {
+        return false;
+    }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return true;
+    }
+    // the in-module domain only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    return !!(td->current_pgm->getParseOptions() & restricting);
+}
+
+bool qore_caller_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return false;
+    }
+    // under a module initialization barrier, the code that loads library code does not create what the
+    // initialization of the library code creates (see QoreModuleInitSandboxBarrierHelper); under a lift it does
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    // a sandboxed caller that a parse or module load in another Program hid from the walk below; not one that called
+    // library code whose initialization runs now (see QoreCallerSandboxHelper)
+    if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
+        return true;
+    }
+    // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
+    // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
+    // are walked as in find_thread_sandbox_stack_ref_intern()
+    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (qore_program_is_sandboxed(td->current_pgm)) {
+            return true;
+        }
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            break;
+        }
+        if (qore_program_is_sandboxed(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    if (!mib && td->current_pgm != td->call_program_context
+        && qore_program_is_sandboxed(td->call_program_context)) {
+        return true;
+    }
+    // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
+    // runs and the sandbox inherited by the thread, as for interrupts and resource limits
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(), nullptr);
+        return static_cast<bool>(sm);
+    } catch (std::bad_alloc&) {
+        // the sandbox cannot be resolved: what the code creates is not trusted
+        return true;
+    }
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -4352,6 +5297,40 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
     }
 }
 
+QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // no switch hides the caller, or the caller is trusted
+    if (!td || !target || target == td->current_pgm || !qore_caller_is_sandboxed()) {
+        return;
+    }
+    previous = td->sandboxed_caller;
+    barrier_depth = td->module_init_barriers.size();
+    td->sandboxed_caller = this;
+    pushed = true;
+    // the sandbox that governs the caller governs what runs for it in the target Program; a caller that no sandbox
+    // governs (code of a Program that sandboxed code created, called by trusted code) is recorded only
+    try {
+        QoreSandboxContext* ctx = new QoreSandboxContext(false);
+        if (ctx->manager || ctx->policy_manager || ctx->provenance_manager || ctx->provenance_policy_manager) {
+            provenance.apply(ctx);
+        } else {
+            ctx->deref();
+        }
+    } catch (std::bad_alloc&) {
+        // the caller cannot be governed: the call must fail
+        assert(xsink);
+        xsink->outOfMemory();
+    }
+}
+
+QoreCallerSandboxHelper::~QoreCallerSandboxHelper() {
+    if (pushed) {
+        ThreadData* td = thread_data.get();
+        assert(td->sandboxed_caller == this);
+        td->sandboxed_caller = previous;
+    }
+}
+
 QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const ResolvedCallReferenceNode* callback) {
     if (callback) {
         apply(qore_get_call_reference_provenance(callback));
@@ -4467,8 +5446,23 @@ void QoreInheritedSandboxHelper::reset() {
 QoreSandboxCapture::QoreSandboxCapture() : ctx(new QoreSandboxContext) {
 }
 
+QoreSandboxCapture::QoreSandboxCapture(const QoreSandboxCapture& other) : ctx(other.ctx) {
+    // the context is immutable, so the copy shares it
+    ctx->ref();
+}
+
 QoreSandboxCapture::~QoreSandboxCapture() {
     ctx->deref();
+}
+
+QoreSandboxManager* QoreSandboxCapture::getPolicyManagerRef() const {
+    // as find_thread_sandbox_manager_ref_intern() resolves the policy manager on a thread with no Qore context of
+    // its own while QoreSandboxCaptureHelper applies the capture (td->inherited_sandbox_context): the context's
+    // policy manager combined with the policy managers of its provenance
+    if (!isSandboxed()) {
+        return nullptr;
+    }
+    return QoreSandboxComposition::combine({ctx->policy_manager, ctx->provenance_policy_manager});
 }
 
 bool QoreSandboxCapture::isSandboxed() const {
@@ -4583,6 +5577,33 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     sync_runtime_config_program(td);
 }
 
+ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
+        bool no_wait) : restore(false) {
+    if (!pgm) {
+        return;
+    }
+
+    if (no_wait) {
+        int rc = qore_program_private::tryLockParsing(*pgm, xsink);
+        if (rc < 0) {
+            return;
+        }
+        if (rc > 0) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing in another thread");
+            return;
+        }
+    } else if (qore_program_private::lockParsing(*pgm, xsink)) {
+        return;
+    }
+
+    restore = true;
+
+    ThreadData* td = thread_data.get();
+    old_pgm = td->current_pgm;
+    td->current_pgm = pgm;
+    sync_runtime_config_program(td);
+}
+
 ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
     if (!restore)
         return;
@@ -4675,6 +5696,34 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }
 
+bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    if (p == td->current_pgm) {
+        return false;
+    }
+    // the list of the Programs that the thread deletes is searched only while it deletes one
+    if (td->pgm_teardown_depth && qore_program_torn_down_by_current_thread(p)) {
+        return false;
+    }
+    tid = td->tid;
+    return true;
+}
+
+bool qore_thread_program_teardown_enter() {
+    if (ThreadData* td = thread_data.get()) {
+        ++td->pgm_teardown_depth;
+        return true;
+    }
+    return false;
+}
+
+void qore_thread_program_teardown_leave() {
+    ThreadData* td = thread_data.get();
+    assert(td && td->pgm_teardown_depth > 0);
+    --td->pgm_teardown_depth;
+}
+
 QoreProgram* getProgram() {
     ThreadData* td = thread_data.get();
     printd(5, "getProgram(): (td: %p) current: %p call: %p\n", td, td ? td->current_pgm : nullptr,
@@ -4733,12 +5782,44 @@ QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm)
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
-    // only code running in the module's own Program reaches only the module's own state: a module function runs in
-    // its caller's Program, and code of another Program can run while the module's override is active
+    // only code running in the module's own Program reaches only the module's own state: code of another Program
+    // can run while the module's override is active (a callback of the caller, or user code whose Program has
+    // released it, which runs in its caller's Program)
     if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
         return po;
     }
     return po & ~td->runtime_po_caller_restrictions;
+}
+
+ThreadData* qore_get_thread_data() {
+    return thread_data.get();
+}
+
+QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm) {
+    assert(td == thread_data.get());
+    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+}
+
+bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {
+    return runtime_module_call_inherits_caller_restrictions(thread_data.get(), caller_pgm);
+}
+
+bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const QoreProgram* caller_pgm) {
+    if (!td) {
+        return false;
+    }
+    // module code running for a sandboxed caller passes the caller's restrictions on
+    if (td->runtime_po_sandboxed || td->runtime_po_module_pgm) {
+        return true;
+    }
+    // a thread that runs for sandboxed code
+    for (const QoreSandboxContext* ctx : {td->sandbox_context, td->inherited_sandbox_context}) {
+        if (ctx && (ctx->manager || ctx->policy_manager)) {
+            return true;
+        }
+    }
+    return qore_program_private::isSandboxed(caller_pgm)
+        || (td->current_pgm != caller_pgm && qore_program_private::isSandboxed(td->current_pgm));
 }
 
 qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
@@ -4806,10 +5887,13 @@ static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 d
     if (!needed) {
         return 0;
     }
-    // the Program whose code would run: that of a method's class for a method reference
-    const QoreProgram* pgm = rcr ? qore_call_reference_code_program(rcr) : nullptr;
-    // code without a Program of its own (a call reference to a builtin) runs with no restrictions at all
-    QoreParseOptions denied = pgm ? (pgm->getParseOptions() & needed) : needed;
+    // the options of the Program whose code would run: that of a method's class for a method reference, the one that
+    // defines a function for a function reference; code without a Program of its own (a call reference to a builtin)
+    // runs with no restrictions at all, and code whose Program has been deleted cannot run
+    QoreParseOptions code_po;
+    int code_rc = rcr ? qore_call_reference_code_parse_options(rcr, code_po, xsink) : 0;
+    const bool pgm = code_rc > 0;
+    QoreParseOptions denied = pgm ? (code_po & needed) : needed;
     if (!denied) {
         return 0;
     }
@@ -4820,6 +5904,9 @@ static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 d
     if (!rcr) {
         xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the timer data is not code; module code running for a "
             "caller that may not %s can %s only code of a Program that may", name, caller_desc, action);
+    } else if (code_rc < 0) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the callback's Program has been deleted; module code "
+            "running for a caller that may not %s can %s only code of a Program that may", name, caller_desc, action);
     } else if (!pgm) {
         xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the callback is a call reference to builtin code, "
             "which has no Program; module code running for a caller that may not %s can %s only code of a Program "
@@ -4845,9 +5932,16 @@ RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreC
 }
 
 void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& o) {
+    set(o.td ? o.td : thread_data.get(), o);
+}
+
+void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseOptionsOverride& o) {
     // the caller restrictions apply only to the code of the given module Program
     assert(!o.caller_restrictions || o.module_pgm);
-    ThreadData* td = thread_data.get();
+    assert(!active);
+    assert(td == thread_data.get());
+    this->td = td;
+    active = true;
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_replace = td->runtime_po_override_replace;
@@ -4855,24 +5949,63 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
     old_app_pgm_id = td->runtime_po_app_pgm_id;
+    old_sandboxed = td->runtime_po_sandboxed;
+    old_override_pgm = td->runtime_po_override_pgm;
     td->runtime_po_override_mask = o.mask;
     td->runtime_po_override_value = o.value;
     td->runtime_po_override_replace = o.replace & o.mask;
     td->runtime_po_caller_restrictions = o.caller_restrictions;
     td->runtime_po_module_pgm = o.module_pgm;
     td->runtime_po_app_pgm_id = o.app_pgm_id;
+    td->runtime_po_sandboxed = o.sandboxed;
+    td->runtime_po_override_pgm = o.override_pgm;
     td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
 }
 
-RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
-    ThreadData* td = thread_data.get();
+void RuntimeParseOptionsOverrideHelper::setCleared() {
+    assert(!active);
+    td = thread_data.get();
+    active = true;
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    old_replace = td->runtime_po_override_replace;
+    old_po = td->runtime_po;
+    old_caller_restrictions = td->runtime_po_caller_restrictions;
+    old_module_pgm = td->runtime_po_module_pgm;
+    old_app_pgm_id = td->runtime_po_app_pgm_id;
+    old_sandboxed = td->runtime_po_sandboxed;
+    old_override_pgm = td->runtime_po_override_pgm;
+    td->runtime_po_override_mask = QoreParseOptions();
+    td->runtime_po_override_value = QoreParseOptions();
+    td->runtime_po_override_replace = QoreParseOptions();
+    td->runtime_po_caller_restrictions = QoreParseOptions();
+    td->runtime_po_module_pgm = nullptr;
+    td->runtime_po_app_pgm_id = 0;
+    td->runtime_po_sandboxed = false;
+    td->runtime_po_override_pgm = nullptr;
+    // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
+}
+
+void RuntimeParseOptionsOverrideHelper::restore() {
+    assert(active);
+    assert(td == thread_data.get());
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
     td->runtime_po_override_replace = old_replace;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po_app_pgm_id = old_app_pgm_id;
+    td->runtime_po_sandboxed = old_sandboxed;
+    td->runtime_po_override_pgm = old_override_pgm;
     td->runtime_po = old_po;
+}
+
+bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
+    return runtime_module_call_override_in_effect(thread_data.get(), module_pgm);
+}
+
+bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm) {
+    return td && td->runtime_po_override_pgm == module_pgm;
 }
 
 LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& po) {
@@ -4884,12 +6017,16 @@ LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& p
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
     old_app_pgm_id = td->runtime_po_app_pgm_id;
+    old_sandboxed = td->runtime_po_sandboxed;
+    old_override_pgm = td->runtime_po_override_pgm;
     td->runtime_po_override_mask = QoreParseOptions();
     td->runtime_po_override_value = QoreParseOptions();
     td->runtime_po_override_replace = QoreParseOptions();
     td->runtime_po_caller_restrictions = QoreParseOptions();
     td->runtime_po_module_pgm = nullptr;
     td->runtime_po_app_pgm_id = 0;
+    td->runtime_po_sandboxed = false;
+    td->runtime_po_override_pgm = nullptr;
     td->runtime_po = po;
 }
 
@@ -4901,6 +6038,8 @@ LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po_app_pgm_id = old_app_pgm_id;
+    td->runtime_po_sandboxed = old_sandboxed;
+    td->runtime_po_override_pgm = old_override_pgm;
     td->runtime_po = old_po;
 }
 
@@ -4969,13 +6108,42 @@ VNode* get_global_vnode() {
     return (thread_data.get())->global_vnode;
 }
 
-QoreClass* parse_get_class() {
-    const qore_class_private* cls = (thread_data.get())->current_class;
-    return cls ? const_cast<qore_class_private*>(cls)->cls : nullptr;
+namespace {
+// the class context of the parse-time checks while IR is lowered, analyzed or compiled in this thread (see
+// QoreIRClassContextHelper); a thread-local variable of its own, as a background compilation thread has no ThreadData
+thread_local const qore_class_private* ir_class_ctx = nullptr;
+thread_local bool ir_class_ctx_set = false;
+}
+
+QoreIRClassContextHelper::QoreIRClassContextHelper(const qore_class_private* cls) : old_cls(ir_class_ctx),
+        old_set(ir_class_ctx_set) {
+    ir_class_ctx = cls;
+    ir_class_ctx_set = true;
+}
+
+QoreIRClassContextHelper::~QoreIRClassContextHelper() {
+    ir_class_ctx = old_cls;
+    ir_class_ctx_set = old_set;
+}
+
+bool QoreIRClassContextHelper::isSet() {
+    return ir_class_ctx_set;
 }
 
 qore_class_private* parse_get_class_priv() {
-    return const_cast<qore_class_private*>((thread_data.get())->current_class);
+    if (ir_class_ctx_set) {
+        return const_cast<qore_class_private*>(ir_class_ctx);
+    }
+    ThreadData* td = thread_data.get();
+    // a thread without parse state (a background compilation thread) makes parse-time checks only in the class
+    // context of the code that it compiles, which a QoreIRClassContextHelper sets
+    assert(td);
+    return td ? const_cast<qore_class_private*>(td->current_class) : nullptr;
+}
+
+QoreClass* parse_get_class() {
+    qore_class_private* cls = parse_get_class_priv();
+    return cls ? cls->cls : nullptr;
 }
 
 void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns,
@@ -5052,7 +6220,10 @@ void qore_exit_process(int rc) {
         // The native JIT compiler uses a dedicated C++ thread that is not part of
         // thread_list.  Stop it while LLVM's process-wide state is still intact;
         // otherwise exit() can run LLVM static destructors concurrently with an
-        // in-progress ORC materialization.
+        // in-progress ORC materialization.  A compile still in LLVM, which can take without bound, is
+        // detached instead of awaited, and its thread is left running; qore_fork_child_quick_exit() below
+        // then ends the process with _exit() if it still runs, so that exit() does not destroy LLVM's
+        // static objects under it (see QoreJIT::exitQuickly()).
         // Keep compiled code mapped because later atexit callbacks and static destructors can still
         // execute Qore cleanup code after the native compiler has been stopped.
         QoreJIT::instance().stopBackgroundCompiler();
@@ -5121,6 +6292,44 @@ static void qore_thread_cleanup(void* n = nullptr) {
     ERR_remove_state(0);
 #endif
 }
+
+//! Runs qore_thread_cleanup() once: where run() is called, or when the thread function's scope is left without it
+/** It replaces pthread_cleanup_push()/pthread_cleanup_pop(1) in q_run_thread() and op_background_thread() (issue
+    #5718): on macOS the macros read and write the cleanup stack in the thread's pthread_t
+    (pthread_self()->__cleanup_stack), which the system library reuses for a new thread after a detached thread (a
+    background thread) has ended.  That reuse is synchronized in the uninstrumented system library, so ThreadSanitizer
+    reported the push of a new thread and the pop of an ended background thread as a data race (a false positive; no
+    Qore data was shared).  examples/test/runner/test_no_pthread_cleanup.py keeps the macros out of libqore.
+
+    Unlike the macros, the guard does not run the cleanup when the thread is ended with pthread_cancel() or
+    pthread_exit(), on any platform; with the macros it ran then only with glibc, whose C++ form of the macros is an
+    object whose destructor runs when the thread is unwound, and not with musl or on macOS.  That is acceptable:
+    libqore never cancels a thread with pthread_cancel(), its only pthread_exit() is in the signal thread, which is not
+    a Qore thread and does not use the guard, and a Qore thread that thread_exit() ends returns normally from its thread
+    function, which runs the cleanup at run().
+*/
+class QoreThreadCleanupGuard {
+public:
+    DLLLOCAL QoreThreadCleanupGuard() = default;
+
+    DLLLOCAL ~QoreThreadCleanupGuard() {
+        run();
+    }
+
+    //! Runs the cleanup now, if it has not run yet
+    DLLLOCAL void run() {
+        if (!done) {
+            done = true;
+            qore_thread_cleanup();
+        }
+    }
+
+    QoreThreadCleanupGuard(const QoreThreadCleanupGuard&) = delete;
+    QoreThreadCleanupGuard& operator=(const QoreThreadCleanupGuard&) = delete;
+
+private:
+    bool done = false;
+};
 
 int q_register_foreign_thread() {
     // see if the current thread has already been registered
@@ -5471,7 +6680,7 @@ namespace {
 
         set_tid_thread_name(ta->tid);
 
-        pthread_cleanup_push(qore_thread_cleanup, nullptr);
+        QoreThreadCleanupGuard thread_cleanup;
 
         {
             // the sandbox of the starting code governs everything this thread runs, including its teardown; the
@@ -5532,7 +6741,7 @@ namespace {
             }
         }
 
-        pthread_cleanup_pop((int)1);
+        thread_cleanup.run();
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function (instead of calling pthread_exit()) already triggers
         // TLS destructors registered by OpenSSL via pthread_key_create(),
@@ -5559,18 +6768,44 @@ namespace {
 
         set_tid_thread_name(btp->tid);
 
-        pthread_cleanup_push(qore_thread_cleanup, nullptr);
+        QoreThreadCleanupGuard thread_cleanup;
 
         {
             // the sandbox of the starting code governs everything this thread runs, including its teardown; it is
             // taken from btp because btp is deleted before the thread's data
             std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(btp->sandbox));
             QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+            // a thread that the module cleanup started can enter the Programs of the modules, which the cleanup
+            // closes to other threads, for its whole life, including the deletion of its data
+            QoreModuleCleanupDelegateHelper cleanup_delegate(btp->module_cleanup_delegate);
 
             ExceptionSink xsink;
 
             // register thread in Program object
             btp->startThread(xsink);
+
+            // the thread publishes its lifecycle events to the hub of its Program, which it holds until it has
+            // published FINISHED, as the Program can be destroyed once the thread has left it
+            ProgramThreadHubHolder hub(qore_program_private::refThreadHub(*btp->pgm));
+            int tid = btp->tid;
+            int64 thread_id = btp->identity.thread_id;
+            thread_data.get()->bg_thread_id = thread_id;
+            thread_data.get()->bg_pgm_id = btp->pgm->getProgramId();
+            hub->threadStarted(tid, btp->identity);
+            {
+                // a cancellation request made before the hub was set (by a cancellation wave in startThread(), or
+                // by a canceller that had the TID from the starting thread) is published now; later ones are
+                // published by their canceller, and by the thread when its code has ended
+                lifecycle_cancel_claims_t claims;
+                thread_list.setLifecycleHub(tid, *hub, thread_id, btp->pgm->getProgramId(), claims);
+                for (const QoreLifecycleCancelClaim& claim : claims) {
+                    hub->cancelRequested(thread_id, claim.gen, claim.has_reason ? claim.reason.c_str() : nullptr);
+                }
+            }
+            // how the thread's code ended, the exceptions that ended it, and the first exception of its teardown
+            ProgramThreadOutcome outcome = ProgramThreadOutcome::COMPLETED;
+            ReferenceHolder<QoreHashNode> error(nullptr);
+            int64 exception_count = 0;
 
             // the thread runs the Program's code for its whole life: it enters the Program here, which runs the
             // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
@@ -5608,6 +6843,21 @@ namespace {
                     } else {
                         btp->discardExpression(&xsink);
                     }
+                    // the outcome is taken before the teardown adds exceptions to the sink; a cancellation request
+                    // made from now on is not published
+                    outcome = program_thread_get_outcome(xsink, entered);
+                    error = program_thread_event_error(xsink, 0);
+                    exception_count = program_thread_count_exceptions(xsink);
+                    {
+                        // every request claimed for the thread is published before its FINISHED event, also when
+                        // its canceller has not published it yet; the hub publishes each claim once
+                        lifecycle_cancel_claims_t claims;
+                        thread_list.clearLifecycleHub(tid, claims);
+                        for (const QoreLifecycleCancelClaim& claim : claims) {
+                            hub->cancelRequested(thread_id, claim.gen,
+                                claim.has_reason ? claim.reason.c_str() : nullptr);
+                        }
+                    }
                     // the thread expression has returned; everything from here on is teardown
                     end_thread_cancellation(true);
                     if (tlpd) {
@@ -5616,6 +6866,10 @@ namespace {
                         tlpd->dbgDetach(&xsink);
                         // a thread that a debugger cancelled to end its Program ends without an error
                         tlpd->dbgClearTermination(xsink);
+                        // the exceptions of the code are then no longer in the sink
+                        if (!xsink.isException()) {
+                            exception_count = 0;
+                        }
                     }
 
                     // if there is an object, we dereference the extra reference here
@@ -5632,7 +6886,6 @@ namespace {
                 // Program's thread count, so the Program is not being destroyed
                 entry_frame.exit(&xsink);
 
-                int tid = btp->tid;
                 // the thread's work has ended: it stops counting against the sandbox's thread limit before the
                 // Program sees it end
                 if (sandbox) {
@@ -5646,6 +6899,10 @@ namespace {
                 // delete any thread data
                 td->del(&xsink);
 
+                // the first exception added by the teardown, after the exceptions of the code
+                ReferenceHolder<QoreHashNode> cleanup_error(program_thread_event_error(xsink, exception_count),
+                    nullptr);
+
                 xsink.handleExceptions();
 
                 printd(4, "thread terminating");
@@ -5654,15 +6911,21 @@ namespace {
                 tclist.exec();
 
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
+                cleanup_delegate.reset();
                 sandbox_helper.reset();
                 sandbox.reset();
+
+                // the thread has ended: it publishes FINISHED while it still holds its TID, so a thread that reuses
+                // the TID cannot publish STARTED first
+                hub->threadFinished(thread_id, outcome, error.release(), exception_count, cleanup_error.release());
+                hub.reset();
 
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(tid);
             }
         }
 
-        pthread_cleanup_pop(1);
+        thread_cleanup.run();
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
         qore_thread_counter_share = 0;
@@ -6220,6 +7483,27 @@ void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
     }
 }
 
+namespace {
+//! Refuses the assignment of the current thread's thread_local variables while the data of its task is cleared
+class ThreadLocalVarClearingHelper {
+public:
+    ThreadLocalVarClearingHelper(ThreadData& td) : td(td) {
+        assert(!td.tlv_clearing);
+        td.tlv_clearing = true;
+    }
+
+    ~ThreadLocalVarClearingHelper() {
+        td.tlv_clearing = false;
+    }
+
+    ThreadLocalVarClearingHelper(const ThreadLocalVarClearingHelper&) = delete;
+    ThreadLocalVarClearingHelper& operator=(const ThreadLocalVarClearingHelper&) = delete;
+
+private:
+    ThreadData& td;
+};
+}
+
 void clear_all_program_thread_local_data() {
     ThreadData* td = thread_data.get();
     if (!td) {
@@ -6234,13 +7518,15 @@ void clear_all_program_thread_local_data() {
     // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
     // generation if subsequent cleanup code (e.g. object destructors) throws
 
-    // clear all thread_local variable values without setting the finalizing flag
-    for (auto& i : td->tlvmap) {
-        ExceptionSink xsink;
-        i.second.discard(&xsink);
-        xsink.handleExceptions();
+    // while the task's thread_local values are released, the destructors that the release runs cannot give the
+    // thread's thread_local variables values, as at the end of a thread (see thread_local_vars_finalizing()): a
+    // destructor that gave a variable a value whose destructor gave it a value again kept the release going for ever
+    // between two tasks of a ThreadPool or AsyncIoController worker, and stopWait() never returned; the thread is not
+    // finalized, so the clearing of its other data below and its next task assign them again
+    {
+        ThreadLocalVarClearingHelper tlvch(*td);
+        td->releaseThreadLocalVars(nullptr);
     }
-    td->tlvmap.clear();
 
     // clear thread-local hash (tld) in all programs this thread has data in
     {
@@ -6255,6 +7541,14 @@ void clear_all_program_thread_local_data() {
         purge_thread_resources(&xsink);
         xsink.handleExceptions();
     }
+
+    // the code run above can have assigned variables, or looked them up, which gave the thread entries without
+    // values: they are released as the values of the task were
+    {
+        ThreadLocalVarClearingHelper tlvch(*td);
+        td->releaseThreadLocalVars(nullptr);
+    }
+    td->tlvmap.clear();
 }
 
 void delete_thread_local_data() {
@@ -6426,6 +7720,8 @@ QoreHashNode* QoreThreadList::getCallStackHash(qore_call_t call_type, const std:
     ph->setKeyValueIntern("function", new QoreStringNode(code));
     ph->setKeyValueIntern("line",     loc.start_line);
     ph->setKeyValueIntern("endline",  loc.end_line);
+    ph->setKeyValueIntern("start_column", static_cast<int64>(loc.start_column));
+    ph->setKeyValueIntern("end_column", static_cast<int64>(loc.end_column));
     ph->setKeyValueIntern("file",     new QoreStringNode(loc.getFileValue()));
     // do not set "source" to NOTHING as it must be set to a value according to the hashdecl
     {
@@ -6494,6 +7790,7 @@ void QoreThreadList::deleteData(int tid) {
         entry[tid].closeCancelWakeup();
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 }
@@ -6506,6 +7803,7 @@ void QoreThreadList::deleteDataRelease(int tid) {
         entry[tid].thread_data = nullptr;
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 
@@ -6578,6 +7876,7 @@ void QoreThreadList::deleteDataReleaseSignalThread() {
         entry[0].thread_data = nullptr;
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 
@@ -6649,35 +7948,142 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
 
 // --- Thread Cancellation API ---
 
+#ifdef DEBUG
+thread_local std::function<void()>* qore_dbg_cancel_before_publish = nullptr;
+#endif
+
+//! claims a new cancellation request of a background thread for its lifecycle event; called with lck held
+/** A request scoped to another Program applies only while the thread runs that Program's code, so it is not
+    published: the thread's FINISHED event reports whether it ended the thread.
+
+    @return true if the request was claimed
+*/
+static bool qore_claim_lifecycle_cancel(ThreadEntry& e, qore_program_id_t scope_pgm_id,
+        QoreLifecycleCancelClaim& claim) {
+    if (!e.lifecycle_hub || (scope_pgm_id && scope_pgm_id != e.lifecycle_pgm_id)) {
+        return false;
+    }
+    claim.gen = ++e.lifecycle_cancel_gen;
+    if (e.cancel_reason) {
+        claim.reason = e.cancel_reason->c_str();
+        claim.has_reason = true;
+    }
+    e.lifecycle_cancels.push_back(claim);
+    return true;
+}
+
 int QoreThreadList::cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id) {
-    AutoLocker al(lck);
-    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
-        return -1;
-    }
-    // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
-    // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so it
-    // takes effect at the thread's first cancellation check point instead of being dropped
-    if (!entry[tid].active() && entry[tid].status != QTS_NA) {
-        return -1;
-    }
-    if (reason) {
-        if (entry[tid].cancel_reason) {
-            entry[tid].cancel_reason->deref();
+    // a new request to a background thread whose code runs is claimed under the lock and published to its Program's
+    // lifecycle subscriptions after the lock is released; the thread publishes its claims as well before it ends, so
+    // a request is published even if the thread ends first
+    ProgramThreadHubHolder hub;
+    int64 thread_id = 0;
+    QoreLifecycleCancelClaim claim;
+    {
+        AutoLocker al(lck);
+        if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+            return -1;
         }
-        entry[tid].cancel_reason = new QoreStringNode(reason);
+        // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
+        // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so
+        // it takes effect at the thread's first cancellation check point instead of being dropped
+        if (!entry[tid].active() && entry[tid].status != QTS_NA) {
+            return -1;
+        }
+        if (reason) {
+            if (entry[tid].cancel_reason) {
+                entry[tid].cancel_reason->deref();
+            }
+            entry[tid].cancel_reason = new QoreStringNode(reason);
+        }
+        // publish the scope before the request flag; the target only reads the scope after observing
+        // the flag, so this release store pairs with the acquire load in getCancelScopeProgramId()
+        entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
+        // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
+        // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
+        unsigned prev = entry[tid].cancel_requested.fetch_or(QCR_THREAD_CANCEL, std::memory_order_seq_cst);
+        // wake the target if it's blocked (or about to block) in a cancellable condition wait
+        wakeCondWaiter(tid);
+        // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
+        // lck before it drains or closes the channel
+        signalWaitingFd(tid);
+        // a request made while one is pending is not a new one
+        if (!(prev & QCR_THREAD_CANCEL) && qore_claim_lifecycle_cancel(entry[tid], scope_pgm_id, claim)) {
+            entry[tid].lifecycle_hub->ref();
+            hub.set(entry[tid].lifecycle_hub);
+            thread_id = entry[tid].lifecycle_thread_id;
+        }
     }
-    // publish the scope before the request flag; the target only reads the scope after observing
-    // the flag, so this release store pairs with the acquire load in getCancelScopeProgramId()
-    entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
-    // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
-    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    entry[tid].cancel_requested.fetch_or(QCR_THREAD_CANCEL, std::memory_order_seq_cst);
-    // wake the target if it's blocked (or about to block) in a cancellable condition wait
-    wakeCondWaiter(tid);
-    // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
-    // lck before it drains or closes the channel
-    signalWaitingFd(tid);
+    if (hub) {
+#ifdef DEBUG
+        // tests delay the publication until the thread has ended (dbg_cancel_thread_after_end())
+        if (qore_dbg_cancel_before_publish) {
+            (*qore_dbg_cancel_before_publish)();
+        }
+#endif
+        hub->cancelRequested(thread_id, claim.gen, claim.has_reason ? claim.reason.c_str() : nullptr);
+        // the claim is published; the thread no longer needs it, unless it has already taken it to publish it itself,
+        // and once it has been removed, the hub need not keep its generation to detect a second publication
+        if (releaseLifecycleCancelClaim(tid, thread_id, claim.gen)) {
+            hub->cancelClaimReleased(thread_id, claim.gen);
+        }
+    }
     return 0;
+}
+
+#ifdef DEBUG
+size_t QoreThreadList::getLifecycleCancelClaimCount(int tid) {
+    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+        return 0;
+    }
+    AutoLocker al(lck);
+    return entry[tid].lifecycle_cancels.size();
+}
+#endif
+
+bool QoreThreadList::releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen) {
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    // the TID may have been released and reused since the claim was made
+    if (e.lifecycle_thread_id != thread_id) {
+        return false;
+    }
+    for (lifecycle_cancel_claims_t::iterator i = e.lifecycle_cancels.begin(), end = e.lifecycle_cancels.end();
+            i != end; ++i) {
+        if (i->gen == gen) {
+            e.lifecycle_cancels.erase(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreThreadList::setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, qore_program_id_t pgm_id,
+        lifecycle_cancel_claims_t& claims) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    assert(!e.lifecycle_hub);
+    e.lifecycle_hub = hub;
+    e.lifecycle_thread_id = thread_id;
+    e.lifecycle_pgm_id = pgm_id;
+    // a request made before the hub was set was not claimed by its canceller; the thread publishes it itself now
+    if (e.cancel_requested.load(std::memory_order_seq_cst) & QCR_THREAD_CANCEL) {
+        QoreLifecycleCancelClaim claim;
+        if (qore_claim_lifecycle_cancel(e, e.cancel_scope_pgm_id.load(std::memory_order_acquire), claim)) {
+            claims.swap(e.lifecycle_cancels);
+        }
+    }
+}
+
+void QoreThreadList::clearLifecycleHub(int tid, lifecycle_cancel_claims_t& claims) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    e.lifecycle_hub = nullptr;
+    e.lifecycle_thread_id = 0;
+    e.lifecycle_pgm_id = 0;
+    claims.swap(e.lifecycle_cancels);
 }
 
 void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {
@@ -6689,8 +8095,9 @@ void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {
         assert(tid > 0 && tid < MAX_QORE_THREADS);
         // seq_cst pairs with the waiter side exactly as in cancelThread()
         entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
-        wakeCondWaiter(tid);
-        signalWaitingFd(tid);
+        // a limit also ends the waits of a trusted destructor
+        wakeCondWaiter(tid, true);
+        signalWaitingFd(tid, true);
     }
 }
 
@@ -6698,8 +8105,9 @@ void QoreThreadList::requestSandboxLimit(int tid) {
     assert(tid > 0 && tid < MAX_QORE_THREADS);
     AutoLocker al(lck);
     entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
-    wakeCondWaiter(tid);
-    signalWaitingFd(tid);
+    // a limit also ends the waits of a trusted destructor
+    wakeCondWaiter(tid, true);
+    signalWaitingFd(tid, true);
 }
 
 bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& budgets) {
@@ -6713,10 +8121,11 @@ bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& bu
     return true;
 }
 
-void QoreThreadList::signalWaitingFd(int tid) {
+void QoreThreadList::signalWaitingFd(int tid, bool limit) {
 #ifdef HAVE_POLL
     int fd = entry[tid].waiting_fd.load(std::memory_order_seq_cst);
-    if (fd >= 0) {
+    // a wait that only a sandbox limit can end is not woken for anything else: it would deliver nothing
+    if (fd >= 0 && (limit || !entry[tid].waiting_fd_limits_only.load(std::memory_order_relaxed))) {
 #ifdef DEBUG
         ++entry[tid].dbg_cancel_wakes;
 #endif
@@ -7110,7 +8519,7 @@ void qore_stop_cond_waker() {
     cond_waker.stop();
 }
 
-int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m) {
+int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m, bool limits_only) {
     assert(tid >= 0 && tid < MAX_QORE_THREADS);
     {
         AutoLocker al(cond_waker.lck);
@@ -7122,6 +8531,7 @@ int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex
         assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
         te.waiting_on = cond;
         te.waiting_mutex = m;
+        te.waiting_limits_only = limits_only;
     }
 #ifdef DEBUG
     // noted outside the registry lock: dbgCancelInWait() requests the cancellation with the debug lock held
@@ -7142,6 +8552,7 @@ void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
     assert(te.waiting_mutex == m);
     te.waiting_on = nullptr;
     te.waiting_mutex = nullptr;
+    te.waiting_limits_only = false;
     if (!te.wake_queued && !te.wake_busy) {
         return;
     }
@@ -7155,10 +8566,11 @@ void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
     pthread_mutex_lock(m);
 }
 
-void QoreThreadList::wakeCondWaiter(int tid) {
+void QoreThreadList::wakeCondWaiter(int tid, bool limit) {
     AutoLocker al(cond_waker.lck);
     ThreadEntry& te = entry[tid];
-    if (!te.waiting_on) {
+    // a wait that only a sandbox limit can end is not woken for anything else: it would deliver nothing
+    if (!te.waiting_on || (te.waiting_limits_only && !limit)) {
         return;
     }
 #ifdef DEBUG
@@ -7238,6 +8650,15 @@ int qore_fast_route_guard_probe(const char* kind, const ResolvedCallReferenceNod
 #endif
 }
 
+//! Returns true if only a sandbox limit can be delivered to the current thread's waits now
+/** In the destructor of a trusted class, a thread cancellation and a program interrupt are deferred, so a wait made
+    there is registered to be woken only by a sandbox limit (see ThreadEntry::waiting_limits_only)
+*/
+static bool qore_cancel_limits_only() {
+    ThreadData* td = thread_data.get();
+    return td && td->dtor_cancel_defer_count;
+}
+
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
         const char* operation) {
     // a fast route must never block
@@ -7251,7 +8672,7 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
-    if (thread_list.registerCondWait(tid, &cond, m)) {
+    if (thread_list.registerCondWait(tid, &cond, m, qore_cancel_limits_only())) {
         if (xsink) {
             xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
                 "thread that wakes cancelled threads", operation);
@@ -7430,6 +8851,13 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         // the thread has left the call since the bit was set (or the TID was reused): the bit is stale
         thread_list.clearSandboxLimit(tid, td->sandbox_budgets);
     }
+    // the destructor of a trusted class completes on a cancelled or interrupted thread; the request is left untouched
+    // and raised after the destructor returns.  A sandbox limit was checked above: it is never deferred here, so a
+    // destructor running in a sandbox call cannot run unbounded (see "Destructors" in
+    // design/cooperative-cancellation.md)
+    if (td && td->dtor_cancel_defer_count) {
+        return false;
+    }
     if ((bits & QCR_THREAD_CANCEL) && check_cancel_in_scope(tid)) {
         if (xsink) {
             // hold a reference while formatting; a concurrent cancelThread() call would otherwise
@@ -7496,7 +8924,45 @@ void qore_pop_cancel_deferral() {
 
 bool qore_is_cancel_deferred() {
     ThreadData* td = thread_data.get();
+    // only a full deferral: while the destructor of a trusted class runs, a sandbox limit can still be delivered, so
+    // waits must stay registered for a wakeup then
     return td && td->cancel_defer_count;
+}
+
+QoreDestructorCancelHelper::QoreDestructorCancelHelper(bool sandboxed) : td(thread_data.get()) {
+    if (!td) {
+        return;
+    }
+    if (!sandboxed) {
+        ++td->dtor_cancel_defer_count;
+        pushed = true;
+        return;
+    }
+    // sandboxed code never runs under a deferral, neither one of a trusted destructor that releases the object nor
+    // one in effect where the object is released (thread teardown, a cleanup critical section)
+    saved_defer = td->cancel_defer_count;
+    saved_dtor_defer = td->dtor_cancel_defer_count;
+    td->cancel_defer_count = 0;
+    td->dtor_cancel_defer_count = 0;
+    suspended = true;
+    // a request that a cancellation point would deliver now: the destructor is skipped; the request stays pending
+    skip_dtor = qore_check_cancel(nullptr, "destructor");
+}
+
+QoreDestructorCancelHelper::~QoreDestructorCancelHelper() {
+    if (pushed) {
+        // an underflow would leave the thread permanently uncancellable, so it is refused in release builds as well
+        assert(td->dtor_cancel_defer_count);
+        if (td->dtor_cancel_defer_count) {
+            --td->dtor_cancel_defer_count;
+        }
+    } else if (suspended) {
+        // added, not assigned, as in ProgramThreadCountContextHelper::restoreDeferral(): the code run in between
+        // restored the depths it changed
+        assert(!td->dtor_cancel_defer_count);
+        td->cancel_defer_count += saved_defer;
+        td->dtor_cancel_defer_count += saved_dtor_defer;
+    }
 }
 
 #ifdef HAVE_POLL
@@ -7587,7 +9053,7 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
         // register, then check: either this check sees a request delivered before the registration, or the
         // canceller sees the registration and signals the channel (seq_cst on both sides)
         if (!nested) {
-            thread_list.setCurrentWaitingFd(tid, wake_fd);
+            thread_list.setCurrentWaitingFd(tid, wake_fd, qore_cancel_limits_only());
         }
         int rc = 0;
         int poll_errno = 0;
@@ -7670,7 +9136,7 @@ int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
     }
     // register, then check: either the check sees a request made before the registration, or the canceller sees the
     // registration and signals the channel
-    thread_list.setCurrentWaitingFd(tid, wake_fd);
+    thread_list.setCurrentWaitingFd(tid, wake_fd, qore_cancel_limits_only());
     if (qore_check_cancel(xsink, operation)) {
         thread_list.clearCurrentWaitingFd(tid);
         qore_cancel_wakeup_drain(wake_fd);

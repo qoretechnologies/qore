@@ -67,6 +67,12 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         #! Counter to signal when the connection closes
         *Counter done;
 
+        #! Called with this operation once when the connection has ended, on a handler-pool thread
+        /** Set by @ref setDoneCallback(); protected by @ref dispatch_mutex.  It replaces a thread that waits for
+            @ref done for the life of the connection (qore#5752).
+        */
+        *code<nothing()> done_callback;
+
         #! Mutex to serialize frame-dispatch state (dispatching flag, onComplete,
         #! and the inline-drain fallback)
         /** A handler-pool drainer holds this mutex only while it takes a frame from the
@@ -154,6 +160,67 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         }
     }
 
+    #! Sets the code that ends the connection once the operation has ended, in place of a thread waiting for it
+    /** No thread then waits for the connection to end: a thread of the handler pool that waits for each open
+        connection, and a connection whose end needs a thread of the same pool to process its close frame, deadlock
+        the pool once the open connections take all its threads (qore#5752).  The code is called once, on a thread
+        of the handler pool (or on a new thread if the pool does not take it), when
+        @ref onComplete() has processed the remaining frames or @ref forceClose() ends the operation; if that has
+        already happened, it is scheduled now.
+
+        @param cb the code to call; it runs user code (the connection's close callbacks) and must handle the
+        exceptions that it raises
+    */
+    public setDoneCallback(code<nothing()> cb) {
+        bool do_call = False;
+        {
+            AutoLock al(dispatch_mutex);
+            done_callback = cb;
+            if (completed && !done_signaled) {
+                done_signaled = True;
+                do_call = True;
+            }
+        }
+        if (do_call) {
+            scheduleDoneCallback();
+        }
+    }
+
+    #! Schedules the done callback, if one is set, on a handler-pool thread, or on a new thread
+    /** The caller has set @ref done_signaled.  The callback is never called in the caller's thread: it can be an
+        AsyncSocketIo callback dispatcher worker, where user code must not run, or a thread that holds the locks of
+        the connection's handler (@ref forceClose() from a stop of the handler).
+    */
+    private scheduleDoneCallback() {
+        *code<nothing()> cb;
+        *HttpAsyncSocketIoController c;
+        *HttpAsyncTarget t;
+        {
+            AutoLock al(dispatch_mutex);
+            cb = remove done_callback;
+            c = completion_controller;
+            t = completion_target;
+        }
+        if (!cb) {
+            return;
+        }
+        if (c && t) {
+            try {
+                c.submitToHandlerPool(t, cb);
+                return;
+            } catch () {
+                # the pool is stopping or refuses the task: run it on a thread of its own
+            }
+        }
+        try {
+            background cb();
+        } catch () {
+            # no thread can be started (a thread limit): the end must still run, or the connection's listener could
+            # never stop, so it runs here
+            cb();
+        }
+    }
+
     #! Idempotently completes the operation so the handler thread's done Counter
     #! is released during teardown without depending on the async wake path
     /** Called from \c WebSocketHandler::WebSocketConnection::stop() ->
@@ -167,18 +234,33 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         setting @ref completed stops further frame dispatch and makes a later
         @ref setDone() release the counter if this races the setup window. */
     public forceClose() {
-        bool do_dec = False;
+        bool do_signal = False;
         {
             AutoLock al(dispatch_mutex);
             completed = True;
-            if (exists done && !done_signaled) {
+            if ((exists done || exists done_callback) && !done_signaled) {
                 done_signaled = True;
-                do_dec = True;
+                do_signal = True;
             }
         }
-        if (do_dec) {
-            done.dec();
+        if (do_signal) {
+            signalDone();
         }
+    }
+
+    #! Signals the end of the connection: decrements @ref done and schedules @ref done_callback, if set
+    /** The caller has set @ref done_signaled, so this runs once per operation.
+    */
+    private signalDone() {
+        *Counter d;
+        {
+            AutoLock al(dispatch_mutex);
+            d = done;
+        }
+        if (d) {
+            d.dec();
+        }
+        scheduleDoneCallback();
     }
 
     #! Called by the AsyncSocketIo controller when frames have been pushed
@@ -493,15 +575,15 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             # Clear references to prevent further dispatch
             wsc = NOTHING;
             handler = NOTHING;
-            # Signal the handler thread to wake up and run cleanup — exactly once
-            # across onComplete()/forceClose()/setDone()
-            if (exists done && !done_signaled) {
+            # Signal the handler thread to wake up and run cleanup, or schedule the done callback — exactly once
+            # across onComplete()/forceClose()/setDone()/setDoneCallback()
+            if ((exists done || exists done_callback) && !done_signaled) {
                 done_signaled = True;
                 do_dec = True;
             }
         }
         if (do_dec) {
-            done.dec();
+            signalDone();
         }
         # Call base class to trigger handleConnectionResult() → handleWebSocketClose(),
         # which removes the stale connections{uh} entry and cancels the I/O operation.

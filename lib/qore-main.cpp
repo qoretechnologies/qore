@@ -417,6 +417,10 @@ void qore_cleanup() {
     // Stop JIT background compilation before destroying programs/functions: BgCompileWork holds
     // raw pointers to UserVariantBase members.  Keep the LLVM engine alive, however, because user
     // module delete callbacks below can still call functions through published native entry points.
+    // A compile still in LLVM is detached rather than awaited, as LLVM can take without bound; its
+    // thread no longer reads those pointers, QoreJIT::shutdown() below leaves the engine to the
+    // operating system then, and qore_fork_child_quick_exit() ends the process with _exit() if the
+    // compile still runs at the end (see QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly()).
     QoreJIT::instance().stopBackgroundCompiler();
 
     // drop any user-module QoreObject references held by the async I/O
@@ -454,6 +458,11 @@ void qore_cleanup() {
     // stop signal manager
     QSM.del();
 #endif
+
+    // no other thread can run Qore code any more (the signal thread has stopped as well; threads registered with
+    // q_register_foreign_thread() must have ended): the Programs of the modules no longer need module lifetime, and
+    // the Programs of the user modules, which delUser() deleted, are freed now, before the binary modules are deleted
+    qore_release_module_program_pins();
 
     // delete all loadable modules
     QMM.cleanup();

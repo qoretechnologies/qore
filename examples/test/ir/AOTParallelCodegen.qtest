@@ -99,7 +99,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
     # Sorted set of an object's defined global symbol names (via nm; "" = nm unavailable).
     private list<string> globalSyms(string obj) {
         string out = run(sprintf("nm -g --defined-only %s", obj));
-        hash<string, bool> seen;
+        hash<string, bool> seen = {};
         foreach string line in (out.split("\n")) {
             # "<value> <type> <name>" for a defined symbol
             *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(.+?)\s*$/);

@@ -333,13 +333,21 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
-//! v23: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//! v23: a serialized IR function has, after its local slot table, the number of its handler-own local slots and
+//!      their slot ids (u32 each): the closure-bound locals that an on_block_exit handler declares itself, which the
+//!      lowering does not mark pre-instantiated in the handler (zero for a function that is not a handler).  A handler
+//!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
+//!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
+//!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
+//! v24: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
 //!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
-//!      release_values).  A v9-v22 record has none.
+//!      release_values).  A v9-v23 record has none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 23;
-//! First format version whose IteratorNext records have release values (see v23 above).
-constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 23;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
+//! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
+constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
+//! First format version whose IteratorNext records have release values (see v24 above).
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 24;
 //! First format version whose class records have a class-flags byte (see v22 above).
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)

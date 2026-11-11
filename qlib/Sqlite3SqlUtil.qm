@@ -1865,7 +1865,7 @@ string sql = pk.getTableConstraintSql();
             # position in the constraint (seq), the referenced table, the column (from) and the referenced column
             # (to), which is null when the constraint references the primary key of the table
             *hash<auto> qh = ds.select("pragma foreign_key_list(" + getSqlName() + ")");
-            hash<string, hash<auto>> fks;
+            hash<string, hash<auto>> fks = {};
             foreach hash<auto> row in (qh.contextIterator()) {
                 string id = sprintf("%06d", row.id.toInt());
                 string pos = sprintf("%06d", row.seq.toInt());
