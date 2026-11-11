@@ -1,0 +1,27 @@
+method: B5::m1(auto) p=1
+method, 2 args: B5::m2(auto, auto) p=1 q=1
+static: B::s(Tr, auto) t="x" p=1
+converted arg: B6::m(auto, auto) a="1.5" p=1
+function: fn(auto, auto) a=1 p=1
+call reference: fn(auto, auto) a=1 p=1
+typed method: D5::m1(int)
+typed function: fn(int, int)
+deleted object: dobj(auto) with an argument: True
+method: B5::m1(auto) p=1
+method, 2 args: B5::m2(auto, auto) p=1 q=1
+static: B::s(Tr, auto) t="x" p=1
+converted arg: B6::m(auto, auto) a="1.5" p=1
+function: fn(auto, auto) a=1 p=1
+call reference: fn(auto, auto) a=1 p=1
+typed method: D5::m1(int)
+typed function: fn(int, int)
+deleted object: dobj(auto) with an argument: True
+method: B5::m1(auto) p=1
+method, 2 args: B5::m2(auto, auto) p=1 q=1
+static: B::s(Tr, auto) t="x" p=1
+converted arg: B6::m(auto, auto) a="1.5" p=1
+function: fn(auto, auto) a=1 p=1
+call reference: fn(auto, auto) a=1 p=1
+typed method: D5::m1(int)
+typed function: fn(int, int)
+deleted object: dobj(auto) with an argument: True

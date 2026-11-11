@@ -495,6 +495,9 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::ExceptionSuspend, "ExceptionSuspend"               , false, false, false,  0, "Set the exceptions raised aside for code that runs while they are raised", true , false, "QoreRemoveOperatorNode", true , false, false, false, false }, // 424
     { QoreIROpcode::ExceptionResume, "ExceptionResume"                , false, false, false,  1, "Raise again the exceptions set aside, before any raised since", true , false, "QoreRemoveOperatorNode", false, false, false, false, false }, // 425
     { QoreIROpcode::IteratorNextSelectors, "IteratorNextSelectors"          , false, false, true ,  0, "Give the next value of the iterator of a list of selectors, or branch if it has none now", true , true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 426
+    { QoreIROpcode::ToStringChecked, "ToStringChecked"                , false, true , false,  1, "string() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 427
+    { QoreIROpcode::ToIntChecked, "ToIntChecked"                   , false, true , false,  1, "int() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 428
+    { QoreIROpcode::ToFloatChecked, "ToFloatChecked"                 , false, true , false,  1, "float() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 429
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

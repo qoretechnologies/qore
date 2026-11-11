@@ -64,7 +64,7 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
         list reflects what configure decided, which is where the glob result lands.
     */
     private list<string> installedModuleSources(string build_dir, string module) {
-        hash<string, bool> names;
+        hash<string, bool> names = {};
         string marker = "/qlib/" + module + "/";
         foreach string token in (read(build_dir + "/cmake_install.cmake").split("\"")) {
             int ix = token.find(marker);
