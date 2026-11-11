@@ -37,9 +37,10 @@ class ImplicitArgumentTypesTest inherits QUnit::Test {
 
     newTest() {
         list<int> tl = (1, 2);
-        assertEq(((NOTHING,), (NOTHING,)), map new list<auto>(($2,)), tl);
-        assertEq((NOTHING, NOTHING), map (new list<auto>(($2,)))[0], tl);
-        assertEq(((1,), (2,)), map new list<auto>(($1,)), tl);
+        # the initializer of new list<T>() is the element of the new list, as the AST interpreter builds it
+        assertEq(((NOTHING,), (NOTHING,)), map (new list<auto>(($2,)))[0], tl);
+        assertEq(((1,), (2,)), map (new list<auto>(($1,)))[0], tl);
+        assertEq(((1, NOTHING), (2, NOTHING)), map (new list<auto>(($1, $2)))[0], tl);
         assertEq(({"a": NOTHING}, {"a": NOTHING}), map new hash<string, auto>({"a": $2}), tl);
     }
 
