@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the parse errors are checked in Programs of its own process; the fixture runs in children
+# test-platform: macos - AOT compilation of typed container checks of date subtypes with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DateSubtypeContainersTest
+
+#! Regression test for issue #5782: a container whose value type is a date subtype checks the dates it is given
+/** A hash or list whose value type is date, such as one folded from a constant literal, was taken as it was by a
+    hash<string, date<absolute>> or list<date<relative>> target: its values were not checked and the container kept
+    the value type date.  The value types have the same accept and return specs, so the containers compared equal.
+
+    A literal whose value is a date of the other subtype than the value type of the container it is given for is a
+    parse error (the date literal has the type of its subtype, issue #5722).  Containers whose dates have no subtype
+    known at parse time (constants, variables, arguments, nested containers) are checked when the code runs:
+    DateSubtypeContainers.q must print DateSubtypeContainers.expected, which the AST interpreter prints, in every
+    execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class DateSubtypeContainersTest inherits QUnit::Test {
+    public {
+        #! container literals with a date of the other subtype than the value type they are given for
+        const ParseErrors = (
+            "hash<string, date<absolute>> h = {\"a\": 1s};",
+            "list<date<relative>> l = (2026-01-01,);",
+            "hash<string, list<date<absolute>>> h = {\"a\": (1s,)};",
+            "hash<string, *date<relative>> h = {\"a\": 2026-01-01};",
+            "softlist<date<absolute>> l = (1s,);",
+            "list<date<absolute>> l = (2026-01-01, 1s);",
+            "hash<string, date<relative>> h; h = {\"a\": 1s, \"b\": 2026-01-01};",
+        );
+
+        #! function bodies with container literals that stay valid, with the full type of the container returned
+        const Valid = {
+            "hash<string, date<absolute>> h = {\"a\": 2026-01-01}; return h.fullType();":
+                "hash<string, date<absolute>>",
+            "list<date<relative>> l = (1s, 2s); return l.fullType();": "list<date<relative>>",
+            "hash<string, date> h = {\"a\": 1s, \"b\": 2026-01-01}; return h.fullType();": "hash<string, date>",
+            "auto l = (1s, 2026-01-01); return l.fullType();": "list<date>",
+        };
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/DateSubtypeContainers.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/DateSubtypeContainers.expected");
+    }
+
+    constructor() : QUnit::Test("date subtype containers", "1.0", \ARGV) {
+        addTestCase("a literal of the other subtype is a parse error", \parseErrors());
+        addTestCase("valid container literals keep their types", \valid());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    parseErrors() {
+        foreach string code in (ParseErrors) {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (code, "date-subtype-container"), code);
+        }
+    }
+
+    valid() {
+        foreach hash<auto> i in (Valid.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            p.parse("string sub t() { " + i.key + " }", "date-subtype-container");
+            assertEq(i.value, p.callFunction("t"), i.key);
+        }
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/date-subtype-containers";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -164,6 +164,24 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
+        // a date of the other subtype than the value type of the hash that the literal is given for is a parse
+        // error, as for an assignment (issue #5782)
+        if (QoreTypeInfo::isDateSubtypeMismatch(expected_value_type, vtypes[i])) {
+            QoreStringNode* desc = new QoreStringNode("the value of ");
+            std::string key;
+            if (keys[i].isValue() && !QoreHashKeyHelper::getConstKey(keys[i], key)) {
+                desc->sprintf("key '%s'", key.c_str());
+            } else {
+                desc->sprintf("key number %zu (starting from 0)", i);
+            }
+            desc->sprintf(" in the hash is type '%s', but the hash expects '%s'", QoreTypeInfo::getName(vtypes[i]),
+                QoreTypeInfo::getName(expected_value_type));
+            parseException(*lvec[i], "PARSE-TYPE-ERROR", desc);
+            if (!err) {
+                err = -1;
+            }
+        }
+
         // For lvalue-like refs, clear type info to prevent baking declared or
         // narrowed types into the hash literal; the actual runtime value may
         // be NOTHING, so the type must be determined at runtime.

@@ -73,12 +73,31 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
 
     int err = 0;
 
+    // the element type of the list that a list literal is given for; not for the arguments of a call (issue #5782)
+    const QoreTypeInfo* expected_elem_type = nullptr;
+    if (!preserve_varref_types && parse_context.expected_type_info) {
+        expected_elem_type = QoreTypeInfo::getReturnComplexListOrNothing(parse_context.expected_type_info);
+        if (!expected_elem_type) {
+            expected_elem_type = QoreTypeInfo::getReturnComplexSoftListOrNothing(parse_context.expected_type_info);
+        }
+    }
+
     for (size_t i = 0; i < values.size(); ++i) {
         bool typed_varref_may_be_nothing = qore_parse_list_literal_varref_may_be_nothing(values[i]);
 
         parse_context.typeInfo = nullptr;
         int e = parse_init_value(values[i], parse_context);
         vtypes[i] = parse_context.typeInfo;
+        // a date of the other subtype than the element type of the list that the literal is given for is a parse
+        // error, as for an assignment (issue #5782)
+        if (QoreTypeInfo::isDateSubtypeMismatch(expected_elem_type, vtypes[i])) {
+            parseException(*lvec[i], "PARSE-TYPE-ERROR", "element %zu (starting from 0) in the list is type '%s', "
+                "but the list expects '%s'", i, QoreTypeInfo::getName(vtypes[i]),
+                QoreTypeInfo::getName(expected_elem_type));
+            if (!e) {
+                e = -1;
+            }
+        }
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_list_literal_varref_may_be_nothing(values[i]);
         if (e && !err) {
