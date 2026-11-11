@@ -84,6 +84,50 @@ sub through_reference(reference<hash<auto>> r) {
 hash<auto> rv = {"rv": 1};
 through_reference(\rv);
 
+# a local of a function that a closure of the function captures
+sub captured_local() {
+    hash<auto> h = {"h": 1};
+    code get = auto sub () { return h; };
+    h.a = 0;
+    hash<auto> w := h;
+    h.b = 2;
+    h{"c"} = 3;
+    printf("captured local: %y %y\n", w, get().size());
+}
+captured_local();
+
+sub captured_list() {
+    list<auto> l = (1, 2);
+    code get = auto sub () { return l; };
+    l[0] = 5;
+    list<auto> w := l;
+    l[1] += 10;
+    l[2] = 3;
+    printf("captured list: %y %y\n", w, get().size());
+}
+captured_list();
+
+# compound assignments to a variable read in a function, with a weak reference
+list<auto> cmp_list = (1, 2, 3);
+sub list_compound() {
+    cmp_list[0] = 0;
+    list<auto> w := cmp_list;
+    cmp_list[1] += 5;
+    cmp_list[2] *= 2;
+    printf("list compound: %y\n", w);
+}
+list_compound();
+
+hash<auto> ch = {"a": 1, "b": 2};
+sub hash_compound(string k) {
+    ch.a = 0;
+    hash<auto> w := ch;
+    ch{k} += 10;
+    ch.b -= 1;
+    printf("hash compound: %y\n", w);
+}
+hash_compound("a");
+
 # the same without a weak reference: the writes and the copies as before
 sub plain() {
     g.p = 1;

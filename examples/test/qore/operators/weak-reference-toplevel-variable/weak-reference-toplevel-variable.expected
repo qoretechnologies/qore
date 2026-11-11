@@ -6,5 +6,9 @@ list index: [9, 8, 7]
 shared: {a: 1} {a: 1, b: 2, c: 3} {a: 1, b: 2, c: 3}
 closure: {cap: 1, a: 0, b: 2}
 reference: {rv: 1, a: 0, b: 2}
+captured local: {h: 1, a: 0, b: 2, c: 3} 4
+captured list: [5, 12, 3] 3
+list compound: [0, 7, 6]
+hash compound: {a: 10, b: 1}
 plain: {g: 1, y: 0, x: 2, z: 0, u: 3, p: 1} {g: 1, y: 0, x: 2, z: 0, u: 3, p: 1, q: 2}
 repeated: 1000
