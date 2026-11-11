@@ -763,6 +763,17 @@ uses of the same locks are not cancellation points.
 - `StreamPipe.cpp` — stream pipe I/O
 - `BackquoteNode.cpp` — command execution
 
+#### Debugger callbacks
+
+A debugger callback (`QoreDebugProgramWithQoreObject::callMethod()` in `QC_DebugProgram.h`) runs the debugger's
+code on the debugged thread, also while the thread handles a cancellation (the debugger's `onException` callback for
+the `THREAD-CANCELLED` exception, for example).  The callback is not a cancellation point of its own, so the debugged
+code behaves as without a debugger: `DebugProgramControl` takes the locks of its state with the cancellation deferred
+(`DebugProgramControl::withLock()`), so that a contended lock does not raise a pending cancellation again in its
+code; its waits for its clients stay cancellation points.  A cancellation that the debugger's code raised and handled
+itself (counted with `qore_get_cancel_raise_count()`) is raised for the debugged code when the callback returns, if it
+is still pending, so that it is not lost.
+
 ### Exception Behavior
 
 `THREAD-CANCELLED` is a **normal, catchable exception**:

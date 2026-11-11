@@ -264,11 +264,14 @@ DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsi
 DLLLOCAL void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink);
 
 //! Raises the calling thread's pending cancellation, if any, for a synchronous call whose operation ended without
-//! reaching its goal (canceled, or ended by a close of its socket)
+//! reaching its goal (canceled, or ended with an error)
 /** A cancellation of the thread can end the operation before the wait for it sees the cancellation: the code that the
-    cancellation ends closes the socket (an HTTP client closes its transport), and the close cancels the operation.
-    The caller must see the cancellation, whichever event ended the operation first, not the close that it caused.
-    Also raises a sandbox limit or an interrupt of the thread's Program (see qore_check_cancel()).
+    cancellation ends closes the socket (an HTTP client closes its transport), and the close cancels the operation or
+    makes it fail; the peer can also reset the connection that it finds closed, so that a write fails (issue #5793).
+    The caller must see the cancellation, whichever event ended the operation first, not the error that it caused; an
+    error that the operation raised for another reason is replaced as well, as the next cancellation point would raise
+    the cancellation in any case.  Also raises a sandbox limit or an interrupt of the thread's Program (see
+    qore_check_cancel()).
 
     @param op the operation, for the exception's description
     @param xsink for the exception
@@ -2886,6 +2889,26 @@ public:
         }
     }
 
+    //! Returns true if a Content-Type value has the media type text/event-stream
+    /** The media type is compared case-insensitively and its parameters are ignored (RFC 9110 section 8.3.1);
+        nothing is allocated, as this runs for every response without a message body.
+    */
+    DLLLOCAL static bool is_event_stream_media_type(const char* ct) {
+        static constexpr const char event_stream[] = "text/event-stream";
+        static constexpr size_t event_stream_len = sizeof(event_stream) - 1;
+        while (*ct == ' ' || *ct == '\t') {
+            ++ct;
+        }
+        if (strncasecmp(ct, event_stream, event_stream_len)) {
+            return false;
+        }
+        ct += event_stream_len;
+        while (*ct == ' ' || *ct == '\t') {
+            ++ct;
+        }
+        return !*ct || *ct == ';';
+    }
+
     // issue #3879: must add Content-Length in responses if not present, even if there is no message body
     /** see https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
     */
@@ -2906,7 +2929,10 @@ public:
                     } else if (!strcasecmp(key, "content-type")
                         && (v.getType() == NT_STRING)) {
                         QoreStringValueHelper str(v);
-                        if (!strcmp(str->c_str(), "text/event-stream")) {
+                        // an event stream is delimited by the end of the connection; the media type is compared
+                        // case-insensitively and without its parameters (RFC 9110 section 8.3.1), so that
+                        // "text/event-stream;charset=utf-8" does not get a Content-Length of 0 (qore#5758)
+                        if (is_event_stream_media_type(str->c_str())) {
                             addsize = false;
                         }
                     }

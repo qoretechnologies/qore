@@ -391,7 +391,8 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), string_index_char,
             negative_offsets, xsink);
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the index is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -648,7 +649,8 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                     if (*xsink)
                         return QoreValue();
 
-                    assert(entry->getType() != NT_LIST);
+                    // the entry is an element of the list, which can be a list itself: ll[0..1, 2] with
+                    // ll = ((1, 2), (3, 4), (5, 6)) selects lists
 
                     if (!it.index()) {
                         vtype = entry->getTypeInfo();
@@ -802,7 +804,7 @@ bool QoreFunctionalSquareBracketsOperator::getNextImpl(ValueOptionalRefHolder& v
 const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
-        case NT_LIST: return get_or_nothing_type(leftValue->get<const QoreListNode>()->getValueTypeInfo());
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
@@ -911,7 +913,7 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
 const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
-        case NT_LIST: return get_or_nothing_type(leftValue->get<const QoreListNode>()->getValueTypeInfo());
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();

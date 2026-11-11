@@ -49,9 +49,10 @@ typedef qlist<ThreadPoolThread*> tplist_t;
     sandbox on the worker thread: a task submitted by module code (for example, an HTTP server listener created by a
     Qore-language module) runs in the module's Program, whose Program context does not include the sandboxed caller.
 
-    It also captures whether the submitting thread runs the module cleanup at the end of the process, or work that the
-    cleanup handed over: the task is then part of the cleanup, and can enter the Programs of the modules, which the
-    cleanup closes to other threads (see qore_close_module_programs()).
+    The captured context also records whether the submitting thread runs the module cleanup at the end of the process,
+    or work that the cleanup handed over (QoreSandboxContext::module_cleanup_delegate): the task is then part of the
+    cleanup, and can enter the Programs of the modules, which the cleanup closes to other threads (see
+    qore_close_module_programs()).
 */
 class ThreadTask {
 public:
@@ -66,7 +67,7 @@ public:
 
     DLLLOCAL void del(ExceptionSink* xsink) {
         // releasing the code can run destructors in the Programs of the modules
-        QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
+        QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         code->deref(xsink);
         if (cancelCode)
             cancelCode->deref(xsink);
@@ -83,7 +84,7 @@ public:
         QoreProgram* pgm = code->getProgram();
         assert(pgm);
         // declared before the Program is entered, which can be the Program of a module
-        QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
+        QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         QoreExternalProgramContextHelper pch(xsink, pgm);
         if (*xsink) {
             return QoreValue();
@@ -94,12 +95,12 @@ public:
 
     //! Returns true if the task is part of the module cleanup; see qore_module_cleanup_delegation()
     DLLLOCAL bool isModuleCleanupDelegate() const {
-        return module_cleanup_delegate;
+        return sandbox_context.module_cleanup_delegate;
     }
 
     DLLLOCAL void cancel(ExceptionSink* xsink) {
         if (cancelCode) {
-            QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
+            QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
             SandboxScope sandbox_scope(sandbox_context);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
@@ -108,11 +109,8 @@ public:
 protected:
     ResolvedCallReferenceNode* code;
     ResolvedCallReferenceNode* cancelCode;
-    //! The sandbox of the submitting thread
+    //! The sandbox of the submitting thread, and whether the task is part of the module cleanup
     const QoreSandboxContext sandbox_context;
-    //! True if the submitting thread runs the module cleanup or work that it handed over; see
-    //! qore_module_cleanup_delegation()
-    const bool module_cleanup_delegate = qore_module_cleanup_delegation();
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a

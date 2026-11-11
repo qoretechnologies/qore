@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A switch on a string value whose cases are ASCII strings, which the compiled tiers dispatch with a string lookup,
+# compares the value with the cases as the AST interpreter does: with the value's encoding and length, so a UTF-16
+# value matches the case with its characters and a value with a null byte after a case does not match the case; a
+# value that cannot be converted for the comparison is not the case (and "case ==" raises the conversion error), and
+# a constant case in another encoding is compared with its characters; the bytes of ASCII characters in an encoding in
+# which they are other characters, or that iconv does not know, are not the case; and a string with a null byte or in
+# another encoding keeps them in AOT code, in a case and elsewhere (SwitchStringEncoding.qr, in every execution mode and
+# as qcc executables)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class SwitchStringEncodingTest
+
+class SwitchStringEncodingTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/SwitchStringEncoding.qr";
+        string expected;
+    }
+
+    constructor() : Test("switch string encoding", "1.0", \ARGV) {
+        addTestCase("AST reference output", \astOutput());
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", source));
+        }
+        return expected;
+    }
+
+    astOutput() {
+        string out = getExpected();
+        # 3 rounds of 19 values
+        assertEq(57, (select out.split("\n"), $1 =~ / typed=/).size());
+        # and of the values for the conversion cases, which depend on the encodings of the platform's iconv
+        int conv = (select out.split("\n"), $1 =~ / try=/).size();
+        assertEq(0, conv % 3);
+        assertGe(3 * 20, conv);
+        # a value in another encoding matches the case with its characters
+        assertRegex("\n0 UTF-16LE !!binary YQBiAGMA: typed=abc lwr=abc auto=abc\n", out, "UTF-16LE abc");
+        assertRegex("\n0 UTF-16BE !!binary AGEAYgBj: typed=abc lwr=abc auto=abc\n", out, "UTF-16BE abc");
+        assertRegex("\n0 UTF-16LE !!binary QQBCAEMA: typed=default lwr=abc auto=default\n", out, "UTF-16LE ABC");
+        assertRegex("\n0 ISO-8859-1 !!binary YWJj: typed=abc lwr=abc auto=abc\n", out, "ISO-8859-1 abc");
+        # a value with a null byte after a case is not the case
+        assertRegex("\n0 UTF-8 !!binary YQA=: typed=default lwr=default auto=default\n", out, "a\\0");
+        assertRegex("\n0 UTF-8 !!binary YWJjAA==: typed=default lwr=default auto=default\n", out, "abc\\0");
+        assertRegex("\n0 UTF-8 !!binary QQA=: typed=default lwr=default auto=default\n", out, "A\\0");
+        # a prefix or an extension of a case is not the case
+        assertRegex("\n0 UTF-8 !!binary YWI=: typed=default lwr=default auto=default\n", out, "ab");
+        assertRegex("\n0 UTF-8 !!binary YWJjZA==: typed=default lwr=default auto=default\n", out, "abcd");
+        # an empty string in any encoding is the empty case
+        assertRegex("\n0 UTF-16LE !!binary : typed=empty lwr=empty auto=empty\n", out, "UTF-16LE empty");
+        # a value with a changed byte or an extension of a case is no case, and a prefix is the case that it is
+        string lens;
+        foreach list<string> c in ((("4", "default"), ("7", "default"), ("8", "7"), ("9", "8"), ("15", "default"),
+                ("16", "15"), ("17", "16"), ("20", "default"))) {
+            lens += sprintf(" %s default default default %s default %s", c[0], c[1], c[0]);
+        }
+        assertRegex("\n0 lengths:" + lens + "\n", out, "case lengths");
+        # the bytes of a case are not the case in an encoding that iconv does not know, and are in an ASCII superset
+        assertRegex("\n0 NO-SUCH-ENCODING !!binary YQ==: try=default ", out, "unknown encoding");
+        assertRegex("\n0 ISO-8859-1 !!binary XA==: try=bs ", out, "ISO-8859-1 backslash");
+        assertRegex("\n0 US-ASCII !!binary YQ==: try=a ", out, "US-ASCII a");
+        # cases folded to a string with a null byte or in another encoding
+        assertRegex("\n0 UTF-8 !!binary YQ==: folded=a\n", out, "a is not the case with a null byte");
+        assertRegex("\n0 UTF-8 !!binary YQBi: folded=nul-literal\n", out, "literal null byte");
+        assertRegex("\n0 UTF-8 !!binary YWM=: folded=utf16\n", out, "folded UTF-16 case");
+        assertRegex("\n0 UTF-16BE !!binary AGEAYw==: folded=utf16\n", out, "folded UTF-16 case, UTF-16BE value");
+        assertRegex("\n0 UTF-8 !!binary eAB5eg==: folded=nul\n", out, "folded case with a null byte");
+        assertRegex("\n0 UTF-8 !!binary eAB5: folded=default\n", out, "prefix of a folded case");
+        # the same strings outside a switch keep their encoding and null bytes
+        assertRegex("\n0 nonswitch: UTF-16LE !!binary YQBjAA== \\| UTF-8 !!binary cABx \\| UTF-8 !!binary "
+            "cHFyc3R1dnd4eXoAcQ== \\| UTF-16LE !!binary YQBkAA== \\| UTF-16LE !!binary YQBlAA== \\| UTF-8 !!binary eAB5 "
+            "\\| UTF-16LE !!binary YQBmAA== \\| UTF-8 !!binary dQB2 \\| UTF-8 !!binary cwB0 \\| UTF-16LE !!binary "
+            "YQBnAA== \\| UTF-8 !!binary bQBu\n", out, "strings outside a switch");
+        # a value that cannot be converted for a comparison with a plain case is not the case, and the switch raises
+        # no exception (as QoreValue::isEqualHard() compares them); "case ==" raises the conversion error
+        assertRegex("\n0 ISO-2022-JP !!binary GyRC/w==: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n",
+            out, "invalid ISO-2022-JP");
+        # the iconv of musl has no UTF-7: a UTF-7 value or case can then be compared with no case in another encoding
+        bool have_utf7;
+        try {
+            convert_encoding("+", "UTF-7");
+            have_utf7 = True;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        }
+        if (have_utf7) {
+            assertRegex("\n0 UTF-7 !!binary K/8=: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n", out,
+                "invalid UTF-7");
+            # a constant case in another encoding is compared with its characters: UTF-7 "+" is "+-"
+            assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-8 +");
+            assertRegex("\n0 UTF-7 !!binary Ky0=: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-7 +");
+        } else {
+            # the UTF-7 constant case cannot be converted for the comparison, so it is not taken
+            assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=default\n", out, "UTF-8 + without UTF-7");
+        }
+        assertRegex("\n0 UTF-8 !!binary Ky0=: try=default eq=default const=default\n", out, "UTF-8 +-");
+        # the SHIFT_JIS constant is U+00A5, not "\\", where iconv's SHIFT_JIS has the yen sign at that byte (libiconv,
+        # glibc); in musl's, the byte is "\\"
+        bool sjis_backslash = convert_encoding(force_encoding("\\", "SHIFT_JIS"), "UTF-8") == "\\";
+        assertRegex("\n0 UTF-8 !!binary XA==: try=bs eq=eq-bs const=" + (sjis_backslash ? "sjis-yen" : "default")
+            + "\n", out, "UTF-8 \\");
+        # a UTF-16LE class constant and a UTF-7 constant declared after the function
+        assertRegex("\n0 UTF-8 !!binary YWI=: try=default eq=default const=utf16-ab\n", out, "UTF-8 ab");
+        assertRegex("\n0 UTF-8 !!binary YSs=: try=default eq=default const=" + (have_utf7 ? "utf7-a" : "default")
+            + "\n", out, "UTF-8 a+");
+    }
+
+    executionModes() {
+        string exp = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 ",
+                    "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                assertEq(exp, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+            }
+        }
+    }
+
+    aot() {
+        string exp = getExpected();
+        TmpDir dir("qore-switch-string-encoding-");
+        # QORE_AOT_EH is read when the code is compiled
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "-o", executable, source), prefix);
+                assertEq(exp, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

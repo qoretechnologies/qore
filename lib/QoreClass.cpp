@@ -418,7 +418,10 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         //    "rm: %d) '%s'\n", &m, f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, sig, f,
         //    f && f->parseHasVariantWithSignature(i.second, relaxed_match), relaxed_match, sig);
 
-        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match);
+        // issue #5773: the abstract variant's types are those of the specialization that the implementing class
+        // inherits
+        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match,
+            f->getClass() ? f->getClass()->getTypeInfo() : nullptr);
         if (has_match) {
             // add to our pending_save
             i.second->ref();
@@ -553,7 +556,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
             // pending_save
-            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second);
+            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second, qc.cls->getTypeInfo());
             if (v) {
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
@@ -790,7 +793,7 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
         num_user_methods(0),
         num_static_methods(0),
         num_static_user_methods(0),
-        typeInfo(n_typeInfo ? n_typeInfo : new QoreClassTypeInfo(cls, name.c_str(), path.c_str())),
+        typeInfo(n_typeInfo ? n_typeInfo : new QoreClassTypeInfo(cls, name.c_str(), path.c_str(), instance_serial)),
         orNothingTypeInfo(nullptr),
         selfid("self", typeInfo),
         spgm(getProgram()),
@@ -801,14 +804,14 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
     selfid.setSelf();
 
     if (!n_typeInfo) {
-        orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+        orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
         owns_ornothingtypeinfo = true;
     } else {
         // see if typeinfo already accepts NOTHING
         if (QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
             orNothingTypeInfo = reinterpret_cast<QoreClassOrNothingTypeInfo*>(typeInfo);
         } else {
-            orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+            orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
             owns_ornothingtypeinfo = true;
         }
     }
@@ -1027,9 +1030,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         old.spgm.load(), spgm);
 
     // issue #3368: create new type info objects as the class ptr is derived from the typeInfo object in some cases
-    typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str());
+    typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_typeinfo = true;
-    orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str());
+    orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_ornothingtypeinfo = true;
 
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
@@ -1600,6 +1603,84 @@ const QoreMethod* qore_class_private::findLocalCommittedStaticMethod(const char*
     return m && !m->priv->func->committedEmpty() ? m : nullptr;
 }
 
+int qore_class_private::enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h, ExceptionSink* xsink) const {
+    bool referenced;
+    bool deleted = false;
+    QoreProgram* p = getSourceProgramForCall(referenced, &deleted);
+    if (p) {
+        // the Program is current, has module lifetime, or is deleted by this thread unless a reference was taken
+        return referenced ? h.enterReferenced(p, xsink) : 0;
+    }
+    // as for a method call (see getMethodForEval()): once the source Program has released the class, only that
+    // Program can run its code, as its teardown does
+    if (!deleted) {
+        if (qore_program_id_t released = released_spgm_id.load()) {
+            QoreProgram* current_pgm = ::getProgram();
+            if (current_pgm && released == current_pgm->getProgramId()) {
+                return 0;
+            }
+        } else if (ns || !ns_deleted) {
+            // a class without a source Program, such as a builtin class
+            return 0;
+        }
+    }
+    xsink->raiseException("PROGRAM-ERROR", "cannot initialize the members of class '%s'; the Program object that "
+        "owns class '%s' has already been deleted and therefore cannot be accessed at runtime", cls->getName(),
+        name.c_str());
+    return -1;
+}
+
+int8_t qore_class_private::computeMemberInitCode() const {
+    int8_t rv = 0;
+    for (auto& i : member_init_list) {
+        if (i.info->initIsCode()) {
+            if (i.info->getClass() != this) {
+                rv = 2;
+                break;
+            }
+            rv = 1;
+        }
+    }
+    member_init_code.store(rv, std::memory_order_relaxed);
+    return rv;
+}
+
+int qore_class_private::enterMemberInitSourcePrograms(QoreDeclaringProgramHelper& h,
+        const QoreClassSourceProgramInfo& spgm_info, ExceptionSink* xsink) const {
+    // each class that declares members with initializers that are code is checked once
+    const qore_class_private* last_cls = nullptr;
+    // the frame holds a reference to the source Program, but the Program can be deleted unless the thread is in it
+    bool enter_spgm = spgm_info.referenced;
+    for (auto& i : member_init_list) {
+        if (!i.info->initIsCode()) {
+            continue;
+        }
+        const qore_class_private* decl_cls = i.info->getClass();
+        if (decl_cls == last_cls) {
+            continue;
+        }
+        last_cls = decl_cls;
+        // the source Program of the class being instantiated has been taken for the frame (see initMembers()); a
+        // class with the same source Program needs nothing more
+        QoreProgram* p = spgm_info.pgm;
+        if (p && (decl_cls == this || decl_cls->spgm.load() == p)) {
+            if (enter_spgm) {
+                p->ref();
+                if (h.enterReferenced(p, xsink)) {
+                    return -1;
+                }
+                // entered once for all the classes with this source Program
+                enter_spgm = false;
+            }
+            continue;
+        }
+        if (decl_cls->enterSourceProgramForInit(h, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const {
     assert(xsink);
     if (members.empty() && !scl)
@@ -1610,35 +1691,41 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
         return -1;
 #endif
 
-    // make sure the object context is set before evaluating members
-    CodeContextHelperBase cch("constructor", &o, this, xsink, false);
+    // make sure the object context is set before evaluating members; the helper takes the source Program of the
+    // class for the frame
+    QoreClassSourceProgramInfo spgm_info;
+    CodeContextHelperBase cch("constructor", &o, this, xsink, false, spgm_info);
     SelfInstantiatorHelper sih(&selfid, &o);
 
-    // the call site of the call that creates the object is the location of the frame of the constructor, which is
-    // created after the member initializers have run: initializers that are evaluated run with no call site, so that
-    // only the calls that they make set one
-    int8_t evaluates = member_init_evaluates.load(std::memory_order_relaxed);
-    if (evaluates) {
-        if (evaluates < 0) {
-            evaluates = 0;
-            for (auto& i : member_init_list) {
-                const AbstractQoreNode* n = i.info->exp.getInternalNode();
-                if (n && n->needs_eval()) {
-                    evaluates = 1;
-                    break;
-                }
-            }
-            member_init_evaluates.store(evaluates, std::memory_order_relaxed);
+    // if no initializer evaluates anything, the common case, the members are initialized directly
+    if (int8_t mic = getMemberInitCode()) {
+        // the call site of the call that creates the object is the location of the frame of the constructor, which is
+        // created after the member initializers have run: initializers that are evaluated run with no call site, so
+        // that only the calls that they make set one
+        QoreHideCallSiteHelper hide_call_site(true);
+        // the source Programs of the classes that declare the members must be kept while their initializers are
+        // evaluated (the members of a parent class are code of the parent's source Program), unless the members are
+        // declared by the class and its source Program needs nothing more: the thread is in it, or it has module
+        // lifetime
+        if (mic == 2 || !spgm_info.pgm || spgm_info.referenced) {
+            return initMembersEntered(o, need_scan, spgm_info, xsink);
         }
-        if (evaluates) {
-            QoreHideCallSiteHelper hide_call_site(true);
-            return initMemberList(o, need_scan, xsink);
-        }
+        return initMemberList(o, need_scan, xsink);
     }
     return initMemberList(o, need_scan, xsink);
 }
 
-int qore_class_private::initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const {
+int qore_class_private::initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,
+        ExceptionSink* xsink) const {
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterMemberInitSourcePrograms(src_pgm_helper, spgm_info, xsink)) {
+        return -1;
+    }
+    return initMemberList(o, need_scan, xsink);
+}
+
+QORE_INTERN_ALWAYS_INLINE int qore_class_private::initMemberList(QoreObject& o, bool& need_scan,
+        ExceptionSink* xsink) const {
     // issue #2970: initializes members once and save member info in the appropriate location in the object
     for (auto& i : member_init_list) {
         printd(5, "qore_class_private::initMembers() this: %p %s '%s::%s' ctx %p '%s' (access '%s') has parent " \
@@ -2002,6 +2089,8 @@ void qore_class_private::parseCommit() {
 }
 
 void qore_class_private::addLocalMembersForInit() {
+    // the list is complete when the local members have been added: getMemberInitCode() looks at it again
+    member_init_code.store(-1, std::memory_order_relaxed);
     for (auto& i : members.member_list) {
         // skip imported members, and members held in external storage, which have no value in the object
         if (!i.second->local() || i.second->getAccessors()) {
@@ -3156,7 +3245,8 @@ bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
     return false;
 }
 
-MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v) const {
+MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
+        const QoreTypeInfo* receiver) const {
     for (auto& i : *this) {
         const QoreClass* nqc = (*i).sclass;
         //printd(5, "BCList::matchNonAbstractVariant() this: %p %s::%s %p (%s) ncq: %p\n", this, nqc ? nqc->getName() : "n/a", name.c_str(), v, v->getAbstractSignature(), nqc);
@@ -3169,12 +3259,12 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         QoreMethod* m = nqc->priv->parseFindLocalMethod(name);
         if (m) {
             MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match);
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match, receiver);
             if (ov && !ov->isAbstract())
                 return ov;
         }
         if (nqc->priv->scl) {
-            MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v);
+            MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v, receiver);
             if (ov)
                 return ov;
         }
@@ -3578,7 +3668,7 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     assert(source);
     assert(target_base);
 
-    if (source->getBaseClass() == target_base) {
+    if (sameDeclaration(source->getBaseClass(), target_base)) {
         return source;
     }
 
@@ -3588,7 +3678,7 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
         if (!parent_pti) {
             continue;
         }
-        if (parent_pti->getBaseClass() == target_base) {
+        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
             return subst;
         }
         const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
@@ -3605,7 +3695,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         bool allow_raw_self) const {
     assert(target_base);
 
-    if (allow_raw_self && cls == target_base && hasTypeParams() && rawConstructionDefaultsToAuto()) {
+    if (allow_raw_self && sameDeclaration(cls, target_base) && hasTypeParams() && rawConstructionDefaultsToAuto()) {
         type_vec_t raw_args(type_params.size(), autoTypeInfo);
         return getTypeInfo(raw_args);
     }
@@ -3619,7 +3709,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         if (!parent_pti) {
             continue;
         }
-        if (parent_pti->getBaseClass() == target_base) {
+        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
             return parent_type;
         }
         const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
@@ -3636,7 +3726,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         if (&base == cls) {
             continue;
         }
-        if (&base == target_base) {
+        if (sameDeclaration(&base, target_base)) {
             const qore_class_private* target = qore_class_private::get(base);
             if (!raw_target_fallback && target->hasTypeParams() && target->rawConstructionDefaultsToAuto()) {
                 type_vec_t raw_args(base.getTypeParameterCount(), autoTypeInfo);
@@ -5608,11 +5698,11 @@ void collect_base_method_names(const qore_class_private& qc, bool is_static, std
 }
 
 bool local_overrides_all_base_variants(MethodFunctionBase& local_func, MethodFunctionBase& base_func,
-        bool relaxed_match) {
+        bool relaxed_match, const QoreTypeInfo* receiver) {
     QoreFunctionIterator fiter(base_func);
     while (fiter.next()) {
         MethodVariantBase* base_variant = const_cast<MethodVariantBase*>(METHVB_const(fiter.getVariant()));
-        if (local_func.parseHasVariantWithSignature(base_variant, relaxed_match)) {
+        if (local_func.parseHasVariantWithSignature(base_variant, relaxed_match, receiver)) {
             continue;
         }
         base_variant->parseResolveUserSignature();
@@ -5869,7 +5959,7 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
 
             MethodFunctionBase* base_func = qore_method_private::get(*base_method)->getFunction();
             if (base_func->numVariants() > 1
-                && !local_overrides_all_base_variants(*local_func, *base_func, relaxed_match)) {
+                && !local_overrides_all_base_variants(*local_func, *base_func, relaxed_match, cls->getTypeInfo())) {
                 if (local_func->parseHasAmbiguousSignature(*base_func, relaxed_match)) {
                     ambiguous_signatures = true;
                 }
@@ -6861,13 +6951,15 @@ void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
 }
 
 // if an identical signature is found to the passed variant, then it is removed from the abstract list
-MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match) const {
+MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match,
+        const QoreTypeInfo* receiver) const {
     v->parseResolveUserSignature();
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
         MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
-        if (candidate->isSignatureIdentical(sig, relaxed_match) && method_const_contract_satisfied(v, candidate)) {
+        if (candidate->isSignatureIdentical(sig, relaxed_match, receiver)
+                && method_const_contract_satisfied(v, candidate)) {
             return candidate;
         }
     }

@@ -11978,7 +11978,10 @@ public namespace SigCheckQmodTest {
                 "timeout, gtimeout, or perl");
         }
 
-        string cmd = sprintf("LD_LIBRARY_PATH=%s QORE_VERIFY_MODULE_SIGNATURES=1 %s 15 %s "
+        # the load of the damaged module may crash where nothing checks the module's signature (the damaged byte can be
+        # executed): the child and the timeout command, which ends with the child's signal, dump no core (a core is kept
+        # with the CI job's artifacts as a crash)
+        string cmd = sprintf("ulimit -c 0; LD_LIBRARY_PATH=%s QORE_VERIFY_MODULE_SIGNATURES=1 %s 15 %s "
             "--exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
             libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
         string out = backquote(cmd);

@@ -10,6 +10,12 @@
 %exec-class QoreNamespacePriorityTest
 
 public class QoreNamespacePriorityTest inherits QUnit::Test {
+    public {
+        #! the options of the Programs that test %broken-namespace-resolution: new style, types and strict arguments
+        #! without %modern, which does not allow the option (issue #5682)
+        const LegacyOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+    }
+
     constructor() : QUnit::Test("Qore namespace priority test", "1.0") {
         addTestCase("QoreFunctionPriority", \qoreFunctionPriority());
         addTestCase("QoreClassPriority", \qoreClassPriority());
@@ -39,7 +45,7 @@ public class QoreNamespacePriorityTest inherits QUnit::Test {
     }
 
     private brokenNamespaceResolutionOption() {
-        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_NAMESPACE_RESOLUTION);
+        Program p(LegacyOptions | PO_BROKEN_NAMESPACE_RESOLUTION);
         string code = "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
         *hash h = p.parse(code, "qore-broken-ns-opt", WARN_ALL);
         assertFalse(exists h);
@@ -47,7 +53,7 @@ public class QoreNamespacePriorityTest inherits QUnit::Test {
     }
 
     private brokenNamespaceResolutionDirective() {
-        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        Program p(LegacyOptions);
         string code = "%broken-namespace-resolution\n"
             "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
         *hash h = p.parse(code, "qore-broken-ns-directive", WARN_ALL);
@@ -56,7 +62,7 @@ public class QoreNamespacePriorityTest inherits QUnit::Test {
     }
 
     private correctNamespaceResolutionDirective() {
-        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        Program p(LegacyOptions);
         string code = "%broken-namespace-resolution\n%correct-namespace-resolution\n"
             "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
         *hash h = p.parse(code, "qore-correct-ns-directive", WARN_ALL);
@@ -65,7 +71,7 @@ public class QoreNamespacePriorityTest inherits QUnit::Test {
     }
 
     private brokenNamespaceResolutionClass() {
-        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_NAMESPACE_RESOLUTION);
+        Program p(LegacyOptions | PO_BROKEN_NAMESPACE_RESOLUTION);
         string code = "class Program { int marker() { return 1234; } } "
             "int sub call() { Program p(); return p.marker(); }";
         *hash h = p.parse(code, "qore-broken-ns-class", WARN_ALL);

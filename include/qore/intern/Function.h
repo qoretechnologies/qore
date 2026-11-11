@@ -215,7 +215,13 @@ public:
         return i < names.size() ? names[i].c_str() : 0;
     }
 
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false) const;
+    //! Compares this signature with \a sig (an abstract method's signature)
+    /** @param receiver if not nullptr, the class whose parameterized bases give the type arguments of the type
+        parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
+        implemented in a subclass of a specialization; issue #5773)
+    */
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -265,12 +271,201 @@ DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
     const QoreTypeParamInstantiation* inst);
-//! Returns the process-local identity key for a concrete generic specialization.
-//! @param receiver_type_info concrete parameterized receiver type, if any
-//! @param type_param_instantiation concrete function or method type arguments, if any
-DLLLOCAL std::string qore_make_generic_specialization_key(
-    const QoreTypeInfo* receiver_type_info,
-    const QoreTypeParamInstantiation* type_param_instantiation);
+//! The process-lifetime identity of a concrete generic specialization: the key of a variant's specialized IR
+/** Each type is identified by its address with qore_get_type_identity_serial(): a type that is freed with its
+    class, hashdecl or enum has that owner's serial, which no later type at the same address has, and every other type
+    is never freed while the library is initialized.  Types of different Programs with the same path are therefore
+    different keys, and a type freed with its Program never matches a later type allocated at its address.
+*/
+struct QoreGenericSpecializationKey {
+    //! the concrete parameterized receiver type, if any
+    const QoreTypeInfo* receiver = nullptr;
+    //! qore_get_type_identity_serial() of \a receiver
+    uint64_t receiver_serial = 0;
+    //! the signature whose type parameters \a type_args instantiate, or nullptr if there are none
+    const UserSignature* owner = nullptr;
+    //! the function or method type arguments, each with its qore_get_type_identity_serial()
+    std::vector<std::pair<const QoreTypeInfo*, uint64_t>> type_args;
+
+    //! Makes the key of a specialization; the types must be live
+    DLLLOCAL QoreGenericSpecializationKey(const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation);
+};
+
+//! A specialization's identity as a call gives it, to look up its key without making one
+struct QoreGenericSpecializationView {
+    //! the concrete parameterized receiver type, if any; must be live
+    const QoreTypeInfo* receiver;
+    //! the function or method type arguments, or nullptr if there are none; the types must be live
+    const QoreTypeParamInstantiation* inst;
+
+    DLLLOCAL QoreGenericSpecializationView(const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation)
+            : receiver(receiver_type_info),
+            inst(type_param_instantiation && !type_param_instantiation->empty() ? type_param_instantiation : nullptr) {
+    }
+};
+
+//! Hashes specialization keys and views alike: the type addresses and the owner, not the serials
+/** A key whose type was freed and a view of a later type at the same address hash alike; the serials tell them apart
+    in QoreGenericSpecializationKeyEqual.
+*/
+struct QoreGenericSpecializationKeyHash {
+    typedef void is_transparent;
+
+    DLLLOCAL static size_t mix(size_t h, const void* p) {
+        return (h ^ reinterpret_cast<uintptr_t>(p)) * 0x9e3779b97f4a7c15ULL;
+    }
+
+    DLLLOCAL size_t operator()(const QoreGenericSpecializationKey& k) const {
+        size_t h = mix(mix(0, k.receiver), k.owner);
+        for (const auto& i : k.type_args) {
+            h = mix(h, i.first);
+        }
+        return h ^ (h >> 32);
+    }
+
+    DLLLOCAL size_t operator()(const QoreGenericSpecializationView& v) const {
+        size_t h = mix(0, v.receiver);
+        if (v.inst) {
+            h = mix(h, v.inst->owner);
+            for (const QoreTypeInfo* ti : v.inst->type_args) {
+                h = mix(h, ti);
+            }
+        } else {
+            h = mix(h, nullptr);
+        }
+        return h ^ (h >> 32);
+    }
+};
+
+//! Compares specialization keys and views: the same types (addresses and identity serials) and owner
+struct QoreGenericSpecializationKeyEqual {
+    typedef void is_transparent;
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationKey& a, const QoreGenericSpecializationKey& b) const {
+        return a.receiver == b.receiver && a.receiver_serial == b.receiver_serial && a.owner == b.owner
+            && a.type_args == b.type_args;
+    }
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationKey& a, const QoreGenericSpecializationView& b) const {
+        if (a.receiver != b.receiver || a.receiver_serial != qore_get_type_identity_serial(b.receiver)) {
+            return false;
+        }
+        if (!b.inst) {
+            return !a.owner;
+        }
+        if (a.owner != b.inst->owner || a.type_args.size() != b.inst->type_args.size()) {
+            return false;
+        }
+        const std::pair<const QoreTypeInfo*, uint64_t>* ai = a.type_args.data();
+        for (const QoreTypeInfo* ti : b.inst->type_args) {
+            if (ai->first != ti || ai->second != qore_get_type_identity_serial(ti)) {
+                return false;
+            }
+            ++ai;
+        }
+        return true;
+    }
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationView& a, const QoreGenericSpecializationKey& b) const {
+        return (*this)(b, a);
+    }
+};
+//! A specialization's IR shared by its cache entry and the calls that run it (issue #5765)
+struct QoreSpecializedIR {
+    //! the references: the cache entry's and one per running call
+    std::atomic<uint32_t> refs{1};
+    //! the specialized IR, owned
+    const QoreIRFunction* ir;
+
+    DLLLOCAL QoreSpecializedIR(const QoreIRFunction* ir) : ir(ir) {
+    }
+};
+
+//! Frees a specialization's IR when its last reference is released
+DLLLOCAL void qore_free_specialized_ir(QoreSpecializedIR* s);
+
+//! A reference to a specialization's IR (issue #5765)
+/** The cache entry holds one, and a call holds one while it runs, so an entry can be removed while the specialization
+    is running; the IR is freed with the last reference.
+*/
+class QoreSpecializedIRRef {
+public:
+    DLLLOCAL QoreSpecializedIRRef() = default;
+
+    //! Takes the reference that \a s was made with
+    DLLLOCAL explicit QoreSpecializedIRRef(QoreSpecializedIR* s) : s(s) {
+    }
+
+    DLLLOCAL QoreSpecializedIRRef(const QoreSpecializedIRRef& old) : s(old.s) {
+        if (s) {
+            s->refs.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+
+    DLLLOCAL QoreSpecializedIRRef(QoreSpecializedIRRef&& old) : s(old.s) {
+        old.s = nullptr;
+    }
+
+    DLLLOCAL ~QoreSpecializedIRRef() {
+        reset();
+    }
+
+    DLLLOCAL QoreSpecializedIRRef& operator=(QoreSpecializedIRRef&& old) {
+        if (this != &old) {
+            reset();
+            s = old.s;
+            old.s = nullptr;
+        }
+        return *this;
+    }
+
+    QoreSpecializedIRRef& operator=(const QoreSpecializedIRRef&) = delete;
+
+    DLLLOCAL const QoreIRFunction* get() const {
+        return s ? s->ir : nullptr;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return s;
+    }
+
+    //! Returns the specialization without a reference
+    DLLLOCAL QoreSpecializedIR* getEntry() const {
+        return s;
+    }
+
+    //! Returns the reference to the caller, which must release it with qore_release_specialized_ir()
+    DLLLOCAL QoreSpecializedIR* release() {
+        QoreSpecializedIR* rv = s;
+        s = nullptr;
+        return rv;
+    }
+
+    DLLLOCAL void reset() {
+        if (s) {
+            if (s->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                qore_free_specialized_ir(s);
+            }
+            s = nullptr;
+        }
+    }
+
+private:
+    QoreSpecializedIR* s = nullptr;
+};
+
+//! Releases a reference returned by QoreSpecializedIRRef::release()
+DLLLOCAL inline void qore_release_specialized_ir(QoreSpecializedIR* s) {
+    QoreSpecializedIRRef ref(s);
+}
+
+//! Returns a reference to the generic specialization that \a helper_ir belongs to, if any (issue #5765)
+/** \a helper_ir is the IR of a background expression's helper; the thread that runs it holds the reference
+*/
+DLLLOCAL QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper_ir);
+
 //! Returns the portable dispatch key for a concrete generic specialization.
 //! Unlike the process-local cache key, this key contains no pointer identity;
 //! callers must compare it only after resolving the exact function variant.
@@ -868,10 +1063,12 @@ public:
         return qc->getNamespacePath(true);
     }
 
-    DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false) const {
+    //! @param receiver see AbstractFunctionSignature::compare()
+    DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match);
+        return getSignature()->compare(sig, relaxed_match, receiver);
     }
 
     // only returns a non-nullptr value for normal user method variants
@@ -1136,7 +1333,27 @@ protected:
     mutable std::atomic<bool> uses_self{true};
     //! Specialized IR functions keyed by concrete receiver and method type arguments
     mutable std::mutex specialized_ir_mutex;
-    mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
+    /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
+    */
+    /** The IR is shared with the calls that run it: a call holds it while it runs, so an entry can be removed while
+        the specialization is running (issue #5765)
+    */
+    mutable std::unordered_map<QoreGenericSpecializationKey, QoreSpecializedIRRef,
+        QoreGenericSpecializationKeyHash, QoreGenericSpecializationKeyEqual> specialized_ir_cache;
+    //! The registration of specialized_ir_cache by the types of its keys (issue #5765)
+    class SpecializedIRCache : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL SpecializedIRCache(const UserVariantBase& v) : v(v) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release);
+
+    private:
+        const UserVariantBase& v;
+    };
+    //! created with the first specialization, under specialized_ir_mutex; unregistered by the destructor
+    mutable std::unique_ptr<SpecializedIRCache> specialized_ir_registration;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
     //! Serialized fallback IR installed before AOT publication and protected during materialization.
@@ -1174,7 +1391,7 @@ protected:
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
             bool mark_failure, bool raise_on_failure) const;
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
+    DLLLOCAL QoreSpecializedIRRef getOrCreateSpecializedIR(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
             bool raise_on_failure) const;
@@ -1236,7 +1453,7 @@ public:
         @param type_param_instantiation optional concrete method or function type arguments
         @return the cached specialized IR, or nullptr when specialization is unavailable
     */
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIRForFastCall(const char* name,
+    DLLLOCAL QoreSpecializedIRRef getOrCreateSpecializedIRForFastCall(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
         return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
@@ -1359,7 +1576,8 @@ public:
     DLLLOCAL bool ensureAOTContext(const char* name, ExceptionSink* xsink) const;
 
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
-    DLLLOCAL bool hasCachedFunction() const {
+    //! always inlined: it is called on the fast path of every compiled method call
+    DLLLOCAL __attribute__((always_inline)) bool hasCachedFunction() const {
         return current_tier.load(std::memory_order_acquire) == TIER_JIT
             && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn);
     }
@@ -1909,7 +2127,12 @@ public:
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
-    DLLLOCAL void resolvePendingSignatures();
+    //! resolves the signatures of the pending variants
+    /** A plain function's signatures (their default argument values) are resolved with no class context, a new local
+        variable frame and \a ns (or the current namespace if \a ns is nullptr) as the namespace context, as its body
+        is (see parseInit(); issue #5749)
+    */
+    DLLLOCAL void resolvePendingSignatures(qore_ns_private* ns = nullptr);
 
     DLLLOCAL AbstractFunctionSignature* getUniqueSignature() const {
         return vlist.singular() ? first()->getSignature() : 0;
@@ -1928,8 +2151,6 @@ public:
         return nullptr;
     }
 
-    DLLLOCAL AbstractFunctionSignature* parseGetUniqueSignature() const;
-
     DLLLOCAL int64 parseGetUniqueFunctionality() const {
         if (parse_get_parse_options() & PO_REQUIRE_TYPES)
             return nn_unique_functionality;
@@ -1947,6 +2168,14 @@ public:
 
     DLLLOCAL void addBuiltinVariant(AbstractQoreFunctionVariant* variant);
 
+    //! parse-initializes the pending variants of a function or a method
+    /** A method's body is parse-initialized in the class context that the caller sets.  A plain function's body is
+        always parse-initialized with no class context, a new local variable frame and with \a ns (or the current
+        namespace if \a ns is nullptr) as the namespace context, whatever triggers it: a call to it may be the first
+        reference to it, in the body of a method, and its body must not get the class's access to its private
+        members (issue #5749).  Closures, which keep the class context of the code they are in, use
+        UserClosureFunction::parseInitClosure() instead.
+    */
     DLLLOCAL int parseInit(qore_ns_private* ns);
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseRollback();
@@ -2169,6 +2398,12 @@ public:
     }
 
 protected:
+    //! parse-initializes the pending variants in the thread's current parse context; see parseInit()
+    DLLLOCAL int parseInitIntern(qore_ns_private* ns);
+
+    //! resolves the signatures of the pending variants in the thread's current parse context
+    DLLLOCAL void resolvePendingSignaturesIntern();
+
     std::string name;
 
     // list of function variants
@@ -2441,7 +2676,9 @@ public:
     DLLLOCAL void parseSignatures(QoreString& csig, const char* mod) const;
 
     // if an identical signature is found to the passed variant, then it is removed from the abstract list
-    DLLLOCAL MethodVariantBase* parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
+    //! @param receiver see AbstractFunctionSignature::compare()
+    DLLLOCAL MethodVariantBase* parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const;
 
     // runtime version - assumes signatures are already resolved
     DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
@@ -2563,6 +2800,14 @@ public:
     DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0), serial(UserVariantBase::getNextSerial()) {
         addPendingVariant(new UserClosureVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags));
     }
+
+    //! parse-initializes the closure in the current parse context: the class and namespace of the code it is in
+    DLLLOCAL int parseInitClosure() {
+        return parseInitIntern(nullptr);
+    }
+
+    //! a closure keeps the class context of the code it is in; use parseInitClosure()
+    DLLLOCAL int parseInit(qore_ns_private* ns) = delete;
 
     //! returns the identity of the closure function and of its variant, which is never reused; see \a serial
     DLLLOCAL uint64_t getSerial() const {

@@ -821,6 +821,9 @@ public:
     // user thread-local data
     u_tld_map_t u_tld_map;
 
+    //! the objects of QoreThreadLocalObject that this thread created, released when the thread's data is deleted
+    std::vector<std::pair<void (*)(void*), void*>> exit_cleanups;
+
     // thread-local values
     tlvmap_t tlvmap;
 
@@ -833,8 +836,18 @@ public:
     // active exception counter
     unsigned active_exceptions = 0;
 
+    //! the number of cancellations and interrupts raised in the thread by qore_check_cancel(); written and read by the
+    //! thread only (see qore_get_cancel_raise_count())
+    unsigned cancel_raise_count = 0;
+
+    //! true if the thread is a foreign thread
+    /** Read by other threads (ThreadProgramData::canRunDebugCallbacks(), when a debugger attaches to or detaches from a
+        Program that the thread runs in), so it is not a bit-field: the thread writes its bit-fields (finalizing, for
+        example), which writes the memory location of each bit-field of the group
+    */
+    const bool foreign;
+
     bool
-        foreign : 1, // true if the thread is a foreign thread
         try_reexport : 1,
         finalizing : 1,
         //! true while a pool worker releases the thread_local values of its task between tasks
@@ -984,6 +997,15 @@ public:
     DLLLOCAL ~ThreadData() {
         // the registry keeps no pointer into the map of a thread whose data is deleted
         unregisterThreadLocalVars();
+
+        // the thread's QoreThreadLocalObject objects, last created first: they are released here, when the thread ends
+        // (or the main thread's data is deleted by qore_cleanup()), and not by a thread-local destructor
+        // (until none is left: an object that is first used while another is released registers one more)
+        while (!exit_cleanups.empty()) {
+            std::pair<void (*)(void*), void*> cleanup = exit_cleanups.back();
+            exit_cleanups.pop_back();
+            cleanup.first(cleanup.second);
+        }
 
         // delete all user TLD
         for (auto& i : u_tld_map) {
@@ -1905,12 +1927,18 @@ tid_node::~tid_node() {
 class BGThreadHelper {
 public:
     QoreBackgroundHelperCode code;
+    //! the generic specialization whose code started the thread, if any: the helper's IR is its own (issue #5765)
+    /** Taken when the thread is created, so the specialization outlives its cache entry and the call that started the
+        thread; released when the thread is done
+    */
+    QoreSpecializedIRRef owner;
     //! the helper's parameters
     std::vector<LocalVar*> params;
     //! the value of each parameter: referenced, owned until the thread instantiates the parameters
     std::vector<QoreValue> values;
 
-    DLLLOCAL BGThreadHelper(const QoreBackgroundHelperCode& code) : code(code) {
+    DLLLOCAL BGThreadHelper(const QoreBackgroundHelperCode& code) : code(code),
+            owner(qore_ref_helper_specialization(code.ir)) {
     }
 
     DLLLOCAL ~BGThreadHelper() {
@@ -3761,6 +3789,57 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     sync_runtime_config_program(td);
 }
 
+CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
+        : td(static_cast<ThreadData*>(thread_data_ptr)) {
+    assert(td && td == thread_data.get());
+    switchContext(cls);
+}
+
+CalleeContextHelper::CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls)
+        : td(thread_data.get()), old_argv(td->current_implicit_arg), argv_xsink(xsink) {
+    assert(xsink);
+    td->current_implicit_arg = argv;
+    switchContext(cls);
+}
+
+void CalleeContextHelper::switchContext(const qore_class_private* cls) {
+    // the data of the thread's RuntimeConfig, which stays in place for the life of the thread, is looked up once
+    if (!td->rc) {
+        td->rc = rc_get_tls_impl();
+    }
+    RuntimeConfig::Impl* rc = td->rc;
+    // nothing to switch: the thread has the callee's context, as a plain function called from a plain function or
+    // from top-level code
+    if (!td->current_obj && td->current_class == cls && !rc->obj && rc->cls == cls) {
+        return;
+    }
+    switched = true;
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    old_rc_obj = rc->obj;
+    old_rc_class = rc->cls;
+    td->current_obj = nullptr;
+    td->current_class = cls;
+    rc->obj = nullptr;
+    rc->cls = cls;
+}
+
+void CalleeContextHelper::restoreContext() {
+    assert(switched && td->rc);
+    td->current_obj = old_obj;
+    td->current_class = old_class;
+    td->rc->obj = old_rc_obj;
+    td->rc->cls = old_rc_class;
+}
+
+void CalleeContextHelper::restoreArgv() {
+    // as ~ArgvContextHelper()
+    if (td->current_implicit_arg) {
+        td->current_implicit_arg->deref(argv_xsink);
+    }
+    td->current_implicit_arg = old_argv;
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
     ThreadData* td  = thread_data.get();
     old_obj = td->current_obj;
@@ -3900,6 +3979,16 @@ void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
         ExceptionSink* xsink, bool ref_obj) : xsink(xsink) {
+    init(code, obj, c, ref_obj, nullptr);
+}
+
+CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+        ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info) : xsink(xsink) {
+    init(code, obj, c, ref_obj, &spgm_info);
+}
+
+QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, QoreObject* obj,
+        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info) {
     ThreadData* td  = thread_data.get();
     old_code = td->current_code;
     td->current_code = code;
@@ -3941,6 +4030,10 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     QoreProgram* class_spgm = c ? c->getSourceProgramForCall(class_spgm_referenced) : nullptr;
     if (class_spgm_referenced) {
         referenced_class_pgm = class_spgm;
+    }
+    if (spgm_info) {
+        spgm_info->pgm = class_spgm;
+        spgm_info->referenced = class_spgm_referenced;
     }
     if (class_spgm) {
         call_program_context = class_spgm;
@@ -5213,6 +5306,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
     }
+    // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
+    module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
     ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
     assert(!current || pgm_id);
     ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
@@ -5714,6 +5809,19 @@ bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {
         return false;
     }
     tid = td->tid;
+    return true;
+}
+
+bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    try {
+        td->exit_cleanups.emplace_back(fn, data);
+    } catch (...) {
+        return false;
+    }
     return true;
 }
 
@@ -8823,11 +8931,8 @@ int64 q_get_cancel_check_count() {
 }
 #endif
 
-bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
-#ifdef DEBUG
-    ++cancel_check_count;
-#endif
-    ThreadData* td = thread_data.get();
+// the check of qore_check_cancel() for the thread's data
+static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
     // after the deferral scope ends raises it with the original reason and scope
@@ -8894,6 +8999,26 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     }
 
     return false;
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+#ifdef DEBUG
+    ++cancel_check_count;
+#endif
+    ThreadData* td = thread_data.get();
+    if (!qore_check_cancel_intern(td, xsink, operation)) {
+        return false;
+    }
+    // a cancellation or an interrupt raised in the thread is counted: see qore_get_cancel_raise_count()
+    if (xsink && td) {
+        ++td->cancel_raise_count;
+    }
+    return true;
+}
+
+unsigned qore_get_cancel_raise_count() {
+    ThreadData* td = thread_data.get();
+    return td ? td->cancel_raise_count : 0;
 }
 
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {

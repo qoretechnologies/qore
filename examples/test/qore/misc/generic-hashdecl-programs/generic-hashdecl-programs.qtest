@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A generic hashdecl instantiated at run time for the classes, hashdecls and enums of a series of Programs, each
+# destroyed after its calls, gives each Program the declarations for its own types: a later type can be given the
+# address of a destroyed Program's type, and the declaration made for that type is not used for it; threads making
+# the same declaration at the same time all get the one published (generic-hashdecl-programs.qr, whose Programs run in
+# every execution mode, in a qore process in every execution mode and in AOT executables)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class GenericHashDeclProgramsTest
+
+class GenericHashDeclProgramsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/generic-hashdecl-programs.qr";
+        const Expected = "ast: ok\nir: ok\njit: ok\ntiered: ok\n";
+    }
+
+    constructor() : Test("generic hashdecls of destroyed Programs", "1.0", \ARGV) {
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    executionModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                assertEq(Expected, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+            }
+        }
+    }
+
+    aot() {
+        TmpDir dir("qore-generic-hashdecl-programs-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "-o", executable, source));
+            assertEq(Expected, run((executable,)), level);
+        }
+    }
+}

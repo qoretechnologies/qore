@@ -2964,8 +2964,19 @@ AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern
             parseWarnAmbiguousFunctionCall(fr->loc, fname, fe);
         }
         // check parse options to see if access is allowed
-        if (!qore_program_private::parseAddDomain(getProgram(), fe->getFunction()->parseGetUniqueFunctionality()))
-            return fe->makeCallReference(fr->loc);
+        if (!qore_program_private::parseAddDomain(getProgram(), fe->getFunction()->parseGetUniqueFunctionality())) {
+            ResolvedCallReferenceNode* ref = fe->makeCallReference(fr->loc);
+            // the explicit type arguments of \f<T>() instantiate the function when the reference is called
+            if (!fr->explicit_parse_type_args.empty()) {
+                std::vector<const QoreTypeInfo*> type_args;
+                if (!qore_resolve_call_reference_type_args(fr->explicit_parse_type_args, fr->loc, type_args)) {
+                    if (LocalFunctionCallReferenceNode* lfr = dynamic_cast<LocalFunctionCallReferenceNode*>(ref)) {
+                        lfr->setExplicitTypeArgs(std::move(type_args));
+                    }
+                }
+            }
+            return ref;
+        }
         parse_error(*fr->loc, "parse options do not allow access to function '%s'", fname);
     } else { // cannot find function, throw exception
         parse_error(*fr->loc, "reference to function '%s()' cannot be resolved", fname);

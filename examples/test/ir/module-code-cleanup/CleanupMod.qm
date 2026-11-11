@@ -95,8 +95,9 @@ namespace Priv {
     #! module's data
     /** The code that hands the work over runs in a Program that is not a module's, so the work calls module code
         from another Program, and each call reports the exception it raises instead of failing its thread.  The work
-        that the cleanup thread hands over (a ThreadPool task, a background thread, and a task of such a task) can
-        call module code, as the cleanup thread can; the same work handed over by a foreign thread cannot
+        that the cleanup thread hands over (a ThreadPool task, a background thread, a timer of the asynchronous I/O
+        controller, and such work of such work) can call module code, as the cleanup thread can; the same work handed
+        over by a foreign thread cannot
     */
     class CleanupDelegateCheck {
         public {
@@ -132,6 +133,103 @@ auto sub nested_pool_task() {
     tp.stopWait();
     return rv;
 }
+auto sub async_timer() {
+    Queue q();
+    AsyncIoController::addTimer(now_us(), sub () { q.push(call()); });
+    return q.get();
+}
+auto sub background_timer() {
+    Queue q();
+    background q.push(async_timer());
+    return q.get();
+}
+# an asynchronous I/O operation whose only step calls module code; it holds a module object, which the controller
+# releases when the operation ends
+class OneStepOperation inherits AbstractPollOperation<auto> {
+    private {
+        auto result;
+        bool done;
+        CleanupMod::ReleaseProbe probe;
+    }
+    constructor(Counter destroyed) {
+        probe = new CleanupMod::ReleaseProbe(destroyed);
+    }
+    string getGoal() {
+        return \"one-step\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        result = call();
+        done = True;
+        return NOTHING;
+    }
+    auto getResult() {
+        return result;
+    }
+}
+# submits the operation and returns its result; the references to the operation that this code holds are gone when
+# this returns, so the controller's reference is the last one
+auto sub submit_one_step(EventNotifier n, Counter destroyed) {
+    Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": new OneStepOperation(destroyed),
+        \"owner\": \"cleanup-delegate-check\",
+        \"to\": -1s,
+    });
+    hash<auto> r = rq.get();
+    return r.spop.getResult();
+}
+# returns the result of the operation's step, and whether the module object that only the controller holds at the end
+# was destroyed: the controller's references are held until this code releases them on a callback worker
+list<auto> sub async_operation() {
+    Counter destroyed(1);
+    EventNotifier n();
+    call_function(\"dbg_async_io_hold_releases\", True);
+    on_error call_function(\"dbg_async_io_hold_releases\", False);
+    auto rv = submit_one_step(n, destroyed);
+    AsyncIoController::flushCallbacks();
+    # the controller hands over three releases for the operation: its entry (before the result is pushed), the
+    # operation object (after the push; the one that destroys the probe) and the result Queue's object; all of them
+    # are waited for, as the I/O thread can still be between the push and the second when the result is read
+    int released = call_function(\"dbg_async_io_dispatch_held_releases\", 3, 60s);
+    if (released < 3) {
+        return (rv, sprintf(\"%d releases held\", released));
+    }
+    return (rv, destroyed.getCount() == 0);
+}
+# adds a timer whose callback holds a module object; the controller holds the last reference to the callback once it
+# has run
+sub add_probe_timer(Queue q, Counter destroyed) {
+    CleanupMod::ReleaseProbe probe(destroyed);
+    AsyncIoController::addTimer(now_us(), sub () { q.push(probe.ok()); });
+}
+# returns whether the module object of a timer's callback was destroyed when the controller released the callback on
+# a callback worker after the callback ran
+bool sub timer_release() {
+    Counter destroyed(1);
+    Queue q();
+    call_function(\"dbg_async_io_hold_releases\", True);
+    on_error call_function(\"dbg_async_io_hold_releases\", False);
+    add_probe_timer(q, destroyed);
+    q.get();
+    # the callback's own reference is gone when the callbacks have finished
+    AsyncIoController::flushCallbacks();
+    call_function(\"dbg_async_io_dispatch_held_releases\", 1, 60s);
+    return destroyed.getCount() == 0;
+}
+auto sub pool_task_timer() {
+    ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () { q.push(async_timer()); });
+    auto rv = q.get();
+    tp.stopWait();
+    return rv;
+}
 # for a foreign thread, which reports the code of an exception and nothing else: the result is raised if it is the
 # code of an exception
 sub raise(auto rv) {
@@ -144,6 +242,9 @@ sub foreign_pool_task() {
 }
 sub foreign_background_thread() {
     raise(background_thread());
+}
+sub foreign_async_timer() {
+    raise(async_timer());
 }
 ";
         }
@@ -162,10 +263,23 @@ sub foreign_background_thread() {
             stdout.printf("a background thread of the cleanup thread: %y\n", pgm.callFunction("background_thread"));
             stdout.printf("a ThreadPool task of a ThreadPool task of the cleanup thread: %y\n",
                 pgm.callFunction("nested_pool_task"));
+            stdout.printf("an asynchronous I/O timer of the cleanup thread: %y\n", pgm.callFunction("async_timer"));
+            stdout.printf("an asynchronous I/O timer of a ThreadPool task of the cleanup thread: %y\n",
+                pgm.callFunction("pool_task_timer"));
+            stdout.printf("an asynchronous I/O timer of a background thread of the cleanup thread: %y\n",
+                pgm.callFunction("background_timer"));
+            list<auto> op = pgm.callFunction("async_operation");
+            stdout.printf("an asynchronous I/O operation of the cleanup thread: %y\n", op[0]);
+            stdout.printf("the module object that only the controller holds for an asynchronous I/O operation of the "
+                "cleanup thread is destroyed: %y\n", op[1]);
+            stdout.printf("the module object of an asynchronous I/O timer's callback of the cleanup thread is "
+                "destroyed when the controller releases the callback: %y\n", pgm.callFunction("timer_release"));
             stdout.printf("a ThreadPool task of a foreign thread: %y\n",
                 call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_pool_task")));
             stdout.printf("a background thread of a foreign thread: %y\n",
                 call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_background_thread")));
+            stdout.printf("an asynchronous I/O timer of a foreign thread: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_async_timer")));
             stdout.sync();
         }
     }
@@ -221,5 +335,25 @@ public int sub holder_calls() {
 #! a function of the module
 public int sub f(int x) {
     return x + 1;
+}
+
+#! an object whose destructor runs module code: it decrements the given counter, which no module data holds, as the
+#! module's data can be cleared already when the object is destroyed at the module cleanup
+public class ReleaseProbe {
+    private {
+        Counter destroyed;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+
+    bool ok() {
+        return True;
+    }
 }
 }

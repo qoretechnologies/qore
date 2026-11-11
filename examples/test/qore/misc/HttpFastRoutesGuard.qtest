@@ -70,13 +70,15 @@ class HttpFastRoutesGuardTest inherits QUnit::Test {
             testSkip("the library was built without the debug-build guard");
         }
         # a child process runs the action in a scope that nothing probes: the guard prints the place and aborts; the
-        # shell reports the exit status
+        # shell reports the exit status; the abort is expected, so the child dumps no core (a core is kept with the CI
+        # job's artifacts as a crash)
         string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         if (qore_exe =~ /\// && !absolute_path(qore_exe)) {
             qore_exe = getcwd() + "/" + qore_exe;
         }
         foreach string kind in ("code", "wait") {
-            string cmd = sprintf("'%s' -e 'qore_test_fast_route_guard(\"abort-%s\", sub () {});' 2>&1; echo \"exit=$?\"",
+            string cmd = sprintf("ulimit -c 0; '%s' -e 'qore_test_fast_route_guard(\"abort-%s\", sub () {});' 2>&1; "
+                "echo \"exit=$?\"",
                 replace(qore_exe, "'", "'\\''"), kind);
             string out = backquote(cmd);
             assertRegex("FATAL: .* was reached from inside an HTTP fast route", out, kind + ": the message");

@@ -21,6 +21,10 @@
       parameter; the AST interpreter resolves the variant again and raises RUNTIME-OVERLOAD-ERROR when none matches
       (functions, methods, static methods, recursive calls)
 
+    - #5709, #5717: a private or internal variant resolved at run time was called from outside its access scope in
+      IR, JIT and tiered mode (static methods), and AOT raised RUNTIME-TYPE-ERROR for it; a failed cast to an
+      or-nothing scalar type named the type without the \c * in AOT executables
+
     - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
       with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
       arguments converted for the variant that did not match
@@ -32,7 +36,8 @@
 class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named");
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named",
+            "access-control", "or-nothing-casts");
     }
 
     private {

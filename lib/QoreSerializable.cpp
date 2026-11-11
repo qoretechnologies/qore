@@ -1180,7 +1180,8 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                                 if (!mem.isTransient()) {
                                     continue;
                                 }
-                                ValueHolder val(mem.getDefaultValue(xsink), xsink);
+                                // the initializer is code of the Program that declared the class
+                                ValueHolder val(mem.getDefaultValue(mcls, xsink), xsink);
                                 if (*xsink) {
                                     return QoreValue();
                                 }

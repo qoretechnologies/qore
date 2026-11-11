@@ -33,6 +33,7 @@
 #include "QC_AbstractMember.h"
 #include "QC_TypedHashMember.h"
 #include "QC_AbstractClassMember.h"
+#include "QC_TypedHashMember.h"
 #include "QC_Type.h"
 
 //! This class provides information about %Qore class and @ref hashdecl "typed hash (hashdecl)" members
@@ -153,7 +154,15 @@ auto AbstractMember::getDefaultValue() {
     // the default runs under the calling code's restrictions, as when the caller creates the value itself
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
 
-    // the class ptr must be valid
+    // the initializer is code of the Program that declared the class or hashdecl, which can have been deleted while
+    // the class or hashdecl is still reachable from the reflection object's Program (an inherited or imported
+    // declaration, or the type of a value)
+    if (const QoreReflectionClassMember* cm = dynamic_cast<const QoreReflectionClassMember*>(m)) {
+        return m->mem->getDefaultValue(*cm->cls, xsink);
+    }
+    if (const QoreReflectionHashDeclMember* hm = dynamic_cast<const QoreReflectionHashDeclMember*>(m)) {
+        return m->mem->getDefaultValue(*hm->th, xsink);
+    }
     return m->mem->getDefaultValue(xsink);
 }
 

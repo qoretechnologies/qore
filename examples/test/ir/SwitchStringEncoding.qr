@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A switch on constant string cases compares the value as the AST interpreter does (hard string equality, with
+# encoding conversion): the fixture of SwitchStringEncoding.qtest, whose output must be the same in every execution
+# mode and in AOT code
+
+%modern
+
+# a switch on a string value with ASCII string cases only, which the compiled tiers dispatch with a string lookup
+string sub typed_switch(string s) {
+    switch (s) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+# a switch on the lower-case transformation of a string value, which the compiled tiers dispatch with a string lookup
+string sub lwr_switch(string s) {
+    switch (s.lwr()) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+# the same cases on a value of any type, compared case by case
+string sub auto_switch(auto v) {
+    switch (v) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+# cases of the lengths that a lookup compares in different ways (a byte loop up to 3 bytes, two overlapping 4-byte
+# words up to 7, two overlapping 8-byte words up to 16, memcmp() after that)
+string sub length_switch(string s) {
+    switch (s) {
+        case "abcd": return "4";
+        case "abcdefg": return "7";
+        case "abcdefgh": return "8";
+        case "abcdefghi": return "9";
+        case "abcdefghijklmno": return "15";
+        case "abcdefghijklmnop": return "16";
+        case "abcdefghijklmnopq": return "17";
+        case "abcdefghijklmnopqrst": return "20";
+    }
+    return "default";
+}
+
+# a switch with a case that is not a letter, whose byte is another character in some encodings (SHIFT_JIS "\\" is
+# U+00A5 with libiconv) and a try block around it: a conversion error in the comparison with a plain case means that
+# the value is not the case, as with QoreValue::isEqualHard(), so the switch takes the default case
+string sub try_switch(string s) {
+    try {
+        switch (s) {
+            case "a": return "a";
+            case "\\": return "bs";
+            case "+": return "plus";
+        }
+        return "default";
+    } catch (hash<ExceptionInfo> ex) {
+        return "caught " + ex.err;
+    }
+}
+
+# "case ==" compares with the == operator, which raises an encoding conversion error
+string sub eq_switch(string s) {
+    switch (s) {
+        case == "a": return "eq-a";
+        case == "\\": return "eq-bs";
+        case == "+": return "eq-plus";
+    }
+    return "default";
+}
+
+# constant cases in encodings that are not ASCII-compatible or whose bytes are other ASCII characters: UTF-7 "+" is
+# "+-", and SHIFT_JIS U+00A5 is the byte of "\\" (in libiconv and glibc); the cases are given by their bytes, as the
+# iconv of musl has no UTF-7 (a comparison with the UTF-7 case is not possible there, and the switch does not take it,
+# in every mode) and no U+00A5 in SHIFT_JIS (where the byte is "\\")
+const UTF7_PLUS = force_encoding("+-", "UTF-7");
+const SJIS_YEN = force_encoding("\\", "SHIFT_JIS");
+
+class SwitchConstants {
+    const UTF16_AB = convert_encoding("ab", "UTF-16LE");
+}
+
+string sub const_switch(string s) {
+    switch (s) {
+        case UTF7_PLUS: return "utf7-plus";
+        case SJIS_YEN: return "sjis-yen";
+        case SwitchConstants::UTF16_AB: return "utf16-ab";
+        case LATE_UTF7_A: return "utf7-a";
+        case "a": return "a";
+    }
+    return "default";
+}
+
+# a constant declared after the function that uses it as a case
+# "a+" in UTF-7, by its bytes (see UTF7_PLUS)
+const LATE_UTF7_A = force_encoding("a+-", "UTF-7");
+
+# cases folded at parse time to strings with a null byte or in another encoding: they are not constants of the program
+const FOLD_UTF16 = convert_encoding("a", "UTF-16LE");
+const FOLD_NUL = "x" + binary_to_string(<00>) + "y";
+
+string sub folded_switch(string s) {
+    switch (s) {
+        case "a\000b": return "nul-literal";
+        case FOLD_UTF16 + "c": return "utf16";
+        case FOLD_NUL + "z": return "nul";
+        case "a": return "a";
+    }
+    return "default";
+}
+
+# the same strings outside a switch
+string sub folded_utf16() { return FOLD_UTF16 + "c"; }
+string sub literal_nul() { return "p\000q"; }
+string sub long_literal_nul() { return "pqrstuvwxyz\000q"; }
+string sub default_utf16(string s = FOLD_UTF16 + "d") { return s; }
+list<string> sub folded_list() { return (FOLD_UTF16 + "e", "x\000y"); }
+hash<auto> sub folded_hash() { return {"utf16": FOLD_UTF16 + "f", "nul": "u\000v"}; }
+
+class SwitchMembers {
+    public {
+        string utf16 = FOLD_UTF16 + "g";
+        string nul = "m\000n";
+    }
+
+    static string staticDefault(string s = "s\000t") {
+        return s;
+    }
+}
+
+string sub describe(string s) {
+    return sprintf("%s %y", s.encoding(), binary(s));
+}
+
+string sub safe(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return "EX " + ex.err;
+    }
+}
+
+list<string> sub values() {
+    return (
+        "a", "abc", "ab", "abcd", "", "x", "ABC",
+        # the same strings in other encodings
+        convert_encoding("a", "UTF-16LE"), convert_encoding("abc", "UTF-16LE"), convert_encoding("abc", "UTF-16BE"),
+        convert_encoding("ABC", "UTF-16LE"), convert_encoding("abc", "ISO-8859-1"), convert_encoding("", "UTF-16LE"),
+        convert_encoding("x", "UTF-16LE"),
+        # an embedded null byte: a string that is longer than a case that is its prefix
+        binary_to_string(<6100>), binary_to_string(<610062>), binary_to_string(<61626300>),
+        binary_to_string(<4100>), binary_to_string(<00>),
+    );
+}
+
+list<string> sub conversion_values() {
+    list<string> l = (
+        # values with invalid bytes, which cannot be converted for a comparison with a case
+        force_encoding(binary_to_string(<1b2442ff>), "ISO-2022-JP"), force_encoding(binary_to_string(<2bff>), "UTF-7"),
+        force_encoding(binary_to_string(<d800>), "UTF-16LE"),
+        # the byte of "\\", which is U+00A5 in SHIFT_JIS
+        force_encoding(binary_to_string(<5c>), "SHIFT_JIS"),
+        "\\", "+", "+-", "a+", "ab",
+    );
+    # the bytes of ASCII characters in encodings in which they can be other characters or that iconv may not know: such
+    # a value is compared with the case converted to the encoding
+    foreach string enc in (("ISO646-FR", "ISO646-DE", "ISO646-ES", "ISO646-JP", "JOHAB", "JIS_X0201", "NEXTSTEP", "HZ",
+            "UTF-7-IMAP", "NO-SUCH-ENCODING", "ISO-8859-1", "KOI8-R", "US-ASCII")) {
+        foreach string v in (("\\", "~", "+", "a")) {
+            push l, force_encoding(v, enc);
+        }
+    }
+    # characters whose byte in the encoding is an ASCII character
+    foreach list<string> t in ((("\u00e7", "ISO646-FR"), ("\u00d6", "ISO646-DE"), ("\u00d1", "ISO646-ES"),
+            ("\u20a9", "JOHAB"))) {
+        try {
+            push l, convert_encoding(t[0], t[1]);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                rethrow;
+            }
+        }
+    }
+    foreach string v in (("+", "A", "ABC", "\\", "a", "ab", "a+")) {
+        foreach string enc in (("SHIFT_JIS", "UTF-7", "UTF-16LE")) {
+            # a character that the encoding does not have (libiconv's SHIFT_JIS has no backslash) is left out
+            try {
+                push l, convert_encoding(v, enc);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+    return l;
+}
+
+list<string> sub length_values() {
+    list<string> l;
+    foreach string c in (("abcd", "abcdefg", "abcdefgh", "abcdefghi", "abcdefghijklmno", "abcdefghijklmnop",
+            "abcdefghijklmnopq", "abcdefghijklmnopqrst")) {
+        push l, c;
+        # the first, a middle and the last byte changed
+        foreach int i in ((0, c.size() / 2, c.size() - 1)) {
+            push l, c.substr(0, i) + "X" + c.substr(i + 1);
+        }
+        # a prefix and an extension
+        push l, c.substr(0, -1);
+        push l, c + "z";
+        push l, convert_encoding(c, "UTF-16LE");
+    }
+    return l;
+}
+
+list<string> vl = values();
+list<string> ll = length_values();
+list<string> fl = ("a", binary_to_string(<610062>), "ac", convert_encoding("ac", "UTF-16LE"),
+    convert_encoding("ac", "UTF-16BE"), binary_to_string(<7800797a>), binary_to_string(<780079>));
+SwitchMembers members();
+list<string> cl = conversion_values();
+# enough rounds for the functions to be compiled in the tiered modes
+for (int round = 0; round < 3; ++round) {
+    foreach string v in (vl) {
+        printf("%d %s %y: typed=%s lwr=%s auto=%s\n", round, v.encoding(), binary(v), typed_switch(v), lwr_switch(v),
+            auto_switch(v));
+    }
+    foreach string v in (cl) {
+        printf("%d %s %y: try=%s eq=%s const=%s\n", round, v.encoding(), binary(v), safe(string sub () { return try_switch(v); }),
+            safe(string sub () { return eq_switch(v); }), safe(string sub () { return const_switch(v); }));
+    }
+    foreach string v in (fl) {
+        printf("%d %s %y: folded=%s\n", round, v.encoding(), binary(v), folded_switch(v));
+    }
+    printf("%d nonswitch: %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s\n", round, describe(folded_utf16()),
+        describe(literal_nul()), describe(long_literal_nul()), describe(default_utf16()), describe(folded_list()[0]),
+        describe(folded_list()[1]), describe(folded_hash().utf16), describe(folded_hash().nul),
+        describe(SwitchMembers::staticDefault()), describe(members.utf16), describe(members.nul));
+    printf("%d lengths:", round);
+    foreach string v in (ll) {
+        printf(" %s", length_switch(v));
+    }
+    printf("\n");
+    for (int i = 0; i < 100; ++i) {
+        length_switch("abcdefghijklmnop");
+        folded_switch("a");
+        folded_utf16();
+        literal_nul();
+        long_literal_nul();
+        default_utf16();
+        folded_list();
+        folded_hash();
+        SwitchMembers::staticDefault();
+        typed_switch("abc");
+        lwr_switch("ABC");
+        auto_switch("abc");
+        try_switch("a");
+        eq_switch("a");
+        const_switch("a");
+    }
+}

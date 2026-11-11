@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReflectionHandleLifetimeTest
+
+#! Regression test for issue #5781: a reflection handle keeps the declarations of its type
+/** A TypedHash or TypedHashMember handle, or a Type handle of a hashdecl, class or enum type (or of a type made of
+    one, such as \c list<hash<H>>), got from a value of a Program that was deleted afterwards, read freed memory once
+    the last value of the type was removed: the handle held no reference to the hashdecl or class, whose type info
+    and members were freed with it.  The handles now keep the declarations they refer to.
+
+    The driver (reflection-handle-lifetime.q) removes the values and uses the handles; it runs in every execution
+    mode and as a qcc executable.  Freed memory gave wrong results (no members, an empty cast, a member default of
+    NOTHING) or a crash.
+*/
+class ReflectionHandleLifetimeTest inherits QUnit::Test {
+    public {
+        #! the result of each case of the driver
+        const Expected = (
+            "typed hash name: \"H\"",
+            "typed hash path: \"H\"",
+            "typed hash members: [\"a\", \"s\"]",
+            "typed hash doCast: {a: 1, s: \"x\"}",
+            "typed hash member name: \"a\"",
+            "typed hash member type: \"int\"",
+            "typed hash member default: 1",
+            "hashdecl type name: \"hash<H>\"",
+            "hashdecl type typed hash: \"H\"",
+            "list of hashdecl type name: \"list<hash<H>>\"",
+            "class type name: \"object<C>\"",
+            "enum type name: \"enum<E>\"",
+            "done",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string driver;
+    }
+
+    constructor() : QUnit::Test("ReflectionHandleLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        driver = get_script_dir() + DirSep + "reflection-handle-lifetime.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("reflection handles of a deleted Program in %s mode", mode), getModeTest(mode));
+        }
+        addTestCase("reflection handles of a deleted Program on the IR tier", \runIrTier());
+        addTestCase("reflection handles of a deleted Program in a qcc executable", \runAot());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    private code getModeTest(string mode) {
+        return sub () { assertEq(getExpected(), ExecModeHarness::run(getCommand(mode)), mode); };
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        assertEq(getExpected(), ExecModeHarness::run_ir_tier(getCommand("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the driver with qcc and runs the executable
+    runAot() {
+        TmpDir tmp("qore-reflection-handle-lifetime-");
+        string exe = tmp.path + DirSep + "reflection-handle-lifetime";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, exe, driver));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(getExpected(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)), "executable");
+    }
+
+    #! returns the command running the driver in the given mode
+    private string getCommand(string mode) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir, libqore_dir,
+            qore_bin, mode, driver);
+    }
+
+    #! returns the output of the driver
+    private static string getExpected() {
+        return (foldl $1 + "\n" + $2, Expected) + "\n";
+    }
+}

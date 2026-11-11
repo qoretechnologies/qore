@@ -86,10 +86,10 @@ static void socket_raise_poll_result_exception(const QoreHashNode* ex, Exception
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
-    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation (see
-    // qore_socket_raise_pending_cancel())
-    if (err.getType() == NT_STRING && QoreStringDataHelper(err) == "SOCKET-CLOSED"
-            && qore_socket_raise_pending_cancel("socket operation", xsink)) {
+    // an operation that ended with an error while the thread is cancelled reports the cancellation, whatever ended
+    // it: a close of its socket by the code that the cancellation ends, or the peer's reaction to that (see
+    // qore_socket_raise_pending_cancel(), issue #5793)
+    if (qore_socket_raise_pending_cancel("socket operation", xsink)) {
         return;
     }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
@@ -5344,7 +5344,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
-    @param body if present (and does not have a length of zero), the body to be sent with the message (if present, the \c "Content-Length" header will be automatically set); string data will be automatically converted to the Socket's encoding if necessary
+    @param body if present (and does not have a length of zero), the body to be sent with the message (if present, the \c "Content-Length" header will be automatically set); string data will be automatically converted to the Socket's encoding if necessary; a response without a body is sent with \c "Content-Length: 0", unless the headers have a \c "Transfer-Encoding" header or a \c "Content-Type" whose media type is \c text/event-stream, compared case-insensitively and without its parameters (an event stream is delimited by the end of the connection; before %Qore 3.0 only the exact value \c "text/event-stream" was recognized)
     @param timeout_ms the timeout in milliseconds (1/1000 second); If no timeout is passed or is negative, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599

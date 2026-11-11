@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class RemoveSelectorsNonContainerTest
+
+#! issue #5695: remove and delete with a list of selectors on a value that is not a list, a string or a binary
+/** The AST interpreter removed a value that is not a list, a string or a binary object (a hash, an int, an object or
+    NOTHING) as a whole when a remove or delete expression gave it a list of selectors, while the other execution
+    modes, and the expression as a value, select nothing from it.  Every mode now evaluates the selectors in order and
+    removes nothing; a single index still removes the value as a whole.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class RemoveSelectorsNonContainerTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "non-container-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("remove and delete selectors before the lvalue lock", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        list<string> lines = out.split("\n");
+        assertEq(24, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        # every selector is evaluated, in order, and nothing is removed
+        assertTrue(out =~ /^remove hash:\n  sel a\n  sel b\n  = \[null, \{a: 1, b: 2\}\]\n/, "hash");
+        assertTrue(out =~ /\nremove hash range:\n  sel a\n  sel b\n  sel c\n  = \[null, \{a: 1\}\]\n/, "range");
+        assertTrue(out =~ /\nremove int:\n  sel a\n  sel b\n  = \[null, 5\]\n/, "int");
+        assertTrue(out =~ /\ndelete int:\n  sel a\n  sel b\n  sel c\n  = 5\n/, "delete int");
+        assertTrue(out =~ /\nremove object:\n  sel a\n  sel b\n  destroy lo\n  = \[null, "lo"\]\n/, "object");
+        assertTrue(out =~ /\ndelete object:\n  sel a\n  sel b\n  destroy ld\n  = "ld"\n/, "delete object");
+        assertTrue(out =~ /\nremove nothing:\n  sel a\n  sel b\n  = \[null, null\]\n/, "NOTHING");
+        assertTrue(out =~ /\ndelete global int:\n  sel a\n  sel b\n  = 7\n/, "global");
+        # a member is reported when it is resolved for the removal; an object is not deleted
+        assertTrue(out =~ /\nremove member hash:\n  notify h\n  sel a\n  sel b\n  notify h\n  = \[null, \{a: 1\}\]\n/,
+            "member notification");
+        assertTrue(out =~ /\ndelete member object:\n  notify o\n  sel a\n  sel b\n  notify o\n  = "mo"\n/, "member object");
+        # through a reference, a static variable, a value on a path and a missing path that is not created
+        assertTrue(out =~ /\nremove through reference:\n  sel a\n  sel b\n  sel a\n  sel b\n  = \[null, \{a: 1\}, null, 5\]\n/,
+            "reference");
+        assertTrue(out =~ /\nremove static:\n  sel a\n  sel b\n  = \[null, \{a: 1\}\]\n/, "static variable");
+        assertTrue(out =~ /\nremove path value:\n  sel a\n  sel b\n  = \[null, \{a: 5\}\]\n/, "value on a path");
+        assertTrue(out =~ /\nremove missing path:\n  sel a\n  sel b\n  = \[null, \{\}\]\n/, "missing path");
+        # a later selector that raises: nothing is removed
+        assertTrue(out =~ /\nraise later hash:\n  sel a\n  sel throw second\n  caught SEL-ERROR\n  = \{a: 1\}\n/,
+            "raise later");
+        # a single index removes the value as a whole; a list still gives the selected elements
+        assertTrue(out =~ /\nsingle index hash:\n  sel a\n  = \[\{a: 1\}, null\]\n/, "single index");
+        assertTrue(out =~ /\nlist:\n  sel a\n  sel b\n  = \[\[1, 3\], \[2\]\]\n/, "list");
+        assertEq((), (select lines, $1 =~ /^  ! /), "no case raised an exception");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("remove-selectors-non-container-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

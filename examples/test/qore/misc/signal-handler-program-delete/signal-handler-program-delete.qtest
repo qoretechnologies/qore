@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs in a worker that sets its own --exec-mode
+# test-platform: macos - signal handlers of a Program released when the Program is deleted
+
+# Issue #5766: the signal handlers that a Program set were removed after its data had been deleted, so an object whose
+# last reference a handler's closure held was destroyed in a Program without its data: its destructor raised
+# PROGRAM-ERROR or saw its globals cleared (an HttpServer that qdbg-server's signal handler stops raised PROGRAM-ERROR
+# when the process ended).  A Program now removes its signal handlers before it deletes its data.  The worker runs in
+# every execution mode, without -b, which would disable signal handling.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SignalHandlerProgramDeleteTest
+
+class SignalHandlerProgramDeleteTest inherits QUnit::Test {
+    public {
+        #! the output of the worker for each of its modes
+        const Expected = {
+            "main": "main returns\ndestructor: global valid, static captured\n",
+            "program": "deleting the Program\ndestructor: global valid, static captured\nthe Program is deleted\n",
+            # set_signal_handler() has no effect in the destructor: the closure is released when set_handler() returns
+            "teardown": "main returns\ndestructor: global valid, static captured\nthe destructor set the handler\n",
+            # the thread that deletes the Program releases the handler whose callback finished in the signal thread
+            "running": "deleting the Program while its callback finishes\ndestructor: global valid, static captured\n"
+                "the Program is deleted\n",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("SignalHandlerProgramDeleteTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the main Program releases its signal handlers before it deletes its data", \mainTest());
+        addTestCase("a deleted Program releases its signal handlers before it deletes its data", \programTest());
+        addTestCase("a handler set while the Program's data is destroyed is not set", \teardownTest());
+        addTestCase("a Program deleted while its signal callback finishes releases its handler", \runningTest());
+        set_return_value(main());
+    }
+
+    mainTest() {
+        checkModes("main");
+    }
+
+    teardownTest() {
+        checkModes("teardown");
+    }
+
+    runningTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the signal thread requires a debug build");
+        }
+        checkModes("running");
+    }
+
+    programTest() {
+        checkModes("program");
+    }
+
+    #! Runs the worker in each execution mode and on the IR tier, and compares the output of every run at once
+    private checkModes(string worker_mode) {
+        # the worker runs in a child process, which has signal handling unless the platform has none
+        if (!Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+        hash<string, string> results;
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            results{mode} = runWorker(worker_mode, mode, False);
+        }
+        results{ExecModeHarness::IRTierName} = runWorker(worker_mode, "tiered", True);
+        hash<string, string> expected = map {$1: Expected{worker_mode}},
+            ExecModeHarness::ExecModes + ExecModeHarness::IRTierName;
+        assertEq(expected, results, "the output of the worker (" + worker_mode + ") in every execution mode");
+    }
+
+    #! Runs the worker and returns its output, with its exit status if it is not 0
+    private string runWorker(string worker_mode, string exec_mode, bool ir_tier) {
+        string worker = get_script_dir() + DirSep + "signal-handler-program-delete-worker.q";
+        # no -b: the worker sets a signal handler
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, exec_mode, worker, worker_mode);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        if (ir_tier) {
+            ExecModeHarness::check_ir_tier(r);
+        } else {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+        }
+        return r.rc ? sprintf("%sexit status %d\n", r.out, r.rc) : r.out;
+    }
+}

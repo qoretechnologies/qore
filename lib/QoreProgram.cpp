@@ -574,16 +574,26 @@ std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private
 #endif
 
 namespace {
-//! the Programs whose data the calling thread deletes, innermost last; see qore_program_torn_down_by_current_thread()
-/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+class QoreProgramTeardownScope;
+
+//! the innermost scope of the Programs whose data the calling thread deletes; see
+//! qore_program_torn_down_by_current_thread()
+/** The scopes are a stack linked through the scopes themselves (they live on the stack of the code that deletes the
+    Program), and this is a plain pointer, not a container: a thread_local object with a destructor, such as a
+    std::vector, is destroyed by the main thread when exit() starts, before the destructors of static objects run, and
+    a static object that owns a Program (a module's, or QoreProgramHelper's) deletes it then, so it used the destroyed
+    container (a heap use-after-free and "corrupted double-linked list" when a script ended normally with a Program
+    held at static scope).  A pointer has no destructor and is valid for the life of the thread.
 */
-thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
+thread_local const QoreProgramTeardownScope* qore_program_teardown_scope = nullptr;
 
 //! records that the calling thread deletes a Program's data while it exists
+/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+*/
 class QoreProgramTeardownScope {
 public:
-    QoreProgramTeardownScope(const QoreProgram* pgm) {
-        qore_programs_torn_down.push_back(pgm);
+    QoreProgramTeardownScope(const QoreProgram* pgm) : pgm(pgm), prev(qore_program_teardown_scope) {
+        qore_program_teardown_scope = this;
         counted = qore_thread_program_teardown_enter();
     }
 
@@ -591,21 +601,35 @@ public:
         if (counted) {
             qore_thread_program_teardown_leave();
         }
-        qore_programs_torn_down.pop_back();
+        assert(qore_program_teardown_scope == this);
+        qore_program_teardown_scope = prev;
+    }
+
+    //! returns true if the calling thread is deleting the data of \a p in an enclosing scope
+    static bool contains(const QoreProgram* p) {
+        for (const QoreProgramTeardownScope* i = qore_program_teardown_scope; i; i = i->prev) {
+            if (i->pgm == p) {
+                return true;
+            }
+        }
+        return false;
     }
 
     QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
     QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
 
 private:
+    //! the Program whose data is deleted
+    const QoreProgram* pgm;
+    //! the enclosing scope of the thread, or nullptr
+    const QoreProgramTeardownScope* prev;
     //! the thread's data records the teardown (see qore_reference_program_needs_entry())
     bool counted;
 };
 }
 
 bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm) {
-    return std::find(qore_programs_torn_down.begin(), qore_programs_torn_down.end(), pgm)
-        != qore_programs_torn_down.end();
+    return QoreProgramTeardownScope::contains(pgm);
 }
 
 QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
@@ -616,6 +640,73 @@ QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qo
     }
     // a registered Program has references (see derefUnregister())
     return i->second->optRef() ? i->second : nullptr;
+}
+
+int QoreDeclaringProgramHelper::raiseDeleted(ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program that declared the member initializer has already been "
+            "deleted and therefore its code cannot be executed");
+    }
+    return -1;
+}
+
+int QoreDeclaringProgramHelper::enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+        ExceptionSink* xsink) {
+    assert(p);
+    // the current Program, which the thread is in, and a Program that the thread deletes (which runs the code of its
+    // declarations while it deletes their data, destructors for example) are allocated: their ID tells them from a
+    // later Program at the same address
+    int ctid;
+    if (!qore_reference_program_needs_entry(p, ctid)) {
+        return p->getProgramId() == id ? 0 : raiseDeleted(xsink);
+    }
+    // a module's Program stays allocated while any code can run (module lifetime), as for a call of a module's
+    // function from another Program (see QoreSourceProgramHolder::setVariant())
+    if (module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+        return 0;
+    }
+    QoreProgram* rp = qore_program_private::getReferencedProgram(p, id);
+    if (!rp) {
+        return raiseDeleted(xsink);
+    }
+    if (qore_program_has_module_lifetime(rp)) {
+        module_lifetime.store(true, std::memory_order_release);
+    }
+    return enterReferenced(rp, xsink);
+}
+
+int QoreDeclaringProgramHelper::enterReferenced(QoreProgram* p, ExceptionSink* xsink) {
+    assert(p);
+    if (pgm) {
+        // the helper holds another Program already
+        if (!next) {
+            next.reset(new QoreDeclaringProgramHelper);
+        }
+        return next->enterReferenced(p, xsink);
+    }
+    int ctid = q_gettid();
+    if (!qore_program_private::get(*p)->enterWithoutContext(ctid)) {
+        // releasing the last reference deletes the Program, which needs a sink for its destructors
+        ExceptionSink local_xsink;
+        p->deref(xsink ? xsink : &local_xsink);
+        return raiseDeleted(xsink);
+    }
+    pgm = p;
+    tid = ctid;
+    leave_xsink = xsink;
+    return 0;
+}
+
+void QoreDeclaringProgramHelper::leave() {
+    assert(pgm);
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // leaving the Program can release it, if it was deleted meanwhile, as can releasing the reference; the
+    // destructors run then need a sink
+    ExceptionSink local_xsink;
+    ExceptionSink* xsink = leave_xsink ? leave_xsink : &local_xsink;
+    qore_program_private::decThreadCount(*p, tid, xsink);
+    p->deref(xsink);
 }
 
 bool qore_program_private::runWithRegisteredPrograms(
@@ -1850,6 +1941,19 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         //printd(5, "qore_program_private::waitForTerminationAndClear() this: %p pgm: %p clr: %d\n", this, pgm, clr);
 
+#ifdef HAVE_SIGNAL_HANDLING
+        // issue #5766: the signal handlers of this Program are removed before any of its data is destroyed: a handler
+        // is code that runs in the Program, and its closure can hold the last reference to an object (a server that
+        // the handler stops, for example), whose destructor runs user code; released after the data below, the
+        // object was destroyed in a Program whose data had been deleted, and its destructor raised PROGRAM-ERROR.
+        // The Program's threads have ended and no thread can enter it any more; a callback that is still finishing in
+        // the signal thread (it has left the Program, but its handler is in progress) is waited for, and its handler
+        // is handed over to this thread and released here, as the signal thread cannot enter the Program any more.
+        // The code that runs below sets no handler (see QoreSignalManager::setHandler()), so none is left when the
+        // Program is deleted.
+        QSM.removeProgramHandlers({pgm}, xsink);
+#endif
+
         // Discard the exec-class instance now that all threads have terminated.
         // This must happen before clearLocalVars()/clearNamespaceData() because the
         // instance's destructor may run user code that references globals or namespace data.
@@ -1905,15 +2009,6 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             if (twaiting)
                 tcond.broadcast();
         }
-#ifdef HAVE_SIGNAL_HANDLING
-        {
-            int_set_t ns = sigset;
-            // clear all signal handlers managed by this program
-            for (int_set_t::iterator i = ns.begin(), e = ns.end(); i != e; ++i)
-                QSM.removeHandler(*i, xsink);
-        }
-#endif
-
         // merge pending parse exceptions into the passed exception sink, if any
         if (pendingParseSink) {
             xsink->assimilate(pendingParseSink);
@@ -3724,6 +3819,111 @@ void QoreProgram::parseSetParseOptions(const QoreParseOptions& po) {
 
 void QoreProgram::parseDisableParseOptions(const QoreParseOptions& po) {
     priv->parseDisableParseOptions(&loc_builtin, po);
+}
+
+namespace {
+//! the parse directives of the options that %modern implies or does not allow (issue #5682)
+struct QoreModernOptionName {
+    const QoreParseOptions* option;
+    int64 legacy_option;
+    const char* directive;
+};
+}
+
+void qore_program_private_base::describeParseOptions(const QoreParseOptions& po, QoreString& str) {
+    static const QoreModernOptionName names[] = {
+        {nullptr, PO_BROKEN_NARROWED_TYPES, "%broken-narrowed-types"},
+        {nullptr, PO_STRICT_BOOLEAN_EVAL, "%strict-bool-eval"},
+        {nullptr, PO_BROKEN_LIST_PARSING, "%broken-list-parsing"},
+        {nullptr, PO_BROKEN_LOGIC_PRECEDENCE, "%broken-logic-precedence"},
+        {nullptr, PO_BROKEN_INT_ASSIGNMENTS, "%broken-int-assignments"},
+        {nullptr, PO_BROKEN_OPERATORS, "%broken-operators"},
+        {nullptr, PO_BROKEN_LOOP_STATEMENT, "%broken-loop-statement"},
+        {nullptr, PO_BROKEN_REFERENCES, "%broken-references"},
+        {nullptr, PO_BROKEN_SPRINTF, "%broken-sprintf"},
+        {nullptr, PO_BROKEN_CAST, "%broken-cast"},
+        {nullptr, PO_BROKEN_NAMESPACE_RESOLUTION, "%broken-namespace-resolution"},
+        {nullptr, PO_BROKEN_RANGE, "%broken-range"},
+        {nullptr, PO_BROKEN_VARARGS, "%broken-varargs"},
+        {nullptr, PO_BROKEN_LIST_RANGE, "%broken-list-range"},
+        {&QoreParseOptions::BROKEN_SOFT_TYPES, 0, "%broken-soft-types"},
+        {&QoreParseOptions::BROKEN_AUTO_CAST, 0, "%broken-auto-cast"},
+        {&QoreParseOptions::NO_STRING_INDEX_CHAR, 0, "%no-string-index-char"},
+        {&QoreParseOptions::NO_SUMMARIZE, 0, "%no-summarize"},
+        {&QoreParseOptions::STREAMING_ANY, 0, "%streaming-any"},
+        {&QoreParseOptions::NEGATIVE_OFFSETS, 0, "%negative-offsets"},
+    };
+    bool first = true;
+    for (const auto& n : names) {
+        QoreParseOptions o = n.option ? *n.option : QoreParseOptions(n.legacy_option);
+        if (!(po & o)) {
+            continue;
+        }
+        if (!first) {
+            str.concat(", ");
+        }
+        first = false;
+        str.concat(n.directive);
+    }
+}
+
+int qore_program_private_base::checkModernConflict(const QoreParseOptions& current, const QoreParseOptions& po, bool set,
+        const char* what, ExceptionSink* xsink) {
+    QoreParseOptions conflict = getModernConflict(current, po, set);
+    if (!conflict) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("%s: ", what);
+    describeParseOptions(conflict, *desc);
+    desc->concat(set
+        ? " cannot be set while %modern is in effect: the option changes the meaning of code, and %modern guarantees "
+            "a consistent set of parse options"
+        : " cannot be disabled while %modern is in effect, which implies the option and guarantees a consistent set of "
+            "parse options");
+    xsink->raiseException("OPTION-ERROR", desc);
+    return -1;
+}
+
+int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po,
+        bool set) {
+    QoreParseOptions conflict = getModernConflict(pwo.parse_options, po, set);
+    if (!conflict) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNode;
+    if (set) {
+        describeParseOptions(conflict, *desc);
+        desc->concat(" cannot be used while %modern is in effect: the option changes the meaning of code, and %modern "
+            "guarantees a consistent set of parse options; remove the directive, or parse the code without %modern (as "
+            "a .q file, or after %old-style)");
+    } else {
+        // %no-negative-offsets is the only directive that disables an option that %modern implies
+        desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
+        describeParseOptions(conflict, *desc);
+        desc->concat(" and guarantees a consistent set of parse options; remove the directive, or parse the code "
+            "without %modern (as a .q file, or after %old-style)");
+    }
+    qore_program_private::makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
+    return -1;
+}
+
+int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
+        ExceptionSink* xsink) {
+    // a child Program has its parent's options too, unless the parent allows other options for its children
+    QoreParseOptions effective = po;
+    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+        effective |= parent->priv->pwo.parse_options;
+    }
+    if (!isModern(effective)) {
+        return 0;
+    }
+    if (isModern(po)) {
+        return checkModernConflict(effective, po, true, "Program::constructor()", xsink);
+    }
+    // %modern comes from the parent
+    return checkModernConflict(effective, po, true, "Program::constructor() (the new Program has %modern from its "
+        "parent, which can allow other options for its child Programs with %no-child-restrictions, or create an "
+        "independent Program)", xsink);
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
