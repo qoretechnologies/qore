@@ -40,7 +40,18 @@ private:
     DLLLOCAL virtual ~QoreImplicitElementNode() {
     }
 
+    //! a \c $# that no operator or foreach statement sets for the code being parsed is unset: NOTHING (qore#5690)
+    /** \c $# is the index of the element of the operator or foreach statement whose per-element code encloses it in
+        the same function (PF_IMPLICIT_ELEMENT); in a function, method or closure called from that code, and at the
+        top level outside any of them, it is unset, whatever the caller's index is.
+    */
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+        if (!(parse_context.pflag & PF_IMPLICIT_ELEMENT)) {
+            SimpleRefHolder<QoreImplicitElementNode> holder(this);
+            val = QoreValue();
+            parse_context.typeInfo = nothingTypeInfo;
+            return 0;
+        }
         parse_context.typeInfo = bigIntTypeInfo;
         return 0;
     }

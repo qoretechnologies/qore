@@ -1340,6 +1340,11 @@ public:
     bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
     bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
     bool aot_int_to_string_measure = false;  // Transient: ToString returns the native decimal width
+    // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
+    // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
+    // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
+    bool restore_on_exception_exit = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
@@ -3551,6 +3556,33 @@ public:
         instructions.insert(instructions.begin(), std::move(inst));
     }
 
+    //! Returns the temp scope in which the code of this block runs as the handler of an exception
+    /** The scope that the block's first instruction recorded (QoreIRInstruction::temp_scope_id), other than an
+        instruction that opens or closes a temp scope and records its own; 0 if none is known.  An exception that
+        branches to the block leaves every temp scope opened after this one, and releases their temporaries before
+        the block runs (see design/ir-exception-branch-temp-scope.md).
+
+        A block whose first instruction opens a temp scope of its own (PushTempMark) is skipped over to the
+        instructions in that scope, which is not open when an exception branches to the block: the scope returned is
+        then found on no stack of open scopes, and the exception drains the raising instruction's own scope, as before
+        the rule for nested scopes.  The handlers that the lowering creates record their scope first (a landing pad, a
+        cleanup block's releases), so this does not arise for them.
+    */
+    uint32_t getHandlerTempScopeId() const {
+        for (const auto& inst : instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                case QoreIROpcode::DiscardTempsKeep:
+                case QoreIROpcode::UnwindTemps:
+                    continue;
+                default:
+                    return inst->temp_scope_id;
+            }
+        }
+        return 0;
+    }
+
     std::string name;
     std::vector<std::unique_ptr<QoreIRInstruction>> instructions;
 
@@ -4176,6 +4208,12 @@ public:
     //! The class of each value for the order of the release of a statement's temporaries by an exception (see
     //! qore_ir_build_exception_release_groups())
     mutable std::vector<uint32_t> interpreter_exception_release_groups;
+    //! the PushImplicitArg / SetImplicitArgv / PushImplicitElement instructions
+    //! (QoreIRInstruction::restore_on_exception_exit) open
+    //! at each instruction that leaves the function on an exception, outermost first; the interpreter's frame exit
+    //! restores them (see qore_ir_find_open_implicit_contexts())
+    mutable std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>
+        interpreter_open_implicit_contexts;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;

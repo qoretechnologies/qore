@@ -101,6 +101,17 @@
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
 
+    @par The Implicit Index Is Unset Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
+    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
+    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
+    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+
+    @par An Operator over a Single Value Gives It the Implicit Index 0
+    A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
+    it the @ref implicit_index "implicit index" (<tt>$#</tt>) \c 0, as for a list of one element, instead of leaving
+    the enclosing index.
+
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
     \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the
