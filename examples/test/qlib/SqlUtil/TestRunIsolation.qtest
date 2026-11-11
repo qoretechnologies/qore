@@ -10,9 +10,11 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires json
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./TestRunIsolation.qm
+%requires ./PgsqlTestIsolation.qm
 %requires ./MysqlTestIsolation.qm
 %requires ./MssqlTestIsolation.qm
 %requires ./OracleTestIsolation.qm
@@ -29,6 +31,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         addTestCase("the passwords of datasource strings are masked in messages", \masking());
         addTestCase("the lock file is named without the password", \lockName());
         addTestCase("the CI cleanup prints no password", \cleanupOutput());
+        addTestCase("a database whose driver module cannot be loaded gets no run object", \driverUnavailable());
         set_return_value(main());
     }
 
@@ -126,11 +129,13 @@ class TestRunIsolationTest inherits QUnit::Test {
         # a datasource string that cannot be parsed (its port is not a number), as quoted in a message
         string bad = "mysql:user/" + pw + "@db%host:12x";
         string msg;
+        *hash<auto> config;
         try {
-            parse_datasource(bad);
+            config = parse_datasource(bad);
         } catch (hash<ExceptionInfo> ex) {
             msg = ex.desc;
         }
+        assertNothing(config, "the datasource string cannot be parsed");
         assertNeq(-1, msg.find(pw), "the message quotes the password");
         assertEq(-1, TestRun::maskSecrets(msg, bad).find(pw));
         # without the datasource string: the "user/password@" form
@@ -189,5 +194,120 @@ class TestRunIsolationTest inherits QUnit::Test {
             script));
         assertRegex("MySQL: skipped: DATASOURCE-PARSE-ERROR", out);
         assertEq(-1, out.find(pw), out);
+    }
+
+    #! A database whose driver module cannot be loaded gets no run object, so the test finds it so when it connects
+    /** The module is not installed, or it was built for another module API, which the loader reports in the same
+        way (LOAD-MODULE-ERROR, naming the file it refused).  The run objects were made with a datasource of the
+        driver before any connection was tried, so the error ended the test where it skips without the driver (CI
+        pipeline 64230, whose images had the DBI drivers only for module API 2.0).  The setups run in a process
+        whose module path has no driver module, and in one whose module path has the driver modules for a module
+        API that no Qore loads.
+    */
+    private driverUnavailable() {
+        if (PlatformOS == "Windows") {
+            testSkip("no POSIX shell");
+        }
+        # the directories of the modules that the isolation modules need (Util and its modules), which hold no
+        # driver module
+        list<string> dirs = ();
+        foreach hash<auto> i in (get_module_hash().pairIterator()) {
+            if (!inlist(i.key, ("Util", "yaml", "json", "reflection")) || !i.value.filename) {
+                continue;
+            }
+            string dir = dirname(i.value.filename);
+            if (inlist(dir, dirs)) {
+                continue;
+            }
+            if (is_dir(dir)) {
+                Dir d();
+                d.chdir(dir);
+                if (d.listFiles("^(pgsql|mysql|freetds|oracle|jni)(-api-[0-9.]+)?\\.qmod$")) {
+                    testSkip(sprintf("the module directory %y has driver modules", dir));
+                }
+            }
+            dirs += dir;
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        # driver modules for a module API that no Qore loads
+        string old_api = tmp + DirSep + "old-api";
+        mkdir(old_api);
+        foreach string driver in (("pgsql", "mysql", "freetds", "oracle", "jni")) {
+            File f();
+            f.open2(old_api + DirSep + driver + "-api-1.9.qmod", O_CREAT | O_WRONLY | O_TRUNC);
+            f.close();
+        }
+        string empty = tmp + DirSep + "empty";
+        mkdir(empty);
+
+        string dir = normalize_dir(get_script_dir());
+        string script = tmp + DirSep + "setup.q";
+        File sf();
+        sf.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        sf.write(sprintf("%%modern\n"
+            "%%requires json\n"
+            "%%requires %s/PgsqlTestIsolation.qm\n"
+            "%%requires %s/MysqlTestIsolation.qm\n"
+            "%%requires %s/MssqlTestIsolation.qm\n"
+            "%%requires %s/OracleTestIsolation.qm\n"
+            "%%try-module pgsql\n"
+            "%%define NoPgsql\n"
+            "%%endtry\n"
+            "hash<auto> h = {};\n"
+            "%%ifdef NoPgsql\n"
+            "h.\"try-module\" = \"unavailable\";\n"
+            "%%endif\n"
+            "try { new Datasource(\"pgsql:u/p@db%%localhost:1\"); } catch (hash<ExceptionInfo> ex) {\n"
+            "    h.err = ex.err; h.desc = ex.desc;\n"
+            "}\n"
+            "h.pgsql = PgsqlRunSchema::setup(\"pgsql:u/p@db%%localhost:1\", \"x\");\n"
+            "h.pgsql_jdbc = PgsqlRunSchema::setup(\"jdbc:u/p@db{url=postgresql://localhost:1/db}\", \"x\");\n"
+            "h.pgoptions = getenv(\"PGOPTIONS\");\n"
+            "h.mysql = MysqlRunDatabase::getConnectionString(\"mysql:u/p@db%%localhost:1\", \"x\");\n"
+            "h.mssql = MssqlRunDatabase::getConnectionString(\"freetds:u/p@db%%localhost:1\", \"x\");\n"
+            "h.mssql_jdbc = MssqlRunDatabase::getConnectionString(\"jdbc:u/p@db{url=sqlserver://localhost:1}\", "
+                "\"x\");\n"
+            "h.oracle = OracleRunSchema::getConnectionString(\"oracle:u/p@db%%localhost:1\", \"x\");\n"
+            "printf(\"%%s\\n\", make_json(h));\n", dir, dir, dir, dir));
+        sf.close();
+
+        foreach hash<auto> i in ({"not installed": empty, "built for another module API": old_api}.pairIterator()) {
+            string module_path = (dirs + i.value).join(":");
+            string out = backquote(sprintf("env -u PGOPTIONS QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
+                "QORE_DB_CONNSTR_ORACLE_SYS='oracle:system/p@db%%localhost:1' %s %s 2>&1",
+                TestRunIsolationTest::shellQuote(module_path),
+                TestRunIsolationTest::shellQuote(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore"),
+                TestRunIsolationTest::shellQuote(script)));
+            *hash<auto> h;
+            try {
+                h = parse_json(out);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("%s: unexpected output: %s", i.key, out));
+            }
+            # the loader's error is the same as for a module that is not found
+            assertEq("unavailable", h."try-module", i.key);
+            assertEq("LOAD-MODULE-ERROR", h.err, i.key);
+            if (i.value == old_api) {
+                assertRegex("pgsql-api-1\\.9\\.qmod' built for module API 1\\.9", h.desc, i.key);
+            } else {
+                assertEq(-1, h.desc.find("built for module API"), i.key);
+            }
+            # nothing is set up: no schema, and PGOPTIONS is not set
+            assertNothing(h.pgsql, i.key);
+            assertNothing(h.pgsql_jdbc, i.key);
+            assertNothing(h.pgoptions, i.key);
+            # the datasource strings are returned as they are given
+            assertEq("mysql:u/p@db%localhost:1", h.mysql, i.key);
+            assertEq("freetds:u/p@db%localhost:1", h.mssql, i.key);
+            assertEq("jdbc:u/p@db{url=sqlserver://localhost:1}", h.mssql_jdbc, i.key);
+            assertEq("oracle:u/p@db%localhost:1", h.oracle, i.key);
+        }
+    }
+
+    #! Returns the string quoted for a POSIX shell
+    private static string shellQuote(string str) {
+        str =~ s/'/'\\''/g;
+        return "'" + str + "'";
     }
 }

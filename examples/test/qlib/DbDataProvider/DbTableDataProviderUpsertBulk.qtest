@@ -116,13 +116,14 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         }
         # on PostgreSQL, every connection of the run uses the run's own schema
         PgsqlRunSchema::setup(connstr, "DbTableDataProviderUpsertBulk");
-        Datasource ds(connstr);
+        Datasource ds;
         try {
+            ds = new Datasource(connstr);
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
             # a connection string can be present but unusable (no server, wrong
-            # credentials); that is an environment condition, not a test failure.
-            # Only the connection attempt is guarded - every later error still fails.
+            # credentials, a driver whose module cannot be loaded); that is an environment condition, not a test
+            # failure. Only the connection attempt is guarded - every later error still fails.
             testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
         }
         return ds;

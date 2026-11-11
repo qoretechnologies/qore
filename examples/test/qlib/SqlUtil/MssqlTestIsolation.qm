@@ -129,8 +129,9 @@ public class MssqlRunDatabase {
         the \c freetds driver or the \c jdbc driver with a SQL Server URL
         @param suite the name of the test, used in the name of the database
 
-        @return the datasource string of the run's database; the given one if it is not for SQL Server, or if no
-        database can be created for the run (see the introduction); no value if none is given
+        @return the datasource string of the run's database; the given one if it is not for SQL Server, if the
+        module of its driver cannot be loaded (it is not installed, or it was built for another module API), or if
+        no database can be created for the run (see the introduction); no value if none is given
     */
     static *string getConnectionString(*string connstr, string suite) {
         try {
@@ -162,13 +163,17 @@ public class MssqlRunDatabase {
             return connstr;
         }
 
-        Datasource ds(connstr);
-        # "create database" and "drop database" cannot run in a transaction (see MssqlRunDatabase::outsideTransaction())
-        ds.setAutoCommit(True);
+        Datasource ds;
         try {
+            ds = new Datasource(connstr);
+            # "create database" and "drop database" cannot run in a transaction (see
+            # MssqlRunDatabase::outsideTransaction())
+            ds.setAutoCommit(True);
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
+            # a driver whose module cannot be loaded (LOAD-MODULE-ERROR: it is not installed, or it was built for
+            # another module API), or a server that cannot be reached: the test finds it so when it connects, and
+            # reports or skips it
             return connstr;
         }
         string version = ds.selectRow("select @@version as v").v;
