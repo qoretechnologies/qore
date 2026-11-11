@@ -1012,13 +1012,20 @@ table.dropCommit();
 
         @throw OPTION-ERROR invalid or unknown callback option
 
-        @note The transaction is committed if successful or rolled back if an exception occurs; use @ref drop() to
-        execute without any transaction management
+        @note Each statement of getDropSql() is committed on its own, and a failed statement is rolled back: a
+        partitioned table whose driver drops each partition in its own statement (as PostgreSQL does) is dropped one
+        partition per transaction, and so within the database's lock limits however many partitions it has.  Use
+        @ref drop() to execute without any transaction management.
     */
     dropCommit(*hash<auto> opt) {
-        on_exit ds.commit();
         on_error ds.rollback();
-        drop(opt);
+        # also when there is nothing to drop, the transaction is ended
+        on_success ds.commit();
+        foreach string sql in (getDropSql(opt)) {
+            ds.execRaw(sql);
+            ds.commit();
+        }
+        inDb = False;
     }
 
     #! drops the table from the database without any transaction management

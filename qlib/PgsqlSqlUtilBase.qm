@@ -235,6 +235,9 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - the drop SQL of a partitioned table drops each of its partitions in a statement of its own before the table:
+      dropping the table took a lock on every partition and its indexes at once, and with hundreds of partitions
+      failed with "out of shared memory" on a server with the default \c max_locks_per_transaction
     - fixed \c PgsqlTable::bulkInsert() on a connection of a driver other than \c pgsql (ex: \c jdbc), which ran
       PostgreSQL's \c COPY \c FROM \c STDIN as SQL, which the driver refuses, and aborted the transaction: the rows
       are inserted as with the other databases
@@ -6676,10 +6679,55 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             throw "OPTION-ERROR", sprintf("%s: table drop option %y is not supported by database driver %y",
                 getDesc(), "cascade_constraints", ds.getDriverName());
         }
+        # the partitions of a partitioned table first, each in a statement of its own
+        if (supportsPartitions() && getPartitionStrategy()) {
+            l += getPartitionDropSql(opt);
+        }
         l += sprintf("drop table%s %s%s", opt.if_exists ? " if exists" : "", getSqlName(),
             (opt.force || opt.cascade) ? " cascade" : "");
         map l += $1.getDropSql(), triggerFunctions.iterator();
         return l;
+    }
+
+    #! returns the SQL that drops each partition of a partitioned table, the deepest partitions first
+    /** Dropping a partitioned table takes a lock on every partition and on each partition's indexes and TOAST
+        relations at once, in one transaction: with hundreds of partitions this exceeds the server's lock table
+        (@c max_locks_per_transaction times the number of connections; 6400 by default) and fails with
+        "out of shared memory".  A partition dropped by a statement of its own takes only its own locks, so a caller
+        that commits each statement (AbstractTable::dropCommit(), Schema::AbstractSchema::drop()) stays within the
+        default limits.  Only the partitions of a declaratively partitioned table are listed, never the children of
+        classic table inheritance; a foreign table partition is dropped as a foreign table.
+
+        Without the \c cascade or \c force option, nothing is listed when an object outside the table, such as a
+        view or a foreign key of another table, depends on the table: its drop then fails as the drop of the table
+        alone would, before any partition, and so any data, is dropped.
+    */
+    private list<string> getPartitionDropSql(*hash<auto> opt) {
+        bool cascade = opt.force || opt.cascade;
+        if (!cascade && ds.selectRow("select 1 as found from pg_catalog.pg_depend d "
+                "where d.refclassid = 'pg_catalog.pg_class'::pg_catalog.regclass "
+                "and d.refobjid = pg_catalog.to_regclass(%v) and d.deptype = 'n' limit 1", getSqlName())) {
+            return ();
+        }
+        *hash<auto> q = ds.select("with recursive parts (oid, depth) as ("
+            "select i.inhrelid, 1 from pg_catalog.pg_inherits i "
+            "join pg_catalog.pg_class p on p.oid = i.inhparent "
+            "where i.inhparent = pg_catalog.to_regclass(%v) and p.relkind = 'p' "
+            "union all "
+            "select i.inhrelid, parts.depth + 1 from pg_catalog.pg_inherits i "
+            "join parts on i.inhparent = parts.oid "
+            "join pg_catalog.pg_class p on p.oid = i.inhparent where p.relkind = 'p') "
+            "select pg_catalog.quote_ident(n.nspname) || '.' || pg_catalog.quote_ident(c.relname) as sql_name, "
+            "c.relkind = 'f' as is_foreign "
+            "from parts join pg_catalog.pg_class c on c.oid = parts.oid "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "order by parts.depth desc, c.relname", getSqlName());
+        list<string> rv = ();
+        foreach hash<auto> row in (q.contextIterator()) {
+            rv += sprintf("drop %stable %s%s", row.is_foreign ? "foreign " : "", row.sql_name,
+                cascade ? " cascade" : "");
+        }
+        return rv;
     }
 
     private setupTableImpl(hash<auto> desc, *hash<auto> opt) {

@@ -401,9 +401,7 @@ public namespace DebugProgramControl {
 
         #! Returns True if a client is connected
         private bool hasConnection() {
-            rwlConnection.readLock();
-            on_exit rwlConnection.readUnlock();
-            return boolean(ctxConnection);
+            return DebugProgramControl::withReadLock(rwlConnection, bool sub () { return boolean(ctxConnection); });
         }
 
         #! unregister all connections; the stopped threads continue
@@ -615,8 +613,44 @@ public namespace DebugProgramControl {
         /** @since DebugProgramControl 0.1.3
         */
         public bool isTerminating(int pgm_id) {
-            AutoLock al(startedLock);
-            return boolean(terminatingPrograms{pgm_id});
+            return DebugProgramControl::withLock(startedLock, bool sub () {
+                return boolean(terminatingPrograms{pgm_id});
+            });
+        }
+
+        #! Runs code with a lock of the debugger's state held, with the cancellation of the thread deferred
+        /** The threads that the debugger debugs take the locks of its state in its callbacks, also while they handle
+            a cancellation, as the one with which terminateProgram() ends them, which it makes while it holds a lock of
+            the state.  A lock wait is a cancellation point, so a thread whose cancellation is pending would raise it
+            again in the code of the debugger, which would then not complete; the locks are held only briefly, so the
+            cancellation is deferred while one is taken and held, and it is raised at the next cancellation point
+            after the code, such as the next statement of the program or a wait of the debugger for its clients
+
+            @return the value that the code returns
+        */
+        private:internal static auto withLock(Mutex m, code c) {
+            return defer_thread_cancel(auto sub () {
+                AutoLock al(m);
+                return c();
+            });
+        }
+
+        #! Runs code with the read lock of a lock of the debugger's state held; see withLock()
+        private:internal static auto withReadLock(RWLock l, code c) {
+            return defer_thread_cancel(auto sub () {
+                l.readLock();
+                on_exit l.readUnlock();
+                return c();
+            });
+        }
+
+        #! Runs code with the write lock of a lock of the debugger's state held; see withLock()
+        private:internal static auto withWriteLock(RWLock l, code c) {
+            return defer_thread_cancel(auto sub () {
+                l.writeLock();
+                on_exit l.writeUnlock();
+                return c();
+            });
         }
 
         #! process message in debugging thread, if message is related to debugged thread then put it in particular queue
@@ -1418,16 +1452,17 @@ public namespace DebugProgramControl {
             # the call is the nth call of the statement with its key
             int ordinal = (select targetKeys[0..target], $1 == key).size();
             int depth = (select get_thread_call_stack(), $1.type == "user").size();
-            AutoLock al(stepIntoLock);
-            stepIntos{tid} = {
-                "key": key,
-                "ordinal": ordinal,
-                "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
-                "depth": depth,
-                "counts": {},
-                # the location of the call, which the frame of the called code has
-                "loc": targets[target]{"start_line", "end_line", "start_column", "end_column"},
-            };
+            DebugProgramControl::withLock(stepIntoLock, sub () {
+                stepIntos{tid} = {
+                    "key": key,
+                    "ordinal": ordinal,
+                    "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
+                    "depth": depth,
+                    "counts": {},
+                    # the location of the call, which the frame of the called code has
+                    "loc": targets[target]{"start_line", "end_line", "start_column", "end_column"},
+                };
+            });
         }
 
         #! Returns True if the frame of called code is the frame of the call that a thread steps into
@@ -1464,10 +1499,7 @@ public namespace DebugProgramControl {
         */
         private bool checkStepInto(int tid, string func, reference runState) {
             *hash<auto> si;
-            {
-                AutoLock al(stepIntoLock);
-                si = stepIntos{tid};
-            }
+            si = DebugProgramControl::withLock(stepIntoLock, *hash<auto> sub () { return stepIntos{tid}; });
             if (!si) {
                 return False;
             }
@@ -1478,19 +1510,13 @@ public namespace DebugProgramControl {
                     hash<auto> frame = stack[2 + frameOffset];
                     string key = DebugProgramControl::getStepIntoFrameKey(frame.function, si.keys);
                     int n;
-                    {
-                        AutoLock al(stepIntoLock);
-                        n = ++stepIntos{tid}.counts{key};
-                    }
+                    n = DebugProgramControl::withLock(stepIntoLock, int sub () { return ++stepIntos{tid}.counts{key}; });
                     if (!DebugProgramControl::isStepIntoCall(si, frame, key, n)) {
                         runState = DebugUntilReturn;
                         return True;
                     }
                     # the call: the thread stops at its first statement, as a step into a function does
-                    {
-                        AutoLock al(stepIntoLock);
-                        remove stepIntos{tid};
-                    }
+                    DebugProgramControl::withLock(stepIntoLock, sub () { remove stepIntos{tid}; });
                     runState = DebugStep;
                     return True;
                 } else if (func == "funcExit") {
@@ -1499,8 +1525,7 @@ public namespace DebugProgramControl {
                     return True;
                 }
             }
-            AutoLock al(stepIntoLock);
-            remove stepIntos{tid};
+            DebugProgramControl::withLock(stepIntoLock, sub () { remove stepIntos{tid}; });
             return False;
         }
 
@@ -1538,57 +1563,54 @@ public namespace DebugProgramControl {
             @param uncaught @ref True if no try statement of debuggable code in the call stack catches it
         */
         private bool stopsAtException(hash<auto> ex, bool uncaught) {
-            rwlConnection.readLock();
-            on_exit rwlConnection.readUnlock();
-            if (!ctxConnection) {
-                return True;
-            }
-            *string type = ex.type.lwr();
-            foreach hash<auto> c in (ctxConnection.iterator()) {
-                if (!exists c.exceptionFilters
-                    || inlist(type, c.exceptionFilters)
-                    || (uncaught && inlist("uncaught", c.exceptionFilters))
-                    || inlist(ex.err, c.exceptionFilters)) {
+            return DebugProgramControl::withReadLock(rwlConnection, bool sub () {
+                if (!ctxConnection) {
                     return True;
                 }
-            }
-            return False;
+                *string type = ex.type.lwr();
+                foreach hash<auto> c in (ctxConnection.iterator()) {
+                    if (!exists c.exceptionFilters
+                        || inlist(type, c.exceptionFilters)
+                        || (uncaught && inlist("uncaught", c.exceptionFilters))
+                        || inlist(ex.err, c.exceptionFilters)) {
+                        return True;
+                    }
+                }
+                return False;
+            });
         }
 
         #! Returns True if the thread steps into a call of its statement; see checkStepInto()
         private bool hasStepInto(int tid) {
-            AutoLock al(stepIntoLock);
-            return exists stepIntos{tid};
+            return DebugProgramControl::withLock(stepIntoLock, bool sub () { return exists stepIntos{tid}; });
         }
 
         #! Notes that a client requested threads to stop (pause); see onStep()
         private notePauseRequests(*softlist<softint> tids) {
-            AutoLock al(pauseLock);
-            map pauseRequests{$1} = True, tids;
+            DebugProgramControl::withLock(pauseLock, sub () { map pauseRequests{$1} = True, tids; });
         }
 
         #! Returns True if a thread to pause stops at a block, as it reached the block again without a statement
         /** The first time, the block is noted, and the thread stops at its first statement; see onStep()
         */
         private bool stopsAtBlockForPause(int tid, int block_id) {
-            AutoLock al(pauseLock);
-            if (pauseSkippedBlocks{tid} === block_id) {
-                return True;
-            }
-            pauseSkippedBlocks{tid} = block_id;
-            return False;
+            return DebugProgramControl::withLock(pauseLock, bool sub () {
+                if (pauseSkippedBlocks{tid} === block_id) {
+                    return True;
+                }
+                pauseSkippedBlocks{tid} = block_id;
+                return False;
+            });
         }
 
         #! Returns True if a client requested the thread to stop (pause) and it has not stopped since
         private bool isPauseRequested(int tid) {
-            AutoLock al(pauseLock);
-            return exists pauseRequests{tid};
+            return DebugProgramControl::withLock(pauseLock, bool sub () { return exists pauseRequests{tid}; });
         }
 
         #! Returns True if any breakpoint has a condition, hit condition or log message
         private bool hasBreakpointOptions() {
-            AutoLock al(bkptLock);
-            return boolean(bkptOptions);
+            return DebugProgramControl::withLock(bkptLock, bool sub () { return boolean(bkptOptions); });
         }
 
         #! Returns the IDs of the breakpoints of a statement that apply to the current thread, in their order
@@ -1614,8 +1636,7 @@ public namespace DebugProgramControl {
 
         #! Returns the condition, hit condition, log message and number of hits of a breakpoint, if any is set
         private *hash<auto> getBreakpointOptions(int id) {
-            AutoLock al(bkptLock);
-            return bkptOptions{id};
+            return DebugProgramControl::withLock(bkptLock, *hash<auto> sub () { return bkptOptions{id}; });
         }
 
         #! Sets or removes the condition, hit condition or log message of a breakpoint
@@ -1776,13 +1797,12 @@ public namespace DebugProgramControl {
                     return {"stop": False};
                 }
                 int count;
-                {
-                    AutoLock al(bkptLock);
+                DebugProgramControl::withLock(bkptLock, sub () {
                     # the options may have been removed meanwhile
                     if (bkptOptions{id}) {
                         count = ++bkptOptions{id}.hits;
                     }
-                }
+                });
                 if (opts.hitCondition && !DebugProgramControl::checkHitCondition(opts.hitCondition, count)) {
                     return {"stop": False};
                 }
@@ -2206,9 +2226,7 @@ public namespace DebugProgramControl {
             Program epgm;
             string fname;
             Counter calls;
-            {
-                evalLock.lock();
-                on_exit evalLock.unlock();
+            DebugProgramControl::withLock(evalLock, sub () {
                 string id = string(pgm.getProgramId());
                 *string f = evalPrograms{id}.functions{key};
                 # a Program is parsed only when no evaluation runs in it; another thread can evaluate an expression,
@@ -2251,7 +2269,7 @@ public namespace DebugProgramControl {
                 if (call) {
                     calls.inc();
                 }
-            }
+            });
             return {"program": epgm, "function": fname, "calls": calls};
         }
 
@@ -2283,16 +2301,15 @@ public namespace DebugProgramControl {
         */
         nothing removeProgram(ProgramControl program) {
             DebugProgram::removeProgram(program);
-            {
-                AutoLock al(startedLock);
+            # the thread that ran a program removes it when the run ends, also when it is cancelled (see runAndDetach())
+            DebugProgramControl::withLock(startedLock, sub () {
                 remove startedPrograms{program.getProgramId()};
                 remove terminatingPrograms{program.getProgramId()};
                 remove endedThreads{program.getProgramId()};
-            }
+            });
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
-            AutoLock al(evalLock);
-            remove evalPrograms{program.getProgramId()};
+            DebugProgramControl::withLock(evalLock, sub () { remove evalPrograms{program.getProgramId()}; });
         }
 
         #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
@@ -2329,15 +2346,10 @@ public namespace DebugProgramControl {
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
             }
-            # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
-            # locks are cancellation points, so they are taken when the thread is no longer cancelled
+            # a thread that leaves the program has no more stops to give a returned value or to pause at a block
             if (func == "detach") {
-                {
-                    AutoLock al(returnLock);
-                    remove returnedValues{tid};
-                }
-                AutoLock al(pauseLock);
-                remove pauseSkippedBlocks{tid};
+                DebugProgramControl::withLock(returnLock, sub () { remove returnedValues{tid}; });
+                DebugProgramControl::withLock(pauseLock, sub () { remove pauseSkippedBlocks{tid}; });
             }
             # the attach of the first thread of a program is its start; other threads attach when they start
             bool program_start = func == "attach" && isProgramStart(pgm.getProgramId());
@@ -2465,20 +2477,18 @@ public namespace DebugProgramControl {
             }
             # the thread stops: a pause that a client requested is done; a stop of a step that is not at a breakpoint is
             # given as the pause, so that the clients can tell it from the end of a step
-            {
-                AutoLock al(pauseLock);
+            DebugProgramControl::withLock(pauseLock, sub () {
                 if ((remove pauseRequests{tid}) && func == "step" && !exists breakpointId) {
                     ctx.intrInfo.pause = True;
                 }
                 remove pauseSkippedBlocks{tid};
-            }
+            });
             # the stop after a function returned to a thread that ran until it returned gives the returned value
-            {
-                AutoLock al(returnLock);
+            DebugProgramControl::withLock(returnLock, sub () {
                 if (*hash<auto> ret = remove returnedValues{tid}) {
                     ctx.intrInfo.returned = ret;
                 }
-            }
+            });
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
             # a thread is not registered as stopped once the debugger ends its program, as terminateProgram()
             # resumes only the threads that are registered when it starts; a thread that ends stops as usual
@@ -2493,9 +2503,7 @@ public namespace DebugProgramControl {
             # when shutdown() resumes the threads, or does not stop; the end of a thread is still reported, as a client
             # resumes it
             bool unattended;
-            {
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
+            DebugProgramControl::withWriteLock(rwlThread, sub () {
                 @assert(!exists ctxThread{tid});
                 terminating = !ends && isTerminating(ctx.pgmId);
                 unattended = !terminating && ((!program_start && !hasConnection())
@@ -2503,7 +2511,7 @@ public namespace DebugProgramControl {
                 if (!terminating && !unattended) {
                     ctxThread{tid} = ctx;
                 }
-            }
+            });
             if (terminating) {
                 throw "THREAD-CANCELLED", TerminateReason;
             }
@@ -2511,6 +2519,28 @@ public namespace DebugProgramControl {
                 # the thread continues as it ran before, as without a client at the start of this method
                 runToStatementId = runToStatementIdBefore;
                 return;
+            }
+            # a thread that leaves its stop with an exception, as when it is cancelled while it waits for a command, is no
+            # longer stopped: its registration is removed, and the clients are told that it runs again, as when it
+            # continues; the cleanup completes with the cancellation deferred, as it is sticky
+            bool registered = True;
+            on_error if (registered) {
+                defer_thread_cancel(sub () {
+                    DebugProgramControl::withWriteLock(rwlThread, sub () { remove ctxThread{tid}; });
+                    try {
+                        broadcastDataImpl({
+                            'type': DebugResponseType::Event,
+                            'cmd': DebugEventCmd::Run,
+                            'pgmid': ctx.pgmId,
+                            'tid': tid,
+                            'stamp': now_us(),
+                            'runstate': encodeValue('runState', runState, runStateStrings),
+                            'runtostatementid': runToStatementId,
+                        });
+                    } catch (hash<ExceptionInfo> ex) {
+                        # suppress exceptions
+                    }
+                });
             }
 
             # debugger client cannot ask for stack when procession message as it dead lock thread handler so we add it to original message
@@ -2837,11 +2867,8 @@ public namespace DebugProgramControl {
             if (exists except) {
                 remove ctx.intrInfo.exception;
             }
-            {
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
-                remove ctxThread{tid};
-            }
+            DebugProgramControl::withWriteLock(rwlThread, sub () { remove ctxThread{tid}; });
+            registered = False;
             # commands that were queued after the command that resumed the thread are not processed; no command is
             # queued any more, as the thread is no longer registered as stopped
             while (ctx.queue.size()) {
@@ -2901,8 +2928,7 @@ public namespace DebugProgramControl {
             The lock is taken with the cancellation deferred, as it is a cancellation point.
         */
         private:internal threadEnds(int pgm_id, int tid) {
-            defer_thread_cancel(sub () {
-                AutoLock al(startedLock);
+            DebugProgramControl::withLock(startedLock, sub () {
                 endedThreads{pgm_id}{tid} = True;
                 if (terminatingPrograms{pgm_id}) {
                     clear_thread_cancel();
@@ -2912,8 +2938,7 @@ public namespace DebugProgramControl {
 
         #! Registers a thread that runs the code of a program; see threadEnds()
         private:internal threadStarts(int pgm_id, int tid) {
-            AutoLock al(startedLock);
-            remove endedThreads{pgm_id}{tid};
+            DebugProgramControl::withLock(startedLock, sub () { remove endedThreads{pgm_id}{tid}; });
         }
 
         #! Returns True if the program is debugged, which it no longer is once it has been removed
@@ -2928,12 +2953,13 @@ public namespace DebugProgramControl {
 
         #! Returns True for the first thread of a program that attaches, which starts the program
         private:internal bool isProgramStart(int pgm_id) {
-            AutoLock al(startedLock);
-            if (startedPrograms{pgm_id}) {
-                return False;
-            }
-            startedPrograms{pgm_id} = True;
-            return True;
+            return DebugProgramControl::withLock(startedLock, bool sub () {
+                if (startedPrograms{pgm_id}) {
+                    return False;
+                }
+                startedPrograms{pgm_id} = True;
+                return True;
+            });
         }
 
         onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {
@@ -3007,13 +3033,12 @@ public namespace DebugProgramControl {
                         break;
                     }
                 }
-                {
-                    AutoLock al(returnLock);
+                DebugProgramControl::withLock(returnLock, sub () {
                     returnedValues{gettid()} = {
                         "function": name ?? "<unknown>",
                         "value": AbstractDebugControl::serialize(result),
                     };
-                }
+                });
                 rs = DebugStepOver;
                 return;
             }

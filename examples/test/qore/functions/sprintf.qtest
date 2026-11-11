@@ -3,6 +3,7 @@
 # test-platform: macos - sprintf() of maximal conversion specifications, where the C library printf differs
 
 %modern
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

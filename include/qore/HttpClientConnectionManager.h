@@ -599,16 +599,19 @@ public:
     */
     DLLLOCAL static bool isConnectionClosedError(ExceptionSink& xsink);
 
-    //! Replaces the connection-closed error of a request with the calling thread's pending cancellation, if any
-    /** A cancellation of the thread that waits for a request can end the request's connection before the wait sees
-        the cancellation (the code that the cancellation ends closes the transport); the caller must see the
-        cancellation, not the close that it caused, and the request is not repeated
+    //! Replaces the error of a request with the calling thread's pending cancellation, if any
+    /** A cancellation of the thread that waits for a request can end the request before the wait sees the
+        cancellation, whatever ends it: the code that the cancellation ends closes the transport, and the request
+        fails with a closed connection, or with a send or receive error when the peer resets the connection that it
+        sees closed (issue #5793); the caller must see the cancellation, not the error that it caused, and the
+        request is not repeated.  An error that the request raised for another reason (before any I/O, for example)
+        is replaced as well, as the next cancellation point would raise the cancellation in any case
 
         @return true if the error was replaced
 
         @since %Qore 3.0
     */
-    DLLLOCAL static bool replaceClosedErrorWithPendingCancel(ExceptionSink& xsink);
+    DLLLOCAL static bool replaceErrorWithPendingCancel(ExceptionSink& xsink);
 
     //! Returns true if a cancellation of the calling thread is pending, without raising it
     /** A request that a pending cancellation ended is not repeated; the next cancellation point raises the

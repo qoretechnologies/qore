@@ -9,6 +9,7 @@
 # %strict-bool-eval the string is converted to a number instead.
 
 %modern
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

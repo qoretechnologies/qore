@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SelectorListElementsTest
+
+#! lists of selectors and indexes of any type applied to lists, lists of lists, strings and binaries
+/** QoreSquareBracketsOperatorNode::doSquareBrackets() asserted that an element that a list of selectors selects
+    from a list is not a list, so ll[0..1, 2] and ll[0, 2] with ll = ((1, 2), (3, 4), (5, 6)) aborted a debug build
+    in every execution mode; a release build returned the right value.
+
+    Native code (jit and tiered execution once a function was compiled, and AOT executables) also converted every
+    boxed index of the [] operator to an integer (QoreIRToLLVM::tryEmitListIndexAccess()), so any index that holds a
+    list of indexes selected the element at index 0 instead of a slice: constant and non-constant lists of selectors
+    (il[0, 2], m[f(1), 4], m[i, 4]), lists of indexes in variables and parameters, typed index lists (list<int>,
+    softlist<int>, negative indexes), typed lists of lists (tl[2, 0]), and string and binary selector lists
+    (str[0, 2], bin[0, 2]).  A boxed index that is not known to be an integer (*int, auto) must still take the native
+    element access when it holds an integer; the scalar cases cover those indexes, and their values.
+
+    list-elements.q runs in every execution mode, on the IR tier and as AOT executables (qcc -O0 and -O3), and its
+    output must be the expected values with their types, which are the values that the AST interpreter gives.
+*/
+class SelectorListElementsTest inherits QUnit::Test {
+    public {
+        #! the output of list-elements.q, printed Iterations times
+        const Expected = (
+            "range and index: [[1, 2], [3, 4], [5, 6]] (list<list<int>>)",
+            "index and range: [[5, 6], [1, 2], [3, 4]] (list<list<int>>)",
+            "indexes: [[1, 2], [5, 6]] (list<list<int>>)",
+            "typed: [[1, 2], [3, 4], [5, 6]] (list<list<int>>)",
+            "typed indexes: [[5, 6], [1, 2]] (list<list<int>>)",
+            "mixed elements: [[1, 2], \"a\", {k: 1}, [3]] (list<auto>)",
+            "nested: 3 (integer)",
+            "int indexes: [1, 3] (list<int>)",
+            "variable indexes: [1, 3] (list<int>)",
+            "variable index: 2 (integer)",
+            "call selectors: [20, 50] (list<int>)",
+            "variable selectors: [20, 50] (list<int>)",
+            "typed index list: [10, 30] (list<int>)",
+            "soft index list: [40, 20] (list<int>)",
+            "param index list: [20, 40] (list<int>)",
+            "param negative index list: [50, 10] (list<int>)",
+            "param index: 30 (integer)",
+            "string indexes: \"ac\" (string)",
+            "string variable indexes: \"eb\" (string)",
+            "binary indexes: !!binary YWM= (binary)",
+            "binary variable indexes: !!binary ZWI= (binary)",
+            "nullable index: 30 (integer)",
+            "nullable nothing index: 10 (integer)",
+            "auto indexes: [20, [10, 30], 10, 40, 20, 50, null] (list<auto>)",
+            "nullable loop: 300 (integer)",
+            "auto loop: 300 (integer)",
+        );
+
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("selector lists on lists of lists", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        string path = scriptPath();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc at every optimization level and checks the output of each executable
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("selector-list-elements-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = dir.path + "/list-elements" + opt;
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                scriptPath()));
+            assertTrue(is_file(exe), sprintf("qcc %s compiles the script: %s", opt, out));
+            assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/list-elements.q";
+    }
+
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}

@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the parse errors are checked in Programs of its own process; the fixture runs in children
+# test-platform: macos - AOT compilation of date literals of both subtypes with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DateLiteralSubtypesTest
+
+#! Regression test for issue #5722: a date literal has the type of its subtype (date<absolute> or date<relative>)
+/** A literal of one subtype given where the other is required (an argument, an assignment, a return value) is a
+    parse error; it was accepted at parse time and raised RUNTIME-TYPE-ERROR when it ran.
+
+    A type inferred from a literal for the code that follows (the value type of a container, the type of a ternary,
+    the narrowed type of a local) is date, as a date has no subtype at run time: DateLiteralSubtypes.q builds them and
+    adds dates of the other subtype; its output must be the one in DateLiteralSubtypes.expected, which the AST
+    interpreter prints, in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class DateLiteralSubtypesTest inherits QUnit::Test {
+    public {
+        #! code in which a literal of one subtype is given where the other is required
+        const ParseErrors = (
+            "date<absolute> a = 1s;",
+            "date<relative> r = 2026-01-01;",
+            "*date<absolute> a = 1s;",
+            "*date<relative> r = 2026-01-01;",
+            "sub t(date<absolute> d) {} t(1s);",
+            "sub t(date<relative> d) {} t(2026-01-01);",
+            "sub t(date<absolute> d) {} t(P1D);",
+            "sub t(*date<relative> d) {} t(2026-01-01T10:00:00);",
+            "date<absolute> sub t() { return 1s; }",
+            "date<relative> sub t() { return 2026-01-01; }",
+            "class C { static m(date<absolute> d) {} } C::m(1s);",
+            "class C { m(date<relative> d) {} } C c(); c.m(2026-01-01);",
+            "const R = 1s; date<absolute> a = R;",
+            "const A = 2026-01-01; sub t(date<relative> d) {} t(A);",
+            "date<absolute> a; a = 1s;",
+            "sub t(date<absolute> d = 1s) {}",
+        );
+
+        #! code whose date of the other subtype is checked when it runs: the value has no known subtype at parse time
+        const RuntimeErrors = (
+            "any v = 1s; date<absolute> a = v;",
+            "any v = 2026-01-01; sub t(date<relative> d) {} t(v);",
+            "date d = 1s; sub t(date<absolute> d) {} t(d);",
+        );
+
+        #! function bodies with date literals that stay valid, with the value that each returns
+        const Valid = {
+            "date d = 1s; d = 2026-01-01T00:00:00Z; return d;": 2026-01-01T00:00:00Z,
+            "date<absolute> a = 2026-01-01T00:00:00Z; return a;": 2026-01-01T00:00:00Z,
+            "date<relative> r = 1s; return r;": 1s,
+            "auto x = 1s; x = 2026-01-01T00:00:00Z; date<absolute> a = x; return a;": 2026-01-01T00:00:00Z,
+            "auto h = {\"a\": 1s}; h.b = 2026-01-01T00:00:00Z; return h.b;": 2026-01-01T00:00:00Z,
+            "auto l = (1s, 2026-01-01T00:00:00Z); push l, 2s; return l[2];": 2s,
+            "auto t = False ? 1s : 2026-01-01T00:00:00Z; date<absolute> a = t; return a;": 2026-01-01T00:00:00Z,
+        };
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/DateLiteralSubtypes.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/DateLiteralSubtypes.expected");
+    }
+
+    constructor() : QUnit::Test("date literal subtypes", "1.0", \ARGV) {
+        addTestCase("a literal of the other subtype is a parse error", \parseErrors());
+        addTestCase("valid code with date literals parses", \valid());
+        addTestCase("a value of the other subtype is checked at run time", \runtimeCheck());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("qcc refuses a literal of the other subtype", \qccParseError());
+
+        set_return_value(main());
+    }
+
+    parseErrors() {
+        foreach string code in (ParseErrors) {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (code, "date-literal-subtype"), code);
+        }
+    }
+
+    valid() {
+        foreach hash<auto> i in (Valid.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            p.parse("date sub t() { " + i.key + " }", "date-literal-subtype");
+            assertEq(i.value, p.callFunction("t"), i.key);
+        }
+    }
+
+    runtimeCheck() {
+        foreach string code in (RuntimeErrors) {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "date-literal-subtype");
+            assertThrows("RUNTIME-TYPE-ERROR", \p.run(), NOTHING, code);
+        }
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        string qcc_bin = getQcc();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/date-literal-subtypes";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private qccParseError() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string source = dir + "/mismatch.q";
+        File f();
+        f.open2(source, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nsub t(date<absolute> d) {}\nt(1s);\n");
+        f.close();
+        string program = dir + "/mismatch";
+        string output = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(getQcc()), shellQuote(program),
+            shellQuote(source)));
+        assertFalse(is_file(program), output);
+        assertRegex("PARSE-TYPE-ERROR", output);
+    }
+
+    private string getQcc() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

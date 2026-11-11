@@ -2035,6 +2035,103 @@ llvm::Value* QoreIRToLLVM::emitIsBoxedFloat(llvm::Value* qv) {
 // Emits: has_node ? qore_rt_refself(val) : val
 // This avoids external function call overhead for the type check
 // Uses LLVM select to avoid extra basic blocks - inline conditional evaluation
+bool QoreIRToLLVM::checkSelectorIteratorLowered(uint32_t iterator, std::string& error) const {
+    auto def = value_definitions.find(iterator);
+    if (def == value_definitions.end() || def->second->opcode != QoreIROpcode::IteratorCreateSelectors
+            || lowered_selector_iterators.count(iterator)) {
+        return true;
+    }
+    error = "a step of a list of selectors is lowered before the creation of its iterator";
+    return false;
+}
+
+bool QoreIRToLLVM::lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction* iter_inst,
+        const SelectorSegmentState& seg, llvm::Module& module, llvm::Function* llvm_func, std::string& error) {
+    auto done_it = block_map.find(iter_inst->done_target);
+    auto cont_it = block_map.find(iter_inst->continue_target);
+    if (done_it == block_map.end() || cont_it == block_map.end()) {
+        error = "IteratorNextSelectors: target block not found";
+        return false;
+    }
+    // the output slot holds the reference of the current element, initialized to NOTHING, which the end of the
+    // frame and ReleaseOwnedTemp release, as for qore_rt_selector_iterator_next()
+    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+    llvm::Value* out_val_ptr = ab.CreateAlloca(i64_type, nullptr, "segment_out_val");
+    ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+        llvm::FunctionType::get(i64_type, {i64_type}, false));
+    auto cursor_at = [&](int part) {
+        return builder->CreateConstInBoundsGEP1_64(i64_type, seg.cursor, part);
+    };
+
+    // the element of the previous value is released first, as qore_rt_selector_iterator_next() releases it; only a
+    // node holds a reference
+    llvm::Value* old_val = builder->CreateLoad(i64_type, out_val_ptr, "segment_old_val");
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+    llvm::BasicBlock* release_block = llvm::BasicBlock::Create(ctx, "selector_segment.release", llvm_func);
+    llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "selector_segment.check", llvm_func);
+    builder->CreateCondBr(hasNodeInline(old_val), release_block, check_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(release_block);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    builder->CreateBr(check_block);
+
+    // no index left of the current selector: the done target asks for the next selector
+    builder->SetInsertPoint(check_block);
+    llvm::Value* count = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_COUNT), "segment_count");
+    llvm::BasicBlock* value_block = llvm::BasicBlock::Create(ctx, "selector_segment.value", llvm_func);
+    edge_block_map[{current_lowering_block_, iter_inst->done_target}] = builder->GetInsertBlock();
+    builder->CreateCondBr(builder->CreateICmpEQ(count, llvm::ConstantInt::get(i64_type, 0)), done_it->second,
+        value_block);
+
+    // the value at the index, or NOTHING outside of the list, as the iterator reads it
+    // (QoreSquareBracketsOperatorNode::doSquareBrackets())
+    builder->SetInsertPoint(value_block);
+    llvm::Value* index = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_INDEX), "segment_index");
+    llvm::Value* step = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_STEP), "segment_step");
+    llvm::Value* size = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_SIZE), "segment_size");
+    builder->CreateStore(builder->CreateAdd(index, step), cursor_at(QORE_RT_SEGMENT_INDEX));
+    builder->CreateStore(builder->CreateSub(count, llvm::ConstantInt::get(i64_type, 1)),
+        cursor_at(QORE_RT_SEGMENT_COUNT));
+    llvm::BasicBlock* read_block = llvm::BasicBlock::Create(ctx, "selector_segment.read", llvm_func);
+    llvm::BasicBlock* outside_block = llvm::BasicBlock::Create(ctx, "selector_segment.outside", llvm_func);
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(ctx, "selector_segment.merge", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpULT(index, size), read_block, outside_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+    builder->SetInsertPoint(read_block);
+    llvm::Value* data = builder->CreateIntToPtr(
+        builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_DATA), "segment_data"), ptr_type);
+    llvm::Value* entry = builder->CreateLoad(i64_type, builder->CreateInBoundsGEP(i64_type, data, index),
+        "segment_entry");
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(outside_block);
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(merge_block);
+    llvm::PHINode* val = builder->CreatePHI(i64_type, 2, "segment_val");
+    val->addIncoming(entry, read_block);
+    val->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), outside_block);
+
+    // the output slot takes a reference of its own to a node, which the list keeps
+    llvm::BasicBlock* ref_block = llvm::BasicBlock::Create(ctx, "selector_segment.ref", llvm_func);
+    llvm::BasicBlock* store_block = llvm::BasicBlock::Create(ctx, "selector_segment.store", llvm_func);
+    builder->CreateCondBr(hasNodeInline(val), ref_block, store_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(ref_block);
+    builder->CreateCall(refself_fn, {val});
+    builder->CreateBr(store_block);
+    builder->SetInsertPoint(store_block);
+    builder->CreateStore(val, out_val_ptr);
+    values[iter_inst->result.id] = val;
+    nanboxed_values.insert(iter_inst->result.id);
+    registerInvokeCleanupAlloca(out_val_ptr);
+    iterator_element_allocas[iter_inst->result.id] = out_val_ptr;
+    edge_block_map[{current_lowering_block_, iter_inst->continue_target}] = builder->GetInsertBlock();
+    builder->CreateBr(cont_it->second);
+    return true;
+}
+
 llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
     // Check if value has a node (inline check using NaN-boxing)
     llvm::Value* has_node = hasNodeInline(val);
@@ -5831,17 +5928,21 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             (void)qore_check_cancel(nullptr, "LLVM call argument release");
         }
         uint32_t id = inst->operands[i - 1].id;
-        // a value created by a call, a Phi of such values that took their references over (see consumable_phis), and
-        // a value read from a variable that the read gave a reference of its own to are released; a value borrowed
-        // from a variable or a constant has no cleanup slot.  A read through a reference keeps its reference in the
-        // slot of its read site, which is released if it still holds the value
+        // a temporary that the frame owns is released: a value created by a call, a Phi of such values that took
+        // their references over (see consumable_phis), a value read from a variable that the read gave a reference
+        // of its own to, and a list or hash literal or the result of AddAny whose release can be observed
+        // (f((o,)), f(l + o); qore_ir_find_observable_temp_call_args(), qore#5712); a value borrowed from a variable
+        // or a constant has no cleanup slot.
+        // A read through a reference keeps its reference in the slot of its read site, which is released if it
+        // still holds the value
         if (!id || weak_load_result_ids.count(id)) {
             continue;
         }
         auto ref_read_it = reference_read_slots.find(id);
         bool reference_read = ref_read_it != reference_read_slots.end() && ref_read_it->second;
         if (!reference_read && ((!value_defined_by_call.count(id) && !consumable_phis.count(id)
-                    && !value_defined_by_variable_read.count(id))
+                    && !value_defined_by_variable_read.count(id)
+                    && !(id < observable_temp_call_args.size() && observable_temp_call_args[id]))
                 || invoke_alloca_map.find(id) == invoke_alloca_map.end())) {
             continue;
         }
@@ -6557,6 +6658,74 @@ llvm::BasicBlock* QoreIRToLLVM::getOrCreateFunctionUnwindLP(llvm::Module& module
     // issues between invoke emission and the LP's landingpad instruction.
     function_unwind_lp = llvm::BasicBlock::Create(ctx, "func_unwind_lp", llvm_func);
     return function_unwind_lp;
+}
+
+llvm::Value* QoreIRToLLVM::emitComplexConstructFromOperand(const QoreTypeInfo* type_info, bool is_hash,
+        const QoreIRInstruction* inst, bool maybe_invoke, llvm::Module& module, llvm::Function* llvm_func,
+        std::string& error) {
+    assert(inst && !inst->operands.empty());
+    type_info = specializeType(type_info);
+    if (!type_info) {
+        error = "typed hash/list construction with a lowered initializer has no target type";
+        return nullptr;
+    }
+    uint32_t init_id = inst->operands[0].id;
+    llvm::Value* init_val = getVal(init_id, error);
+    if (!init_val) {
+        return nullptr;
+    }
+    llvm::Value* init_boxed = boxValue(init_val, init_id);
+    auto initializer_definition = value_definitions.find(init_id);
+    bool hash_prechecked = is_hash && current_ir_func
+        && initializer_definition != value_definitions.end()
+        && qore_ir_complex_hash_initializer_prechecked(*current_ir_func, initializer_definition->second, type_info);
+
+    // the construction takes over the initializer's reference when it is its last use and the initializer has a
+    // cleanup slot, so that a unique initializer is retyped in place and not copied, as the AST interpreter does (see
+    // buildArgCleanupArray())
+    llvm::Value* cleanup_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    {
+        auto uses_it = operand_remaining_uses.find(init_id);
+        auto alloca_it = invoke_alloca_map.find(init_id);
+        if (alloca_it != invoke_alloca_map.end()
+                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)) {
+            llvm::Value* slot = alloca_it->second;
+            if (!slot) {
+                slot = promoteSsaEntryToAlloca(init_id, module, llvm_func);
+            }
+            if (slot) {
+                cleanup_ptr = slot;
+            }
+        }
+    }
+    int32_t flags = (is_hash ? QORE_RT_COMPLEX_INIT_HASH : 0) | (hash_prechecked ? QORE_RT_COMPLEX_INIT_PRECHECKED : 0);
+    llvm::Value* flags_val = llvm::ConstantInt::get(i32_type, flags);
+
+    std::vector<llvm::Value*> args;
+    std::vector<llvm::Type*> arg_types;
+    const char* helper_name;
+    const char* helper_throwing_name;
+    if (aot_mode) {
+        helper_name = "qore_rt_new_complex_from_value_consume_by_type_path_cached";
+        helper_throwing_name = "qore_rt_new_complex_from_value_consume_by_type_path_cached_throwing";
+        std::string type_path = qore_ir_get_type_path(type_info);
+        llvm::Value* type_path_ptr = qore_ir_create_global_string_ptr(builder, type_path);
+        args = {aot_ctx_arg, type_path_ptr, init_boxed, cleanup_ptr, flags_val, xsink_arg};
+        arg_types = {ptr_type, ptr_type, i64_type, ptr_type, i32_type, ptr_type};
+    } else {
+        helper_name = "qore_rt_new_complex_from_value_consume";
+        helper_throwing_name = "qore_rt_new_complex_from_value_consume_throwing";
+        llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(type_info));
+        args = {builder->CreateIntToPtr(type_ptr, ptr_type), init_boxed, cleanup_ptr, flags_val, xsink_arg};
+        arg_types = {ptr_type, i64_type, ptr_type, i32_type, ptr_type};
+    }
+    auto ft = llvm::FunctionType::get(i64_type, arg_types, false);
+    auto helper = module.getOrInsertFunction(helper_name, ft);
+    if (!maybe_invoke) {
+        return builder->CreateCall(helper, args);
+    }
+    auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, ft);
+    return emitMaybeInvoke(helper, helper_throwing, args, module, llvm_func, inst);
 }
 
 llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
@@ -9819,11 +9988,23 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     bool summary_nothrow = false;
     // the frame of the call, also when the callee's body summary takes the place of the call
     AotInlineCallFrame frame = emitPushAotInlineCallFrame(slot, callee_info, inst, module, llvm_func);
+    // a plain function runs without the object and class context of a caller that has one
+    const AbstractQoreFunctionVariant* context_callee = !object_base ? getBatchCalleeVariant(callee_info) : nullptr;
+    llvm::CallInst* function_context = context_callee && nativeCallNeedsFunctionContext(context_callee)
+        ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
     llvm::Value* fast_result = emitAOTImportedSummary(callee_info, call_args,
         callee_ctx, module, fast_fn, &summary_nothrow);
     const bool inline_body = fast_result;
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
+    }
+    if (function_context) {
+        if (inline_body && summary_nothrow) {
+            // an inline summary that raises no exception does not observe the context
+            function_context->eraseFromParent();
+        } else {
+            emitPopNativeFunctionContext(module);
+        }
     }
     endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
     if (has_arg_cleanups) {
@@ -10504,11 +10685,68 @@ void QoreIRToLLVM::emitPopNativeCallFrame(llvm::Module& module) {
             {native_call_frame_storage});
 }
 
+bool QoreIRToLLVM::nativeCallNeedsFunctionContext(const AbstractQoreFunctionVariant* callee) const {
+    assert(callee && callee->getUserVariantBase());
+    // a closure runs in the context it was created in, the caller's
+    if (dynamic_cast<const UserClosureVariant*>(callee)) {
+        return false;
+    }
+    // AOT code calls the fast entries of methods with the context that they establish
+    if (dynamic_cast<const MethodVariantBase*>(callee)) {
+        assert(aot_mode);
+        return false;
+    }
+    // a body that does not observe the context (only scalar operations on its own locals and calls of such callees:
+    // qore_aot_fast_entry_is_context_independent()) runs alike in any context
+    const BatchCalleeInfo* info = getBatchCallee(callee);
+    if (info && (aot_mode ? info->context_independent_fast_entry : info->context_free_body)) {
+        return false;
+    }
+    const AbstractQoreFunctionVariant* caller = current_ir_func ? current_ir_func->source_variant : nullptr;
+    // top-level code and closures run in a context that is not known here
+    if (!caller || !caller->getUserVariantBase() || dynamic_cast<const UserClosureVariant*>(caller)) {
+        return true;
+    }
+    // a plain function runs without an object and a class: the callee's context
+    return dynamic_cast<const MethodVariantBase*>(caller) != nullptr;
+}
+
+llvm::CallInst* QoreIRToLLVM::emitPushNativeFunctionContext(llvm::Module& module, llvm::Function* llvm_func) {
+    if (!native_function_context_storage) {
+        // the storage, in the function's entry block
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+        native_function_context_storage = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+            llvm::ConstantInt::get(i64_type, qore_rt_native_function_context_size()), "native_function_context");
+        native_function_context_storage->setAlignment(llvm::Align(qore_rt_native_function_context_align()));
+    }
+    // the thread's data comes with the slots got when the function is entered
+    assert(native_call_thread_data);
+    return builder->CreateCall(module.getOrInsertFunction("qore_rt_push_native_function_context_v1",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false)),
+        {native_function_context_storage, native_call_thread_data});
+}
+
+void QoreIRToLLVM::emitPopNativeFunctionContext(llvm::Module& module) {
+    assert(native_function_context_storage);
+    builder->CreateCall(module.getOrInsertFunction("qore_rt_pop_native_function_context_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false)),
+        {native_function_context_storage});
+}
+
 llvm::CallInst* QoreIRToLLVM::emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
         const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
         const llvm::Twine& name) {
     emitPushNativeCallFrame(callee, module, llvm_func);
+    // the context is switched inside the frame and restored before the frame is popped
+    bool function_context = nativeCallNeedsFunctionContext(callee);
+    if (function_context) {
+        emitPushNativeFunctionContext(module, llvm_func);
+    }
     llvm::CallInst* call = builder->CreateCall(fn, args, name);
+    if (function_context) {
+        emitPopNativeFunctionContext(module);
+    }
     emitPopNativeCallFrame(module);
     return call;
 }
@@ -11216,6 +11454,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     QoreIRClassContextHelper class_ctx(func);
     native_handler_cache_cancelled = false;
     native_call_frame_storage = nullptr;
+    native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
     open_native_call_frames = 0;
     bg_helper_count = 0;
@@ -11862,6 +12101,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_alloca_map.clear();
     cleanup_alloca_value_ids.clear();
     iterator_element_allocas.clear();
+    selector_segment_states.clear();
+    lowered_selector_iterators.clear();
     iterator_cleanup_allocas.clear();
     positioned_iterator_allocas.clear();
     positioned_iterator_alloca_set.clear();
@@ -12142,6 +12383,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     value_defined_by_variable_read.clear();
+    // the literals and AddAny results that a call releases when it returns (qore#5712)
+    qore_ir_find_observable_temp_call_args(func, observable_temp_call_args);
     {
         // the call arguments that a later execution of the call uses again, such as a read hoisted out of a loop:
         // no call releases them (see design/temporary-lifetime.md); a cancelled analysis fails the compilation, as
@@ -17851,29 +18094,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Get pointer to first element
             llvm::Value* arr_ptr = builder->CreateBitCast(case_arr, ptr_type);
 
+            // the lengths of the cases, next to them
+            std::vector<llvm::Constant*> case_len_consts;
+            for (const auto& c : sw->cases) {
+                case_len_consts.push_back(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type),
+                    static_cast<uint64_t>(c.value.size())));
+            }
+            llvm::ArrayType* len_arr_type = llvm::ArrayType::get(i64_type,
+                    static_cast<uint64_t>(sw->cases.size()));
+            llvm::GlobalVariable* len_arr = new llvm::GlobalVariable(module, len_arr_type, true,
+                    llvm::GlobalValue::PrivateLinkage, llvm::ConstantArray::get(len_arr_type, case_len_consts),
+                    "switch_string_case_lens");
+
             llvm::Value* case_count = llvm::ConstantInt::get(
                 llvm::cast<llvm::IntegerType>(i32_type),
                 static_cast<int32_t>(sw->cases.size()));
+            // a SwitchString has no exception target: the lookup raises no exception, and the transformation of a
+            // fused case transform, which can, is fused only outside a try block (its exception goes to the caller)
+            assert(!sw->exception_target);
             llvm::Value* case_idx;
             if (sw->aot_string_case_transform) {
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_switch_string_case_lookup_noguard",
+                    "qore_rt_switch_string_case_lookup_noguard_v2",
                     llvm::FunctionType::get(i32_type,
-                        {i64_type, ptr_type, i32_type, i32_type,
+                        {i64_type, ptr_type, ptr_type, i32_type, i32_type,
                          ptr_type}, false));
                 case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr, case_count,
+                    {val_boxed, arr_ptr, len_arr, case_count,
                      llvm::ConstantInt::get(i32_type,
                         sw->aot_string_case_transform_upper ? 1 : 0),
                      xsink_arg});
                 emitExceptionCheck(module, llvm_func, inst);
             } else {
+                // the comparison with the cases raises no exception (QoreSwitchStringValue)
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_switch_string_lookup",
+                    "qore_rt_switch_string_lookup_v2",
                     llvm::FunctionType::get(i32_type,
-                        {i64_type, ptr_type, i32_type}, false));
+                        {i64_type, ptr_type, ptr_type, i32_type}, false));
                 case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr, case_count});
+                    {val_boxed, arr_ptr, len_arr, case_count});
             }
 
             consumeValueUse(sw->switch_val.id, module);
@@ -19822,6 +20081,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "qore_rt_new_complex_buffer_from_value_kind_throwing", ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
                                 {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
+                    }
+                } else if ((inv->invoke_opcode == QoreIROpcode::NewComplexHash
+                        || inv->invoke_opcode == QoreIROpcode::NewComplexList) && !inv->operands.empty()) {
+                    // the initializer is lowered as the operand (issue #5704)
+                    const AbstractQoreNode* node = inv->expr.getInternalNode();
+                    const QoreTypeInfo* type_info = nullptr;
+                    bool is_hash = inv->invoke_opcode == QoreIROpcode::NewComplexHash;
+                    if (is_hash) {
+                        if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                            type_info = nch->typeInfo;
+                        }
+                    } else if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                        type_info = ncl->typeInfo;
+                    }
+                    if (!type_info) {
+                        return setExpressionFallbackError(error, inst,
+                                "typed hash/list construction invoke with a lowered initializer has no target node");
+                    }
+                    result = emitComplexConstructFromOperand(type_info, is_hash, inst, false, module, llvm_func,
+                        error);
+                    if (!result) {
+                        return false;
                     }
                 } else if (aot_mode) {
                     QoreValue expr_val = inv->expr;
@@ -26787,6 +27068,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorPending: {
             // operands: the iterator handle
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
+            auto segment_it = selector_segment_states.find(inst->operands[0].id);
+            if (segment_it != selector_segment_states.end()) {
+                // the selector-segment loop asks for a selector only when it has given every value of the previous
+                // one: the next selector, or -1 when every selector has been given
+                const SelectorSegmentState& seg = segment_it->second;
+                llvm::Value* selector = builder->CreateLoad(i64_type, seg.selector, "segment_next_selector");
+                values[inst->result.id] = builder->CreateSelect(
+                    builder->CreateICmpSLT(selector, llvm::ConstantInt::get(i64_type, seg.count)), selector,
+                    llvm::ConstantInt::get(i64_type, -1));
+                return true;
+            }
             auto* iter_ptr = getVal(inst->operands[0].id, error);
             if (!iter_ptr) { return false; }
             if (iter_ptr->getType() != ptr_type) {
@@ -26799,6 +27094,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorFeed: {
             // operands: the iterator handle, the flags, and the index or the bounds of a range
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
             auto* iter_ptr = getVal(inst->operands[0].id, error);
             if (!iter_ptr) { return false; }
             if (iter_ptr->getType() != ptr_type) {
@@ -26815,6 +27113,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* operand = getVal(inst->operands[i + 2].id, error);
                 if (!operand) { return false; }
                 args[i] = boxValue(operand, inst->operands[i + 2].id);
+            }
+            auto segment_it = selector_segment_states.find(inst->operands[0].id);
+            if (segment_it != selector_segment_states.end()) {
+                // the selector-segment loop: the cursor gets the indices of the selector, which raises RANGE-ERROR
+                // for a bound of a range that is NOTHING, as the iterator does
+                const SelectorSegmentState& seg = segment_it->second;
+                llvm::Value* selector = builder->CreateLoad(i64_type, seg.selector);
+                builder->CreateStore(builder->CreateAdd(selector, llvm::ConstantInt::get(i64_type, 1)),
+                    seg.selector);
+                llvm::Value* feed_flags = builder->CreateOr(ensureIntTypeInline(flags, inst->operands[1].id),
+                    llvm::ConstantInt::get(i64_type, seg.flags
+                        & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)));
+                auto segment_helper = module.getOrInsertFunction("qore_rt_selector_segment_feed",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i64_type, ptr_type,
+                            ptr_type}, false));
+                builder->CreateCall(segment_helper, {seg.seq, feed_flags, args[0], args[1], seg.cursor, xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
             }
             auto helper = module.getOrInsertFunction("qore_rt_selector_iterator_feed",
                     llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
@@ -29506,7 +29822,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::NewComplexHash: {
             const auto* nchinst = static_cast<const QoreIRNewComplexHashInstruction*>(inst);
             llvm::Value* result;
-            if (aot_mode) {
+            if (!inst->operands.empty()) {
+                // the initializer is lowered as the operand (issue #5704)
+                const auto* nch = dynamic_cast<const NewComplexHashNode*>(nchinst->node
+                    ? nchinst->node : nchinst->expr.getInternalNode());
+                if (!nch) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexHash with a lowered initializer has no NewComplexHashNode");
+                }
+                result = emitComplexConstructFromOperand(nch->typeInfo, true, inst, true, module, llvm_func, error);
+                if (!result) {
+                    return false;
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = nchinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -29545,7 +29873,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::NewComplexList: {
             const auto* nclinst = static_cast<const QoreIRNewComplexListInstruction*>(inst);
             llvm::Value* result;
-            if (aot_mode) {
+            if (!inst->operands.empty()) {
+                // the initializer is lowered as the operand (issue #5704)
+                const auto* ncl = dynamic_cast<const NewComplexListNode*>(nclinst->node
+                    ? nclinst->node : nclinst->expr.getInternalNode());
+                if (!ncl) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexList with a lowered initializer has no NewComplexListNode");
+                }
+                result = emitComplexConstructFromOperand(ncl->typeInfo, false, inst, true, module, llvm_func, error);
+                if (!result) {
+                    return false;
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = nclinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -33313,11 +33653,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!flags || !count) {
                     return false;
                 }
+                llvm::Value* flags_int = ensureIntTypeInline(flags, inst->operands[0].id);
+                llvm::Value* count_int = ensureIntTypeInline(count, inst->operands[1].id);
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_selectors", ft);
-                result = builder->CreateCall(helper, {iterable_boxed,
-                    ensureIntTypeInline(flags, inst->operands[0].id),
-                    ensureIntTypeInline(count, inst->operands[1].id), xsink_arg});
+                result = builder->CreateCall(helper, {iterable_boxed, flags_int, count_int, xsink_arg});
+                lowered_selector_iterators.insert(inst->result.id);
+                // the selector-segment loop of a list whose values hold no reference: the cursor lives in the frame,
+                // and the iterator only keeps the sequence (qore#5711)
+                auto* flags_const = llvm::dyn_cast<llvm::ConstantInt>(flags_int);
+                auto* count_const = llvm::dyn_cast<llvm::ConstantInt>(count_int);
+                if (flags_const && count_const
+                        && (flags_const->getSExtValue() & static_cast<int64_t>(QoreIRListSelectorFlag::Segment))
+                        && !q_env_is_set("QORE_DISABLE_LLVM_SELECTOR_SEGMENT_LOOP")) {
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                    SelectorSegmentState state;
+                    state.cursor = ab.CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i64_type, QORE_RT_SEGMENT_CURSOR_SIZE), "segment_cursor");
+                    state.selector = ab.CreateAlloca(i64_type, nullptr, "segment_selector");
+                    state.seq = iterable_boxed;
+                    state.flags = flags_const->getSExtValue();
+                    state.count = count_const->getSExtValue();
+                    // each evaluation of the list of selectors starts with no index and its first selector; a value
+                    // that is not a list, a string or a binary has no iterator, which the lowering of each consumer
+                    // checks before its loop, so that the loop never runs for it
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, 0),
+                        builder->CreateConstInBoundsGEP1_64(i64_type, state.cursor, QORE_RT_SEGMENT_COUNT));
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, 0), state.selector);
+                    selector_segment_states[inst->result.id] = state;
+                }
             } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);
@@ -33496,6 +33860,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* iter_inst = static_cast<const QoreIRIteratorNextInstruction*>(inst);
             // the iterator of a list of selectors is not released when it has no value, so its cleanup slot keeps it
             const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
+            if (keep_iterator) {
+                if (!checkSelectorIteratorLowered(iter_inst->iterator.id, error)) {
+                    return false;
+                }
+                auto segment_it = selector_segment_states.find(iter_inst->iterator.id);
+                if (segment_it != selector_segment_states.end()) {
+                    return lowerSelectorSegmentNext(iter_inst, segment_it->second, module, llvm_func, error);
+                }
+            }
             // Get the iterator pointer
             auto* iter_ptr = getVal(iter_inst->iterator.id, error);
             if (!iter_ptr) {
@@ -34494,8 +34867,9 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
 }
 
 // Phase 5b: Try to emit specialized list index access.
-// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode
-// with a known integer index operand, emits qore_rt_list_index_access.
+// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode with a single index operand,
+// emits qore_rt_list_index_access_compat() for an index that cannot be a list, and for a boxed index that can be a
+// list, a runtime int48 check that calls qore_rt_list_index_dynamic() for any other value (ex: a list of indexes).
 bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
         llvm::Function* llvm_func) {
     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);

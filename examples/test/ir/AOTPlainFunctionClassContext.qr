@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class FunctionContextBase;
+class FunctionContextPrivate inherits private FunctionContextBase {
+    static string verify() {
+        FunctionContextPrivate input();
+        string direct = checkAssignment(input);
+        string invoked;
+        try {
+            invoked = checkAssignment(input);
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+        code<string(FunctionContextBase)> callback = \checkAssignment();
+        string indirect = callback(input);
+        string returned;
+        try {
+            returnBase(input);
+            returned = "unexpected-return-access";
+        } catch (hash<ExceptionInfo> ex) {
+            returned = ex.err;
+        }
+        # The caller's privilege must be restored after normal and exceptional
+        # function returns. This identical assignment is legal here only.
+        FunctionContextBase restored = input;
+        return sprintf("%s:%s:%s:%s:%d", direct, invoked, indirect, returned, !!restored);
+    }
+}
+
+string sub checkAssignment(FunctionContextBase input) {
+    try {
+        FunctionContextBase receiver = input;
+        return "unexpected-function-access";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+FunctionContextBase sub returnBase(FunctionContextBase input) {
+    return input;
+}
+
+for (int i = 0; i < 16; ++i) {
+    printf("%s\n", FunctionContextPrivate::verify());
+}

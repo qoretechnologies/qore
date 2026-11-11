@@ -164,6 +164,12 @@ struct AsyncIoDeferredRelease {
     QoreObject* state_queue_obj = nullptr;           //!< State event queue object (referenced, or nullptr)
     SocketPollOperationBase* spop_base = nullptr;    //!< C++ poll operation (referenced, or nullptr)
     QoreValue udata;                                 //!< Timer user data, e.g. a callback (referenced)
+    //! True if the references belong to work that the module cleanup handed over
+    //! (QoreSandboxContext::module_cleanup_delegate): release() then runs with the delegation, wherever it runs (a
+    //! callback worker, a synchronous caller, the thread that ends a debug hold), as releasing them can run the
+    //! destructors of objects of module classes, which enter the Programs of the modules (see
+    //! qore_close_module_programs())
+    bool module_cleanup_delegate = false;
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -279,11 +285,20 @@ class QoreSandboxContext;
 //! The sandbox context of the thread that submitted a poll operation
 /** Captured by AsyncIoControllerPriv::submit() and applied with QoreSandboxContextHelper around every step of the
     operation that runs on a callback worker, so that the operation, and any connection it makes there, is governed by
-    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies.
+    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies and the
+    operation is not work that the module cleanup hands over (QoreSandboxContext::module_cleanup_delegate), whose
+    callbacks can enter the Programs of the modules while the cleanup has closed them (QoreModuleCleanupDelegateHelper).
 */
 typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
 
+//! Returns true if \a ctx belongs to work that the module cleanup handed over
+//! (QoreSandboxContext::module_cleanup_delegate)
+DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_delegate;
+}
+
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
+//! and the thread does not run the module cleanup or work that the cleanup handed over
 /** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
     operation's sandbox.
 */
@@ -1989,6 +2004,16 @@ public:
         @param xsink exception sink for the releases
     */
     DLLLOCAL static void dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink);
+
+    //! Debug-only: waits until at least @p count references are held, stops holding them, and releases those held
+    //! on a callback worker of the global controller, as an I/O thread does without the hold
+    /** Called by the dbg_async_io_dispatch_held_releases() test hook; returns when the releases have run (see
+        flushCallbacks()), with the number of references released, or -1 if the wait timed out (the references stay
+        held then).  Unlike dbgHoldOffIoThreadReleases(false), the references are released by a DT_RELEASE item of
+        the callback dispatcher, as in production.
+    */
+    DLLLOCAL static int64_t dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
+        ExceptionSink* xsink);
 
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer

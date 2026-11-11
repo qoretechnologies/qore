@@ -268,6 +268,18 @@ auto sub map_throws() {
     return map use_raise($1), l[f("a", 0), f("b", 1)..f("c", 3)];
 }
 
+# the values of a list whose values can be NOTHING (list<auto>, list<*int>) are NOTHING or a value of the list's
+# value type; the type of the iterator's values is that type (it aborted debug builds)
+auto sub select_auto_seq() {
+    list<auto> la = (1, "b", NOTHING, 4.5);
+    return select la[f("a", 3), f("b", 0)..f("c", 2)], use("select", $1) != "b";
+}
+
+auto sub select_or_nothing_seq() {
+    list<*int> ln = (1, NOTHING, 3);
+    return select ln[f("a", 2), f("b", 0)..f("c", 1)], use("select", $1) != 3;
+}
+
 auto sub select_throws() {
     return select l[f("a", 0), f("b", 1)..f("c", 3)], use_raise($1);
 }
@@ -1048,6 +1060,8 @@ sub main() {
         t("map throws", \map_throws());
         t("map selector throws", \map_selector_throws());
         t("select throws", \select_throws());
+        t("select auto seq", \select_auto_seq());
+        t("select or nothing seq", \select_or_nothing_seq());
         t("foldl throws", \foldl_throws());
         t("map string", \map_string());
         t("map binary", \map_binary());

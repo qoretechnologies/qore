@@ -190,6 +190,10 @@ class TestDebugProgramControl inherits DebugProgramControl {
 
         #! if set, called once by the next thread that checks a breakpoint, before it registers as stopped
         *code breakpointHook;
+
+        #! if set, the \c code of the hash is called once by the next call of isTerminating() in the thread with the
+        #! TID \c tid, before it takes the lock of the state
+        *hash<auto> isTerminatingThreadHook;
     }
 
     constructor() : DebugProgramControl("DebugProgramControlTest") {
@@ -201,7 +205,22 @@ class TestDebugProgramControl inherits DebugProgramControl {
         if (hook) {
             hook();
         }
+        if (isTerminatingThreadHook.tid == gettid()) {
+            (remove isTerminatingThreadHook).code();
+        }
         return DebugProgramControl::isTerminating(pgm_id);
+    }
+
+    #! returns the lock of the state that isTerminating() and terminateProgram() take
+    public Mutex getStartedLock() {
+        return startedLock;
+    }
+
+    #! returns True if the thread is registered as stopped
+    public bool isRegisteredStopped(int tid) {
+        rwlThread.readLock();
+        on_exit rwlThread.readUnlock();
+        return exists ctxThread{tid};
     }
 
     #! a thread at a breakpoint with options checks them before it registers as stopped
@@ -437,6 +456,11 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the debugger ends a stopped program", \terminateStoppedTest());
         addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
         addTestCase("the debugger ends a program whose thread runs", \terminateRunningTest());
+        addTestCase("the debugger ends a program whose thread waits for a lock of the debugger's state",
+            \terminateWaitingLockTest());
+        addTestCase("a thread that is cancelled while it is stopped leaves its stop", \stoppedCancelTest());
+        addTestCase("a thread that is cancelled while it steps is not cancelled again by the debugger",
+            \steppingCancelTest());
         addTestCase("the debugger ends a program whose thread ends first", \terminateEndedThreadTest());
         addTestCase("the programs of a debugger have the type of their list", \allProgramsTypeTest());
         addTestCase("a stopped thread is resumed only after its program is marked as ending",
@@ -1516,6 +1540,131 @@ try {
         assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
     }
 
+    # the thread that runs a program ends when the debugger ends the program while it waits, also when another thread
+    # holds the lock of the debugger's state that the thread takes while it handles the cancellation: the thread waits
+    # for the lock, which is not a cancellation point in the debugger's code, so it is not cancelled again there
+    terminateWaitingLockTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the ordering control dbg_lock_wait_arm() is only registered in a library-debug build");
+        }
+        DebuggedProgram p(dpc, "%modern\nour Mutex m;\nm.lock();\n");
+        on_exit p.cleanup();
+        # the thread reaches isTerminating() through the debugger's exception callback for its cancellation, which the
+        # other execution modes do not call for an exception that a builtin raises in top-level code
+        # (https://github.com/qoretechnologies/qore/issues/5795)
+        if (p.pgm.getExecMode() != EM_AST) {
+            testSkip("the exception callback is called in the AST interpreter only (issue 5795)");
+        }
+        # the program waits for a lock that this thread holds
+        Mutex m();
+        m.lock();
+        on_exit m.unlock();
+        p.pgm.setGlobalVarValue("m", m);
+        call_function("dbg_lock_wait_arm", m, p.tid);
+        dpc.go(p.tid);
+        call_function("dbg_lock_wait_wait", EventTimeout);
+        # the thread of the program, cancelled in its wait, calls isTerminating() while it handles the cancellation:
+        # it waits for this thread before it takes the lock of the state, which this thread then holds
+        Queue reached();
+        Queue proceed();
+        dpc.isTerminatingThreadHook = {
+            "tid": p.tid,
+            "code": sub () {
+                defer_thread_cancel(sub () {
+                    reached.push(True);
+                    proceed.get();
+                });
+            },
+        };
+        on_exit remove dpc.isTerminatingThreadHook;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        reached.get(EventTimeout);
+        Mutex state = dpc.getStartedLock();
+        {
+            state.lock();
+            on_exit state.unlock();
+            call_function("dbg_lock_wait_arm", state, p.tid);
+            proceed.push(True);
+            # the thread waits for the lock of the state
+            call_function("dbg_lock_wait_wait", EventTimeout);
+        }
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(e.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the debugger ended the program$", rv.ex.desc);
+        assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
+    }
+
+    # a thread that is cancelled while it is stopped leaves its stop with the cancellation: it is no longer registered as
+    # stopped, and the clients are told that it runs again
+    stoppedCancelTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        hash<auto> e = p.runToStop();
+        assertEq(7, e.line);
+        # the events up to the stop
+        while (dpc.events.size()) {
+            dpc.events.get();
+        }
+        cancel_thread(p.tid, "the test cancels the thread");
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the test cancels the thread$", rv.ex.desc);
+        assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
+        assertFalse(dpc.isRegisteredStopped(p.tid));
+        # the clients were told that the thread runs again after its stop at the breakpoint, and it did not stop again,
+        # as at its THREAD-CANCELLED exception or at its detach
+        int run = 0;
+        list<hash<auto>> stops = ();
+        while (dpc.events.size()) {
+            hash<auto> ev = dpc.events.get();
+            if (ev.tid != p.tid) {
+                continue;
+            }
+            if (ev.cmd == DebugEventCmd::Run) {
+                ++run;
+            } else if (ev.cmd == DebugEventCmd::Interrupt) {
+                stops += ev{"func", "line"};
+            }
+        }
+        assertEq(1, run, "run events");
+        assertEq((), stops, "stops after the cancellation");
+    }
+
+    # a thread that is cancelled while it steps raises THREAD-CANCELLED in the program; the debugger's code for the
+    # exception, which raises the pending cancellation again, as at a loop, does not chain it to the exception
+    steppingCancelTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the ordering control dbg_lock_wait_arm() is only registered in a library-debug build");
+        }
+        DebuggedProgram p(dpc, "%modern\nour Mutex m;\nm.lock();\n");
+        on_exit p.cleanup();
+        # the program waits for a lock that this thread holds
+        Mutex m();
+        m.lock();
+        on_exit m.unlock();
+        p.pgm.setGlobalVarValue("m", m);
+        # the thread steps over the statement that waits for the lock
+        p.breakAt(3);
+        hash<auto> e = p.runToStop();
+        assertEq(3, e.line);
+        call_function("dbg_lock_wait_arm", m, p.tid);
+        dpc.go(p.tid, "step");
+        call_function("dbg_lock_wait_wait", EventTimeout);
+        cancel_thread(p.tid, "the test cancels the thread");
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the test cancels the thread$", rv.ex.desc);
+        assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
+        assertFalse(dpc.isRegisteredStopped(p.tid));
+    }
+
     # a thread that sees that the program is ending can reach its detach before terminateProgram() cancels the threads;
     # the thread is then not cancelled, so that its stop at the detach is not ended and it can be resumed
     terminateEndedThreadTest() {
@@ -1684,10 +1833,10 @@ int x = 1;
         assertTrue(DebugProgramControl::isTerminateException(rv.ex));
     }
 
-    # a thread in the debugger's code when the debugger ends its program, which is not stopped so it is cancelled: the
-    # locks of that code are cancellation points, and handleInterrupt() suppresses the exceptions of what it sends to
-    # the clients; the cancellation stays set after the exception, so it still ends the thread, also when debugging has
-    # ended by then and nothing else would
+    # a thread in the debugger's code when the debugger ends its program, which is not stopped so it is cancelled: a wait
+    # in that code raises the cancellation, and handleInterrupt() suppresses the exceptions of what it sends to the
+    # clients; the cancellation stays set after the exception, so it still ends the thread when the debugger's callback
+    # returns, also when debugging has ended by then and nothing else would
     endDebuggingSwallowedCancelTest() {
         DebuggedProgram p(dpc);
         on_exit p.cleanup();

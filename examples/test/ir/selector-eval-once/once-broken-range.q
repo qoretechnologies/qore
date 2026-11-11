@@ -1,7 +1,13 @@
-%modern
+%new-style
+%require-types
+%strict-args
 %broken-list-range
 # the cases of selector-eval-once.qtest with %broken-list-range: ranges that a foreach statement or a functional
 # operator iterates, whose bounds and sequences are evaluated once (qore#5684)
+#
+# %broken-list-range is a compatibility option, which %modern refuses (qore#5682), so this script is legacy code: it
+# runs on the AST tier in every execution mode and is not compiled by qcc; selector-eval-once.qtest checks it with the
+# AST interpreter
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

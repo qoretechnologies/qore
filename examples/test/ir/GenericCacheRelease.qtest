@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - GenericCacheRelease.qr runs in child processes that set their own --exec-mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class GenericCacheReleaseTest
+
+#! generic specializations and concrete generic hashdecl declarations are freed with the Program whose types they
+#! were made for (issue #5765)
+/** Each Program whose types instantiated a generic function, method or hashdecl of a library Program added entries to
+    the library's caches that stayed until the library itself was destroyed: memory grew with every Program
+    generation.  GenericCacheRelease.qr creates and destroys Programs that specialize the generics of its own Program
+    with their own class, in each execution mode, and checks with dbg_generic_cache_counts() (debug builds) that the
+    entries are freed with each Program and that a value of a concrete declaration keeps it alive until it is released.
+*/
+class GenericCacheReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("generic cache release", "1.0", \ARGV) {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            addTestCase(mode, sub () { modeTest(mode); });
+        }
+        set_return_value(main());
+    }
+
+    private modeTest(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_generic_cache_counts() is only built with DEBUG");
+        }
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/GenericCacheRelease.qr "
+            "2>&1", libdir, libdir, qore_bin, mode, get_script_dir()), \status);
+        assertEq(0, status, out);
+        list<string> lines = (map $1, out.split("\n"), $1 =~ /: /);
+        assertEq(11, lines.size(), out);
+        foreach string line in (lines) {
+            assertRegex(": ok$", line, line);
+        }
+    }
+}

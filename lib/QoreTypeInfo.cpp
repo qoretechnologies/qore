@@ -313,6 +313,7 @@ public:
                 makeReturnVec(hashdecl, or_nothing)),
             qore_path(std::move(qore_path)), type_path(std::move(type_path)), hashdecl(hashdecl),
             or_nothing(or_nothing) {
+        aot_deferred_placeholder = true;
     }
 
     bool samePlaceholder(const QoreAOTDeferredTypeInfo& other) const {
@@ -462,12 +463,18 @@ const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLocation* l
 }
 
 bool qore_type_info_is_aot_deferred(const QoreTypeInfo* ti) {
-    return dynamic_cast<const QoreAOTDeferredTypeInfo*>(ti);
+    return ti && ti->isAotDeferredPlaceholder();
 }
 
 bool qore_type_info_aot_deferred_compare(const QoreTypeInfo* a, const QoreTypeInfo* b, bool& result) {
-    const QoreAOTDeferredTypeInfo* da = dynamic_cast<const QoreAOTDeferredTypeInfo*>(a);
-    const QoreAOTDeferredTypeInfo* db = dynamic_cast<const QoreAOTDeferredTypeInfo*>(b);
+    // neither type is a placeholder: the comparison is not deferred (the common case, without a dynamic_cast)
+    if (!qore_type_info_is_aot_deferred(a) && !qore_type_info_is_aot_deferred(b)) {
+        return false;
+    }
+    const QoreAOTDeferredTypeInfo* da = qore_type_info_is_aot_deferred(a)
+        ? static_cast<const QoreAOTDeferredTypeInfo*>(a) : nullptr;
+    const QoreAOTDeferredTypeInfo* db = qore_type_info_is_aot_deferred(b)
+        ? static_cast<const QoreAOTDeferredTypeInfo*>(b) : nullptr;
     if (!da && !db) {
         return false;
     }
@@ -697,17 +704,123 @@ void init_qore_types() {
 //! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
 static std::vector<QoreTypeInfo*> retired_derived_types;
 
-void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
-    std::set<const QoreTypeInfo*> dead;
-    if (ti1) {
-        dead.insert(ti1);
+namespace {
+//! The registry of the generic caches by the types that their keys name (issue #5765)
+class QoreGenericCacheRegistry {
+public:
+    DLLLOCAL void insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+            const std::function<void()>& insert_entry) {
+        std::lock_guard<std::mutex> lock(m);
+        // the types are registered first: if that fails, no entry is added (a type registered without an entry is
+        // only an index entry for nothing); if the entry is added, it is always registered
+        std::unordered_set<const QoreTypeInfo*>& cache_types = by_cache[cache];
+        for (const QoreTypeInfo* ti : types) {
+            if (ti && cache_types.insert(ti).second) {
+                by_type[ti].insert(cache);
+            }
+        }
+        empty.store(by_type.empty(), std::memory_order_release);
+        insert_entry();
     }
-    if (ti2) {
-        dead.insert(ti2);
+
+    DLLLOCAL void unregister(QoreGenericTypeCache* cache) {
+        std::lock_guard<std::mutex> lock(m);
+        auto i = by_cache.find(cache);
+        if (i == by_cache.end()) {
+            return;
+        }
+        for (const QoreTypeInfo* ti : i->second) {
+            auto t = by_type.find(ti);
+            assert(t != by_type.end());
+            t->second.erase(cache);
+            if (t->second.empty()) {
+                by_type.erase(t);
+            }
+        }
+        by_cache.erase(i);
+        empty.store(by_type.empty(), std::memory_order_release);
     }
-    if (!owner && dead.empty()) {
-        return;
+
+    DLLLOCAL size_t registeredTypeCount() {
+        std::lock_guard<std::mutex> lock(m);
+        return by_type.size();
     }
+
+    //! Evicts the entries that name a dead type from every cache that registered one
+    /** @param release receives what the caches removed, to be released by the caller after the lock is released
+    */
+    DLLLOCAL void evict(const std::set<const QoreTypeInfo*>& dead, qore_generic_cache_release_list_t& release) {
+        // every class, hashdecl and enum destruction purges its types: no lock while no cache has an entry
+        if (empty.load(std::memory_order_acquire)) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        // this runs in destructors: if memory cannot be allocated, the entries are left in the caches (their keys
+        // never match a later type), not released
+        std::unordered_set<QoreGenericTypeCache*> caches;
+        try {
+            for (const QoreTypeInfo* ti : dead) {
+                auto t = by_type.find(ti);
+                if (t != by_type.end()) {
+                    caches.insert(t->second.begin(), t->second.end());
+                }
+            }
+        } catch (std::bad_alloc&) {
+            return;
+        }
+        for (const QoreTypeInfo* ti : dead) {
+            auto t = by_type.find(ti);
+            if (t == by_type.end()) {
+                continue;
+            }
+            for (QoreGenericTypeCache* cache : t->second) {
+                auto c = by_cache.find(cache);
+                assert(c != by_cache.end());
+                c->second.erase(ti);
+            }
+            by_type.erase(t);
+        }
+        for (QoreGenericTypeCache* cache : caches) {
+            cache->evictDeadTypes(dead, release);
+        }
+        empty.store(by_type.empty(), std::memory_order_release);
+    }
+
+private:
+    std::mutex m;
+    //! the caches that have an entry whose key names each type
+    std::unordered_map<const QoreTypeInfo*, std::unordered_set<QoreGenericTypeCache*>> by_type;
+    //! the types that each cache registered
+    std::unordered_map<QoreGenericTypeCache*, std::unordered_set<const QoreTypeInfo*>> by_cache;
+    //! true while no type is registered
+    std::atomic<bool> empty{true};
+};
+
+//! the generic cache registry; never destroyed, as caches unregister during library cleanup
+QoreGenericCacheRegistry& qore_generic_cache_registry() {
+    static QoreGenericCacheRegistry* registry = new QoreGenericCacheRegistry;
+    return *registry;
+}
+}
+
+void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert) {
+    qore_generic_cache_registry().insert(cache, types, insert);
+}
+
+std::atomic<int64_t> qore_live_generic_specializations{0};
+std::atomic<int64_t> qore_live_parameterized_hashdecls{0};
+
+size_t qore_generic_cache_registered_type_count() {
+    return qore_generic_cache_registry().registeredTypeCount();
+}
+
+void qore_generic_cache_unregister(QoreGenericTypeCache* cache) {
+    qore_generic_cache_registry().unregister(cache);
+}
+
+//! Purges the derived types; \a dead receives the destroyed types and every derived type retired with them
+static void qore_purge_derived_types_intern(const void* owner, std::set<const QoreTypeInfo*>& dead) {
 
     auto any_dead = [&dead](const type_vec_t& types) -> bool {
         for (const QoreTypeInfo* t : types) {
@@ -720,8 +833,12 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
 
     AutoLocker al(ctl);
 
-    if (!(owner && derived_type_keys.count(owner)) && !(ti1 && derived_type_keys.count(ti1))
-            && !(ti2 && derived_type_keys.count(ti2))) {
+    // dead holds the destroyed types here (at most two)
+    bool keyed = owner && derived_type_keys.count(owner);
+    for (auto i = dead.begin(), e = dead.end(); !keyed && i != e; ++i) {
+        keyed = derived_type_keys.count(*i);
+    }
+    if (!keyed) {
         return;
     }
 
@@ -802,6 +919,26 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
     }
     for (const QoreTypeInfo* t : dead) {
         derived_type_keys.erase(t);
+    }
+}
+
+void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+    std::set<const QoreTypeInfo*> dead;
+    if (ti1) {
+        dead.insert(ti1);
+    }
+    if (ti2) {
+        dead.insert(ti2);
+    }
+    if (!owner && dead.empty()) {
+        return;
+    }
+    qore_purge_derived_types_intern(owner, dead);
+    // issue #5765: the generic caches drop the entries made for the destroyed types; what they removed is released
+    // after the registry's lock is released, as releasing it can purge types in turn
+    if (!dead.empty()) {
+        qore_generic_cache_release_list_t release;
+        qore_generic_cache_registry().evict(dead, release);
     }
 }
 
@@ -1743,6 +1880,105 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
     bool rv = subtype && qore_type_contains_type_parameter(subtype);
     ti->setContainsTypeParameterCache(rv);
     return rv;
+}
+
+//! The declarations that a QoreExternalTypeDeclRefs object keeps
+class qore_type_decl_refs_private {
+public:
+    std::vector<const TypedHashDecl*> hashdecls;
+    std::vector<QoreClass*> classes;
+    std::vector<const QoreEnumDecl*> enums;
+
+    //! References the declarations that \a ti and the types in it refer to; \a p is created with the first one
+    /** A type is a finite tree of types: the declarations are not entered, so no type is visited twice on a path
+    */
+    DLLLOCAL static void add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                get(p).addHashDecl(hd);
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                get(p).addClass(pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    add(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                get(p).addClass(qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                get(p).addEnum(ed);
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                add(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                add(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            add(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                add(p, param, depth + 1);
+            }
+        }
+    }
+
+    DLLLOCAL ~qore_type_decl_refs_private() {
+        for (QoreClass* c : classes) {
+            qore_class_private::derefClass(*c, false, false, false);
+        }
+        for (const TypedHashDecl* hd : hashdecls) {
+            hd->deref();
+        }
+        for (const QoreEnumDecl* ed : enums) {
+            const_cast<qore_enum_decl_private*>(qore_enum_decl_private::get(*ed))->deref();
+        }
+    }
+
+private:
+    DLLLOCAL static qore_type_decl_refs_private& get(std::unique_ptr<qore_type_decl_refs_private>& p) {
+        if (!p) {
+            p.reset(new qore_type_decl_refs_private);
+        }
+        return *p;
+    }
+
+    DLLLOCAL void addHashDecl(const TypedHashDecl* hd) {
+        if (std::find(hashdecls.begin(), hashdecls.end(), hd) == hashdecls.end()) {
+            hd->ref();
+            hashdecls.push_back(hd);
+        }
+    }
+
+    DLLLOCAL void addClass(const QoreClass* qc) {
+        if (!qc) {
+            return;
+        }
+        QoreClass* c = const_cast<QoreClass*>(qc);
+        if (std::find(classes.begin(), classes.end(), c) == classes.end()) {
+            // as an object holds its class (see QoreObject)
+            qore_class_private::refClass(*c);
+            classes.push_back(c);
+        }
+    }
+
+    DLLLOCAL void addEnum(const QoreEnumDecl* ed) {
+        if (std::find(enums.begin(), enums.end(), ed) == enums.end()) {
+            qore_enum_decl_private::get(*ed)->ref();
+            enums.push_back(ed);
+        }
+    }
+};
+
+QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
+    // nothing is allocated for a type without declarations, such as a builtin type
+    std::unique_ptr<qore_type_decl_refs_private> p;
+    qore_type_decl_refs_private::add(p, ti, 0);
+    priv = p.release();
+}
+
+QoreExternalTypeDeclRefs::~QoreExternalTypeDeclRefs() {
+    delete priv;
 }
 
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
@@ -6411,8 +6647,8 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         if (src->getHashDecl() == hd) {
             return true;
         }
-        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
-            src, /*runtime_check=*/true, xsink);
+        // the element type can be a hashdecl of another Program (a member type of a hashdecl from a deleted Program)
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHashFromType(src, xsink);
         if (!coerced || (xsink && xsink->isException())) {
             if (coerced) {
                 coerced->deref(xsink);
@@ -6546,6 +6782,12 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         max_result = QTI_IDENT;
         may_not_match = true;
         return QTI_AMBIGUOUS;
+    }
+    // date<absolute> and date<relative> have no value in common: both accept and return dates, so only their
+    // subtypes tell them apart, and a value of one is never accepted by the other (issue #5722)
+    if (isDateSubtypeMismatch(first, second)) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
     }
     return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
 }

@@ -2195,12 +2195,25 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         # the reconnect publishes its connection, whose open report is held (made by the reconnect thread, or by a
         # delivery task if a frame of the connection is delivered first)
         ctx.wsc.hold_opened = True;
+        Queue events = ctx.wsc.events;
+        # "reconnect-done" can come at any point before the destructor's thread wait ends: also before the open report
+        # is held, when a delivery task makes the report after the reconnect thread has ended
+        bool reconnect_done;
+        code next = string sub () {
+            while (True) {
+                string ev = events.get(LifecycleWsClient::HandoffTimeout);
+                if (ev == "reconnect-done") {
+                    reconnect_done = True;
+                    continue;
+                }
+                return ev;
+            }
+        };
         ctx.wsc.send("bye");
-        assertEq("opened-held", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("opened-held", next());
         LifecycleWsClient c = remove ctx.wsc;
         Counter release_opened = c.release_opened;
         Counter release_destructor = c.release_close_handshake;
-        Queue events = c.events;
         Queue opened_tids = c.opened_tids;
         Queue handshake_tids = c.handshake_tids;
         # the destructor is held in the close handshake wait of the connection it takes
@@ -2216,18 +2229,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             delete c;
             deleted.push(True);
         });
-        # "reconnect-done" can come at any point before the destructor's thread wait ends
-        bool reconnect_done;
-        code next = string sub () {
-            while (True) {
-                string ev = events.get(LifecycleWsClient::HandoffTimeout);
-                if (ev == "reconnect-done") {
-                    reconnect_done = True;
-                    continue;
-                }
-                return ev;
-            }
-        };
         # the destructor takes the connection and waits for its close handshake, while the open report is held
         assertEq("handshake-wait", next());
         int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);

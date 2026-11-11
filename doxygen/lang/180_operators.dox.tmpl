@@ -280,7 +280,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
 
     @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
 
-    @note Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" when maintaining legacy code that depends on negative list, binary, or buffer indexes not addressing from the end.
+    @note Legacy code that depends on negative list, binary, or buffer indexes not addressing from the end uses @ref no-negative-offsets "%no-negative-offsets" without @ref modern "%modern" (in a <tt>.q</tt> file, or after @ref old-style "%old-style"); the directive cannot be used while @ref modern "%modern" is in effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13 this operator accepts list expressions inside the square brackets
 
@@ -436,6 +436,19 @@ list<int> l1 = new list<int>(2);
     - it is illegal to make changes to a local variable anywhere in a background expression, or to assign or modify a member
       of the object of the code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a
       class with member \c x); a parse exception will be thrown
+    - the same holds for a value held by such a local variable (also a closure-bound or a thread-local variable) or
+      member, which the new thread takes when it starts: an element of a list or a key of a hash
+      (<tt><b>background</b> (l[0] = 9)</tt>,
+      <tt><b>background</b> (h.a = 2)</tt>) is refused at parse time; a member of an object that the path reaches through a
+      value statically typed as an object or class is the object's member, which the thread shares, and is allowed
+      (<tt><b>background</b> (o.x = 5)</tt> with <tt>C o</tt>, <tt><b>background</b> (l[0].x = 5)</tt> with
+      <tt>list&lt;C&gt; l</tt>), as a method call on the object is, with every modifying operator, also
+      @ref remove "remove" and @ref delete "delete", and also when the rest of the path is a container held by the object
+      (<tt><b>background</b> (o.h.k = 1)</tt>) or the root is a member of the object of the code that starts the thread
+      (<tt><b>background</b> (o.x = 1)</tt> in a method of a class with a member <tt>C o</tt>); a member of an object
+      variable that holds no value (<tt>*C o</tt>) raises the same exception as outside of a background expression; a path
+      through a value whose type is not known (\c auto, \c any or no type) is refused, as it could be either: declare the
+      variable with an object type, or call a method of the object
     - the whole expression is evaluated in the new thread, in every @ref exec_mode_intro "execution mode": the arguments of a
       call and its target (the object of a method call, such as the <tt><b>new</b> T()</tt> of
       <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the expression that gives the call reference to call) are
@@ -490,6 +503,7 @@ list<int> l1 = new list<int>(2);
     When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
     The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
     The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
+    @anchor remove_selector_list A list of selectors in square brackets (more than one selector, any of which can be an index range, ex: <tt>delete x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order and nothing is deleted; a single index on such a value deletes the value as a whole.\n<br>
     In the case the delete operator operates on an object, any exception can be thrown that is thrown by the class' destructor.\n<br>
     A @ref cast "cast" cannot be the \a lvalue of the delete operator, as a cast is a converted value and not storage that can be deleted; a cast can still be used in a part of the \a lvalue that refers to a container (ex: <tt>delete cast<MyClass>(obj).member</tt>).\n<br>
     For a similar operator that returns the value that is removed from the data structure, and does not delete objects, see the @ref remove "remove operator".
@@ -524,6 +538,7 @@ delete l[2,5..7,8];
     When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
     The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
     The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
+    A list of selectors in square brackets (ex: <tt>remove x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order, nothing is removed and the value returned is @ref nothing; a single index on such a value removes the value as a whole (see @ref remove_selector_list).\n<br>
     The remove operator does not call destructors when operating on objects, but if removing an object from an lvalue or from a data structure within the \a lvalue causes the object to go out of scope, it will be destroyed, and then its destructor could throw an exception.\n<br>
     A @ref cast "cast" cannot be the \a lvalue of the remove operator, as a cast is a converted value and not storage that can be removed; a cast can still be used in a part of the \a lvalue that refers to a container (ex: <tt>remove cast<MyClass>(obj).member</tt>).\n<br>
     For a similar operator that deletes the value that is removed from the data structure, see the @ref delete "delete operator".
@@ -2275,6 +2290,11 @@ if (x || y)
     \c *date, <tt>*list&lt;auto&gt;</tt>) is checked as its plain type, so a statement refused for the plain type is
     refused for it as well (ex: <tt>*string s; s -= 1;</tt>, whose message is
     <tt>lvalue has type '*string', but the -= operator will assign it an integer value</tt>).
+
+    @anchor list_assignment
+    @note A list assignment (<tt>(a, b) = (1, 2)</tt>) assigns the elements of its right-hand side to its lvalues in
+    order and returns its right-hand side, with the type of the right-hand side (ex: <tt>list&lt;int&gt;</tt> for
+    <tt>(c, d) = (7, 8)</tt>, which can initialize a key of type \c auto in <tt>new hash&lt;string, auto&gt;</tt>).
 
     <hr>
     @subsection weak_assignment_operator Weak Reference Assignment Operator (:=)

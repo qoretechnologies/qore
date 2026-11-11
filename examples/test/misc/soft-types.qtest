@@ -27,6 +27,9 @@
 */
 
 %modern
+# the test Programs parse %broken-soft-types, which %modern refuses (issue #5682): they do not take %modern from this
+# Program
+%no-child-restrictions
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"

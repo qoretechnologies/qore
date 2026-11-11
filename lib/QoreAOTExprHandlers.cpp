@@ -2490,6 +2490,11 @@ static QoreValue read_expr_const_enum(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_const_string(AOTExprWriteCtx& ctx) {
+    // a string that a CONST_STRING cannot represent is written as a value
+    if (ctx.expr.getType() == NT_STRING && qore_aot_string_needs_value(ctx.expr)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+        return ctx.writer.writeValue(ctx.expr);
+    }
     if (ctx.expr.isShortString()) {
         char buf[8];
         ctx.expr.getShortString(buf);

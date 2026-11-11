@@ -168,7 +168,7 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         // Use generic closure type for deferred initialization
         parse_context.typeInfo = runTimeClosureTypeInfo;
     } else {
-        err = uf->parseInit(nullptr);
+        err = uf->parseInitClosure();
         uf->parseCommit();
 
         // After parseCommit, the signature is available - create a typed callable type
@@ -196,7 +196,7 @@ int QoreClosureParseNode::parseInitDeferred() {
         const qore_class_private* old_qc;
         qore_ns_private* old_ns;
         thread_set_class_and_ns(parse_qc, parse_ns, old_qc, old_ns);
-        rc = uf->parseInit(nullptr);
+        rc = uf->parseInitClosure();
         thread_set_class_and_ns(old_qc, old_ns);
     }
     uf->parseCommit();

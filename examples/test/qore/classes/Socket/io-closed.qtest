@@ -61,37 +61,42 @@ class IoClosedTest inherits QUnit::Test {
     }
 
     #! A connect that waits: one canceled by the close must not return as if it had connected
-    /** The listener's queue of connections that are not accepted is full, so a further connection request is
-        dropped (on Linux; other systems may refuse it) and the connect waits for an answer.  A close that comes
+    /** The connect must wait for an answer that never comes, so that the close finds it waiting: its connection
+        request must be dropped, not answered or refused.  macOS drops a connection request to a socket that is bound
+        and not listening (Linux refuses it); Linux drops a further connection request to a listener whose queue of
+        connections that are not accepted is full (macOS takes more connections than the backlog, and the queue that a
+        probe finds full can take a connection later, so the connect returned there; qore#5800).  A close that comes
         before the connect has opened its descriptor closes nothing, and the connect then waits for its timeout
         (SOCKET-TIMEOUT), which is short for this reason.
     */
     testConnect() {
         Socket l();
         l.bindINET("127.0.0.1", "0", True);
-        l.listen(0);
         on_exit l.close();
         int port = l.getSocketInfo().port;
-        # fill the queue until a connection request fails: the number of connections that a queue holds depends on the
-        # system (about one for a backlog of 0 on Linux, more on macOS); a connect that the queue takes completes, and
-        # it returns, as it should, when the close comes after it
         list<Socket> fillers;
         on_exit map $1.close(), fillers;
-        bool full = False;
-        for (int i = 0; i < 256; ++i) {
-            Socket f();
-            try {
-                f.connectINET("127.0.0.1", port, 200ms);
-            } catch (hash<ExceptionInfo> ex) {
-                # the queue is full
-                full = True;
-                break;
+        if (Platform.OS != "Darwin") {
+            l.listen(0);
+            # fill the queue until a connection request fails: the number of connections that a queue holds depends
+            # on the system (about one for a backlog of 0 on Linux); a connect that the queue takes completes, and it
+            # returns, as it should, when the close comes after it
+            bool full = False;
+            for (int i = 0; i < 256; ++i) {
+                Socket f();
+                try {
+                    f.connectINET("127.0.0.1", port, 200ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the queue is full
+                    full = True;
+                    break;
+                }
+                push fillers, f;
             }
-            push fillers, f;
-        }
-        if (!full) {
-            testSkip(sprintf("the listener's queue took %d connections without refusing or dropping one",
-                fillers.size()));
+            if (!full) {
+                testSkip(sprintf("the listener's queue took %d connections without refusing or dropping one",
+                    fillers.size()));
+            }
         }
         hash<string, int> results;
         for (int i = 0; i < 30; ++i) {
@@ -120,9 +125,10 @@ class IoClosedTest inherits QUnit::Test {
             ++results{result};
         }
         foreach string result in (keys results) {
-            # a refused connection request (a system that does not drop it) fails as a refused connect
+            # a refused connection request (a system other than Linux and macOS, which do not drop it) fails as a
+            # refused connect
             assertTrue(result == "SOCKET-NOT-OPEN" || result == "SOCKET-CLOSED" || result == "SOCKET-TIMEOUT"
-                || (Platform.OS != "Linux" && result == "SOCKET-CONNECT-ERROR"),
+                || (Platform.OS != "Linux" && Platform.OS != "Darwin" && result == "SOCKET-CONNECT-ERROR"),
                 sprintf("%s in %d of 30 iterations", result, results{result}));
         }
         if (Option::HAVE_LIBRARY_DEBUGGING) {

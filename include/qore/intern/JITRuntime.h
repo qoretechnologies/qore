@@ -640,9 +640,21 @@ int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
 uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
+//! Looks up the case of a switch on a string value whose cases are ASCII strings without null bytes
+/** compared as QoreSwitchStringValue compares them, which raises no exception
+    @param case_strings the cases, \a num_cases null-terminated strings
+    @param case_lens the lengths of the cases in bytes
+    @return the index of the first case that the value equals, or -1 if the value is not a string or matches no case
+*/
+int32_t qore_rt_switch_string_lookup_v2(uint64_t switch_val_bits, const char** case_strings,
+    const uint64_t* case_lens, int32_t num_cases);
 //! Transform an assigned string and look up an ASCII switch case without retaining the result.
-int32_t qore_rt_switch_string_case_lookup_noguard(uint64_t value,
-    const char** case_strings, int32_t num_cases, int32_t upper,
+/** @param case_lens the lengths of the cases in bytes
+    @return the index of the first case that the transformed value equals, or -1 if it matches no case or the
+    transformation raised an exception
+*/
+int32_t qore_rt_switch_string_case_lookup_noguard_v2(uint64_t value,
+    const char** case_strings, const uint64_t* case_lens, int32_t num_cases, int32_t upper,
     ExceptionSink* xsink);
 
 //! Compare an assigned string after case conversion without retaining the result.
@@ -801,6 +813,19 @@ void qore_rt_push_native_closure_call_frame(void* storage);
 
 //! Pops the call stack frame pushed by qore_rt_push_native_call_frame() in the same storage
 void qore_rt_pop_native_call_frame(void* storage);
+
+//! Switches to the object and class context of a plain function for a direct call of its fast entry from native code
+/** The function then runs without an object and a class, as a call of the function does, until
+    qore_rt_pop_native_function_context_v1() restores the caller's context; the storage has the size and alignment
+    given by qore_rt_native_function_context_size() and qore_rt_native_function_context_align().
+
+    @param thread_data the current thread's data, which the caller got when it was entered
+    (qore_rt_get_native_entry_slots())
+*/
+void qore_rt_push_native_function_context_v1(void* storage, void* thread_data);
+
+//! Restores the context replaced by qore_rt_push_native_function_context_v1()
+void qore_rt_pop_native_function_context_v1(void* storage);
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
@@ -1039,6 +1064,14 @@ uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(QoreA
 
 //! Create a new typed list from an already-evaluated constructor value
 uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);
+//! the flags of qore_rt_new_complex_from_value_consume(): a typed hash (else a list)
+#define QORE_RT_COMPLEX_INIT_HASH        (1 << 0)
+//! the flags of qore_rt_new_complex_from_value_consume(): the hash initializer's values have the value type
+#define QORE_RT_COMPLEX_INIT_PRECHECKED  (1 << 1)
+uint64_t qore_rt_new_complex_from_value_consume(const QoreTypeInfo* typeInfo, uint64_t value_bits, uint64_t* cleanup,
+    int32_t flags, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_from_value_consume_by_type_path_cached(QoreAOTContext* ctx, const char* type_path,
+    uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_list_from_value_by_type_path(const char* type_path, uint64_t value_bits,
     ExceptionSink* xsink);
 
@@ -1415,6 +1448,28 @@ int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value, Exce
 //! See QoreIROpcode::SelectorIteratorFeed.
 int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits, uint64_t second_bits,
         ExceptionSink* xsink);
+
+//! The cursor of the selector-segment loop of native code (QoreIRListSelectorFlag::Segment; qore#5711)
+enum QoreRtSelectorSegmentCursor : int {
+    //! the next index
+    QORE_RT_SEGMENT_INDEX = 0,
+    //! the number of indices left of the current selector
+    QORE_RT_SEGMENT_COUNT = 1,
+    //! the step from one index to the next: 1 or -1
+    QORE_RT_SEGMENT_STEP = 2,
+    //! the size of the list
+    QORE_RT_SEGMENT_SIZE = 3,
+    //! the values of the list (const uint64_t*)
+    QORE_RT_SEGMENT_DATA = 4,
+    //! the number of elements of the cursor
+    QORE_RT_SEGMENT_CURSOR_SIZE = 5,
+};
+
+//! Sets the cursor of the selector-segment loop to the indices of the next selector of a list of selectors over the
+//! list \a seq_bits, as the iterator of the list of selectors computes them when it is given the selector; returns 1
+//! if an exception was raised (RANGE-ERROR for a bound of a range that is NOTHING); see QoreIROpcode::SelectorIteratorFeed
+int64_t qore_rt_selector_segment_feed(uint64_t seq_bits, int64_t flags, uint64_t first_bits, uint64_t second_bits,
+        int64_t* cursor, ExceptionSink* xsink);
 
 //! Sets the exceptions of \a xsink aside and returns their handle; see QoreIROpcode::ExceptionSuspend
 void* qore_rt_exception_suspend(ExceptionSink* xsink);
@@ -2222,5 +2277,9 @@ DLLEXPORT double qore_rt_to_float_checked_throwing(uint64_t val_bits, ExceptionS
 DLLLOCAL size_t qore_rt_native_call_frame_size();
 //! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_align();
+//! Returns the size of the storage of the context for qore_rt_push_native_function_context_v1()
+DLLLOCAL size_t qore_rt_native_function_context_size();
+//! Returns the alignment of the storage of the context for qore_rt_push_native_function_context_v1()
+DLLLOCAL size_t qore_rt_native_function_context_align();
 
 #endif

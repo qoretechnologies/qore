@@ -95,6 +95,13 @@ public:
     */
     DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const;
 
+    //! reads the variable without following a reference; the value is referenced if needs_deref is set
+    DLLLOCAL QoreValue evalRaw(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! evaluates the reference that the variable holds
+    DLLLOCAL static QoreValue followReference(QoreValue v, RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink);
+
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 

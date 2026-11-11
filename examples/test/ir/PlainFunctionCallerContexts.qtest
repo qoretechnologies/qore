@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+#
+# A plain function runs without the object and class context of its caller whatever the caller: a constructor, a
+# destructor, a copy method, a closure created in a method, map and select in a method, a background expression in a
+# method, a method of a module compiled with qcc --compile-module (PlainFunctionCallerContexts.qr and a module
+# written here); a static method runs in its class, also for the check of its return value, and a closure made outside
+# a class without a class, whatever the caller (CalleeContextCases.qr); in every execution mode, on the IR tier and as
+# qcc executables and modules, compared with the AST
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class PlainFunctionCallerContextsTest
+
+class PlainFunctionCallerContextsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        #! the fixtures, compared with the AST interpreter
+        list<string> sources = (get_script_dir() + "/PlainFunctionCallerContexts.qr",
+            get_script_dir() + "/CalleeContextCases.qr");
+        #! the AST output of each fixture
+        hash<string, string> expected;
+
+        const Module = "%modern
+module CallerContextMod {
+    version = \"1.0\";
+    desc = \"plain function caller context fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace CallerContextMod {
+    public class Holder {
+        private int pm() {
+            return 42;
+        }
+
+        string fromMethod() {
+            string rv;
+            for (int i = 0; i < 20; ++i) {
+                rv = probe(self);
+            }
+            return rv;
+        }
+
+        static string fromStatic(object o) {
+            string rv;
+            for (int i = 0; i < 20; ++i) {
+                rv = probe(o);
+            }
+            return rv;
+        }
+
+        list<string> mapInMethod() {
+            return map probe($1), (self, self);
+        }
+    }
+
+    public string sub probe(object o) {
+        try {
+            o.pm();
+            return \"allowed\";
+        } catch (hash<ExceptionInfo> ex) {
+            return \"denied\";
+        }
+    }
+}
+";
+        const Driver = "
+CallerContextMod::Holder h();
+for (int i = 0; i < 3; ++i) {
+    printf(\"%s %s %y\\n\", h.fromMethod(), CallerContextMod::Holder::fromStatic(h), h.mapInMethod());
+}
+";
+        const ModuleLine = "denied denied [\"denied\", \"denied\"]\n";
+        const ModuleExpected = ModuleLine + ModuleLine + ModuleLine;
+    }
+
+    constructor() : Test("plain function caller contexts", "1.0", \ARGV) {
+        addTestCase("AST reference output", \astOutput());
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT", \aot());
+        addTestCase("compiled module", \compiledModule());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string command(list<string> args, string prefix = "") {
+        return prefix + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ");
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(command(args, prefix) + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! runs qore in an execution mode with native compilation traced and checked (ExecModeHarness)
+    private string runMode(list<string> args) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(args));
+        ExecModeHarness::check_native(r);
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+
+    private static write(string path, string value) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(value);
+    }
+
+    private string getExpected(string source) {
+        if (!expected{source}) {
+            expected{source} = run((qore, "--exec-mode=ast", source));
+        }
+        return expected{source};
+    }
+
+    astOutput() {
+        string out = getExpected(sources[0]);
+        # each probe of each caller is denied, in each of the 3 rounds
+        assertEq(0, (select out.split("\n"), $1 =~ /allowed/).size(), out);
+        foreach string caller in (("constructor", "copy", "method", "static", "closure in method",
+                "closure made in method", "background in method", "top-level")) {
+            assertEq(3, (select out.split("\n"), $1 == caller + ": denied").size(), caller);
+        }
+        # the destructors of the object and of its copy
+        assertEq(6, (select out.split("\n"), $1 == "destructor: denied").size(), "destructor");
+        assertEq(3, (select out.split("\n"), $1 == "map in method: [\"denied\", \"denied\"]").size());
+        assertEq(3, (select out.split("\n"), $1 == "select in method: 0").size());
+
+        out = getExpected(sources[1]);
+        # a static method returns its object as its private parent class
+        assertEq(4, (select out.split("\n"), $1 =~ /^static method .*: returned PChild$/).size(), out);
+        # a plain function cannot read a private member of an object of its caller's class
+        assertEq(2, (select out.split("\n"), $1 =~ /^plain function reading .*: PRIVATE-MEMBER$/).size(), out);
+        # a closure made outside a class cannot call a private method of its caller's class
+        assertEq(2, (select out.split("\n"), $1 =~ /^closure made at top level .*: denied$/).size(), out);
+        # an inherited final method reads the private:internal member of its own class
+        assertEq(2, (select out.split("\n"), $1 =~ /^inherited final method.*: 7$/).size(), out);
+        assertRegex("static method of another class called from a method: denied\n", out);
+        # the return value of a plain function is checked in its own context: an object of the caller's class read
+        # from a hash is not the class that the caller's class inherits privately; an argument is checked in the
+        # caller's
+        assertRegex("plain function returning an object read from a hash, called from a method: "
+            "RUNTIME-TYPE-ERROR\n", out);
+        assertRegex("plain function taking an object of the caller's class: took RC\n", out);
+    }
+
+    executionModes() {
+        foreach string source in (sources) {
+            string exp = getExpected(source);
+            string name = basename(source);
+            foreach string mode in (("ir", "jit", "tiered")) {
+                assertEq(exp, run((qore, "--exec-mode=" + mode, source)), name + " " + mode);
+                assertEq(exp, runMode((qore, "--exec-mode=" + mode, source)),
+                    name + " " + mode + " (synchronous compilation)");
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(command((qore, "--exec-mode=tiered", source))),
+                name + " IR tier");
+        }
+    }
+
+    aot() {
+        TmpDir dir("qore-plain-function-callers-");
+        foreach string source in (sources) {
+            string exp = getExpected(source);
+            string name = basename(source);
+            # QORE_AOT_EH is read when the code is compiled
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    run((qcc, level, "-o", executable, source), prefix);
+                    assertEq(exp, run((executable,)), name + " " + prefix + level);
+                }
+            }
+        }
+    }
+
+    compiledModule() {
+        TmpDir dir("qore-plain-function-callers-mod-");
+        write(dir.path + "/CallerContextMod.qm", Module);
+        write(dir.path + "/run-source.qr", "%requires ./CallerContextMod.qm\n" + Driver);
+        write(dir.path + "/run-qmod.qr", "%requires ./CallerContextMod.qmod\n" + Driver);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(ModuleExpected, run((qore, "--exec-mode=" + mode, dir.path + "/run-source.qr")),
+                "source module " + mode);
+        }
+        foreach string level in (("-O0", "-O3")) {
+            run((qcc, level, "-m", dir.path + "/CallerContextMod.qm", "-o", dir.path + "/CallerContextMod.qmod"));
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(ModuleExpected, run((qore, "--exec-mode=" + mode, dir.path + "/run-qmod.qr")),
+                    "compiled module " + level + " " + mode);
+            }
+            unlink(dir.path + "/CallerContextMod.qmod");
+        }
+    }
+}

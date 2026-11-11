@@ -490,9 +490,9 @@ static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, Exce
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
     QoreStringValueHelper err_str(err);
-    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation
-    if (err.getType() == NT_STRING && !strcmp(err_str->c_str(), "SOCKET-CLOSED")
-            && qore_socket_raise_pending_cancel("socket operation", xsink)) {
+    // an operation that ended with an error while the thread is cancelled reports the cancellation, whatever ended
+    // it: a close of its socket by the code that the cancellation ends, or the peer's reaction to that (issue #5793)
+    if (qore_socket_raise_pending_cancel("socket operation", xsink)) {
         return;
     }
     QoreStringValueHelper desc_str(desc);

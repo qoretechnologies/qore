@@ -1,0 +1,3 @@
+# a file parsed in %modern mode by its extension: an option given on the command line that %modern does not allow
+# is suspended
+printf("range: %y\n", range(1, 2));

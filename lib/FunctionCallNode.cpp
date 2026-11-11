@@ -122,6 +122,21 @@ static void record_source_parse_reflection_class_for_name_import(QoreProgram* pg
         type_path.c_str(), false, false);
 }
 
+//! Returns the receiver of an implicit call in a method of \a class_ctx to \a m, or nullptr if it needs none
+/** The receiver of a call to a method of a generic base class from a class that inherits a specialization of it is that
+    class, as for an explicit self.method() call: the type parameters of the base class are then substituted with the
+    type arguments of the specialization at parse time and when the variant is resolved at run time (ex: T is Foo in a
+    method of class FooBox inherits Box<Foo>).  In a generic class, the type parameters of the base class stay those of
+    the class (issue #5769).
+*/
+static const QoreTypeInfo* implicit_self_call_receiver(const QoreMethod* m, const qore_class_private* class_ctx) {
+    if (!m || !class_ctx || class_ctx->hasTypeParams()) {
+        return nullptr;
+    }
+    const QoreClass* mcls = m->getClass();
+    return mcls && mcls != class_ctx->cls && mcls->hasTypeParameters() ? class_ctx->cls->getTypeInfo() : nullptr;
+}
+
 static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
         int& err) {
     std::string type_path = get_static_scope_receiver_type_path(scope);
@@ -638,7 +653,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // resolves pending signatures unconditionally
     if (func) {
-        func->resolvePendingSignatures();
+        func->resolvePendingSignatures(func->getClass() ? nullptr : ns);
 
         // initialize function or class immediately for possible error messages later (also in case of constant
         // expressions for immediate evaluation)
@@ -863,6 +878,10 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
+    // issue #5769: the receiver of an implicit call to a method of a generic base class
+    if (!receiver_type_info) {
+        receiver_type_info = implicit_self_call_receiver(method, class_ctx);
+    }
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
     int err = parseArgs(parse_context, method ? qore_method_private::get(*method)->getFunction() : nullptr, nullptr);
     if (parse_context.pflag & PF_CONST_METHOD) {
@@ -1167,7 +1186,10 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                         sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
                             qore_class_private::get(*qc));
                     } else {
-                        val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                        StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                        // issue #5769: the receiver of an implicit call to a static method of a generic base class
+                        smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, qore_class_private::get(*qc)));
+                        val = smcn;
                         deref();
                         return parse_init_value(val, parse_context);
                     }
@@ -1185,7 +1207,10 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
         if (class_ctx) {
             const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
             if (m) {
-                val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                // issue #5769: the receiver of an implicit call to a static method of a generic base class
+                smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, class_ctx));
+                val = smcn;
                 deref();
                 return parse_init_value(val, parse_context);
             }
