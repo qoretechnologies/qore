@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT direct calls of a plain function from a method
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class FunctionCallClassContextTest
+
+#! A plain function called from a method runs with no class context in every mode (qore#5768)
+/** In IR, JIT, tiered and AOT code, a plain function called from a method ran with the method's class context, so it
+    could call the class's private methods, which the AST interpreter refuses with \c METHOD-IS-PRIVATE; with a try
+    block in the method, JIT, tiered and AOT code still did.  The program calls each method more times than the JIT
+    threshold and runs in each execution mode in a child process, with tiered execution promoted to native code, and
+    as qcc-compiled executables (-O0, -O3).
+*/
+class FunctionCallClassContextTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Program = "%modern
+class C {
+    private int pm() { return 1; }
+    auto run() { return f_pm(self); }
+    auto runTry() { try { return f_pm(self); } catch (hash<ExceptionInfo> ex) { rethrow; } }
+}
+auto sub f_pm(auto o) { return o.pm(); }
+C c();
+foreach string m in ((\"run\", \"runTry\")) {
+    for (int i = 0; i < 8; ++i) {
+        string r;
+        try {
+            r = sprintf(\"%y\", call_object_method(c, m));
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        printf(\"%s %d: %s\\n\", m, i, r);
+    }
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("FunctionCallClassContext", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        foreach string m in (("run", "runTry")) {
+            for (int i = 0; i < 8; ++i) {
+                expected += sprintf("%s %d: METHOD-IS-PRIVATE\n", m, i);
+            }
+        }
+
+        addTestCase("a function called from a method cannot call its private methods in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-function-call-class-context-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Program);
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "prog" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+}

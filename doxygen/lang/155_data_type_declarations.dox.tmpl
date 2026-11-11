@@ -204,6 +204,35 @@ date<absolute> abs = 2017-07-10;
 date<relative> rel = 2h + 30m;
     @endcode
 
+    @anchor date_literal_subtypes
+    @par Date Literal Subtypes
+    @parblock
+    A date literal and a constant whose value is a date have the type of their subtype: an
+    @ref absolute_dates "absolute" date/time literal such as \c 2017-07-10 is \c date&lt;absolute&gt;, and a
+    @ref relative_dates "relative" one such as \c 1s or \c P1D is \c date&lt;relative&gt;.  A literal of one subtype
+    given where the other is required (an argument, an assignment, a return value or the default value of a
+    parameter) is therefore a parse error (\c PARSE-TYPE-ERROR); a date of the other subtype from any other
+    expression is checked when the code runs (\c RUNTIME-TYPE-ERROR).
+
+    A type that is inferred from a literal for the code that follows (the value type of a list or hash built from
+    literals, the type of a @ref conditional_operator "conditional" expression, the type that a local variable
+    declared as \c auto takes) is \c date, as a date value has no subtype at run time; such a container or variable
+    can take a date of either subtype.  The variant of a function or method with several variants is chosen as at run
+    time, where a date of either subtype matches a parameter of either subtype; if the parameter of the variant chosen
+    requires the other subtype, the call is a parse error.
+    @endparblock
+
+    @par Example (date literal subtypes)
+    @code{.py}
+sub wait_until(date<absolute> d) {}
+
+wait_until(2026-01-01T00:00:00Z);   # OK
+wait_until(1s);                     # PARSE-TYPE-ERROR: a relative date literal for a date<absolute> parameter
+
+auto l = (1s, 2s);
+push l, now();                      # OK: the list holds dates
+    @endcode
+
     <hr>
     @section binary_type binary
 

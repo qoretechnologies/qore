@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreInstanceOfOperatorNode::InstanceOf_str("instanceof operator expression");
 
@@ -49,7 +50,7 @@ int QoreInstanceOfOperatorNode::getAsString(QoreString& str, int foff, Exception
 QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(ti);
 
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

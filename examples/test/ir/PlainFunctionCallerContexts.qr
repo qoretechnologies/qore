@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A plain function runs without the object and class context of its caller whatever the caller: a constructor, a
+# destructor, a copy method, a closure created in a method, map and select in a method, a background expression in a
+# method.  The fixture of PlainFunctionCallerContexts.qtest, whose output must be the same in every execution mode and
+# in AOT code: each probe is denied, as a private method called through an object from a plain function is
+
+%modern
+
+class Target {
+    private int pm() {
+        return 42;
+    }
+
+    constructor() {
+        printf("constructor: %s\n", probe_n(self, 3));
+    }
+
+    destructor() {
+        printf("destructor: %s\n", probe_n(self, 3));
+    }
+
+    copy() {
+        printf("copy: %s\n", probe_n(self, 3));
+    }
+
+    string closureInMethod() {
+        code c = string sub (object o) { return probe(o); };
+        string rv;
+        for (int i = 0; i < 3; ++i) {
+            rv = c(self);
+        }
+        return rv;
+    }
+
+    code makeClosure() {
+        return string sub (object o) { return probe(o); };
+    }
+
+    list<string> mapInMethod(list<object> l) {
+        list<string> rv;
+        for (int i = 0; i < 3; ++i) {
+            rv = map probe($1), l;
+        }
+        return rv;
+    }
+
+    list<object> selectInMethod(list<object> l) {
+        list<object> rv;
+        for (int i = 0; i < 3; ++i) {
+            rv = select l, probe($1) == "allowed";
+        }
+        return rv;
+    }
+
+    string backgroundInMethod() {
+        Queue q();
+        for (int i = 0; i < 3; ++i) {
+            background q.push(probe(self));
+        }
+        list<string> l;
+        for (int i = 0; i < 3; ++i) {
+            push l, q.get();
+        }
+        return (map $1, l, $1 != "denied") ? "allowed" : "denied";
+    }
+
+    string fromMethod() {
+        return probe_n(self, 3);
+    }
+
+    static string fromStatic(object o) {
+        return probe_n(o, 3);
+    }
+}
+
+#! a private method called through an object is denied in a plain function
+string sub probe(object o) {
+    try {
+        o.pm();
+        return "allowed";
+    } catch (hash<ExceptionInfo> ex) {
+        return "denied";
+    }
+}
+
+string sub probe_n(object o, int n) {
+    string rv;
+    for (int i = 0; i < n; ++i) {
+        rv = probe(o);
+    }
+    return rv;
+}
+
+for (int round = 0; round < 3; ++round) {
+    printf("round %d\n", round);
+    {
+        Target t();
+        Target c = t.copy();
+        printf("method: %s\n", t.fromMethod());
+        printf("static: %s\n", Target::fromStatic(t));
+        printf("closure in method: %s\n", t.closureInMethod());
+        printf("closure made in method: %s\n", t.makeClosure()(t));
+        printf("map in method: %y\n", t.mapInMethod((t, c)));
+        printf("select in method: %d\n", t.selectInMethod((t, c)).size());
+        printf("background in method: %s\n", t.backgroundInMethod());
+        printf("top-level: %s\n", probe_n(t, 3));
+        delete c;
+        delete t;
+    }
+}

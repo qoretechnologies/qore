@@ -957,6 +957,11 @@ enum class QoreIROpcode : uint16_t {
     //! evaluates no selector and iterates nothing.  The lowering evaluates each selector in the loop when
     //! IteratorNextSelectors has no value and SelectorIteratorPending asks for it, and gives it to the iterator with
     //! SelectorIteratorFeed (qore#5675).
+    //!
+    //! With QoreIRListSelectorFlag::Segment, native code iterates the list with the selector-segment loop: the
+    //! iterator only keeps the sequence, SelectorIteratorFeed computes the first index, the number of indices and the
+    //! step of each selector, and IteratorNextSelectors reads each value from the list, in the frame of the function;
+    //! the IR interpreter ignores the flag (qore#5711).
     IteratorCreateSelectors = 421,
 
     //! Return the index of the selector that the iterator of IteratorCreateSelectors needs before the next
@@ -1034,6 +1039,9 @@ enum class QoreIRListSelectorFlag : int64_t {
     RangeShift = 8,
     //! negative indices count from the end (the parse option negative-offsets); IteratorCreateSelectors only
     NegativeOffsets = 1 << 4,
+    //! the sequence is a list whose values hold no reference (int, float or bool values); IteratorCreateSelectors
+    //! only: native code iterates it with the selector-segment loop (qore#5711)
+    Segment = 1 << 5,
 };
 
 //! The largest number of selectors of one QoreIROpcode::ListSelectorStep (QoreIRListSelectorFlag::RangeShift)
@@ -2883,6 +2891,10 @@ public:
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
+    //! True if the inlined callee's body runs in a context other than the caller's: the caller can run with an object
+    //! or a class (it is not a plain function) and the callee's body can observe it (see
+    //! qore_ir_body_is_context_free())
+    mutable bool cached_switches_context = true;
 
     // Cached native leaf-call state. The release/acquire state publishes the
     // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.
@@ -4014,6 +4026,28 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+    //! Releases a read of a plain local after its last use when the statement writes the local later
+    /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
+        can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
+        AST interpreter borrows the value from the variable; the difference can be observed only if the statement
+        writes the variable after the read, which then destroys
+        the value in the AST interpreter: f((o,)) + (o = NOTHING) + mark(), o.n + (o = NOTHING) + mark().  For such
+        a read whose uses are all later in its block and only take values from it (MakeList, MakeHash,
+        MakeHashConstKeys, HashKeyAccess, AddAny; not a slice, which the AST interpreter iterates from the
+        sequence as the source of a functional operator), ReleaseOwnedTemp is inserted after its last use when the
+        statement can write the local later, in the read's block or in a block the statement continues in (a try
+        block, &&, || and ?: split a statement into blocks); a read used as a call argument is
+        released when the call returns instead (see the IR interpreter's buildValueUseCounts()).  The pass can run
+        again on the same function (qore#5712).
+
+        Must run after computeIROnlyLocals().
+    */
+    void releasePlainLocalReadsBeforeWrites();
+
+    //! returns true if the statement of temp scope \a scope can write \a local after instruction \a start of
+    //! \a block, in that block or in a block that the statement continues in (see releasePlainLocalReadsBeforeWrites())
+    bool statementWritesLocalAfter(const QoreIRBasicBlock* block, size_t start, const LocalVar* local,
+        uint32_t scope) const;
 
     //! Derives the handler's own closure-bound parent-slot locals from its IR, for an artifact without them
     /** These are the closure-bound parent-slot locals that the handler instantiates or uninstantiates itself.  This is
@@ -4114,6 +4148,17 @@ public:
     //! writes it; a plain bool was a data race.  Relaxed ordering: it is only a hint, and the compilation it
     //! requests synchronizes on its own.
     mutable std::atomic_bool osr_jit_requested{false};
+
+    //! The number of calls of a generic specialization (UserVariantBase::evalSpecializedIR()): in tiered mode, a
+    //! specialization runs on the IR tier until it reaches the JIT threshold, as the variant it specializes does
+    mutable std::atomic<uint64_t> specialization_exec_count{0};
+
+    //! The generic specialization whose IR contains this function, if it is the helper of a background expression in
+    //! it (issue #5765)
+    /** Set when the specialization is created (qore_mark_specialization_helpers()); a thread that runs the helper takes
+        a reference to the specialization, so the helper outlives the cache entry and the call that started the thread
+    */
+    struct QoreSpecializedIR* specialization_owner = nullptr;
 
     // Cached interpreter metadata.  These vectors are structural properties of
     // the IR function, so compute them once and reuse them across recursive and

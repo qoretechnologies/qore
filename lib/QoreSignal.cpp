@@ -87,6 +87,7 @@ void QoreSignalManager::getWaitMask(sigset_t& wait_mask) {
 void QoreSignalHandler::init() {
     funcref = 0;
     status = SH_OK;
+    release_tid = -1;
 }
 
 // called outside the signal lock
@@ -454,6 +455,8 @@ void QoreSignalManager::forkChild(int fork_tid) {
                 // the handler was running in the signal thread
                 handlers[i].status = QoreSignalHandler::SH_OK;
             }
+            // no thread of the child waits to release a handler
+            handlers[i].release_tid = -1;
         }
     }
     tcount.reinitAfterFork(signal_threads);
@@ -634,6 +637,27 @@ void QoreSignalManager::signal_handler_thread() {
                     // a callback whose handler was replaced while it ran is destroyed here, in its Program's context
                     callback = nullptr;
                 }
+#ifdef DEBUG
+                // test hook: the callback has left its Program, which can be deleted now, while the handler is still
+                // in progress (see dbgHoldAfterCallback())
+                {
+                    AutoLocker al(&mutex);
+                    if (dbg_hold_armed) {
+                        dbg_hold_armed = false;
+                        dbg_held = true;
+                        cond.broadcast();
+                        int64 deadline = q_clock_getmillis() + 30000;
+                        while (!idle_waiting) {
+                            int64 left = deadline - q_clock_getmillis();
+                            if (left <= 0) {
+                                break;
+                            }
+                            cond.wait(&mutex, static_cast<int>(left));
+                        }
+                        dbg_held = false;
+                    }
+                }
+#endif
 
                 // delete thread-local storage
                 end_signal_thread(&xsink);
@@ -662,10 +686,20 @@ void QoreSignalManager::signal_handler_thread() {
             }
 
             assert(handlers[sig].status == QoreSignalHandler::SH_Delete);
+            int release_tid = handlers[sig].release_tid;
+            handlers[sig].release_tid = -1;
             CodePgm old = handlers[sig].take();
             qore_program_private::delSignal(*old.pgm, sig);
             --num_handlers;
             assert(num_handlers >= 0);
+            if (release_tid != -1) {
+                // a thread that removes the handlers of the Program waits for this callback, and releases the handler
+                // itself: it is deleting the Program, which this thread cannot enter any more, so the destructors that
+                // the release runs would fail here with PROGRAM-ERROR (issue #5766)
+                released_handlers.emplace_back(release_tid, old);
+                setHandlerIdleUnlocked();
+                continue;
+            }
             sl.unlock();
             old.del(&xsink);
             // an exception raised by a destructor while the handler is released is reported here; left in the
@@ -730,6 +764,12 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 
 int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, ExceptionSink *xsink) {
     //printd(5, "QoreSignalManager::setHandler(sig: %d fr: %p) pgm: %p\n", sig, fr, getProgram());
+    // the code of a Program whose data is being destroyed (a destructor, for example) sets no handler: it could never
+    // run, and the values that its closure captures would be released only after the Program's data (issue #5766)
+    QoreProgram* cpgm = getProgram();
+    if (cpgm && qore_program_private::get(*cpgm)->dataDestructionStarted()) {
+        return 0;
+    }
     CodePgm old;
 
     {
@@ -772,6 +812,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             // Reset status in case a prior take() left a stale SH_Delete state
             // (signal fired while removing → SH_InProgress → take() → funcref=0 but status=SH_Delete)
             handlers[sig].status = QoreSignalHandler::SH_OK;
+            handlers[sig].release_tid = -1;
             handlers[sig].set(fr, pgm);
             ++num_handlers;
         } else {
@@ -789,6 +830,12 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
                 already_set = false;  // force mask update below
+                // the thread that removed the replaced handler waits to release it (see removeProgramHandlers())
+                if (handlers[sig].release_tid != -1) {
+                    released_handlers.emplace_back(handlers[sig].release_tid, old);
+                    old = CodePgm();
+                    handlers[sig].release_tid = -1;
+                }
             }
         }
 
@@ -876,8 +923,29 @@ bool QoreSignalManager::hasHandler(int sig) {
     return handlers[sig].isSet() && handlers[sig].status != QoreSignalHandler::SH_Delete;
 }
 
+#ifdef DEBUG
+void QoreSignalManager::dbgHoldAfterCallback() {
+    AutoLocker al(&mutex);
+    dbg_hold_armed = true;
+}
+
+bool QoreSignalManager::dbgWaitHeldAfterCallback(int timeout_ms) {
+    AutoLocker al(&mutex);
+    int64 deadline = q_clock_getmillis() + timeout_ms;
+    while (!dbg_held) {
+        int64 left = deadline - q_clock_getmillis();
+        if (left <= 0) {
+            return false;
+        }
+        cond.wait(&mutex, static_cast<int>(left));
+    }
+    return true;
+}
+#endif
+
 void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& pgms, ExceptionSink* xsink) {
     std::vector<CodePgm> olds;
+    int my_tid = ::q_gettid();
     {
         AutoLocker al(&mutex);
         if (!enabled()) {
@@ -895,6 +963,11 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
                 CodePgm old;
                 if (removeHandlerUnlocked(sig, old)) {
                     running = true;
+                    // the signal thread hands the handler over to this thread when its callback has returned (see
+                    // below)
+                    if (tid != my_tid) {
+                        handlers[sig].release_tid = my_tid;
+                    }
                 }
                 if (old.funcref) {
                     olds.push_back(old);
@@ -905,12 +978,29 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
         // the callback of one of the handlers runs in the signal thread: it ends, and so does the release of the
         // signal thread's local data after it, which can run the code of the Programs as well, before this returns;
         // not if the signal thread itself removes the handlers (as with exit() in a handler)
-        if (running && tid != ::q_gettid()) {
+        if (running && tid != my_tid) {
             ++idle_waiting;
+#ifdef DEBUG
+            // a signal thread held by dbgHoldAfterCallback() continues now
+            if (dbg_held) {
+                cond.broadcast();
+            }
+#endif
             while (handler_running && thread_running) {
                 cond.wait(&mutex);
             }
             --idle_waiting;
+        }
+
+        // the handlers whose callbacks were running are released here as well, in this thread (the thread that
+        // deletes their Program, which can still run their destructors), not in the signal thread (issue #5766)
+        for (auto i = released_handlers.begin(); i != released_handlers.end();) {
+            if (i->first == my_tid) {
+                olds.push_back(i->second);
+                i = released_handlers.erase(i);
+            } else {
+                ++i;
+            }
         }
     }
 

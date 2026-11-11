@@ -527,7 +527,13 @@ QoreHashNode::QoreHashNode() : AbstractQoreNode(NT_HASH, true, false), priv(new 
 
 QoreHashNode::QoreHashNode(const TypedHashDecl* hd, ExceptionSink* xsink) : QoreHashNode() {
     priv->setHashDecl(hd);
-    typed_hash_decl_private::get(*hd)->initHash(this, nullptr, xsink);
+    // C++ code can create a hash of another Program's own hashdecl (see typed_hash_decl_private::needsInitEntry())
+    const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (hdp->enterSourceProgramsForApi(src_pgm_helper, nullptr, nullptr, xsink)) {
+        return;
+    }
+    hdp->initHash(this, nullptr, xsink);
 }
 
 QoreHashNode::QoreHashNode(const QoreTypeInfo* valueTypeInfo) : QoreHashNode() {

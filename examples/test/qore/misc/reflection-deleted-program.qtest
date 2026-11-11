@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReflectionDeletedProgramTest
+
+#! Regression test for issue #5761: member initializers of a deleted Program raise PROGRAM-ERROR
+/** The member initializers of a hashdecl or class are code of the Program that declared them; a typed hash value
+    or a hashdecl or class inherited by another Program outlives that Program, and its initializers, evaluated after
+    it had been deleted, ran code that had been freed with it: TypedHash::doCast() of the type of a value of a deleted
+    child Program crashed in FunctionCallNode::evalImpl(), as did the creation of a typed hash or of an object of an
+    inherited declaration in a Program that lives on, and the member defaults of the reflection API.
+
+    The driver (reflection-deleted-program.q) runs each case and prints its result; it runs in every execution mode
+    and as a qcc executable.  Initializers that need no evaluation are no code and still work.
+*/
+class ReflectionDeletedProgramTest inherits QUnit::Test {
+    public {
+        #! the result of each case of the driver
+        const Expected = (
+            "before: {a: 1, b: \"2\", c: \"x\"} \"e\" {a: 1, b: \"2\", c: \"x\"} \"x\"",
+            "value typed hash doCast: PROGRAM-ERROR",
+            "value typed hash doCastWithOverrides: PROGRAM-ERROR",
+            "value typed hash doCastValues: PROGRAM-ERROR",
+            "value typed hash doCastValuesWithOverrides: PROGRAM-ERROR",
+            "value typed hash member default with a builtin call: PROGRAM-ERROR",
+            "value typed hash member default with a user call: PROGRAM-ERROR",
+            "value typed hash literal member default: 1",
+            "value typed hash doCast with every member given: {a: 5, b: \"b\", c: \"c\"}",
+            "value literal typed hash doCast: {a: 1, s: \"lit\"}",
+            "inherited hashdecl initialization: PROGRAM-ERROR",
+            "inherited hashdecl cast: PROGRAM-ERROR",
+            "inherited class without a constructor: PROGRAM-ERROR",
+            "inherited class with a constructor: PROGRAM-ERROR",
+            "subclass of an inherited class: PROGRAM-ERROR",
+            "inherited reflection typed hash doCast: PROGRAM-ERROR",
+            "inherited reflection typed hash member default: PROGRAM-ERROR",
+            "inherited reflection class newObject: PROGRAM-ERROR",
+            "inherited reflection class member default: PROGRAM-ERROR",
+            "inherited reflection class literal member default: 1",
+            "inherited class with literal members: 1",
+            "own hashdecl of the inheriting Program: {x: \"y\"}",
+            "value typed hash doCast with a list element: PROGRAM-ERROR",
+            "inherited hashdecl with a list element: PROGRAM-ERROR",
+            "inherited hashdecl with a hash element: PROGRAM-ERROR",
+            "inherited hashdecl with a non-public parent: PROGRAM-ERROR",
+            "transient member of a deserialized object: PROGRAM-ERROR",
+            "done",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string driver;
+    }
+
+    constructor() : QUnit::Test("ReflectionDeletedProgramTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        driver = get_script_dir() + DirSep + "reflection-deleted-program.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("member initializers of a deleted Program in %s mode", mode), getModeTest(mode));
+        }
+        addTestCase("member initializers of a deleted Program on the IR tier", \runIrTier());
+        addTestCase("member initializers of a deleted Program in a qcc executable", \runAot());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    private code getModeTest(string mode) {
+        return sub () { assertEq(getExpected(), ExecModeHarness::run(getCommand(mode)), mode); };
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        assertEq(getExpected(), ExecModeHarness::run_ir_tier(getCommand("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the driver with qcc and runs the executable
+    runAot() {
+        TmpDir tmp("qore-reflection-deleted-program-");
+        string exe = tmp.path + DirSep + "reflection-deleted-program";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, exe, driver));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(getExpected(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)), "executable");
+    }
+
+    #! returns the command running the driver in the given mode
+    private string getCommand(string mode) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir, libqore_dir,
+            qore_bin, mode, driver);
+    }
+
+    #! returns the output of the driver
+    private static string getExpected() {
+        return (foldl $1 + "\n" + $2, Expected) + "\n";
+    }
+}

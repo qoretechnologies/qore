@@ -82,6 +82,20 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
   `QoreComplexListCastOperatorNode`; a class cast gives its operand itself)
 - `ParseObjectMethodReferenceNode` (`\obj.method()`)
 
+The operators hand the operands that they evaluate to it in the same way, as soon as each is evaluated
+(`QoreOperandEvalHolder`): the arithmetic, bitwise, shift, comparison, logical, regex, `keys`, `elements`, `exists`,
+`instanceof` and unary operators, `?:` its condition, `[]` its index, `{}` its key and a scalar cast its
+operand.  Holding a value when it is created, as the compiled modes
+register a temporary when the instruction that creates it runs, gives the same order of release: the right operand
+before the left one, and the operand that an operator created for an earlier element of a functional operator when
+the operand is evaluated again.  So in `f(h + {"a": o}) + (o = NOTHING) + mark()` the hash literal, an operand of
+`+`, lives until the end of the statement, and the object is destroyed after `mark()`, as in the other execution
+modes (David, 2026-11-10, qore#5712: "all chains, whole statement").  An operand that the operator takes into its
+result is not held, and the operands of a functional operator's expression are held by the scope of each element.  When
+an exception leaves the statement, these operands are released with the receivers, after the argument lists that the
+exception interrupted; the compiled modes order them the same way (`qore_ir_build_exception_release_groups()` puts the
+operands of the corresponding instructions in the receiver class).
+
 A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
 reference of its own to is held by the variable reference itself (see [Values read from
 variables](#values-read-from-variables)).  Nor are strings, numbers, binaries and dates, which hold no other values,
@@ -111,7 +125,8 @@ The statement holds the value as long as it uses it, by what it is used for (Dav
 
 - the receiver of a chain (a method call, a member or element access, a cast, a call reference and the callee of a
   call through a call reference), the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`,
-  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`, a slice), the source of a functional operator, the
+  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`; not the sequence of a slice, which the slice releases
+  when it has been made), the source of a functional operator, the
   value of an assignment, an element of a literal and the value of a `return` statement live until the end of the
   statement (a `return` statement releases its temporaries before the `on_exit` handlers run).  So in
   `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after `mark()`
@@ -189,6 +204,32 @@ that release was removed, so a method chain keeps its receivers to the end of th
 reference that a load of a weak local variable takes is still released at its last use (`weak_load_result_ids`,
 `weak_load_temp_slots`): in the AST interpreter, a variable read is not held either.
 
+A read of a plain local (`qore_ir_is_plain_local_read()`: not through a reference, not of a closure-bound or a
+top-level local, in a function that creates no reference; its storage can be IR-only or AST-visible, as for the
+locals of a statement in a `try` block, whose calls carry their expressions) holds a reference of the frame, while
+the AST interpreter borrows the value from the variable; the two differ only when the statement writes the variable
+after the read, which destroys the value in the AST interpreter (qore#5712):
+
+- a read that is a call argument is released when the call returns (`read_needs_release_at_return()` in the IR
+  interpreter's `buildValueUseCounts()`);
+- a read whose uses are all later in its block and only take values from it - an element of a list or hash literal
+  (`MakeList`, `MakeHash`, `MakeHashConstKeys`), the receiver of a member read (`HashKeyAccess`) and an operand of
+  `AddAny` - is released after its last use when the statement can write the local later, in the read's block or in a
+  block that the statement continues in (a `try` block, `&&`, `||` and `?:` split a statement into blocks):
+  `QoreIRFunction::releasePlainLocalReadsBeforeWrites()`, which runs after `computeIROnlyLocals()`, inserts
+  `ReleaseOwnedTemp`; a read whose local is declared with, or whose value facts give, a type that holds no other
+  values (an int, a float, a bool, a string, a date, a binary or a number) is skipped, as its release cannot be
+  observed (`qore_ir_value_may_be_observable()`).  So `f((o,)) + (o = NOTHING) + mark()` and
+  `o.n + (o = NOTHING) + mark()` destroy the object before `mark()` runs.  A slice is not such a use: as the source of
+  a functional operator, the AST interpreter iterates the sequence itself (`map $1, l[0..(l = ()).size()]`).
+
+A list or hash literal, the result of `AddAny` and the value that `remove`, `shift` or `pop` takes, passed to a call
+as its argument, are released when the call returns, as every argument is, when that release can be observed: when
+they hold a value that nothing else holds, such as an object that the expression created or the value of a local that
+the statement writes later (`qore_ir_find_observable_temp_call_args()`, used by the IR interpreter and by
+`QoreIRToLLVM::releaseConsumedCallArgs()`).  A literal of scalars, constants and reads of locals that keep their values
+is released at the end of the statement, which costs the call nothing.
+
 A method call reference to a temporary (`\make().getName()`) is created from the receiver that the lowering
 evaluated (`qore_rt_create_object_method_ref()`, `ParseObjectMethodReferenceNode::makeReference()`); the interpreter
 and JIT code used to evaluate the AST node again, which evaluated the receiver expression a second time.
@@ -236,4 +277,5 @@ released with the statement's temporaries, before the variable.
 worker in each execution mode, as an AOT program and from a compiled module, and compares the traces with the AST
 interpreter's (`temporary-lifetime-results.qi`).  `examples/test/ir/ReferenceReadLifetime.qtest` runs the reads of
 [Values read from variables](#values-read-from-variables) in every execution mode, on the IR tier and as a qcc
-executable.
+executable. `examples/test/ir/temp-release-points/` runs the release points of reads of locals that the statement writes later
+and of the temporary arguments above (qore#5712).

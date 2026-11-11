@@ -864,6 +864,11 @@ extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const Us
         const LVarSet* vlist);
 extern bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist);
+#ifdef DEBUG
+//! Appends the parameters that the background helpers in \a func own, in instruction order (see
+//! qoreAOTForEachBackgroundHelperParam() in QoreAOTBinary.cpp)
+extern void qoreAOTCollectBackgroundHelperParams(const QoreIRFunction& func, std::vector<const LocalVar*>& params);
+#endif
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -2804,6 +2809,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
     // Classify locals as IR-only vs AST-visible for optimization
     ir_func->computeIROnlyLocals();
+    // a read of a plain local that the statement writes later is released after its last use (qore#5712)
+    ir_func->releasePlainLocalReadsBeforeWrites();
     if (sig) {
         for (unsigned i = 0; i < sig->numParams(); ++i) {
             ir_func->param_local_vars[static_cast<int>(i)] = sig->lv[i];
@@ -6238,17 +6245,23 @@ static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
     return call && call->getAOTDeferredSourceFunction();
 }
 
+//! The flag of a batch callee that records the result of qore_aot_fast_entry_is_context_independent()
+/** BatchCalleeInfo::context_independent_fast_entry for AOT compilation, BatchCalleeInfo::context_free_body for JIT
+    compilation (see qore_ir_resolve_context_free_fast_entries())
+*/
+using QoreContextIndependenceFlag = bool BatchCalleeInfo::*;
+
 static bool qore_aot_fast_entry_call_is_context_independent(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, bool has_ref_args,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        int arg_start = 0) {
+        int arg_start = 0, QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
     if (!variant || has_ref_args) {
         return false;
     }
     auto it = batch_callees.find(variant);
     if (it == batch_callees.end() || !it->second.approach_b_eligible
-            || !it->second.context_independent_fast_entry) {
+            || !(it->second.*flag)) {
         return false;
     }
     int total_operands = static_cast<int>(operands.size());
@@ -6263,10 +6276,18 @@ static bool qore_aot_fast_entry_call_is_context_independent(
 static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctionVariant* variant,
         const QoreIRFunction& ir_func,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        const std::unordered_set<const LocalVar*>* explicit_captures = nullptr) {
+        const std::unordered_set<const LocalVar*>* explicit_captures = nullptr,
+        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     if (!sig) {
+        return false;
+    }
+    // the check of the return value runs in the context the entry runs in, which decides whether an object is
+    // accepted as a class that the caller's class inherits privately: a function that can return an object or a
+    // container (one read from a hash, for example) needs its own context; the return type of a generic function is
+    // the one of the specialization the IR is lowered for
+    if (!QoreTypeInfo::returnsOnlyScalars(ir_func.specializeType(sig->getReturnTypeInfo()))) {
         return false;
     }
     const bool allow_body_locals =
@@ -6504,7 +6525,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     int arg_start = qore_aot_is_deferred_source_function_call(call->expr) ? 1 : 0;
                     if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
-                            call->operands, call->has_ref_args, batch_callees, arg_start)) {
+                            call->operands, call->has_ref_args, batch_callees, arg_start, flag)) {
                         return false;
                     }
                     break;
@@ -6512,7 +6533,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::CallStaticDirect: {
                     const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
                     if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
-                            call->operands, call->has_ref_args, batch_callees)) {
+                            call->operands, call->has_ref_args, batch_callees, 0, flag)) {
                         return false;
                     }
                     break;
@@ -6529,6 +6550,49 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         }
     }
     return true;
+}
+
+bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func) {
+    // no batch callees: a body that makes a call is not proven free of the context
+    static const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> no_callees;
+    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees);
+}
+
+bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func) {
+    const AbstractQoreFunctionVariant* variant = ir_func.source_variant;
+    return variant && variant->getUserVariantBase() && !dynamic_cast<const UserClosureVariant*>(variant)
+        && !dynamic_cast<const MethodVariantBase*>(variant);
+}
+
+void qore_ir_resolve_context_free_fast_entries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    // a fixed point, as the body of a callee calling a context-free callee is context-free only once the callee is
+    bool changed = true;
+    size_t pass = 0;
+    while (changed) {
+        if (pass++ && qore_check_cancel(nullptr, "JIT batch context-free fast-entry fixed-point")) {
+            return;
+        }
+        changed = false;
+        size_t function_i = 0;
+        for (const auto& [variant, ir_func] : functions) {
+            if (function_i++ && !(function_i % 100)
+                    && qore_check_cancel(nullptr, "JIT batch context-free fast-entry fixed-point scan")) {
+                return;
+            }
+            auto it = batch_callees.find(variant);
+            if (!ir_func || it == batch_callees.end() || !it->second.approach_b_eligible
+                    || it->second.context_free_body) {
+                continue;
+            }
+            if (qore_aot_fast_entry_is_context_independent(variant, *ir_func, batch_callees, nullptr,
+                    &BatchCalleeInfo::context_free_body)) {
+                it->second.context_free_body = true;
+                changed = true;
+            }
+        }
+    }
 }
 
 static void resolveAOTBatchContextIndependentFastEntries(
@@ -18073,7 +18137,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         // the runtime binds this body's slots to the variables of the serialized IR by index: both must have the same
         // variable in each slot, or a local of one is bound to another variable (a reservation made in only one of the
         // two lowerings reorders the table); the parameters of background helpers are created by each lowering, so
-        // they are the same when they have the same name
+        // the parameter at each position of one lowering is the one at the same position of the other (both lowerings
+        // walk the same code in the same order and name the parameters by position, so the type is the real check)
         {
             std::string closure_error;
             std::unique_ptr<QoreIRFunction> serialized_ir(::lowerClosureForSerialization(variant, &closure_error));
@@ -18081,23 +18146,32 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
                 if (qoreAOTPrepareClosureIRLocalSlots(serialized_ir.get(), sig, vlist)) {
                     qoreAOTPruneClosureIRBodyLocals(serialized_ir.get(), sig, vlist);
-                    auto by_slot = [](const QoreIRFunction& f) {
-                        std::map<uint32_t, const LocalVar*> rv;
-                        for (const auto& [lv, slot_id] : f.local_var_slots) {
-                            rv.emplace(slot_id, lv);
-                        }
-                        return rv;
-                    };
-                    std::map<uint32_t, const LocalVar*> native_slots = by_slot(*ir_func);
-                    std::map<uint32_t, const LocalVar*> serialized_slots = by_slot(*serialized_ir);
-                    assert(native_slots.size() == serialized_slots.size()
+                    // pair the background helper parameters of both lowerings by position
+                    std::vector<const LocalVar*> native_params, serialized_params;
+                    qoreAOTCollectBackgroundHelperParams(*ir_func, native_params);
+                    qoreAOTCollectBackgroundHelperParams(*serialized_ir, serialized_params);
+                    assert(native_params.size() == serialized_params.size()
+                        && "the native closure body and its serialized IR have different background helper parameters");
+                    // native variable -> serialized variable: the helper parameters by position, any other variable
+                    // is shared by both lowerings
+                    std::unordered_map<const LocalVar*, const LocalVar*> translation;
+                    for (size_t i = 0, e = native_params.size(); i < e; ++i) {
+                        const LocalVar* nlv = native_params[i];
+                        const LocalVar* slv = serialized_params[i];
+                        assert(nlv && slv && !strcmp(nlv->getName(), slv->getName())
+                            && qore_get_aot_serializable_type_path(nlv->getTypeInfo())
+                                == qore_get_aot_serializable_type_path(slv->getTypeInfo())
+                            && "the background helper parameters of the native closure body and its serialized IR "
+                                "differ");
+                        translation.emplace(nlv, slv);
+                    }
+                    assert(ir_func->local_var_slots.size() == serialized_ir->local_var_slots.size()
                         && "the native closure body and its serialized IR have different local slot tables");
-                    for (const auto& [slot_id, lv] : native_slots) {
-                        auto i = serialized_slots.find(slot_id);
-                        assert(i != serialized_slots.end()
-                            && (i->second == lv
-                                || (lv && i->second && lv->getName() && lv->getName()[0] == '%'
-                                    && !strcmp(lv->getName(), i->second->getName())))
+                    for (const auto& [lv, slot_id] : ir_func->local_var_slots) {
+                        auto t = translation.find(lv);
+                        const LocalVar* slv = t == translation.end() ? lv : t->second;
+                        auto i = serialized_ir->local_var_slots.find(slv);
+                        assert(i != serialized_ir->local_var_slots.end() && i->second == slot_id
                             && "the native closure body and its serialized IR have different local slot tables");
                         (void)i;
                     }
@@ -34102,12 +34176,7 @@ class ExprTreeSerializer {
             // infinite-recursing).
             const FunctionEntry* fe = fc->getFunctionEntry();
             if (fe && fe->getNamespace()) {
-                std::string qualified;
-                fe->getNamespace()->getPath(qualified);
-                if (!qualified.empty()) {
-                    qualified += "::";
-                }
-                qualified += fe->getName();
+                std::string qualified = qore_aot_get_function_identity_name(fe);
                 writeStr(qualified.c_str());
             } else {
                 writeStr(fc->getName());
@@ -34832,8 +34901,8 @@ class ExprTreeSerializer {
         }
         if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_REF));
-            QoreFunction* f = fcr->getFunction();
-            writeStr(f ? f->getName() : "");
+            std::string ref_name = qore_aot_get_function_ref_name(fcr);
+            writeStr(ref_name.c_str());
             writeU16(0);
             return true;
         }
@@ -34968,6 +35037,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         // Handle inline short strings (NaN-boxed, up to 6 bytes)
         if (v.isShortString()) {
+            if (qore_aot_string_needs_value(v)) {
+                id.kind = AOTExprKind::CONST_VALUE;
+                id.child_expr = v;
+                return id;
+            }
             char ssbuf[8];
             v.getShortString(ssbuf);
             size_t sslen = v.shortStringLen();
@@ -35031,13 +35105,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // wrapper hijack the lookup.
         const FunctionEntry* fe = call->getFunctionEntry();
         if (fe && fe->getNamespace()) {
-            std::string qualified;
-            fe->getNamespace()->getPath(qualified);
-            if (!qualified.empty()) {
-                qualified += "::";
-            }
-            qualified += fe->getName();
-            id.ref1 = std::move(qualified);
+            id.ref1 = qore_aot_get_function_identity_name(fe);
         } else {
             id.ref1 = call->getName();
         }
@@ -35046,7 +35114,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 = "sig:";
                 id.ref2 += sig->getSignatureText();
             }
-            id.reloc_qore_path = getVariantKey(id.ref1.c_str(), v);
+            // the providers of other objects are keyed by the path without the leading "::" of a root function
+            id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
         if (const QoreTypeParamInstantiation* inst =
                 call->getExplicitTypeParamInstantiation()) {
@@ -35342,6 +35411,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
+        // a CONST_STRING is rebuilt in the default encoding from its bytes up to a null byte
+        if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {
+            id.kind = AOTExprKind::CONST_VALUE;
+            id.child_expr = v;
+            return id;
+        }
         id.kind = AOTExprKind::CONST_STRING;
         id.ref1 = str_node->c_str();
         return id;
@@ -35892,6 +35967,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     id.ref2.append(sig->getSignatureText());
                 }
             }
+            // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
+            if (const QoreTypeParamInstantiation* inst = mc->getExplicitTypeParamInstantiation()) {
+                id.ref2 += "\ntypeargs:";
+                id.ref2 += std::to_string(inst->type_args.size());
+                for (const QoreTypeInfo* type_arg : inst->type_args) {
+                    id.ref2 += "\n";
+                    id.ref2 += qore_get_aot_serializable_type_path(type_arg);
+                }
+            }
             id.flags = is_pseudo ? 1 : 0;
             return id;
         }
@@ -35986,8 +36070,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL_REF;
-        QoreFunction* f = fcr->getFunction();
-        id.ref1 = f ? f->getName() : "";
+        id.ref1 = qore_aot_get_function_ref_name(fcr);
         return id;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {

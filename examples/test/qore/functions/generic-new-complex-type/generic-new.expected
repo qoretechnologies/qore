@@ -1,0 +1,10 @@
+{a: 19}
+{a: "s"}
+[19]
+[1.5]
+{k: 7}
+[7]
+{k: "x"}
+["x"]
+hash<string, int>
+list<string>

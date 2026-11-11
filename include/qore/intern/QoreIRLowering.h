@@ -287,6 +287,11 @@ public:
     QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
         QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
         std::string& error);
+    //! Returns true if the lazy list of selectors \a src is iterated with the selector-segment loop in native code
+    /** The sequence must be a list whose values hold no reference, whose release cannot be observed, so that native
+        code can read each value from the list (qore#5711)
+    */
+    bool useSelectorSegmentLoop(const LazySelectorSource& src) const;
     //! Returns true if evaluating the selector \a selector (or the bounds of a range) can create a node temp
     static bool selectorMayCreateTemp(const QoreValue& selector);
     //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
@@ -354,6 +359,10 @@ public:
     QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    //! Lowers a typed hash or list construction whose initializer is lowered as the operand \a init
+    /** @param type_only a NewComplexHashNode or NewComplexListNode of the type without an initializer */
+    QoreIRValue lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only, QoreIRValue init,
+            const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
     QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
@@ -449,7 +458,11 @@ private:
     */
     /** With \a pure_consumer_ok (a map, select, map/select or foldl operator without other stages), a list whose
         selectors have side effects is also evaluated before the iteration when the operator's expressions only
-        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other
+        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other.
+        Any other consumer iterates a list of stable selectors over a list whose values hold no reference lazily as
+        well (useSelectorSegmentLoop()) when it has at least as many ranges as single indices, which gives the same
+        values without building the list of them; a list with more single indices is built first, as a lazy single
+        index costs a step of the iteration protocol where the list costs one element (qore#5711).
     */
     bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,
@@ -961,6 +974,19 @@ private:
         @return true if \a expr is such a value, false if not
     */
     bool lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv, std::string& error);
+
+    //! Returns the parameter of the background helper being lowered that holds a value the expression takes when the
+    //! thread starts, created for the key if it does not exist yet (see lowerBackgroundLeaf())
+    LocalVar* backgroundLeafParam(std::string key, const QoreValue& expr);
+
+    //! Extracts the access path of an lvalue (the file-level extractLValuePath() function)
+    /** In a background helper, the root of a path that is a member of the object of the code that starts the thread is
+        the value of the member that the thread took when it started, as for the AST interpreter, which the helper
+        holds in a parameter: the new thread has no object context (issue #5723: <tt>background (o.x = 1)</tt> in a
+        method of a class with an object member \c o raised "no object context for self member access")
+    */
+    bool extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
+            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false);
 
     //! Lowers a background expression to a helper function and the instruction starting the thread with it
     /** See QoreIRBackgroundInstruction.

@@ -141,7 +141,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         wake_callback = cb;
     }
 
-    #! Sets the callback invoked when the stream is disconnected
+    #! Sets the callback invoked when the stream has ended
+    /** The async I/O controller calls it exactly once on a thread of its handler pool when the stream has ended
+        for any reason: a disconnect by the client, the end of a stream that the producer closed, a connection
+        error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback()).
+    */
     setCloseCallback(*code<nothing()> cb) {
         lockState("setCloseCallback");
         on_exit m.unlock();
@@ -153,6 +157,16 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         lockState("getCloseCallback");
         on_exit m.unlock();
         return close_callback;
+    }
+
+    #! Returns the callback invoked when the stream has ended and clears it, so that it is called at most once
+    /** The async I/O controller takes the callback on every path that ends the stream: a disconnect, a connection
+        error, and the removal of the listener or a stop of the controller.
+    */
+    *code<nothing()> takeCloseCallback() {
+        lockState("takeCloseCallback");
+        on_exit m.unlock();
+        return remove close_callback;
     }
 
     #! Returns the goal of the operation

@@ -223,11 +223,15 @@ QoreValue NewHashDeclNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) con
 }
 
 QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_hash_private::newComplexHash(typeInfo, args, xsink);
+    // in generic code the type has type parameters (hash<string, T>) that are substituted with the types of the
+    // instantiation that is running, as for VarRefNewObjectNode::constructValue()
+    return qore_hash_private::newComplexHash(
+        needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink);
 }
 
 QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_list_private::newComplexList(typeInfo, args, xsink);
+    return qore_list_private::newComplexList(
+        needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink);
 }
 
 static int qore_get_buffer_factory_size(const QoreListNode* args_list, const char* factory, ExceptionSink* xsink,

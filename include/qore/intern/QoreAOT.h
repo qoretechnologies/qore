@@ -66,6 +66,7 @@ class FunctionEntry;
 class LocalVar;
 class QoreClass;
 class QoreFunction;
+class LocalFunctionCallReferenceNode;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
@@ -133,6 +134,21 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
+
+//! Returns the name that identifies a function unambiguously in an AOT image
+/** The namespace path without the leading "::" and the function name, ex: "Util::substitute_env_vars". A function in
+    the root namespace gets a leading "::" ("::chr"): the bare name resolves through the root function index to the
+    builtin of the same name (Qore::chr), while the "::" form names the root namespace's own function.
+
+    @param fe the function entry that the parser resolved
+*/
+std::string qore_aot_get_function_identity_name(const FunctionEntry* fe);
+
+//! Returns the name that identifies the function of a function call reference in an AOT image
+/** The function's name, or "::name" if the parser resolved the reference to the function of that name in the root
+    namespace (see qore_aot_get_function_identity_name())
+*/
+std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr);
 
 //! Resolve a namespace function for a serialized class-qualified call after method lookup fails.
 const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
@@ -357,6 +373,10 @@ struct QoreAOTContext {
     //! Owned string copies for call target method names from slot map deserialization.
     //! Uses std::list so that element pointers remain stable across insertions.
     std::list<std::string> owned_call_target_strings;
+
+    //! Owned explicit type-parameter instantiations of dot-eval call targets (obj.method<T>()), which have no
+    //! expression node to hold them; call_targets[].explicit_type_param_instantiation points to them.
+    std::list<std::shared_ptr<const QoreTypeParamInstantiation>> owned_explicit_type_param_insts;
 
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;

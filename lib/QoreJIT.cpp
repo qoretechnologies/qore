@@ -1625,6 +1625,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
     }
+    // a direct call of a callee whose body does not observe the object and class context it runs in does not switch
+    // to the callee's context
+    if (!q_env_is_set("QORE_DISABLE_JIT_CONTEXT_FREE_CALLS")) {
+        qore_ir_resolve_context_free_fast_entries(effect_functions, batch_callee_map);
+    }
     if (rewrite_root
             && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
         size_t projections = qore_ir_fuse_batch_aggregate_return_projections(
@@ -2553,10 +2558,10 @@ void QoreJIT::bgCompileThreadLoop() {
             // sets the context while the compile runs, on every exit path
             struct ContextHelper {
                 BgCompileContext*& ptr;
-                DLLLOCAL ContextHelper(BgCompileContext*& ptr, BgCompileContext& ctx) : ptr(ptr) {
+                ContextHelper(BgCompileContext*& ptr, BgCompileContext& ctx) : ptr(ptr) {
                     ptr = &ctx;
                 }
-                DLLLOCAL ~ContextHelper() {
+                ~ContextHelper() {
                     ptr = nullptr;
                 }
             } ctx_helper(bg_compile_ctx, ctx);

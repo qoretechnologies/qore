@@ -576,7 +576,8 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     // do not evaluate expression if any parse exceptions have been thrown
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
-            typeInfo = val.getTypeInfo();
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            typeInfo = QoreTypeInfo::getKnownValueType(val);
         } else if (explicit_type && val && !val.needsEval() && !pgm->parseExceptionRaised()) {
             // only fold the value into the declared type when the declared type actually accepts the
             // initializer expression; if the parse-time type check above already raised a PARSE-TYPE-ERROR,
@@ -655,7 +656,8 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
                         QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink);
                     }
                 } else {
-                    typeInfo = saved_val.getTypeInfo();
+                    // a date has the type of its subtype, as a date literal does (issue #5722)
+                    typeInfo = QoreTypeInfo::getKnownValueType(saved_val);
                 }
                 assert(!saved_val.getInternalNode() || !saved_val.needsEval());
             } else {
@@ -972,7 +974,9 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
     // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
     const QoreTypeInfo* ti = parseTypeInfo
         ? typeInfo
-        : (typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo());
+        : (typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            : QoreTypeInfo::getKnownValueType(value));
     ConstantEntry* ce = new ConstantEntry(loc, name, value, ti, pub, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
@@ -1155,7 +1159,9 @@ void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& n
     // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
     const QoreTypeInfo* ti = parseTypeInfo
         ? typeInfo
-        : (typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo : val.getTypeInfo());
+        : (typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            : QoreTypeInfo::getKnownValueType(val));
     ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, ti, false, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();

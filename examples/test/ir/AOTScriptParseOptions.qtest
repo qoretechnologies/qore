@@ -187,6 +187,8 @@ public int sub f(int a) {
         addTestCase("negative: qcc rejects relocatable objects that are not %modern", \testRejectedObjects());
         addTestCase("qcc applies the rule to modules", \testModules());
         addTestCase("qcc applies the rule to each source of a batch", \testBatch());
+        addTestCase("an AOT module does not inherit the loader's compatibility options",
+            \testModuleInheritance());
 
         set_return_value(main());
     }
@@ -315,6 +317,52 @@ public int sub f(int a) {
         rv = run(sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
         checkRejection("module directive after the module block", rv, mod, ("PO_STRICT_ARGS",));
         assertFalse(is_file(out));
+    }
+
+    #! an AOT module runs with its own %modern options, not with the compatibility options of the Program loading it
+    /** The options a module inherits from its loader (aot_inherited_po) are its restrictions only: the options that
+        only select language behavior (QoreParseOptions::FREE_OPTIONS), every compatibility option among them, are
+        not inherited, as with the same module loaded from source (issue #5682)
+    */
+    testModuleInheritance() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        string src = 'module AotPoInherit {
+    version = "1.0";
+    desc = "AOT parse option inheritance test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AotPoInherit {
+public string sub r() {
+    return sprintf("%y", range(1, 2));
+}
+public string sub c() {
+    return sprintf("%y", cast<string>(NOTHING));
+}
+}
+';
+        string mod = tmp.path + DirSep + "AotPoInherit.qm";
+        writeFile(mod, src);
+        string loader = writeFile(tmp.path + DirSep + "loader.q", "%new-style\n%require-types\n%strict-args\n"
+            "%broken-range\n%broken-cast\n%requires AotPoInherit\n"
+            "printf(\"loader: %y %y\\n\", range(1, 2), cast<string>(NOTHING));\n"
+            "printf(\"module: %s %s\\n\", AotPoInherit::r(), AotPoInherit::c());\n");
+        string expected = "loader: [1, 2] null\nmodule: [1] \"\"\n";
+        # from source
+        hash<auto> rv = run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, tmp.path, qore_bin, loader));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(expected, rv.out, "source module");
+        # as an AOT module
+        string out = tmp.path + DirSep + "AotPoInherit.qmod";
+        rv = run(sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        assertEq(0, rv.rc, rv.err);
+        unlink(mod);
+        rv = run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, tmp.path, qore_bin, loader));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(expected, rv.out, "AOT module");
     }
 
     testBatch() {

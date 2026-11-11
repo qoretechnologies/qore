@@ -746,7 +746,10 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
             if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
                 return false;
             }
-            bindings[i] = explicit_type;
+            // an explicit type argument can be a type parameter of the generic code that makes the call
+            // (inner<T>() in a generic function): the callee is bound to the type of the instantiation that is
+            // running
+            bindings[i] = qore_substitute_type_params_if_needed(explicit_type);
         }
     }
     for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {
@@ -838,7 +841,8 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
     return rv;
 }
 
-bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match) const {
+bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+        const QoreTypeInfo* receiver) const {
     // check varargs flags first
     if (varargs != sig.varargs) {
         //printd(5, "AbstractFunctionSignature::compare() varargs: %d sig.varargs: %d\n", varargs, sig.varargs);
@@ -849,17 +853,23 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
         return false;
     }
 
+    // the types of a generic class's abstract method are those of the specialization that the class inherits
+    auto sig_type = [receiver] (const QoreTypeInfo* ti) {
+        return receiver ? qore_substitute_type_params_if_needed(ti, receiver) : ti;
+    };
+    const QoreTypeInfo* sig_return_type = sig_type(sig.returnTypeInfo);
+
     // return types for abstract methods must be compatible if present
-    if (sig.returnTypeInfo != nothingTypeInfo) {
+    if (sig_return_type != nothingTypeInfo) {
         bool may_not_match = false;
-        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig.returnTypeInfo, returnTypeInfo, may_not_match);
-        const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig.returnTypeInfo);
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, returnTypeInfo, may_not_match);
+        const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig_return_type);
         bool raw_generic_type_param = rtpi
             && qore_class_private::get(*rtpi->getOwnerClass())->rawConstructionDefaultsToAuto();
         if (!res || (may_not_match && !relaxed_match
                 // auto/any return types always accept any concrete return type
-                && sig.returnTypeInfo != autoTypeInfo
-                && sig.returnTypeInfo != anyTypeInfo
+                && sig_return_type != autoTypeInfo
+                && sig_return_type != anyTypeInfo
                 && !raw_generic_type_param)) {
             //printd(5, "AbstractFunctionSignature::compare() rt: %s is not compatible with %s (%p %p)\n",
             //    QoreTypeInfo::getName(returnTypeInfo), QoreTypeInfo::getName(sig.returnTypeInfo), returnTypeInfo,
@@ -871,7 +881,7 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     for (unsigned i = 0; i < typeList.size(); ++i) {
         const QoreTypeInfo* ti = sig.typeList.size() <= i
             ? nullptr
-            : sig.typeList[i];
+            : sig_type(sig.typeList[i]);
         bool match;
         if (relaxed_match) {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,
@@ -1128,10 +1138,10 @@ public:
     //! the original values of the converted arguments; created with the first one (see prepareDefaultArgs())
     std::unique_ptr<CodeEvaluationHelper::arg_restore_vec_t> args;
 
-    DLLLOCAL CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
+    CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
     }
 
-    DLLLOCAL ~CodeEvaluationArgRestoreHelper() {
+    ~CodeEvaluationArgRestoreHelper() {
         if (args) {
             for (auto& i : *args) {
                 i.second.discard(xsink);
@@ -1140,7 +1150,7 @@ public:
     }
 
     //! Puts the original values back into the argument list, which then holds them
-    DLLLOCAL void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
+    void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
         if (!args) {
             return;
         }
@@ -1424,8 +1434,36 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
         return 0;
     }
 
-    if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation,
-            explicit_type_param_instantiation)) {
+    // an explicit type argument can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic class
+    // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
+    // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
+    // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
+    //! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
+    //! (std::bad_alloc) leaves the inference
+    struct CallerReceiverScope {
+        const QoreTypeInfo* callee_receiver_type_info = nullptr;
+        bool active = false;
+
+        CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
+            if (active) {
+                callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
+            }
+        }
+
+        ~CallerReceiverScope() {
+            if (active) {
+                runtime_set_receiver_type_info(callee_receiver_type_info);
+            }
+        }
+    };
+    bool inferred;
+    {
+        CallerReceiverScope caller_receiver(explicit_type_param_instantiation && restore_receiver_type_info,
+            old_receiver_type_info);
+        inferred = qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info,
+            &type_param_instantiation, explicit_type_param_instantiation);
+    }
+    if (!inferred) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
             callName.c_str(), sig ? sig->getSignatureText() : "");
         return -1;
@@ -2435,6 +2473,30 @@ static AbstractQoreFunctionVariant* doSingleVariantTypeException(const QoreProgr
     return nullptr;
 }
 
+//! Raises a parse error for an argument that is a date of the other subtype than its parameter's (issue #5722)
+/** The variant is chosen with such an argument matched as a date (see qore_variant_match_arg_type()); the variant
+    chosen at parse time checks it then, as its parameter checks the value at run time.
+
+    @param args the types of the arguments, in the order of the parameters
+
+    @return -1 if a parse error was raised, 0 if not
+*/
+static int qore_check_date_subtype_args(const QoreProgramLocation* loc, const AbstractQoreFunctionVariant* variant,
+        const char* class_name, const char* name, const type_vec_t& args, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_inst) {
+    const AbstractFunctionSignature* sig = variant->getSignature();
+    size_t num_params = sig->numParams();
+    for (size_t pi = 0; pi < args.size() && pi < num_params; ++pi) {
+        const QoreTypeInfo* param = sig->getParamTypeInfo(pi);
+        if (QoreTypeInfo::isDateSubtypeMismatch(param, args[pi])) {
+            doSingleVariantTypeException(loc, static_cast<int>(pi), variant, class_name, name, sig, param, args[pi],
+                receiver_type_info, type_param_inst);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void do_call_str(QoreString &desc, const QoreFunction* func, const type_vec_t& argTypeInfo,
         const type_vec_t* explicit_type_args = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
         bool use_path = false) {
@@ -2685,7 +2747,7 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
 
 static bool qore_bind_class_type_param(const QoreClass* cls, const QoreTypeParameterTypeInfo* tpi,
         const QoreTypeInfo* actual, type_vec_t& bindings) {
-    if (tpi->getOwnerClass() != cls) {
+    if (!qore_class_private::sameDeclaration(tpi->getOwnerClass(), cls)) {
         return true;
     }
     if (!actual || !QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
@@ -2899,6 +2961,15 @@ struct ClassReceiverInferenceResult {
     bool ambiguous = false;
 };
 
+//! Returns the argument type with which a variant is chosen at parse time (issue #5722)
+/** A date of the other subtype than the parameter's (date<absolute> or date<relative>) is matched as a date: the
+    variant is chosen as at run time, where a date of either subtype matches a parameter of either subtype and the
+    parameter then checks the value; the variant chosen checks the subtype (see qore_check_date_subtype_args()).
+*/
+static const QoreTypeInfo* qore_variant_match_arg_type(const QoreTypeInfo* param, const QoreTypeInfo* arg) {
+    return QoreTypeInfo::isDateSubtypeMismatch(param, arg) ? QoreTypeInfo::getRuntimeValueType(arg) : arg;
+}
+
 static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunctionVariant* variant,
         const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
         const type_vec_t* explicit_type_args, int& score, int& nperfect, int& score_len) {
@@ -2946,7 +3017,8 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunc
         if (rc == QTI_UNASSIGNED) {
             bool may_not_match = false;
             bool may_need_filter = false;
-            rc = QoreTypeInfo::parseAccepts(formal, actual, may_not_match, may_need_filter, max_rc, true);
+            rc = QoreTypeInfo::parseAccepts(formal, qore_variant_match_arg_type(formal, actual), may_not_match,
+                may_need_filter, max_rc, true);
             if (may_not_match) {
                 return false;
             }
@@ -3940,7 +4012,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 if (rc == QTI_UNASSIGNED) {
                     bool may_not_match = false;
                     bool may_need_filter = false;
-                    rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                    rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                        may_need_filter, max_rc, true);
                     if (may_not_match) {
                         variant_soft_match = true;
                         variant_runtime_match = true;
@@ -4196,6 +4269,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
+        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+                best_binding.arg_types, receiver_type_info, &best_type_param_inst) && !err) {
+            err = -1;
+        }
+
         AbstractFunctionSignature* sig = variant->getSignature();
         if (!variant->hasVarargs() && best_binding.arg_types.size() > sig->numParams()) {
             if (warn_excess_args(loc, this, best_binding.arg_types, variant, sig, receiver_type_info,
@@ -4382,7 +4460,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     if (rc == QTI_UNASSIGNED) {
                         bool may_not_match = false;
                         bool may_need_filter = false;
-                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                            may_need_filter, max_rc, true);
                         if (may_not_match) {
                             variant_soft_match = true;
                             variant_runtime_match = true;
@@ -4642,7 +4721,8 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
                     continue;
                 }
                 const QoreTypeInfo* a = pi < num_args ? argTypeInfo[pi] : nothingTypeInfo;
-                if (!QoreTypeInfo::hasType(a) || QoreTypeInfo::parseAccepts(t, a) != QTI_NOT_EQUAL) {
+                if (!QoreTypeInfo::hasType(a)
+                        || QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a)) != QTI_NOT_EQUAL) {
                     continue;
                 }
                 may_match = false;
@@ -4762,7 +4842,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
                     }
                     const QoreTypeInfo* a = supplied[pi] && pi < param_types.size() ? param_types[pi]
                         : nothingTypeInfo;
-                    if (!QoreTypeInfo::hasType(a) || QoreTypeInfo::parseAccepts(t, a) != QTI_NOT_EQUAL) {
+                    if (!QoreTypeInfo::hasType(a)
+                            || QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a)) != QTI_NOT_EQUAL) {
                         continue;
                     }
                     may_match = false;
@@ -4944,7 +5025,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (rc == QTI_UNASSIGNED) {
                         bool may_not_match = false;
                         bool may_need_filter = false;
-                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                            may_need_filter, max_rc, true);
                         //printd(5, "QoreFunction::parseFindVariant() %s(%s) pi: %d (%s <= %s) rc: %d max_rc: %d "
                         //    "may_not_match: %d\n", getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t),
                         //    QoreTypeInfo::getName(a), rc, max_rc, may_not_match);
@@ -5172,6 +5254,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             desc->concat("; to disable this warning, use '%disable-warning invalid-operation' in your code");
             qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_CALL_WITH_TYPE_ERRORS,
                 "CALL-WITH-TYPE-ERRORS", desc);
+        }
+
+        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+                argTypeInfo, receiver_type_info, &best_type_param_inst) && !err) {
+            err = -1;
         }
 
         AbstractFunctionSignature* sig = variant->getSignature();
@@ -5628,7 +5715,45 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
     //    synced);
 }
 
+//! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
+static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bi->helper_ir) {
+                    bi->helper_ir->specialization_owner = s;
+                    qore_mark_specialization_helpers(*bi->helper_ir, s);
+                }
+            } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obei->handler_ir) {
+                    qore_mark_specialization_helpers(*obei->handler_ir, s);
+                }
+            }
+        }
+    }
+}
+
+QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper_ir) {
+    QoreSpecializedIR* s = helper_ir ? helper_ir->specialization_owner : nullptr;
+    if (s) {
+        s->refs.fetch_add(1, std::memory_order_relaxed);
+    }
+    return QoreSpecializedIRRef(s);
+}
+
+void qore_free_specialized_ir(QoreSpecializedIR* s) {
+    qore_live_generic_specializations.fetch_sub(1, std::memory_order_relaxed);
+    delete s->ir;
+    delete s;
+}
+
 UserVariantBase::~UserVariantBase() {
+    // issue #5765: no eviction may call the specialization cache once its destruction has started
+    if (specialized_ir_registration) {
+        qore_generic_cache_unregister(specialized_ir_registration.get());
+    }
     delete cached_aot_ctx.load(std::memory_order_relaxed);
     delete cached_ir.load(std::memory_order_relaxed);
     delete gate;
@@ -6457,6 +6582,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // Classify locals as IR-only vs AST-visible for optimization; the variant's flags describing the body are set
     // only if and when it is published (see publishIRContextFlags())
     func->computeIROnlyLocals();
+    // a read of a plain local that the statement writes later is released after its last use (qore#5712)
+    func->releasePlainLocalReadsBeforeWrites();
 
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
@@ -7097,26 +7224,16 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
         || (type_param_instantiation && !type_param_instantiation->empty());
 }
 
-std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* type_param_instantiation) {
-    std::string key;
-    if (receiver_type_info) {
-        key += "R:";
-        key += QoreTypeInfo::getPath(receiver_type_info);
-    }
+QoreGenericSpecializationKey::QoreGenericSpecializationKey(const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation)
+        : receiver(receiver_type_info), receiver_serial(qore_get_type_identity_serial(receiver_type_info)) {
     if (type_param_instantiation && !type_param_instantiation->empty()) {
-        key += "|M:";
-        key += std::to_string(reinterpret_cast<uintptr_t>(type_param_instantiation->owner));
-        key += "<";
-        for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
-            if (i) {
-                key += ",";
-            }
-            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+        owner = type_param_instantiation->owner;
+        type_args.reserve(type_param_instantiation->type_args.size());
+        for (const QoreTypeInfo* ti : type_param_instantiation->type_args) {
+            type_args.emplace_back(ti, qore_get_type_identity_serial(ti));
         }
-        key += ">";
     }
-    return key;
 }
 
 std::string qore_make_generic_specialization_dispatch_key(
@@ -7145,19 +7262,20 @@ std::string qore_make_generic_specialization_dispatch_key(
     return key;
 }
 
-const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name,
+QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_instantiation,
         bool raise_on_failure) const {
     if (!statements || !qore_has_generic_specialization_context(receiver_type_info, type_param_instantiation)) {
-        return nullptr;
+        return QoreSpecializedIRRef();
     }
 
-    std::string key = qore_make_generic_specialization_key(receiver_type_info, type_param_instantiation);
+    // the call's types are live; the cache is searched with them as they are, without making a key
+    const QoreGenericSpecializationView view(receiver_type_info, type_param_instantiation);
     {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
-        auto it = specialized_ir_cache.find(key);
+        auto it = specialized_ir_cache.find(view);
         if (it != specialized_ir_cache.end()) {
-            return it->second.get();
+            return it->second;
         }
     }
 
@@ -7168,11 +7286,65 @@ const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name
     std::unique_ptr<QoreIRFunction> ir(lowerIRFunction(name, unique_name, receiver_type_info,
         type_param_instantiation, false, raise_on_failure));
     if (!ir) {
-        return nullptr;
+        return QoreSpecializedIRRef();
     }
-    std::lock_guard<std::mutex> lock(specialized_ir_mutex);
-    auto it = specialized_ir_cache.emplace(std::move(key), std::move(ir)).first;
-    return it->second.get();
+    QoreGenericSpecializationKey key(receiver_type_info, type_param_instantiation);
+    std::vector<const QoreTypeInfo*> key_types;
+    key_types.reserve(key.type_args.size() + 1);
+    key_types.push_back(key.receiver);
+    for (const auto& i : key.type_args) {
+        key_types.push_back(i.first);
+    }
+    // counted while it lives, for the debug checks of the cache eviction (issue #5765)
+    qore_live_generic_specializations.fetch_add(1, std::memory_order_relaxed);
+    QoreSpecializedIRRef rv(new QoreSpecializedIR(ir.release()));
+    // a thread that runs a background helper of the specialization takes a reference to it
+    qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
+    SpecializedIRCache* registration;
+    {
+        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        if (!specialized_ir_registration) {
+            specialized_ir_registration.reset(new SpecializedIRCache(*this));
+        }
+        registration = specialized_ir_registration.get();
+    }
+    // if another thread published the specialization first, its IR is kept and this one is freed after the locks are
+    // released
+    QoreSpecializedIRRef loser;
+    // issue #5765: the entry is added with the registry locked, so it is removed when one of its types is destroyed
+    qore_generic_cache_insert(registration, key_types, [&] () {
+        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        auto it = specialized_ir_cache.emplace(std::move(key), rv).first;
+        if (it->second.get() != rv.get()) {
+            loser = std::move(rv);
+            rv = QoreSpecializedIRRef(it->second);
+        }
+    });
+    return rv;
+}
+
+void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+        qore_generic_cache_release_list_t& release) {
+    std::lock_guard<std::mutex> lock(v.specialized_ir_mutex);
+    for (auto i = v.specialized_ir_cache.begin(), e = v.specialized_ir_cache.end(); i != e;) {
+        bool is_dead = dead.count(i->first.receiver);
+        for (auto ti = i->first.type_args.begin(), te = i->first.type_args.end(); !is_dead && ti != te; ++ti) {
+            is_dead = dead.count(ti->first);
+        }
+        if (is_dead) {
+            // a running call holds its own reference; the IR is freed when the last one is released
+            if (!release.add(i->second.getEntry(), [] (void* p) {
+                    qore_release_specialized_ir(static_cast<QoreSpecializedIR*>(p));
+                })) {
+                ++i;
+                continue;
+            }
+            i->second.release();
+            i = v.specialized_ir_cache.erase(i);
+        } else {
+            ++i;
+        }
+    }
 }
 
 QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
@@ -7207,7 +7379,15 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
             QoreValue ir_return_value;
             bool ok = false;
             qore_exec_mode_t exec_mode = pgm->getExecMode();
-            if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+            // in tiered mode, the specialization is promoted to the JIT tier when it is hot, as evalTiered() promotes
+            // the variant: on reaching the JIT threshold or when the IR interpreter detects a hot loop (OSR)
+            bool use_jit = exec_mode == QEM_JIT;
+            if (exec_mode == QEM_TIERED) {
+                uint64_t count = ir->specialization_exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+                use_jit = count >= QoreJIT::getJITThreshold()
+                    || ir->osr_jit_requested.exchange(false, std::memory_order_relaxed);
+            }
+            if (use_jit) {
                 std::string error;
                 ok = QoreJIT::instance().executeWithFallback(*ir, ir_return_value, xsink, error,
                     ir->cached_pre_instantiated);
@@ -7354,10 +7534,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             runtime_get_type_param_instantiation();
         if (qore_has_generic_specialization_context(specialization_receiver_type_info,
                 specialization_type_param_instantiation)) {
-            const QoreIRFunction* specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
+            // the call holds the specialization while it runs (issue #5765)
+            QoreSpecializedIRRef specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
                 specialization_type_param_instantiation, false);
             if (specialized_ir) {
-                return evalSpecializedIR(name, specialized_ir, argv, self, xsink, caller_has_frame_boundary);
+                return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary);
             }
             if (pgm) {
                 pgm->recordIRFallback("generic specialization unavailable");
@@ -8206,25 +8387,48 @@ int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* vari
     return 0;
 }
 
-AbstractFunctionSignature* QoreFunction::parseGetUniqueSignature() const {
-    if (vlist.singular()) {
-        const UserVariantBase* uvb = first()->getUserVariantBase();
-        if (uvb) {
-            UserSignature* sig = uvb->getUserSignature();
-            sig->resolve();
-            return sig;
-        }
-        return first()->getSignature();
+namespace {
+//! sets the parse context of a plain function while its signature or body is parse-initialized
+/** No class context, the function's namespace context, and a new local variable frame, so that the code of the
+    function (its default argument values and its body) sees neither the class nor the local variables of the code
+    that references it first (issue #5749)
+*/
+class QorePlainFunctionParseContextHelper {
+public:
+    explicit QorePlainFunctionParseContextHelper(qore_ns_private* ns) {
+        thread_set_class_and_ns(nullptr, ns ? ns : parse_get_ns(), old_cls, old_ns);
     }
 
-    return nullptr;
+    ~QorePlainFunctionParseContextHelper() {
+        thread_set_class_and_ns(old_cls, old_ns);
+    }
+
+private:
+    const qore_class_private* old_cls;
+    qore_ns_private* old_ns;
+    //! hides the local variables of the code that references the function (restored after)
+    LVarStackBreakHelper lsbh;
+    //! the local variable frame of the function's code, from which only the Program's top-level variables, which
+    //! have global scope, are visible, as for the function's body
+    VariableBlockHelper vbh;
+};
 }
 
-void QoreFunction::resolvePendingSignatures() {
+void QoreFunction::resolvePendingSignatures(qore_ns_private* ns) {
     if (!check_parse) {
         return;
     }
+    if (!getClass()) {
+        // issue #5749: a plain function's default argument values are resolved in its own context, not in that of
+        // the code that references it first (ex: a call in a method's body)
+        QorePlainFunctionParseContextHelper pch(ns);
+        resolvePendingSignaturesIntern();
+        return;
+    }
+    resolvePendingSignaturesIntern();
+}
 
+void QoreFunction::resolvePendingSignaturesIntern() {
     const QoreTypeInfo* ti = nullptr;
 
     for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
@@ -8315,6 +8519,20 @@ void QoreFunction::parseRollback() {
 }
 
 int QoreFunction::parseInit(qore_ns_private* ns) {
+    if (parse_init_done || parse_init_in_progress) {
+        return 0;
+    }
+    if (getClass()) {
+        // a method: the caller has set the class context
+        return parseInitIntern(ns);
+    }
+    // issue #5749: a plain function's body is parse-initialized without the class context of the code that
+    // references it first (ex: a call in a method's body), or it would get the class's access to private members
+    QorePlainFunctionParseContextHelper pch(ns);
+    return parseInitIntern(ns);
+}
+
+int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     if (parse_init_done || parse_init_in_progress) {
         return 0;
     }
