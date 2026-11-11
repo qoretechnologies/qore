@@ -12,10 +12,14 @@ whose budgets then have to be reviewed).
 Every call of interpreted code (and every level of a recursion of it) puts one frame of each of these functions on
 the thread's stack, so each byte of growth costs as many bytes as the recursion is deep; deep recursion on Alpine
 (musl, 8 MB thread stacks) fails first.  Frame sizes depend on the compiler, its version and the optimization
-level and the C library's headers: the budgets are calibrated for the compiler, build type and target (the
+level, the other compiler flags and the C library's headers: the budgets are calibrated for the compiler and its
+major version, the build type and its flags, the other compiler flags (CMAKE_CXX_FLAGS) and the target (the
 compiler's -dumpmachine triple, which names the C library) named in the budget file, and are only checked for a
-build made with that compiler ID, build type and target (any other build is reported, not checked, unless --force
-is given).
+build that matches them all (any other build is reported, not checked, unless --force is given).
+
+A function that GCC splits into a head and a ".part" clone (partial inlining) can have both frames on the stack, as
+the head calls the clone: its frame is counted as the largest head plus the largest ".part" clone; other clones
+(.constprop, .isra) are alternatives, of which the largest counts.
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded
@@ -40,7 +44,7 @@ def parse_budgets(text, name="<budgets>"):
     """Parses a budget file.
 
     Returns (settings, budgets): settings are the "@key value" lines (compiler, build-type, target and the optional
-    compiler-version), budgets a list of
+    compiler-version, build-type-flags and cxx-flags), budgets a list of
     (function, bytes, line number) in file order.  Blank lines and lines starting with # are ignored.
     """
     settings = {}
@@ -142,17 +146,56 @@ def collect_frames(build_dir):
 
 
 def check(budgets, frames):
-    """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None)."""
+    """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None).
+
+    The frame of a function is that of its largest head (the function or a .constprop/.isra clone of it) plus that of
+    its largest ".part" clone, which the head calls."""
     results = []
     for func, budget, _ in budgets:
-        worst = None
-        worst_sig = None
+        head = None
+        part = None
         for signature, size, _ in frames:
-            if matches(func, signature) and (worst is None or size > worst):
-                worst = size
-                worst_sig = signature
-        results.append((func, budget, worst, worst_sig))
+            if not matches(func, signature):
+                continue
+            if re.search(r"\[clone [^\]]*\.part\.", signature):
+                if part is None or size > part[0]:
+                    part = (size, signature)
+            elif head is None or size > head[0]:
+                head = (size, signature)
+        if head is None and part is None:
+            results.append((func, budget, None, None))
+            continue
+        worst = (head[0] if head else 0) + (part[0] if part else 0)
+        signature = " + ".join(p[1] for p in (head, part) if p)
+        results.append((func, budget, worst, signature))
     return results
+
+
+def flags_match(calibrated, actual):
+    """True if two flag strings have the same flags, in any order."""
+    return sorted(calibrated.split()) == sorted(actual.split())
+
+
+def calibration_mismatch(settings, config):
+    """Returns why the budgets do not apply to the build that config describes, or None if they do."""
+    compiler = config.get("compiler", "?")
+    if compiler.lower() != settings["compiler"].lower():
+        return "compiler %s, budgets for %s" % (compiler, settings["compiler"])
+    version = config.get("compiler-version", "?")
+    calibrated_version = settings.get("compiler-version")
+    if calibrated_version and version.split(".")[0] != calibrated_version.split(".")[0]:
+        return "compiler version %s, budgets for major version %s (%s)" % (version,
+            calibrated_version.split(".")[0], calibrated_version)
+    build_type = config.get("build-type", "?")
+    if build_type.lower() != settings["build-type"].lower():
+        return "build type %s, budgets for %s" % (build_type, settings["build-type"])
+    target = config.get("target", "?")
+    if target != settings["target"]:
+        return "target %s, budgets for %s" % (target, settings["target"])
+    for key in ("build-type-flags", "cxx-flags"):
+        if key in settings and not flags_match(settings[key], config.get(key, "")):
+            return "%s %r, budgets for %r" % (key, config.get(key, ""), settings[key])
+    return None
 
 
 def main(argv=None):
@@ -160,7 +203,7 @@ def main(argv=None):
     parser.add_argument("build_dir", help="a build directory configured with -DQORE_STACK_USAGE_REPORT=ON")
     parser.add_argument("--budgets", default=str(DEFAULT_BUDGETS), help="the budget file (default: %(default)s)")
     parser.add_argument("--force", action="store_true",
-        help="check the budgets even if the compiler or build type is not the one they are calibrated for")
+        help="check the budgets even if the build is not the one they are calibrated for")
     parser.add_argument("--verbose", "-v", action="store_true", help="print the signature that matched each budget")
     args = parser.parse_args(argv)
 
@@ -182,16 +225,13 @@ def main(argv=None):
         target = config.get("target", "?")
         print("stack usage: %s %s, %s build for %s; budgets calibrated for %s, %s build for %s" % (compiler, version,
             build_type, target, settings["compiler"], settings["build-type"], settings["target"]))
-        if (compiler.lower() != settings["compiler"].lower() or build_type.lower() != settings["build-type"].lower()
-                or target != settings["target"]):
+        mismatch = calibration_mismatch(settings, config)
+        if mismatch:
             if not args.force:
-                print("stack usage: SKIPPED: the budgets are not calibrated for this compiler, build type and target "
-                    "(use --force to check them anyway)")
+                print("stack usage: SKIPPED: the budgets are not calibrated for this build: %s (use --force to check "
+                    "them anyway)" % mismatch)
                 return 0
-        calibrated_version = settings.get("compiler-version")
-        if calibrated_version and version.split(".")[0] != calibrated_version.split(".")[0]:
-            print("stack usage: note: the budgets were calibrated with %s %s; frames may differ with %s" %
-                (settings["compiler"], calibrated_version, version))
+            print("stack usage: note: the budgets are not calibrated for this build: %s" % mismatch)
 
         frames = collect_frames(args.build_dir)
         if not frames:

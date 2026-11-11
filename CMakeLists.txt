@@ -2745,11 +2745,14 @@ if (QORE_STACK_USAGE_REPORT)
     # the target triple names the C library (x86_64-linux-gnu, x86_64-alpine-linux-musl), whose headers change frames
     execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE _qore_stack_usage_target
         OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_stack_usage_build_type)
     file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
         "# written by CMake for tools/check-stack-usage.py\n"
         "compiler=${CMAKE_CXX_COMPILER_ID}\n"
         "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
         "build-type=${CMAKE_BUILD_TYPE}\n"
+        "build-type-flags=${CMAKE_CXX_FLAGS_${_qore_stack_usage_build_type}}\n"
+        "cxx-flags=${CMAKE_CXX_FLAGS}\n"
         "target=${_qore_stack_usage_target}\n")
 endif()
 
@@ -3261,6 +3264,15 @@ if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 include(cmake/QoreRecordedCFlags.cmake)
 qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
+# the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
+# sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
+string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
+qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+if (SINGLE_COMPILATION_UNIT)
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
+else()
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 0)
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)

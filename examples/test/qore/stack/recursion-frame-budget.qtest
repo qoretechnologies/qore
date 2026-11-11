@@ -91,6 +91,18 @@ int sub run(string f) {
             "ir": EM_IR,
         };
 
+        #! the GCC major version that the budgets are calibrated for
+        const CalibratedGccMajor = "15";
+
+        #! the flags of the build types that the budgets are calibrated for (see Qore's CMakeLists.txt)
+        const CalibratedBuildTypeFlags = {
+            "release": "-O3 -DNDEBUG",
+            "debug": "-g -Og",
+        };
+
+        #! the only compiler flags (CFLAGS) besides those of the build type that the budgets are calibrated for
+        const CalibratedCFlags = ("-fno-strict-aliasing", "-std=c++20");
+
         #! the two stack sizes of the measurement
         const SmallStack = 4 * 1024 * 1024;
         const LargeStack = 8 * 1024 * 1024;
@@ -125,6 +137,7 @@ int sub run(string f) {
     constructor() : Test("RecursionFrameBudgetTest", "1.0") {
         addTestCase("bytes per level of a recursion of interpreted code", \testBytesPerLevel());
         addTestCase("measurement", \testMeasurement());
+        addTestCase("calibration of the budgets", \testCalibration());
         set_return_value(main());
     }
 
@@ -156,14 +169,55 @@ int sub run(string f) {
         }
     }
 
+    #! returns why the budgets do not apply to a library with the given build information, or nothing if they do
+    /** @param info the build information of the library, as get_qore_library_info() returns it
+        @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
+
+        The budgets are calibrated for one compiler and flag set: GCC 15 on x86_64 Linux, a single compilation unit,
+        no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags of Qore's CMake build;
+        frames differ with another GCC version, another optimization level (a distribution's -O2 build, a debug
+        build made without -Og), link-time optimization or hardening flags, so such a build is not checked
+    */
+    static *string getCalibrationMismatch(hash<auto> info, bool library_debugging) {
+        if (info.Compiler != "GNU") {
+            return sprintf("the budgets are for GCC, and this library was built with %y", info.Compiler);
+        }
+        if (!exists info.CompilerVersion || !exists info.BuildType || !exists info.BuildTypeCFLAGS
+            || !exists info.SingleCompilationUnit) {
+            return "this library does not report its compiler version, build type and flags";
+        }
+        if ((info.CompilerVersion =~ x/^([0-9]+)/)[0] != CalibratedGccMajor) {
+            return sprintf("the budgets are for GCC %s, and this library was built with GCC %s", CalibratedGccMajor,
+                info.CompilerVersion);
+        }
+        if (info.PlatformCPU != "x86_64" || info.PlatformOS != "Linux") {
+            return sprintf("the budgets are for x86_64 Linux, and this is %s %s", info.PlatformCPU, info.PlatformOS);
+        }
+        if (!info.SingleCompilationUnit) {
+            return "the budgets are for a library built as a single compilation unit, as CI builds it";
+        }
+        string build_type = library_debugging ? "debug" : "release";
+        if (info.BuildType.lwr() != build_type) {
+            return sprintf("the budgets are for the release and debug build types, and this library was built with "
+                "%y", info.BuildType);
+        }
+        string type_flags = CalibratedBuildTypeFlags{build_type};
+        if (info.BuildTypeCFLAGS != type_flags) {
+            return sprintf("the budgets are for a %s build with %y, and this library was built with %y", build_type,
+                type_flags, info.BuildTypeCFLAGS);
+        }
+        list<string> extra = select info.CFLAGS.split(" "), $1 && !inlist($1, CalibratedCFlags);
+        if (extra) {
+            return sprintf("the budgets are for a library built with no compiler flags beyond %y, and this library "
+                "was also built with %y", CalibratedCFlags, extra);
+        }
+    }
+
     #! returns why the budgets do not apply to this build, or nothing if they do
     static *string getUncalibratedReason() {
-        if (Qore::Compiler != "GNU") {
-            return sprintf("the budgets are for GCC, and this library was built with %y", Qore::Compiler);
-        }
-        if (Qore::PlatformCPU != "x86_64" || Qore::PlatformOS != "Linux") {
-            return sprintf("the budgets are for x86_64 Linux, and this is %s %s", Qore::PlatformCPU,
-                Qore::PlatformOS);
+        *string reason = getCalibrationMismatch(get_qore_library_info(), Option::HAVE_LIBRARY_DEBUGGING);
+        if (reason) {
+            return reason;
         }
         if (!getLibc()) {
             return "the budgets are for glibc and musl, and the C library of this process is neither";
@@ -240,6 +294,50 @@ int sub run(string f) {
         }
         # a frame on the call path grew: see tools/stack-usage-budgets.txt for the frames and what to do
         assertEq((), over, "recursions over their budget of bytes per level");
+    }
+
+    #! the budgets are checked only for a build like the one they are calibrated for
+    testCalibration() {
+        hash<auto> release = {
+            "Compiler": "GNU",
+            "CompilerVersion": "15.2.0",
+            "PlatformCPU": "x86_64",
+            "PlatformOS": "Linux",
+            "SingleCompilationUnit": True,
+            "BuildType": "Release",
+            "BuildTypeCFLAGS": "-O3 -DNDEBUG",
+            "CFLAGS": "-fno-strict-aliasing -std=c++20",
+        };
+        hash<auto> debug = release + {"BuildType": "debug", "BuildTypeCFLAGS": "-g -Og"};
+        assertNothing(getCalibrationMismatch(release, False));
+        assertNothing(getCalibrationMismatch(debug, True));
+
+        # each difference from the calibrated builds: the build information -> library debugging -> the reason
+        list<list<auto>> cases = (
+            (release + {"Compiler": "Clang"}, False, "built with \"Clang\""),
+            (release - "CompilerVersion", False, "does not report"),
+            (release + {"CompilerVersion": "14.2.0"}, False, "GCC 15, and this library was built with GCC 14.2.0"),
+            (release + {"CompilerVersion": "16.1.0"}, False, "GCC 16.1.0"),
+            (release + {"PlatformCPU": "aarch64"}, False, "aarch64 Linux"),
+            (release + {"SingleCompilationUnit": False}, False, "single compilation unit"),
+            # a distribution build: build type "None" with its own flags in CFLAGS
+            (release + {"BuildType": "None", "BuildTypeCFLAGS": "",
+                "CFLAGS": "-g -O2 -fstack-protector-strong -fno-strict-aliasing -std=c++20"}, False, "\"None\""),
+            (release + {"BuildType": "RelWithDebInfo", "BuildTypeCFLAGS": "-O2 -g -DNDEBUG"}, False,
+                "\"RelWithDebInfo\""),
+            # a debug build made without -Og (QORE_OPTIMIZE_DEBUG_BUILDS=OFF) is -O0
+            (debug + {"BuildTypeCFLAGS": "-g"}, True, "built with \"-g\""),
+            # a debug library with release flags, or the reverse
+            (debug, False, "\"debug\""),
+            (release, True, "\"Release\""),
+            (release + {"CFLAGS": "-fno-strict-aliasing -std=c++20 -flto"}, False, "also built with [\"-flto\"]"),
+            (release + {"CFLAGS": "-O2 -fno-strict-aliasing -std=c++20"}, False, "also built with [\"-O2\"]"),
+        );
+        foreach list<auto> c in (cases) {
+            *string reason = getCalibrationMismatch(c[0], c[1]);
+            assertEq(True, reason.typeCode() == NT_STRING && reason.find(c[2]) >= 0,
+                sprintf("case %d: %y contains %y", $#, reason, c[2]));
+        }
     }
 
     #! the measurement itself: each recursion runs out of stack at a depth that grows with the stack

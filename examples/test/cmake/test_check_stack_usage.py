@@ -4,11 +4,12 @@
 - the budget file of the repository parses, names each function once and is calibrated for a compiler and build
   type;
 - .su records of GCC and Clang are parsed, and a budget matches a function's own frame only: not a lambda or local
-  class inside it, not a function of another class whose name ends with the same name, and every clone of it (the
-  largest frame counts);
+  class inside it, not a function of another class whose name ends with the same name, and every clone of it;
+- a function split into a head and a .part clone counts both frames, other clones only the largest;
 - a frame over its budget and a function with no frame fail the check, frames within budget pass it, a build made
-  with another compiler, build type or target (C library) is skipped unless --force is given, and a build directory
-  without the configuration that QORE_STACK_USAGE_REPORT writes, or without .su files, is an input error.
+  with another compiler or major version, build type, flags or target (C library) is skipped unless --force is
+  given, and a build directory without the configuration that QORE_STACK_USAGE_REPORT writes, or without .su files,
+  is an input error.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
@@ -57,13 +58,14 @@ CLANG_SU = "/src/lib/Function.cpp:10:10:UserVariantBase::eval\t512\tstatic\n"
 
 
 @contextlib.contextmanager
-def build_dir(su_text, compiler="GNU", build_type="Release", write_config=True, target="x86_64-linux-gnu"):
+def build_dir(su_text, compiler="GNU", build_type="Release", write_config=True, target="x86_64-linux-gnu",
+        version="15.2.0", build_type_flags="-O3 -DNDEBUG", cxx_flags="-fno-strict-aliasing -std=c++20"):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         if write_config:
             (tmp / "stack-usage-config.txt").write_text(
-                "# test\ncompiler=%s\ncompiler-version=15.2.0\nbuild-type=%s\ntarget=%s\n"
-                % (compiler, build_type, target))
+                "# test\ncompiler=%s\ncompiler-version=%s\nbuild-type=%s\nbuild-type-flags=%s\ncxx-flags=%s\n"
+                "target=%s\n" % (compiler, version, build_type, build_type_flags, cxx_flags, target))
         if su_text is not None:
             obj = tmp / "CMakeFiles" / "libqore.dir" / "lib"
             obj.mkdir(parents=True)
@@ -174,13 +176,55 @@ class CheckTest(unittest.TestCase):
                 rc, out, _ = run(["--budgets", b, "--force", str(d)])
                 self.assertEqual(1, rc, out)
 
-    def test_compiler_version_note(self):
+    def test_compiler_version(self):
+        # another major version is skipped unless --force is given
         with build_dir(GCC_SU) as d:
-            b = write_budgets(d, "600 UserVariantBase::eval\n",
+            b = write_budgets(d, "1 UserVariantBase::eval\n",
                 "@compiler GNU\n@build-type Release\n@compiler-version 14.1.0\n@target x86_64-linux-gnu\n")
             rc, out, _ = run(["--budgets", b, str(d)])
-        self.assertEqual(0, rc, out)
-        self.assertIn("calibrated with GNU 14.1.0", out)
+            self.assertEqual(0, rc, out)
+            self.assertIn("SKIPPED", out)
+            self.assertIn("compiler version 15.2.0, budgets for major version 14", out)
+            rc, out, _ = run(["--budgets", b, "--force", str(d)])
+            self.assertEqual(1, rc, out)
+        # another minor version of the same major version is checked
+        with build_dir(GCC_SU, version="15.1.0") as d:
+            b = write_budgets(d, "1 UserVariantBase::eval\n")
+            rc, out, _ = run(["--budgets", b, str(d)])
+            self.assertEqual(1, rc, out)
+
+    def test_flags(self):
+        settings = ("@compiler GNU\n@build-type Release\n@compiler-version 15.2.0\n@target x86_64-linux-gnu\n"
+            "@build-type-flags -O3 -DNDEBUG\n@cxx-flags -fno-strict-aliasing -std=c++20\n")
+        # the same flags in another order are the calibrated build, which is checked
+        with build_dir(GCC_SU, build_type_flags="-DNDEBUG -O3", cxx_flags="-std=c++20 -fno-strict-aliasing") as d:
+            b = write_budgets(d, "1 UserVariantBase::eval\n", settings)
+            rc, out, _ = run(["--budgets", b, str(d)])
+            self.assertEqual(1, rc, out)
+        # other flags are not: link-time optimization, hardening flags, another optimization level
+        for kwargs, text in (({"cxx_flags": "-fno-strict-aliasing -std=c++20 -flto"}, "cxx-flags"),
+                ({"cxx_flags": "-O2 -fstack-protector-strong -fno-strict-aliasing -std=c++20"}, "cxx-flags"),
+                ({"build_type_flags": "-O2 -DNDEBUG"}, "build-type-flags")):
+            with build_dir(GCC_SU, **kwargs) as d:
+                b = write_budgets(d, "1 UserVariantBase::eval\n", settings)
+                rc, out, _ = run(["--budgets", b, str(d)])
+                self.assertEqual(0, rc, out)
+                self.assertIn("SKIPPED", out)
+                self.assertIn(text, out)
+
+    def test_part_clone_adds(self):
+        # a head and its .part clone are both on the stack: their frames add; other clones are alternatives
+        su = ("/src/lib/A.cpp:1:1:int A::f(int)\t100\tstatic\n"
+            "/src/lib/A.cpp:1:1:int A::f(int) [clone .constprop.0]\t120\tstatic\n"
+            "/src/lib/A.cpp:1:1:int A::f(int) [clone .part.0]\t300\tstatic\n"
+            "/src/lib/A.cpp:1:1:int A::f(int) [clone .part.1]\t200\tstatic\n"
+            "/src/lib/A.cpp:2:1:int A::g(int) [clone .part.0]\t80\tstatic\n")
+        frames = [(csu.parse_su_line(l)[0], csu.parse_su_line(l)[1], None) for l in su.splitlines()]
+        results = csu.check([("A::f", 500, 1), ("A::g", 500, 2)], frames)
+        self.assertEqual(420, results[0][2])
+        self.assertIn("[clone .constprop.0] + ", results[0][3])
+        # a function inlined into its callers whose .part clone remains has the frame of the clone
+        self.assertEqual(80, results[1][2])
 
     def test_input_errors(self):
         with build_dir(GCC_SU, write_config=False) as d:

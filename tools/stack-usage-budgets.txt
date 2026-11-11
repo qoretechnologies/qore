@@ -3,8 +3,8 @@
 #
 # Every level of a recursion of interpreted code puts one frame of each function of its call path on the thread's
 # stack, so a frame that grows by N bytes costs N bytes per level: a deep recursion that fits in an 8 MB thread stack
-# on Alpine (musl) today fails after such growth.  The budgets are the frames measured with the compiler, build type
-# and target below (a single-compilation-unit build, as CI builds libqore), plus a small margin (about 5%, at least 32
+# on Alpine (musl) today fails after such growth.  The budgets are the frames measured with the compiler, flags and
+# target below (a single-compilation-unit build, as CI builds libqore), plus a small margin (about 5%, at least 32
 # bytes) for code changes that do not matter; QoreIRInterpreter::execute, the largest frame by far, has 160 bytes
 # (4%), less than the 528 bytes that one array in its frame costs (13281fbbd7 added an 880 byte one).
 #
@@ -14,11 +14,15 @@
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload and
-# clone of the function (the largest frame counts), not the lambdas and local classes inside it.
+# clone of the function (the largest frame counts, plus the largest ".part" clone, which the function calls), not the
+# lambdas and local classes inside it.
 
 @compiler GNU
+# the major version must match
 @compiler-version 15.2.0
 @build-type Release
+@build-type-flags -O3 -DNDEBUG
+@cxx-flags -fno-strict-aliasing -std=c++20
 # glibc (the Ubuntu image of the CI's release build); with musl (Alpine), QoreIRInterpreter::execute is 6016 bytes
 @target x86_64-linux-gnu
 

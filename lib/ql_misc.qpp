@@ -3679,6 +3679,11 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     - \c LDFLAGS: The linker flags used to link the %Qore library
     - \c LLVMVersion: The version of LLVM that the %Qore library was built with (since %Qore 3.0); see
       @ref Qore::LLVMVersion
+    - \c CompilerVersion: The version of the compiler used to build the %Qore library (since %Qore 3.0)
+    - \c BuildType: The build type of the %Qore library, such as \c "release" or \c "debug" (since %Qore 3.0)
+    - \c BuildTypeCFLAGS: The compiler flags of the build type used in addition to \c CFLAGS, such as
+      <tt>-O3 -DNDEBUG</tt> (since %Qore 3.0)
+    - \c SingleCompilationUnit: @ref True if the %Qore library was compiled as one compilation unit (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -3707,6 +3712,10 @@ hash<auto> get_qore_library_info() [flags=CONSTANT] {
    h->setKeyValue("CFLAGS", new QoreStringNode(qore_cflags), xsink);
    h->setKeyValue("LDFLAGS", new QoreStringNode(qore_ldflags), xsink);
    h->setKeyValue("LLVMVersion", new QoreStringNode(LLVM_VERSION_STRING), xsink);
+   h->setKeyValue("CompilerVersion", new QoreStringNode(QORE_LIB_CXX_VERSION), xsink);
+   h->setKeyValue("BuildType", new QoreStringNode(QORE_LIB_BUILD_TYPE), xsink);
+   h->setKeyValue("BuildTypeCFLAGS", new QoreStringNode(QORE_LIB_BUILD_TYPE_CFLAGS), xsink);
+   h->setKeyValue("SingleCompilationUnit", (bool)QORE_LIB_SINGLE_COMPILATION_UNIT, xsink);
 
    return h;
 }
