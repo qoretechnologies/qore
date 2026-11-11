@@ -1483,8 +1483,6 @@ struct QoreIRDebugNest {
 
 struct IRCallFrame {
     std::vector<QoreValue> values;
-    //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call
-    QoreIRDebugNest dbg_nest;
     IRCleanupSlots cleanup;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
@@ -1608,6 +1606,9 @@ struct IRCallFrame {
         local_owned_slots.assign(reserve_size, 0);
         temp_cleanup_marks.clear();
     }
+    //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
+    //! so that the members used in every call keep their offsets
+    QoreIRDebugNest dbg_nest;
 };
 
 struct IRCallFramePool {
@@ -7012,6 +7013,18 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     e.flags = inst->nest_flags;
 }
 
+//! The end of a statement (QORE_IR_DEBUG_NEST_END): the frame is in the statement that contains it, which an exception
+//! raised after it, as in a loop's condition, is reported for
+static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState& st,
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement** stmt_ptr) {
+    std::vector<QoreIRDebugNestEntry>& entries = st.nest->entries;
+    if (entries.size() > inst->nest_depth) {
+        entries.resize(inst->nest_depth);
+        st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
+        *stmt_ptr = st.frame_stmt;
+    }
+}
+
 //! Starts the events of the statements that contain the given statement, whose exception event was made
 static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractStatement* stmt) {
     if (!st.nest) {
@@ -9992,7 +10005,7 @@ next_instruction:
                         dbgHandlersRan();
                     }
                     // the events of the statements that the closed scope was in (#5816); a dismissal ends the function
-                    if (debug_active) {
+                    if (debug_active) [[unlikely]] {
                         dbgReportEnclosing();
                         if (dbg_state.exit_dismissed) {
                             unwindForException();
@@ -14198,11 +14211,8 @@ load_local_done:
                     if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_END) {
                         // the statement ended: the frame is in the statement that contains it, which an exception
                         // raised after it, as in a loop's condition, is reported for
-                        if (dbg_state.nest && dbg_state.nest->entries.size() > dbg_inst->nest_depth) {
-                            dbg_state.nest->entries.resize(dbg_inst->nest_depth);
-                            dbg_state.frame_stmt = dbg_state.nest->entries.empty()
-                                ? nullptr : dbg_state.nest->entries.back().stmt;
-                            *rl_cache.stmt_ptr = dbg_state.frame_stmt;
+                        if (dbg_state.nest) {
+                            qore_ir_dbg_statement_end(dbg_state, dbg_inst, rl_cache.stmt_ptr);
                         }
                         ++ip;
                         break;
@@ -18245,7 +18255,7 @@ load_local_done:
                     invalidateExternalCaches();
                     if (*xsink) {
                         qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
-                    } else {
+                    } else [[unlikely]] {
                         // dismissed: the function ends, which returns no value (#5825)
                         dbg_state.exit_dismissed = true;
                         unwindForException();
@@ -18316,7 +18326,7 @@ load_local_done:
                     invalidateExternalCaches();
                     if (*xsink) {
                         qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
-                    } else {
+                    } else [[unlikely]] {
                         // dismissed: the function ends, which returns no value (#5825)
                         dbg_state.exit_dismissed = true;
                         unwindForException();
