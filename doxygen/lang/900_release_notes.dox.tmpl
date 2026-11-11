@@ -84,14 +84,12 @@
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
     flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
     <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
-    The most common cases keep their results with regular variants: <tt>length()</tt> and <tt>strlen()</tt> of
-    @ref nothing return \c 0; and <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and
-    <tt>sort_descending_stable()</tt> of @ref nothing (such as \c keys of an unassigned hash) return @ref nothing.
-    <tt>inlist()</tt> and <tt>inlist_hard()</tt> with @ref nothing as the list still return @ref False: their list
-    parameter (\c softlist) accepts no value.  The deprecated <tt>sortStable()</tt>, <tt>sortDescending()</tt> and
-    <tt>sortDescendingStable()</tt> have no such variant.  A call of these functions whose argument may have no value
-    (\c length(), \c strlen() and the four \c sort functions above) is resolved at run time, so a type error in the
-    use of its result, such as assigning <tt>sort()</tt> of a list member to an \c int, is raised at run time.
+    The most common cases keep their results with regular variants:
+    - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
+    - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
+      no value (such as \c keys of an unassigned hash) return no value; as these calls are resolved at run time, a
+      type error in the use of their result is raised at run time;
+    - <tt>inlist()</tt> and <tt>inlist_hard()</tt> with @ref nothing as the list still return @ref False.
 
     @par Call Stack Frames Are Located at Their Calls
     Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
