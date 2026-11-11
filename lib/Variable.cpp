@@ -1307,8 +1307,9 @@ int LValueHelper::evalPathKeys(const QoreLValuePathKeys& keys) {
             QoreStatementTempScope temps(vl.xsink);
             v = key.eval(needs_deref, vl.xsink);
             // a value borrowed from a variable gets a reference of its own: a later key can assign the variable
-            // (h.(key).(key = "b") = 1), and the key keeps the value that it had when it was evaluated
-            if (!needs_deref && v.hasNode()) {
+            // (h.(key).(key = "b") = 1), and the key keeps the value that it had when it was evaluated; this
+            // includes an enum value, which holds a reference to its declaration
+            if (!needs_deref && v.needsRef()) {
                 v.refSelf();
                 needs_deref = true;
             }
