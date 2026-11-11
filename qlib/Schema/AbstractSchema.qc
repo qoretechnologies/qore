@@ -435,10 +435,15 @@ public namespace Schema {
         }
 
         #! executes a schema drop operation in the database
+        /** Each statement is committed on its own: a table, with the objects that depend on it, is dropped in a
+            transaction of its own, and a partitioned table one partition per transaction, so that a schema with
+            partitioned tables stays within the database's lock limits.  A failure leaves the objects dropped before it
+            dropped.
+        */
         drop(bool force = False, int verbose = 0, bool do_msgs = True) {
             SchemaCallbackHelper sch(self, verbose);
 
-            callback_opts = sch.getCallbacks(force);
+            callback_opts = sch.getDropCallbacks(force);
 
             if (!checkExistence()) {
                 if (!force) {

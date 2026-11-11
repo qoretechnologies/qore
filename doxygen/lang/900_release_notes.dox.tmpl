@@ -345,6 +345,14 @@
     as before SqlUtil 1.7.2; add such an index to the template or use the \c omit option to keep it; see
     @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" and @ref sqlutilv3_11_0.
 
+    @par Schema and Table Drops Commit Each Statement
+    @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
+    @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
+    drop a partitioned table one partition at a time, so many partitions no longer exceed the server's lock table;
+    with transactional DDL, a failed drop now keeps what it dropped before the failure (drop again to finish), and a
+    partitioned table that a view or foreign key depends on fails before any partition is dropped.
+    @ref SqlUtil::AbstractTable::drop() "AbstractTable::drop()" still runs in the caller's transaction.
+
     @par Stream Socket Binding and Address Reporting
     A stream socket bound on all interfaces is one dual-stack socket on \c "::" (a port in use in either address
     family raises \c SOCKET-BIND-ERROR), a socket bound to a host name holds its port in all the name's address
