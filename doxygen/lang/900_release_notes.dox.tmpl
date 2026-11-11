@@ -721,13 +721,10 @@
     between modules is possible; see "Sharing a C++ API Between Modules" in the C++ API documentation.
 
     @par Module State Released Before the Library Shuts Down
-    A binary module registers the namespace it keeps in a static variable with \c QoreModuleInfo::ns (feature macro
-    \c QORE_HAS_MODULE_NS_PURGE), and the library releases the namespace with everything in it when it deletes the
-    module, before it frees the types, instead of leaving it to the C++ static destructor, which runs after the
-    library has shut down or not at all when the process ends with \c _exit().  All modules bundled with %Qore
-    register their namespaces, so a process that exits while a background JIT compile is still running no longer
-    leaves their constants and objects allocated, which valgrind reported as lost memory; see "Releasing Module
-    State at Shutdown" in the module development guide of the C++ API documentation.
+    A binary module registers its static namespace with \c QoreModuleInfo::ns (\c QORE_HAS_MODULE_NS_PURGE), and the
+    library releases it when it deletes the module, not in a C++ static destructor.  All bundled modules do, so a
+    process that exits during a background JIT compile no longer leaks their values; see "Releasing Module State at
+    Shutdown" in the module development guide of the C++ API documentation.
 
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
