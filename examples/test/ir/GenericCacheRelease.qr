@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The specializations of a generic function or method and the concrete declarations of a generic hashdecl made for
+# the types of a Program are freed with the Program (issue #5765); see GenericCacheRelease.qtest.  Needs a debug
+# libqore (dbg_generic_cache_counts()).
+
+# the library: this Program, whose public generics the user Programs inherit
+public class Box<T> { public { T v; } constructor(T v) { self.v = v; } T get() { return v; } }
+public T sub identity<T>(T value) { return value; }
+public hashdecl HBox<T> { T v; int n = 1; }
+
+const UserSrc = "
+class Foo { string n() { return \"foo\"; } }
+string sub run() {
+    string rv;
+    for (int i = 0; i < 3; ++i) {
+        Box<Foo> b(new Foo());
+        rv = b.get().n();
+        Foo f = identity<Foo>(new Foo());
+        rv += f.n();
+        hash<HBox<Foo>> h = cast<hash<HBox<Foo>>>({\"v\": new Foo()});
+        rv += h.v.n();
+    }
+    return rv;
+}
+# a value of a concrete declaration made for this Program's class, returned to the parent
+hash<HBox<*Foo>> sub keep() {
+    return cast<hash<HBox<*Foo>>>({});
+}
+";
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+
+sub check(string label, bool ok, auto info) {
+    printf("%s: %s\n", label, ok ? "ok" : sprintf("FAILED %y", info));
+}
+
+hash<auto> base = dbg_generic_cache_counts();
+hash<auto> after_first;
+for (int g = 0; g < 20; ++g) {
+    {
+        Program u(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        u.setExecMode(mode);
+        u.parse(UserSrc, "user");
+        string r = u.callFunction("run");
+        if (r != "foofoofoo") {
+            check("result " + g, False, r);
+        }
+        if (!g) {
+            hash<auto> live = dbg_generic_cache_counts();
+            # the AST interpreter makes no specialized IR
+            check("specializations made", mode == EM_AST ? live.specializations == base.specializations
+                : live.specializations > base.specializations, live);
+            check("hashdecls made", live.hashdecls > base.hashdecls, live);
+        }
+    }
+    hash<auto> c = dbg_generic_cache_counts();
+    if (!g) {
+        after_first = c;
+        check("specializations freed", c.specializations == base.specializations, c);
+        check("hashdecls freed", c.hashdecls == base.hashdecls, c);
+    } else if (c != after_first) {
+        check("bounded in generation " + g, False, c);
+    }
+}
+check("bounded", dbg_generic_cache_counts() == after_first, dbg_generic_cache_counts());
+
+# a value of a concrete declaration keeps it after its Program is destroyed
+hash<auto> h;
+{
+    Program u(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    u.setExecMode(mode);
+    u.parse(UserSrc, "user");
+    h = u.callFunction("keep");
+}
+check("value keeps its declaration", dbg_generic_cache_counts().hashdecls == base.hashdecls + 1,
+    dbg_generic_cache_counts());
+check("value usable", h.n == 1 && h.typeCode() == NT_HASH, h);
+remove h;
+check("declaration freed with its last value", dbg_generic_cache_counts().hashdecls == base.hashdecls,
+    dbg_generic_cache_counts());

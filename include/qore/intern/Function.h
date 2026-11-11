@@ -1157,8 +1157,25 @@ protected:
     mutable std::mutex specialized_ir_mutex;
     /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
     */
-    mutable std::unordered_map<QoreGenericSpecializationKey, std::unique_ptr<QoreIRFunction>,
+    /** The IR is shared with the calls that run it: a call holds it while it runs, so an entry can be removed while
+        the specialization is running (issue #5765)
+    */
+    mutable std::unordered_map<QoreGenericSpecializationKey, std::shared_ptr<const QoreIRFunction>,
         QoreGenericSpecializationKeyHash, QoreGenericSpecializationKeyEqual> specialized_ir_cache;
+    //! The registration of specialized_ir_cache by the types of its keys (issue #5765)
+    class SpecializedIRCache : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL SpecializedIRCache(const UserVariantBase& v) : v(v) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release);
+
+    private:
+        const UserVariantBase& v;
+    };
+    //! created with the first specialization, under specialized_ir_mutex; unregistered by the destructor
+    mutable std::unique_ptr<SpecializedIRCache> specialized_ir_registration;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
     //! Serialized fallback IR installed before AOT publication and protected during materialization.
@@ -1196,7 +1213,7 @@ protected:
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
             bool mark_failure, bool raise_on_failure) const;
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
+    DLLLOCAL std::shared_ptr<const QoreIRFunction> getOrCreateSpecializedIR(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
             bool raise_on_failure) const;
@@ -1258,7 +1275,7 @@ public:
         @param type_param_instantiation optional concrete method or function type arguments
         @return the cached specialized IR, or nullptr when specialization is unavailable
     */
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIRForFastCall(const char* name,
+    DLLLOCAL std::shared_ptr<const QoreIRFunction> getOrCreateSpecializedIRForFastCall(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
         return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);

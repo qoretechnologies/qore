@@ -101,6 +101,13 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
+        // issue #5765: no eviction may call the cache once its destruction has started
+        if (parameterized_hashdecl_registration) {
+            qore_generic_cache_unregister(parameterized_hashdecl_registration.get());
+        }
+        if (parameterized_base) {
+            qore_live_parameterized_hashdecls.fetch_sub(1, std::memory_order_relaxed);
+        }
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private::get(*i.second)->deref();
         }
@@ -611,6 +618,21 @@ protected:
     mutable std::mutex parameterized_hashdecl_cache_lock;
     mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*, parameterized_hashdecl_key_less_t>
         parameterized_hashdecl_cache;
+    //! The registration of parameterized_hashdecl_cache by the types of its keys (issue #5765)
+    class ParameterizedHashDeclCache : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL ParameterizedHashDeclCache(const typed_hash_decl_private& hd) : hd(hd) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release);
+
+    private:
+        const typed_hash_decl_private& hd;
+    };
+    //! created with the first concrete declaration, under parameterized_hashdecl_cache_lock; unregistered by the
+    //! destructor
+    mutable std::unique_ptr<ParameterizedHashDeclCache> parameterized_hashdecl_registration;
     const TypedHashDecl* parameterized_base = nullptr;
     std::vector<const QoreTypeInfo*> type_args;
 

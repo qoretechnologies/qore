@@ -332,6 +332,8 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     priv->reexport = reexport;
     priv->parse_init_done = true;
     priv->parameterized_base = thd;
+    // counted while it lives, for the debug checks of the cache eviction (issue #5765)
+    qore_live_parameterized_hashdecls.fetch_add(1, std::memory_order_relaxed);
     priv->type_args = args;
     priv->ns = ns;
 
@@ -343,7 +345,17 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     }
 
     TypedHashDecl* existing = nullptr;
+    ParameterizedHashDeclCache* registration;
     {
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (!parameterized_hashdecl_registration) {
+            parameterized_hashdecl_registration.reset(new ParameterizedHashDeclCache(*this));
+        }
+        registration = parameterized_hashdecl_registration.get();
+    }
+    // issue #5765: the declaration is added with the registry locked, so it is removed from the cache when one of its
+    // type arguments is destroyed
+    qore_generic_cache_insert(registration, args, [&] () {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
         auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
@@ -359,7 +371,7 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
             parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
                 priv->thd));
         }
-    }
+    });
     if (existing) {
         // another thread made the declaration first; the unpublished one is released outside the lock, as its
         // destruction purges the derived types of its own type
@@ -367,6 +379,27 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         return existing;
     }
     return priv->thd;
+}
+
+void typed_hash_decl_private::ParameterizedHashDeclCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+        qore_generic_cache_release_list_t& release) {
+    std::lock_guard<std::mutex> lock(hd.parameterized_hashdecl_cache_lock);
+    for (auto i = hd.parameterized_hashdecl_cache.begin(), e = hd.parameterized_hashdecl_cache.end(); i != e;) {
+        bool is_dead = false;
+        for (auto ti = i->first.begin(), te = i->first.end(); !is_dead && ti != te; ++ti) {
+            is_dead = dead.count(ti->first);
+        }
+        if (is_dead) {
+            // the cache's reference is released after the locks are released: hash values of the declaration hold
+            // their own references, and the last release destroys it, which purges its types
+            release.emplace_back(i->second, [] (const void* p) {
+                typed_hash_decl_private::get(*static_cast<TypedHashDecl*>(const_cast<void*>(p)))->deref();
+            });
+            i = hd.parameterized_hashdecl_cache.erase(i);
+        } else {
+            ++i;
+        }
+    }
 }
 
 // NOTE: the new namespace will be set manually after this call
