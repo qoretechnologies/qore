@@ -151,7 +151,7 @@ typedef std::vector<int> sig_vec_t;
 ///@{
 // qore code flags
 #define QCF_NO_FLAGS                     0   //!< no flag
-#define QCF_NOOP                   (1 << 0)  //!< this variant is a noop, meaning it returns a constant value with the given argument types
+#define QCF_NOOP                   (1 << 0)  //!< this variant is a noop, meaning it returns a constant value with the given argument types; not a candidate for programs with %require-types or %strict-args (PO_REQUIRE_TYPES, PO_STRICT_ARGS), at parse time or at run time
 #define QCF_USES_EXTRA_ARGS        (1 << 1)  //!< code accesses arguments beyond the declared parameter list
 #define QCF_CONSTANT_INTERN        (1 << 2)  //!< internal constant flag, use QCF_CONSTANT instead
 #define QCF_DEPRECATED             (1 << 3)  //!< function or method is deprecated and will be removed in a later release

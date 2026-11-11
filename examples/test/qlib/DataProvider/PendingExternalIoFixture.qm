@@ -1,0 +1,81 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# PendingExternalIoFixture.qm registers a factory, and a deferred app with external I/O that is not sandbox-aware, for AppExternalIo.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider >= 3.12
+
+module PendingExternalIoFixture {
+    version = "1.0";
+    desc = "deferred external I/O app fixture";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new PendingExternalIoFactory());
+        # the app is deferred: its declarations are known only once it is initialized
+        DataProviderActionCatalog::registerPendingApp("QoreTestPendingExternalIoApp", sub () {
+            DataProviderActionCatalog::registerApp(cast<hash<DataProviderAppInfo>>({
+                "name": "QoreTestPendingExternalIoApp",
+                "display_name": "QoreTestPendingExternalIoApp",
+                "short_desc": "deferred external I/O app fixture",
+                "desc": "deferred external I/O app fixture",
+                "groups": (AppGroup::DataTransformation,),
+                "logo": "fixture",
+                "logo_mime_type": "image/svg+xml",
+                "logo_file_name": "fixture.svg",
+            } + {"external_io": True}));
+        });
+    };
+}
+
+#! The fixture's data provider
+public class PendingExternalIoProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "PendingExternalIoProvider",
+            "supports_request": True,
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "PendingExternalIoProvider";
+    }
+
+    *string getDesc() {
+        return "deferred external I/O app fixture provider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+#! The fixture's factory: it belongs to this module, which registers the app
+public class PendingExternalIoFactory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("PendingExternalIoProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "qoretestpendingexternalio",
+            "desc": "deferred external I/O app fixture",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return PendingExternalIoProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}

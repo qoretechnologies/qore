@@ -116,6 +116,8 @@ private:
     friend class RuntimeConfigClosureHelper;
     friend class RuntimeConfigElementHelper;
     friend class RuntimeConfigStackHelper;
+    friend class QoreRcCallSiteHelper;
+    friend void rc_tls_set_call_site_ptr(const QoreProgramLocation** call_site_ptr);
 };
 
 #endif // _QORE_RUNTIMECONFIG_H

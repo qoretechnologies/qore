@@ -659,7 +659,7 @@ public class DataProviderPresentation {
         # filesystem access.
         list<string> unused = I18n::discover_catalog_files(domain,
             RootLocale, {"search_path": ()});
-        hash<string, bool> locales;
+        hash<string, bool> locales = {};
         foreach string search_root in (
                 I18n::get_catalog_search_path(discovery_opts)) {
             string nested_dir = search_root + DirSep + domain;
@@ -785,7 +785,7 @@ public class DataProviderPresentation {
                     hash<auto> catalog = I18n::load_native_catalog(path, MaxCatalogFileBytes);
                     I18n::MessageCatalog validated(catalog,
                         {"literal_messages": True});
-                    if (sort(keys catalog.locales) != (locale,)) {
+                    if (sort((keys catalog.locales) ?? ()) != (locale,)) {
                         issues += translationCatalogIssue(path, locale, "",
                             sprintf("catalog must contain only locale %y",
                                 locale));
@@ -806,7 +806,7 @@ public class DataProviderPresentation {
             }
         }
         hash<string, list<string>> translation_message_ids_by_locale;
-        foreach string locale in (sort(keys message_ids_by_locale)) {
+        foreach string locale in (sort(keys (message_ids_by_locale ?? {}))) {
             translation_message_ids_by_locale{locale} =
                 sort(keys message_ids_by_locale{locale});
         }

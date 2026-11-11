@@ -660,6 +660,10 @@ bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
     return false;
 }
 
+bool HttpClientConnectionManagerBase::isCancelPending() {
+    return qore_check_cancel(nullptr, "HTTP request");
+}
+
 bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
     QoreValue err = xsink.getExceptionErr();
     if (err.getType() != NT_STRING) {
@@ -668,6 +672,22 @@ bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsi
     const char* e = err.get<const QoreStringNode>()->c_str();
     return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
         || !strcmp(e, "SOCKET-CLOSED");
+}
+
+bool HttpClientConnectionManagerBase::replaceClosedErrorWithPendingCancel(ExceptionSink& xsink) {
+    // the HTTP/3 connections of the HTTPClient report a closed QUIC connection; this manager does not repeat requests
+    // on them, so isConnectionClosedError() does not include it
+    if (!isConnectionClosedError(xsink) && !(xsink.getExceptionErr().getType() == NT_STRING
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "HTTP3-CONNECTION-CLOSED")) {
+        return false;
+    }
+    ExceptionSink cancel_xsink;
+    if (!qore_socket_raise_pending_cancel("HTTP request", &cancel_xsink)) {
+        return false;
+    }
+    xsink.clear();
+    xsink.assimilate(cancel_xsink);
+    return true;
 }
 
 //! Returns the TLS configuration for a new connection from the manager's options
@@ -1484,11 +1504,13 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // The protocol poll operation publishes its closed error before its callback updates
         // the pooled connection state. A submit in that window must evict and retry too.
         if (conn->isClosed() || isConnectionClosedError(*xsink)) {
+            // a cancellation of this thread that closed the connection is reported as such, and not repeated
+            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink) || isCancelPending();
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed by the peer while it waited in the pool
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }
@@ -1526,12 +1548,19 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // pending and before the connection reference goes out of scope.
         abandonRequest(conn, stream_id);
         result.discard(xsink);
-        // a reused connection that was closed by the peer is not used again, and the request is repeated
-        if (retry && isConnectionClosedError(*xsink)) {
-            ExceptionSink evict_xsink;
-            closeAndEvict(conn, &evict_xsink);
-            evict_xsink.clear();
-            *retry = true;
+        if (isConnectionClosedError(*xsink)) {
+            // a cancellation of this thread that ended the request first (the code that it ends closes the
+            // transport) is reported as such, and the request is not repeated
+            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink);
+            // a reused connection that was closed by the peer is not used again, and the request is repeated
+            if (retry) {
+                ExceptionSink evict_xsink;
+                closeAndEvict(conn, &evict_xsink);
+                evict_xsink.clear();
+                if (!cancelled) {
+                    *retry = true;
+                }
+            }
         }
         return nullptr;
     }
@@ -1668,11 +1697,13 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         // the eviction, the repeat of the request can be handed the same dead connection, fail the same way and
         // be reported as final.
         if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
+            // a cancellation of this thread that closed the connection is reported as such, and not repeated
+            bool cancelled = (*xsink && replaceClosedErrorWithPendingCancel(*xsink)) || isCancelPending();
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed while it waited in the pool, with or without an error of its own
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }

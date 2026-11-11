@@ -273,6 +273,10 @@ public:
         return false;
     }
 
+    DLLLOCAL virtual const MethodVariantBase* getMethodVariantBase() const override {
+        return this;
+    }
+
     //! Returns true when this method variant can use a fast call entry.
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastMethodCallEligible(bool allow_type_parameters = false) const {
@@ -308,7 +312,7 @@ public:
         return qmethod;
     }
 
-    DLLLOCAL const QoreClass* getClass() const {
+    DLLLOCAL const QoreClass* getClass() const override {
         return qmethod->getClass();
     }
 
@@ -3633,6 +3637,8 @@ public:
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
+    //! initializes the members of member_init_list; called by initMembers() with the object context set
+    DLLLOCAL int initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
 
     DLLLOCAL int initMember(QoreObject& o, bool& need_scan, const char* member_name, const QoreMemberInfo& info, const qore_class_private* member_class_ctx, ExceptionSink* xsink) const;
 
@@ -3893,9 +3899,6 @@ public:
     //! initializes the members of an object with the source Programs of their classes entered; see initMembers()
     DLLLOCAL int initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,
             ExceptionSink* xsink) const;
-
-    //! initializes the members of an object in the order of the member initialization list
-    DLLLOCAL int initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
 
     //! Keeps the source Programs of the classes that declare members initialized with code while they are evaluated
     /** See enterSourceProgramForInit()

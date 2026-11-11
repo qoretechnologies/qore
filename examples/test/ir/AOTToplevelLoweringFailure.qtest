@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc code generation and linking of an executable, the exit status of the build
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTToplevelLoweringFailureTest
+
+#! qcc fails the build when the top-level code of a program fails to lower, as it does for a function (qore#5738)
+/** A program whose top-level code failed to lower used to produce an executable that did nothing and exited with
+    status 0, while the failure of a function made qcc fail.  Both now fail the build with the reason, and no
+    executable is written.
+
+    The failure is provoked with the \c QORE_AOT_TEST_FAIL_LOWERING test hook, which makes the lowering to LLVM of
+    every IR function whose name contains the given text fail; the top-level code is the IR function \c _toplevel.
+*/
+class AOTToplevelLoweringFailureTest inherits QUnit::Test {
+    public {
+        #! the program: a function that the hook can name, called from the top-level code
+        const Program = "%modern
+int sub aot_hook_target(int a, int b) {
+    return a + b;
+}
+printf(\"%d\\n\", aot_hook_target(40, 2));
+";
+
+        #! the qcc optimization levels tested
+        const OptLevels = ("0", "3");
+
+        #! the output of the program
+        const Expected = "42\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        TmpDir tmp("qore-aot-toplevel-lowering-failure-");
+        string src;
+    }
+
+    constructor() : QUnit::Test("AOTToplevelLoweringFailureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        File f();
+        src = tmp.path + "/program.qr";
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Program);
+        f.close();
+
+        addTestCase("the program compiles and runs without the hook", \testCompiles());
+        addTestCase("negative: a hook matching no IR function changes nothing", \testHookNoMatch());
+        addTestCase("a failed lowering of a function fails the build", \testFunctionFailure());
+        addTestCase("a failed lowering of the top-level code fails the build", \testToplevelFailure());
+        addTestCase("qore --compile fails the build too", \testQoreCompileFailure());
+
+        set_return_value(main());
+    }
+
+    #! runs a command, returns its output and sets the exit status
+    private string run(string cmd, reference<int> rc) {
+        return backquote(cmd + " 2>&1", \rc);
+    }
+
+    private string exeName(string label, string opt) {
+        return sprintf("%s/%s.O%s", tmp.path, label, opt);
+    }
+
+    #! compiles the program with qcc, with the hook set to \a hook if not empty
+    private string compile(string exe, string opt, string hook, reference<int> rc) {
+        string hook_env = hook ? sprintf("QORE_AOT_TEST_FAIL_LOWERING=%s ", hook) : "";
+        return run(sprintf("%s %s%s -O%s -o %s %s", env, hook_env, qcc_bin, opt, exe, src), \rc);
+    }
+
+    #! returns the output of a compiled executable
+    private string runExe(string exe) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe));
+    }
+
+    #! skips the test case if qcc cannot compile the program; the cases that expect a failed build need it to tell one
+    private skipWithoutQcc() {
+        int rc;
+        string exe = tmp.path + "/probe";
+        string out = compile(exe, "0", "", \rc);
+        if (rc || !is_file(exe)) {
+            testSkip("qcc is not available or cannot compile the program: " + out);
+        }
+    }
+
+    testCompiles() {
+        skipWithoutQcc();
+        foreach string opt in (OptLevels) {
+            string exe = exeName("plain", opt);
+            int rc;
+            string out = compile(exe, opt, "", \rc);
+            assertEq(0, rc, "qcc -O" + opt + " exit status: " + out);
+            assertTrue(is_file(exe), "qcc -O" + opt + " wrote the executable");
+            assertEq(Expected, runExe(exe), "-O" + opt + " executable output");
+        }
+    }
+
+    testHookNoMatch() {
+        skipWithoutQcc();
+        foreach string opt in (OptLevels) {
+            string exe = exeName("nomatch", opt);
+            int rc;
+            string out = compile(exe, opt, "no_such_ir_function_name", \rc);
+            assertEq(0, rc, "qcc -O" + opt + " exit status: " + out);
+            assertEq(Expected, runExe(exe), "-O" + opt + " executable output");
+        }
+    }
+
+    testFunctionFailure() {
+        skipWithoutQcc();
+        foreach string opt in (OptLevels) {
+            string exe = exeName("function", opt);
+            int rc;
+            string out = compile(exe, opt, "aot_hook_target", \rc);
+            assertTrue(rc != 0, "qcc -O" + opt + " fails the build: " + out);
+            assertFalse(is_file(exe), "qcc -O" + opt + " wrote no executable");
+            assertTrue(out =~ /aot_hook_target/ && out =~ /QORE_AOT_TEST_FAIL_LOWERING/,
+                "the error names the function and the reason: " + out);
+        }
+    }
+
+    testToplevelFailure() {
+        skipWithoutQcc();
+        foreach string opt in (OptLevels) {
+            string exe = exeName("toplevel", opt);
+            int rc;
+            string out = compile(exe, opt, "_toplevel", \rc);
+            assertTrue(rc != 0, "qcc -O" + opt + " fails the build: " + out);
+            assertFalse(is_file(exe), "qcc -O" + opt + " wrote no executable");
+            assertTrue(out =~ /top-level code/ && out =~ /_toplevel/ && out =~ /QORE_AOT_TEST_FAIL_LOWERING/,
+                "the error names the top-level code and the reason: " + out);
+        }
+    }
+
+    testQoreCompileFailure() {
+        skipWithoutQcc();
+        string exe = tmp.path + "/qore-compile";
+        int rc;
+        string out = run(sprintf("%s QORE_AOT_TEST_FAIL_LOWERING=_toplevel %s -b --compile --output %s %s", env,
+            qore_bin, exe, src), \rc);
+        assertTrue(rc != 0, "qore --compile fails the build: " + out);
+        assertFalse(is_file(exe), "qore --compile wrote no executable");
+        assertTrue(out =~ /top-level code/, "the error names the top-level code: " + out);
+    }
+}

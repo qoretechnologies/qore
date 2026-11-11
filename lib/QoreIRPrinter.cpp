@@ -255,6 +255,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ToBool: return "to.bool";
         case QoreIROpcode::ToInt: return "to.int";
         case QoreIROpcode::ToFloat: return "to.float";
+        case QoreIROpcode::ToStringChecked: return "to.string.checked";
+        case QoreIROpcode::ToIntChecked: return "to.int.checked";
+        case QoreIROpcode::ToFloatChecked: return "to.float.checked";
         case QoreIROpcode::Not: return "not";
         case QoreIROpcode::IsNullOrNothing: return "is.null-or-nothing";
         case QoreIROpcode::Phi: return "phi";

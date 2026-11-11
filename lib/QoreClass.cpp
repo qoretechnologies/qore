@@ -1694,13 +1694,20 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
     CodeContextHelperBase cch("constructor", &o, this, xsink, false, spgm_info);
     SelfInstantiatorHelper sih(&selfid, &o);
 
-    // the source Programs of the classes that declare the members must be kept while their initializers are
-    // evaluated (the members of a parent class are code of the parent's source Program), unless the members are
-    // declared by the class and its source Program needs nothing more: the thread is in it, or it has module lifetime
+    // if no initializer evaluates anything, the common case, the members are initialized directly
     if (int8_t mic = getMemberInitCode()) {
+        // the call site of the call that creates the object is the location of the frame of the constructor, which is
+        // created after the member initializers have run: initializers that are evaluated run with no call site, so
+        // that only the calls that they make set one
+        QoreHideCallSiteHelper hide_call_site(true);
+        // the source Programs of the classes that declare the members must be kept while their initializers are
+        // evaluated (the members of a parent class are code of the parent's source Program), unless the members are
+        // declared by the class and its source Program needs nothing more: the thread is in it, or it has module
+        // lifetime
         if (mic == 2 || !spgm_info.pgm || spgm_info.referenced) {
             return initMembersEntered(o, need_scan, spgm_info, xsink);
         }
+        return initMemberList(o, need_scan, xsink);
     }
     return initMemberList(o, need_scan, xsink);
 }
@@ -1913,6 +1920,9 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
         if (!constructor && !variant) {
             if (scl) { // execute superconstructors if any
                 CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, this);
+                // the class has no constructor, so its call site is the location of no frame: the constructors of
+                // the base classes are located where their calls are given, as in a class with a constructor
+                QoreHideCallSiteHelper hide_call_site(true);
 
                 scl->execConstructors(self, *bceal, rc, xsink);
             }
@@ -7292,9 +7302,11 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
     QoreSourceProgramHolder spgm_holder(xsink);
+    // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can
+    // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
         qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder));
+        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, false, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);

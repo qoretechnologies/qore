@@ -582,6 +582,12 @@ public:
     QoreThreadLock stack_walk_lck;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
+    //! the location of the call expression being made, for the call stack frame of the called code
+    /** Set by a call site for the duration of the call and taken (and cleared) by the frame of the called code when
+        it is created; see QoreRcCallSiteHelper and take_runtime_call_location().  It follows runtime_loc
+        immediately: IR and native code address it as the runtime location slot + 1 (qore_call_site_slot()).
+    */
+    const QoreProgramLocation* call_site_loc = nullptr;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -1407,6 +1413,8 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+    // the thread's RuntimeConfig writes the call sites of AST calls directly (QoreRcCallSiteHelper)
+    rc_tls_set_call_site_ptr(&thread_data->call_site_loc);
     // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
     // set (see qore_robject_hazard_register())
     qore_robject_hazard_register(tid);
@@ -3230,6 +3238,8 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
+    // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
+    td->call_site_loc = nullptr;
 
     return publish_pushed_stack_location(td, stack_loc);
 }
@@ -3242,6 +3252,8 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
+    // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
+    td->call_site_loc = nullptr;
 
     old_runtime_loc = td->runtime_loc;
     td->runtime_loc = &loc_builtin;
@@ -3263,7 +3275,15 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     current_pgm = td->current_pgm;
     current_stmt = td->runtime_statement;
     runtime_loc = td->runtime_loc;
-    frame_loc = call_loc ? call_loc : runtime_loc;
+    if (call_loc) {
+        frame_loc = call_loc;
+    } else if (td->call_site_loc) {
+        frame_loc = td->call_site_loc;
+    } else {
+        frame_loc = runtime_loc;
+    }
+    // the location of the call is the location of this frame, not of the frames of calls that the callee makes
+    td->call_site_loc = nullptr;
 
     const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
     if (callee_loc) {
@@ -3299,6 +3319,46 @@ const AbstractStatement* get_runtime_statement() {
 
 const QoreProgramLocation* get_runtime_location() {
     return thread_data.get()->runtime_loc;
+}
+
+const QoreProgramLocation* take_runtime_call_location() {
+    ThreadData* td = thread_data.get();
+    const QoreProgramLocation* loc = td->call_site_loc;
+    if (loc) {
+        td->call_site_loc = nullptr;
+        return loc;
+    }
+    return td->runtime_loc;
+}
+
+const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev) {
+    ThreadData* td = thread_data.get();
+    slot = &td->call_site_loc;
+    prev = td->call_site_loc;
+    td->call_site_loc = nullptr;
+    return td->runtime_loc;
+}
+
+void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLocation*& prev) {
+    ThreadData* td = thread_data.get();
+    prev = td->call_site_loc;
+    td->call_site_loc = loc;
+    return td;
+}
+
+void clear_runtime_call_site() {
+    ThreadData* td = thread_data.get();
+    // also called on threads being set up or torn down, such as in an exception thrown during initialization
+    if (td) {
+        td->call_site_loc = nullptr;
+    }
+}
+
+void restore_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation* prev) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+    td->call_site_loc = prev;
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
@@ -3350,6 +3410,14 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
 }
+
+// IR and native code address the call site as the slot after the runtime location (qore_call_site_slot());
+// ThreadData has no virtual bases, so offsetof() is exact although the class is not standard-layout
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+static_assert(offsetof(ThreadData, call_site_loc) == offsetof(ThreadData, runtime_loc)
+    + sizeof(const QoreProgramLocation*), "the call site must follow the runtime location in ThreadData");
+#pragma GCC diagnostic pop
 
 RuntimeLocationCache get_runtime_location_cache() {
     ThreadData* td = thread_data.get();
@@ -6054,13 +6122,42 @@ VNode* get_global_vnode() {
     return (thread_data.get())->global_vnode;
 }
 
-QoreClass* parse_get_class() {
-    const qore_class_private* cls = (thread_data.get())->current_class;
-    return cls ? const_cast<qore_class_private*>(cls)->cls : nullptr;
+namespace {
+// the class context of the parse-time checks while IR is lowered, analyzed or compiled in this thread (see
+// QoreIRClassContextHelper); a thread-local variable of its own, as a background compilation thread has no ThreadData
+thread_local const qore_class_private* ir_class_ctx = nullptr;
+thread_local bool ir_class_ctx_set = false;
+}
+
+QoreIRClassContextHelper::QoreIRClassContextHelper(const qore_class_private* cls) : old_cls(ir_class_ctx),
+        old_set(ir_class_ctx_set) {
+    ir_class_ctx = cls;
+    ir_class_ctx_set = true;
+}
+
+QoreIRClassContextHelper::~QoreIRClassContextHelper() {
+    ir_class_ctx = old_cls;
+    ir_class_ctx_set = old_set;
+}
+
+bool QoreIRClassContextHelper::isSet() {
+    return ir_class_ctx_set;
 }
 
 qore_class_private* parse_get_class_priv() {
-    return const_cast<qore_class_private*>((thread_data.get())->current_class);
+    if (ir_class_ctx_set) {
+        return const_cast<qore_class_private*>(ir_class_ctx);
+    }
+    ThreadData* td = thread_data.get();
+    // a thread without parse state (a background compilation thread) makes parse-time checks only in the class
+    // context of the code that it compiles, which a QoreIRClassContextHelper sets
+    assert(td);
+    return td ? const_cast<qore_class_private*>(td->current_class) : nullptr;
+}
+
+QoreClass* parse_get_class() {
+    qore_class_private* cls = parse_get_class_priv();
+    return cls ? cls->cls : nullptr;
 }
 
 void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns,
@@ -6137,7 +6234,10 @@ void qore_exit_process(int rc) {
         // The native JIT compiler uses a dedicated C++ thread that is not part of
         // thread_list.  Stop it while LLVM's process-wide state is still intact;
         // otherwise exit() can run LLVM static destructors concurrently with an
-        // in-progress ORC materialization.
+        // in-progress ORC materialization.  A compile still in LLVM, which can take without bound, is
+        // detached instead of awaited, and its thread is left running; qore_fork_child_quick_exit() below
+        // then ends the process with _exit() if it still runs, so that exit() does not destroy LLVM's
+        // static objects under it (see QoreJIT::exitQuickly()).
         // Keep compiled code mapped because later atexit callbacks and static destructors can still
         // execute Qore cleanup code after the native compiler has been stopped.
         QoreJIT::instance().stopBackgroundCompiler();
@@ -7634,6 +7734,8 @@ QoreHashNode* QoreThreadList::getCallStackHash(qore_call_t call_type, const std:
     ph->setKeyValueIntern("function", new QoreStringNode(code));
     ph->setKeyValueIntern("line",     loc.start_line);
     ph->setKeyValueIntern("endline",  loc.end_line);
+    ph->setKeyValueIntern("start_column", static_cast<int64>(loc.start_column));
+    ph->setKeyValueIntern("end_column", static_cast<int64>(loc.end_column));
     ph->setKeyValueIntern("file",     new QoreStringNode(loc.getFileValue()));
     // do not set "source" to NOTHING as it must be set to a value according to the hashdecl
     {
@@ -7702,6 +7804,7 @@ void QoreThreadList::deleteData(int tid) {
         entry[tid].closeCancelWakeup();
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 }
@@ -7714,6 +7817,7 @@ void QoreThreadList::deleteDataRelease(int tid) {
         entry[tid].thread_data = nullptr;
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 
@@ -7786,6 +7890,7 @@ void QoreThreadList::deleteDataReleaseSignalThread() {
         entry[0].thread_data = nullptr;
     }
 
+    rc_tls_set_call_site_ptr(nullptr);
     delete thread_data.get();
     thread_data.set(nullptr);
 

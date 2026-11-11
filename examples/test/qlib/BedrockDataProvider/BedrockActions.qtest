@@ -227,7 +227,7 @@ class BedrockActionsTest inherits QUnit::Test {
                     continue;
                 }
                 RestSchemaActionOperation op = BedrockSchema::getOperationEx(action.action);
-                assertEq(sort(keys op.getRequestFields()), sort(keys action.options), action.action);
+                assertEq(sort((keys op.getRequestFields()) ?? ()), sort((keys action.options) ?? ()), action.action);
                 assertTrue(exists op.getResponseType(), action.action + ": schema response type");
             }
         }
