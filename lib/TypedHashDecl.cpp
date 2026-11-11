@@ -812,6 +812,9 @@ int typed_hash_decl_private::getDirectMemberOffset(const char* key) const {
 QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const {
     QoreDeclaringProgramHelper src_pgm_helper;
     if (enterSourceProgramsForApi(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
         return nullptr;
     }
     return newHash(init, true, xsink);
