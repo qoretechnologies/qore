@@ -7942,12 +7942,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     // owner's later writes are seen through the weak reference (qore#5756)
     if (assign_mode == AssignmentMode::Weak) {
         auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
-        // a thread-safe local (VT_LOCAL_TS: a top-level variable read in a function, a variable used through a
-        // reference or in a background expression) is left out: a weak reference to a top-level variable that a
-        // function reads is not correct in a qcc executable whatever the container holds (a separate defect), and
-        // making its container unique first would turn that into a crash; the other tiers and the AST give the
-        // same result for these variables in the cases that were compared
-        if (source_var && source_var->getType() != VT_IMMEDIATE && source_var->getType() != VT_LOCAL_TS
+        if (source_var && source_var->getType() != VT_IMMEDIATE
                 && qore_weak_assignment_source_made_unique(source_var->getTypeInfo())) {
             QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
                 error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);

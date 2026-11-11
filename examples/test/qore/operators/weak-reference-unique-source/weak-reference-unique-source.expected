@@ -8,6 +8,9 @@ list shared variable: [1, 2] [1, 2, 3] [1, 2, 3]
 function: {v: 1, y: 2}
 list function: [9, 2, 3]
 global: {og: 1, x: 2}
+top-level variable: {t: 1, x: 2} {t: 1}
+referenced local: {a: 1, z: 2}
+background local: {a: 1, z: 2}
 weak of weak: {a: 1, q: 1}
 int: [6, 5]
 repeated: 2000

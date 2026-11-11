@@ -75,6 +75,39 @@ hash<auto> sub from_global() {
 }
 printf("global: %y\n", from_global());
 
+# a top-level variable that a function reads
+hash<auto> top = map {$1: 1}, ("t",);
+hash<auto> top_sharer = top;
+hash<auto> sub from_top_level() {
+    hash<auto> tw := top;
+    top.x = 2;
+    return tw;
+}
+printf("top-level variable: %y %y\n", from_top_level(), top_sharer);
+
+# a local that a reference is taken of, and one that a background expression uses
+sub noop(reference<hash<auto>> r) {
+}
+hash<auto> sub referenced_local() {
+    hash<auto> a = map {$1: 1}, ("a",);
+    hash<auto> b = a;
+    noop(\b);
+    hash<auto> bw := b;
+    b.z = 2;
+    return bw;
+}
+printf("referenced local: %y\n", referenced_local());
+
+hash<auto> sub background_local() {
+    hash<auto> a = map {$1: 1}, ("a",);
+    hash<auto> b = a;
+    background noop(\b);
+    hash<auto> bw := b;
+    b.z = 2;
+    return bw;
+}
+printf("background local: %y\n", background_local());
+
 # a weak reference of a weak reference
 hash<auto> sub weak_of_weak() {
     hash<auto> a = {"a": 1};
