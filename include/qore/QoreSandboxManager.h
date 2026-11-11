@@ -644,20 +644,18 @@ public:
     DLLEXPORT int64 getMemoryUsage() const;
 
     //! Sets whether code that the sandbox governs may use uncontrolled APIs
-    /** @param allow true to allow code that the sandbox governs to call functions, methods and classes of the
-        @ref QDOM_UNCONTROLLED_API functional domain; false (the default) to refuse them
+    /** @param allow true if the host trusts the code that the sandbox governs to use uncontrolled APIs (functions,
+        methods and classes of the @ref QDOM_UNCONTROLLED_API functional domain); false (the default) if not
 
         Uncontrolled APIs (for example the Java classes of the \c jni module and the Python objects of the
         \c python module) do I/O and run code that %Qore does not see, so neither the filesystem and network policy
-        nor the parse options of the sandbox apply to what they do.  By default a sandbox refuses them at run time,
-        as the parse option \c PO_NO_UNCONTROLLED_APIS does: a call raises \c INVALID-FUNCTION-ACCESS.  The check
-        is a policy check (see QoreSandboxManagerHelper::Policy): it applies to the code that the sandbox governs,
-        also library module code that runs for it, and to objects created under the sandbox, but not to a
-        system-policy capability of trusted code (\c SandboxManager::createSystemPolicyCall()).
-
-        A host that uses a sandbox only for its resource limits, interrupts or I/O policy, and trusts the code to use
-        uncontrolled APIs, allows them.  When more than one sandbox governs the code, the uncontrolled APIs are allowed
-        only if every one of them allows them.
+        nor the parse options of the sandbox apply to what they do.  The policy is the trust setting of the code
+        that the sandbox governs: code whose sandbox refuses them counts as restricted for the rules that keep
+        sandboxed code from such I/O (qore_sandbox_allows_uncontrolled_apis(), \c SandboxManager::isRestricted(),
+        \c SandboxManager::isUncontrolledApiAllowed()), such as the \c external_io apps of the data provider
+        catalog.  A host that uses a sandbox only for its resource limits, interrupts or I/O policy, and trusts the
+        code to use uncontrolled APIs, allows them.  When more than one sandbox governs the code, the uncontrolled
+        APIs are allowed only if every one of them allows them.
 
         @since %Qore 3.0
     */
@@ -1010,6 +1008,14 @@ private:
     @since %Qore 3.0
 */
 DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose);
+
+//! defined if the uncontrolled-API policy of sandboxes is available
+/** QoreSandboxManager::setUncontrolledApiPolicy(), QoreSandboxManager::getUncontrolledApiPolicy() and
+    qore_sandbox_allows_uncontrolled_apis()
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
 
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited

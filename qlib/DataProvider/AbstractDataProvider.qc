@@ -4989,10 +4989,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change a process-wide callback
-    /** Uses Qore::SandboxManager::isRestricted(), which also sees a sandbox under a policy barrier and is not restricted
+    /** Uses Qore::SandboxManager::isSandboxed(), which also sees a sandbox under a policy barrier and is not restricted
     */
     private:internal static checkNotSandboxed(string what) {
-        if (SandboxManager::isRestricted()) {
+        if (SandboxManager::isSandboxed()) {
             throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would run on the "
                 "threads of other tenants and of trusted code", what);
         }

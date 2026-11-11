@@ -33,6 +33,25 @@ auto sub through(code c) {
     return c();
 }
 
+# a thread that the code starts: it inherits the sandbox of the code that starts it
+hash<string, bool> sub query_background() {
+    Queue q();
+    background q.push(query());
+    return q.get();
+}
+
+# a child Program that this code creates with a sandbox of its own that allows uncontrolled APIs
+hash<string, bool> sub query_child(string src) {
+    SandboxManager own();
+    own.setFilesystemDefaultPolicy(True);
+    own.setNetworkDefaultPolicy(True);
+    own.setUncontrolledApiPolicy(True);
+    Program child(PO_NEW_STYLE);
+    child.setSandboxManager(own);
+    child.parse(src, \"child\");
+    return child.callFunction(\"query\");
+}
+
 public class Probe {
     hash<string, bool> query() {
         return ::query();
@@ -55,6 +74,9 @@ object sub make_probe() {
         addTestCase("a policy barrier and a capability", \barrierTest());
         addTestCase("an object created under a sandbox carries its policy", \provenanceTest());
         addTestCase("sandboxed code cannot allow uncontrolled APIs for the sandbox that governs it", \changeTest());
+        addTestCase("a child Program that sandboxed code allows is still restricted", \childTest());
+        addTestCase("copy() keeps the policy", \copyTest());
+        addTestCase("a thread that the code starts inherits the policy", \threadTest());
         set_return_value(main());
     }
 
@@ -169,6 +191,35 @@ object sub make_probe() {
         object allow_probe = allow.callFunction("make_probe");
         assertEq({"sandboxed": True, "restricted": False, "allowed": True}, allow_probe.query(),
             "an object of the trusting sandbox");
+    }
+
+    childTest() {
+        # the child's code runs on the restricted code's thread: the restricting sandbox still governs it
+        string query_src = "hash<string, bool> sub query() { return {\"sandboxed\": SandboxManager::isSandboxed(), "
+            "\"restricted\": SandboxManager::isRestricted(), \"allowed\": "
+            "SandboxManager::isUncontrolledApiAllowed()}; }";
+        Program deny = getProgram(False);
+        hash<string, bool> h = deny.callFunction("query_child", query_src);
+        assertTrue(h.restricted, "the child of restricted code");
+        assertFalse(h.allowed, "the child of restricted code");
+        # the child of trusted code that allows them is not restricted
+        Program allow = getProgram(True);
+        h = allow.callFunction("query_child", query_src);
+        assertFalse(h.restricted, "the child of trusted code");
+    }
+
+    copyTest() {
+        SandboxManager sm();
+        assertFalse(sm.copy().getUncontrolledApiPolicy(), "the default is copied");
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.copy().getUncontrolledApiPolicy(), "allow is copied");
+    }
+
+    threadTest() {
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False},
+            getProgram(False).callFunction("query_background"), "a thread of restricted code");
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True},
+            getProgram(True).callFunction("query_background"), "a thread of trusted code");
     }
 
     changeTest() {

@@ -44,8 +44,8 @@
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
     - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
       @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
-      refuse) decides whether the code counts as restricted for the rules that protect the process from sandboxed
-      code, such as the \c external_io apps of the data provider catalog; queried with
+      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
+      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
       @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
       @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
       \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)

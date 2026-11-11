@@ -70,7 +70,7 @@ public class DataProviderWebhook {
     */
     static registerWebhookApis(code create, code destroy) {
         # process-wide callbacks run on the threads of every interface that creates a webhook
-        if (SandboxManager::isRestricted()) {
+        if (SandboxManager::isSandboxed()) {
             throw "DATA-PROVIDER-CALLBACK-ERROR", "code that a sandbox governs cannot register the webhook APIs: they "
                 "would run on the threads of other tenants and of trusted code";
         }

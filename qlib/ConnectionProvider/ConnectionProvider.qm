@@ -57,7 +57,7 @@ module ConnectionProvider {
         # The callback runs on the threads of every caller: from the module path, this module is initialized with no
         # sandbox provenance and registers it; when sandboxed code loads a copy of it by path, its initialization is
         # governed by that sandbox, and it is not registered: no app is then treated as a REST app.
-        if (SandboxManager::isRestricted()) {
+        if (SandboxManager::isSandboxed()) {
             return;
         }
         DataProvider::DataProviderActionCatalog::setSchemeLookupCallback(

@@ -731,11 +731,14 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     says so with @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy(True)".
     The default is to refuse them, so a sandbox fails closed.
 
-    The policy decides whether code counts as restricted for every rule that protects the process from sandboxed code
-    rather than applying a filesystem or network policy: the @ref DataProvider::DataProviderAppInfo "external_io"
-    apps of the data provider catalog and their factories and connections, the process-wide registrations of the data
-    provider catalog (apps, actions, change listeners, process-wide callbacks), and the module checks that use the
-    same query.  @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()" answers it, seeing the
+    The policy decides whether code counts as restricted for the rules that keep sandboxed code from I/O that %Qore
+    does not control: the @ref DataProvider::DataProviderAppInfo "external_io" apps of the data provider catalog
+    and their factories and connections, and the module checks that use the same query.  It does not lift the rules
+    that keep what code registers process-wide from carrying a sandbox: the data provider catalog's registrations,
+    change listeners and callbacks are refused to code that any sandbox governs
+    (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), because an object or callback created
+    under a sandbox carries it (see @ref sandbox_provenance), so its interrupts and limits would apply to every
+    caller of what was registered.  @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()" answers it, seeing the
     sandbox through a policy barrier or a system-policy capability as
     @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()" does;
     @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" answers it as

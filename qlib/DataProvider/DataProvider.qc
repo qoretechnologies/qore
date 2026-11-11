@@ -579,7 +579,7 @@ public class DataProvider {
 
         @throw PROVIDER-ERROR the given provider has already been registered
         @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the factory is sandboxed
-        (Qore::SandboxManager::isRestricted(); since %DataProvider 3.12)
+        (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
     static registerFactory(AbstractDataProviderFactory factory) {
         # a factory name taken by sandboxed code would be denied to the module that owns it
@@ -2016,11 +2016,11 @@ if (action.data_provider_info) {
 
     #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change process-wide state
     /** Process-wide state changes what the module does for every caller, of other tenants and of trusted code, and
-        process-wide code runs on their threads; Qore::SandboxManager::isRestricted() also sees a sandbox under a
+        process-wide code runs on their threads; Qore::SandboxManager::isSandboxed() also sees a sandbox under a
         policy barrier
     */
     private:internal static checkNotSandboxed(string what) {
-        if (SandboxManager::isRestricted()) {
+        if (SandboxManager::isSandboxed()) {
             throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would change "
                 "what the module does for other tenants and for trusted code", what);
         }

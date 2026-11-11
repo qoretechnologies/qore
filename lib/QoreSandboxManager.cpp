@@ -1525,7 +1525,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->cpu_time_limit = cpu_time_limit.load();
     result->max_stack_size = max_stack_size.load();
     result->mem_account->limit.store(mem_account->limit.load());
-    result->setUncontrolledApiPolicy(fs_mgr.priv->uncontrolled_api_allowed.load(std::memory_order_acquire));
+    // the effective policy: a copy of a composition allows them only if every member does
+    result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
     // Don't copy interrupt state
 
     return result;

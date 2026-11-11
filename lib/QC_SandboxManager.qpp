@@ -677,13 +677,12 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
 /** Uncontrolled APIs - functions, methods and classes of the @ref Qore::PO_NO_UNCONTROLLED_APIS
     "uncontrolled API" functional domain, such as the Java classes of the \c jni module and the Python objects of the
     \c python module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
-    the parse options of the sandbox apply to what they do.  By default a sandbox refuses them at run time, as
-    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" does: a call raises \c INVALID-FUNCTION-ACCESS.
-
-    The refusal is a policy check, resolved as the filesystem and network checks are: it applies to the code that
-    the sandbox governs, to library module code that runs for that code, and to objects and callbacks created under
-    the sandbox, also when trusted code calls them later.  A system-policy capability of trusted code
-    (createSystemPolicyCall()) is not refused.  When more than one sandbox governs the code, the uncontrolled APIs are
+    the parse options of the sandbox apply to what they do.  The policy is the trust setting of the code that the
+    sandbox governs: code whose sandbox refuses them (the default) counts as restricted for the rules that keep
+    sandboxed code from such I/O, such as the @ref DataProvider::DataProviderAppInfo "external_io" apps of the data
+    provider catalog (see isRestricted() and isUncontrolledApiAllowed()).  It applies to the code that the sandbox
+    governs, to library module code that runs for that code, and to objects and callbacks created under the sandbox,
+    also when trusted code calls them later.  When more than one sandbox governs the code, the uncontrolled APIs are
     allowed only if every one of them allows them.
 
     A host that attaches a sandbox only for its resource limits, interrupts or I/O policy, and trusts the code to use
@@ -1221,10 +1220,10 @@ static bool SandboxManager::isUncontrolledApiAllowed() [flags=RET_VALUE_ONLY] {
     APIs, does not make its code restricted: the host trusts that code to run arbitrary code in Java or Python, which can
     reach everything that a restriction based on this method protects.
 
-    Trusted infrastructure uses it where a sandboxed caller must be refused something that changes what the process
-    does for others, or that does I/O the sandbox does not control (for example the
-    @ref DataProvider::DataProviderAppInfo::external_io "external_io" apps of the data provider catalog), and
-    isSandboxed() where it decides where work runs.
+    Trusted infrastructure uses it where a sandboxed caller must be refused I/O that the sandbox does not control
+    (for example the @ref DataProvider::DataProviderAppInfo::external_io "external_io" apps of the data provider
+    catalog), and isSandboxed() where it decides where work runs or refuses a process-wide registration: what code
+    that a sandbox governs registers carries that sandbox, whatever its policy.
 
     It masks nothing and reveals only whether the calling code is restricted, so it is not restricted itself.
 
@@ -1233,9 +1232,10 @@ static bool SandboxManager::isUncontrolledApiAllowed() [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-# a process-wide registration: refused to tenants, allowed to trusted code that a sandbox governs only for interrupts
+# I/O that the sandbox does not control: refused to tenants, allowed to trusted code that a sandbox governs only
+# for its interrupts
 if (SandboxManager::isRestricted()) {
-    throw "ACCESS-DENIED", "sandboxed code cannot register a process-wide handler";
+    throw "ACCESS-DENIED", "sandboxed code cannot use this connection";
 }
     @endcode
 
