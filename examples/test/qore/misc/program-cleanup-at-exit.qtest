@@ -64,6 +64,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         addTestCase("a Program owned at static scope survives exit()", \staticProgramExitTest());
         addTestCase("a Program owned at static scope preserves the exit status",
             \staticProgramExitStatusTest());
+        addTestCase("a Program owned at static scope survives the end of a script that does not call exit()",
+            \staticProgramNormalEndTest());
         set_return_value(main());
     }
 
@@ -159,6 +161,21 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         }
         assertEq(0, runChild("exit(0);", 0, "staticpgm"),
             "exit(0) tears the process down without crashing");
+    }
+
+    #! a script that ends normally, with no call of exit(): the teardown of the static Program runs from the exit
+    #! handlers of the process after the thread-local data of the main thread was destroyed
+    /** the teardown scopes of the Programs that a thread deletes were a thread_local std::vector, which the main
+        thread destroyed when exit() started; the Program of "staticpgm" is deleted afterwards by a static
+        destructor, which pushed onto the destroyed vector: a heap use-after-free that aborted the process
+        ("corrupted double-linked list", status 134)
+    */
+    private staticProgramNormalEndTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
+        assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgm"),
+            "a script that ends normally tears the process down without crashing");
     }
 
     private staticProgramExitStatusTest() {

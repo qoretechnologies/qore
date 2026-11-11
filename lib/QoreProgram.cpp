@@ -574,16 +574,26 @@ std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private
 #endif
 
 namespace {
-//! the Programs whose data the calling thread deletes, innermost last; see qore_program_torn_down_by_current_thread()
-/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+class QoreProgramTeardownScope;
+
+//! the innermost scope of the Programs whose data the calling thread deletes; see
+//! qore_program_torn_down_by_current_thread()
+/** The scopes are a stack linked through the scopes themselves (they live on the stack of the code that deletes the
+    Program), and this is a plain pointer, not a container: a thread_local object with a destructor, such as a
+    std::vector, is destroyed by the main thread when exit() starts, before the destructors of static objects run, and
+    a static object that owns a Program (a module's, or QoreProgramHelper's) deletes it then, so it used the destroyed
+    container (a heap use-after-free and "corrupted double-linked list" when a script ended normally with a Program
+    held at static scope).  A pointer has no destructor and is valid for the life of the thread.
 */
-thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
+thread_local const QoreProgramTeardownScope* qore_program_teardown_scope = nullptr;
 
 //! records that the calling thread deletes a Program's data while it exists
+/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+*/
 class QoreProgramTeardownScope {
 public:
-    QoreProgramTeardownScope(const QoreProgram* pgm) {
-        qore_programs_torn_down.push_back(pgm);
+    QoreProgramTeardownScope(const QoreProgram* pgm) : pgm(pgm), prev(qore_program_teardown_scope) {
+        qore_program_teardown_scope = this;
         counted = qore_thread_program_teardown_enter();
     }
 
@@ -591,21 +601,35 @@ public:
         if (counted) {
             qore_thread_program_teardown_leave();
         }
-        qore_programs_torn_down.pop_back();
+        assert(qore_program_teardown_scope == this);
+        qore_program_teardown_scope = prev;
+    }
+
+    //! returns true if the calling thread is deleting the data of \a p in an enclosing scope
+    static bool contains(const QoreProgram* p) {
+        for (const QoreProgramTeardownScope* i = qore_program_teardown_scope; i; i = i->prev) {
+            if (i->pgm == p) {
+                return true;
+            }
+        }
+        return false;
     }
 
     QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
     QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
 
 private:
+    //! the Program whose data is deleted
+    const QoreProgram* pgm;
+    //! the enclosing scope of the thread, or nullptr
+    const QoreProgramTeardownScope* prev;
     //! the thread's data records the teardown (see qore_reference_program_needs_entry())
     bool counted;
 };
 }
 
 bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm) {
-    return std::find(qore_programs_torn_down.begin(), qore_programs_torn_down.end(), pgm)
-        != qore_programs_torn_down.end();
+    return QoreProgramTeardownScope::contains(pgm);
 }
 
 QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
