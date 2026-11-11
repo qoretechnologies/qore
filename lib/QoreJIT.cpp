@@ -2508,10 +2508,10 @@ void QoreJIT::bgCompileThreadLoop() {
             // sets the context while the compile runs, on every exit path
             struct ContextHelper {
                 BgCompileContext*& ptr;
-                DLLLOCAL ContextHelper(BgCompileContext*& ptr, BgCompileContext& ctx) : ptr(ptr) {
+                ContextHelper(BgCompileContext*& ptr, BgCompileContext& ctx) : ptr(ptr) {
                     ptr = &ctx;
                 }
-                DLLLOCAL ~ContextHelper() {
+                ~ContextHelper() {
                     ptr = nullptr;
                 }
             } ctx_helper(bg_compile_ctx, ctx);

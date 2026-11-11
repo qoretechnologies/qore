@@ -1128,10 +1128,10 @@ public:
     //! the original values of the converted arguments; created with the first one (see prepareDefaultArgs())
     std::unique_ptr<CodeEvaluationHelper::arg_restore_vec_t> args;
 
-    DLLLOCAL CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
+    CodeEvaluationArgRestoreHelper(ExceptionSink* xsink) : xsink(xsink) {
     }
 
-    DLLLOCAL ~CodeEvaluationArgRestoreHelper() {
+    ~CodeEvaluationArgRestoreHelper() {
         if (args) {
             for (auto& i : *args) {
                 i.second.discard(xsink);
@@ -1140,7 +1140,7 @@ public:
     }
 
     //! Puts the original values back into the argument list, which then holds them
-    DLLLOCAL void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
+    void restore(QoreListNodeEvalOptionalRefHolder& tmp) {
         if (!args) {
             return;
         }
