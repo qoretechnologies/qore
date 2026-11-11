@@ -34205,7 +34205,15 @@ class ExprTreeSerializer {
         if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NEW));
             const QoreClass* qc = no->getClass();
-            writeStr(qore_aot_encode_class_ref(qc));
+            // the object type with the type arguments of a generic class (new G<float>()): without them the object
+            // is constructed as a plain generic class
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            const QoreTypeInfo* object_type_info = no->getObjectTypeInfo();
+            if (object_type_info && QoreTypeInfo::getParameterizedClassType(object_type_info)) {
+                class_ref += "\ntype:";
+                class_ref += qore_get_aot_serializable_type_path(object_type_info);
+            }
+            writeStr(class_ref);
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -34220,7 +34228,14 @@ class ExprTreeSerializer {
         // ScopedObjectCallNode: new Namespace::ClassName(args)
         if (auto* so = dynamic_cast<const ScopedObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SCOPED_NEW));
-            writeStr(qore_aot_encode_class_ref(so->oc));
+            // the object type with the type arguments of a generic class; see EN_NEW
+            std::string class_ref = qore_aot_encode_class_ref(so->oc);
+            const QoreTypeInfo* object_type_info = so->getObjectTypeInfo();
+            if (object_type_info && QoreTypeInfo::getParameterizedClassType(object_type_info)) {
+                class_ref += "\ntype:";
+                class_ref += qore_get_aot_serializable_type_path(object_type_info);
+            }
+            writeStr(class_ref);
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
