@@ -984,10 +984,12 @@ public:
 
         // the thread's QoreThreadLocalObject objects, last created first: they are released here, when the thread ends
         // (or the main thread's data is deleted by qore_cleanup()), and not by a thread-local destructor
-        for (size_t i = exit_cleanups.size(); i > 0; --i) {
-            exit_cleanups[i - 1].first(exit_cleanups[i - 1].second);
+        // (until none is left: an object that is first used while another is released registers one more)
+        while (!exit_cleanups.empty()) {
+            std::pair<void (*)(void*), void*> cleanup = exit_cleanups.back();
+            exit_cleanups.pop_back();
+            cleanup.first(cleanup.second);
         }
-        exit_cleanups.clear();
 
         // delete all user TLD
         for (auto& i : u_tld_map) {

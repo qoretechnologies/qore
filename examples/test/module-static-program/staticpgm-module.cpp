@@ -41,7 +41,7 @@ static void staticpgm_module_delete();
 
 // This file is built twice: as "staticpgm" (an empty Program) and, with STATICPGM_CODE defined, as "staticpgmcode",
 // whose Program holds an object with a Qore destructor that runs code at static destruction (see
-// static-program-code.qtest and qore#5778)
+// program-cleanup-at-exit.qtest and qore#5778)
 #ifdef STATICPGM_CODE
 #define STATICPGM_NAME "staticpgmcode"
 #define STATICPGM_DESC_FUNC staticpgmcode_qore_module_desc
