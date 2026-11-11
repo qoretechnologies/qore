@@ -344,6 +344,29 @@ list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
    return p->getThreadList();
 }
 
+//! Requests cooperative cancellation of one of this Program's threads, scoped to this Program
+/** As @ref Qore::Program::cancelThread() "Program::cancelThread()": the request applies only while the thread runs
+    in this Program or in a call that originated in it, so that a thread that called into this Program and returned
+    does not raise it in its own code; a debugger ends the threads of a program with it (see
+    DebugProgramControl::terminateProgram())
+
+    @param tid positive thread ID
+    @param reason optional explanation
+
+    @return true if cancellation was requested, false if the thread is no longer active here
+
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-cancellation
+
+    @since %Qore 3.0
+*/
+bool ProgramControl::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL] {
+   if (tid <= 0 || tid > INT_MAX) {
+      xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+      return false;
+   }
+   return p->cancelThread(tid, reason ? reason->c_str() : nullptr, xsink);
+}
+
 //! Checks if a user function exists in the program object
 /** @param function_name the function name to check
 

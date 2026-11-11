@@ -582,7 +582,8 @@
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
     activity. @ref Qore::Program::cancelThread() "cancelThread()" and
-    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program.
+    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program,
+    as @ref Qore::ProgramControl::cancelThread() "ProgramControl::cancelThread()" does for a debugger.
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
