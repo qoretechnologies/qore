@@ -463,6 +463,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("a thread that is cancelled while it steps is not cancelled again by the debugger",
             \steppingCancelTest());
         addTestCase("the debugger ends a program whose thread ends first", \terminateEndedThreadTest());
+        addTestCase("the debugger ends a thread stopped at an exception that the program catches",
+            \terminateCaughtExceptionTest());
         addTestCase("the programs of a debugger have the type of their list", \allProgramsTypeTest());
         addTestCase("a stopped thread is resumed only after its program is marked as ending",
             \terminateOrderTest());
@@ -1688,6 +1690,47 @@ try {
         assertFalse(dpc.isRegisteredStopped(p.tid));
     }
 
+    # a thread stopped at an exception that the program catches ends when the debugger ends the program: the
+    # THREAD-CANCELLED with which it leaves its stop does not replace the exception that it was stopped at, which the
+    # try statement of the program catches, but terminateProgram() cancels the stopped thread too, so the cancellation
+    # is raised again and ends the thread before the loop after the try statement runs (qore#5797); the code is in a
+    # function, which runs in the AST interpreter while a debugger is attached, where every execution mode stops at
+    # the exception
+    terminateCaughtExceptionTest() {
+        DebuggedProgram p(dpc, "%modern
+our int caught;
+our int after;
+sub f() {
+    try {
+        throw \"TEST-ERROR\";
+    } catch (hash<ExceptionInfo> ex) {
+        caught = 1;
+    }
+    for (int i = 0; i < 3; ++i) {
+        after = i;
+    }
+}
+f();
+");
+        on_exit p.cleanup();
+        p.breakAt(14);
+        hash<auto> e = p.runToStop();
+        assertEq(14, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        # the thread stops at its detach, as any thread that the debugger ends (see terminateStoppedTest())
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+        assertNothing(p.pgm.getGlobalVariable("after"), "the loop did not run");
+    }
+
     # a thread that sees that the program is ending can reach its detach before terminateProgram() cancels the threads;
     # the thread is then not cancelled, so that its stop at the detach is not ended and it can be resumed
     terminateEndedThreadTest() {
@@ -1836,7 +1879,8 @@ int x = 1;
     }
 
     # a stopped thread that the debugger ends ends, also if debugging ends before it continues, as when the wait of the
-    # kill command of qdbg ends before the thread has run, and then qdbg quits: it was not cancelled, as it was stopped
+    # kill command of qdbg ends before the thread has run, and then qdbg quits: the command with which the debugger
+    # resumed it ends it, as its cancellation does not end its stop (qore#5794, qore#5797)
     endDebuggingTerminatedTest() {
         DebuggedProgram p(dpc);
         on_exit p.cleanup();
