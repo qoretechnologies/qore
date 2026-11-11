@@ -17658,9 +17658,9 @@ void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* p
 
 namespace {
 //! holds the thread that converts the end of a synchronous socket call's operation into an error
-/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close of the socket ends the call's operation, the
-    test cancels the held thread and lets it continue, so that the thread converts the end of its operation with a
-    pending cancellation, as when its cancellation and the close that the cancellation causes race
+/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close or a reset of the connection ends the call's
+    operation, the test cancels the held thread and lets it continue, so that the thread converts the end of its
+    operation with a pending cancellation, as when its cancellation and the close that the cancellation causes race
 */
 struct SocketCancelConversionHold {
     std::mutex m;

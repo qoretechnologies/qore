@@ -32,6 +32,9 @@ class SocketCancelCloseRaceTest inherits QUnit::Test {
     constructor() : Test("SocketCancelCloseRaceTest", "1.0") {
         addTestCase("a receive ended by a close while the thread is cancelled raises THREAD-CANCELLED",
             \cancelAfterCloseTest());
+        addTestCase("a send ended by a reset while the thread is cancelled raises THREAD-CANCELLED",
+            \cancelAfterResetTest());
+        addTestCase("a send ended by a reset without a cancellation raises SOCKET-SEND-ERROR", \resetWithoutCancelTest());
         addTestCase("a receive ended by a close without a cancellation still raises SOCKET-CLOSED",
             \closeWithoutCancelTest());
         set_return_value(main());
@@ -64,12 +67,78 @@ class SocketCancelCloseRaceTest inherits QUnit::Test {
         }();
     }
 
-    #! Waits until the receive waits on the async I/O controller, so that the close ends its operation
-    /** A close before the receive starts would make the receive fail at once, without an operation to end
+    #! Starts a thread that sends more data than the socket buffers of both sides take and reports the error of its
+    #! call; returns its TID
+    private int startSender(Socket client, Queue result) {
+        return background sub () {
+            try {
+                client.send(binary(strmul("x", 16 * 1024 * 1024)), HangTimeout);
+                result.push({"err": "NO-ERROR"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation is sticky: clear it, so that this thread can report the error
+                clear_thread_cancel();
+                result.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+    }
+
+    #! Runs a send that the peer's reset ends, with the hold armed for the sending thread; returns its error
+    /** Issue #5793: an operation that the cancellation's effects end with an error other than SOCKET-CLOSED, such as
+        the failure of a write that finds the connection reset by the peer, reports the cancellation as well.  The
+        peer closes the connection once data that it has not read has arrived, which resets the connection, and the
+        send, which writes more data than the buffers of both sides take, fails.
+
+        @param cancel if the sending thread is cancelled while it is held
     */
-    private waitForReceive(Socket client) {
-        assertTrue(call_function("dbg_socket_wait_controller_op", client, HangTimeout),
-            "the receive waits on the controller");
+    private hash<auto> runSendReset(bool cancel) {
+        *Socket peer;
+        Socket client = connectPair(\peer);
+        on_exit if (peer) {
+            peer.close();
+        }
+        Queue result();
+        int tid = startSender(client, result);
+        # the send waits on the controller for the peer to read
+        waitForControllerOp(client, "the send waits on the controller");
+        # data that the peer has not read has arrived
+        assertTrue(peer.isDataAvailable(HangTimeout), "the peer has data that it has not read");
+        on_exit resetHold();
+        call_function("dbg_hold_socket_cancel_conversion", tid);
+        # the close with unread data resets the connection
+        peer.close();
+        assertTrue(call_function("dbg_wait_socket_cancel_conversion_held", HangTimeoutMs),
+            "the sending thread converts the failure of its write");
+        assertEq(0, result.size(), "the sending thread has not reported its error yet");
+        if (cancel) {
+            assertTrue(cancel_thread(tid, "test cancellation"), "the sending thread is cancelled");
+        }
+        assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),
+            "the sending thread leaves the hold");
+        return result.get(HangTimeout);
+    }
+
+    cancelAfterResetTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runSendReset(True);
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the failed write; "
+            + row.desc);
+    }
+
+    resetWithoutCancelTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runSendReset(False);
+        assertEq("SOCKET-SEND-ERROR", row.err, "a reset by the peer is reported as the failed write; " + row.desc);
+    }
+
+    #! Waits until the call waits on the async I/O controller, so that the close or the reset ends its operation
+    /** A close before the call starts would make the call fail at once, without an operation to end
+    */
+    private waitForControllerOp(Socket client, string what = "the receive waits on the controller") {
+        assertTrue(call_function("dbg_socket_wait_controller_op", client, HangTimeout), what);
     }
 
     #! Closes the socket in another thread with the hold armed for the receiving thread, and waits until it is held
@@ -106,7 +175,7 @@ class SocketCancelCloseRaceTest inherits QUnit::Test {
         Queue result();
         int tid = startReceiver(client, result);
         # the receive waits for data that never comes, until the close below ends it
-        waitForReceive(client);
+        waitForControllerOp(client);
         on_exit resetHold();
         Counter closed = closeAndHold(client, result, tid);
         # the thread is cancelled after the close ended its operation, before it raises its error
@@ -129,7 +198,7 @@ class SocketCancelCloseRaceTest inherits QUnit::Test {
         on_exit peer.close();
         Queue result();
         int tid = startReceiver(client, result);
-        waitForReceive(client);
+        waitForControllerOp(client);
         on_exit resetHold();
         Counter closed = closeAndHold(client, result, tid);
         assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),

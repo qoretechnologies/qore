@@ -25,6 +25,9 @@ class HttpClientCancelCloseRaceTest inherits QUnit::Test {
 
         #! the same, in milliseconds, for the debug hooks
         const HangTimeoutMs = 30000;
+
+        #! the size of the upload whose write fails: more than the socket buffers take at once
+        const UploadSize = 4 * 1024 * 1024;
     }
 
     constructor() : Test("HttpClientCancelCloseRaceTest", "1.0") {
@@ -36,6 +39,9 @@ class HttpClientCancelCloseRaceTest inherits QUnit::Test {
             "THREAD-CANCELLED", \recvCallbackCancelAfterCloseTest());
         addTestCase("a request with a send callback ended by a close while the thread is cancelled raises "
             "THREAD-CANCELLED", \sendCallbackCancelAfterCloseTest());
+        addTestCase("an upload whose send fails while the thread is cancelled raises THREAD-CANCELLED",
+            \uploadCancelAfterResetTest());
+        addTestCase("an upload whose send fails without a cancellation reports the failure", \uploadResetTest());
         set_return_value(main());
     }
 
@@ -138,6 +144,95 @@ class HttpClientCancelCloseRaceTest inherits QUnit::Test {
         assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the close that ended the "
             "request first; " + row.desc);
         assertNothing(row.next, "no other error is raised after the cancellation");
+    }
+
+    #! Runs an upload whose write fails because the peer resets the connection, with the hold armed for the
+    #! uploading thread; returns the upload's error
+    /** Issue #5793: the cancellation of the uploading thread can end the upload with the failure of its write
+        (SOCKET-SEND-ERROR) rather than with a closed connection, when the write is the first to find the connection
+        reset (the peer resets it when it finds it closed, or the code that the cancellation ends closes it); the
+        cancellation must still reach the caller.  Which side finds the reset first depends on timing, so the reset is
+        made by dbg_fail_http1_send_side() when the receive side has found nothing and the body is about to be
+        written: the write fails first in every run.
+
+        @param cancel if the uploading thread is cancelled while it is held
+    */
+    private hash<auto> runUploadReset(bool cancel) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d", port), "timeout": HangTimeout});
+        on_exit client.disconnect();
+        client.connect();
+        Socket peer = listener.accept(HangTimeout);
+        on_exit peer.close();
+
+        # the uploading thread starts the upload once the hold is armed for it
+        Counter go(1);
+        Queue result();
+        int tid = background sub () {
+            try {
+                go.waitForZero(HangTimeout);
+                binary body = binary(strmul("x", UploadSize));
+                client.send(body, "POST", "/race", {"Content-Type": "application/octet-stream"});
+                result.push({"err": "NO-ERROR"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation is sticky: clear it, so that this thread can report the error
+                clear_thread_cancel();
+                result.push({"err": ex.err, "desc": ex.desc, "next": ex.next.err});
+            }
+        }();
+
+        # the peer resets the connection, with no answer, when the body is about to be written
+        Counter reached(1);
+        call_function("dbg_fail_http1_send_side", reached, peer, "");
+        hash<auto> hook_result;
+        on_exit if (!hook_result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+        call_function("dbg_hold_socket_cancel_conversion", tid);
+        on_exit {
+            # never leave the hold armed or a thread held
+            call_function("dbg_reset_socket_cancel_conversion", HangTimeoutMs);
+        }
+        go.dec();
+
+        assertEq(0, reached.waitForZero(HangTimeout), "the peer reset the connection before the body was written");
+        assertTrue(call_function("dbg_wait_socket_cancel_conversion_held", HangTimeoutMs),
+            "the uploading thread converts the failure of the upload");
+        assertEq(0, result.size(), "the uploading thread has not reported its error yet");
+        if (cancel) {
+            assertTrue(cancel_thread(tid, "test cancellation"), "the uploading thread is cancelled");
+        }
+        assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),
+            "the uploading thread leaves the hold");
+        hash<auto> row = result.get(HangTimeout);
+        hook_result = call_function("dbg_http1_send_failure_result");
+        # the write was the first to find the reset, in this run as well
+        assertEq("SOCKET-SEND-ERROR", hook_result.error, "the upload's operation failed in its write");
+        return row;
+    }
+
+    uploadCancelAfterResetTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks require a debug build");
+        }
+        hash<auto> row = runUploadReset(True);
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the failed write of the "
+            "upload; " + row.desc);
+        assertNothing(row.next, "no other error is raised after the cancellation");
+    }
+
+    uploadResetTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks require a debug build");
+        }
+        hash<auto> row = runUploadReset(False);
+        assertEq("SOCKET-SEND-ERROR", row.err, "without a cancellation, the failed write of the upload is reported; "
+            + row.desc);
     }
 
     closeWithoutCancelTest() {

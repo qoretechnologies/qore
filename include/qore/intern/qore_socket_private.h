@@ -264,11 +264,14 @@ DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsi
 DLLLOCAL void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink);
 
 //! Raises the calling thread's pending cancellation, if any, for a synchronous call whose operation ended without
-//! reaching its goal (canceled, or ended by a close of its socket)
+//! reaching its goal (canceled, or ended with an error)
 /** A cancellation of the thread can end the operation before the wait for it sees the cancellation: the code that the
-    cancellation ends closes the socket (an HTTP client closes its transport), and the close cancels the operation.
-    The caller must see the cancellation, whichever event ended the operation first, not the close that it caused.
-    Also raises a sandbox limit or an interrupt of the thread's Program (see qore_check_cancel()).
+    cancellation ends closes the socket (an HTTP client closes its transport), and the close cancels the operation or
+    makes it fail; the peer can also reset the connection that it finds closed, so that a write fails (issue #5793).
+    The caller must see the cancellation, whichever event ended the operation first, not the error that it caused; an
+    error that the operation raised for another reason is replaced as well, as the next cancellation point would raise
+    the cancellation in any case.  Also raises a sandbox limit or an interrupt of the thread's Program (see
+    qore_check_cancel()).
 
     @param op the operation, for the exception's description
     @param xsink for the exception
