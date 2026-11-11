@@ -1320,7 +1320,7 @@ static thread_local std::vector<PendingFunctionDefault>*
 static std::string qoreAOTNewObjectClassRef(const std::string& class_ref);
 static std::string qoreAOTNewObjectTypePath(const std::string& class_ref);
 static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
-        const std::string& full_class_path, std::vector<QoreValue>& args);
+        const std::string& full_class_path, std::vector<QoreValue>& args, std::string& type_error);
 
 //! binds the builtin constructor variant that a deserialized object construction resolves to
 static void qore_aot_bind_constructor_variant(ScopedObjectCallNode* socn, const QoreClass* qc) {
@@ -1600,7 +1600,12 @@ static bool readDeferredMemberDefault(
     const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(getProgram(), member_class_path.c_str());
     if (qc) {
         // Resolvable now: construct ScopedObjectCallNode immediately (with the object type of a generic class)
-        default_val = qoreAOTMakeObjectDefaultNode(getProgram(), qc, class_path, args);
+        std::string type_error;
+        default_val = qoreAOTMakeObjectDefaultNode(getProgram(), qc, class_path, args, type_error);
+        if (!type_error.empty()) {
+            error = "cannot resolve the object type of a new_object default: " + type_error;
+            return false;
+        }
     } else {
         // Defer: store class path + args; second pass resolves.
         pim.pending_new_class_path = class_path;
@@ -3413,24 +3418,38 @@ static std::string qoreAOTNewObjectTypePath(const std::string& class_ref) {
         : class_ref.substr(pos + strlen(QORE_AOT_NEW_OBJECT_TYPE_MARKER));
 }
 
+//! creates the node of a serialized new-object default
+/** @param type_error receives the reason if the object type of the value cannot be resolved: nothing is created then
+    (the arguments are released) and the caller reports the error, as the readers of the same value do; a value
+    whose object type cannot be resolved is a serializer bug, which a fallback to the plain class type would hide
+    @return the node, or nothing if the object type cannot be resolved
+*/
 static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
-        const std::string& full_class_path, std::vector<QoreValue>& args) {
+        const std::string& full_class_path, std::vector<QoreValue>& args, std::string& type_error) {
     const std::string class_path = qoreAOTNewObjectClassRef(full_class_path);
-    QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
-    ScopedObjectCallNode* socn = nullptr;
+    type_error.clear();
+    // the object type with the type arguments of a generic class, if the class was constructed with them
+    const QoreTypeInfo* object_type_info = qc ? qc->getTypeInfo() : nullptr;
     if (qc) {
-        // the object type with the type arguments of a generic class, if the class was constructed with them
-        const QoreTypeInfo* object_type_info = qc->getTypeInfo();
         const std::string type_path = qoreAOTNewObjectTypePath(full_class_path);
         if (!type_path.empty()) {
             QoreAOTTypeResolver resolver(pgm);
-            std::string type_error;
-            if (const QoreTypeInfo* ti = resolver.resolve(type_path.c_str(), type_error)) {
+            object_type_info = resolver.resolve(type_path.c_str(), type_error);
+            if (!object_type_info || !type_error.empty()) {
                 if (type_error.empty()) {
-                    object_type_info = ti;
+                    type_error = "the object type '" + type_path + "' is not resolved";
                 }
+                for (QoreValue& v : args) {
+                    v.discard(nullptr);
+                }
+                args.clear();
+                return QoreValue();
             }
         }
+    }
+    QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
+    ScopedObjectCallNode* socn = nullptr;
+    if (qc) {
         socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, object_type_info);
     } else {
         const QoreTypeInfo* object_type_info = qore_get_aot_deferred_type_info(
@@ -16622,8 +16641,14 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             if (!pim.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     qoreAOTNewObjectClassRef(pim.pending_new_class_path).c_str(), &all_class_map);
+                std::string type_error;
                 pim.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    pim.pending_new_class_path, pim.pending_new_args);
+                    pim.pending_new_class_path, pim.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        pim.pending_new_class_path.c_str(), "class", qc->getName(), pim.name.c_str(),
+                        type_error.c_str());
+                }
                 pim.pending_new_class_path.clear();
             }
 
@@ -16826,8 +16851,14 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             if (!psm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     qoreAOTNewObjectClassRef(psm.pending_new_class_path).c_str(), &all_class_map);
+                std::string type_error;
                 psm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    psm.pending_new_class_path, psm.pending_new_args);
+                    psm.pending_new_class_path, psm.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        psm.pending_new_class_path.c_str(), "class", qc->getName(), psm.name.c_str(),
+                        type_error.c_str());
+                }
                 psm.pending_new_class_path.clear();
             }
 
@@ -17331,8 +17362,14 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             if (!phm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     qoreAOTNewObjectClassRef(phm.pending_new_class_path).c_str());
+                std::string type_error;
                 phm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    phm.pending_new_class_path, phm.pending_new_args);
+                    phm.pending_new_class_path, phm.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        phm.pending_new_class_path.c_str(), "hashdecl", hd->getName(), phm.name.c_str(),
+                        type_error.c_str());
+                }
                 phm.pending_new_class_path.clear();
             }
 
