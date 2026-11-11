@@ -1,0 +1,520 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 client flow control: stream credit granted as the application reads
+
+/*  ClientReceiveCredit.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5820: the HTTP/2 and HTTP/3 clients granted the flow-control credit of a streaming response's data as it
+    arrived, so an application that does not read made the client buffer everything a fast server sends.  The stream
+    credit is now granted as the application takes the data (the connection credit as it arrives).  The server of
+    the test writes to the response stream directly; a full buffer on the server (HTTP2-FLOW-CONTROL, or a full QUIC
+    send buffer) is the deterministic signal that the client stopped granting credit.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+%exec-class ClientReceiveCreditTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The size of each write of the server
+const ChunkSize = 32768;
+
+#! The data written to a client that does not read before its stream must be full (a hang guard)
+const MaxBytes = 256 * 1024 * 1024;
+
+#! The largest initial stream window of the clients (HTTP/3: QUIC_CLIENT_INITIAL_MAX_STREAM_DATA)
+const MaxWindow = 16 * 1024 * 1024;
+
+#! The size of the plain response returned whole
+const PlainSize = 8 * 1024 * 1024;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Hands the test each response stream that the server sets up, so that the test writes to it directly
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! receives {proto, sock, stream_id, session_id, wake} for each stream
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        streams.push({"proto": "h2", "sock": sock, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http3SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp3(sock, cx, hdr,
+            cid, session_id, stream_id, wake_callback);
+        streams.push({"proto": "h3", "sock": sock, "session_id": session_id, "stream_id": stream_id,
+            "wake": wake_callback});
+        return rv;
+    }
+}
+
+#! Answers with a body returned whole
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, binary(strmul("p", PlainSize)), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+#! Writes to a response stream from the server side
+class Writer {
+    private {
+        hash<auto> st;
+    }
+
+    constructor(hash<auto> st) {
+        self.st = st;
+    }
+
+    #! Writes data; returns False if the stream's send buffer is full
+    bool write(data d) {
+        if (st.proto == "h2") {
+            try {
+                st.sock.sendHttp2StreamData(st.stream_id, binary(d), False);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    return False;
+                }
+                rethrow;
+            }
+        } else if (st.sock.submitQuicStreamData(st.session_id, st.stream_id, d, False) == 1) {
+            return False;
+        }
+        if (st.wake) {
+            st.wake();
+        }
+        return True;
+    }
+
+    #! Writes data, waiting for the client to take data whenever the buffer is full (a hang guard only)
+    writeAll(data d) {
+        int waits = 0;
+        while (!write(d)) {
+            if (st.wake) {
+                st.wake();
+            }
+            int rc = st.proto == "h2"
+                ? st.sock.waitForHttp2StreamDrain(st.stream_id, 1s)
+                : st.sock.waitForQuicStreamDrain(st.session_id, st.stream_id, 1s);
+            if (rc && ++waits > HangGuard.durationSeconds()) {
+                throw "TEST-ERROR", "the client took no data within the hang guard";
+            }
+            if (!rc) {
+                waits = 0;
+            }
+        }
+    }
+
+    #! Writes until the stream's send buffer is full; returns the bytes written, or -1 if MaxBytes were written
+    int writeUntilFull() {
+        binary chunk = binary(strmul("x", ChunkSize));
+        int taken = 0;
+        while (taken < MaxBytes) {
+            if (!write(chunk)) {
+                return taken;
+            }
+            taken += ChunkSize;
+        }
+        return -1;
+    }
+
+    #! Ends the stream
+    end() {
+        if (st.proto == "h2") {
+            st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+        } else {
+            st.sock.submitQuicStreamData(st.session_id, st.stream_id, "", True);
+        }
+        if (st.wake) {
+            st.wake();
+        }
+    }
+}
+
+#! Reads a stream to its end on a thread of its own
+class BodyReader {
+    public {
+        int bytes = 0;
+        *hash<ExceptionInfo> err;
+        Counter done(1);
+    }
+
+    constructor(HttpClientIo::HttpClientStreamHandle stream) {
+        background sub () {
+            on_exit done.dec();
+            try {
+                while (True) {
+                    auto v = stream.readData(HangGuard);
+                    if (!exists v) {
+                        throw "TEST-ERROR", "no data within the hang guard";
+                    }
+                    if (v.typeCode() == NT_HASH) {
+                        if (v.end_stream) {
+                            break;
+                        }
+                        if (v.error) {
+                            throw "TEST-ERROR", sprintf("stream error: %y", v);
+                        }
+                        continue;
+                    }
+                    bytes += v.size();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+    }
+
+    int wait() {
+        return done.waitForZero(HangGuard);
+    }
+}
+
+class ClientReceiveCreditTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler handler();
+        int tls_port;
+    }
+
+    constructor() : Test("ClientReceiveCreditTest", "1.0") {
+        foreach string proto in (("h2", "h3")) {
+            addTestCase(proto + ": a client that does not read is bounded, and then reads everything",
+                \testNonReadingThenDrain(), proto);
+            addTestCase(proto + ": a stream that is not read does not hold up the other streams",
+                \testOneStreamNotRead(), proto);
+            addTestCase(proto + ": streams reset with data in flight do not pin the connection",
+                \testResetInFlight(), proto);
+            addTestCase(proto + ": large downloads through every read path", \testReadPaths(), proto);
+            addTestCase(proto + ": a stream's channel outlives its session", \testChannelOutlivesSession(),
+                proto);
+        }
+        addTestCase("h2: HTTPClient streaming (receive callback) gets every byte", \testHttpClientRecvCallback());
+        addTestCase("every deferred byte is credited once", \testCreditAccounting());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("client-receive-credit", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setDefaultHandler("push", handler);
+        server.setHandler("plain", "^/?plain", NOTHING, new PlainHandler());
+        server.waitForAsyncIo();
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getMgr(string proto) {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    private string getUrl() {
+        return sprintf("https://127.0.0.1:%d/", tls_port);
+    }
+
+    #! Opens a streaming response and returns its handle and its server-side stream
+    private hash<auto> openStream(HttpClientIo::HttpClientConnectionManager mgr) {
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(getUrl(), "GET", "/",
+            {"Accept": "text/event-stream"});
+        return {"stream": stream, "writer": new Writer(handler.streams.get(HangGuard))};
+    }
+
+    testNonReadingThenDrain(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        hash<auto> s = openStream(mgr);
+        Writer w = s.writer;
+        # the client takes nothing: its stream credit runs out, and the server's send buffer fills
+        int taken = w.writeUntilFull();
+        assertGt(0, taken + 1, sprintf("the server's buffer is full before %d bytes", MaxBytes));
+        # the client holds the data it received without granting its stream credit, at most the stream's window
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            hash<auto> stats = call_function("dbg_http_stream_credit_stats");
+            int outstanding = stats.deferred - stats.credited;
+            assertGt(0, outstanding, "the client holds unread data without granting its stream credit");
+            assertLt(MaxWindow + 1, outstanding, "the data held for the client is bounded by the stream window");
+        }
+        # the client reads now: everything arrives, including what the server writes from now on
+        BodyReader r(s.stream);
+        w.writeAll(binary(strmul("y", 4 * 1024 * 1024)));
+        w.end();
+        assertEq(0, r.wait(), "the reader ended");
+        assertNothing(r.err);
+        assertEq(taken + 4 * 1024 * 1024, r.bytes, "every byte arrives");
+    }
+
+    testOneStreamNotRead(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        hash<auto> idle = openStream(mgr);
+        on_exit idle.stream.cancel();
+        # the stream that is not read is full
+        assertGt(0, idle.writer.writeUntilFull() + 1, "the stream that is not read is full");
+        # the other streams of the connection complete
+        foreach int i in (xrange(3)) {
+            hash<auto> s = openStream(mgr);
+            BodyReader r(s.stream);
+            s.writer.writeAll(binary(strmul("z", 2 * 1024 * 1024)));
+            s.writer.end();
+            assertEq(0, r.wait(), sprintf("stream %d ended", i));
+            assertNothing(r.err);
+            assertEq(2 * 1024 * 1024, r.bytes, sprintf("stream %d gets every byte", i));
+        }
+    }
+
+    testResetInFlight(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        foreach int i in (xrange(5)) {
+            hash<auto> s = openStream(mgr);
+            # data in flight when the client resets the stream
+            s.writer.write(binary(strmul("r", ChunkSize)));
+            s.stream.cancel();
+            # a response returned whole on the same connection still arrives
+            hash<auto> resp = mgr.request(getUrl(), "GET", "/plain", NOTHING, NOTHING, HangGuard, False);
+            assertEq(PlainSize, resp.body.size(), sprintf("round %d: the response arrives whole", i));
+        }
+    }
+
+    testReadPaths(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        # a body returned whole
+        assertEq(PlainSize, mgr.request(getUrl(), "GET", "/plain", NOTHING, NOTHING, HangGuard, False).body.size(),
+            "a body returned whole");
+        # SseStreamReader (readData())
+        {
+            hash<auto> s = openStream(mgr);
+            HttpClientStreamingIo::SseStreamReader reader(s.stream);
+            string payload = strmul("e", 65536);
+            Counter written(1);
+            *hash<ExceptionInfo> write_err;
+            background sub () {
+                on_exit written.dec();
+                try {
+                    foreach int i in (xrange(64)) {
+                        s.writer.writeAll(sprintf("id: %d\ndata: %s\n\n", i, payload));
+                    }
+                    s.writer.end();
+                } catch (hash<ExceptionInfo> ex) {
+                    write_err = ex;
+                }
+            }();
+            int n = 0;
+            while (*hash<SseMessageInfo> e = reader.readEvent(HangGuard)) {
+                assertEq(string(n), e.id);
+                ++n;
+            }
+            assertEq(64, n, "SseStreamReader gets every event");
+            assertEq(0, written.waitForZero(HangGuard));
+            assertNothing(write_err, "the server wrote every event");
+        }
+        # the parsed events of a Queue (SSE state installed on the stream)
+        {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(getUrl());
+            Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
+            Writer w(handler.streams.get(HangGuard));
+            string payload = strmul("q", 65536);
+            Counter written(1);
+            *hash<ExceptionInfo> write_err;
+            background sub () {
+                on_exit written.dec();
+                try {
+                    foreach int i in (xrange(64)) {
+                        w.writeAll(sprintf("id: %d\ndata: %s\n\n", i, payload));
+                    }
+                    w.end();
+                } catch (hash<ExceptionInfo> ex) {
+                    write_err = ex;
+                }
+            }();
+            int n = 0;
+            while (True) {
+                auto e = q.get(HangGuard);
+                if (!e || e.hasKey("err")) {
+                    break;
+                }
+                assertEq(string(n), e.id);
+                ++n;
+            }
+            assertEq(64, n, "the event Queue gets every event");
+            assertEq(0, written.waitForZero(HangGuard));
+            assertNothing(write_err, "the server wrote every event");
+            stream.cancel();
+        }
+    }
+
+    testHttpClientRecvCallback() {
+        HTTPClient hc({"url": getUrl()});
+        hc.setHttp2Mode("required");
+        int size = 4 * 1024 * 1024;
+        Counter written(1);
+        *hash<ExceptionInfo> write_err;
+        background sub () {
+            on_exit written.dec();
+            try {
+                Writer w(handler.streams.get(HangGuard));
+                w.writeAll(binary(strmul("c", size)));
+                w.end();
+            } catch (hash<ExceptionInfo> ex) {
+                write_err = ex;
+            }
+        }();
+        int bytes = 0;
+        hc.sendWithRecvCallback(sub (hash<auto> h) {
+            if (h.data) {
+                bytes += h.data.size();
+            }
+        }, NOTHING, "GET", "/", {"Accept": "text/event-stream"}, HangGuard);
+        assertEq(0, written.waitForZero(HangGuard));
+        assertNothing(write_err, "the server wrote everything");
+        assertEq(size, bytes, "the receive callback gets every byte");
+    }
+
+    testChannelOutlivesSession(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        hash<auto> s = openStream(mgr);
+        s.writer.writeAll(binary(strmul("o", 256 * 1024)));
+        # the session ends with data unread in the stream's channel
+        delete mgr;
+        # the channel is read after its session is gone, and then released
+        int bytes = 0;
+        while (True) {
+            auto v;
+            try {
+                v = s.stream.readData(HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            if (!exists v || v.typeCode() == NT_HASH) {
+                break;
+            }
+            bytes += v.size();
+        }
+        assertGe(0, bytes, "the unread data can be read or dropped after the session has ended");
+        remove s;
+    }
+
+    testCreditAccounting() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the credit accounting is only in debug builds");
+        }
+        # every client of the earlier cases is gone: every deferred byte has been credited once, when it was consumed
+        # or settled with its stream (reports after that are counted as excess or orphaned, and credit nothing)
+        hash<auto> stats = call_function("dbg_http_stream_credit_stats");
+        assertGt(0, stats.deferred, "stream credit was deferred");
+        assertEq(stats.deferred, stats.credited, sprintf("every deferred byte is credited once: %y", stats));
+    }
+}

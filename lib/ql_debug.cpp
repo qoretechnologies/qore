@@ -19874,6 +19874,23 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     return QoreValue();
 }
 
+QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+
+//! returns the accounting of the client stream credit deferred until the application consumes the data
+/** @return a hash with keys \c deferred, \c credited, \c excess and \c orphaned (bytes); see
+    QoreDbgStreamCreditStats
+*/
+static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    QoreDbgStreamCreditStats& s = qore_dbg_stream_credit_stats;
+    h->setKeyValue("deferred", s.deferred.load(), xsink);
+    h->setKeyValue("credited", s.credited.load(), xsink);
+    h->setKeyValue("excess", s.excess.load(), xsink);
+    h->setKeyValue("orphaned", s.orphaned.load(), xsink);
+    return h.release();
+}
+
 namespace {
 //! the Counter armed by dbg_http_submit_after_close(), with a reference
 std::mutex dbg_submit_after_close_m;
@@ -21139,6 +21156,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");

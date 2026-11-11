@@ -69,6 +69,9 @@ static bool http2DebugEnabled() {
 // nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
 // Use the new API when available for better cross-platform compatibility
 #include <nghttp2/nghttp2ver.h>
+
+#include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
 #define QORE_USE_NGHTTP2_MEM_SEND2 1
 #endif
@@ -399,6 +402,12 @@ Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char
 }
 
 Http2Session::~Http2Session() {
+#ifdef DEBUG
+    // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
+    for (auto& i : deferred_stream_credit) {
+        qore_dbg_stream_credit_stats.credited.fetch_add(i.second, std::memory_order_relaxed);
+    }
+#endif
     // No io_uring cleanup needed here — PendingRead holds a weak_ptr<Http2Session>,
     // which expires naturally when this destructor runs. processCompletions() will
     // skip delivery for expired sessions.
@@ -493,7 +502,14 @@ int Http2Session::init(ExceptionSink* xsink) {
     // testHttp2RstStreamDuringInputStreamStreaming (and Qorus issue-1704.qtest
     // which exposed this on conn_mgr via the H2 MultiplexPoll headers-first
     // dispatch fix).
-    nghttp2_option_set_no_auto_window_update(opts, is_server ? 1 : 0);
+    //
+    // The client grants credit in the same way (issue #5820): the connection credit of the data it receives at
+    // once, and the stream credit of a streaming response's data only when the application consumes it (see
+    // creditConsumedStreamData()), so that the data held for an application that does not read is bounded by the
+    // stream's window; the stream credit of a response returned whole is granted when it is received (its size is
+    // bounded by the maximum response body size).  As on the server, nghttp2 consumes DATA that arrives on a stream
+    // that was reset locally itself, through the same accounting, so the connection window does not pin.
+    nghttp2_option_set_no_auto_window_update(opts, 1);
     // RFC 8441: enable extended CONNECT support in nghttp2.
 
     if (is_server) {
@@ -1071,6 +1087,106 @@ int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
         return -1;
     }
     return 0;
+}
+
+size_t qore_http_stream_value_body_size(const QoreValue& v) {
+    if (v.getType() != NT_HASH) {
+        return 0;
+    }
+    QoreValue body = v.get<const QoreHashNode>()->getKeyValue("body");
+    switch (body.getType()) {
+        case NT_BINARY:
+            return body.get<const BinaryNode>()->size();
+        case NT_STRING:
+            return body.get<const QoreStringNode>()->size();
+        default:
+            return 0;
+    }
+}
+
+void qore_http_stream_wake_socket(const std::string& sock_hash) {
+    if (sock_hash.empty()) {
+        return;
+    }
+    // no controller is created here: without one, there is no I/O thread to wake
+    AsyncIoControllerPriv* ctl = qore_get_async_io_controller_if_exists();
+    if (!ctl) {
+        return;
+    }
+    ctl->wakeSocket(sock_hash);
+    ExceptionSink xsink;
+    ctl->deref(&xsink);
+    xsink.clear();
+}
+
+QueueItemConsumeHook::QueueItemConsumeHook(std::shared_ptr<QoreConsumeHook> target) : target(std::move(target)) {
+    assert(this->target);
+}
+
+void QueueItemConsumeHook::record(const void* item, size_t bytes) {
+    if (!bytes) {
+        return;
+    }
+    std::lock_guard<std::mutex> lg(m);
+    sizes[item] += bytes;
+}
+
+size_t QueueItemConsumeHook::measure(const QoreValue& v) const {
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (!node) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lg(m);
+    auto i = sizes.find(node);
+    if (i == sizes.end()) {
+        return 0;
+    }
+    size_t rv = i->second;
+    // an item is reported once: taken, or dropped with the queue
+    sizes.erase(i);
+    return rv;
+}
+
+#ifdef DEBUG
+void qore_http_stream_credit_orphaned(size_t bytes) {
+    qore_dbg_stream_credit_stats.orphaned.fetch_add(bytes, std::memory_order_relaxed);
+}
+#endif
+
+void Http2Session::setStreamCreditOnConsume(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getOrCreateStream(stream_id);
+    if (stream) {
+        stream->credit_on_consume = true;
+    }
+}
+
+size_t Http2Session::creditConsumedStreamData(int32_t stream_id, size_t len) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto i = deferred_stream_credit.find(stream_id);
+    size_t take = (i == deferred_stream_credit.end()) ? 0 : std::min(len, i->second);
+#ifdef DEBUG
+    if (len > take) {
+        qore_dbg_stream_credit_stats.excess.fetch_add(len - take, std::memory_order_relaxed);
+    }
+#endif
+    if (!take) {
+        return 0;
+    }
+    if (!(i->second -= take)) {
+        deferred_stream_credit.erase(i);
+    }
+#ifdef DEBUG
+    qore_dbg_stream_credit_stats.credited.fetch_add(take, std::memory_order_relaxed);
+#endif
+    // a stream that has closed takes no stream credit; nghttp2 refuses it, which is not an error here
+    if (session) {
+        int rv = nghttp2_session_consume_stream(session, stream_id, take);
+        if (rv) {
+            printd(5, "creditConsumedStreamData() stream %d: %s\n", stream_id, nghttp2_strerror(rv));
+        }
+    }
+    return take;
 }
 
 int Http2Session::consumeReceivedData(int32_t stream_id, size_t len) {
@@ -2299,8 +2415,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         }
     } else {
         stream = h2->getOrCreateStream(stream_id);
-        // the rest of a response body that exceeded the limit is discarded
+        // the rest of a response body that exceeded the limit is discarded; its credit is granted at once
         if (stream && stream->body_too_large) {
+            if (len) {
+                h2->consumeReceivedData(stream_id, len);
+            }
             return 0;
         }
     }
@@ -2364,6 +2483,26 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
                 nghttp2_strerror(rv));
         }
+    } else if (len) {
+        // client: the connection credit is granted now; the stream credit of a streaming response (and of a CONNECT
+        // tunnel) when the application consumes the data, and that of a response returned whole now (issue #5820)
+        if (stream && stream->credit_on_consume && !stream->body_too_large) {
+            int rv = h2->consumeReceivedData(0, len);
+            if (rv) {
+                printd(5, "onDataChunkRecvCallback: consuming %zu bytes on the connection failed: %s\n", len,
+                    nghttp2_strerror(rv));
+            }
+            h2->deferred_stream_credit[stream_id] += len;
+#ifdef DEBUG
+            qore_dbg_stream_credit_stats.deferred.fetch_add(len, std::memory_order_relaxed);
+#endif
+        } else {
+            int rv = h2->consumeReceivedData(stream_id, len);
+            if (rv) {
+                printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
+                    nghttp2_strerror(rv));
+            }
+        }
     }
     return 0;
 }
@@ -2384,6 +2523,17 @@ void Http2Session::raiseStreamReset(int32_t stream_id, uint32_t error_code, Exce
 int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
         uint32_t error_code, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    // a closed stream takes no more stream credit: the credit deferred until the data is consumed is settled
+    // (issue #5820); data consumed later is reported in vain
+    if (h2) {
+        auto dit = h2->deferred_stream_credit.find(stream_id);
+        if (dit != h2->deferred_stream_credit.end()) {
+#ifdef DEBUG
+            qore_dbg_stream_credit_stats.credited.fetch_add(dit->second, std::memory_order_relaxed);
+#endif
+            h2->deferred_stream_credit.erase(dit);
+        }
+    }
     if (h2 && http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: stream close stream=%d error_code=%u\n",
             stream_id, error_code);

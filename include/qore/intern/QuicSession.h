@@ -142,6 +142,8 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
+    bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
     /** Parallel to Http2StreamInfo::reset.  Subsequent
         @ref QuicSession::sendStreamData() calls must fail with a typed
@@ -522,6 +524,19 @@ public:
     */
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
                        bool end_stream, ExceptionSink* xsink);
+
+    //! Client: the stream credit of the stream's response data is granted when the application consumes it
+    /** See Http2Session::setStreamCreditOnConsume() (issue #5820).
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int64_t stream_id);
+
+    //! Grants the stream credit of response data that the application of a client has consumed
+    /** See Http2Session::creditConsumedStreamData(); the caller wakes the I/O controller so that MAX_STREAM_DATA is
+        sent.
+
+        @return the number of bytes credited
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int64_t stream_id, size_t len);
 
     //! Handles a send on a stream that is closed for sending without an error; see sendStreamData()
     /** Must be called with \c mtx_ held.
@@ -1926,6 +1941,9 @@ private:
 
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int64_t, size_t> deferred_stream_credit_;
 
     //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
     /** @since %Qore 3.0

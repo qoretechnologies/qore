@@ -37,9 +37,12 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <string>
 
 class Queue;
+class QoreConsumeHook;
+class QueueItemConsumeHook;
 
 //! Per-stream WebSocket frame decode/reassemble/dispatch state machine
 /** Designed to be driven from the I/O thread of a multiplexed transport
@@ -184,7 +187,21 @@ public:
     */
     DLLLOCAL Queue* getMsgQueue() const { return msg_queue; }
 
+    //! Has the stream credit of the data granted as the messages made from it are taken from the queue (#5820)
+    /** @param stream_hook the hook of the stream; the messages of the queue, and data that makes no message
+        (control frames), are reported to it
+    */
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> stream_hook);
+
 private:
+    //! reports the data that the messages were made from, if the stream's credit is granted as they are taken
+    std::shared_ptr<QueueItemConsumeHook> item_hook;
+    //! the data fed since the last message, which no message has been made from yet
+    size_t pending_bytes = 0;
+
+    //! Reports the data fed since the last message at once if the decoder holds no partial frame
+    DLLLOCAL void creditUnusedData();
+
     Queue* msg_queue;
     SendCallback send_cb;
     bool is_server;

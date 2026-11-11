@@ -46,6 +46,8 @@
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
+#include "qore/intern/AsyncCompletionAction.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 
 #include <atomic>
 #include <cstdio>
@@ -6832,6 +6834,50 @@ void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, E
         new QoreSocketObjectQuicEnqueuePollOperation(this,
             QoreSocketObjectQuicEnqueuePollOperation::Action::Cancel, session_id, stream_id),
         "cancelQuicStream", xsink);
+}
+
+//! Installs the consume hook on a client streaming action; returns false if the action takes none
+static bool qore_socket_object_set_action_consume_hook(AbstractAsyncAction* action,
+        const std::shared_ptr<QoreConsumeHook>& hook) {
+    if (ChannelAction* a = dynamic_cast<ChannelAction*>(action)) {
+        a->setConsumeHook(hook);
+        return true;
+    }
+    if (StreamingHeadersPromiseNotifierAction* a = dynamic_cast<StreamingHeadersPromiseNotifierAction*>(action)) {
+        a->setConsumeHook(hook);
+        return true;
+    }
+    if (FrameStateAction* a = dynamic_cast<FrameStateAction*>(action)) {
+        a->setConsumeHook(hook);
+        return true;
+    }
+    return false;
+}
+
+void QoreSocketObject::installHttp2StreamConsumeHook(int32_t stream_id, AbstractAsyncAction* action) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        return;
+    }
+    std::shared_ptr<QoreConsumeHook> hook = std::make_shared<HttpStreamConsumeHook<Http2Session, int32_t>>(h2,
+        stream_id, getIoIdentityHash());
+    // the hook reports everything that the action delivers before the stream's credit is deferred
+    if (qore_socket_object_set_action_consume_hook(action, hook)) {
+        h2->setStreamCreditOnConsume(stream_id);
+    }
+}
+
+void QoreSocketObject::installQuicStreamConsumeHook(int64_t session_id, int64_t stream_id,
+        AbstractAsyncAction* action) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    if (!session) {
+        return;
+    }
+    std::shared_ptr<QoreConsumeHook> hook = std::make_shared<HttpStreamConsumeHook<QuicSession, int64_t>>(session,
+        stream_id, getIoIdentityHash());
+    if (qore_socket_object_set_action_consume_hook(action, hook)) {
+        session->setStreamCreditOnConsume(stream_id);
+    }
 }
 
 int QoreSocketObject::cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {

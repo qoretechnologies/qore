@@ -163,6 +163,11 @@ struct Http2StreamInfo {
     */
     bool end_stream_received = false;
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
+    //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
+    /** Set by setStreamCreditOnConsume() once a consume hook reports the stream's consumption; data received
+        before is credited when it is received.
+    */
+    bool credit_on_consume = false;
     bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
                                    //!< response.  Separate from @c dispatched because we do NOT want to inhibit
                                    //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
@@ -376,6 +381,29 @@ public:
         @return 0 on success, or an nghttp2 error code
     */
     DLLLOCAL int consumeReceivedData(int32_t stream_id, size_t len);
+
+    //! Grants the stream flow-control credit of data that the application of a client has consumed (issue #5820)
+    /** The client grants the connection credit of a streaming response's data when it is received, and the stream
+        credit only when the application takes the data from the Channel or Queue that delivers it (see
+        QoreConsumeHook), so that the data held for an application that does not read is bounded by the stream's
+        window.  The credit is capped at the stream credit that was deferred for the stream, so that a value reported
+        twice, or data that was credited when it was received, is never credited twice; a stream that has closed
+        takes no credit (its connection credit was granted when the data was received).
+
+        Thread-safe; the caller wakes the I/O controller so that the WINDOW_UPDATE is sent.
+
+        @param stream_id the stream
+        @param len the number of bytes consumed
+
+        @return the number of bytes credited
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int32_t stream_id, size_t len);
+
+    //! Client: the stream credit of the stream's response data is granted when the application consumes it
+    /** Called once a consume hook that reports the stream's consumption has been installed (see
+        HttpStreamConsumeHook); the stream credit of data received from then on is deferred.
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int32_t stream_id);
 
     //! Submit a PRIORITY frame to set stream priority
     /** @param stream_id Stream ID to prioritize
@@ -1056,6 +1084,9 @@ private:
               end_stream(end_stream) {}
     };
     std::unordered_map<int32_t, BodyData> pending_body_data;
+
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that
