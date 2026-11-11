@@ -40,13 +40,14 @@
     The bytes per level are measured as a difference: the recursion runs until STACK-LIMIT-EXCEEDED in a thread with
     a 4 MB stack and in one with an 8 MB stack, so (8 MB - 4 MB) / (depth8 - depth4) is the stack of one level, free
     of the stack guard, of the thread's start and of the frames below the recursion.  What remains depends on the
-    compiler, its optimization level and the C library's headers (in a release build, the frame of the IR
-    interpreter is about 2.4 KB larger with musl than with glibc, with the same GCC version): the budgets are for
-    GCC on x86_64 Linux with glibc (Ubuntu) and with musl (Alpine), each with a release build (-O3) and a debug
-    build (-Og, as CI builds Qore).  They are 5-7% over the measured values, but never more than 400 bytes, so that
-    a frame of 528 bytes more at each level (an array in a frame of the IR interpreter, as 13281fbbd7 added) fails
-    here.  On any other compiler, CPU, C library or flag set (see getCalibrationMismatch()) the values are reported
-    but not checked, as they are in sanitizer builds, whose stack redzones make every frame larger.
+    compiler, its optimization level, its hardening options and the C library's headers (a memcpy() that musl's
+    fortify-headers check made the frame of the IR interpreter 2.4 KB larger on Alpine until NaN-boxed values were
+    converted with std::bit_cast): the budgets are for GCC on x86_64 Linux with glibc (Ubuntu) and with musl
+    (Alpine), each with a release build (-O3) and a debug build (-Og, as CI builds Qore).  They are 5-7% over the
+    measured values, but never more than 400 bytes, so that a frame of 528 bytes more at each level (an array in a
+    frame of the IR interpreter, as 13281fbbd7 added) fails here.  On any other compiler, CPU, C library or flag set
+    (see getCalibrationMismatch()) the values are reported but not checked, as they are in sanitizer builds, whose
+    stack redzones make every frame larger.
 
     tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
     -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
@@ -134,10 +135,10 @@ int sub run(string f) {
                 "ast": {"function": 2960, "method": 2890, "static method": 2810},
                 "ir": {"function": 4670, "method": 6250, "static method": 4670},
             },
-            # measured: ast 2783, 2592, 2639; ir 6765, 7928, 6820
+            # measured: ast 2783, 2592, 2639; ir 4350, 5504, 4401
             "musl release": {
                 "ast": {"function": 2980, "method": 2780, "static method": 2830},
-                "ir": {"function": 7165, "method": 8328, "static method": 7220},
+                "ir": {"function": 4650, "method": 5850, "static method": 4700},
             },
             # measured: ast 2766, 2704, 2623; ir 4369, 5857, 4369
             "musl debug": {

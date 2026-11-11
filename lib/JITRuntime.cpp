@@ -1647,17 +1647,11 @@ extern "C" DLLEXPORT int64_t qore_rt_guard_float(uint64_t val) {
 // --- Boxing helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_box_big_int(int64_t val) {
-    QoreValue v(val);
-    uint64_t bits;
-    std::memcpy(&bits, &v, sizeof(bits));
-    return bits;
+    return toBits(QoreValue(val));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_box_float(double val) {
-    QoreValue v(val);
-    uint64_t bits;
-    std::memcpy(&bits, &v, sizeof(bits));
-    return bits;
+    return toBits(QoreValue(val));
 }
 
 // --- Local variable helpers ---
@@ -11585,9 +11579,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
             }
         }
     } else {
-        QoreValue result;
-        std::memcpy(&result, &result_bits, sizeof(result));
-        val = result;
+        val = fromBits(result_bits);
     }
 
     // Restore thread-local runtime parse options/location saved above.
@@ -20341,8 +20333,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,
         ExceptionSink* xsink) {
     const CaseNode* cn = reinterpret_cast<const CaseNode*>(case_node_ptr);
-    QoreValue switch_val;
-    std::memcpy(&switch_val, &switch_val_bits, sizeof(switch_val));
+    QoreValue switch_val = fromBits(switch_val_bits);
     bool match = cn->matches(switch_val, xsink);
     return toBits(QoreValue(match));
 }

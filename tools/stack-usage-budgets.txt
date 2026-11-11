@@ -26,7 +26,8 @@
 # the hardening macros that Ubuntu's GCC predefines; no link-time optimization
 @hardening _FORTIFY_SOURCE=3 __CET__=3 __SSP_STRONG__=3
 @ipo 0
-# glibc (the Ubuntu image of the CI's release build); with musl (Alpine), QoreIRInterpreter::execute is 6016 bytes
+# glibc (the Ubuntu image of the CI's release build); musl (Alpine) gives the same frames on this path since
+# toBits() and fromBits() convert with std::bit_cast instead of a memcpy() that musl's fortify-headers check
 @target x86_64-linux-gnu
 
 # IR execution: every call of a function or method from the IR interpreter
