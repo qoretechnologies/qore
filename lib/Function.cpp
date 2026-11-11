@@ -5732,8 +5732,10 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
-                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
-                if (bi->helper_ir) {
+                // a background call of a function, of a closure or of a resolved self or static method is an
+                // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
+                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
                     qore_mark_specialization_helpers(*bi->helper_ir, s);
                 }
