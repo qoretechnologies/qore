@@ -619,6 +619,15 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 }
                 logDebug("SSE connection %y dropped from a send to all connections: %s: %s", conn.cid, ex.err,
                     ex.desc);
+                # a stream that nothing has ended yet (its state could not be read) is stopped, so that its client
+                # does not keep an open stream that gets no more events
+                if (ex.err != HttpServerAsyncIo::SseClientOverflowErr && ex.err != "SSE-CLOSED") {
+                    try {
+                        conn.stop();
+                    } catch (hash<ExceptionInfo> ex1) {
+                        logError("error stopping SSE connection %y: %s", conn.cid, get_exception_string(ex1));
+                    }
+                }
                 # deregistered by the end of its stream when the server reports it; a connection whose stream has no
                 # such report is deregistered here (a connection already deregistered is ignored)
                 deregisterConnection(conn.cid);

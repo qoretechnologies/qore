@@ -462,11 +462,12 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             overflowed = True;
             cb = warning_callback;
         }
-        # a stream that has already ended (the client went away, or it was aborted or closed) is not dropped for its
-        # bound: it is closed
+        # a stream that has already ended (the client went away, or it was aborted) is not dropped for its bound: it
+        # is closed; a draining stream (see close()) still has a client, which is dropped
         bool ended;
         try {
-            ended = getState() != STATE_STREAMING;
+            string st = getState();
+            ended = st == STATE_DISCONNECTED || st == STATE_ERROR;
         } catch (hash<ExceptionInfo> ex) {
             # the state lock could not be taken: the stream is dropped below
         }

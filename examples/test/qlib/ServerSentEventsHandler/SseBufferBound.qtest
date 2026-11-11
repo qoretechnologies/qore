@@ -602,6 +602,16 @@ class SseBufferBoundTest inherits QUnit::Test {
             assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
         }
         {
+            # a draining stream (close()) still has a client, which is dropped for its bound
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            op.close();
+            assertEq(HttpServerAsyncIo::HttpSseStreamPollOperation::STATE_DRAINING, op.getState());
+            assertThrows("SSE-CLIENT-OVERFLOW", \op.queueRawString(), "z");
+            assertTrue(op.isDisconnected(), "the client of the draining stream is dropped");
+        }
+        {
             # the end of a stream reported before its peer-close callback is set is delivered when it is set
             HttpServerAsyncIo::Http2SseStream h2(new Socket(), 1);
             h2.notifyPeerClosed();
