@@ -1279,7 +1279,8 @@ private:
 class IRLocalVarSet {
 public:
     //! inserts a local; returns true if it was not in the set
-    DLLLOCAL bool insert(const LocalVar* var) {
+    //! (always inlined: a declaration in a loop calls it in every iteration)
+    QORE_INTERN_ALWAYS_INLINE bool insert(const LocalVar* var) {
         assert(var);
         if ((used + 1) * 4 > table.size() * 3) {
             grow();
@@ -1433,10 +1434,10 @@ struct IRActiveIterator {
     the operator, before the statement's temporaries and before the handlers of the blocks left run (qore#5670); the
     iterators of foreach statements are released at their places among the locals (see releaseActiveIteratorsFrom())
 */
-static void releaseOperatorIterators(std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters) {
-    if (iters.empty()) {
-        return;
-    }
+/** Only an exception calls it, so it is kept out of the interpreter's loop (see restoreOpenImplicitContexts())
+*/
+static __attribute__((noinline, cold)) void releaseOperatorIterators(
+        std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters) {
     std::vector<std::pair<FunctionalOperatorInterface*, uint64_t>> released;
     for (const auto& entry : iters) {
         if (!entry.second.foreach) {
@@ -1449,6 +1450,36 @@ static void releaseOperatorIterators(std::unordered_map<FunctionalOperatorInterf
     for (auto& [iter, seq] : released) {
         iters.erase(iter);
         delete iter;
+    }
+}
+
+//! Restores the implicit arguments and elements open at \a inst, innermost first (see QoreIRInterpreter::execute())
+/** Only an exception that leaves the frame calls it, so it is kept out of the interpreter's loop: inlined into the
+    unwinding code at each of its many call sites, it made the compiler generate worse code for the normal path
+*/
+template <typename Values>
+static __attribute__((noinline, cold)) void restoreOpenImplicitContexts(const QoreIRFunction& func,
+        const QoreIRInstruction* inst, Values& values, ExceptionSink* xsink) {
+    auto it = func.interpreter_open_implicit_contexts.find(inst);
+    if (it == func.interpreter_open_implicit_contexts.end()) {
+        return;
+    }
+    for (size_t i = it->second.size(); i > 0; --i) {
+        const QoreIRInstruction* push = it->second[i - 1];
+        uint32_t id = push->result.id;
+        if (id >= values.size()) {
+            continue;
+        }
+        if (push->opcode == QoreIROpcode::PushImplicitElement) {
+            save_implicit_element(static_cast<int>(values[id].getAsBigInt()));
+            continue;
+        }
+        // as PopImplicitArg does
+        const QoreListNode* current = thread_get_implicit_args();
+        if (current) {
+            const_cast<QoreListNode*>(current)->deref(xsink);
+        }
+        thread_set_implicit_args(values[id].template get<QoreListNode>());
     }
 }
 
@@ -8226,34 +8257,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // instruction are known from the IR (QoreIRFunction::interpreter_open_implicit_contexts), so the normal path does
     // nothing for them
     auto restoreImplicitContexts = [&]() {
-        if (func.interpreter_open_implicit_contexts.empty() || !block || ip >= block->instructions.size()) {
-            return;
-        }
-        auto it = func.interpreter_open_implicit_contexts.find(block->instructions[ip].get());
-        if (it == func.interpreter_open_implicit_contexts.end()) {
-            return;
-        }
-        for (size_t i = it->second.size(); i > 0; --i) {
-            const QoreIRInstruction* push = it->second[i - 1];
-            uint32_t id = push->result.id;
-            if (id >= values.size()) {
-                continue;
-            }
-            if (push->opcode == QoreIROpcode::PushImplicitElement) {
-                save_implicit_element(static_cast<int>(values[id].getAsBigInt()));
-                continue;
-            }
-            // as PopImplicitArg does
-            const QoreListNode* current = thread_get_implicit_args();
-            if (current) {
-                const_cast<QoreListNode*>(current)->deref(xsink);
-            }
-            thread_set_implicit_args(values[id].get<QoreListNode>());
+        if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
+            restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
         }
     };
     auto unwindForException = [&]() {
         restoreImplicitContexts();
-        releaseOperatorIterators(active_iterators);
+        if (!active_iterators.empty()) {
+            releaseOperatorIterators(active_iterators);
+        }
         while (!scope_stack.empty()) {
             releaseScopeTemps(scope_stack.back());
             fireScopeExits(scope_stack.size() - 1);
@@ -14060,10 +14072,25 @@ load_local_done:
                     QoreValue v = values[id];
                     values[id] = QoreValue();
                     v.discard(xsink);
+                    // the release of a fused pipeline's stage input (a second operand) runs on the normal path only:
+                    // an exception that a destructor raises leaves the pipeline there, as it leaves the AST
+                    // interpreter's functional map iterator
+                    if (inst->operands.size() > 1 && xsink && *xsink) {
+                        if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return false;
+                    }
                 }
-                // no exception check: the instruction also runs on the path of an exception, which stays raised; an
-                // exception raised by a destructor is added to it, and the CheckException that follows the releases
-                // of a statement's exit, as UninstantiateLocal, branches to the handler
+                // no exception check otherwise: the instruction also runs on the path of an exception, which stays
+                // raised; an exception raised by a destructor is added to it, and the CheckException that follows the
+                // releases of a statement's exit, as UninstantiateLocal, branches to the handler
                 ++ip;
                 break;
             }

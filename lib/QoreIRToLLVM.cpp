@@ -33389,11 +33389,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->SetInsertPoint(release_bb);
                 builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                // the release of a fused pipeline's stage input runs on the normal path only: an exception that a
+                // destructor raises leaves the pipeline there (see the interpreter); only a release checks
+                if (kept) {
+                    skip_next_exception_check = false;
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 builder->CreateBr(cont_bb);
                 builder->SetInsertPoint(cont_bb);
             }
-            // no exception check: the instruction also runs on the path of an exception, which stays raised (see
-            // the interpreter)
+            // no exception check otherwise: the instruction also runs on the path of an exception, which stays
+            // raised (see the interpreter)
             return true;
         }
         case QoreIROpcode::UnwindTemps: {

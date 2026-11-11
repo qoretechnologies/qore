@@ -20483,7 +20483,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     auto release_stage_input = [&](QoreIRValue input, QoreIRValue stage_result, const QoreTypeInfo* input_type,
             const QoreProgramLocation* release_loc) {
         if (input.id != stage_result.id && qore_ir_type_may_hold_object(input_type)) {
-            builder.createReleaseStageInput(input, stage_result, release_loc);
+            withExceptionTarget(builder.createReleaseStageInput(input, stage_result, release_loc));
         }
     };
     FusedLoopState state{
@@ -21103,9 +21103,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // the value replaces the code's previous value of the expression (a receiver of the statement) after the
         // iterator: the element and the stage values are released before the iterator unless they are the value,
         // which gets its reference after the iterator, and they are released after it then
-        builder.createReleaseStageInput(iter_element, result, loc);
+        withExceptionTarget(builder.createReleaseStageInput(iter_element, result, loc));
         for (const QoreIRValue& v : stage_values) {
-            builder.createReleaseStageInput(v, result, loc);
+            withExceptionTarget(builder.createReleaseStageInput(v, result, loc));
         }
         builder.createIteratorRelease(iter_val, loc);
         // the base source, which the operator's functional iterator held, is released with it, before the value
@@ -21487,7 +21487,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     auto release_foreach_stage_input = [&](QoreIRValue input, QoreIRValue stage_result,
             const QoreProgramLocation* release_loc) {
         if (input.id != stage_result.id && qore_ir_type_may_hold_object(foreach_input_type)) {
-            builder.createReleaseStageInput(input, stage_result, release_loc);
+            withExceptionTarget(builder.createReleaseStageInput(input, stage_result, release_loc));
         }
     };
     FusedForeachState state{stage_indices, foreach_index};

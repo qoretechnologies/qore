@@ -227,7 +227,10 @@ stage's input (the element, or the value of the stage before it) is released onc
 before the stages after it, the consumer and a `foreach` body run, as the AST interpreter's functional map iterator
 releases it: a `ReleaseOwnedTemp` with the stage's value as a second operand, which keeps a value that is the stage's
 value at run time (an optimization can make `$1 ?? $1` the element itself, so a release list of `IteratorNext` drops
-a value that became the element, and the element's slot holds nothing once it is released).  The value of `first`
+a value that became the element, and the element's slot holds nothing once it is released).  Unlike the other
+releases of `ReleaseOwnedTemp`, which also run on the path of an exception, this one runs on the normal path only:
+an exception that the input's destructor raises leaves the pipeline to the instruction's exception target, and only
+a release that ran checks for one.  The value of `first`
 replaces the code's previous value of the expression after the operator's iterator and source are released, as the
 AST interpreter returns it.  The value of a
 predicate that can hold an object is released when the element has been decided on
