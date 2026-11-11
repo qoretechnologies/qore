@@ -1,0 +1,247 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 client stream queues drained by the async I/O thread over TLS
+
+/*  StreamQueueRefused.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5840: when the Queue registered for an HTTP/2 client stream refused a value (a Queue in an error state), the
+    I/O thread's drain released the value that the Queue had already released (a crash), and raised the Queue's
+    exception to whatever call ran the connection's poll operation next.  A refusal now ends the stream's
+    registration, and the connection goes on serving its other streams.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class StreamQueueRefusedTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Hands the test each response stream that the server sets up, so that the test writes to it directly
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! receives {sock, stream_id, wake} for each stream
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        streams.push({"sock": sock, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+}
+
+class StreamQueueRefusedTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("StreamQueueRefused", "1.0") {
+        addTestCase("a stream queue in an error state is not raised to other calls", \testRefused());
+        addTestCase("data that a stream queue refuses is released once", \testRefusedData());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"debug": False});
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! Writes data and the end of the stream from the server side
+    private writeAndEnd(hash<auto> st) {
+        foreach int i in (xrange(20)) {
+            st.sock.sendHttp2StreamData(st.stream_id, binary(sprintf("data: %d\n\n", i)), False);
+            if (st.wake) {
+                st.wake();
+            }
+        }
+        st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+        if (st.wake) {
+            st.wake();
+        }
+    }
+
+    #! Reads a streaming response to its end; returns the number of data events
+    /** The stream must end normally: a refusal that failed the connection ends it with an error
+    */
+    private int readToEnd(HttpClientIo::HttpClientStreamHandle stream, string label) {
+        int n = 0;
+        while (True) {
+            auto v = stream.readData(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            if (v.typeCode() == NT_HASH && (v.end_stream || v.error)) {
+                assertNothing(v.error, label + ": the stream ends without an error");
+                assertTrue(v.end_stream, label + ": the stream ends normally");
+                break;
+            }
+            ++n;
+        }
+        return n;
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getMgr() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+            # one connection: the next streams are served by the connection whose drain met the refusal
+            "max_connections_per_host": 1,
+        });
+    }
+
+    #! The data of a request whose response is returned whole stays in its stream until the response ends, so the
+    #! drain reads it and pushes it to the stream's queue, which refuses it
+    testRefusedData() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        # the connection of the first stream, which every stream must use
+        *int conn_id;
+        foreach int i in (xrange(3)) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            checkConnection(stream, \conn_id, sprintf("round %d", i));
+            hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+            hash<auto> st = handler.streams.get(HangGuard);
+            Queue q();
+            q.setError("TEST-ERROR", "the queue refuses its values");
+            cast<HttpClientIo::Http2ClientConnection>(stream.getConnection()).registerStreamQueue(h.stream_id, q);
+            # the first chunk, which the drain takes from the stream and pushes to the queue
+            string chunk0 = "data: first\n\n";
+            st.sock.sendHttp2StreamData(st.stream_id, binary(chunk0), False);
+            if (st.wake) {
+                st.wake();
+            }
+            # a request answered on the same connection after it: the client has read the first chunk, and its drain
+            # has run, before it reads this response
+            {
+                HttpClientIo::HttpClientStreamHandle sync = mgr.acquireAndStartStreaming(url, "GET", "/",
+                    {"Accept": "text/event-stream"});
+                writeAndEnd(handler.streams.get(HangGuard));
+                assertGt(0, readToEnd(sync, sprintf("round %d sync", i)),
+                    sprintf("round %d: a request after the first chunk is answered", i));
+                checkConnection(sync, \conn_id, sprintf("round %d sync", i));
+            }
+            # the rest of the response
+            string rest;
+            foreach int j in (xrange(5)) {
+                string c = sprintf("data: %d\n\n", j);
+                rest += c;
+                st.sock.sendHttp2StreamData(st.stream_id, binary(c), False);
+            }
+            st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+            if (st.wake) {
+                st.wake();
+            }
+            hash<auto> r = h.future.get(HangGuard);
+            assertEq(200, r.status_code, sprintf("round %d: the response is answered", i));
+            # the queue's drain took the first chunk; the rest is the response's
+            assertEq(rest, r.body.typeCode() == NT_BINARY ? r.body.toString() : r.body,
+                sprintf("round %d: the response has the data that the drain did not take", i));
+        }
+        # the connection serves a new stream
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/",
+            {"Accept": "text/event-stream"});
+        writeAndEnd(handler.streams.get(HangGuard));
+        assertGt(0, readToEnd(stream, "new stream"), "a new stream on the connection gets its data");
+        checkConnection(stream, \conn_id, "new stream");
+    }
+
+    #! Checks that the stream uses the connection of the first stream (a refusal must not fail the connection)
+    /** Connection IDs come from a counter that only increases, so a new connection never has the ID of an old one
+    */
+    private checkConnection(HttpClientIo::HttpClientStreamHandle stream, reference<*int> conn_id, string label) {
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        assertFalse(conn.isClosed(), label + ": the connection is open");
+        int id = conn.getConnectionId();
+        if (!exists conn_id) {
+            conn_id = id;
+        } else {
+            assertEq(conn_id, id, label + ": the stream uses the same connection");
+        }
+    }
+
+    testRefused() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+
+        # the connection of the first stream, which every stream must use
+        *int conn_id;
+        # streams whose registered queue refuses everything; the stream ends, so the drain also pushes its end
+        foreach int i in (xrange(3)) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/",
+                {"Accept": "text/event-stream"});
+            checkConnection(stream, \conn_id, sprintf("round %d", i));
+            hash<auto> st = handler.streams.get(HangGuard);
+            Queue q();
+            q.setError("TEST-ERROR", "the queue refuses its values");
+            cast<HttpClientIo::Http2ClientConnection>(stream.getConnection()).registerStreamQueue(
+                stream.getStreamId(), q);
+            writeAndEnd(st);
+            # the stream's own data still arrives through its handle, up to its normal end
+            assertGt(0, readToEnd(stream, sprintf("round %d", i)), sprintf("round %d: the stream's data arrives",
+                i));
+        }
+
+        # the refusals raised nothing to the calls that ran the connection's poll operation, and the connection
+        # serves a new stream
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/",
+            {"Accept": "text/event-stream"});
+        checkConnection(stream, \conn_id, "new stream");
+        writeAndEnd(handler.streams.get(HangGuard));
+        assertGt(0, readToEnd(stream, "new stream"), "a new stream on the connection gets its data");
+    }
+}
