@@ -83,6 +83,14 @@ class ModuleCommandContextTest inherits QUnit::Test {
             + "47 caller, sandboxed, via module:     po=none sandboxed=1\n"
             + "48 caller, sandboxed, own code:       po=none sandboxed=1\n"
             + "49 caller, no-uncontrolled, via module: po=none sandboxed=0\n"
+            + "50 trusting sandbox, record:   ok | origin=1 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "51 trusting sandbox, code:     ok\n"
+            + "52 trusting sandbox, legacy:   ok\n"
+            + "53 trusting sandbox, caller via module: po=none sandboxed=0\n"
+            + "54 child of restricted code:     ok | sandboxed=1\n"
+            + "55 child of trusting sandbox:    ok | sandboxed=0\n"
+            + "56 trusting sandbox, no-uncontrolled: ok | origin=1 po=restricted sandboxed=0 issuer_is_target=1 "
+                "target_is_handler=1\n"
             + "";
 
         #! the replay program: the helper that reads the history, and the output line

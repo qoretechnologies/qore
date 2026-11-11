@@ -122,7 +122,9 @@
       the code that loads the program together with the options that were in force at the directive when the program
       was compiled (the options that the program is declared with, for a program compiled before they were recorded),
       except for a library module that is loaded compiled, which has only the latter;
-    - whether a sandbox governs the issuing code (QoreModuleCommandRestrictions::isSandboxed());
+    - whether a sandbox governs the issuing code (QoreModuleCommandRestrictions::isSandboxed()); a sandbox that allows
+      uncontrolled APIs (QoreSandboxManager::setUncontrolledApiPolicy()), which a host attaches to trusted code only
+      for its interrupts or limits, does not make the code sandboxed;
     - how the command arrived (QoreModuleCommandContext::getOrigin()), and the issuing and target Programs.
 
     The restrictions only grow within a command: a command that a handler issues itself has at least the restrictions

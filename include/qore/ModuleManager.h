@@ -236,6 +236,10 @@ public:
     DLLEXPORT QoreParseOptions getParseOptions() const;
 
     //! returns true if a sandbox governs the issuing code, or the issuing code runs in a sandboxed Program
+    /** A sandbox that a host attaches to trusted code only for its interrupts or limits, and that allows uncontrolled
+        APIs (QoreSandboxManager::setUncontrolledApiPolicy()), does not make the code that it governs sandboxed here;
+        a Program that sandboxed code created with no sandbox of its own stays sandboxed
+    */
     DLLEXPORT bool isSandboxed() const;
 
     //! returns true if the issuing code is sandboxed or has a restricting parse option

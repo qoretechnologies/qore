@@ -265,3 +265,45 @@ string sub caller_in(Program p, string func) {
     Program n = make_program(PO_NO_UNCONTROLLED_APIS);
     printf("49 caller, no-uncontrolled, via module: %s\n", caller_in(n, "caller_by_module"));
 }
+
+# a sandbox that a host attaches to trusted code only for its interrupts or limits, and that allows uncontrolled APIs
+# (SandboxManager::setUncontrolledApiPolicy()): its code does not issue commands as sandboxed code
+{
+    Program a = make_program();
+    SandboxManager sm();
+    sm.setUncontrolledApiPolicy(True);
+    a.setSandboxManager(sm);
+    printf("50 trusting sandbox, record:   %s | %s\n", issue_in(a, "cmdctxaware", "record"), history("cmdctxaware"));
+    printf("51 trusting sandbox, code:     %s\n", issue_in(a, "cmdctxaware", "code"));
+    printf("52 trusting sandbox, legacy:   %s\n", issue_in(a, "cmdctxlegacy", "record"));
+    printf("53 trusting sandbox, caller via module: %s\n", caller_in(a, "caller_by_module"));
+}
+
+# a Program that sandboxed code creates with no sandbox of its own stays sandboxed: no governing sandbox trusts it
+string sub child_of(*SandboxManager sm) {
+    Program parent(PO_NEW_STYLE);
+    if (sm) {
+        parent.setSandboxManager(sm);
+    }
+    parent.parse("Program sub make_child(string src) { Program c(PO_NEW_STYLE); c.parse(src, \"child\"); return c; }",
+        "child-maker");
+    Program child = parent.callFunction("make_child", IssueCode);
+    string rv = issue_in(child, "cmdctxaware", "record");
+    return sprintf("%s | %s", rv, (history("cmdctxaware") =~ x/(sandboxed=\d)/)[0] ?? history("cmdctxaware"));
+}
+{
+    printf("54 child of restricted code:     %s\n", child_of(new SandboxManager()));
+    SandboxManager trusting();
+    trusting.setUncontrolledApiPolicy(True);
+    printf("55 child of trusting sandbox:    %s\n", child_of(trusting));
+}
+
+# parse options still restrict: a Program with PO_NO_UNCONTROLLED_APIS is restricted whatever its sandbox allows
+{
+    Program n = make_program(PO_NO_UNCONTROLLED_APIS);
+    SandboxManager sm();
+    sm.setUncontrolledApiPolicy(True);
+    n.setSandboxManager(sm);
+    printf("56 trusting sandbox, no-uncontrolled: %s | %s\n", issue_in(n, "cmdctxaware", "record"),
+        history("cmdctxaware"));
+}

@@ -2198,17 +2198,33 @@ private:
     const QoreModuleCommandContext* previous;
 };
 
+//! returns true if the code running on this thread issues a module command as sandboxed code
+/** Code is sandboxed for a module command when it is sandboxed (qore_caller_is_sandboxed()) and no governing sandbox
+    trusts it: a sandbox that a host attaches to trusted code only for its interrupts or limits, and that allows
+    uncontrolled APIs (QoreSandboxManager::setUncontrolledApiPolicy()), does not make its code sandboxed.  The
+    governing sandbox is resolved as for interrupts, through policy barriers and capabilities.  A Program that sandboxed
+    code created with no sandbox of its own stays sandboxed, as no governing sandbox trusts it.
+*/
+static bool qore_command_issuer_is_sandboxed() {
+    if (!qore_caller_is_sandboxed()) {
+        return false;
+    }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return !governing || !governing->getUncontrolledApiPolicy();
+}
+
 //! returns the restrictions that a command issued by the code running on this thread has, for a module command
 /** The restrictions are those of the issuing code with what it inherits from its callers: the effective run-time
-    parse options of the current Program and whether a sandbox governs the thread.  They only grow within a command
-    that a handler issues itself.  Called before the thread switches to the Program that the command applies to.
+    parse options of the current Program and whether it is sandboxed (qore_command_issuer_is_sandboxed()).  They only
+    grow within a command that a handler issues itself.  Called before the thread switches to the Program that the
+    command applies to.
 
     @param declared_po the parse options that a compiled program is declared with, for a command that is replayed
     from it, or nullptr
 */
 static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed, const QoreParseOptions* declared_po,
         bool replay) {
-    sandboxed = qore_caller_is_sandboxed();
+    sandboxed = qore_command_issuer_is_sandboxed();
     if (replay && qore_module_load_is_library()) {
         // the commands of a library module that is loaded compiled are the library's own: the loader's parse options
         // are not theirs, only what was in force at the directive (see qore_module_load_is_library())
@@ -6166,7 +6182,7 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     if (!get_module_def_context() || !qore_module_load_is_library()) {
         po = pgm->getParseOptions() | runtime_get_parse_options();
     }
-    bool sandboxed = qore_caller_is_sandboxed();
+    bool sandboxed = qore_command_issuer_is_sandboxed();
     if (const QoreModuleCommandContext* outer = QoreModuleCommandContext::get()) {
         po |= outer->getParseOptions();
         sandboxed = sandboxed || outer->isSandboxed();
