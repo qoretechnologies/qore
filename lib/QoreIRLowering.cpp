@@ -6323,6 +6323,17 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
+                // a local that delete or remove leaves without a value (also through a reference to it) can be
+                // NOTHING at a read that the single forward parse saw as assigned, as the read before a delete later
+                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710)
+                if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
+                        && var->ref.id && var->ref.id->everDeleted()) {
+                    analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
+                    analysis.clearFlag(QoreParseAnalysis::NeverNothing);
+                    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+                        analysis.known_type = get_or_nothing_type_check(analysis.known_type);
+                    }
+                }
             }
             return true;
         }
@@ -7044,13 +7055,20 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
         bool local_definitely_assigned = parse_context && var->getType() == VT_LOCAL && var->ref.id
             && !var->ref.id->closureUse() && parse_context->isLocalDefinitelyAssigned(var->ref.id);
         bool plain_local = declared_type && !QoreTypeInfo::getReferenceTarget(declared_type);
-        bool definitely_assigned = analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
-            || (local_definitely_assigned && plain_local);
+        // a local that delete or remove (also through a reference to it) can leave without a value is NOTHING when
+        // it is read after that, whatever its declared type and the parse's flow analysis say (qore#5710)
+        bool ever_deleted = (var->getType() == VT_LOCAL || var->getType() == VT_LOCAL_TS
+            || var->getType() == VT_CLOSURE) && var->ref.id && var->ref.id->everDeleted();
+        bool definitely_assigned = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || (local_definitely_assigned && plain_local));
+        if (ever_deleted && facts.type_info) {
+            facts.type_info = get_or_nothing_type_check(facts.type_info);
+        }
         facts.assigned_state = definitely_assigned
             ? QoreIRAssignedState::Assigned : QoreIRAssignedState::MaybeAssigned;
-        facts.never_nothing = analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        facts.never_nothing = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::NeverNothing)
             || (definitely_assigned && facts.type_info
-                && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL);
+                && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL));
         if (facts.never_nothing && facts.type_info) {
             if (QoreTypeInfo::isType(facts.type_info, NT_INT)) {
                 facts.representation = QoreIRValueRepresentation::NativeInt;
@@ -7277,7 +7295,13 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
         return nullptr;
     }
     if (LocalVar* local = getLocalVarFromValue(*expr)) {
-        return parse_context->guaranteedType(local);
+        const QoreTypeInfo* type = parse_context->guaranteedType(local);
+        // a local that is the operand of delete or remove anywhere in its scope can be NOTHING when it is read, also
+        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710)
+        if (type && local->everDeleted()) {
+            return get_or_nothing_type_check(type);
+        }
+        return type;
     }
     return nullptr;
 }
@@ -8211,6 +8235,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
         QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
             left_value, nothing_val, op->loc)->result;
+        // the variable is read again at the merge for the operation: the reference of this read is released, so
+        // that the value is unique there and a string can be appended in place, as the AST interpreter does (the
+        // growth of a sandbox's string by the host is charged to the sandbox: qore#5665, qore#5710)
+        builder.createReleaseOwnedTemp(left_value, op->loc);
         builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
 
         // Nothing path: store the type's default value and branch to merge
@@ -8436,6 +8464,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
         QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
             left_value, nothing_val, op->loc)->result;
+        // the variable is read again at the merge for the operation: the reference of this read is released, so
+        // that the value is unique there and the operation can change it in place, as the AST interpreter does
+        // (see lowerPlusEquals())
+        builder.createReleaseOwnedTemp(left_value, op->loc);
         builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
 
         builder.setBlock(nothing_bb);
@@ -14509,7 +14541,9 @@ bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const
         // a local that is the target of a reference or captured by a closure, or of a reference type (whose read
         // gives the referenced value), can have no value whatever its declared type (see getAnalysis())
         const QoreTypeInfo* local_type = local->parseGetTypeInfo();
+        // a local that delete or remove can leave without a value (qore#5710)
         return !parse_context
+            || local->everDeleted()
             || local->closureUse()
             || QoreTypeInfo::getReferenceTarget(local->getTypeInfo())
             || !parse_context->isLocalDefinitelyAssigned(local)

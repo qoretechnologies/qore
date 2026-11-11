@@ -15462,6 +15462,9 @@ load_local_done:
                             }
                         }
                         {
+                        // the value removed by delete is a borrowed reference (delete self)
+                        bool del_static_assignment = false;
+                        {
                         LValueHelper lvh(xsink);
                         // the remove or delete of the variable itself (see LValueHelper::navigatePath())
                         if (lvh.navigatePath(path_copy.data(), path_copy.size(), true, path_copy.size() == 1)) {
@@ -15494,27 +15497,34 @@ load_local_done:
                             // removeValue asserts !static_assignment and, with assertions off,
                             // would return the borrowed value and cause a double-free via the
                             // subsequent res.discard).  Mirrors LValueRemoveHelper::deleteLValue.
-                            bool static_assignment = false;
-                            res = lvh.remove(static_assignment);
-                            if (res.getType() == NT_OBJECT) {
-                                QoreObject* o = res.get<QoreObject>();
-                                if (!o->isSystemObject()) {
-                                    o->doDelete(xsink);
-                                }
-                                // Only deref non-borrowed refs.  static_assignment means the
-                                // LocalVarValue didn't own the +1 (e.g. `self`); the caller's
-                                // ref covers the object lifetime until the method frame unwinds.
-                                if (!static_assignment) {
-                                    res.discard(xsink);
-                                }
-                                res = QoreValue();
-                            } else if (static_assignment) {
-                                // Non-object with static_assignment (shouldn't occur for self
-                                // but handle defensively) — borrowed ref, don't discard below.
-                                res = QoreValue();
-                            }
+                            // the object is deleted after the lvalue's lock, below
+                            res = lvh.remove(del_static_assignment);
                         }
                         }  // end of LValueHelper scope
+                        // delete gives NOTHING, as the AST interpreter's delete operator does: an object removed is
+                        // deleted, and the value released, after the lvalue's lock, as its destructor can access the
+                        // lvalue (LValueRemoveHelper::deleteLValue(); qore#5710)
+                        if (path_inst->unary_op == LVUnaryOp::Delete && !res.isNothing()) {
+                            if (res.getType() == NT_OBJECT) {
+                                QoreObject* o = res.get<QoreObject>();
+                                if (o->isSystemObject()) {
+                                    xsink->raiseException("SYSTEM-OBJECT-ERROR",
+                                        "cannot delete a system constant object (class '%s')", o->getClassName());
+                                } else {
+                                    o->doDelete(xsink);
+                                }
+                            }
+                            // a borrowed reference (self) is not released: the caller's reference keeps the object
+                            // until the method's frame unwinds
+                            if (!del_static_assignment) {
+                                res.discard(xsink);
+                            }
+                            res = QoreValue();
+                            if (*xsink) {
+                                return -1;
+                            }
+                        }
+                        }
                         single_step_remove_done:;
                     } else {
                         // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
