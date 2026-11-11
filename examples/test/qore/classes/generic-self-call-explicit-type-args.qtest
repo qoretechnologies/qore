@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT method calls with explicit type arguments
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericSelfCallExplicitTypeArgsTest
+
+#! A call of a method of the class in class code keeps its explicit type arguments in every mode (qore#5818)
+/** A call of a method of the class in class code without "self." (a self call, an unqualified call of a static method,
+    a call of a base class method by its class name, in instance or static class code) dropped its explicit type
+    arguments when the parser made the method call from the function call, and the call of a base class method by
+    its class name did not pass them in the AST interpreter; qcc-compiled code did not record them for a self call.
+    The probes
+    (generic-self-call-explicit-type-args/probes.q: concrete type arguments, and type arguments naming the type
+    parameter of the calling method or of its class) run at the top level and in a child Program, in each execution
+    mode in a child process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled
+    executables (-O0, -O3).
+*/
+class GenericSelfCallExplicitTypeArgsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "1; \"RUNTIME-OVERLOAD-ERROR\"; \"RUNTIME-OVERLOAD-ERROR\"; \"RUNTIME-OVERLOAD-ERROR\"; "
+            "2; \"RUNTIME-OVERLOAD-ERROR\"; \"RUNTIME-OVERLOAD-ERROR\"; \"RUNTIME-OVERLOAD-ERROR\"; "
+            "3; \"RUNTIME-OVERLOAD-ERROR\"; \"RUNTIME-OVERLOAD-ERROR\"; 4; \"RUNTIME-OVERLOAD-ERROR\"";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericSelfCallExplicitTypeArgs", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-self-call-explicit-type-args" + DirSep
+            + "probes.q");
+        for (int i = 0; i < 8; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("a method call in class code keeps its explicit type arguments in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-self-call-explicit-type-args-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes());\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE);\np.parse(ReadOnlyFile::readTextFile(%y), "
+            "\"probes\");\nprint(p.callFunction(\"probes\"));\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}
