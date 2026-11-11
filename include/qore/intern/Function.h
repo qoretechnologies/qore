@@ -2201,7 +2201,7 @@ public:
 
     // finds a variant using destructive evaluation of temporary arguments and executes the variant
     DLLLOCAL QoreValue evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's

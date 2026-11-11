@@ -1292,9 +1292,11 @@ static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
     const AbstractQoreFunctionVariant* variant = call.getVariant();
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* callee_signature = uvb ? uvb->getUserSignature() : nullptr;
-    if (!method_ref.explicit_type_args_valid || !callee_signature
-            || method_ref.explicit_type_arg_paths.size()
-                != callee_signature->getTypeParameterCount()) {
+    // a call whose variant is chosen at run time has no signature here; its type arguments are checked against the
+    // variant chosen then, as for the parsed call, which has no owner either (qore#5791)
+    if (!method_ref.explicit_type_args_valid || (callee_signature
+            && method_ref.explicit_type_arg_paths.size()
+                != callee_signature->getTypeParameterCount())) {
         return false;
     }
     QoreTypeParamInstantiation inst;
@@ -1480,8 +1482,10 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     ? variant->getUserVariantBase() : nullptr;
                 const UserSignature* callee_signature = uvb
                     ? uvb->getUserSignature() : nullptr;
-                if (!count_tail || *count_tail || !callee_signature
-                        || count != callee_signature->getTypeParameterCount()) {
+                // a call whose variant is chosen at run time has no signature here; its type arguments are checked
+                // against the variant chosen then, as for the parsed call, which has no owner either (qore#5791)
+                if (!count_tail || *count_tail || (callee_signature
+                        && count != callee_signature->getTypeParameterCount())) {
                     delete fcn;
                     return 0;
                 }
