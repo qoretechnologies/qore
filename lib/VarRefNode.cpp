@@ -208,9 +208,14 @@ QoreValue VarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSi
 }
 
 QoreValue VarRefNode::evalCallArg(ExceptionSink* xsink) const {
-    RuntimeConfig& rc = rc_get_current_ref();
     bool needs_deref = true;
-    QoreValue v = evalValue(rc, needs_deref, xsink);
+    QoreValue v = evalRaw(needs_deref, xsink);
+    // the runtime configuration is needed only to follow a reference: the read of a variable that holds a value
+    // itself, which is nearly every argument, does not look the thread's configuration up
+    AbstractQoreNode* n = v.getInternalNode();
+    if (n && n->getType() == NT_REFERENCE) {
+        v = followReference(v, rc_get_current_ref(), needs_deref, xsink);
+    }
     if (*xsink) {
         if (needs_deref) {
             v.discard(xsink);
@@ -222,6 +227,26 @@ QoreValue VarRefNode::evalCallArg(ExceptionSink* xsink) const {
 }
 
 QoreValue VarRefNode::evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    QoreValue v = evalRaw(needs_deref, xsink);
+    AbstractQoreNode* n = v.getInternalNode();
+    if (n && n->getType() == NT_REFERENCE) {
+        return followReference(v, rc, needs_deref, xsink);
+    }
+    return v;
+}
+
+QoreValue VarRefNode::followReference(QoreValue v, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {
+    ReferenceNode* r = reinterpret_cast<ReferenceNode*>(v.getInternalNode());
+    bool nd = true;
+    QoreValue nv = r->eval(rc, nd, xsink);
+    if (needs_deref) {
+        discard(v.getInternalNode(), xsink);
+    }
+    needs_deref = nd;
+    return nv;
+}
+
+QoreValue VarRefNode::evalRaw(bool& needs_deref, ExceptionSink* xsink) const {
     QoreValue v{};
     if (type == VT_LOCAL) {
         //printd(5, "VarRefNode::evalImpl() this: %p lvar %p (%s) v: '%s' pgm: %p\n", this, ref.id, ref.id->getName(),
@@ -241,18 +266,6 @@ QoreValue VarRefNode::evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionS
             type == VT_THREAD_LOCAL ? "thread_local" : "global", ref.var, ref.var->getName());
         v = ref.var->eval();
     }
-
-    AbstractQoreNode* n = v.getInternalNode();
-    if (n && n->getType() == NT_REFERENCE) {
-        ReferenceNode* r = reinterpret_cast<ReferenceNode*>(n);
-        bool nd = true;
-        QoreValue nv = r->eval(rc, nd, xsink);
-        if (needs_deref)
-            discard(v.getInternalNode(), xsink);
-        needs_deref = nd;
-        return v = nv;
-    }
-
     return v;
 }
 

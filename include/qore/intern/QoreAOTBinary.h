@@ -339,15 +339,21 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
 //!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
 //!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
-//! v24: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//! v24: a string value that is not in UTF-8 is serialized with its encoding (QoreAOTValueTag::VT_STRING_ENC), and a
+//!      string constant in an expression that is not in UTF-8 or that has a null byte is a CONST_VALUE and not a
+//!      CONST_STRING, whose text ends at the first null byte and which is rebuilt in the default encoding.
+//! v25: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
 //!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
-//!      release_values).  A v9-v23 record has none.
+//!      release_values).  A v9-v24 record has none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
+//! First format version whose IteratorNext records have release values (see v25 above); the newest format change
+//! (qore#5670), so that it is the current version: a merge with another format change takes the next version
+//! after the other's, here and in the history above
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 25;
+//! The current format version: the newest format change's version (QORE_AOT_ITERATOR_RELEASES_VERSION)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_ITERATOR_RELEASES_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
-//! First format version whose IteratorNext records have release values (see v24 above).
-constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 24;
 //! First format version whose class records have a class-flags byte (see v22 above).
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
@@ -851,7 +857,23 @@ enum class QoreAOTValueTag : uint8_t {
     //! Unicode char value.
     //! Encoded as codepoint(u32).
     VT_CHAR = 21,
+    //! String in an encoding other than UTF-8 (from format version 24).
+    //! Encoded as byte length(u32) + string offset(u32) + encoding name offset(u32).
+    VT_STRING_ENC = 22,
 };
+
+//! Returns true if a string constant cannot be an AOTExprKind::CONST_STRING (see format version 24)
+/** which is text in the default encoding up to its first null byte; such a string is a CONST_VALUE
+*/
+inline bool qore_aot_string_needs_value(const char* str, size_t len, const QoreEncoding* enc) {
+    return enc != QCS_UTF8 || memchr(str, '\0', len);
+}
+
+//! Returns true if a string value cannot be an AOTExprKind::CONST_STRING; \a v must be a string
+inline bool qore_aot_string_needs_value(const QoreValue& v) {
+    QoreStringDataHelper str(v);
+    return qore_aot_string_needs_value(str.c_str(), str.size(), str.getEncoding());
+}
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
 //! payloads when QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS is set.

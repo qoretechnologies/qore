@@ -32,6 +32,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/NewComplexTypeNode.h"
@@ -234,13 +235,7 @@ static std::string instRegistryGetFunctionCallName(const FunctionCallNode* call)
         return call->getName() ? call->getName() : "";
     }
 
-    std::string qualified;
-    fe->getNamespace()->getPath(qualified);
-    if (!qualified.empty()) {
-        qualified += "::";
-    }
-    qualified += fe->getName();
-    return qualified;
+    return qore_aot_get_function_identity_name(fe);
 }
 
 static std::string instRegistryGetVariantSignatureRef(const AbstractQoreFunctionVariant* variant) {

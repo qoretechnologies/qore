@@ -30,6 +30,9 @@
 
 #include <qore/Qore.h>
 #include <qore/AutoVLock.h>
+#ifdef DEBUG
+#include "qore/intern/ql_debug.h"
+#endif
 
 #include <cassert>
 #include <cerrno>
@@ -176,6 +179,9 @@ int VLock::waitIntern(QoreCondition& cond, AbstractSmartLock* asl, ExceptionSink
 int VLock::waitOn(AbstractSmartLock* asl, VLock* vl, ExceptionSink* xsink, int timeout_ms) {
     assert(!waiting_on.load());
     waiting_on.store(asl);
+#ifdef DEBUG
+    qore_dbg_note_lock_wait(asl, tid);
+#endif
 
     int rc = 0;
     AbstractSmartLock* vl_wait = vl->waiting_on.load();
@@ -210,6 +216,9 @@ int VLock::waitOn(AbstractSmartLock* asl, VLock* vl, ExceptionSink* xsink, int t
 int VLock::waitOn(AbstractSmartLock* asl, QoreCondition *cond, VLock* vl, ExceptionSink* xsink, int timeout_ms) {
     assert(!waiting_on.load());
     waiting_on.store(asl);
+#ifdef DEBUG
+    qore_dbg_note_lock_wait(asl, tid);
+#endif
 
     int rc = 0;
     AbstractSmartLock* vl_wait = vl->waiting_on.load();
@@ -244,6 +253,9 @@ int VLock::waitOn(AbstractSmartLock* asl, QoreCondition *cond, VLock* vl, Except
 int VLock::waitOn(AbstractSmartLock* asl, vlock_map_t& vmap, ExceptionSink* xsink, int timeout_ms) {
     assert(!waiting_on.load());
     waiting_on.store(asl);
+#ifdef DEBUG
+    qore_dbg_note_lock_wait(asl, tid);
+#endif
 
     int rc = 0;
     for (vlock_map_t::iterator i = vmap.begin(), e = vmap.end(); i != e; ++i) {

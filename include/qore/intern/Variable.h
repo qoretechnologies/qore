@@ -714,6 +714,9 @@ protected:
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    //! the root of the lvalue of a background expression, or an error for another value that is not an lvalue
+    //! (issue #5723); out of line, so that doLValue() stays as small as before for the lvalues of other expressions
+    DLLLOCAL __attribute__((noinline, cold)) int doBackgroundRootLValue(const QoreValue& n);
 
     DLLLOCAL int makeIntQv(const char* desc);
 

@@ -118,6 +118,28 @@ private:
     DLLLOCAL QoreExternalMethodVariant();
 };
 
+//! Keeps the declarations that a type refers to: the hashdecls, classes and enums in it and in its element types
+/** The type info of a hashdecl or class type (and of a type derived from one, such as \c list<hash<H>>) is freed
+    with the declaration, which the Program that declared it releases when it is deleted; a holder of the type that
+    can outlive the values of that type, such as a reflection handle, keeps the declarations with this object.
+
+    @since %Qore 3.0
+*/
+class QoreExternalTypeDeclRefs {
+public:
+    //! References the declarations that \a ti refers to
+    DLLEXPORT QoreExternalTypeDeclRefs(const QoreTypeInfo* ti);
+
+    //! Releases the references
+    DLLEXPORT ~QoreExternalTypeDeclRefs();
+
+    DLLLOCAL QoreExternalTypeDeclRefs(const QoreExternalTypeDeclRefs&) = delete;
+    DLLLOCAL QoreExternalTypeDeclRefs& operator=(const QoreExternalTypeDeclRefs&) = delete;
+
+private:
+    class qore_type_decl_refs_private* priv = nullptr;
+};
+
 //! external wrapper base class for class and hashdecl members
 /** @since %Qore 0.9
 */
@@ -127,7 +149,32 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! evaluates the initialization expression for the member and returns the referenced value
+    /** The expression is code of the Program that declared the member, which must not have been deleted; use the
+        variant that takes the class or hashdecl of the member to have that checked
+    */
     DLLEXPORT QoreValue getDefaultValue(ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given class and returns the referenced value
+    /** @param cls the class that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        defined the class has been deleted
+
+        The Program that defined the class is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const QoreClass& cls, ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given hashdecl and returns the referenced value
+    /** @param hd the hashdecl that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        declared the hashdecl has been deleted
+
+        The Program that declared the hashdecl is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const TypedHashDecl& hd, ExceptionSink* xsink) const;
 
     //! returns the source location of the member's declaration
     DLLEXPORT const QoreExternalProgramLocation* getSourceLocation() const;

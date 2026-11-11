@@ -39,6 +39,7 @@ class RuntimeConfig;
 #include <atomic>
 #include <functional>
 #include <vector>
+#include <utility>
 #include <set>
 #include <map>
 #include <memory>
@@ -327,6 +328,12 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+
+//! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
+/** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
+    code raised a cancellation, which it may have handled (see QoreDebugProgramWithQoreObject)
+*/
+DLLLOCAL unsigned qore_get_cancel_raise_count();
 
 //! Returns the location of the call stack frame of code being called, and clears the call site
 /** The location of a frame is the location of the call expression that called the code, set by the call site with
@@ -722,6 +729,10 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
+    //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
+    //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
+    bool module_cleanup_delegate = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -1321,14 +1332,17 @@ DLLLOCAL void qore_stop_module_uncounted_entries();
     threads that run it: a ThreadPool task that the cleanup thread submits (a destructor that the cleanup runs can
     submit a task and wait for its result, which would otherwise wait forever) and a background thread that it starts,
     and in turn such work of such work (see qore_module_cleanup_delegation() and QoreModuleCleanupDelegateHelper).
-    Work handed over by any other thread is refused
+    So does an asynchronous I/O operation or a timer that the cleanup thread adds to the asynchronous I/O controller
+    (QoreSandboxContext::module_cleanup_delegate): its callbacks run on the controller's workers.  Work handed over by
+    any other thread is refused
 */
 DLLLOCAL void qore_close_module_programs();
 
 //! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
 //! can still enter them: it runs the module cleanup, or work that the cleanup handed over
-/** Called by the code that hands work to another thread, in the handing thread (ThreadTask, the background operator):
-    the work then enters the Programs of the modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
+/** Called by the code that hands work to another thread, in the handing thread (QoreSandboxContext for a ThreadPool
+    task and the asynchronous I/O controller, the background operator): the work then enters the Programs of the
+    modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
 
@@ -1822,6 +1836,15 @@ DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* 
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 
+//! The source Program of a class that CodeContextHelperBase takes for its frame
+struct QoreClassSourceProgramInfo {
+    //! the source Program (see qore_class_private::getSourceProgramForCall()), or nullptr if the class has none
+    QoreProgram* pgm = nullptr;
+    //! true if a reference was taken to \a pgm: it is neither the current Program nor one with module lifetime, nor
+    //! one that the thread deletes
+    bool referenced = false;
+};
+
 class CodeContextHelperBase {
 private:
     const char* old_code;
@@ -1846,7 +1869,75 @@ private:
 public:
     DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
             ExceptionSink* xsink, bool ref_obj = true);
+
+    //! as above; also returns the source Program of the class that the helper takes for its frame
+    DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+            ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info);
+
     DLLLOCAL ~CodeContextHelperBase();
+
+private:
+    DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
+            QoreClassSourceProgramInfo* spgm_info);
+};
+
+//! Runs the body of a plain function or a static method in its own object and class context
+/** A call of user code runs a plain function's body without an object or a class, and a static method's body
+    without an object in the class of its variant (UserVariantBase::eval()); the paths that run the body without that
+    call (the runtime fast-call helpers, the IR interpreter's inline calls and native code calling a fast entry
+    directly) switch to that context with this helper, as ObjectSubstitutionHelper does, and restore the caller's
+    when it is destroyed.  It does nothing when the thread already has that context, as for a plain function called
+    from a plain function or from top-level code, and it updates the thread's RuntimeConfig through its data (as
+    sync_runtime_config_program() does), so a switch makes no thread-local lookup when the caller gives the thread's
+    data, and the runtime helpers set the call's implicit arguments with it (as ArgvContextHelper does) in the same
+    lookup.
+*/
+class CalleeContextHelper {
+public:
+    //! Switches to the callee's context if the thread does not have it
+    /** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls = nullptr);
+
+    //! Sets the implicit arguments of the call, as ArgvContextHelper does, and switches to the callee's context if
+    //! the thread does not have it
+    /** @param argv the implicit arguments, which the helper dereferences when it is destroyed
+        @param xsink for exceptions raised when the arguments are dereferenced
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls = nullptr);
+
+    //! Restores the context that the constructor replaced, if any, and the implicit arguments, if it set them
+    DLLLOCAL ~CalleeContextHelper() {
+        if (argv_xsink) {
+            restoreArgv();
+        }
+        if (switched) {
+            restoreContext();
+        }
+    }
+
+    CalleeContextHelper(const CalleeContextHelper&) = delete;
+    CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+private:
+    //! the current thread
+    ThreadData* td;
+    //! true if the constructor switched the context
+    bool switched = false;
+    QoreObject* old_obj;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_obj;
+    const qore_class_private* old_rc_class;
+    //! the implicit arguments that the call's replaced, if it set them
+    QoreListNode* old_argv = nullptr;
+    //! the sink for the dereference of the call's implicit arguments, if it set them
+    ExceptionSink* argv_xsink = nullptr;
+
+    DLLLOCAL void switchContext(const qore_class_private* cls);
+    DLLLOCAL void restoreContext();
+    DLLLOCAL void restoreArgv();
 };
 
 class ObjectSubstitutionHelper {
@@ -2282,6 +2373,82 @@ private:
     bool valid = true;
 };
 
+//! Keeps the Program that declared a member initializer from being deleted while the thread evaluates it
+/** The member initializers of a hashdecl or class are code of the Program that declared them, but they are evaluated
+    in the Program of the code that creates the hash or the object, which is another Program for a hashdecl or class
+    inherited or imported by another Program, or for a typed hash whose type another Program gets from a value (with
+    the reflection API).  The code of the initializers, such as the function entries of their calls, is freed with
+    their Program: an initializer evaluated after that Program had been deleted crashed.
+
+    The helper enters the declaring Program without switching to it (qore_program_private::enterWithoutContext()),
+    so that its teardown waits until the initializer has been evaluated, unless it is the current Program, which the
+    thread is in, one that the thread deletes, or a Program with module lifetime; entering a Program that is being
+    deleted, or has been, raises \c PROGRAM-ERROR.  See typed_hash_decl_private::enterSourceProgram() and
+    qore_class_private::enterSourceProgramForInit().
+*/
+class QoreDeclaringProgramHelper {
+public:
+    DLLLOCAL QoreDeclaringProgramHelper() = default;
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL ~QoreDeclaringProgramHelper() {
+        reset();
+    }
+
+    DLLLOCAL QoreDeclaringProgramHelper(const QoreDeclaringProgramHelper&) = delete;
+    DLLLOCAL QoreDeclaringProgramHelper& operator=(const QoreDeclaringProgramHelper&) = delete;
+
+    //! Enters the Program identified by its address and ID, which can have been deleted
+    /** @param p the Program; it is not dereferenced unless it is still registered with the ID given or is the
+        current Program
+        @param id the Program's ID, which tells it from a later Program at the same address
+        @param module_lifetime set once the Program is found to have module lifetime, so that later calls need neither
+        the lock nor a reference to it
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr, in which case no exception is raised
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+
+        If the helper holds a Program already, it holds this one as well
+    */
+    DLLLOCAL int enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+            ExceptionSink* xsink);
+
+    //! Takes over a reference to a Program and enters it
+    /** @param p the Program, referenced; the reference is released with the helper, or here if the Program cannot be
+        entered
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+    */
+    DLLLOCAL int enterReferenced(QoreProgram* p, ExceptionSink* xsink);
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL void reset() {
+        next.reset();
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Raises the \c PROGRAM-ERROR exception for a declaring Program that has been deleted, if \a xsink is not null
+    DLLLOCAL static int raiseDeleted(ExceptionSink* xsink);
+
+private:
+    //! the Program entered and referenced, if any
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+    //! the sink given when the Program was entered, used to leave it; may be nullptr
+    ExceptionSink* leave_xsink = nullptr;
+    //! holds the other Programs entered, if any; left before \a pgm
+    std::unique_ptr<QoreDeclaringProgramHelper> next;
+
+    //! Leaves the Program entered and releases the reference to it
+    DLLLOCAL void leave();
+};
+
 class QoreStatementTempScope;
 
 //! makes the thread have no temp scope of a statement and returns the innermost one (see QoreStatementTempScope)
@@ -2325,6 +2492,16 @@ DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid)
 //! records in the thread's data that it deletes a Program's data, which qore_reference_program_needs_entry() reads
 /** @return false if the thread has no data (it is not recorded then)
 */
+//! registers a function that releases an object of the calling thread when the Qore thread's data is deleted
+/** The function runs on the thread that registered it, when the thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread data), before the thread's thread-local destructors.  Returns false (and
+    registers nothing) if the thread has no thread data, as after qore_cleanup(); the caller then does not release the
+    object.
+
+    @see QoreThreadLocalObject
+*/
+DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
+
 DLLLOCAL bool qore_thread_program_teardown_enter();
 //! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
 //! returned true
@@ -2914,5 +3091,54 @@ DLLLOCAL int q_get_thread_name(int tid, QoreString& str);
 
 //! checkpoints stack usage for debugging purposes
 DLLLOCAL void checkpoint_stack_pos(const char*);
+
+//! an object of class T of each thread that uses it, that is not destroyed by a thread-local destructor
+/** A thread_local object with a destructor (a std::vector, a std::unordered_map, a pool) is destroyed by the thread's
+    thread-local destructors, which the main thread runs when exit() starts, before the destructors of static objects
+    and before any exit handler runs.  Qore code that a static object runs then (a Program that a module keeps at
+    static scope deletes its global objects, and their Qore destructors run) used the destroyed object: a heap
+    use-after-free and a crash (qore#5778).
+
+    The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
+    created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object that is never released.
+
+    @tparam T the class of the object, default constructible
+    @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
+*/
+template <typename T, typename Tag>
+class QoreThreadLocalObject {
+public:
+    //! returns the calling thread's object, creating it if the thread has none
+    DLLLOCAL static T& get() {
+        T* p = ptr;
+        if (__builtin_expect(!p, 0)) {
+            p = create();
+        }
+        return *p;
+    }
+
+private:
+    DLLLOCAL static T* create() {
+        T* p = new T;
+        ptr = p;
+        qore_thread_add_exit_cleanup(release, nullptr);
+        return p;
+    }
+
+    //! releases the calling thread's object
+    DLLLOCAL static void release(void*) {
+        T* p = ptr;
+        // cleared first: the destructor of T must not find the object it is destroying
+        ptr = nullptr;
+        delete p;
+    }
+
+    static thread_local T* ptr;
+};
+
+template <typename T, typename Tag>
+thread_local T* QoreThreadLocalObject<T, Tag>::ptr = nullptr;
 
 #endif

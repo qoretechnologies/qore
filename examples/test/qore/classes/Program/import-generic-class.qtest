@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ImportGenericClassTest
+
+#! the library code: generic classes and a parameterized hashdecl, exported with Program::importClass() and
+#! Program::importHashDecl()
+const LibSrc = "
+public class Box<T> {
+    public { T v; }
+    constructor(T v) { self.v = v; }
+    T get() { return v; }
+    static T id(T x) { return x; }
+}
+public class Pair<A, B = string> inherits Box<A> {
+    public { B b; }
+    constructor(A a, B b) : Box(a) { self.b = b; }
+    B second() { return b; }
+}
+public class Num<T: int> {
+    public { T v; }
+    constructor(T v) { self.v = v; }
+    T val() { return v; }
+}
+public hashdecl HBox<T> { T v; }
+sub export(Program u) {
+    u.importClass(\"Box\");
+    u.importClass(\"Pair\");
+    u.importClass(\"Num\");
+    u.importClass(\"Box\", \"Ns::Crate\");
+    u.importHashDecl(\"HBox\");
+}
+sub exportSubclassOnly(Program u) {
+    u.importClass(\"Pair\");
+}
+";
+
+#! the user code: specializations of the imported generic classes with classes of the user Program and with builtin
+#! types
+const UserSrc = "
+class Foo { string n() { return \"foo\"; } }
+class FooBox inherits Box<Foo> {
+    constructor() : Box(new Foo()) {}
+    string name() { return self.get().n(); }
+}
+list<auto> sub run() {
+    list<auto> rv;
+    Box<Foo> b = new Box<Foo>(new Foo());
+    rv += b.get().n();
+    Box<int> bi = new Box<int>(2);
+    int i = bi.get();
+    rv += i;
+    rv += (new FooBox()).name();
+    Pair<int> p(3, \"x\");
+    int pa = p.get();
+    string pb = p.second();
+    rv += (pa, pb);
+    Num<int> n(21);
+    int nv = n.val();
+    rv += nv * 2;
+    int s = Box<int>::id(5);
+    rv += s;
+    Ns::Crate<int> c(4);
+    int ci = c.get();
+    rv += ci;
+    Box<Box<int>> nb = new Box<Box<int>>(new Box<int>(8));
+    int nbv = nb.get().get();
+    rv += nbv;
+    hash<HBox<int>> h = cast<hash<HBox<int>>>({\"v\": 7});
+    int hv = h.v;
+    rv += hv;
+    # negative: a value of another type, known only at run time
+    auto sv = \"no\";
+    try {
+        Box<int> bad = new Box<int>(sv);
+        rv += \"no error\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        Box<Foo> bad = new Box<Foo>(sv);
+        rv += \"no error\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    return rv;
+}
+";
+
+#! the results of UserSrc's run()
+const Expected = ("foo", 2, "foo", 3, "x", 42, 5, 4, 8, 7, "RUNTIME-OVERLOAD-ERROR", "RUNTIME-OVERLOAD-ERROR");
+
+#! the parse options of the test Programs
+const TestPgmOpts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+
+#! generic classes imported into a Program can be specialized there (issue #5763)
+/** A class imported with Program::importClass() is a copy with its own QoreClass; the type parameters in the
+    signatures of its methods are those of the original class.  They were matched with the class of a specialization
+    by address, so they were not substituted in a specialization of the copy: its constructor did not accept a value
+    of the type argument (RUNTIME-OVERLOAD-ERROR in every mode, also for builtin type arguments), and the return
+    types of its methods were the type parameter at parse time.  Classes inherited from the parent Program share the
+    class of the parent and were not affected.
+*/
+class ImportGenericClassTest inherits QUnit::Test {
+    public {
+        #! the execution modes, by name
+        const hash<string, ExecMode> Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+    }
+
+    constructor() : QUnit::Test("import generic class", "1.0", \ARGV) {
+        foreach hash<auto> i in (Modes.pairIterator()) {
+            string name = i.key;
+            ExecMode mode = i.value;
+            addTestCase("library Program: " + name, sub () { libraryTest(mode); });
+            addTestCase("parent Program: " + name, sub () { parentTest(mode); });
+            addTestCase("generic subclass without its base: " + name, sub () { subclassOnlyTest(mode); });
+        }
+        set_return_value(main());
+    }
+
+    #! the generic classes are imported from a library Program into a Program that does not inherit them
+    private libraryTest(ExecMode mode) {
+        Program lib(TestPgmOpts);
+        lib.setExecMode(mode);
+        lib.parse(LibSrc, "lib");
+        Program u(TestPgmOpts | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS);
+        u.setExecMode(mode);
+        lib.callFunction("export", u);
+        u.parse(UserSrc, "user");
+        # each call runs the code again (and on the compiled tier once it is compiled)
+        for (int i = 0; i < 3; ++i) {
+            assertEq(Expected, u.callFunction("run"), "run " + i);
+        }
+    }
+
+    #! a generic subclass is imported without its generic base class
+    private subclassOnlyTest(ExecMode mode) {
+        Program lib(TestPgmOpts);
+        lib.setExecMode(mode);
+        lib.parse(LibSrc, "lib");
+        Program u(TestPgmOpts | PO_NO_INHERIT_USER_CLASSES);
+        u.setExecMode(mode);
+        lib.callFunction("exportSubclassOnly", u);
+        u.parse("list<auto> sub run() { Pair<int, float> p(6, 1.5); int a = p.get(); float b = p.second(); "
+            "auto sv = \"no\"; string e; try { Pair<int, float> bad(sv, 1.0); } "
+            "catch (hash<ExceptionInfo> ex) { e = ex.err; } return (a, b, e); }", "user");
+        for (int i = 0; i < 3; ++i) {
+            assertEq((6, 1.5, "RUNTIME-OVERLOAD-ERROR"), u.callFunction("run"), "run " + i);
+        }
+    }
+
+    #! the generic class is imported by this Program's own code into a child Program that does not inherit it, and is
+    #! inherited by a child Program that does
+    private parentTest(ExecMode mode) {
+        Program u(TestPgmOpts | PO_NO_INHERIT_USER_CLASSES);
+        u.setExecMode(mode);
+        u.importClass("ImportGenericBox");
+        string src = "int sub run() { ImportGenericBox<int> b(2); int i = b.get(); return i; }";
+        u.parse(src, "user");
+        assertEq(2, u.callFunction("run"));
+
+        Program c(TestPgmOpts);
+        c.setExecMode(mode);
+        c.parse(src, "child");
+        assertEq(2, c.callFunction("run"));
+    }
+}
+
+#! a generic class of this Program, imported by parentTest()
+public class ImportGenericBox<T> {
+    public { T v; }
+    constructor(T v) { self.v = v; }
+    T get() { return v; }
+}

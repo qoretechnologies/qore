@@ -15,13 +15,15 @@
 %exec-class OperatorOperandReleaseTest
 
 #! Regression test: the temporaries of an operator's operands are released once the operator has run
-/** The AST interpreter evaluates the operands of an operator into holders that the operator releases when it returns,
-    so <tt>f(new T("a") == new T("b"), g())</tt> destroys b and a before g() runs; a functional operator (map,
+/** The temporary operands of an operator live until the end of the statement in every mode (qore#5712), so
+    <tt>f(new T("a") == new T("b"), g())</tt> destroys b and a after f() returns; a slice releases its sequence when
+    it returns, a functional operator (map,
     select, map-select, map with a hash result, foldl, foldr) releases its source when it returns, and a list or hash
     literal holds the only references to its elements.  The compiled modes released these temporaries when the
-    statement ended.  The lowering now releases the temporaries of the operands of comparisons, \c instanceof,
-    \c exists, \c elements and slices, the source of a functional operator and the elements of a literal once they
-    have been used (ReleaseOwnedTemp); the value of a functional operator that can be its source's (over a single
+    statement ended.  The lowering now releases the temporary sequence of a slice, the source of a functional operator
+    and the elements of a literal once they have been used (ReleaseOwnedTemp); the operands of the other operators
+    (comparisons, \c instanceof, \c exists, \c elements) live until the end of the statement in every mode, as a
+    temporary does (qore#5712); the value of a functional operator that can be its source's (over a single
     value) gets a reference of its own first.  A destructor that throws when a temporary is released adds its
     exception to the one raised, and an exception raised after a release, and in a fused pipeline, releases the rest
     before the handler runs.  The script runs the operators in call arguments, in a loop and as branch conditions,
@@ -47,7 +49,8 @@ T sub onet(string n) { return new T(n); }
 list<auto> sub mk(string p) { return (new T(p + "0"), new T(p + "1"), new T(p + "2")); }
 auto sub p(auto a) { printf("p\n"); return a; }
 sub f(auto a, auto b, auto c) { printf("f\n"); }
-# the operands of an operator are released when the operator has run, before the next argument is evaluated
+# the operands of an operator live until the end of the statement; the sequence of a slice is released when the slice
+# has been made
 sub operators() {
     f(new T("a") == new T("b"), p(1), 1);
     printf("--\n");
@@ -145,32 +148,32 @@ for (int i = 0; i < 2; ++i) {
 
         #! the AST interpreter's output
         const Expected = (
+            "p",
+            "f",
             "dtor b",
             "dtor a",
+            "--",
             "p",
             "f",
-            "--",
             "dtor d",
             "dtor c",
+            "--",
             "p",
             "f",
-            "--",
             "dtor f",
             "dtor e",
+            "--",
             "p",
             "f",
-            "--",
             "dtor g",
+            "--",
             "p",
             "f",
-            "--",
             "dtor h",
-            "p",
-            "f",
             "--",
-            "dtor i",
             "p",
             "f",
+            "dtor i",
             "--",
             "dtor s0",
             "dtor s2",
@@ -178,9 +181,9 @@ for (int i = 0; i < 2; ++i) {
             "f",
             "dtor s1",
             "--",
-            "dtor k",
             "p",
             "f",
+            "dtor k",
             "-- j",
             "dtor j",
             "dtor q0",
@@ -220,11 +223,11 @@ for (int i = 0; i < 2; ++i) {
             "p",
             "f",
             "--",
+            "p",
+            "f",
             "dtor el0",
             "dtor el1",
             "dtor el2",
-            "p",
-            "f",
             "--",
             "dtor sv",
             "sv",
@@ -242,6 +245,8 @@ for (int i = 0; i < 2; ++i) {
             "dtor x0",
             "dtor x1",
             "caught DTOR \"x0\", DTOR \"x1\"",
+            "p",
+            "f",
             "dtor y",
             "caught DTOR \"y\"",
             "dtor z",
@@ -269,32 +274,32 @@ for (int i = 0; i < 2; ++i) {
             "dtor l1",
             "p",
             "--",
+            "p",
+            "f",
             "dtor b",
             "dtor a",
+            "--",
             "p",
             "f",
-            "--",
             "dtor d",
             "dtor c",
+            "--",
             "p",
             "f",
-            "--",
             "dtor f",
             "dtor e",
+            "--",
             "p",
             "f",
-            "--",
             "dtor g",
+            "--",
             "p",
             "f",
-            "--",
             "dtor h",
-            "p",
-            "f",
             "--",
-            "dtor i",
             "p",
             "f",
+            "dtor i",
             "--",
             "dtor s0",
             "dtor s2",
@@ -302,9 +307,9 @@ for (int i = 0; i < 2; ++i) {
             "f",
             "dtor s1",
             "--",
-            "dtor k",
             "p",
             "f",
+            "dtor k",
             "-- j",
             "dtor j",
             "dtor q0",
@@ -344,11 +349,11 @@ for (int i = 0; i < 2; ++i) {
             "p",
             "f",
             "--",
+            "p",
+            "f",
             "dtor el0",
             "dtor el1",
             "dtor el2",
-            "p",
-            "f",
             "--",
             "dtor sv",
             "sv",
@@ -366,6 +371,8 @@ for (int i = 0; i < 2; ++i) {
             "dtor x0",
             "dtor x1",
             "caught DTOR \"x0\", DTOR \"x1\"",
+            "p",
+            "f",
             "dtor y",
             "caught DTOR \"y\"",
             "dtor z",

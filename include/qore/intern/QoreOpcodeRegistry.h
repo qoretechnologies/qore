@@ -358,8 +358,8 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::CreateMethodRef, "CreateMethodRef"               , false, false, false, OPCODE_MIN_OPERANDS(0), "CreateMethodRef", false, true , "ParseNode", true , false, false, false, false }, // 287
     { QoreIROpcode::CreateParseRef, "CreateParseRef"                , false, false, false, OPCODE_MIN_OPERANDS(0), "CreateParseRef", false, true , "ParseNode", true , false, false, false, false }, // 288
     { QoreIROpcode::NewHashDecl, "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false, false }, // 289
-    { QoreIROpcode::NewComplexHash, "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false, false }, // 290
-    { QoreIROpcode::NewComplexList, "NewComplexList"                , false, false, false,  0, "NewComplexList", false, true , "ParseNode", true , false, false, false, false }, // 291
+    { QoreIROpcode::NewComplexHash, "NewComplexHash"                , false, false, false, OPCODE_MIN_OPERANDS(0), "NewComplexHash", false, true , "ParseNode", true , false, false, false, false }, // 290
+    { QoreIROpcode::NewComplexList, "NewComplexList"                , false, false, false, OPCODE_MIN_OPERANDS(0), "NewComplexList", false, true , "ParseNode", true , false, false, false, false }, // 291
     { QoreIROpcode::VrnConstruct, "VrnConstruct"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "VrnConstruct", false, true , "ParseNode", true , false, false, false, false }, // 292
     { QoreIROpcode::HashSetKeyValue, "HashSetKeyValue"               , false, false, false,  3, "HashSetKeyValue", false, true , "ParseNode", false, false, false, false, false }, // 293
     { QoreIROpcode::IteratorCreateReverse, "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false, false }, // 294

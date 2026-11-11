@@ -579,6 +579,10 @@ QoreEncodingManager::QoreEncodingManager() {
     addAlias(QCS_WINDOWS_1258, "CP-1258");
     addAlias(QCS_WINDOWS_1258, "CP1258");
 
+    // conversions between these and any ASCII text are known without iconv
+    qore_encoding_private::get(*QCS_USASCII)->ascii_identical = 1;
+    qore_encoding_private::get(*QCS_UTF8)->ascii_identical = 1;
+
     QCS_DEFAULT = QCS_UTF8;
 };
 
@@ -1602,6 +1606,26 @@ void qore_encoding_private::probe() {
     if (!flength && has_multibyte_units(convert)) {
         setStateful(convert);
     }
+}
+
+bool qore_encoding_private::probeAsciiIdentical() const {
+    bool identical = false;
+    if (ascii_compat && !stateful) {
+        ProbeConverter to(code.c_str(), "UTF-8");
+        ProbeConverter from("UTF-8", code.c_str());
+        if (to.valid() && from.valid()) {
+            identical = true;
+            std::string in, out, back;
+            // every character that a string without a null byte can have
+            for (int c = 1; c < 0x80 && identical; ++c) {
+                in.assign(1, static_cast<char>(c));
+                identical = to.convert(in, out) && out == in && from.convert(out, back) && back == in;
+            }
+        }
+    }
+    // two threads can get here for an encoding, with the same result
+    ascii_identical.store(identical ? 1 : 0, std::memory_order_relaxed);
+    return identical;
 }
 
 void qore_encoding_private::setStateful(const probe_convert_t& convert) {

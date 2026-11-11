@@ -143,6 +143,21 @@ void QoreStatementTempScope::hold(const void* site, ValueOptionalRefHolder& hold
     }
 }
 
+void QoreOperandEvalHolder::evalOperand(const QoreValue& exp) {
+    if (!exp.needsEval()) {
+        needs_deref = false;
+        v = exp;
+        return;
+    }
+    bool nd = true;
+    v = exp.eval(nd, xsink);
+    needs_deref = nd;
+    // a value folded at parse time (no exception sink) is not a temporary of a statement
+    if (nd && xsink && v.needsRef()) {
+        QoreStatementTempScope::holdReceiver(exp, *this, xsink);
+    }
+}
+
 void QoreStatementTempScope::holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink) {
     QoreStatementTempScope* scope = current_temp_scope;
     if (!scope || !isObservable(value)) {

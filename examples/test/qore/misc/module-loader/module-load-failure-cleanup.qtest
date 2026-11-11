@@ -133,9 +133,12 @@ printf(\"good: %d\\n\", p.callFunction(\"get\"));
     }
 
     testAotModule() {
+        # the compiler needs json, which the module requires: it is found in the module path of this test (the
+        # directories of the binary modules), after the module's own directory
+        string module_path = src_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
-            src_dir, qore_bin, qmod_dir + "/CleanupFailAot.qmod", src_dir + "/CleanupFailAot.qm"));
+            "QORE_MODULE_DIR='%s' %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            module_path, qore_bin, qmod_dir + "/CleanupFailAot.qmod", src_dir + "/CleanupFailAot.qm"));
         if (!is_file(qmod_dir + "/CleanupFailAot.qmod")) {
             testSkip("AOT module compilation is not available: " + compile_out);
         }

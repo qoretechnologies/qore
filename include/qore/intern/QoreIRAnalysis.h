@@ -179,6 +179,17 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 
 //! Return the local directly written or invalidated by one instruction.
 //! Covers ordinary stores, fused scalar writes, and local-rooted lvalue paths.
+//! Marks in \a observable (by value id) the list and hash literals, the results of AddAny and the values taken by
+//! remove, shift and pop that a call takes as its argument and whose release when the call returns can be observed
+/** The AST interpreter releases the argument list of a call when the call returns (see design/temporary-lifetime.md);
+    the IR interpreter and native code release such a temporary then only if its release can destroy a value: if it
+    holds a value that nothing else holds, such as an object created by the expression, or the value of a local that
+    the statement writes later (whose read releasePlainLocalReadsBeforeWrites() releases); a temporary of scalar and
+    constant values and of reads of locals that keep their values to the end of the statement is released at the end
+    of the statement, which costs no release at the call (qore#5712).
+*/
+DLLLOCAL void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vector<uint8_t>& observable);
+
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
 
@@ -208,6 +219,20 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
 DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
     std::unordered_set<uint32_t>& result);
 
+//! Returns true for a read of a plain local: not through a reference, not of a closure-bound or a top-level local
+/** In a function that creates no reference, such a local is written only by the instructions that
+    qore_ir_get_written_local() gives, whether its storage is IR-only or AST-visible (a local of a statement in a try
+    block, whose calls carry their expressions, is AST-visible), so a read of it whose statement writes it later can
+    be released after its last use, as the AST interpreter borrows the value (qore#5712).
+*/
+DLLLOCAL bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load);
+
+//! Returns false if \a value (of a local declared with type \a declared, if not null) can only be a value whose
+//! release cannot be observed: an int, a float, a bool, a string, a date, a binary or a number, which hold no other
+//! values, so that releasing it early is not worth an instruction
+DLLLOCAL bool qore_ir_value_may_be_observable(const QoreIRFunction& func, QoreIRValue value,
+    const QoreTypeInfo* declared);
+
 //! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
 constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 
@@ -215,14 +240,18 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 /** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
     the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
     list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
-    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a
-    cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
-    held first.  An engine that releases a statement's temporaries last registered first gives another order
-    (f(new T("a"), new T("b"), thr()) destroys b before a).
+    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a cast) and
+    an operand that the statement holds (of an arithmetic, bitwise, shift, comparison, logical, regex, keys,
+    elements, exists, instanceof or unary operator, the condition of ?:, the index of [] or the key of {} -
+    QoreOperandEvalHolder), which the
+    statement holds until it ends (QoreStatementTempScope::holdReceiver()), are released last, last held first.  An
+    engine that releases a statement's temporaries last registered first gives another order (f(new T("a"),
+    new T("b"), thr()) destroys b before a).
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
-    receiver, or 0 if it is released on its own (an operand of any other instruction, or a value used more than once);
+    receiver or an operand that the statement holds, or 0 if it is released on its own (an operand of any other
+    instruction, or a value used more than once);
     an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
     the incoming value, which an engine can keep in the incoming value's own slot.
 

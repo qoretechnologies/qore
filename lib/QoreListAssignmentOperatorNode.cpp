@@ -64,20 +64,15 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             if (!err) {
                 err = -1;
             }
-        } else if ((parse_context.pflag & PF_BACKGROUND_EXPR) && v.getType() == NT_VARREF
-            && v.get<const VarRefNode>()->getType() == VT_LOCAL) {
-            parse_error(*loc, "illegal local variable modification with the background operator in position %d " \
-                "of left-hand-side list in list assignment", li.index() + 1);
-            if (!err) {
-                err = -1;
-            }
-        } else if ((parse_context.pflag & PF_BACKGROUND_EXPR)
-                && (v.getType() == NT_SELF_VARREF || parse_is_self_member_lvalue(v))) {
-            // the expression takes the member's value when the thread starts, as it does for local variables
-            parse_error(*loc, "illegal member modification with the background operator in position %d of " \
-                "left-hand-side list in list assignment", li.index() + 1);
-            if (!err) {
-                err = -1;
+        } else if (parse_context.pflag & PF_BACKGROUND_EXPR) {
+            // a local, a member, or a value contained in one, which the thread copies (issue #5723)
+            qore_background_lvalue_e kind = parse_check_background_lvalue(v);
+            if (kind != qore_background_lvalue_e::SHARED) {
+                QoreStringMaker what("position %d of left-hand-side list in list assignment", li.index() + 1);
+                parse_raise_background_lvalue_error(loc, kind, what.c_str());
+                if (!err) {
+                    err = -1;
+                }
             }
         }
 
@@ -119,6 +114,10 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     while (ri.next()) {
         ri.parseInit(parse_context);
     }
+
+    // the value of the expression is its right-hand side, not the last value assigned (issue #5704: a list
+    // assignment in a typed hash initializer gave the key the type of the last lvalue, and the hash was refused)
+    parse_context.typeInfo = ri.getTypeInfo();
 
     return li.hasError() || ri.hasError() || err ? -1 : 0;
 }

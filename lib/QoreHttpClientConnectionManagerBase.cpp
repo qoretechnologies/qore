@@ -674,11 +674,8 @@ bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsi
         || !strcmp(e, "SOCKET-CLOSED");
 }
 
-bool HttpClientConnectionManagerBase::replaceClosedErrorWithPendingCancel(ExceptionSink& xsink) {
-    // the HTTP/3 connections of the HTTPClient report a closed QUIC connection; this manager does not repeat requests
-    // on them, so isConnectionClosedError() does not include it
-    if (!isConnectionClosedError(xsink) && !(xsink.getExceptionErr().getType() == NT_STRING
-            && QoreStringDataHelper(xsink.getExceptionErr()) == "HTTP3-CONNECTION-CLOSED")) {
+bool HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(ExceptionSink& xsink) {
+    if (!xsink) {
         return false;
     }
     ExceptionSink cancel_xsink;
@@ -1503,9 +1500,10 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // request for any other reason, is still healthy and stays pooled.
         // The protocol poll operation publishes its closed error before its callback updates
         // the pooled connection state. A submit in that window must evict and retry too.
-        if (conn->isClosed() || isConnectionClosedError(*xsink)) {
-            // a cancellation of this thread that closed the connection is reported as such, and not repeated
-            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink) || isCancelPending();
+        bool closed = conn->isClosed() || isConnectionClosedError(*xsink);
+        // a cancellation of this thread that ended the request is reported as such, and the request is not repeated
+        bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
+        if (closed) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
@@ -1548,10 +1546,12 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // pending and before the connection reference goes out of scope.
         abandonRequest(conn, stream_id);
         result.discard(xsink);
-        if (isConnectionClosedError(*xsink)) {
-            // a cancellation of this thread that ended the request first (the code that it ends closes the
-            // transport) is reported as such, and the request is not repeated
-            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink);
+        bool closed = isConnectionClosedError(*xsink);
+        // a cancellation of this thread that ended the request first (the code that it ends closes the transport,
+        // and the request fails with a closed connection, or with a send or receive error when the peer resets it)
+        // is reported as such, and the request is not repeated (issue #5793)
+        bool cancelled = replaceErrorWithPendingCancel(*xsink);
+        if (closed) {
             // a reused connection that was closed by the peer is not used again, and the request is repeated
             if (retry) {
                 ExceptionSink evict_xsink;
@@ -1696,9 +1696,10 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         // connection closed, so a submit in that window fails while the connection still looks reusable; without
         // the eviction, the repeat of the request can be handed the same dead connection, fail the same way and
         // be reported as final.
-        if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
-            // a cancellation of this thread that closed the connection is reported as such, and not repeated
-            bool cancelled = (*xsink && replaceClosedErrorWithPendingCancel(*xsink)) || isCancelPending();
+        bool closed = conn->isClosed() || (*xsink && isConnectionClosedError(*xsink));
+        // a cancellation of this thread that ended the request is reported as such, and the request is not repeated
+        bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
+        if (closed) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();

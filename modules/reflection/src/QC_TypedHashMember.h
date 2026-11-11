@@ -46,6 +46,12 @@ public:
 
     DLLLOCAL QoreReflectionHashDeclMember(QoreProgram* pgm, const TypedHashDecl* th, const char* name, const QoreExternalMemberBase* mem) :
         QoreReflectionMember(pgm, name, mem), th(th), name(name) {
+        // the member is the hashdecl's: the handle keeps the hashdecl (qore#5781)
+        th->ref();
+    }
+
+    DLLLOCAL ~QoreReflectionHashDeclMember() {
+        th->deref();
     }
 };
 

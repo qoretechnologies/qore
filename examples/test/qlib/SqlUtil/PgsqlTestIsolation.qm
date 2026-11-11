@@ -112,14 +112,12 @@ class PgsqlRunSchemaGuard {
             return;
         }
         string name = remove schema;
-        on_error ds.rollback();
-        on_success ds.commit();
-        ds.exec(sprintf("set local lock_timeout = '%s'", PgsqlRunSchema::DropLockTimeout));
         # the run's other schemas (PgsqlRunSchema::getAuxName()), then the run's schema
         *list<string> aux = ds.select("select nspname from pg_catalog.pg_namespace where starts_with(nspname, %v)",
             name + "_").nspname;
-        map ds.exec("drop schema if exists " + $1 + " cascade"), aux;
-        ds.exec("drop schema if exists " + name + " cascade");
+        ds.commit();
+        map PgsqlRunSchema::dropSchema(ds, $1), aux;
+        PgsqlRunSchema::dropSchema(ds, name);
     }
 }
 
@@ -381,10 +379,39 @@ public class PgsqlRunSchema {
             if (PgsqlRunSchema::isProcessAlive(pid) || (now - created) < LeftoverAge.durationSeconds()) {
                 continue;
             }
-            on_error ds.rollback();
-            on_success ds.commit();
-            ds.exec("drop schema if exists " + schema + " cascade");
+            try {
+                PgsqlRunSchema::dropSchema(ds, schema);
+            } catch (hash<ExceptionInfo> ex) {
+                # a leftover that cannot be dropped must not fail the test that found it
+                printf("PgsqlRunSchema: cannot drop leftover schema %s: %s: %s\n", schema, ex.err, ex.desc);
+            }
         }
+    }
+
+    #! Drops a schema with everything in it
+    /** Its partitioned tables are dropped first, each partition in a transaction of its own: a schema with many
+        partitions dropped in one transaction exceeds the server's lock table ("out of shared memory").
+    */
+    static dropSchema(Datasource ds, string schema) {
+        # the partitions of every partitioned table in the schema, the deepest first
+        *hash<auto> parts = ds.select("select pg_catalog.quote_ident(pn.nspname) || '.' || "
+            "pg_catalog.quote_ident(pc.relname) as sql_name, pc.relkind = 'f' as is_foreign "
+            "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "cross join lateral pg_catalog.pg_partition_tree(c.oid) t "
+            "join pg_catalog.pg_class pc on pc.oid = t.relid "
+            "join pg_catalog.pg_namespace pn on pn.oid = pc.relnamespace "
+            "where n.nspname = %v and c.relkind = 'p' and not c.relispartition and t.level > 0 "
+            "order by t.level desc", schema);
+        ds.commit();
+        foreach hash<auto> part in (parts.contextIterator()) {
+            on_error ds.rollback();
+            ds.exec(sprintf("drop %stable if exists %s cascade", part.is_foreign ? "foreign " : "", part.sql_name));
+            ds.commit();
+        }
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec(sprintf("set local lock_timeout = '%s'", PgsqlRunSchema::DropLockTimeout));
+        ds.exec("drop schema if exists " + schema + " cascade");
     }
 
     #! Returns True if a process with the given id exists on this host

@@ -3172,6 +3172,7 @@ static const char* dump_aot_value_tag_name(uint8_t tag) {
         case QoreAOTValueTag::VT_INT64: return "INT64";
         case QoreAOTValueTag::VT_FLOAT64: return "FLOAT64";
         case QoreAOTValueTag::VT_STRING: return "STRING";
+        case QoreAOTValueTag::VT_STRING_ENC: return "STRING_ENC";
         case QoreAOTValueTag::VT_ABS_DATE: return "ABS_DATE";
         case QoreAOTValueTag::VT_REL_DATE: return "REL_DATE";
         case QoreAOTValueTag::VT_LIST: return "LIST";
@@ -3280,6 +3281,10 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_CONST_REF:
             return dump_skip_len_string_ref(reader, p, end)
                 || fail("truncated string reference value");
+
+        case QoreAOTValueTag::VT_STRING_ENC:
+            return (dump_skip_len_string_ref(reader, p, end) && dump_skip_bytes(p, end, 4))
+                || fail("truncated encoded string value");
 
         case QoreAOTValueTag::VT_ABS_DATE:
             return dump_skip_bytes(p, end, 16) || fail("truncated absolute date value");

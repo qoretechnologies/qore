@@ -89,8 +89,17 @@ class ModuleCodeCleanupTest inherits QUnit::Test {
                 "a ThreadPool task of the cleanup thread: 2\n"
                 "a background thread of the cleanup thread: 2\n"
                 "a ThreadPool task of a ThreadPool task of the cleanup thread: 2\n"
+                "an asynchronous I/O timer of the cleanup thread: 2\n"
+                "an asynchronous I/O timer of a ThreadPool task of the cleanup thread: 2\n"
+                "an asynchronous I/O timer of a background thread of the cleanup thread: 2\n"
+                "an asynchronous I/O operation of the cleanup thread: 2\n"
+                "the module object that only the controller holds for an asynchronous I/O operation of the cleanup "
+                "thread is destroyed: True\n"
+                "the module object of an asynchronous I/O timer's callback of the cleanup thread is destroyed when the "
+                "controller releases the callback: True\n"
                 "a ThreadPool task of a foreign thread: \"PROGRAM-ERROR\"\n"
-                "a background thread of a foreign thread: \"PROGRAM-ERROR\"\n", r.out, mode);
+                "a background thread of a foreign thread: \"PROGRAM-ERROR\"\n"
+                "an asynchronous I/O timer of a foreign thread: \"PROGRAM-ERROR\"\n", r.out, mode);
         }
     }
 

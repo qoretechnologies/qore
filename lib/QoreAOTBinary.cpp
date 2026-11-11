@@ -1795,6 +1795,9 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_CONST_REF:
             return skip_fixed(8, "scalar value payload");
 
+        case QoreAOTValueTag::VT_STRING_ENC:
+            return skip_fixed(12, "encoded string value payload");
+
         // a number carries its precision after the digits from QORE_AOT_NUMBER_PRECISION_VERSION;
         // skipping only the 8-byte string payload would leave the stream 4 bytes short of the next value
         case QoreAOTValueTag::VT_NUMBER:
@@ -3659,10 +3662,15 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             return true;
         }
         case NT_STRING: {
-            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_STRING));
             QoreStringValueHelper str(v);
+            const QoreEncoding* enc = str->getEncoding();
+            writeU8(static_cast<uint8_t>(enc == QCS_UTF8 ? QoreAOTValueTag::VT_STRING
+                : QoreAOTValueTag::VT_STRING_ENC));
             writeU32(static_cast<uint32_t>(str->size()));
             writeStringRef(str->c_str(), str->size());
+            if (enc != QCS_UTF8) {
+                writeStringRef(enc->getCode());
+            }
             return true;
         }
         case NT_DATE: {
@@ -4493,6 +4501,23 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 return QoreValue();
             }
             return QoreValue::makeStringValue(str, len, QCS_UTF8);
+        }
+
+        case QoreAOTValueTag::VT_STRING_ENC: {
+            if (ptr + 12 > end) {
+                error = "unexpected end of data reading encoded string value";
+                return QoreValue();
+            }
+            uint32_t len = readU32(ptr);
+            uint32_t str_offset = readU32(ptr);
+            uint32_t enc_offset = readU32(ptr);
+            const char* str = getString(str_offset);
+            const char* enc_name = getString(enc_offset);
+            if (!str || !enc_name || !*enc_name) {
+                error = "invalid string offset in encoded string value";
+                return QoreValue();
+            }
+            return QoreValue::makeStringValue(str, len, QEM.findCreate(enc_name));
         }
 
         case QoreAOTValueTag::VT_ABS_DATE: {
@@ -6430,7 +6455,9 @@ static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, 
         QoreMethod* m = npriv->parseFindLocalMethod(method_name);
         if (m) {
             MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match);
+            // issue #5773: the abstract variant's types are those of the specialization that the class inherits
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match,
+                origin_class->getTypeInfo());
             if (ov && !ov->isAbstract()) {
                 return ov;
             }
@@ -7014,6 +7041,10 @@ static bool aotAppendValueHashParts(const QoreValue& value, std::vector<std::str
             const QoreString* qs = *str;
             parts.push_back("scalar");
             parts.emplace_back(qs ? qs->c_str() : "", qs ? qs->strlen() : 0);
+            // the same bytes in another encoding are another value
+            if (qs && value.getType() == NT_STRING && qs->getEncoding() != QCS_UTF8) {
+                parts.push_back(qs->getEncoding()->getCode());
+            }
             return true;
         }
         case NT_LIST: {
@@ -11891,6 +11922,17 @@ bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* l
 
 } // anonymous namespace
 
+#ifdef DEBUG
+//! Appends the parameters that the background helpers in \a func own, in instruction order (see
+//! qoreAOTForEachBackgroundHelperParam()); used by the debug check of the closure slot tables in QoreAOT.cpp
+void qoreAOTCollectBackgroundHelperParams(const QoreIRFunction& func, std::vector<const LocalVar*>& params) {
+    qoreAOTForEachBackgroundHelperParam(func, [&params](const LocalVar* param) {
+        params.push_back(param);
+        return true;
+    });
+}
+#endif
+
 //! Records why an expression slot writer failed (QoreAOTExprSlotHandlers.cpp)
 /** The caller of the slot writer reports it as a compile error; the first diagnostic recorded is kept, so a nested
     writer's more specific message is not replaced by its caller's.
@@ -12062,6 +12104,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             return true;
         }
         if (expr.isShortString()) {
+            if (qore_aot_string_needs_value(expr)) {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+                return writer.writeValue(expr);
+            }
             char buf[8];
             expr.getShortString(buf);
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
@@ -12192,12 +12238,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (deferred_source_function) {
             writer.writeStringRef(deferred_source_function);
         } else if (fe && fe->getNamespace()) {
-            std::string qualified;
-            fe->getNamespace()->getPath(qualified);
-            if (!qualified.empty()) {
-                qualified += "::";
-            }
-            qualified += fe->getName();
+            std::string qualified = qore_aot_get_function_identity_name(fe);
             writer.writeStringRef(qualified.c_str());
         } else {
             writer.writeStringRef(call->getName());
@@ -12483,6 +12524,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
     // QoreStringNode: string literal constant (e.g., "" as constructor arg)
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        if (qore_aot_string_needs_value(str->c_str(), str->size(), str->getEncoding())) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+            return writer.writeValue(expr);
+        }
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
         writer.writeStringRef(str->c_str(), str->size());
         return true;
@@ -13437,8 +13482,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
-        QoreFunction* f = fcr->getFunction();
-        writer.writeStringRef(f ? f->getName() : "");
+        std::string ref_name = qore_aot_get_function_ref_name(fcr);
+        writer.writeStringRef(ref_name.c_str());
         return true;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
@@ -17629,6 +17674,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         }
         TypedHashDecl* hd = new TypedHashDecl(name, type_path.c_str());
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+        // the member initializers loaded below are code of the Program that loads the binary
+        hdp->setSourceProgram(pgm);
 
         // Set visibility
         if (flags & 0x0001) {
@@ -19406,8 +19453,9 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
                 auto mi = priv->hm.find(ai->first);
                 MethodFunctionBase* f = (mi != priv->hm.end())
                     ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                // issue #5773: the abstract variant's types are those of the specialization that the class inherits
                 if (f && f->parseHasVariantWithSignature(
-                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match)) {
+                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match, priv->cls->getTypeInfo())) {
                     // Resolved — concrete override matches abstract signature
                     continue;
                 }

@@ -38,6 +38,8 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_encoding_private.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -74,6 +76,53 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
     }
 
     return false;
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(QoreValue v) {
+    // an enum value is compared with its base value, as qore_switch_case_equal() compares it
+    if (v.isEnum()) {
+        v = v.getEnumBaseValue();
+    }
+    if (v.isShortString()) {
+        // an inline short string is in UTF-8
+        v.getShortString(short_buf);
+        buf = short_buf;
+        len = v.shortStringLen();
+        ascii_identical = true;
+        return;
+    }
+    if (v.getType() == NT_STRING) {
+        setString(*v.get<const QoreStringNode>());
+    }
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(const QoreString& value) {
+    setString(value);
+}
+
+void QoreSwitchStringValue::setString(const QoreString& value) {
+    // the data of the value, read directly, as a lookup does for each switch
+    const qore_string_private* p = qore_string_private::get(value);
+    str = &value;
+    buf = p->effective_buf();
+    len = p->len;
+    ascii_identical = qore_encoding_private::get(*p->getEncoding())->isKnownAsciiIdentical();
+}
+
+bool QoreSwitchStringValue::equalsConverted(const char* case_str, size_t case_len) const {
+    assert(str);
+    // determines the encoding's property, so that the next lookup can compare bytes if it has it
+    qore_encoding_private::get(*str->getEncoding())->isAsciiIdentical();
+    // compared as the AST interpreter compares the strings (QoreValue::isEqualHard()), for which an encoding conversion
+    // error means that they are not equal; the case is ASCII, and in UTF-8 whatever the default encoding is
+    QoreString case_string(case_str, case_len, QCS_UTF8);
+    ExceptionSink xsink;
+    bool rv = str->equalSoft(case_string, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return rv;
 }
 
 bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {

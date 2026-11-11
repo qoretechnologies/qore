@@ -1018,8 +1018,34 @@ DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use
 DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
-//! Returns true if the lvalue is a member of the current object named through self (self.x), as a bare member (x) is
-DLLLOCAL bool parse_is_self_member_lvalue(QoreValue n);
+
+//! what a background expression would modify with an lvalue (see parse_check_background_lvalue())
+enum class qore_background_lvalue_e {
+    //! a global variable, which the thread shares, or an object reached through the path: allowed
+    SHARED,
+    //! a local, closure-bound or thread-local variable of the code that starts the thread, or a value contained in
+    //! it, which the thread takes when it starts: refused (a local declared as a reference, such as
+    //! reference<list<int>>, is a local too)
+    LOCAL,
+    //! a member of the object of the code that starts the thread, or a value contained in it: refused
+    MEMBER,
+    //! a value contained in a local or a member, through a step whose type is not known: refused
+    UNKNOWN,
+};
+
+//! Returns what the lvalue of a modification in a background expression modifies, by its access path (issue #5723)
+/** The background operator takes the values of the local, closure-bound and thread-local variables and of the members
+    of the code that starts the thread when the thread starts, so a modification of one of them, or of a value it
+    contains (an element of a list, a key of a hash), changes only the thread's copy: it is refused.  A step of the path whose type is
+    an object makes the rest of the path a part of that object, which the thread shares: the modification is allowed,
+    as a method call on the object is.  A step whose type is not known (auto, any, no type) could be either.
+*/
+DLLLOCAL qore_background_lvalue_e parse_check_background_lvalue(QoreValue n);
+
+//! Raises the parse error for the lvalue of a modification refused by parse_check_background_lvalue()
+/** @param what the description of the place of the lvalue, as in the error messages of the operator */
+DLLLOCAL void parse_raise_background_lvalue_error(const QoreProgramLocation* loc, qore_background_lvalue_e kind,
+        const char* what);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
         const MethodVariantBase* variant, const QoreFunction* func = nullptr);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
@@ -1590,6 +1616,7 @@ public:
         // and save the return type
         parse_context.typeInfo = nullptr;
         error = parse_init_value(n, parse_context);
+        typeInfo = parse_context.typeInfo;
         //printd(5, "QorePossibleListNodeParseInitHelper::QorePossibleListNodeParseInitHelper() n: %s\n",
         //    n.getFullTypeName());
         if (n.getType() == NT_LIST) {
@@ -1611,6 +1638,11 @@ public:
 
     DLLLOCAL bool noArgument() const {
         return finished;
+    }
+
+    //! Returns the parse type of the whole expression, as its parse initialization gave it
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
     }
 
     DLLLOCAL bool next() {
@@ -1641,6 +1673,8 @@ private:
     bool finished = true;
     size_t pos = -1;
     const QoreTypeInfo* singleTypeInfo = nullptr;
+    //! the parse type of the whole expression
+    const QoreTypeInfo* typeInfo = nullptr;
     bool error = false;
 
     DLLLOCAL size_t sizeIntern() const {
