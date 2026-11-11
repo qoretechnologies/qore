@@ -187,6 +187,17 @@ DLLLOCAL void qore_dbg_http_note_closed();
 //! the Counter armed by dbg_http_submit_after_close() reaches zero (a connection was marked closed), then disarms it
 DLLLOCAL void qore_dbg_http_wait_submit_after_close();
 
+//! the points at which an HTTP client can be held by dbg_http_hold_at()
+enum class QoreDbgHttpHoldPoint : unsigned char {
+    //! HTTPClient::startPollSendRecv() has checked out its connection and is about to submit the request
+    Submit,
+    //! Http1ClientConnection::closeConnection() has invalidated the connection and is about to close it
+    CloseAfterInvalidate,
+};
+
+//! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
+DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook
 //! (\a after false), and once after the close hook (\a after true); set by unit tests

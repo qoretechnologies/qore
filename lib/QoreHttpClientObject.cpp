@@ -9359,7 +9359,9 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         }
         QoreStringValueHelper err(xsink->getExceptionErr());
         if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
-            return conn->isClosed();
+            // a connection that another thread is closing (closeConnection() invalidates it before it closes it,
+            // and refuses the submit meanwhile) is reported like a closed one (#5814)
+            return conn->isClosed() || conn->isInvalidated();
         }
         ExceptionSink info_xsink;
         ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
@@ -9430,6 +9432,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #ifdef DEBUG
         // tests submit the request only once the I/O thread has marked the connection closed
         qore_dbg_http_wait_submit_after_close();
+        // tests hold the submit to order it with a concurrent close of the connection
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Submit);
 #endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
@@ -9484,6 +9488,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             reportPollSendEvent(method, msgpath, *nh);
 #ifdef DEBUG
             qore_dbg_http_wait_submit_after_close();
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::Submit);
 #endif
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);

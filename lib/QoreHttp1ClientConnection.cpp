@@ -39,6 +39,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
@@ -914,6 +915,10 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // (we've already invalidated).  See HttpClientConnection.h.
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
     finishStreamingSend();
 
     if (!poll_op_priv) {

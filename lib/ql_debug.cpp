@@ -19765,6 +19765,90 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 }
 
 namespace {
+//! one point armed by dbg_http_hold_at(): the Counters are referenced
+struct DbgHttpHold {
+    Counter* reached = nullptr;
+    Counter* release = nullptr;
+};
+std::mutex dbg_http_hold_m;
+DbgHttpHold dbg_http_holds[2];
+}
+
+void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
+    DbgHttpHold h;
+    {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& armed = dbg_http_holds[static_cast<int>(point)];
+        if (!armed.reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        h = armed;
+        armed = DbgHttpHold();
+    }
+    ExceptionSink xsink;
+    h.reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    h.release->waitForZero(&xsink, 60000);
+    h.reached->deref(&xsink);
+    h.release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
+/** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
+    the request; \c "close": an HTTP/1 client connection that is being closed has been invalidated (new calls on it
+    are refused) and is not closed yet
+    @param reached decremented when a thread reaches the point
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
+*/
+static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    int point;
+    if (!strcmp(name->c_str(), "submit")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Submit);
+    } else if (!strcmp(name->c_str(), "close")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point %y", name->c_str());
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    DbgHttpHold& h = dbg_http_holds[point];
+    if (h.reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): point %y is already armed",
+            name->c_str());
+        return QoreValue();
+    }
+    h.reached = reached.release();
+    h.release = release.release();
+    return QoreValue();
+}
+
+//! disarms the points armed by dbg_http_hold_at() that were not reached
+static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    for (DbgHttpHold& h : dbg_http_holds) {
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+            h = DbgHttpHold();
+        }
+    }
+    return QoreValue();
+}
+
+namespace {
 //! the Counter armed by dbg_http_submit_after_close(), with a reference
 std::mutex dbg_submit_after_close_m;
 Counter* dbg_submit_after_close = nullptr;
@@ -21015,6 +21099,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");
