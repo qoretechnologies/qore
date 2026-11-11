@@ -8,8 +8,9 @@ printf("list += list: %y\n", l1w);
 
 auto l2 = map $1, (1, 2, 3);
 auto l2w := l2;
-l2 -= 2;
-printf("list -= : %y\n", l2w);
+l2 += 4;
+l2 += (5, 6);
+printf("list += twice: %y\n", l2w);
 
 auto l3 = map $1, (1, 2);
 auto l3w := l3;
@@ -67,6 +68,59 @@ auto sub captured() {
     return (lw, get().size());
 }
 printf("closure: %y\n", captured());
+
+# typed variables that are weak sources
+list<auto> typed = map $1, (1, 2);
+list<auto> typedw := typed;
+typed += 3;
+printf("typed list: %y\n", typedw);
+hash<auto> typedh = map {$1: 1}, ("a",);
+hash<auto> typedhw := typedh;
+typedh += {"b": 2};
+printf("typed hash: %y\n", typedhw);
+
+# the weak assignment comes after the change, and is in a loop
+auto sub assigned_later() {
+    auto l = map $1, (1, 2);
+    l += 3;
+    auto w := l;
+    l += 4;
+    return w;
+}
+printf("weak assignment after a change: %y\n", assigned_later());
+
+auto sub in_loop() {
+    auto l = map $1, (1, 2);
+    auto w;
+    for (int i = 0; i < 3; ++i) {
+        l += i + 10;
+        if (i == 1) {
+            w := l;
+        }
+    }
+    return w;
+}
+printf("weak assignment in a loop: %y\n", in_loop());
+
+# the weak source is one of the branches of a conditional or an operand of a coalescing operator
+auto sub conditional(bool c) {
+    auto l = map $1, (1, 2);
+    auto other = map $1, (7, 8);
+    auto w := c ? l : other;
+    l += 3;
+    other += 9;
+    return w;
+}
+printf("conditional: %y %y\n", conditional(True), conditional(False));
+
+auto sub coalescing() {
+    auto l = map $1, (1, 2);
+    auto n;
+    auto w := n ?? l;
+    l += 3;
+    return w;
+}
+printf("coalescing: %y\n", coalescing());
 
 # a source that is only read through a weak reference: scalars and objects are not changed
 auto sub scalars() {

@@ -36,6 +36,9 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreMapOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/Variable.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
@@ -186,6 +189,38 @@ QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
     return metadata;
 }
 
+//! records the local variables that a weak assignment of \a expr can take a weak reference to the container of
+/** the variable itself, and the variables that the branches of a conditional (<tt>c ? a : b</tt>) and the operands of
+    the coalescing operators (<tt>a ?? b</tt>, <tt>a ?: b</tt>) can give (qore#5846)
+*/
+static void qore_mark_weak_assignment_sources(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+    if (const VarRefNode* source = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t source_type = source->getType();
+        if ((source_type == VT_LOCAL || source_type == VT_CLOSURE || source_type == VT_LOCAL_TS) && source->ref.id) {
+            source->ref.id->parseWeakSource();
+        }
+        return;
+    }
+    if (const QoreQuestionMarkOperatorNode* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(q->getExpression(1));
+        qore_mark_weak_assignment_sources(q->getExpression(2));
+        return;
+    }
+    if (const QoreNullCoalescingOperatorNode* n = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(n->getLeft());
+        qore_mark_weak_assignment_sources(n->getRight());
+        return;
+    }
+    if (const QoreValueCoalescingOperatorNode* v = dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(v->getLeft());
+        qore_mark_weak_assignment_sources(v->getRight());
+    }
+}
+
 int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode) {
     // the operator's spelling, used in diagnostics
     const char* op_name = mode == AssignmentMode::Weak
@@ -247,12 +282,8 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;
     // a local variable that a weak reference is taken of must be changed in place (qore#5846)
-    if (mode == AssignmentMode::Weak && right.getType() == NT_VARREF) {
-        const VarRefNode* source = right.get<const VarRefNode>();
-        qore_var_t source_type = source->getType();
-        if ((source_type == VT_LOCAL || source_type == VT_CLOSURE || source_type == VT_LOCAL_TS) && source->ref.id) {
-            source->ref.id->parseWeakSource();
-        }
+    if (mode == AssignmentMode::Weak) {
+        qore_mark_weak_assignment_sources(right);
     }
 
     // check for illegal assignment to $self
