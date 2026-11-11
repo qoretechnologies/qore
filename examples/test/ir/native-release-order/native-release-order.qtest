@@ -51,7 +51,7 @@ class NativeReleaseOrderTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(8, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(10, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         foreach string c in ("map", "select", "map select", "hash map") {
             assertTrue(regex(out,
                 sprintf("(^|\n)%s: released h2; released h3; released h1; catch STAGE; after(\n|$)", c)), c);
@@ -62,6 +62,9 @@ class NativeReleaseOrderTest inherits QUnit::Test {
         }
         assertTrue(out =~ /\nmap statement iterator: v 10; itdone it; released fac; released local; catch DIVISION-/,
             "map statement over an iterator");
+        assertTrue(out =~ /\nmap statement try: released n1; released n2; released n3; stmt/, "map statement in a try");
+        assertTrue(out =~ /\nmap dtor raises: mk 1; mk 2; dtor 1; dtor 2; catch DTOR; after/,
+            "a destructor raises when a value is replaced");
     }
 
     #! runs the script in every execution mode and on the IR tier

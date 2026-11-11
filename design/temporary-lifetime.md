@@ -67,7 +67,15 @@ An expression evaluated again within the same statement - the expression of a `m
 `select`, of `foldl`, also when a `foreach` statement gets the elements of a `map` one by one - keeps one temporary
 per expression: the one from the previous element is released when the next one is created (the IR interpreter
 overwrites the value slot of the instruction; native code overwrites the cleanup slot), so a loop never accumulates
-temporaries; the last one is released at the end of the statement.
+temporaries; the last one is released at the end of the statement.  An expression that raises an exception creates no
+temporary, so the previous element's stays until the statement's temporaries are released, after the operator's
+values: the IR interpreter sets no value for an instruction that raises, and native code sets the cleanup slot of an
+IR invoke at the start of its normal continuation (`QoreIRToLLVM::getInvokeResultDeferBlock()`), which costs the
+normal path nothing; before, an exception released the previous element's temporary first (qore#5830).  The blocks
+that a functional operator's lowering creates for the code after its loop are laid out after the blocks of its body
+(`qore_ir_move_loop_exit_blocks()`): they hold the end of the statement, and native code, which closes a temp scope
+in the order of the blocks, otherwise left the temporaries of the body to the enclosing statement, which released
+them after the handler of an exception, and after the code that followed the statement in a `try` block.
 
 ## AST interpreter
 

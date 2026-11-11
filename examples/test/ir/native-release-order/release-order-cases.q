@@ -95,6 +95,31 @@ int sub idiv(int i) {
     return i == 2 ? 0 : 1;
 }
 
+#! a value whose destructor raises for the first one
+class T {
+    public {
+        Log log;
+        int n;
+    }
+
+    constructor(Log l, int i) {
+        log = l;
+        n = i;
+    }
+
+    destructor() {
+        log.add("dtor " + n);
+        if (n == 1) {
+            throw "DTOR", "t" + n;
+        }
+    }
+}
+
+T sub mk(Log log, int i) {
+    log.add("mk " + i);
+    return new T(log, i);
+}
+
 #! prints the log of a case
 sub out(string name, Log log) {
     printf("%s: %s\n", name, log.lines.join("; "));
@@ -203,6 +228,32 @@ sub map_statement_iterator() {
     out("map statement iterator", log);
 }
 
+# no exception: the temporary of the last element is released when the map statement ends, before the next
+# statement, also in a try block
+sub map_statement_try() {
+    Log log();
+    try {
+        map (new Holder(log, "n" + $1)).n.size(), (1, 2, 3);
+        log.add("stmt");
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    out("map statement try", log);
+}
+
+# the destructor of the value of the previous element raises when the next call replaces it
+sub map_dtor_raises() {
+    Log log();
+    try {
+        list<auto> r = map mk(log, $1).n, (1, 2, 3);
+        log.add("r " + r.size());
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("map dtor raises", log);
+}
+
 sub main() {
     map_list();
     select_list();
@@ -212,6 +263,8 @@ sub main() {
     select_temp_local();
     hash_map_temp_local();
     map_statement_iterator();
+    map_statement_try();
+    map_dtor_raises();
 }
 
 main();

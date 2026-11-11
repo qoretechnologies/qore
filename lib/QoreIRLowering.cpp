@@ -15915,8 +15915,11 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
 /** The blocks that the body creates (a ternary, a short-circuit operator, the implicit context's exception cleanup)
     come after the loop's own, which are created before it, and would be laid out before them: the code runs them
     after the body, and the LLVM code generator assigns the body's temporaries to the statement's temp scope, and
-    orders their release on an exception edge, in the order of the blocks.  A body that created none keeps its layout
-    (qore#5680).
+    orders their release on an exception edge, in the order of the blocks.  The blocks after the loop hold the end of
+    the statement (its DiscardTemps): laid out before the body's blocks, they closed the statement's temp scope for the
+    code generator before the body's temporaries were emitted, which the statement then released only when the
+    enclosing statement ended, after the handler of an exception (qore#5830).  A body that created none keeps its
+    layout (qore#5680).
 
     @param body_block_count the number of blocks of the function when the body's lowering started
 */
@@ -17446,6 +17449,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
         // Body block: load element, evaluate expression, store result
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val;
@@ -17579,6 +17583,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         body_scope.end();
         loop_cleanup.finish(QoreIRValue(), input_list, qore_ir_observable_release(element_val, elem_type), result_list,
             map->loc, {qore_ir_observable_release(expr_result, map->getMapExpType())});
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_list is the result (empty for size 0, filled for size > 0)
         builder.setBlock(exit_block);
@@ -17700,6 +17705,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Body block: set up context, evaluate expression, append result
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -17806,6 +17812,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     loop_cleanup.finish(iter_val, input_list, element_val, result_list, map->loc,
         {qore_ir_observable_release(expr_result, map->getMapExpType())});
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {loop_exit_block, unwrap_check_block, unwrap_get_block, unwrap_nothing_block, final_block});
 
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
@@ -17951,6 +17959,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
         // Body block: load element, evaluate predicate
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val;
@@ -18088,6 +18097,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             output_index_phi->operands.push_back(zero);
             output_index_phi->operands.push_back(next_output_index);
         }
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
@@ -18205,6 +18215,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     // Body block: set up context, evaluate predicate
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // the predicate (the right operand of select) runs with the element as $1 and its index as $#, which the
     // thread-local stack also holds for AST-delegated sub-expressions, and is converted to a bool; see
@@ -18251,6 +18262,8 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     index_phi->operands.push_back(next_index);
 
     loop_cleanup.finish(iter_val, input_list, element_val, result_list, select->loc);
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {loop_exit_block, unwrap_check_block, unwrap_get_block, unwrap_nothing_block, final_block});
 
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
@@ -18438,6 +18451,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
 
         // Body block: load element, evaluate fold expression
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val;
@@ -18493,6 +18507,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         accum_phi->incoming.push_back({fold_result, body_exit_block});
         accum_phi->operands.push_back(first_val);
         accum_phi->operands.push_back(fold_result);
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
         // Exit block: PHI between identity value (empty) and accumulator
         builder.setBlock(exit_block);
@@ -18546,6 +18561,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
 
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -18585,6 +18601,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     accum_phi->incoming.push_back({fold_result, body_exit_block});
     accum_phi->operands.push_back(first_val);
     accum_phi->operands.push_back(fold_result);
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
     // Exit block: return accumulator (via phi from different sources)
     builder.setBlock(exit_block);
@@ -18683,6 +18700,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         builder.createBranchIf(at_end, exit_block, body_block, foldr->loc);
 
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
         QoreIRValue element_val = elem_is_int
             ? builder.createListGetInt(input_list, index_val, foldr->loc)->result
             : builder.createListGetFloat(input_list, index_val, foldr->loc)->result;
@@ -18723,6 +18741,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         accum_phi->incoming.push_back({fold_result, body_exit_block});
         accum_phi->operands.push_back(first_val);
         accum_phi->operands.push_back(fold_result);
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
         builder.setBlock(exit_block);
         auto* result_phi = builder.createPhi({
@@ -18772,6 +18791,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
 
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -18811,6 +18831,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     accum_phi->incoming.push_back({fold_result, body_exit_block});
     accum_phi->operands.push_back(first_val);
     accum_phi->operands.push_back(fold_result);
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
     // Exit block: return accumulator (via phi from different sources)
     builder.setBlock(exit_block);
@@ -18939,6 +18960,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         // Body block: load element, evaluate predicate
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val;
@@ -19116,6 +19138,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         body_scope.end();
         loop_cleanup.finish(QoreIRValue(), input_list, qore_ir_observable_release(element_val, elem_type), result_list,
             ms->loc, {qore_ir_observable_release(map_result, map_type)});
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
@@ -19243,6 +19266,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // Body block: push implicit args, evaluate select predicate
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // the select predicate (operand 2) and then the map expression (operand 0) run with the element as $1 and its
     // index as $#, which the thread-local stack also holds for AST-delegated sub-expressions, set once for both, as the
@@ -19335,6 +19359,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     loop_cleanup.finish(iter_val, input_list, element_val, result_list, ms->loc,
         {qore_ir_observable_release(map_result, map_type)});
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {loop_exit_block, unwrap_check_block, unwrap_get_block, unwrap_nothing_block, final_block});
 
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
@@ -19471,6 +19497,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
         // Body block: load element, evaluate key and value, insert into hash
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hm->loc)->result;
@@ -19572,6 +19599,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
             type_state_phi->operands.push_back(type_state_init);
             type_state_phi->operands.push_back(next_type_state);
         }
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
@@ -19643,6 +19671,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // Body block: evaluate key and value expressions
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -19733,6 +19762,8 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     index_phi->incoming.push_back({next_index, body_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {loop_exit_block != header_block ? loop_exit_block : nullptr, exit_block});
     if (type_state_phi) {
         type_state_phi->incoming.push_back({type_state_init, preheader_block});
         type_state_phi->incoming.push_back({next_type_state, body_exit_block});
@@ -19843,6 +19874,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
         // Body block: load element, evaluate predicate
         builder.setBlock(body_block);
+        size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
         QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hms->loc)->result;
@@ -19972,6 +20004,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             type_state_phi->operands.push_back(type_state_init);
             type_state_phi->operands.push_back(next_type_state);
         }
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
@@ -20046,6 +20079,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
     // Body block: evaluate select predicate
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
 
     // Set virtual implicit context: $1 = element, $# = index
     VirtualImplicitContext saved = virtual_implicit;
@@ -20162,6 +20196,8 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     index_phi->incoming.push_back({next_index, cont_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {loop_exit_block != header_block ? loop_exit_block : nullptr, exit_block});
     if (type_state_phi) {
         type_state_phi->incoming.push_back({type_state_init, preheader_block});
         type_state_phi->incoming.push_back({next_type_state, cont_exit_block});

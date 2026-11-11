@@ -5232,14 +5232,14 @@ bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* targ
     return false;
 }
 
-void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
-        llvm::Function* llvm_func) {
+bool QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
+        llvm::Function* llvm_func, llvm::BasicBlock* defer_to) {
     const QoreIRValueFacts* facts = current_ir_func
         ? current_ir_func->getValueFacts(QoreIRValue(result_id)) : nullptr;
     if (!q_env_is_set("QORE_DISABLE_AOT_REFERENCE_FREE_CLEANUP_ELISION")
             && facts
             && facts->ownership == QoreIRValueOwnership::ReferenceFree) {
-        return;
+        return false;
     }
 
     // Phase 2B — SSA-direct path: when the just-emitted call went through
@@ -5254,7 +5254,7 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
         // result's alloca to clear it (DotEval base release, StoreLocal
         // tracking).  Use nullptr to signal "SSA-direct, no alloca".
         invoke_alloca_map[result_id] = nullptr;
-        return;
+        return false;
     }
 
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
@@ -5267,14 +5267,81 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     // Decref previous value before overwriting.  This is required even when
     // exception checks are deferred: ordinary AOT functions can contain loops,
     // so the same cleanup alloca may be reused many times before function exit.
-    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
-    builder->CreateStore(result, cleanup_alloca);
-    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    // The result of an IR invoke replaces the previous value on the invoke's normal edge only (see
+    // getInvokeResultDeferBlock()): the continuation is not lowered yet, so the instructions go at its start
+    {
+        llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+        if (defer_to) {
+            builder->SetInsertPoint(defer_to);
+        }
+        auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
+        builder->CreateStore(result, cleanup_alloca);
+        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    }
 
     registerInvokeCleanupAlloca(cleanup_alloca);
     setInvokeAlloca(result_id, cleanup_alloca);
+    return defer_to != nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock* normal_target,
+        const QoreIRBasicBlock* exception_target) {
+    auto bb_it = block_map.find(normal_target);
+    // a continuation that is also the exception target would release the result on the exception edge and store it
+    // at its start
+    if (!normal_target || normal_target == exception_target || !current_ir_func || bb_it == block_map.end()
+            || !bb_it->second
+            || !bb_it->second->empty()
+            || (!normal_target->instructions.empty()
+                && normal_target->instructions.front()->opcode == QoreIROpcode::Phi)) {
+        return nullptr;
+    }
+    if (!ir_block_predecessor_counts_valid) {
+        ir_block_predecessor_counts_valid = true;
+        std::unordered_set<const QoreIRBasicBlock*> targets;
+        for (const auto& block : current_ir_func->blocks) {
+            targets.clear();
+            for (const auto& inst : block->instructions) {
+                if (!inst) {
+                    continue;
+                }
+                if (inst->exception_target) {
+                    targets.insert(inst->exception_target);
+                }
+                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                    if (throw_inst->exception_target) {
+                        targets.insert(throw_inst->exception_target);
+                    }
+                }
+            }
+            if (!block->instructions.empty() && block->instructions.back()) {
+                qore_ir_visit_successors(*block->instructions.back(),
+                    [&targets](QoreIRBasicBlock* target) { targets.insert(target); });
+            }
+            for (const QoreIRBasicBlock* target : targets) {
+                ++ir_block_predecessor_counts[target];
+            }
+        }
+    }
+    auto count_it = ir_block_predecessor_counts.find(normal_target);
+    return count_it != ir_block_predecessor_counts.end() && count_it->second == 1 ? bb_it->second : nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDiscardEdge(llvm::Module& module, llvm::Function* llvm_func,
+        llvm::Value* result, llvm::BasicBlock* target) {
+    llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "invoke_result_discard", llvm_func);
+    builder->SetInsertPoint(edge);
+    // a value that the call gave although it raised is owned and is not used, as in the IR interpreter
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(decref_fn, {result, xsink_arg});
+    builder->CreateBr(target);
+    return edge;
 }
 
 // Walk a lvalue AST expression to find the root LocalVar* key (for alloca lookup).
@@ -12292,6 +12359,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_result_allocas.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
+    ir_block_predecessor_counts.clear();
+    ir_block_predecessor_counts_valid = false;
     boxed_exit_cleanup_array = nullptr;
     boxed_exit_cleanup_array_count = 0;
     iterator_cleanup_array = nullptr;
@@ -13209,11 +13278,42 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     // the Phis whose incoming values are used by the Phi once, and otherwise only in the block that defines them,
     // before the Phi (new T() ?? x tests the temporary first), which can take their references over (see
-    // consumable_phis); a value with more than one use is consumed by no other instruction
+    // consumable_phis); a value with more than one use is consumed by no other instruction.  The block of an IR
+    // invoke's value (a call in a try block) ends with the invoke: its normal continuation is the defining block too,
+    // as for the plain call outside a try block, or the slot of the Phi's value, the incoming value's, was released as
+    // one of the statement's own temporaries, before the operator's values, where the IR interpreter releases the
+    // Phi's as an operand that the statement holds (qore#5830)
     {
         std::unordered_map<uint32_t, uint32_t> phi_uses;
         std::unordered_set<uint32_t> used_elsewhere;
         std::vector<const QoreIRPhiInstruction*> phis;
+        // the normal continuation of an IR invoke (in a try block), which ends its block: the code after the call,
+        // such as the test of ??, is there, which is the defining block for this purpose
+        std::unordered_map<uint32_t, const QoreIRBasicBlock*> invoke_continuations;
+        for (const auto& block : func.blocks) {
+            const QoreIRInstruction* last = block->instructions.empty() ? nullptr : block->instructions.back().get();
+            if (!last || !last->result.isValid()) {
+                continue;
+            }
+            const QoreIRBasicBlock* normal_target = nullptr;
+            switch (last->opcode) {
+                case QoreIROpcode::Invoke:
+                    normal_target = static_cast<const QoreIRInvokeInstruction*>(last)->normal_target;
+                    break;
+                case QoreIROpcode::InvokeMethodDirect:
+                    normal_target = static_cast<const QoreIRInvokeMethodDirectInstruction*>(last)->normal_target;
+                    break;
+                case QoreIROpcode::InvokeDotEvalMethodDirect:
+                    normal_target = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(last)
+                        ->normal_target;
+                    break;
+                default:
+                    break;
+            }
+            if (normal_target && normal_target != block.get()) {
+                invoke_continuations.emplace(last->result.id, normal_target);
+            }
+        }
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 bool phi_inst = inst_ptr->opcode == QoreIROpcode::Phi;
@@ -13226,7 +13326,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         return;
                     }
                     auto def_it = value_def_block.find(operand.id);
-                    if (def_it == value_def_block.end() || def_it->second != block.get()) {
+                    if (def_it != value_def_block.end() && def_it->second == block.get()) {
+                        return;
+                    }
+                    auto cont_it = invoke_continuations.find(operand.id);
+                    if (cont_it == invoke_continuations.end() || cont_it->second != block.get()) {
                         used_elsewhere.insert(operand.id);
                     }
                 });
@@ -20906,11 +21010,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = result;
+            // set on the normal edge only when the call can raise (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             // RefForeachInit returns an opaque state handle — not a nanboxed QoreValue
             if (inv->invoke_opcode != QoreIROpcode::RefForeachInit
                     && invoke_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                trackResultForCleanup(result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
+                    result_proven_nothrow ? nullptr
+                        : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
             } else if (invoke_return_kind != BatchCalleeReturnKind::Boxed) {
                 native_call_result_kinds.emplace(
                     inst->result.id, invoke_return_kind);
@@ -20951,8 +21059,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
@@ -23516,9 +23630,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
+            // set on the normal edge only (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(call_result, inst->result.id, llvm_func,
+                    getInvokeResultDeferBlock(invoke_inst->normal_target, invoke_inst->exception_target));
             } else {
                 native_call_result_kinds.emplace(
                     inst->result.id, call_return_kind);
@@ -23552,8 +23669,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, call_result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
@@ -25625,9 +25748,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
             }
+            // set on the normal edge only when the call can raise (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             if (result_needs_cleanup
                     && call_return_kind == BatchCalleeReturnKind::Boxed) {
-                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(call_result, inst->result.id, llvm_func,
+                    call_may_throw
+                        ? getInvokeResultDeferBlock(invoke_inst->normal_target, invoke_inst->exception_target)
+                        : nullptr);
             }
             const BatchCalleeInfo* object_summary = aot_object_compound_get
                 ? aot_object_compound_get : aot_object_set_get
@@ -25665,8 +25793,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, call_result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
