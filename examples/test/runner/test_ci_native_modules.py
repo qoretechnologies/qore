@@ -95,6 +95,44 @@ class NativeModuleFarmTest(unittest.TestCase):
         # 2.10 is not 2.1, and 1.3 is not loaded
         self.assertEqual({"a-api-2.0.qmod", "b-api-2.1.qmod"}, set(self.linked()))
 
+    def test_list_without_spaces(self):
+        # the items may be separated by a comma alone: they are matched all the same
+        mods = self.module_dir("mods", ("a-api-2.0.qmod", "b-api-2.1.qmod", "c-api-1.9.qmod"))
+        result = self.run_farm(self.fake_qore("2.0,2.1"), mods)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual({"a-api-2.0.qmod", "b-api-2.1.qmod"}, set(self.linked()))
+        self.assertIn("-- native modules: this qore loads module API 2.0, 2.1 --", result.stdout)
+        self.assertIn("-- native modules: 2 exposed, 1 left out (built for another module API): c-api-1.9 --",
+                      result.stdout)
+
+    def test_shell_state_restored(self):
+        """The caller's IFS (set, empty or unset) and pathname expansion setting are kept"""
+        mods = self.module_dir("mods", ("a-api-2.1.qmod",))
+        qore = self.fake_qore("2.1, 2.0")
+        # IFS as hexadecimal bytes, then whether pathname expansion is off
+        script = ('. "$1"; shift; {setup} qore_ci_native_module_farm "$@" > /dev/null; '
+                  'echo "ifs=${{IFS+set}}:$(printf %s "$IFS" | od -An -tx1 | tr -d " \\n")"; '
+                  'case $- in *f*) echo noglob ;; *) echo glob ;; esac')
+        cases = {
+            "": "ifs=set:20090a\nglob",
+            "IFS=:;": "ifs=set:3a\nglob",
+            "IFS=;": "ifs=set:\nglob",
+            "unset IFS;": "ifs=:\nglob",
+            # the modules are found also when the caller turned pathname expansion off
+            "set -f;": "ifs=set:20090a\nnoglob",
+        }
+        for shell in ("sh", "bash"):
+            for setup, expected in cases.items():
+                with self.subTest(shell=shell, setup=setup):
+                    for f in self.farm.iterdir():
+                        f.unlink()
+                    result = subprocess.run([shell, "-c", script.format(setup=setup), shell, str(HELPER), str(qore),
+                                             str(self.farm), str(mods)], capture_output=True, text=True,
+                                            timeout=60)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual(expected + "\n", result.stdout)
+                    self.assertEqual({"a-api-2.1.qmod"}, set(self.linked()))
+
     def test_first_directory_wins(self):
         first = self.module_dir("first", ("xml-api-2.1.qmod",))
         second = self.module_dir("second", ("xml-api-2.1.qmod", "zip-api-2.1.qmod", "uuid-api-2.0.qmod"))

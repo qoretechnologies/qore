@@ -12,17 +12,32 @@
 # module API change, the tests that need such a module are skipped until the image is rebuilt, and the summary line in
 # the job log names the modules left out.
 
+# Restores the pathname expansion setting of the caller of qore_ci_native_module_farm
+qore_ci_nmf_restore_glob() {
+    if [ -n "${qore_ci_nmf_noglob}" ]; then
+        set -f
+    else
+        set +f
+    fi
+}
+
 # Links the native modules of the given directories that the given qore loads into the given directory
 # usage: qore_ci_native_module_farm QORE FARM DIR...
 #   QORE: the qore under test, whose --module-apis option gives the module APIs that it loads
 #   FARM: the directory to link the modules into
 #   DIR...: the directories of the native modules; a module in more than one is linked from the first
-# Prints the modules that are not linked and why, then a summary; returns non-zero if the qore does not give a valid
-# list of module APIs.
+# Keeps the caller's IFS and pathname expansion setting.  Prints the modules that are not linked and why, then a
+# summary; returns non-zero if the qore does not give a valid list of module APIs.
 qore_ci_native_module_farm() {
     qore_ci_nmf_qore=$1
     qore_ci_nmf_farm=$2
     shift 2
+    # the caller's pathname expansion setting, restored before returning: the modules are found with pathname
+    # expansion, and the list of module APIs is split without it
+    case $- in
+        *f*) qore_ci_nmf_noglob=1 ;;
+        *) qore_ci_nmf_noglob= ;;
+    esac
     # ex: "2.1" or "2.1, 2.0"
     qore_ci_nmf_apis=$("${qore_ci_nmf_qore}" --module-apis) || {
         echo "qore_ci_native_module_farm: ${qore_ci_nmf_qore} --module-apis failed" >&2
@@ -38,31 +53,45 @@ qore_ci_native_module_farm() {
             ;;
     esac
     if [ -z "${qore_ci_nmf_bad}" ]; then
+        # the list is split at the commas, without pathname expansion; the caller's IFS (also when it is unset) and
+        # pathname expansion setting are restored
+        qore_ci_nmf_ifs_set=${IFS+set}
         qore_ci_nmf_ifs=$IFS
+        set -f
         IFS=,
+        # the list with the items separated by ", ", as it is matched below
+        qore_ci_nmf_norm=
         for qore_ci_nmf_item in ${qore_ci_nmf_apis}; do
-            # without the space that follows each comma
+            # without the space that may follow each comma
             qore_ci_nmf_item=${qore_ci_nmf_item# }
             case "${qore_ci_nmf_item}" in
                 *[!0-9.]*|.*|*.|*.*.*|*..*)
                     qore_ci_nmf_bad=1
                     ;;
                 *.*)
+                    qore_ci_nmf_norm="${qore_ci_nmf_norm:+${qore_ci_nmf_norm}, }${qore_ci_nmf_item}"
                     ;;
                 *)
                     qore_ci_nmf_bad=1
                     ;;
             esac
         done
-        IFS=$qore_ci_nmf_ifs
+        if [ -n "${qore_ci_nmf_ifs_set}" ]; then
+            IFS=$qore_ci_nmf_ifs
+        else
+            unset IFS
+        fi
+        qore_ci_nmf_restore_glob
     fi
     if [ -n "${qore_ci_nmf_bad}" ]; then
         echo "qore_ci_native_module_farm: ${qore_ci_nmf_qore} --module-apis did not give a list of module APIs" \
             "(<major>.<minor>, ...): '${qore_ci_nmf_apis}'" >&2
         return 1
     fi
+    qore_ci_nmf_apis=${qore_ci_nmf_norm}
     echo "-- native modules: this qore loads module API ${qore_ci_nmf_apis} --"
     qore_ci_nmf_linked=0
+    set +f
     qore_ci_nmf_skipped=0
     qore_ci_nmf_skipped_names=
     for qore_ci_nmf_dir in "$@"; do
@@ -93,6 +122,7 @@ qore_ci_native_module_farm() {
             qore_ci_nmf_linked=$((qore_ci_nmf_linked + 1))
         done
     done
+    qore_ci_nmf_restore_glob
     # the coverage of the run: the tests of the modules left out are skipped
     echo "-- native modules: ${qore_ci_nmf_linked} exposed, ${qore_ci_nmf_skipped} left out (built for another" \
         "module API)${qore_ci_nmf_skipped_names:+:${qore_ci_nmf_skipped_names}} --"

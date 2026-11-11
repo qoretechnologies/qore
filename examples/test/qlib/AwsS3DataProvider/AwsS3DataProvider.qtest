@@ -894,6 +894,10 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                 "object_keys": (map sprintf("k%d", $1), xrange(0, MaxDeleteKeys + 1)),
             });
         });
+        # an empty batch is refused before any request
+        assertThrows("S3-DELETE-ERROR", "no object keys", sub () {
+            dp.doRequest({"bucket": "b", "object_keys": ()});
+        });
 %ifdef NoXml
         # the rest reads the XML responses of the requests
         testSkip("no xml module: the S3 responses are XML");
@@ -906,9 +910,6 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         });
         assertEq(0, full.error_count, "a batch of exactly the maximum size is accepted");
         rest.served = 0;
-        assertThrows("S3-DELETE-ERROR", "no object keys", sub () {
-            dp.doRequest({"bucket": "b", "object_keys": ()});
-        });
 
         # a batch delete can succeed as a request while refusing individual keys, so the failures must be
         # reported rather than the response being assumed empty
