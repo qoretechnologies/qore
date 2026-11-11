@@ -6390,8 +6390,8 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         if (src->getHashDecl() == hd) {
             return true;
         }
-        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
-            src, /*runtime_check=*/true, xsink);
+        // the element type can be a hashdecl of another Program (a member type of a hashdecl from a deleted Program)
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHashFromType(src, xsink);
         if (!coerced || (xsink && xsink->isException())) {
             if (coerced) {
                 coerced->deref(xsink);

@@ -50,6 +50,11 @@ class ReflectionDeletedProgramTest inherits QUnit::Test {
             "inherited reflection class literal member default: 1",
             "inherited class with literal members: 1",
             "own hashdecl of the inheriting Program: {x: \"y\"}",
+            "value typed hash doCast with a list element: PROGRAM-ERROR",
+            "inherited hashdecl with a list element: PROGRAM-ERROR",
+            "inherited hashdecl with a hash element: PROGRAM-ERROR",
+            "inherited hashdecl with a non-public parent: PROGRAM-ERROR",
+            "transient member of a deserialized object: PROGRAM-ERROR",
             "done",
         );
     }

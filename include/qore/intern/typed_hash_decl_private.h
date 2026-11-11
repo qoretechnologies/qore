@@ -101,6 +101,7 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
+        releaseParentHashDecl();
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private::get(*i.second)->deref();
         }
@@ -551,10 +552,11 @@ public:
     //! returns true if the language's creation of a hash must enter the Programs that declared the hashdecls
     /** True if the hashdecl or a parent is a copy of another Program's hashdecl (one that a Program inherited or
         imported) with member initializers that are code, unless the Programs that declared them have module
-        lifetime and it is in effect.  A Program's own hashdecl is created by the language only in the code of that
-        Program, which the thread is in, so that the Program is not deleted; the API paths that can create a hash of
-        it in another Program's code (the type of a value, with the reflection API or in C++ code) enter it in any
-        case (see enterSourceProgramsForApi())
+        lifetime and it is in effect.  A Program's own hashdecl is created directly by the language only in the code of
+        that Program, which the thread is in, so that the Program is not deleted; the paths that create a hash from a
+        type that can be another Program's (the type of a value with the reflection API or in C++ code, the element
+        type of a list or hash that is converted) enter it in any case (see newHashFromType() and
+        enterSourceProgramsForApi())
 
         The part that depends on the hashdecls is computed once
     */
@@ -572,9 +574,13 @@ public:
     */
     DLLLOCAL int8_t computeInitEntry() const {
         int8_t rv = 0;
+        // a copy's parents are declarations of another Program too, also one that is not a copy itself (a non-public
+        // parent is not copied with a public child); so is a parent that another Program declared
+        bool foreign = false;
         for (const typed_hash_decl_private* hd = this; hd;
                 hd = hd->parentHashDecl ? get(*hd->parentHashDecl) : nullptr) {
-            if (!hd->copied || !hd->src_pgm || !hd->hasCodeInit()) {
+            foreign = foreign || hd->copied || hd->src_pgm_id != src_pgm_id;
+            if (!foreign || !hd->src_pgm || !hd->hasCodeInit()) {
                 continue;
             }
             if (!hd->src_pgm_module_lifetime.load(std::memory_order_acquire)) {
@@ -595,6 +601,9 @@ public:
         return hasHierarchyCodeInit() ? enterSourcePrograms(h, init, overrides, xsink) : 0;
     }
 
+    //! Creates a hash of the hashdecl from a type that can be another Program's (see needsInitEntry())
+    DLLLOCAL QoreHashNode* newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const;
+
     //! Sets the parse-time parent hashdecl type to be resolved during parseInit
     DLLLOCAL void setParseParent(QoreParseTypeInfo* parent) {
         assert(!parse_parent);
@@ -611,8 +620,25 @@ public:
 
     //! Sets the parent hashdecl directly (for system hashdecls)
     DLLLOCAL void setParentHashDecl(const TypedHashDecl* parent) {
+        if (parent) {
+            get(*parent)->ref();
+        }
+        releaseParentHashDecl();
         parentHashDecl = parent;
         parentHashDeclName = parent ? get(*parent)->getPath() : "";
+        // the initializers of the hierarchy have changed
+        hier_code_init.store(-1, std::memory_order_relaxed);
+    }
+
+    //! Releases the reference to the parent hashdecl, if any, and clears it
+    /** The hashdecl keeps its parent, which the Program that declared the parent can have released: a non-public
+        parent of a public hashdecl is not copied to a Program that inherits the child
+    */
+    DLLLOCAL void releaseParentHashDecl() {
+        if (parentHashDecl) {
+            const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->deref();
+            parentHashDecl = nullptr;
+        }
     }
 
     //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)

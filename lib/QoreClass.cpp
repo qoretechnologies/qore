@@ -2086,7 +2086,7 @@ void qore_class_private::parseCommit() {
 }
 
 void qore_class_private::addLocalMembersForInit() {
-    // the list is complete when the local members have been added: hasMemberInitCode() looks at it again
+    // the list is complete when the local members have been added: getMemberInitCode() looks at it again
     member_init_code.store(-1, std::memory_order_relaxed);
     for (auto& i : members.member_list) {
         // skip imported members, and members held in external storage, which have no value in the object

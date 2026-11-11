@@ -235,7 +235,7 @@ int typed_hash_decl_private::parseInit() {
             while (current) {
                 if (current == this || current->orig == orig) {
                     parse_error(*loc, "circular hashdecl inheritance detected in hashdecl '%s'", name.c_str());
-                    parentHashDecl = nullptr;
+                    releaseParentHashDecl();
                     err = -1;
                     break;
                 }
@@ -396,6 +396,10 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
     parameterized_base = old.parameterized_base;
     type_args = old.type_args;
     parse_parent = old.parse_parent ? old.parse_parent->copy() : nullptr;
+    // the copy keeps the parent too (see releaseParentHashDecl())
+    if (parentHashDecl) {
+        get(*parentHashDecl)->ref();
+    }
     // copy member list
     for (auto& i : old.members.member_list) {
         HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
@@ -805,6 +809,14 @@ int typed_hash_decl_private::getDirectMemberOffset(const char* key) const {
     return -1;
 }
 
+QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const {
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterSourceProgramsForApi(src_pgm_helper, init, nullptr, xsink)) {
+        return nullptr;
+    }
+    return newHash(init, true, xsink);
+}
+
 int typed_hash_decl_private::enterSourcePrograms(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
         const QoreHashNode* overrides, ExceptionSink* xsink) const {
     // the code of the current Program can run: its hashdecls need nothing
@@ -1181,12 +1193,7 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
-    // the hashdecl can be another Program's own one (the type of a value; see needsInitEntry())
-    QoreDeclaringProgramHelper src_pgm_helper;
-    if (priv->enterSourceProgramsForApi(src_pgm_helper, h, nullptr, xsink)) {
-        return nullptr;
-    }
-    return priv->newHash(h, true, xsink);
+    return priv->newHashFromType(h, xsink);
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,

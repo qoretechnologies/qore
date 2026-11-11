@@ -10453,6 +10453,7 @@ static void transplantClassClosureValues(
             // We use refSelf() to get a referenced copy of the expression value.
             retargetFallbackValueTypes(fb_mi->exp, type_resolver, hashdecl_map);
             mi.second->exp = fb_mi->exp.refSelf();
+            qore_class_private::get(*main_qc)->member_init_code.store(-1, std::memory_order_relaxed);
             printd(5, "AOT: transplanted member default '%s::%s' from fallback\n",
                 main_qc->getName(), mi.first);
         }

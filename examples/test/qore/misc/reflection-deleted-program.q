@@ -14,8 +14,17 @@ public string sub f() { return 'x'; }
 public class C { public { string m = sprintf('m'); string m2 = f(); int n = 1; } }
 public class D { public { string m = sprintf('m'); } constructor() { } }
 public class L { public { int a = 1; } }
+public hashdecl EK { string s = f(); }
+public hashdecl EL { list<hash<EK>> l; }
+public hashdecl EM { hash<string, hash<EK>> m; }
+hashdecl NP { string s = f(); }
+public hashdecl PC inherits NP { int i = 1; }
+public class S inherits Serializable { public { string v = 'x'; transient string t = f(); } }
 hash<auto> sub mk() { return <H>{}; }
 hash<auto> sub mkl() { return <HL>{}; }
+hash<auto> sub mkel() { return <EL>{}; }
+hash<auto> sub mkek() { return <EK>{}; }
+binary sub ser() { S s(); return Serializable::serialize(s); }
 Program sub mkB(string src) {
     Program b(PO_NEW_STYLE);
     b.parse(src, 'b');
@@ -34,16 +43,27 @@ object sub mkC() { return new C(); }
 object sub mkD() { return new D(); }
 object sub mkE() { return new E(); }
 int sub mkL() { return (new L()).a; }
+hash<auto> sub mkelem() { return <EL>{\"l\": ({},)}; }
+hash<auto> sub mkhelem() { return <EM>{\"m\": {\"a\": {}}}; }
+hash<auto> sub mkpar() { return <PC>{}; }
+auto sub dsr(binary d) { return Serializable::deserialize(d).t; }
 ";
 
 hash<auto> h;
 hash<auto> hl;
+hash<auto> el;
+hash<auto> ek;
+binary ser;
 Program b;
 {
     Program a(PO_NEW_STYLE);
     a.parse(SrcA, "a");
     h = a.callFunction("mk");
     hl = a.callFunction("mkl");
+    el = a.callFunction("mkel");
+    # keeps the hashdecl of the elements, which only the deleted Program held
+    ek = a.callFunction("mkek");
+    ser = a.callFunction("ser");
     b = a.callFunction("mkB", SrcB);
     # the declarations work while their Program exists
     printf("before: %y %y %y %y\n", b.callFunction("mk"), b.callFunction("mkE").e,
@@ -94,6 +114,16 @@ hash<string, code> cases = {
     },
     "inherited class with literal members": auto sub () { return b.callFunction("mkL"); },
     "own hashdecl of the inheriting Program": auto sub () { return b.callFunction("mkbh"); },
+    # the element of a list of another Program's hashdecl is converted, which runs its initializers
+    "value typed hash doCast with a list element": auto sub () {
+        return Type::getType(el).getTypedHash().doCast({"l": ({},)});
+    },
+    "inherited hashdecl with a list element": auto sub () { return b.callFunction("mkelem"); },
+    "inherited hashdecl with a hash element": auto sub () { return b.callFunction("mkhelem"); },
+    # a non-public parent of a public hashdecl is not copied to the inheriting Program
+    "inherited hashdecl with a non-public parent": auto sub () { return b.callFunction("mkpar"); },
+    # deserialization initializes the transient members without running the constructor
+    "transient member of a deserialized object": auto sub () { return b.callFunction("dsr", ser); },
 };
 
 foreach hash<auto> i in (cases.pairIterator()) {
