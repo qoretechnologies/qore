@@ -640,9 +640,21 @@ int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
 uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
+//! Looks up the case of a switch on a string value whose cases are ASCII strings without null bytes
+/** compared as QoreSwitchStringValue compares them, which raises no exception
+    @param case_strings the cases, \a num_cases null-terminated strings
+    @param case_lens the lengths of the cases in bytes
+    @return the index of the first case that the value equals, or -1 if the value is not a string or matches no case
+*/
+int32_t qore_rt_switch_string_lookup_v2(uint64_t switch_val_bits, const char** case_strings,
+    const uint64_t* case_lens, int32_t num_cases);
 //! Transform an assigned string and look up an ASCII switch case without retaining the result.
-int32_t qore_rt_switch_string_case_lookup_noguard(uint64_t value,
-    const char** case_strings, int32_t num_cases, int32_t upper,
+/** @param case_lens the lengths of the cases in bytes
+    @return the index of the first case that the transformed value equals, or -1 if it matches no case or the
+    transformation raised an exception
+*/
+int32_t qore_rt_switch_string_case_lookup_noguard_v2(uint64_t value,
+    const char** case_strings, const uint64_t* case_lens, int32_t num_cases, int32_t upper,
     ExceptionSink* xsink);
 
 //! Compare an assigned string after case conversion without retaining the result.

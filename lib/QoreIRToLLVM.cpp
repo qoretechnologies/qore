@@ -18094,29 +18094,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Get pointer to first element
             llvm::Value* arr_ptr = builder->CreateBitCast(case_arr, ptr_type);
 
+            // the lengths of the cases, next to them
+            std::vector<llvm::Constant*> case_len_consts;
+            for (const auto& c : sw->cases) {
+                case_len_consts.push_back(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type),
+                    static_cast<uint64_t>(c.value.size())));
+            }
+            llvm::ArrayType* len_arr_type = llvm::ArrayType::get(i64_type,
+                    static_cast<uint64_t>(sw->cases.size()));
+            llvm::GlobalVariable* len_arr = new llvm::GlobalVariable(module, len_arr_type, true,
+                    llvm::GlobalValue::PrivateLinkage, llvm::ConstantArray::get(len_arr_type, case_len_consts),
+                    "switch_string_case_lens");
+
             llvm::Value* case_count = llvm::ConstantInt::get(
                 llvm::cast<llvm::IntegerType>(i32_type),
                 static_cast<int32_t>(sw->cases.size()));
+            // a SwitchString has no exception target: the lookup raises no exception, and the transformation of a
+            // fused case transform, which can, is fused only outside a try block (its exception goes to the caller)
+            assert(!sw->exception_target);
             llvm::Value* case_idx;
             if (sw->aot_string_case_transform) {
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_switch_string_case_lookup_noguard",
+                    "qore_rt_switch_string_case_lookup_noguard_v2",
                     llvm::FunctionType::get(i32_type,
-                        {i64_type, ptr_type, i32_type, i32_type,
+                        {i64_type, ptr_type, ptr_type, i32_type, i32_type,
                          ptr_type}, false));
                 case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr, case_count,
+                    {val_boxed, arr_ptr, len_arr, case_count,
                      llvm::ConstantInt::get(i32_type,
                         sw->aot_string_case_transform_upper ? 1 : 0),
                      xsink_arg});
                 emitExceptionCheck(module, llvm_func, inst);
             } else {
+                // the comparison with the cases raises no exception (QoreSwitchStringValue)
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_switch_string_lookup",
+                    "qore_rt_switch_string_lookup_v2",
                     llvm::FunctionType::get(i32_type,
-                        {i64_type, ptr_type, i32_type}, false));
+                        {i64_type, ptr_type, ptr_type, i32_type}, false));
                 case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr, case_count});
+                    {val_boxed, arr_ptr, len_arr, case_count});
             }
 
             consumeValueUse(sw->switch_val.id, module);

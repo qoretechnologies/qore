@@ -35037,6 +35037,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         // Handle inline short strings (NaN-boxed, up to 6 bytes)
         if (v.isShortString()) {
+            if (qore_aot_string_needs_value(v)) {
+                id.kind = AOTExprKind::CONST_VALUE;
+                id.child_expr = v;
+                return id;
+            }
             char ssbuf[8];
             v.getShortString(ssbuf);
             size_t sslen = v.shortStringLen();
@@ -35406,6 +35411,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
+        // a CONST_STRING is rebuilt in the default encoding from its bytes up to a null byte
+        if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {
+            id.kind = AOTExprKind::CONST_VALUE;
+            id.child_expr = v;
+            return id;
+        }
         id.kind = AOTExprKind::CONST_STRING;
         id.ref1 = str_node->c_str();
         return id;

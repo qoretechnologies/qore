@@ -1795,6 +1795,9 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_CONST_REF:
             return skip_fixed(8, "scalar value payload");
 
+        case QoreAOTValueTag::VT_STRING_ENC:
+            return skip_fixed(12, "encoded string value payload");
+
         // a number carries its precision after the digits from QORE_AOT_NUMBER_PRECISION_VERSION;
         // skipping only the 8-byte string payload would leave the stream 4 bytes short of the next value
         case QoreAOTValueTag::VT_NUMBER:
@@ -3659,10 +3662,15 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             return true;
         }
         case NT_STRING: {
-            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_STRING));
             QoreStringValueHelper str(v);
+            const QoreEncoding* enc = str->getEncoding();
+            writeU8(static_cast<uint8_t>(enc == QCS_UTF8 ? QoreAOTValueTag::VT_STRING
+                : QoreAOTValueTag::VT_STRING_ENC));
             writeU32(static_cast<uint32_t>(str->size()));
             writeStringRef(str->c_str(), str->size());
+            if (enc != QCS_UTF8) {
+                writeStringRef(enc->getCode());
+            }
             return true;
         }
         case NT_DATE: {
@@ -4493,6 +4501,23 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 return QoreValue();
             }
             return QoreValue::makeStringValue(str, len, QCS_UTF8);
+        }
+
+        case QoreAOTValueTag::VT_STRING_ENC: {
+            if (ptr + 12 > end) {
+                error = "unexpected end of data reading encoded string value";
+                return QoreValue();
+            }
+            uint32_t len = readU32(ptr);
+            uint32_t str_offset = readU32(ptr);
+            uint32_t enc_offset = readU32(ptr);
+            const char* str = getString(str_offset);
+            const char* enc_name = getString(enc_offset);
+            if (!str || !enc_name || !*enc_name) {
+                error = "invalid string offset in encoded string value";
+                return QoreValue();
+            }
+            return QoreValue::makeStringValue(str, len, QEM.findCreate(enc_name));
         }
 
         case QoreAOTValueTag::VT_ABS_DATE: {
@@ -7014,6 +7039,10 @@ static bool aotAppendValueHashParts(const QoreValue& value, std::vector<std::str
             const QoreString* qs = *str;
             parts.push_back("scalar");
             parts.emplace_back(qs ? qs->c_str() : "", qs ? qs->strlen() : 0);
+            // the same bytes in another encoding are another value
+            if (qs && value.getType() == NT_STRING && qs->getEncoding() != QCS_UTF8) {
+                parts.push_back(qs->getEncoding()->getCode());
+            }
             return true;
         }
         case NT_LIST: {
@@ -12073,6 +12102,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             return true;
         }
         if (expr.isShortString()) {
+            if (qore_aot_string_needs_value(expr)) {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+                return writer.writeValue(expr);
+            }
             char buf[8];
             expr.getShortString(buf);
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
@@ -12489,6 +12522,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
     // QoreStringNode: string literal constant (e.g., "" as constructor arg)
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        if (qore_aot_string_needs_value(str->c_str(), str->size(), str->getEncoding())) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+            return writer.writeValue(expr);
+        }
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
         writer.writeStringRef(str->c_str(), str->size());
         return true;
