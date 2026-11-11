@@ -1466,7 +1466,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         for (QoreValue& v : defaults) {
             v.discard(nullptr);
         }
-        ctx.error = "closure has no IR data";
+        ctx.error = default_error.empty() ? std::string("closure has no IR data") : std::move(default_error);
         return QoreValue();
     }
 

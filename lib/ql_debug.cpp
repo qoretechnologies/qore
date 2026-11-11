@@ -17122,6 +17122,32 @@ static size_t ut_aot_read(AotCraft& a, const std::vector<uint8_t>& payload, std:
 
 static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
     AotCraft a;
+    // valid values of every kind that needs no Program, written by the writer: reading and skipping each consume the
+    // same bytes, as a value that fails is skipped
+    std::vector<std::vector<uint8_t>> valid;
+    {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        l->push(QoreValue(1), &xsink);
+        l->push(new QoreStringNode("x"), &xsink);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        h->setKeyValue("a", l->refSelf(), &xsink);
+        h->setKeyValue("b", QoreValue(2.5), &xsink);
+        std::vector<QoreValue> vals = {QoreValue(), QoreValue(null()), QoreValue(true), QoreValue(-5),
+            QoreValue(1.25), QoreValue(new QoreStringNode("abc")), QoreValue(new QoreNumberNode("1.5")),
+            QoreValue(new BinaryNode(strdup("xyz"), 3)), QoreValue(DateTimeNode::makeAbsolute(nullptr, 1000, 5)),
+            QoreValue(DateTimeNode::makeRelative(1, 2, 3, 4, 5, 6, 7)), QoreValue(l->refSelf()),
+            QoreValue(h->refSelf())};
+        for (QoreValue& v : vals) {
+            uint32_t pos = a.w.position();
+            if (a.w.writeValue(v)) {
+                const std::vector<uint8_t>& buf = a.w.getBuffer();
+                valid.emplace_back(buf.begin() + pos, buf.end());
+            }
+            a.w.truncate(pos);
+            v.discard(&xsink);
+        }
+    }
     uint32_t key = a.ref("k");
     uint32_t str = a.ref("abc");
     uint32_t enum_path = a.ref("NoSuchEnum5848");
@@ -17132,6 +17158,42 @@ static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
         return;
     }
     const uint32_t bad_offset = 0xfffffff0u;
+
+    UT_ASSERT_EQ(c, 12, static_cast<int>(valid.size()), "AOT value reader: the valid values are written");
+    for (size_t i = 0; i < valid.size(); ++i) {
+        std::string err;
+        QoreValue v;
+        size_t read_len = ut_aot_read(a, valid[i], err, &v);
+        v.discard(nullptr);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[valid[i].size()]);
+        memcpy(buf.get(), valid[i].data(), valid[i].size());
+        const uint8_t* p = buf.get();
+        std::string skip_err;
+        bool skipped = a.r.skipValue(p, buf.get() + valid[i].size(), skip_err);
+        UT_ASSERT(c, err.empty() && skipped && read_len == valid[i].size()
+            && static_cast<size_t>(p - buf.get()) == valid[i].size(),
+            ("AOT value reader: value " + std::to_string(i) + " is read and skipped whole: " + err + skip_err).c_str());
+    }
+    // a string whose length is past the end of the string pool
+    {
+        Bytes sv;
+        sv.tag(QoreAOTValueTag::VT_STRING).u32(0x7fffffffu).u32(str);
+        std::string err;
+        size_t pos = ut_aot_read(a, sv.b, err);
+        UT_ASSERT(c, !err.empty() && pos == sv.b.size(),
+            "AOT value reader: a string longer than the string pool fails, and is skipped");
+    }
+    // a value nested deeper than the reader allows: it fails without overflowing the stack
+    {
+        Bytes deep;
+        for (int i = 0; i < 2000; ++i) {
+            deep.tag(QoreAOTValueTag::VT_LIST).plain().u32(1);
+        }
+        deep.intv(1);
+        std::string err;
+        size_t pos = ut_aot_read(a, deep.b, err);
+        UT_ASSERT(c, !err.empty() && pos == deep.b.size(), "AOT value reader: a value nested too deeply fails");
+    }
 
     // a list whose second element has an invalid string offset, followed by an int
     {

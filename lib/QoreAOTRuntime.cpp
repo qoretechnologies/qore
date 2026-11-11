@@ -3535,7 +3535,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     for (int i = 0; i < num_exprs; ++i) {
         // a slot whose value could not be read leaves the read pointer at the end of the data if the value was
         // malformed (QoreAOTBinaryReader::readValue()): the entry has no more slots to read (qore#5848)
-        if (ptr >= (entry_end ? entry_end : end)) {
+        if (ptr >= end || (entry_end && ptr >= entry_end)) {
             setBuildError("slot map entry ends before expression slot " + std::to_string(i) + " of "
                 + std::to_string(num_exprs));
             delete ctx;
@@ -5815,6 +5815,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
                 QoreValue value = reader.readValue(ptr, end, value_error);
+                if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
+                    // a malformed value: the read pointer is at the end of the data, and the rest of the entry
+                    // cannot be read (qore#5848)
+                    setBuildError("expression slot " + std::to_string(i) + ": " + value_error);
+                    delete ctx;
+                    return nullptr;
+                }
                 if (!value_error.empty()) {
                     printd(0, "AOT v2: error reading const value for '%s' expr slot %d: %s\n",
                         name, i, value_error.c_str());
