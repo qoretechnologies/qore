@@ -1361,8 +1361,21 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
         return 0;
     }
 
-    if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation,
-            explicit_type_param_instantiation)) {
+    // an explicit type argument can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic class
+    // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
+    // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
+    // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
+    const QoreTypeInfo* callee_receiver_type_info = nullptr;
+    const bool caller_receiver_current = explicit_type_param_instantiation && restore_receiver_type_info;
+    if (caller_receiver_current) {
+        callee_receiver_type_info = runtime_set_receiver_type_info(old_receiver_type_info);
+    }
+    const bool inferred = qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info,
+        &type_param_instantiation, explicit_type_param_instantiation);
+    if (caller_receiver_current) {
+        runtime_set_receiver_type_info(callee_receiver_type_info);
+    }
+    if (!inferred) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
             callName.c_str(), sig ? sig->getSignatureText() : "");
         return -1;
