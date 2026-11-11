@@ -15764,6 +15764,22 @@ static QoreValue f_dbg_async_io_hold_releases(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! Debug-only: waits until at least @a count references are held by dbg_async_io_hold_releases(), stops holding,
+//! and releases them on a callback worker of the global controller, as an I/O thread does without the hold
+/** Returns when the releases have run, with the number of references released, or -1 if the wait timed out.  Unlike
+    dbg_async_io_hold_releases(False), which releases on the calling thread, the references are released by the
+    controller's callback dispatcher, as in production.
+ */
+static QoreValue f_dbg_async_io_dispatch_held_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    if (count < 0) {
+        count = 0;
+    }
+    return AsyncIoControllerPriv::dbgDispatchHeldOffIoThreadReleases((size_t)count,
+        get_param_value(params, 1).getAsBigInt(), xsink);
+}
+
 //! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
 /** This reproduces, deterministically and without a race, the exact object state behind the AsyncIoController
     I/O-thread spin: an abrupt transport drop (a client that dropped TCP without a WebSocket close frame) tore the
@@ -20735,6 +20751,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_hold_releases", f_dbg_async_io_hold_releases,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_dispatch_held_releases", f_dbg_async_io_dispatch_held_releases,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
