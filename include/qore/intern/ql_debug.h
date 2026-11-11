@@ -39,6 +39,8 @@
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
+class AbstractSmartLock;
+
 #ifdef DEBUG
 //! a QCF_NO_DOMAIN_THROW violation aborts the process (the default)
 #define QORE_FLAG_VIOLATION_ABORT   0
@@ -150,6 +152,9 @@ DLLLOCAL extern std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook
 //! (Http1ClientPollOperationPriv::dbgFailHeaderReadOp() then closes the socket); armed by
 //! dbg_fail_http1_header_read_op(), which names the site or none for any
 DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
+
+//! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
+DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);
 
 //! the number of TLS close_notify alerts sent by SSLSocketHelper::sendCloseNotify() (SSL_shutdown() calls); read by
 //! dbg_ssl_close_notify_count()
