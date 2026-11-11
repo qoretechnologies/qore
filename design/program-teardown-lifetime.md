@@ -89,6 +89,75 @@ cancels or waits for.  Refused work leaves the function in its tier for good (`j
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
+### The phases of a compile, and detaching it
+
+The deletion of a Program cancels its queued work, and waits for the work in progress only while that work reads
+Program data.  The compile thread takes the compile lock before it claims work from the queue, so a teardown never
+waits for another thread's synchronous compile: work that waits for the lock is still queued, where it is cancelled.  The phase of the work in progress (`QoreJIT::bg_in_progress_phase`, under the queue lock) is:
+
+|!Phase|!What the compile thread does|!The teardown of a Program of the work
+|`Lowering`|lowers the Qore IR to LLVM IR, reading the IR, the types and the callees of the Programs|waits
+|`Llvm`|optimizes the self-contained `llvm::Module`, generates its code and emits it (`LLJIT::addIRModule()`, `lookup()`)|detaches the work
+|`Installing`|caches and installs the entry points in the variants (short; no LLVM code runs)|waits
+|`Detached`|finishes the LLVM work of a detached compile and discards the result|does not wait
+
+LLVM can take without bound (in CI a compile stayed in LLVM's block frequency analysis for more than 400 s), so the
+LLVM phase reads nothing of a Program: `compileFunctionInternal()` and `compileFunctionBatchInternal()` read the
+optimization level from the Program and copy the names of the functions before they end the lowering phase
+(`QoreJIT::bgEndLowering()`); after it, they read only the module, the copied names and the `batch_only` flags of the
+work's own `BatchCallee` copies.  The code embeds the addresses of Program objects (variants, IR instructions, deopt
+counters) as constants, which is harmless for code that never runs.  The LLJIT has no definition generator, lazy
+re-export or materialization unit of Qore's that reads Program data: the runtime helpers are absolute symbols, other
+symbols come from LLJIT's process symbol generator, and the debugger support plugin reads only the object.
+
+A waiter that finds the work in the LLVM phase detaches it under the queue lock (`detachInProgressLocked()`): it takes
+the work's references to the variants and its private IR, sets the phase and `bg_in_progress_detached`, and returns
+after releasing the references (`releaseDetachedRefs()`).  The references are released while its Program exists, as
+the compile thread released them before it finished the work; the Programs of the work are listed in
+`bg_detach_releases` meanwhile, and the teardown of another of them waits for the release, as the release can destroy
+its variants; the references of cancelled queued work are released in the same way, before the waiter waits for
+anything, so that two teardowns never wait for each other.  The waiter resets the root function's `jit_compile_state`
+to 0, as for cancelled work: a root of a surviving Program (whose batch folded in a callee of the deleted one) is
+submitted again when it is called.  Work that refers to a deleted Program is refused for good (state 2): the root's IR
+still calls the callee of the deleted Program, so it would be refused, after its batch is lowered again, on every call.
+
+When the LLVM phase ends, the compile thread decides under the queue lock whether to publish the result
+(`bgBeginInstall()`): a detached compile discards it.  A background compile adds its module with a `ResourceTracker`
+of its own, which a discarded compile removes (`bgDiscardModule()`), so no symbol of the module stays defined; the
+symbols it defines are recorded (`defined_batch_symbols`, `defined_fast_entry_abi`) and its entry points cached
+(`compiled_functions`) only after the decision, so no variant is marked compiled with an entry of a discarded module,
+and the functions can be compiled again under the same names.  The compile thread checks `bg_in_progress_detached`
+between the steps of the LLVM phase to skip the steps that remain, and the optimizer skips its optional passes once it
+is set (`registerShouldRunOptionalPassCallback()`); a pass that is running, or LLVM's code generation, is not
+interrupted.  `bg_active_work` counts a detached compile until the compile thread finishes it, so
+`QoreJIT::waitForBgCompileQueue()` without a Program waits for it.  A synchronous compile (top-level code in the jit
+mode, generic specializations) does not wait for a detached compile: it falls back to the IR tier when the compile
+lock is held by one (`lockForSyncCompile()`), as it does once the compiler stops.
+
+Process exit detaches the work in the LLVM phase in the same way (`QoreJIT::stopBackgroundCompiler()`, called by
+`qore_cleanup()` and `qore_exit_process()`), and does not join the compile thread then (`bg_thread_abandoned`): the
+thread ends when LLVM returns, without touching the JIT again.  `QoreJIT::shutdown()` leaves the LLJIT to the
+operating system then, as its `ExecutionSession` cannot be destroyed under an active compile; the compile thread holds
+the compile lock, so a synchronous compile is refused instead of waiting for it (`lockForSyncCompile()`).
+
+`exit()` must not run while the thread is in LLVM: it destroys LLVM's static objects (its `cl::opt` options and pass
+registries, which code generation reads), and the compile crashes in them.  So the process ends with `_exit()`, after
+flushing the standard I/O streams, if the thread still runs at the end: `qore_fork_child_quick_exit()`, which the
+`qore` and `qr` programs, `qore_exit_process()`, the executables compiled with `qcc` and embedding programs call at
+the end, asks `QoreJIT::exitQuickly()`.  If the thread has left its loop (`bg_thread_done`), it is joined there and the
+process exits as usual.  A process that exits without calling it (an embedding program that returns from `main()`)
+waits for the thread in the library's `atexit()` handler (`qore_jit_shutdown_at_exit()`), as before; that protects
+the static objects of LLVM registered before the handler (its global options), but not the function-local statics LLVM
+creates during its first compile, so such a process should call it.  Exit-time handlers (module `atexit()` handlers,
+static destructors, coverage and sanitizer reports) are skipped only when a compile is still running in LLVM at the
+very end of the process.
+
+`examples/test/ir/BgCompileTeardownDetach.qtest` tests it with the debug build's holds of the compile thread
+(`dbg_hold_bg_compile()` at the start of the lowering, at the start of the LLVM phase, at its end, or before the
+result is installed, with
+`dbg_wait_bg_compile_held()`, `dbg_continue_bg_compile()` and `dbg_wait_bg_compile_teardown_waiting()`) and the count
+of discarded compiles (`dbg_get_bg_compile_discarded_count()`).
+
 ## Caches that outlive their objects
 
 A cache that is not deleted with the objects it holds (a `thread_local` or process-wide cache) must not identify

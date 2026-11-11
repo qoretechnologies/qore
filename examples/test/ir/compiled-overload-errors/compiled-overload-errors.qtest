@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the scripts run in child processes that set their own --exec-mode, or as AOT executables, and the named binding checks parse and call Programs in its own process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class CompiledOverloadErrorsTest
+
+#! the compiled modes raise the overload errors of the AST interpreter (issues #5660 and #5686)
+/** - #5660: string(), int() and float() with one argument were inlined as conversions that accept every value; for a
+      value that the builtin does not accept (an object, a hash, a list, a binary, a closure, NULL for string() and
+      float()), the AST interpreter raises RUNTIME-OVERLOAD-ERROR and the compiled modes returned an empty value
+    - #5686: a call whose variant was resolved at parse time binds its arguments in the fast call paths, which raised
+      the parameter type error (RUNTIME-TYPE-ERROR) for an argument that does not match, such as a reference to an int
+      parameter; the AST interpreter resolves the variant again and raises RUNTIME-OVERLOAD-ERROR when none matches
+      (functions, methods, static methods, recursive calls)
+
+    - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
+      with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
+      arguments converted for the variant that did not match
+
+    The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
+    their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
+    for a script with a <script>.expected file must be that of the file.
+*/
+class CompiledOverloadErrorsTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("compiled overload errors", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        foreach string script in (Scripts) {
+            addTestCase(script + ": execution modes", sub () { modesTest(script); });
+            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
+            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+        }
+        addTestCase("named call binding conflict", \namedBindingConflictTest());
+        set_return_value(main());
+    }
+
+    #! a named call whose variant can be resolved at run time to a variant with other parameter names at the
+    #! positions of its arguments is a parse error; the same call with positional arguments is not
+    namedBindingConflictTest() {
+        string decl = "%modern\n"
+            "class C { public { int mi; } }\n"
+            "string sub nf5(int a, string b) { return \"nf5(int a, string b)\"; }\n"
+            "string sub nf5(*int x, string y) { return \"nf5(*int x, string y)\"; }\n";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "nf5\\(\\*int x, string y\\)", \p.parse(),
+                (decl + "string sub t() { C c(); return nf5(a: c.mi, b: \"s\"); }\n", "named-conflict"));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { C c(); return nf5(c.mi, \"s\"); }\n", "positional");
+            assertEq("nf5(*int x, string y)", p.callFunction("t"));
+        }
+        {
+            # a variant with variable arguments would take the argument at a position after its parameters by
+            # position
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "but vb\\(int a, \\.\\.\\.\\)", \p.parse(),
+                ("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs"));
+        }
+        {
+            # the same call with an argument that has a value of the type of the parameter is bound to it
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(string x) { return vb(a: 1, b: x); }", "named-varargs-valid");
+            assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+        }
+        {
+            # an argument that always has a value is bound at parse time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");
+            assertEq("nf5(int a, string b)", p.callFunction("t"));
+        }
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            assertRegex("RUNTIME-OVERLOAD-ERROR", exp, script + ": the AST interpreter raises the overload error");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("compiled-overload-errors-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

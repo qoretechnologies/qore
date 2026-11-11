@@ -59,6 +59,11 @@ static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* e
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation
+    if (err.getType() == NT_STRING && QoreStringDataHelper(err) == "SOCKET-CLOSED"
+            && qore_socket_raise_pending_cancel("socket operation", xsink)) {
+        return;
+    }
     // NT_STRING values may be stored inline (SSO short strings), in which case there is no
     // QoreStringNode to dereference; QoreStringNodeValueHelper materializes a referenced node safely
     xsink->raiseException(
@@ -3287,6 +3292,11 @@ void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o, bool host_
 
 void qore_socket_raise_accept_without_connection(const QoreHashNode* result, const char* method,
         ExceptionSink* xsink) {
+    // a cancellation of the thread that ended the accept first is reported as such (see
+    // qore_socket_raise_pending_cancel())
+    if (qore_socket_raise_pending_cancel(method, xsink)) {
+        return;
+    }
     if (result && result->getKeyValue("canceled").getAsBool()) {
         xsink->raiseException("SOCKET-CLOSED", "the listening socket was closed while Socket::%s() was waiting for "
             "a connection", method);

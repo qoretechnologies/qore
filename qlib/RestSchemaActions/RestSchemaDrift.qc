@@ -357,8 +357,11 @@ public class RestSchemaDrift {
     private static list<hash<RestSchemaDriftInfo>> compareRequestContentTypes(string action,
             RestSchemaActionOperation old_op, RestSchemaActionOperation new_op) {
         # an operation with no request body declares no content types at all
-        list<string> old_ct = sort(keys old_op.getOperation().consumes) ?? ();
-        list<string> new_ct = sort(keys new_op.getOperation().consumes) ?? ();
+        # the "consumes" member of an operation without request content types is not assigned
+        *hash<string, bool> old_consumes = old_op.getOperation().consumes;
+        *hash<string, bool> new_consumes = new_op.getOperation().consumes;
+        list<string> old_ct = old_consumes ? sort(keys old_consumes) : ();
+        list<string> new_ct = new_consumes ? sort(keys new_consumes) : ();
         if (old_ct == new_ct) {
             return ();
         }
@@ -387,8 +390,15 @@ public class RestSchemaDrift {
                 "compatible": False,
             };
         }
-        *list<string> old_out = old_op.getResponseType() ? sort(keys old_op.getResponseType().getFields()) : NOTHING;
-        *list<string> new_out = new_op.getResponseType() ? sort(keys new_op.getResponseType().getFields()) : NOTHING;
+        # a response type need not have fields
+        *hash<string, AbstractDataField> old_fields = old_op.getResponseType()
+            ? old_op.getResponseType().getFields()
+            : NOTHING;
+        *hash<string, AbstractDataField> new_fields = new_op.getResponseType()
+            ? new_op.getResponseType().getFields()
+            : NOTHING;
+        *list<string> old_out = exists old_fields ? sort(keys old_fields) : NOTHING;
+        *list<string> new_out = exists new_fields ? sort(keys new_fields) : NOTHING;
         if (old_out != new_out) {
             *list<string> removed = map $1, old_out, !(new_out ?? ()).contains($1);
             rv += <RestSchemaDriftInfo>{

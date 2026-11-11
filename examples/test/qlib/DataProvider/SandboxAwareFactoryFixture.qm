@@ -1,0 +1,90 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# SandboxAwareFactoryFixture.qm registers a factory, and an app with sandbox-aware external I/O, for AppExternalIo.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider >= 3.12
+
+module SandboxAwareFactoryFixture {
+    version = "1.0";
+    desc = "external I/O factory fixture: sandbox-aware";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new SandboxAwareFixtureFactory());
+        DataProviderActionCatalog::registerApp(cast<hash<DataProviderAppInfo>>({
+            "name": "QoreTestSandboxAwareFactoryApp",
+            "display_name": "QoreTestSandboxAwareFactoryApp",
+            "short_desc": "external I/O factory fixture",
+            "desc": "external I/O factory fixture",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "fixture",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "fixture.svg",
+        } + {"external_io": True, "sandbox_aware": True}));
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestSandboxAwareFactoryApp",
+            "action": "run",
+            "path": "/run",
+            "display_name": "run",
+            "short_desc": "external I/O factory fixture action",
+            "desc": "external I/O factory fixture action",
+            "action_code": DPAT_API,
+            "cls": "SandboxAwareFixtureProvider",
+            "cls_mod": get_module_context_path(),
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+        });
+    };
+}
+
+#! The fixture's data provider
+public class SandboxAwareFixtureProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "SandboxAwareFixtureProvider",
+            "supports_request": True,
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "SandboxAwareFixtureProvider";
+    }
+
+    *string getDesc() {
+        return "external I/O factory fixture provider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+#! The fixture's factory: it belongs to this module, which registers the app
+public class SandboxAwareFixtureFactory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("SandboxAwareFixtureProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "qoretestsandboxaware",
+            "desc": "external I/O factory fixture",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return SandboxAwareFixtureProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}

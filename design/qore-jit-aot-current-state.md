@@ -68,7 +68,11 @@ is non-blocking, so a function keeps executing through the IR interpreter until
 its compiled form is ready. Program teardown drains only that Program's own
 pending background compiles (matched via `QoreIRFunction::pgm`; a compile with no
 owning program is treated as matching any teardown), so destroying one Program
-never serializes behind unrelated Programs' compilation.
+never serializes behind unrelated Programs' compilation.  It waits for the
+compile in progress only while that compile lowers the Program's IR or publishes
+its result; a compile in the LLVM phase is detached and its result discarded, so
+teardown never waits for LLVM (see "Background JIT compiles" in
+design/program-teardown-lifetime.md).
 
 Process shutdown has two ordered JIT phases. It first permanently stops and drains
 the background compiler, making its raw references to Program-owned IR safe before
@@ -81,6 +85,9 @@ reclaim, because callback registration order cannot prove that no later process
 callback will invoke a published entry point. This boundary prevents both compiler
 work from outliving its source IR and cached native function pointers from outliving
 their executable mapping, without adding checks to the runtime dispatch path.
+Stopping the compiler detaches a compile still in LLVM rather than waiting for it,
+and leaves its thread running; `qore_cleanup()` then leaves the engine to the
+operating system too, as it cannot be destroyed under an active compile.
 
 Threads that run LLVM are started through `q_start_llvm_compile_thread()` with an
 explicit 8MB stack (`QORE_LLVM_COMPILE_STACK_SIZE`), never with `std::thread`, which
