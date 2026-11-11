@@ -16262,6 +16262,18 @@ private:
 template <typename F>
 QoreIRValue QoreIRLowering::lowerWithImplicitContext(QoreIRValue element, QoreIRValue index,
         const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower) {
+    return lowerWithImplicitArgs(element, QoreIRValue(), index, loc, loop_cleanup, error, std::forward<F>(lower));
+}
+
+/*  Lowers code that runs with the implicit argument list (\a arg0) or (\a arg0, \a arg1) and, with a valid \a index,
+    that index as the implicit element; the context is restored on every path as described for
+    lowerWithImplicitContext().  The two-argument list is the one that foldl and foldr set for their expression: the
+    accumulator and the element, with the enclosing implicit element left as it is, as the AST interpreter's
+    ArgvContextHelper sets it (qore#5691)
+*/
+template <typename F>
+QoreIRValue QoreIRLowering::lowerWithImplicitArgs(QoreIRValue element, QoreIRValue arg1, QoreIRValue index,
+        const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower) {
     // without a loop cleanup block, the exception goes to the handler of the enclosing code, if any
     QoreIRBasicBlock* outer_target = loop_cleanup ? nullptr : getCurrentExceptionTarget();
     QoreIRBasicBlock* cleanup_block = nullptr;
@@ -16281,7 +16293,16 @@ QoreIRValue QoreIRLowering::lowerWithImplicitContext(QoreIRValue element, QoreIR
         push_element->restore_on_exception_exit = true;
         old_element = push_element->result;
     }
-    QoreIRInstruction* push_argv = builder.createPushImplicitArg(element, loc);
+    QoreIRInstruction* push_argv;
+    if (arg1.isValid()) {
+        // the set takes a reference of its own to the list, which the restoration releases
+        QoreIRValue argv = builder.createEmptyList(loc)->result;
+        builder.createListAppend(argv, element, loc);
+        builder.createListAppend(argv, arg1, loc);
+        push_argv = builder.createSetImplicitArgv(argv, loc);
+    } else {
+        push_argv = builder.createPushImplicitArg(element, loc);
+    }
     push_argv->restore_on_exception_exit = true;
     QoreIRValue old_argv = push_argv->result;
 
@@ -16319,7 +16340,7 @@ QoreIRValue QoreIRLowering::lowerWithImplicitContext(QoreIRValue element, QoreIR
 
     VirtualImplicitContext saved = virtual_implicit;
     virtual_implicit.arg0 = element;
-    virtual_implicit.arg1 = QoreIRValue();
+    virtual_implicit.arg1 = arg1;
     virtual_implicit.element = index;
     virtual_implicit.active = true;
     virtual_implicit.runtime = true;
@@ -18353,44 +18374,6 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     }
 }
 
-QoreIRValue QoreIRLowering::insertFoldImplicitArgvSetup(QoreIRBasicBlock* body,
-        size_t position, QoreIRValue accumulator, QoreIRValue element,
-        const QoreProgramLocation* loc) {
-    QoreIRFunction* func = builder.getFunction();
-
-    auto argv = std::make_unique<QoreIRInstruction>(
-        QoreIROpcode::CreateEmptyList);
-    argv->loc = loc;
-    argv->result = func->createValue();
-    QoreIRValue argv_value = argv->result;
-    body->instructions.insert(
-        body->instructions.begin() + position++, std::move(argv));
-
-    auto append_accumulator = std::make_unique<QoreIRInstruction>(
-        QoreIROpcode::ListAppend);
-    append_accumulator->loc = loc;
-    append_accumulator->operands = {argv_value, accumulator};
-    body->instructions.insert(body->instructions.begin() + position++,
-        std::move(append_accumulator));
-
-    auto append_element = std::make_unique<QoreIRInstruction>(
-        QoreIROpcode::ListAppend);
-    append_element->loc = loc;
-    append_element->operands = {argv_value, element};
-    body->instructions.insert(body->instructions.begin() + position++,
-        std::move(append_element));
-
-    auto set_argv = std::make_unique<QoreIRInstruction>(
-        QoreIROpcode::SetImplicitArgv);
-    set_argv->loc = loc;
-    set_argv->operands.push_back(argv_value);
-    set_argv->result = func->createValue();
-    QoreIRValue old_argv = set_argv->result;
-    body->instructions.insert(
-        body->instructions.begin() + position, std::move(set_argv));
-    return old_argv;
-}
-
 QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr,
         std::string& error) {
     if (!ensureBuilderContext(error)) {
@@ -18491,29 +18474,26 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
             element_val = builder.createListGetFloat(input_list, index_val, foldl->loc)->result;
         }
 
-        // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = accum_val;
-        virtual_implicit.arg1 = element_val;
-        virtual_implicit.element = QoreIRValue();
-        virtual_implicit.active = true;
-        virtual_implicit.runtime = false;
-
-        // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
-        int saved_ast_count = ast_delegate_count;
-        QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
-
-        // Restore virtual context and install runtime args only when delegated
-        // AST evaluation can observe them.
-        virtual_implicit = saved;
-
+        // the fold expression runs with (accumulator, element) as the implicit argument list also at run time when it
+        // needs it, decided before it is lowered, as the AST interpreter sets it for each element; otherwise $1 and $2
+        // are the accumulator and the element (the virtual implicit context; see qore_ir_body_needs_implicit_context(),
+        // lowerWithImplicitArgs(); qore#5691)
+        QoreIRValue fold_result;
+        if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
+            fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
+                [&]() { return lowerExpression(foldl->getLeft(), error); });
+        } else {
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = accum_val;
+            virtual_implicit.arg1 = element_val;
+            virtual_implicit.element = QoreIRValue();
+            virtual_implicit.active = true;
+            virtual_implicit.runtime = false;
+            fold_result = lowerExpression(foldl->getLeft(), error);
+            virtual_implicit = saved;
+        }
         if (!fold_result.isValid()) {
             return QoreIRValue();
-        }
-        if (ast_delegate_count > saved_ast_count) {
-            QoreIRValue old_argv = insertFoldImplicitArgvSetup(
-                body_block, 1, accum_val, element_val, foldl->loc);
-            builder.createPopImplicitArg(old_argv, foldl->loc);
         }
 
         // Increment index
@@ -18592,29 +18572,26 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
 
-    // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
-    VirtualImplicitContext saved = virtual_implicit;
-    virtual_implicit.arg0 = accum_val;
-    virtual_implicit.arg1 = element_val;
-    virtual_implicit.element = QoreIRValue();
-    virtual_implicit.active = true;
-    virtual_implicit.runtime = false;
-
-    // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
-    int saved_ast_count = ast_delegate_count;
-    QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
-
-    // Restore virtual context and install runtime args only when delegated AST
-    // evaluation can observe them.
-    virtual_implicit = saved;
-
+    // the fold expression runs with (accumulator, element) as the implicit argument list also at run time when it
+    // needs it, decided before it is lowered, as the AST interpreter sets it for each element; otherwise $1 and $2
+    // are the accumulator and the element (the virtual implicit context; see qore_ir_body_needs_implicit_context(),
+    // lowerWithImplicitArgs(); qore#5691)
+    QoreIRValue fold_result;
+    if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
+        fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
+            [&]() { return lowerExpression(foldl->getLeft(), error); });
+    } else {
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = accum_val;
+        virtual_implicit.arg1 = element_val;
+        virtual_implicit.element = QoreIRValue();
+        virtual_implicit.active = true;
+        virtual_implicit.runtime = false;
+        fold_result = lowerExpression(foldl->getLeft(), error);
+        virtual_implicit = saved;
+    }
     if (!fold_result.isValid()) {
         return QoreIRValue();
-    }
-    if (ast_delegate_count > saved_ast_count) {
-        QoreIRValue old_argv = insertFoldImplicitArgvSetup(
-            body_block, 0, accum_val, element_val, foldl->loc);
-        builder.createPopImplicitArg(old_argv, foldl->loc);
     }
 
     // Record body exit block
@@ -18733,24 +18710,26 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
             ? builder.createListGetInt(input_list, index_val, foldr->loc)->result
             : builder.createListGetFloat(input_list, index_val, foldr->loc)->result;
 
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = accum_val;
-        virtual_implicit.arg1 = element_val;
-        virtual_implicit.element = QoreIRValue();
-        virtual_implicit.active = true;
-        virtual_implicit.runtime = false;
-
-        int saved_ast_count = ast_delegate_count;
-        QoreIRValue fold_result = lowerExpression(foldr->getLeft(), error);
-        virtual_implicit = saved;
-
+        // the fold expression runs with (accumulator, element) as the implicit argument list also at run time when it
+        // needs it, decided before it is lowered, as the AST interpreter sets it for each element; otherwise $1 and $2
+        // are the accumulator and the element (the virtual implicit context; see qore_ir_body_needs_implicit_context(),
+        // lowerWithImplicitArgs(); qore#5691)
+        QoreIRValue fold_result;
+        if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
+            fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
+                [&]() { return lowerExpression(foldr->getLeft(), error); });
+        } else {
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = accum_val;
+            virtual_implicit.arg1 = element_val;
+            virtual_implicit.element = QoreIRValue();
+            virtual_implicit.active = true;
+            virtual_implicit.runtime = false;
+            fold_result = lowerExpression(foldr->getLeft(), error);
+            virtual_implicit = saved;
+        }
         if (!fold_result.isValid()) {
             return QoreIRValue();
-        }
-        if (ast_delegate_count > saved_ast_count) {
-            QoreIRValue old_argv = insertFoldImplicitArgvSetup(
-                body_block, 1, accum_val, element_val, foldr->loc);
-            builder.createPopImplicitArg(old_argv, foldr->loc);
         }
 
         QoreIRValue next_index = builder.createBinaryOp(
@@ -18820,29 +18799,26 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
 
-    // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
-    VirtualImplicitContext saved = virtual_implicit;
-    virtual_implicit.arg0 = accum_val;
-    virtual_implicit.arg1 = element_val;
-    virtual_implicit.element = QoreIRValue();
-    virtual_implicit.active = true;
-    virtual_implicit.runtime = false;
-
-    // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
-    int saved_ast_count = ast_delegate_count;
-    QoreIRValue fold_result = lowerExpression(foldr->getLeft(), error);
-
-    // Restore virtual context and install runtime args only when delegated AST
-    // evaluation can observe them.
-    virtual_implicit = saved;
-
+    // the fold expression runs with (accumulator, element) as the implicit argument list also at run time when it
+    // needs it, decided before it is lowered, as the AST interpreter sets it for each element; otherwise $1 and $2
+    // are the accumulator and the element (the virtual implicit context; see qore_ir_body_needs_implicit_context(),
+    // lowerWithImplicitArgs(); qore#5691)
+    QoreIRValue fold_result;
+    if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
+        fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
+            [&]() { return lowerExpression(foldr->getLeft(), error); });
+    } else {
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = accum_val;
+        virtual_implicit.arg1 = element_val;
+        virtual_implicit.element = QoreIRValue();
+        virtual_implicit.active = true;
+        virtual_implicit.runtime = false;
+        fold_result = lowerExpression(foldr->getLeft(), error);
+        virtual_implicit = saved;
+    }
     if (!fold_result.isValid()) {
         return QoreIRValue();
-    }
-    if (ast_delegate_count > saved_ast_count) {
-        QoreIRValue old_argv = insertFoldImplicitArgvSetup(
-            body_block, 0, accum_val, element_val, foldr->loc);
-        builder.createPopImplicitArg(old_argv, foldr->loc);
     }
 
     // Record body exit block
@@ -19571,70 +19547,51 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Load element at current index
         QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hm->loc)->result;
 
-        // Set virtual implicit context: $1 = element, $# = index
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
-        virtual_implicit.runtime = false;
-
-        // Lower key and value expressions — track AST delegation
-        int saved_ast_count = ast_delegate_count;
-
-        QoreIRValue key_result = lowerExpression(hm->get(0), error);
-        if (!key_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        QoreIRValue value_result = lowerExpression(hm->get(1), error);
-        if (!value_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        // Restore virtual context
-        virtual_implicit = saved;
-
-        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-        if (needs_implicit_push) {
-            // Body contains AST-delegated calls: insert push/pop implicit args
-            QoreIRFunction* func = builder.getFunction();
-
-            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-            push_elem->result = func->createValue();
-            push_elem->operands.push_back(index_val);
-            push_elem->loc = hm->loc;
-            QoreIRValue old_element = push_elem->result;
-
-            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-            push_argv->result = func->createValue();
-            push_argv->operands.push_back(element_val);
-            push_argv->loc = hm->loc;
-            QoreIRValue old_argv = push_argv->result;
-
-            // Insert after element load instruction in body_block
-            size_t insert_pos = 1;
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-                std::move(push_elem));
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-                std::move(push_argv));
-
-            // Pop after body expression (in current block which may be invoke.cont)
-            builder.createPopImplicitArg(old_argv, hm->loc);
-            builder.createPopImplicitElement(old_element, hm->loc);
-        }
-
-        // Set key-value in hash; with the type of the value folded into the common value type
+        // the key and value expressions run with the element as the implicit argument list also at run time when
+        // either needs it, decided before they are lowered, and the hash takes references of its own to the key and
+        // value before the code's temporaries are released (see qore_ir_body_needs_implicit_context(),
+        // lowerWithImplicitContext(); qore#5691)
         QoreIRValue next_type_state;
-        if (type_state_phi) {
-            next_type_state = withExceptionTarget(
-                builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-                type_state_phi->result, index_val, hm->loc))->result;
+        auto lower_body = [&]() -> QoreIRValue {
+            QoreIRValue key_result = lowerExpression(hm->get(0), error);
+            if (!key_result.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue value_result = lowerExpression(hm->get(1), error);
+            if (!value_result.isValid()) {
+                return QoreIRValue();
+            }
+            // Set key-value in hash; with the type of the value folded into the common value type
+            if (type_state_phi) {
+                next_type_state = withExceptionTarget(
+                    builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                    type_state_phi->result, index_val, hm->loc))->result;
+            } else {
+                withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
+            }
+            return key_result;
+        };
+        size_t body_block_count = builder.getFunction()->blocks.size();
+        QoreIRValue body_result;
+        if (qore_ir_body_needs_implicit_context(hm->get(0), 1)
+                || qore_ir_body_needs_implicit_context(hm->get(1), 1)) {
+            body_result = lowerWithImplicitContext(element_val, index_val, hm->loc, nullptr, error, lower_body);
         } else {
-            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
+            // $1 and $# are the element and its index (the virtual implicit context)
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = element_val;
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
+            virtual_implicit.runtime = false;
+            body_result = lower_body();
+            virtual_implicit = saved;
         }
+        if (!body_result.isValid()) {
+            return QoreIRValue();
+        }
+        // the blocks that the body created come before the blocks after the loop, as the code runs
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
@@ -19731,68 +19688,53 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Body block: evaluate key and value expressions
     builder.setBlock(body_block);
 
-    // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
-    VirtualImplicitContext saved = virtual_implicit;
-    virtual_implicit.arg0 = element_val;
-    virtual_implicit.arg1 = QoreIRValue();
-    virtual_implicit.element = index_val;
-    virtual_implicit.active = true;
-    virtual_implicit.runtime = false;
-
-    // Lower key and value expressions — track AST delegation
-    int saved_ast_count = ast_delegate_count;
-
-    QoreIRValue key_result = lowerExpression(hm->get(0), error);
-    if (!key_result.isValid()) {
-        virtual_implicit = saved;
-        return QoreIRValue();
-    }
-
-    QoreIRValue value_result = lowerExpression(hm->get(1), error);
-    if (!value_result.isValid()) {
-        virtual_implicit = saved;
-        return QoreIRValue();
-    }
-
-    // Restore virtual context
-    virtual_implicit = saved;
-
-    bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-    if (needs_implicit_push) {
-        // Body contains AST-delegated calls: insert push/pop
-        QoreIRFunction* func = builder.getFunction();
-
-        auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-        push_elem->result = func->createValue();
-        push_elem->operands.push_back(index_val);
-        push_elem->loc = hm->loc;
-        QoreIRValue old_element = push_elem->result;
-
-        auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-        push_argv->result = func->createValue();
-        push_argv->operands.push_back(element_val);
-        push_argv->loc = hm->loc;
-        QoreIRValue old_argv = push_argv->result;
-
-        // Insert after start of body_block (which follows IteratorNext)
-        size_t insert_pos = 0;
-        body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-            std::move(push_elem));
-        body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-            std::move(push_argv));
-
-        builder.createPopImplicitArg(old_argv, hm->loc);
-        builder.createPopImplicitElement(old_element, hm->loc);
-    }
-
-    // Set key-value in hash; with the type of the value folded into the common value type
+    // the key and value expressions run with the element as the implicit argument list also at run time when
+    // either needs it, decided before they are lowered, and the hash takes references of its own to the key and
+    // value before the code's temporaries are released (see qore_ir_body_needs_implicit_context(),
+    // lowerWithImplicitContext(); qore#5691)
     QoreIRValue next_type_state;
-    if (type_state_phi) {
-        next_type_state = withExceptionTarget(builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-            type_state_phi->result, index_val, hm->loc))->result;
+    auto lower_body = [&]() -> QoreIRValue {
+        QoreIRValue key_result = lowerExpression(hm->get(0), error);
+        if (!key_result.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue value_result = lowerExpression(hm->get(1), error);
+        if (!value_result.isValid()) {
+            return QoreIRValue();
+        }
+        // Set key-value in hash; with the type of the value folded into the common value type
+        if (type_state_phi) {
+            next_type_state = withExceptionTarget(builder.createHashSetKeyValueFold(result_hash, key_result,
+                value_result,
+                type_state_phi->result, index_val, hm->loc))->result;
+        } else {
+            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
+        }
+        return key_result;
+    };
+    size_t body_block_count = builder.getFunction()->blocks.size();
+    QoreIRValue body_result;
+    if (qore_ir_body_needs_implicit_context(hm->get(0), 1)
+            || qore_ir_body_needs_implicit_context(hm->get(1), 1)) {
+        body_result = lowerWithImplicitContext(element_val, index_val, hm->loc, nullptr, error, lower_body);
     } else {
-        withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
+        // $1 and $# are the element and its index (the virtual implicit context)
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+        virtual_implicit.runtime = false;
+        body_result = lower_body();
+        virtual_implicit = saved;
     }
+    if (!body_result.isValid()) {
+        return QoreIRValue();
+    }
+    // the blocks that the body created come before the blocks after the loop, as the code runs; without the type
+    // of the values to track, the loop exits from its header, which stays before the body
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {track_value_type ? loop_exit_block : nullptr, exit_block, nothing_block});
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
@@ -19925,97 +19867,98 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         // Load element at current index
         QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hms->loc)->result;
 
-        // Set virtual implicit context: $1 = element, $# = index
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
-        virtual_implicit.runtime = false;
-
-        // Lower all body expressions — track AST delegation
-        int saved_ast_count = ast_delegate_count;
-
-        // Lower the select predicate (operand 3)
-        QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
-        if (!predicate_result.isValid()) {
+        // the select predicate (operand 3) and the key and value expressions (operands 0 and 1) run with the element
+        // as the implicit argument list also at run time when they need it, decided before they are lowered: each on
+        // its own if only one does, and once for both if both do, as the AST interpreter sets it once for the
+        // element; the hash takes references of its own to the key and value inside the context (see
+        // qore_ir_body_needs_implicit_context(), lowerWithImplicitContext(); qore#5691)
+        bool predicate_context = qore_ir_body_needs_implicit_context(hms->get(3), 1);
+        bool insert_context = qore_ir_body_needs_implicit_context(hms->get(0), 1)
+            || qore_ir_body_needs_implicit_context(hms->get(1), 1);
+        // lowers code that reads the implicit arguments only as the element and its index (the virtual implicit
+        // context)
+        auto with_virtual = [&](auto&& lower) -> QoreIRValue {
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = element_val;
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
+            virtual_implicit.runtime = false;
+            QoreIRValue rv = lower();
             virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        // Convert predicate to bool
-        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
-            hms->loc)->result;
-
-        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
-        // Branch based on predicate
-        builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
-
-        // Insert block: evaluate key and value, insert into hash
-        builder.setBlock(insert_block);
-
-        QoreIRValue key_result = lowerExpression(hms->get(0), error);
-        if (!key_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        QoreIRValue value_result = lowerExpression(hms->get(1), error);
-        if (!value_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        // Set key-value in hash; with the type of the value folded into the common value type
+            return rv;
+        };
+        auto lower_predicate = [&]() -> QoreIRValue {
+            QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+            if (!predicate_result.isValid()) {
+                return QoreIRValue();
+            }
+            return builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, hms->loc)->result;
+        };
         QoreIRValue inserted_type_state;
-        if (type_state_phi) {
-            inserted_type_state = withExceptionTarget(
-                builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-                type_state_phi->result, index_val, hms->loc))->result;
-        } else {
-            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
-        }
-        QoreIRBasicBlock* insert_exit_block = builder.getBlock();
-        builder.createBranch(cont_block, hms->loc);
-
-        // Continue block: restore virtual context
-        builder.setBlock(cont_block);
-        // the type state after this element: folded when the element was selected
+        auto lower_insert = [&]() -> QoreIRValue {
+            QoreIRValue key_result = lowerExpression(hms->get(0), error);
+            if (!key_result.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue value_result = lowerExpression(hms->get(1), error);
+            if (!value_result.isValid()) {
+                return QoreIRValue();
+            }
+            // Set key-value in hash; with the type of the value folded into the common value type
+            if (type_state_phi) {
+                inserted_type_state = withExceptionTarget(
+                    builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                    type_state_phi->result, index_val, hms->loc))->result;
+            } else {
+                withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
+            }
+            return key_result;
+        };
         QoreIRValue next_type_state;
-        if (type_state_phi) {
-            next_type_state = builder.createPhi({{type_state_phi->result, predicate_exit_block},
-                {inserted_type_state, insert_exit_block}}, hms->loc, QoreIRPhiValueKind::NativeInt)->result;
+        // lowers the predicate, the branch, the insertion and the continue block's phi; combined if they run in one
+        // implicit context that the caller set
+        auto lower_body = [&](bool combined) -> QoreIRValue {
+            QoreIRValue predicate_bool = combined ? lower_predicate()
+                : (predicate_context
+                    ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error, lower_predicate)
+                    : with_virtual(lower_predicate));
+            if (!predicate_bool.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
+            builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
+
+            // Insert block: evaluate key and value, insert into hash
+            builder.setBlock(insert_block);
+            QoreIRValue key_result = combined ? lower_insert()
+                : (insert_context
+                    ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error, lower_insert)
+                    : with_virtual(lower_insert));
+            if (!key_result.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* insert_exit_block = builder.getBlock();
+            builder.createBranch(cont_block, hms->loc);
+
+            // Continue block; the type state after this element: folded when the element was selected
+            builder.setBlock(cont_block);
+            if (type_state_phi) {
+                next_type_state = builder.createPhi({{type_state_phi->result, predicate_exit_block},
+                    {inserted_type_state, insert_exit_block}}, hms->loc, QoreIRPhiValueKind::NativeInt)->result;
+            }
+            return predicate_bool;
+        };
+        size_t body_block_count = builder.getFunction()->blocks.size();
+        QoreIRValue body_result = predicate_context && insert_context
+            ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error,
+                [&]() { return lower_body(true); })
+            : lower_body(false);
+        if (!body_result.isValid()) {
+            return QoreIRValue();
         }
-        virtual_implicit = saved;
-
-        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-        if (needs_implicit_push) {
-            // Body contains AST-delegated calls: insert push/pop implicit args
-            QoreIRFunction* func = builder.getFunction();
-
-            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-            push_elem->result = func->createValue();
-            push_elem->operands.push_back(index_val);
-            push_elem->loc = hms->loc;
-            QoreIRValue old_element = push_elem->result;
-
-            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-            push_argv->result = func->createValue();
-            push_argv->operands.push_back(element_val);
-            push_argv->loc = hms->loc;
-            QoreIRValue old_argv = push_argv->result;
-
-            // Insert after element load instruction in body_block
-            size_t insert_pos = 1;
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-                std::move(push_elem));
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-                std::move(push_argv));
-
-            // Pop in cont block (reached from both insert and skip paths)
-            builder.createPopImplicitArg(old_argv, hms->loc);
-            builder.createPopImplicitElement(old_element, hms->loc);
-        }
+        // the blocks that the body created come before the blocks after the loop, as the code runs
+        qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
@@ -20116,94 +20059,99 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Body block: evaluate select predicate
     builder.setBlock(body_block);
 
-    // Set virtual implicit context: $1 = element, $# = index
-    VirtualImplicitContext saved = virtual_implicit;
-    virtual_implicit.arg0 = element_val;
-    virtual_implicit.arg1 = QoreIRValue();
-    virtual_implicit.element = index_val;
-    virtual_implicit.active = true;
-    virtual_implicit.runtime = false;
-
-    // Lower all body expressions — track AST delegation
-    int saved_ast_count = ast_delegate_count;
-
-    // Lower the select predicate (operand 3)
-    QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
-    if (!predicate_result.isValid()) {
+    // the select predicate (operand 3) and the key and value expressions (operands 0 and 1) run with the element as
+    // the implicit argument list also at run time when they need it, decided before they are lowered: each on its own
+    // if only one does, and once for both if both do, as the AST interpreter sets it once for the element; the hash
+    // takes references of its own to the key and value inside the context (see
+    // qore_ir_body_needs_implicit_context(), lowerWithImplicitContext(); qore#5691)
+    bool predicate_context = qore_ir_body_needs_implicit_context(hms->get(3), 1);
+    bool insert_context = qore_ir_body_needs_implicit_context(hms->get(0), 1)
+        || qore_ir_body_needs_implicit_context(hms->get(1), 1);
+    // lowers code that reads the implicit arguments only as the element and its index (the virtual implicit context)
+    auto with_virtual = [&](auto&& lower) -> QoreIRValue {
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+        virtual_implicit.runtime = false;
+        QoreIRValue rv = lower();
         virtual_implicit = saved;
-        return QoreIRValue();
-    }
-
-    // Convert predicate to bool
-    QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, hms->loc)->result;
-
-    QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
-    // Branch based on predicate
-    builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
-
-    // Insert block: evaluate key and value, insert into hash
-    builder.setBlock(insert_block);
-
-    QoreIRValue key_result = lowerExpression(hms->get(0), error);
-    if (!key_result.isValid()) {
-        virtual_implicit = saved;
-        return QoreIRValue();
-    }
-
-    QoreIRValue value_result = lowerExpression(hms->get(1), error);
-    if (!value_result.isValid()) {
-        virtual_implicit = saved;
-        return QoreIRValue();
-    }
-
-    // Set key-value in hash; with the type of the value folded into the common value type
+        return rv;
+    };
+    auto lower_predicate = [&]() -> QoreIRValue {
+        QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+        if (!predicate_result.isValid()) {
+            return QoreIRValue();
+        }
+        return builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, hms->loc)->result;
+    };
     QoreIRValue inserted_type_state;
-    if (type_state_phi) {
-        inserted_type_state = withExceptionTarget(
-            builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-            type_state_phi->result, index_val, hms->loc))->result;
-    } else {
-        withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
-    }
-    QoreIRBasicBlock* insert_exit_block = builder.getBlock();
-    builder.createBranch(cont_block, hms->loc);
-
-    // Continue block: restore virtual context
-    builder.setBlock(cont_block);
-    // the type state after this element: folded when the element was selected
+    auto lower_insert = [&]() -> QoreIRValue {
+        QoreIRValue key_result = lowerExpression(hms->get(0), error);
+        if (!key_result.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue value_result = lowerExpression(hms->get(1), error);
+        if (!value_result.isValid()) {
+            return QoreIRValue();
+        }
+        // Set key-value in hash; with the type of the value folded into the common value type
+        if (type_state_phi) {
+            inserted_type_state = withExceptionTarget(
+                builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                type_state_phi->result, index_val, hms->loc))->result;
+        } else {
+            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
+        }
+        return key_result;
+    };
     QoreIRValue next_type_state;
-    if (type_state_phi) {
-        next_type_state = builder.createPhi({{type_state_phi->result, predicate_exit_block},
-            {inserted_type_state, insert_exit_block}}, hms->loc, QoreIRPhiValueKind::NativeInt)->result;
+    // lowers the predicate, the branch, the insertion and the continue block's phi; combined if they run in one
+    // implicit context that the caller set
+    auto lower_body = [&](bool combined) -> QoreIRValue {
+        QoreIRValue predicate_bool = combined ? lower_predicate()
+            : (predicate_context
+                ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error, lower_predicate)
+                : with_virtual(lower_predicate));
+        if (!predicate_bool.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
+        builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
+
+        // Insert block: evaluate key and value, insert into hash
+        builder.setBlock(insert_block);
+        QoreIRValue key_result = combined ? lower_insert()
+            : (insert_context
+                ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error, lower_insert)
+                : with_virtual(lower_insert));
+        if (!key_result.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* insert_exit_block = builder.getBlock();
+        builder.createBranch(cont_block, hms->loc);
+
+        // Continue block; the type state after this element: folded when the element was selected
+        builder.setBlock(cont_block);
+        if (type_state_phi) {
+            next_type_state = builder.createPhi({{type_state_phi->result, predicate_exit_block},
+                {inserted_type_state, insert_exit_block}}, hms->loc, QoreIRPhiValueKind::NativeInt)->result;
+        }
+        return predicate_bool;
+    };
+    size_t body_block_count = builder.getFunction()->blocks.size();
+    QoreIRValue body_result = predicate_context && insert_context
+        ? lowerWithImplicitContext(element_val, index_val, hms->loc, nullptr, error,
+            [&]() { return lower_body(true); })
+        : lower_body(false);
+    if (!body_result.isValid()) {
+        return QoreIRValue();
     }
-    virtual_implicit = saved;
-
-    bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-    if (needs_implicit_push) {
-        // Body contains AST-delegated calls: insert push/pop
-        QoreIRFunction* func = builder.getFunction();
-
-        auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-        push_elem->result = func->createValue();
-        push_elem->operands.push_back(index_val);
-        push_elem->loc = hms->loc;
-        QoreIRValue old_element = push_elem->result;
-
-        auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-        push_argv->result = func->createValue();
-        push_argv->operands.push_back(element_val);
-        push_argv->loc = hms->loc;
-        QoreIRValue old_argv = push_argv->result;
-
-        size_t insert_pos = 0;
-        body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-            std::move(push_elem));
-        body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-            std::move(push_argv));
-
-        builder.createPopImplicitArg(old_argv, hms->loc);
-        builder.createPopImplicitElement(old_element, hms->loc);
-    }
+    // the blocks that the body created come before the blocks after the loop, as the code runs; without the type
+    // of the values to track, the loop exits from its header, which stays before the body
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
+        {track_value_type ? loop_exit_block : nullptr, exit_block, nothing_block});
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
@@ -20504,14 +20452,15 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return builder.createUnaryOp(QoreIROpcode::ToBool, pred_result, pred_loc)->result;
     };
 
+    // the fold expression runs with (accumulator, element) as the implicit argument list also at run time only when
+    // it needs it, decided once before it is lowered, as for foldl and foldr (qore#5691)
+    bool fold_expr_needs_context = root.fold_expr && qore_ir_body_needs_implicit_context(*root.fold_expr, 2);
     auto lower_fold_expr = [&](QoreIRValue accum_val, QoreIRValue element_val) -> QoreIRValue {
         assert(root.fold_expr);
-
-        // $1 and $2 are the virtual implicit arguments of the IR-lowered expression; the runtime argument list is
-        // installed only when delegated AST code can observe it, as lowerFoldlNative() does
-        QoreIRBasicBlock* setup_block = builder.getBlock();
-        size_t setup_position = setup_block->instructions.size();
-        int saved_ast_count = ast_delegate_count;
+        if (fold_expr_needs_context) {
+            return lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), loc, nullptr, error,
+                [&]() { return lowerExpression(*root.fold_expr, error); });
+        }
 
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -20523,12 +20472,6 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
 
         virtual_implicit = saved;
-        if (fold_result.isValid() && ast_delegate_count > saved_ast_count) {
-            QoreIRValue old_argv = insertFoldImplicitArgvSetup(setup_block, setup_position, accum_val, element_val,
-                loc);
-            builder.createPopImplicitArg(old_argv, loc);
-        }
-
         return fold_result;
     };
 

@@ -3773,7 +3773,8 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
         if (val_it == values.end() || !val_it->second) {
             continue;
         }
-        if (push->opcode == QoreIROpcode::PushImplicitArg) {
+        // PushImplicitArg or SetImplicitArgv (foldl and foldr): both return the argument list to restore
+        if (push->opcode != QoreIROpcode::PushImplicitElement) {
             auto pop_fn = module.getOrInsertFunction("qore_rt_pop_implicit_arg",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(pop_fn, {boxValue(val_it->second, push->result.id), xsink_arg});

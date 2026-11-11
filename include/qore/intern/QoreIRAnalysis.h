@@ -232,8 +232,8 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
 
 //! Finds the implicit arguments and elements open at each instruction that leaves the function on an exception
-/** The PushImplicitArg and PushImplicitElement instructions that the lowering restores on every path in the function
-    (QoreIRInstruction::restore_on_exception_exit) are followed through the control flow, normal and exception edges;
+/** The PushImplicitArg, SetImplicitArgv and PushImplicitElement instructions that the lowering restores on every path
+    in the function (QoreIRInstruction::restore_on_exception_exit) are followed through the control flow, normal and exception edges;
     an instruction with no exception target that runs while some are set gets them in \a open, outermost first, so
     that the frame's exit restores them, innermost first, before it releases the frame's values (qore#5670)
 */

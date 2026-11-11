@@ -348,6 +348,10 @@ public:
     template <typename F>
     QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
             QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
+    //! Lowers code that runs with the implicit argument list (arg0) or (arg0, arg1) (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitArgs(QoreIRValue arg0, QoreIRValue arg1, QoreIRValue index,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -391,9 +395,6 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         const QoreTypeInfo* element_type, std::string& error);
-    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
-    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
-        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
