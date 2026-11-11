@@ -170,6 +170,12 @@ x=null@endverbatim
     that other threads release when they end or between their tasks are released before the Program's data is
     deleted (see @ref thread_local_lifetime).
 
+    The member initialization expressions of the classes and @ref hashdecl "hashdecls" of a Program are code of that
+    Program, whichever Program's code creates the object or hash: a Program that inherited or imported them, or the
+    @ref reflectionintro "reflection" API, keeps the Program from being deleted while they are evaluated, and
+    creating an object or a hash that needs one evaluated after the Program has been deleted raises a
+    \c PROGRAM-ERROR exception (see @ref hashdecl_initializer_program).
+
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
     @anchor synchronized

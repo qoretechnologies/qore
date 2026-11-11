@@ -618,6 +618,73 @@ QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qo
     return i->second->optRef() ? i->second : nullptr;
 }
 
+int QoreDeclaringProgramHelper::raiseDeleted(ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program that declared the member initializer has already been "
+            "deleted and therefore its code cannot be executed");
+    }
+    return -1;
+}
+
+int QoreDeclaringProgramHelper::enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+        ExceptionSink* xsink) {
+    assert(p);
+    // the current Program, which the thread is in, and a Program that the thread deletes (which runs the code of its
+    // declarations while it deletes their data, destructors for example) are allocated: their ID tells them from a
+    // later Program at the same address
+    int ctid;
+    if (!qore_reference_program_needs_entry(p, ctid)) {
+        return p->getProgramId() == id ? 0 : raiseDeleted(xsink);
+    }
+    // a module's Program stays allocated while any code can run (module lifetime), as for a call of a module's
+    // function from another Program (see QoreSourceProgramHolder::setVariant())
+    if (module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+        return 0;
+    }
+    QoreProgram* rp = qore_program_private::getReferencedProgram(p, id);
+    if (!rp) {
+        return raiseDeleted(xsink);
+    }
+    if (qore_program_has_module_lifetime(rp)) {
+        module_lifetime.store(true, std::memory_order_release);
+    }
+    return enterReferenced(rp, xsink);
+}
+
+int QoreDeclaringProgramHelper::enterReferenced(QoreProgram* p, ExceptionSink* xsink) {
+    assert(p);
+    if (pgm) {
+        // the helper holds another Program already
+        if (!next) {
+            next.reset(new QoreDeclaringProgramHelper);
+        }
+        return next->enterReferenced(p, xsink);
+    }
+    int ctid = q_gettid();
+    if (!qore_program_private::get(*p)->enterWithoutContext(ctid)) {
+        // releasing the last reference deletes the Program, which needs a sink for its destructors
+        ExceptionSink local_xsink;
+        p->deref(xsink ? xsink : &local_xsink);
+        return raiseDeleted(xsink);
+    }
+    pgm = p;
+    tid = ctid;
+    leave_xsink = xsink;
+    return 0;
+}
+
+void QoreDeclaringProgramHelper::leave() {
+    assert(pgm);
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // leaving the Program can release it, if it was deleted meanwhile, as can releasing the reference; the
+    // destructors run then need a sink
+    ExceptionSink local_xsink;
+    ExceptionSink* xsink = leave_xsink ? leave_xsink : &local_xsink;
+    qore_program_private::decThreadCount(*p, tid, xsink);
+    p->deref(xsink);
+}
+
 bool qore_program_private::runWithRegisteredPrograms(
         const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f) {
     QoreAutoRWReadLocker al(&lck_programMap);

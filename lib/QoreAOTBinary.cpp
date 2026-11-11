@@ -17629,6 +17629,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         }
         TypedHashDecl* hd = new TypedHashDecl(name, type_path.c_str());
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+        // the member initializers loaded below are code of the Program that loads the binary
+        hdp->setSourceProgram(pgm);
 
         // Set visibility
         if (flags & 0x0001) {

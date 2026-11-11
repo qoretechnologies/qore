@@ -127,7 +127,32 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! evaluates the initialization expression for the member and returns the referenced value
+    /** The expression is code of the Program that declared the member, which must not have been deleted; use the
+        variant that takes the class or hashdecl of the member to have that checked
+    */
     DLLEXPORT QoreValue getDefaultValue(ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given class and returns the referenced value
+    /** @param cls the class that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        defined the class has been deleted
+
+        The Program that defined the class is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const QoreClass& cls, ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given hashdecl and returns the referenced value
+    /** @param hd the hashdecl that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        declared the hashdecl has been deleted
+
+        The Program that declared the hashdecl is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const TypedHashDecl& hd, ExceptionSink* xsink) const;
 
     //! returns the source location of the member's declaration
     DLLEXPORT const QoreExternalProgramLocation* getSourceLocation() const;

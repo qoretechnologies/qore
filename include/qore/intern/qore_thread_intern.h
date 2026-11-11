@@ -1728,6 +1728,15 @@ DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* 
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 
+//! The source Program of a class that CodeContextHelperBase takes for its frame
+struct QoreClassSourceProgramInfo {
+    //! the source Program (see qore_class_private::getSourceProgramForCall()), or nullptr if the class has none
+    QoreProgram* pgm = nullptr;
+    //! true if a reference was taken to \a pgm: it is neither the current Program nor one with module lifetime, nor
+    //! one that the thread deletes
+    bool referenced = false;
+};
+
 class CodeContextHelperBase {
 private:
     const char* old_code;
@@ -1752,7 +1761,16 @@ private:
 public:
     DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
             ExceptionSink* xsink, bool ref_obj = true);
+
+    //! as above; also returns the source Program of the class that the helper takes for its frame
+    DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+            ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info);
+
     DLLLOCAL ~CodeContextHelperBase();
+
+private:
+    DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
+            QoreClassSourceProgramInfo* spgm_info);
 };
 
 class ObjectSubstitutionHelper {
@@ -2186,6 +2204,82 @@ private:
     QoreReferenceProgramEntry entry;
     ExceptionSink* xsink;
     bool valid = true;
+};
+
+//! Keeps the Program that declared a member initializer from being deleted while the thread evaluates it
+/** The member initializers of a hashdecl or class are code of the Program that declared them, but they are evaluated
+    in the Program of the code that creates the hash or the object, which is another Program for a hashdecl or class
+    inherited or imported by another Program, or for a typed hash whose type another Program gets from a value (with
+    the reflection API).  The code of the initializers, such as the function entries of their calls, is freed with
+    their Program: an initializer evaluated after that Program had been deleted crashed.
+
+    The helper enters the declaring Program without switching to it (qore_program_private::enterWithoutContext()),
+    so that its teardown waits until the initializer has been evaluated, unless it is the current Program, which the
+    thread is in, one that the thread deletes, or a Program with module lifetime; entering a Program that is being
+    deleted, or has been, raises \c PROGRAM-ERROR.  See typed_hash_decl_private::enterSourceProgram() and
+    qore_class_private::enterSourceProgramForInit().
+*/
+class QoreDeclaringProgramHelper {
+public:
+    DLLLOCAL QoreDeclaringProgramHelper() = default;
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL ~QoreDeclaringProgramHelper() {
+        reset();
+    }
+
+    DLLLOCAL QoreDeclaringProgramHelper(const QoreDeclaringProgramHelper&) = delete;
+    DLLLOCAL QoreDeclaringProgramHelper& operator=(const QoreDeclaringProgramHelper&) = delete;
+
+    //! Enters the Program identified by its address and ID, which can have been deleted
+    /** @param p the Program; it is not dereferenced unless it is still registered with the ID given or is the
+        current Program
+        @param id the Program's ID, which tells it from a later Program at the same address
+        @param module_lifetime set once the Program is found to have module lifetime, so that later calls need neither
+        the lock nor a reference to it
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr, in which case no exception is raised
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+
+        If the helper holds a Program already, it holds this one as well
+    */
+    DLLLOCAL int enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+            ExceptionSink* xsink);
+
+    //! Takes over a reference to a Program and enters it
+    /** @param p the Program, referenced; the reference is released with the helper, or here if the Program cannot be
+        entered
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+    */
+    DLLLOCAL int enterReferenced(QoreProgram* p, ExceptionSink* xsink);
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL void reset() {
+        next.reset();
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Raises the \c PROGRAM-ERROR exception for a declaring Program that has been deleted, if \a xsink is not null
+    DLLLOCAL static int raiseDeleted(ExceptionSink* xsink);
+
+private:
+    //! the Program entered and referenced, if any
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+    //! the sink given when the Program was entered, used to leave it; may be nullptr
+    ExceptionSink* leave_xsink = nullptr;
+    //! holds the other Programs entered, if any; left before \a pgm
+    std::unique_ptr<QoreDeclaringProgramHelper> next;
+
+    //! Leaves the Program entered and releases the reference to it
+    DLLLOCAL void leave();
 };
 
 class QoreStatementTempScope;

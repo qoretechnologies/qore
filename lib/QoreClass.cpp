@@ -1600,6 +1600,84 @@ const QoreMethod* qore_class_private::findLocalCommittedStaticMethod(const char*
     return m && !m->priv->func->committedEmpty() ? m : nullptr;
 }
 
+int qore_class_private::enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h, ExceptionSink* xsink) const {
+    bool referenced;
+    bool deleted = false;
+    QoreProgram* p = getSourceProgramForCall(referenced, &deleted);
+    if (p) {
+        // the Program is current, has module lifetime, or is deleted by this thread unless a reference was taken
+        return referenced ? h.enterReferenced(p, xsink) : 0;
+    }
+    // as for a method call (see getMethodForEval()): once the source Program has released the class, only that
+    // Program can run its code, as its teardown does
+    if (!deleted) {
+        if (qore_program_id_t released = released_spgm_id.load()) {
+            QoreProgram* current_pgm = ::getProgram();
+            if (current_pgm && released == current_pgm->getProgramId()) {
+                return 0;
+            }
+        } else if (ns || !ns_deleted) {
+            // a class without a source Program, such as a builtin class
+            return 0;
+        }
+    }
+    xsink->raiseException("PROGRAM-ERROR", "cannot initialize the members of class '%s'; the Program object that "
+        "owns class '%s' has already been deleted and therefore cannot be accessed at runtime", cls->getName(),
+        name.c_str());
+    return -1;
+}
+
+int8_t qore_class_private::computeMemberInitCode() const {
+    int8_t rv = 0;
+    for (auto& i : member_init_list) {
+        if (i.info->initIsCode()) {
+            if (i.info->getClass() != this) {
+                rv = 2;
+                break;
+            }
+            rv = 1;
+        }
+    }
+    member_init_code.store(rv, std::memory_order_relaxed);
+    return rv;
+}
+
+int qore_class_private::enterMemberInitSourcePrograms(QoreDeclaringProgramHelper& h,
+        const QoreClassSourceProgramInfo& spgm_info, ExceptionSink* xsink) const {
+    // each class that declares members with initializers that are code is checked once
+    const qore_class_private* last_cls = nullptr;
+    // the frame holds a reference to the source Program, but the Program can be deleted unless the thread is in it
+    bool enter_spgm = spgm_info.referenced;
+    for (auto& i : member_init_list) {
+        if (!i.info->initIsCode()) {
+            continue;
+        }
+        const qore_class_private* decl_cls = i.info->getClass();
+        if (decl_cls == last_cls) {
+            continue;
+        }
+        last_cls = decl_cls;
+        // the source Program of the class being instantiated has been taken for the frame (see initMembers()); a
+        // class with the same source Program needs nothing more
+        QoreProgram* p = spgm_info.pgm;
+        if (p && (decl_cls == this || decl_cls->spgm.load() == p)) {
+            if (enter_spgm) {
+                p->ref();
+                if (h.enterReferenced(p, xsink)) {
+                    return -1;
+                }
+                // entered once for all the classes with this source Program
+                enter_spgm = false;
+            }
+            continue;
+        }
+        if (decl_cls->enterSourceProgramForInit(h, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const {
     assert(xsink);
     if (members.empty() && !scl)
@@ -1610,10 +1688,34 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
         return -1;
 #endif
 
-    // make sure the object context is set before evaluating members
-    CodeContextHelperBase cch("constructor", &o, this, xsink, false);
+    // make sure the object context is set before evaluating members; the helper takes the source Program of the
+    // class for the frame
+    QoreClassSourceProgramInfo spgm_info;
+    CodeContextHelperBase cch("constructor", &o, this, xsink, false, spgm_info);
     SelfInstantiatorHelper sih(&selfid, &o);
 
+    // the source Programs of the classes that declare the members must be kept while their initializers are
+    // evaluated (the members of a parent class are code of the parent's source Program), unless the members are
+    // declared by the class and its source Program needs nothing more: the thread is in it, or it has module lifetime
+    if (int8_t mic = getMemberInitCode()) {
+        if (mic == 2 || !spgm_info.pgm || spgm_info.referenced) {
+            return initMembersEntered(o, need_scan, spgm_info, xsink);
+        }
+    }
+    return initMemberList(o, need_scan, xsink);
+}
+
+int qore_class_private::initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,
+        ExceptionSink* xsink) const {
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterMemberInitSourcePrograms(src_pgm_helper, spgm_info, xsink)) {
+        return -1;
+    }
+    return initMemberList(o, need_scan, xsink);
+}
+
+QORE_INTERN_ALWAYS_INLINE int qore_class_private::initMemberList(QoreObject& o, bool& need_scan,
+        ExceptionSink* xsink) const {
     // issue #2970: initializes members once and save member info in the appropriate location in the object
     for (auto& i : member_init_list) {
         printd(5, "qore_class_private::initMembers() this: %p %s '%s::%s' ctx %p '%s' (access '%s') has parent " \
@@ -1974,6 +2076,8 @@ void qore_class_private::parseCommit() {
 }
 
 void qore_class_private::addLocalMembersForInit() {
+    // the list is complete when the local members have been added: hasMemberInitCode() looks at it again
+    member_init_code.store(-1, std::memory_order_relaxed);
     for (auto& i : members.member_list) {
         // skip imported members, and members held in external storage, which have no value in the object
         if (!i.second->local() || i.second->getAccessors()) {
