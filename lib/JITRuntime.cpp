@@ -4094,7 +4094,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
     }
 
     // a name with a leading "::" is the function of the root namespace itself (see qore_aot_get_function_ref_name())
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, function_name);
+    // the explicit type arguments (\f<T>()) follow the name
+    std::vector<const QoreTypeInfo*> type_args;
+    // a type parameter of the generic function or method that creates the reference is resolved with the signature of
+    // the instantiation of the current call, as for the types of values
+    const QoreTypeParamInstantiation* creator_inst = runtime_get_type_param_instantiation();
+    const FunctionEntry* fe = qore_aot_resolve_function_ref(pgm, function_name,
+        creator_inst ? creator_inst->owner : nullptr, type_args);
     QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
     if (!func) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
@@ -4104,7 +4110,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
 
     RuntimeConfig& rc = rc_get_current_ref();
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
-    return toBits(QoreValue(new FunctionCallReferenceNode(&loc_builtin, func, call_pgm)));
+    FunctionCallReferenceNode* fcr = new FunctionCallReferenceNode(&loc_builtin, func, call_pgm);
+    fcr->setExplicitTypeArgs(std::move(type_args));
+    // a type parameter of the generic code that creates the reference is bound to the running instantiation
+    fcr->bindExplicitTypeArgs();
+    return toBits(QoreValue(fcr));
 }
 
 // --- Method reference creation helper (delegates to call ref - identical behavior) ---

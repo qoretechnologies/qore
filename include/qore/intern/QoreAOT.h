@@ -150,6 +150,21 @@ std::string qore_aot_get_function_identity_name(const FunctionEntry* fe);
 */
 std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr);
 
+//! resolves the encoded name of a function call reference ("name[\ntypeargs:N\n<type path>...]")
+/** @param pgm the Program to resolve in
+    @param encoded the name written by qore_aot_get_function_ref_name()
+    @param containing_signature the signature of the generic function that creates the reference, if known, to
+    resolve its type parameters
+    @param type_args receives the explicit type arguments (empty if none)
+    @return the function entry, or nullptr if the function or a type argument cannot be resolved
+*/
+const FunctionEntry* qore_aot_resolve_function_ref(QoreProgram* pgm, const char* encoded,
+    const UserSignature* containing_signature, std::vector<const QoreTypeInfo*>& type_args);
+
+//! makes the call reference of an encoded name (see qore_aot_resolve_function_ref()), or returns nullptr
+LocalFunctionCallReferenceNode* qore_aot_make_function_ref(QoreProgram* pgm, const char* encoded,
+    const UserSignature* containing_signature = nullptr);
+
 //! Resolve a namespace function for a serialized class-qualified call after method lookup fails.
 const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
     QoreProgram* pgm, const QoreClass* qc, const char* class_ref, const char* method_name);

@@ -1680,15 +1680,9 @@ static QoreValue read_node_EN_SELF_METH_REF(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_FUNC_REF(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
-    if (fe) {
-        // Create a call reference (\func()), not a function call (func())
-        QoreFunction* f = fe->getFunction();
-        if (f) {
-            LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-            fcr->setFunctionEntry(fe);
-            return QoreValue(fcr);
-        }
+    // a call reference (\func()), not a function call (func())
+    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, name.c_str())) {
+        return QoreValue(fcr);
     }
     printd(0, "AOT EXPR_TREE: cannot resolve function ref '%s'\n", name.c_str());
     ctx.failed = true;

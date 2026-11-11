@@ -1251,13 +1251,17 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     // an explicit type argument can be a type parameter of the generic code that creates the reference (\mk0<U>() in
     // a generic function or a method of a generic class): it is bound here, to the instantiation that is running, as
     // the reference can outlive that code and be called when no such instantiation exists
+    rv->bindExplicitTypeArgs();
+    return rv;
+}
+
+void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
     if (explicit_inst) {
         QoreTypeParamInstantiation resolved;
         if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
-            rv->explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
+            explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
         }
     }
-    return rv;
 }
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
