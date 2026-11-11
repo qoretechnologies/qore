@@ -62,7 +62,7 @@ class DataProviderSandboxState {
         module's later registration would fail, denying its apps to everyone, or a sandboxed caller could decide the
         declarations of a name that it does not own; an action it registered would be decided by the declarations of
         an app it does not own, and a file API it registered would be attached to such an app.  Sandboxed code
-        (Qore::SandboxManager::isSandboxed(), also through a policy barrier or a system-policy capability) therefore
+        (Qore::SandboxManager::isRestricted(), also through a policy barrier or a system-policy capability) therefore
         registers nothing in the process-wide catalog: no app, pending app, action, pending or lazy action
         registration, file API, factory or type; modules register them in their initialization, which no sandbox
         governs.  A deferred initialization that trusted code registered (registerPendingApp(),
@@ -79,7 +79,7 @@ class DataProviderSandboxState {
     */
     static checkRegistration(string what, string name, *bool removal) {
         # a deferred initialization that trusted code registered runs also on a sandboxed reader's thread
-        if (SandboxManager::isSandboxed() && !Priv::_trusted_deferred_init) {
+        if (SandboxManager::isRestricted() && !Priv::_trusted_deferred_init) {
             throw "DATA-PROVIDER-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s %s %y in the "
                 "process-wide data provider catalog", removal ? "remove" : "register", what, name);
         }

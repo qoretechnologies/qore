@@ -96,6 +96,8 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("an explicitly sandboxed caller is refused an undeclared external I/O app",
             \explicitSandboxedTest());
         addTestCase("a sandboxed caller is refused an undeclared external I/O app", \sandboxedTest());
+        addTestCase("code that a sandbox allowing uncontrolled APIs governs is trusted for the rule",
+            \uncontrolledApiPolicyTest());
         addTestCase("a system-policy capability called by sandboxed code is refused unless it says it is trusted",
             \capabilityTest());
         addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
@@ -148,10 +150,17 @@ public class AppExternalIoTest inherits QUnit::Test {
     }
 
     #! Returns a Program with a sandbox that calls the code it is given
-    private static Program getSandboxed(int opts = PO_NEW_STYLE) {
+    /** @param allow_uncontrolled whether the sandbox allows uncontrolled APIs, as a host's sandbox for trusted code
+        does (SandboxManager::setUncontrolledApiPolicy())
+    */
+    private static Program getSandboxed(int opts = PO_NEW_STYLE, bool allow_uncontrolled = False) {
         SandboxManager sm();
         sm.blockPrivateNetworks();
         sm.setNetworkDefaultPolicy(True);
+        if (allow_uncontrolled) {
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setUncontrolledApiPolicy(True);
+        }
         Program p(opts);
         p.setSandboxManager(sm);
         p.parse("auto sub through(code c) { return c(); }", "app-external-io-sandbox");
@@ -309,6 +318,40 @@ public class AppExternalIoTest inherits QUnit::Test {
                 p.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, False); });
             }
         }
+    }
+
+    uncontrolledApiPolicyTest() {
+        hash<DataProviderAppInfo> app = appInfo("AppExternalIoPolicy", {"external_io": True});
+        code check = sub () { DataProviderActionCatalog::checkSandboxAccess(app); };
+
+        # a sandbox that a host attaches to trusted code for its limits or interrupts, and that allows uncontrolled
+        # APIs: its code is not restricted, so it is not refused the app
+        Program trusted = getSandboxed(PO_NEW_STYLE, True);
+        assertTrue(trusted.callFunction("through", \SandboxManager::isSandboxed()), "a sandbox governs it");
+        assertFalse(trusted.callFunction("through", \SandboxManager::isRestricted()), "it is not restricted");
+        trusted.callFunction("through", check);
+        # also under a policy barrier and in a capability
+        trusted.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(check); });
+        trusted.callFunction("through", SandboxManager::createSystemPolicyCall(check));
+
+        # the default sandbox refuses uncontrolled APIs: its code is restricted
+        Program restricted = getSandboxed();
+        assertTrue(restricted.callFunction("through", \SandboxManager::isRestricted()), "the default is restricted");
+        assertRefused(app, sub () { restricted.callFunction("through", check); }, "the default sandbox");
+
+        # code that the trusting sandbox governs and that runs a callback that the restricted code created: both
+        # govern it, and the restricting sandbox decides
+        code restricted_check = restricted.callFunction("through", code sub () {
+            return sub () { DataProviderActionCatalog::checkSandboxAccess(app); };
+        });
+        assertRefused(app, sub () { trusted.callFunction("through", restricted_check); },
+            "a callback of restricted code run under a trusting sandbox");
+
+        # the factories and connections of the catalog decide the same way: an explicit decision is not changed
+        trusted.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, False); });
+        assertRefused(app, sub () {
+            trusted.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, True); });
+        }, "a consumer that decides the caller is sandboxed");
     }
 
     capabilityTest() {

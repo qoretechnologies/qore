@@ -57,7 +57,7 @@ module RestClientDataProvider {
         # initialized with no sandbox provenance and registers them; when sandboxed code loads a copy of it by path,
         # its initialization is governed by that sandbox, and they are not registered: REST apps then have no
         # framework-injected generic API call child or action
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             return;
         }
 

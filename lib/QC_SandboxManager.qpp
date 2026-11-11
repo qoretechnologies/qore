@@ -105,6 +105,10 @@ hashdecl SandboxConfigInfo {
     int memory_limit;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
+    //! Whether code that the sandbox governs may use uncontrolled APIs (see SandboxManager::setUncontrolledApiPolicy())
+    /** @since %Qore 3.0
+    */
+    bool uncontrolled_api_policy;
 }
 
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
@@ -669,6 +673,60 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
     return sm->filesystem().getDefaultPolicy();
 }
 
+//! Sets whether code that the sandbox governs may use uncontrolled APIs
+/** Uncontrolled APIs - functions, methods and classes of the @ref Qore::PO_NO_UNCONTROLLED_APIS
+    "uncontrolled API" functional domain, such as the Java classes of the \c jni module and the Python objects of the
+    \c python module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
+    the parse options of the sandbox apply to what they do.  By default a sandbox refuses them at run time, as
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" does: a call raises \c INVALID-FUNCTION-ACCESS.
+
+    The refusal is a policy check, resolved as the filesystem and network checks are: it applies to the code that
+    the sandbox governs, to library module code that runs for that code, and to objects and callbacks created under
+    the sandbox, also when trusted code calls them later.  A system-policy capability of trusted code
+    (createSystemPolicyCall()) is not refused.  When more than one sandbox governs the code, the uncontrolled APIs are
+    allowed only if every one of them allows them.
+
+    A host that attaches a sandbox only for its resource limits, interrupts or I/O policy, and trusts the code to use
+    uncontrolled APIs, allows them.
+
+    @param allow @ref Qore::True "True" to allow code that the sandbox governs to use uncontrolled APIs,
+    @ref Qore::False "False" (the default) to refuse them
+
+    @par Example:
+    @code{.py}
+# a sandbox for interrupting trusted code: the code may use Java and Python
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+sm.setUncontrolledApiPolicy(True);
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR sandboxed code, or code whose functional domains are restricted, tried to allow
+    uncontrolled APIs for a sandbox that its own Program did not create
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setUncontrolledApiPolicy(bool allow) [flags=NAMED_ARGS] {
+    // denying only adds restrictions (see qore_sandbox_manager_check_change())
+    if (allow && qore_sandbox_manager_check_change(sm, "SandboxManager::setUncontrolledApiPolicy()", xsink)) {
+        return QoreValue();
+    }
+    sm->setUncontrolledApiPolicy(allow);
+}
+
+//! Returns whether code that the sandbox governs may use uncontrolled APIs
+/** @return @ref Qore::True "True" if code that the sandbox governs may use uncontrolled APIs, @ref Qore::False
+    "False" if they are refused (the default)
+
+    @see setUncontrolledApiPolicy()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::getUncontrolledApiPolicy() [flags=CONSTANT] {
+    return sm->getUncontrolledApiPolicy();
+}
+
 //! Returns the filesystem security configuration
 /** @return a @ref FilesystemSecurityConfigInfo hash with the current filesystem security configuration
 
@@ -1134,6 +1192,61 @@ if (SandboxManager::isSandboxed()) {
 static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     return static_cast<bool>(governing);
+}
+
+//! Returns @ref True if the current thread's code may use uncontrolled APIs
+/** Resolves the sandboxes that govern the code as isGoverned() does, as the filesystem and network checks do: a policy
+    barrier (callWithSystemPolicy()) and a system-policy capability of trusted code (createSystemPolicyCall()) are
+    honoured.  Uncontrolled APIs are allowed if no sandbox governs the code or if every governing sandbox allows them
+    (setUncontrolledApiPolicy()).
+
+    Like isSandboxed(), it reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @return @ref True if the code may use uncontrolled APIs, @ref False if a governing sandbox refuses them
+
+    @see
+    - isRestricted(), which sees the sandbox through a policy barrier
+    - setUncontrolledApiPolicy()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isUncontrolledApiAllowed() [flags=RET_VALUE_ONLY] {
+    return qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy);
+}
+
+//! Returns @ref True if a sandbox that does not trust the current thread's code governs it, also inside a policy barrier
+/** Resolves the governing sandbox as isSandboxed() does, through any policy barrier or system-policy capability, and
+    returns @ref True only if a governing sandbox refuses uncontrolled APIs (setUncontrolledApiPolicy(), the default).
+    A sandbox that a host attaches only for resource limits, interrupts or I/O policy, and that allows uncontrolled
+    APIs, does not make its code restricted: the host trusts that code to run arbitrary code in Java or Python, which can
+    reach everything that a restriction based on this method protects.
+
+    Trusted infrastructure uses it where a sandboxed caller must be refused something that changes what the process
+    does for others, or that does I/O the sandbox does not control (for example the
+    @ref DataProvider::DataProviderAppInfo::external_io "external_io" apps of the data provider catalog), and
+    isSandboxed() where it decides where work runs.
+
+    It masks nothing and reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @return @ref True if a governing sandbox refuses uncontrolled APIs, also through a policy barrier; @ref False if
+    no sandbox governs the code or every governing sandbox allows them
+
+    @par Example:
+    @code{.py}
+# a process-wide registration: refused to tenants, allowed to trusted code that a sandbox governs only for interrupts
+if (SandboxManager::isRestricted()) {
+    throw "ACCESS-DENIED", "sandboxed code cannot register a process-wide handler";
+}
+    @endcode
+
+    @see
+    - isSandboxed()
+    - isUncontrolledApiAllowed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isRestricted() [flags=RET_VALUE_ONLY] {
+    return !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All);
 }
 
 //! Returns the configuration of each sandbox that governs the filesystem and network access of the current thread's code

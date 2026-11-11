@@ -709,7 +709,8 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     (also when trusted code created them, and also as subclasses defined elsewhere), and data provider consumers that
     serve a sandboxed caller on another thread apply the rule with
     @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()"
-    or \c AbstractConnection::checkSandboxAccess(); trusted callers are not affected.
+    or \c AbstractConnection::checkSandboxAccess(); trusted callers are not affected.  A caller counts as sandboxed
+    for this rule when a sandbox that refuses uncontrolled APIs governs it (see @ref sandbox_uncontrolled_api).
 
     The module commands of the \c jni module follow the same model: a Program's own classpath entries
     (\c add-classpath, \c add-relative-classpath, and the \c classpath option of the \c jdbc database driver) are
@@ -721,6 +722,34 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") and has no @ref Qore::SandboxManager "SandboxManager" is not
     sandboxed for this rule; such a Program cannot use the \c jni module's Java classes itself.
+
+    @subsection sandbox_uncontrolled_api Uncontrolled APIs and Trusted Code That a Sandbox Governs
+
+    A host may attach a @ref Qore::SandboxManager "SandboxManager" to code that it trusts, only for its resource
+    limits, interrupts and force-termination, or its I/O policy.  Such code is not sandboxed in the sense of the rules
+    above: it may use uncontrolled APIs (Java, Python, and other code that does I/O %Qore does not see), and the host
+    says so with @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy(True)".
+    The default is to refuse them, so a sandbox fails closed.
+
+    The policy decides whether code counts as restricted for every rule that protects the process from sandboxed code
+    rather than applying a filesystem or network policy: the @ref DataProvider::DataProviderAppInfo "external_io"
+    apps of the data provider catalog and their factories and connections, the process-wide registrations of the data
+    provider catalog (apps, actions, change listeners, process-wide callbacks), and the module checks that use the
+    same query.  @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()" answers it, seeing the
+    sandbox through a policy barrier or a system-policy capability as
+    @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()" does;
+    @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" answers it as
+    a policy check, honouring them; module code in C++ uses \c qore_sandbox_allows_uncontrolled_apis().  When more
+    than one sandbox governs the code, the uncontrolled APIs are allowed only if every one of them allows them.
+
+    @code{.py}
+# trusted code, governed by a sandbox only so that it can be interrupted
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+sm.setUncontrolledApiPolicy(True);
+pgm.setSandboxManager(sm);
+    @endcode
 
     @section sandbox_resources Resource Limits
 

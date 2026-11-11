@@ -479,7 +479,8 @@ code sub get_closure() {
         assertEq(1500, sm.getWallTimeLimit());
         assertEq(1500, sm.getConfiguration().wall_time_limit, "configuration key");
         assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
-            "memory_limit", "interrupt_requested"), keys sm.getConfiguration(), "configuration keys");
+            "memory_limit", "interrupt_requested", "uncontrolled_api_policy"), keys sm.getConfiguration(),
+            "configuration keys");
         sm.setWallTimeLimit(max_wall_time_ms: 2500);
         assertEq(2500, sm.getWallTimeLimit(), "named argument");
 

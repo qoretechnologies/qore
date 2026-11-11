@@ -1085,7 +1085,10 @@ AbstractDataProviderType output_type = action.output_type;
     never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
     thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
     registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
-    way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    way.  Every decision on where code runs uses Qore::SandboxManager::isSandboxed(), and every refusal
+    (listeners, process-wide callbacks, registrations) Qore::SandboxManager::isRestricted(), which is true only for a
+    sandbox that refuses uncontrolled APIs; neither is restricted, so the catalog decides the same for callers
+    restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
     loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
@@ -2016,7 +2019,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     */
     static int addCatalogChangeListener(DataProviderCatalogChangeListener listener) {
         # a listener runs on the threads that change the catalog, of other tenants and of trusted code
-        if (DataProviderActionCatalog::isGoverned()) {
+        if (SandboxManager::isRestricted()) {
             throw "DATA-PROVIDER-LISTENER-ERROR", "code that a sandbox governs cannot add a catalog change listener: it "
                 "would run on the threads of other code that changes the catalog";
         }
@@ -2086,7 +2089,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             throw "PERMISSION-DENIED", "cannot hold the catalog lock from a context with restricted process control";
         }
         # test hooks are for trusted test code only
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
         }
         lck.lock();
@@ -2260,7 +2263,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
         }
         # test hooks are for trusted test code only
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
         }
         delivery_test_hook = hook;
@@ -3048,7 +3051,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @throw APP-ERROR missing or invalid attributes, app already registered
         @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the app is sandboxed
-        (Qore::SandboxManager::isSandboxed()) (since %DataProvider 3.12)
+        (Qore::SandboxManager::isRestricted()) (since %DataProvider 3.12)
     */
     static registerApp(hash<DataProviderAppInfo> app) {
         # an app name taken by sandboxed code would be denied to the module that owns it
@@ -3514,7 +3517,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         with no sandbox provenance, and can)
     */
     private:internal static checkNotGoverned(string what) {
-        if (DataProviderActionCatalog::isGoverned()) {
+        if (SandboxManager::isRestricted()) {
             throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would run on the "
                 "threads of other tenants and of trusted code", what);
         }
@@ -4198,13 +4201,14 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         sandbox does not govern.
 
         @param app the app's registered info; its \c name and \c display_name name it in the error
-        @param sandboxed whether the caller is sandboxed; if not given, the caller is sandboxed if a sandbox governs
-        the current thread's code (Qore::SandboxManager::isSandboxed()), also through a policy barrier or a
+        @param sandboxed whether the caller is sandboxed; if not given, the caller is sandboxed if a sandbox that
+        refuses uncontrolled APIs governs the current thread's code (Qore::SandboxManager::isRestricted()), also
+        through a policy barrier or a
         system-policy capability, so that the check fails closed: trusted code that uses the app on purpose in a
         capability called by sandboxed code passes @ref False.  Consumers that serve a sandboxed caller from a
         thread that no sandbox governs (for example a server thread that runs a request for a tenant) pass
         @ref True.  A consumer decides this value from what it knows about the caller, and never forwards a value
-        that the caller supplied.  Qore::SandboxManager::isSandboxed() is used because it is not restricted, so the
+        that the caller supplied.  Qore::SandboxManager::isRestricted() is used because it is not restricted, so the
         module can be loaded first by a Program restricted with
         @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"
 
@@ -4224,7 +4228,7 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         if (DataProviderActionCatalog::isSandboxAllowed(app)) {
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("application %y (%s) does network or filesystem I/O that the "
@@ -4256,7 +4260,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             DataProviderActionCatalog::checkSandboxAccess(info, sandboxed);
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("application %y is not registered, so whether sandboxed code may "
@@ -4306,7 +4310,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         if (!module_name || !exists external_io_module_apps{module_name}) {
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("%s %y belongs to module %y, which registers application(s) %y "
@@ -4827,7 +4831,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         # the provider reaches the app's I/O: a sandboxed caller is refused an app whose external I/O its sandbox does
         # not control (see @ref dataprovider_external_io); checked after the module is loaded, which can register the
         # app; an app that is not registered is refused to sandboxed callers too
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             DataProviderActionCatalog::checkActionSandboxAccess(action);
         }
         hash<auto> constructor_opts;
@@ -6050,7 +6054,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 "control";
         }
         # test hooks are for trusted test code only
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
         }
         AutoLock al(lazy_worker_lck);
