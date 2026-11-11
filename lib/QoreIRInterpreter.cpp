@@ -8256,13 +8256,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // The contexts open at each
     // instruction are known from the IR (QoreIRFunction::interpreter_open_implicit_contexts), so the normal path does
     // nothing for them
-    auto restoreImplicitContexts = [&]() {
+    // (done in unwindForException() itself, not in a lambda of its own: each lambda that the frame defines is
+    // constructed with its captures on every call of the function)
+    auto unwindForException = [&]() {
         if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
             restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
         }
-    };
-    auto unwindForException = [&]() {
-        restoreImplicitContexts();
         if (!active_iterators.empty()) {
             releaseOperatorIterators(active_iterators);
         }
@@ -13257,8 +13256,8 @@ load_local_done:
             case QoreIROpcode::PushImplicitArg: {
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 // Save old context: the slot borrows it, as the thread's context does not change hands until the
-                // PopImplicitArg that restores it (or the frame's exit, see restoreImplicitContexts) runs, and only
-                // its owner releases it after that; taking a reference cost every element a reference, a cleanup
+                // PopImplicitArg that restores it (or the frame's exit, see restoreOpenImplicitContexts()) runs, and
+                // only its owner releases it after that; taking a reference cost every element a reference, a cleanup
                 // entry and their release (qore#5670)
                 const QoreListNode* old_argv = thread_get_implicit_args();
                 // Create new argv with val as $1
