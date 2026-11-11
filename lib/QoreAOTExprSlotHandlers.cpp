@@ -1082,6 +1082,9 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     if (!ucf) {
         return false;
     }
+    // the location of the closure (see v25)
+    qore_aot_write_source_location(ctx.writer, ctx.writer.omit_source_locations ? nullptr
+        : qore_aot_closure_location(ucf));
     auto* variant = static_cast<const UserClosureVariant*>(ucf->first());
     const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
 

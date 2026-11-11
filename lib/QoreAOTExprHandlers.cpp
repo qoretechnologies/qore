@@ -1384,6 +1384,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
+    // the location of the closure (see v25), which its signature gets
+    const QoreProgramLocation* closure_loc = nullptr;
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    }
 
     bool is_lambda = false, is_in_method = false;
     if (flags_str) {
@@ -1468,7 +1473,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+        closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+        closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
         std::vector<uint8_t>(), ctx.local_owner_pgm);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);

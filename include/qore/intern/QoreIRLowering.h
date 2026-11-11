@@ -917,6 +917,10 @@ private:
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
+    uint16_t debug_nest_depth = 0;
+    //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
+    int debug_catch_child_depth = -1;
 
     //! Returns the number of active catch scopes that a throw or rethrow statement at the current point leaves
     /** These are the catch scopes entered since the body of the innermost enclosing try statement began, or all of

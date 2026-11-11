@@ -3807,7 +3807,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(catch_var_entry);
         }
         ++catch_cleanup_depth;
-        if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
+        // the statements of the catch block are marked for the debugger's exception events (#5816)
+        int old_debug_catch_child_depth = debug_catch_child_depth;
+        debug_catch_child_depth = debug_nest_depth;
+        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error);
+        debug_catch_child_depth = old_debug_catch_child_depth;
+        if (!catch_ok) {
             --catch_cleanup_depth;
             if (catch_var) {
                 cleanup_stack.pop_back();
@@ -4099,9 +4104,29 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // In a function that can be debugged, the debugger's step event for the statement comes first, as with
         // the AST interpreter (StatementBlock::execImpl()); an exception that the debugger raises is raised by the
         // statement.
+        //
+        // The instruction records the nesting of the statement, for the debugger's exception events of each statement
+        // that an exception leaves (#5816), and the debug IR of AOT code marks the end of each statement, where a frame
+        // continues when a debugger dismisses an exception of the statement.
+        const uint16_t statement_depth = debug_nest_depth;
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
-            builder.createDebugStatement(*it)->exception_target = getCurrentExceptionTarget();
+            auto* dbg = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugStatement(*it));
+            dbg->exception_target = getCurrentExceptionTarget();
+            dbg->nest_depth = statement_depth;
+            dbg->nest_flags = QORE_IR_DEBUG_NEST_VALID
+                | (dynamic_cast<const TryStatement*>(*it) ? QORE_IR_DEBUG_NEST_TRY : 0)
+                | (static_cast<int>(statement_depth) == debug_catch_child_depth ? QORE_IR_DEBUG_NEST_IN_CATCH : 0);
         }
+        // the statements of the blocks of the statement are one level deeper
+        struct DebugNestDepthHelper {
+            uint16_t& depth;
+            DebugNestDepthHelper(uint16_t& d) : depth(d) {
+                ++depth;
+            }
+            ~DebugNestDepthHelper() {
+                --depth;
+            }
+        } debug_nest_depth_helper(debug_nest_depth);
         bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
         uint32_t previous_exception_temp_scope_id = builder.getExceptionTempScopeId();
         if (statement_needs_cleanup) {
@@ -4137,6 +4162,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             }
             terminated = true;
             break;
+        }
+        if (builder.getFunction()->emit_debug_statements) {
+            builder.createDebugStatementEnd(statement_depth, (*it)->loc);
         }
         if (statement_needs_cleanup) {
             createDiscardTemps((*it)->loc);

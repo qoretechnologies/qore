@@ -2901,9 +2901,20 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {
+            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), location (v25), return type
             if (!dump_skip_string_ref(reader, p, end)
-                    || !dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                return false;
+            }
+            if (!dump_skip_string_ref(reader, p, end)) {
                 return false;
             }
             uint16_t nparams = 0;

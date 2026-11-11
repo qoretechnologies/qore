@@ -349,8 +349,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      and its location (qore_aot_write_source_location()), which the call node that is read gets, so that the
 //!      frame of the call and its exceptions have the lines of the call; a class member record ends with the
 //!      location of its declaration; a call form of a default argument (has_default 2, 4 or 6) ends with the
-//!      location of the call.  The locations are kept out of the aggregate digests
-//!      (QoreAOTBinaryWriter::omit_source_locations).
+//!      location of the call; a closure record (CLOSURE_CREATE) has the location of the closure's block after its
+//!      native body key (#5816).  The locations are kept out of the aggregate digests
+//!      (QoreAOTBinaryWriter::omit_source_locations).  A DebugStatement or DebugBlock instruction of the debug IR has
+//!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
+//!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
+//!      of the statements that contain the one that raised an exception, and the continuation after a statement
+//!      whose exception a debugger dismissed, are those of the AST interpreter (#5816).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
 //! First format version with source locations of calls, members and default arguments (see v25 above).
@@ -1565,6 +1570,13 @@ DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const 
 
 //! Returns true if a node has a source location that AOT serializes (qore_aot_write_source_location())
 DLLLOCAL bool qore_aot_has_source_location(const QoreProgramLocation* loc);
+
+class UserClosureFunction;
+//! Returns the source location of a closure, which its record carries from format version 25 (#5816)
+/** the location of the block of its code, which the debugger's events of the closure are given with; its signature
+    when read from an AOT image gets it
+*/
+DLLLOCAL const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* ucf);
 
 //! Deserializes a source location written by qore_aot_write_source_location()
 /** @return the location, interned in the Program, or nullptr if none was written (lines 0) or there is no Program

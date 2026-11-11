@@ -12,11 +12,16 @@
 %modern
 %allow-debugger
 
-#! records the exception events of the functions in this file; dismisses the exceptions of f_dismiss()
+#! records the exception events of the functions in this file; dismisses the given event of an exception
 class ExceptionRecorder inherits DebugProgram {
     public {
         list<string> seen = ();
-        bool dismiss_division = False;
+        #! the code of the exception whose event dismiss_nth is dismissed
+        *string dismiss_err;
+        #! the event of the exception to dismiss, from 1
+        int dismiss_nth;
+        #! the events of the exception so far
+        int dismiss_seen;
         #! the run state that the debugger gives the thread
         int run_state = Step ? DebugStep : DebugRun;
     }
@@ -49,7 +54,7 @@ class ExceptionRecorder inherits DebugProgram {
             return;
         }
         seen += sprintf("%s@%d", ex.err, i.start_line + i.offset);
-        if (dismiss_division && ex.err == "DIVISION-BY-ZERO") {
+        if (ex.err == dismiss_err && ++dismiss_seen == dismiss_nth) {
             dismiss = True;
         }
     }
@@ -61,8 +66,8 @@ class ExceptionRecorder inherits DebugProgram {
 our bool Step = ARGV[0] == "step";
 
 #! the first and the last line of the functions
-const FirstLine = 67;
-const LastLine = 127;
+const FirstLine = 72;
+const LastLine = 138;
 
 sub f_throw() {
     throw "B";
@@ -125,6 +130,12 @@ sub f_on_error_rethrow_caught() {
     int y = 1 / z;
     return 2;
 }
+*int sub f_dismiss_enclosing(int x) {
+    if (x) {
+        throw "DE";
+    }
+    return 5;
+}
 
 ExceptionRecorder r();
 ProgramControl pc = ProgramControl::getProgram();
@@ -144,9 +155,15 @@ background sub () {
         }
         printf("%s: %y\n", fn, r.seen);
     }
-    r.seen = ();
-    r.dismiss_division = True;
-    *int rv = call_function("f_dismiss");
-    printf("f_dismiss: %y rv=%y\n", r.seen, rv);
+    # an exception of an operator dismissed at its statement, and a throw dismissed at the if statement that contains
+    # it: the function continues after the statement
+    foreach list<auto> d in ((("f_dismiss", "DIVISION-BY-ZERO", 1), ("f_dismiss_enclosing", "DE", 2))) {
+        r.seen = ();
+        r.dismiss_err = d[1];
+        r.dismiss_nth = d[2];
+        r.dismiss_seen = 0;
+        *int rv = d[0] == "f_dismiss_enclosing" ? call_function(d[0], 1) : call_function(d[0]);
+        printf("%s: %y rv=%y\n", d[0], r.seen, rv);
+    }
 }();
 cnt.waitForZero();

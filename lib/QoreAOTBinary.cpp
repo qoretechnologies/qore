@@ -12093,6 +12093,18 @@ bool qore_aot_has_source_location(const QoreProgramLocation* loc) {
     return loc && loc->start_line > 0 && loc->getFile() && *loc->getFile();
 }
 
+const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* ucf) {
+    const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        return nullptr;
+    }
+    if (const StatementBlock* b = uvb->getStatementBlock()) {
+        return b->loc;
+    }
+    return const_cast<UserVariantBase*>(uvb)->getUserSignature()->getParseLocation();
+}
+
 //! Classify and write a QoreValue expression in AOTExprKind format, without the source location of a call
 /** See classifyAndWriteExpr()
 */
@@ -13392,6 +13404,9 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     // slot carries the native key when one is available.
                     writer.writeStringRef("");
                 }
+                // the location of the closure (see v25)
+                qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr
+                    : qore_aot_closure_location(ucf));
 
                 // Write return type
                 writeTypePathRef(writer, sig->getReturnTypeInfo());
