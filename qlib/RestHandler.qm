@@ -1537,8 +1537,9 @@ public namespace RestHandler {
                     }
 
                     if (!c) {
+                        *hash<string, bool> subclasses = doGetPossibleSubClasses(rcx, args);
                         throw "REST-CLASS-ERROR", sprintf("unknown root REST class %y in path %y (valid classes: %y)",
-                            cls, rcx.url.path, sort(keys doGetPossibleSubClasses(rcx, args))), 404;
+                            cls, rcx.url.path, subclasses ? sort(keys subclasses) : NOTHING), 404;
                     }
                 }
                 rcls = c;

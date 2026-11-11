@@ -46,6 +46,8 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_thread_intern.h"
+// the debug-build counters of the synchronous releases (qore_dbg_sync_release_taken/refused)
+#include "qore/intern/ql_debug.h"
 
 #include <algorithm>
 #include <cerrno>
