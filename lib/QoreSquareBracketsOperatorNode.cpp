@@ -649,7 +649,8 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                     if (*xsink)
                         return QoreValue();
 
-                    assert(entry->getType() != NT_LIST);
+                    // the entry is an element of the list, which can be a list itself: ll[0..1, 2] with
+                    // ll = ((1, 2), (3, 4), (5, 6)) selects lists
 
                     if (!it.index()) {
                         vtype = entry->getTypeInfo();

@@ -34851,8 +34851,9 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
 }
 
 // Phase 5b: Try to emit specialized list index access.
-// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode
-// with a known integer index operand, emits qore_rt_list_index_access.
+// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode with a single index operand,
+// emits qore_rt_list_index_access_compat() for an index that cannot be a list, and for a boxed index that can be a
+// list, a runtime int48 check that calls qore_rt_list_index_dynamic() for any other value (ex: a list of indexes).
 bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
         llvm::Function* llvm_func) {
     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
