@@ -572,6 +572,12 @@
     limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
+    @par The Signal Handling Thread Is Woken With SIGRTMIN+1 on Linux
+    On Linux, the signal that wakes the signal handling thread is the real-time signal \c SIGRTMIN+1 instead of
+    @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
+    a %Qore-language handler; valgrind and seccomp filters no longer interfere with the wake-up (see
+    @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and

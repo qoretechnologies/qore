@@ -139,7 +139,7 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     }
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
-        fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
+        fmap[QORE_STATUS_SIGNAL] = QORE_STATUS_SIGNAL_DESC;
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
         fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
@@ -278,6 +278,14 @@ void QoreSignalManager::reload() {
 // relying on that signal. On platforms without timed signal waits, report the fatal failure instead of hanging.
 void QoreSignalManager::wake_signal_thread_unlocked() {
     int rc = pthread_kill(ptid, QORE_STATUS_SIGNAL);
+#if defined(__linux__) && defined(SIGRTMIN) && defined(HAVE_SIGTIMEDWAIT)
+    // the wake-up is a real-time signal, which is queued: EAGAIN means that the process's queue of pending real-time
+    // signals is full (RLIMIT_SIGPENDING); the command is recorded under the lock, and the timed signal wait of the
+    // signal thread (below) sees it without the signal, so it is not reported
+    if (rc == EAGAIN) {
+        return;
+    }
+#endif
     if (rc) {
 #ifdef HAVE_SIGTIMEDWAIT
         fprintf(stderr, "Qore signal manager: internal wakeup failed: %s; using timed signal wait\n", strerror(rc));
