@@ -104,7 +104,10 @@ public:
             // or the operator's expression can assign the variable another value, which released the only
             // reference to the sequence while it was iterated (qore#5675)
             : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
-              rightList(rhs->get<const QoreListNode>()),
+              // the list of indices is held as the sequence is: a list that the selectors evaluated to is a temporary
+              // whose reference the iterator takes, which was never released (qore#5684)
+              rightValue(rhs.isTemp() ? *rhs : rhs->refSelf(), true, xsink),
+              rightList(rightValue->get<const QoreListNode>()),
               string_index_char(string_index_char),
               negative_offsets(negative_offsets) {
         lhs.clearTemp();
@@ -119,6 +122,8 @@ public:
 
 protected:
     ValueOptionalRefHolder leftValue;
+    //! the list of indices
+    ValueOptionalRefHolder rightValue;
     const QoreListNode* rightList;
     qore_offset_t offset = -1;
     bool string_index_char = true;

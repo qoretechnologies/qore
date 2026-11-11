@@ -1207,6 +1207,11 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         frame = topFrame(dap, tid);
         assertEq(2, frame.line);
         assertEq("4", evaluate(dap, tid, "x").body.result);
+        # the frame of the caller is located at the call of g(), with the columns of its step-in target
+        r = dap.request("stackTrace", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        hash<auto> caller = r.body.stackFrames[1];
+        assertEq((4, 4, 9, 16), (caller.line, caller.endLine, caller.column, caller.endColumn));
 
         # line 5 calls g() only in h(), so it has h() only
         r = dap.request("continue", {"threadId": tid});

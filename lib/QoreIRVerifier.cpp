@@ -1883,6 +1883,9 @@ static bool qore_ir_opcode_never_gives_reference(QoreIROpcode op) {
         case QoreIROpcode::ToString:
         case QoreIROpcode::ToInt:
         case QoreIROpcode::ToFloat:
+        case QoreIROpcode::ToStringChecked:
+        case QoreIROpcode::ToIntChecked:
+        case QoreIROpcode::ToFloatChecked:
         case QoreIROpcode::Sprintf:
         case QoreIROpcode::SprintfIntFixed:
         // sizes and string results

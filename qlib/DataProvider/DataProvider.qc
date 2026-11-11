@@ -573,11 +573,17 @@ public class DataProvider {
     }
 
     #! Register a new data provider factory
-    /** @param factory the new data provider factory
+    /** Sandboxed code registers no factory: a factory name that it took would be denied to the module that owns it
+
+        @param factory the new data provider factory
 
         @throw PROVIDER-ERROR the given provider has already been registered
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the factory is sandboxed
+        (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
     static registerFactory(AbstractDataProviderFactory factory) {
+        # a factory name taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider factory", factory.getName());
         # Resolve object-backed metadata before taking the shared registry Gate. AOT module
         # initialization can register factories concurrently in separate Programs, and these
         # calls can acquire the factory class's Program parse lock. Holding the Gate while
@@ -687,7 +693,8 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).createWithTemplate(template_options, options);
+            provider = DataProvider::getFactoryEx(shift path_list).createWithTemplate(template_options,
+                options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -981,6 +988,8 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         and therefore not suitable for indexing)
     */
     static registerType(string path, AbstractDataProviderType type) {
+        # a type path taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider type", path);
         try {
             type_cache.registerType(path, type, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {

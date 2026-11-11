@@ -57,7 +57,7 @@ class StabilityCatalogTest inherits QUnit::Test {
                 AbstractDataProviderType type = original;
                 for (int pass = 0; pass < 3; ++pass) {
                     type = Serializable::deserialize(type.serialize());
-                    assertEq(sort(keys original.getFields()), sort(keys type.getFields()));
+                    assertEq(sort((keys original.getFields()) ?? ()), sort((keys type.getFields()) ?? ()));
                 }
             }
         }

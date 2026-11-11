@@ -1586,6 +1586,9 @@ class WebSocketStreamProcessor {
         #! Counter to signal when the stream closes
         Counter done;
 
+        #! Called once when the stream closes, if set; protected by @ref close_lock (see @ref setDoneCallback())
+        *code<nothing()> done_callback;
+
         #! Mutex to serialize I/O processing (held during processFrames() and its gotMessage/sendData calls)
         /** Note: this mutex may be held for extended periods while blocking on user code or
             QUIC stream writes. It must NOT be used to protect shutdown-critical state, and
@@ -1678,13 +1681,35 @@ class WebSocketStreamProcessor {
         self.last_recv_ms = clock_getmillis();
     }
 
+    #! Sets the code that ends the stream once it has closed, in place of a thread waiting for @ref done
+    /** The code is called once, in the thread that closes the stream (an async I/O callback worker, for example), so
+        it must not block or run user code itself: the handler's code submits the end of the stream to a thread of the
+        server's handler pool.  If the stream has closed already, the code is called now (qore#5752).
+
+        @param cb the code to call
+
+        @since WebSocketHandler 2.8
+    */
+    setDoneCallback(code<nothing()> cb) {
+        {
+            AutoLock al(close_lock);
+            if (!closed) {
+                done_callback = cb;
+                return;
+            }
+        }
+        cb();
+    }
+
     #! Atomic check-and-set: marks the stream closed and decrements @ref done exactly once
     /** Uses @ref close_lock (never held during I/O) so shutdown is not blocked by
-        a worker thread stuck in @ref notifyIo() (which holds @ref process_mutex).
+        a worker thread stuck in @ref notifyIo() (which holds @ref process_mutex).  Calls the done callback, if set
+        (see @ref setDoneCallback()).
         @return @ref True if this call performed the close; @ref False if already closed
     */
     private bool markClosedOnce() {
         *int close_timer;
+        *code<nothing()> cb;
         {
             AutoLock al(close_lock);
             if (closed) {
@@ -1692,6 +1717,7 @@ class WebSocketStreamProcessor {
             }
             closed = True;
             close_timer = remove close_timer_id;
+            cb = remove done_callback;
         }
         if (close_timer) {
             try {
@@ -1701,6 +1727,13 @@ class WebSocketStreamProcessor {
         }
         cancelHeartbeatTimer();
         done.dec();
+        if (cb) {
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                handler.logError("exception ending a WebSocket stream: %s", get_exception_string(ex));
+            }
+        }
         return True;
     }
 
@@ -2808,15 +2841,19 @@ handler.setCloseTimeout(2s);
     }
 
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
-    /** This method should not return until the connection is closed or the stop() method is called.
-
-        Depending on the transport, the method delegates I/O to different async mechanisms:
+    /** Depending on the transport, the method delegates I/O to different async mechanisms:
         - <b>HTTP/1.1 async</b>: an @ref Qore::HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" C++ poll
-          operation drives frame decode/encode, heartbeat, and close handshake on the I/O thread; this handler
-          thread blocks on a @ref Qore::Thread::Counter until the connection closes
+          operation drives frame decode/encode, heartbeat, and close handshake on the I/O thread
         - <b>HTTP/2 and HTTP/3</b>: a @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor"
           handles WebSocket frame decode/dispatch on worker threads while the I/O controller manages transport-level
-          I/O; this handler thread blocks on a @ref Qore::Thread::Counter until the stream closes
+          I/O
+
+        With the server's asynchronous I/O, which gives the connection the server's end of it (\c ws_end in the
+        connection's header info), the method returns @ref True (externally managed) as soon as the connection is set
+        up, and the connection's end (this handler's cleanup, \c WebSocketConnection::connectionClosed(), and the
+        server's end) runs on a thread of the server's handler pool when the connection has ended: no thread waits for
+        an open connection, so open connections never take the threads of the handler pool (qore#5752).  Otherwise the
+        method returns when the connection has closed or stop() has been called.
 
         @param lid the unique HTTP listener ID
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
@@ -2957,37 +2994,11 @@ handler.setCloseTimeout(2s);
                 (map $1.getName(), ext_data.extensions));
         }
 
-        on_exit {
-            # Clear async WebSocket poll op resources
-            if (ws_poll_op) {
-                try {
-                    wsc.setWsPollOp();
-                } catch (hash<ExceptionInfo> ex) {
-                    logError("exception clearing WebSocket poll op: %s", get_exception_string(ex));
-                }
-            }
-            # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it
-            try {
-                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-                if (ctx) {
-                    ctx.close();
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                logError("exception closing WebSocket stream: %s", get_exception_string(ex));
-            }
-            try {
-                deregisterConnectionImpl(wsc);
-                wsc.connectionClosed();
-            } catch (hash<ExceptionInfo> ex) {
-                logError("exception deregistering WebSocket connection: %s", get_exception_string(ex));
-            }
-            # a stop that waits for the connection to end (see startClosingConnections()) can go on
-            wsc.markEnded();
-            rwl.writeLock();
-            on_exit rwl.writeUnlock();
-            remove ch{cid};
-            # Safety net: clean up any pending extension data for this connection
-            remove pending_extensions{cid};
+        # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
+        # runs finishConnection() when the connection ends (see endAsyncConnection())
+        bool deferred = False;
+        on_exit if (!deferred) {
+            finishConnection(wsc, ws_poll_op, cid);
         }
 
         # issue #3225: handle exceptions in registered()
@@ -3003,8 +3014,11 @@ handler.setCloseTimeout(2s);
             # The C++ poll op drives frame decode/encode, auto-pong, heartbeat,
             # close handshake, and fragment reassembly on the I/O thread.
             # The onPollComplete() method dispatches frames to gotMessage() on a
-            # worker thread. This handler thread holds the connection in ch{}
-            # and blocks until the connection closes.
+            # worker thread.  No thread waits for the connection to end: this method returns once the connection
+            # is set up, and the poll op runs endAsyncConnection() on a handler-pool thread when it ends.  A
+            # thread of the handler pool waiting for each open connection deadlocked the pool once the open
+            # connections took all its threads, as the end of a connection that received its close frame needs a
+            # thread of the same pool (qore#5752).
 
             # Register with async I/O AFTER setConnection + registered() —
             # this ensures echo mode (and any other connection state) is set
@@ -3025,37 +3039,76 @@ handler.setCloseTimeout(2s);
             # another thread can never be written ahead of the buffered frames
             wsc.enableDirectSend();
 
-            # Block until the connection closes
-            Counter done(1);
-            call_object_method(ws_poll_op, "setDone", done);
+            # the end of the connection: this handler's cleanup, then the server's (the code that the server gives
+            # in the connection's header-info as ws_end), which ran when this method returned while it waited
+            *code<nothing()> server_end = cx."header-info".ws_end;
+            *code<nothing()> accept_end = cx."header-info".ws_accept_end;
+            if (!server_end || !accept_end) {
+                # a server that does not give its end of the connection ends the connection when this method
+                # returns, so this thread waits for the connection to end
+                Counter done(1);
+                call_object_method(ws_poll_op, "setDone", done);
+                # If stop() was called during the setup window (before setWsPollOp() wired the poll op), its
+                # transport close was skipped; replay it now that the poll op is registered.
+                if (wsc.stop_flag) {
+                    wsc.signalTransportClose();
+                }
+                done.waitForZero();
+                # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
+                if (ws_poll_op.hasError()) {
+                    *hash<auto> err = ws_poll_op.getError();
+                    if (err && err.err != "SOCKET-NOT-OPEN") {
+                        logError("WebSocket connection error: %s: %s", err.err, err.desc);
+                    }
+                }
+                logDebug("WebSocketHandler::startImpl() cid: %y connection closed (code %d)", cx.id,
+                    ws_poll_op.getCloseCode());
+                return False;
+            }
+            HttpWebSocketPollOperationBase end_op = ws_poll_op;
+            # the end holds the connection until it has ended it, and then releases it, so that an error of the
+            # connection's destructor is logged (see releaseEndedConnection())
+            *WebSocketConnection end_wsc = wsc;
+            code<nothing()> end = sub () {
+                on_exit releaseEndedConnection(\end_wsc);
+                endAsyncConnection(end_op, end_wsc, cid, lid, server_end);
+            };
+            # from here on the poll op ends the connection; called at once if it has ended already
+            deferred = True;
+            # tell the server that this handler runs its end of the connection (ws_end)
+            accept_end();
+            call_object_method(ws_poll_op, "setDoneCallback", end);
             # If stop() was called during the setup window (before setWsPollOp() wired the poll op),
             # its transport close was skipped; replay it now that the poll op is registered so the
-            # connection is torn down instead of lingering until an unrelated timeout.
+            # connection is torn down instead of lingering until an unrelated timeout.  An error is logged, not
+            # raised: the poll op ends the connection from here on, so this method must report it as externally
+            # managed.
             if (wsc.stop_flag) {
-                wsc.signalTransportClose();
-            }
-            done.waitForZero();
-
-            # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
-            if (ws_poll_op.hasError()) {
-                *hash<auto> err = ws_poll_op.getError();
-                if (err && err.err != "SOCKET-NOT-OPEN") {
-                    logError("WebSocket connection error: %s: %s", err.err, err.desc);
+                try {
+                    wsc.signalTransportClose();
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("exception closing a stopped WebSocket connection: %s", get_exception_string(ex));
                 }
             }
-            logDebug("WebSocketHandler::startImpl() cid: %y connection closed (code %d)",
-                cx.id, ws_poll_op.getCloseCode());
-            return False;
+            # externally managed: start() does not end the listener reference, which endAsyncConnection() ends
+            return True;
         }
 
         # --- HTTP/2 and HTTP/3 WebSocket: async stream processing ---
         # The I/O controller handles transport-level I/O (HTTP/2 DATA frames,
         # HTTP/3 QUIC streams). A WebSocketStreamProcessor handles WebSocket
         # frame decode/dispatch on worker threads. No handler polling loop.
+        # the server's end of the stream, which this handler runs when the stream ends, and the code that runs it on a
+        # thread of the server's handler pool: no thread then waits for the stream (qore#5752)
+        *code<nothing()> server_end = cx."header-info".ws_end;
+        *code<nothing(code<nothing()>)> submit_end = cx."header-info".ws_submit;
+        *code<nothing()> accept_end = cx."header-info".ws_accept_end;
         Counter stream_done(1);
         WebSocketStreamProcessor stream_proc(wsc, self, stream_done);
         wsc.setStreamProcessor(stream_proc);
-        on_exit wsc.setStreamProcessor();
+        on_exit if (!deferred) {
+            wsc.setStreamProcessor();
+        }
 
         # Register the stream processor as a stream data listener
         # The I/O controller dispatches onStreamData() to a worker for both H2 and H3
@@ -3084,6 +3137,33 @@ handler.setCloseTimeout(2s);
         stream_proc.setCloseTimeout(get_duration_milliseconds(close_timeout));
         stream_proc.startHeartbeat(heartbeat, heartbeat_msg, idle_timeout);
 
+        if (server_end && submit_end && accept_end) {
+            # the stream processor ends the stream when it closes, on a thread of the server's handler pool
+            # the end holds the connection until it has ended it (see releaseEndedConnection())
+            *WebSocketConnection end_wsc = wsc;
+            code<nothing()> end = sub () {
+                on_exit releaseEndedConnection(\end_wsc);
+                endAsyncConnection(NOTHING, end_wsc, cid, lid, server_end);
+            };
+            deferred = True;
+            accept_end();
+            stream_proc.setDoneCallback(sub () {
+                submit_end(end);
+            });
+            # If stop() was called during the setup window (before setStreamProcessor() wired the processor), its
+            # transport close was skipped; replay it now that the processor is wired.  An error is logged, not
+            # raised: the stream processor ends the stream from here on.
+            if (wsc.stop_flag) {
+                try {
+                    wsc.signalTransportClose();
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("exception closing a stopped WebSocket stream: %s", get_exception_string(ex));
+                }
+            }
+            # externally managed: start() does not end the listener reference, which endAsyncConnection() ends
+            return True;
+        }
+
         # If stop() was called during the setup window (before setStreamProcessor() wired the
         # processor), its transport close was skipped; replay it now that the processor is wired.
         if (wsc.stop_flag) {
@@ -3098,6 +3178,122 @@ handler.setCloseTimeout(2s);
         stream_done.waitForZero();
         logDebug("WebSocketHandler::startImpl() cid: %y H2/H3 stream closed", cx.id);
         return False;
+    }
+
+    #! Ends a connection that ended without a thread waiting for it
+    /** Runs on a thread of the server's handler pool (see \c HttpWebSocketPollOperation::setDoneCallback() and
+        WebSocketStreamProcessor::setDoneCallback()), where startImpl() ran this after a wait for the connection to
+        end: it logs the end, runs this handler's cleanup (finishConnection()), ends the listener reference that
+        start() took, and runs the server's end of the connection.
+
+        @param ws_poll_op the poll operation of an HTTP/1.1 connection; @ref nothing for an HTTP/2 or HTTP/3 stream
+        @param wsc the connection
+        @param cid the connection ID
+        @param lid the listener ID
+        @param server_end the server's end of the connection, if any
+    */
+    private endAsyncConnection(*HttpWebSocketPollOperationBase ws_poll_op, WebSocketConnection wsc,
+            string cid, string lid, *code<nothing()> server_end) {
+        try {
+            if (ws_poll_op) {
+                # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
+                if (ws_poll_op.hasError()) {
+                    *hash<auto> err = ws_poll_op.getError();
+                    if (err && err.err != "SOCKET-NOT-OPEN") {
+                        logError("WebSocket connection error: %s: %s", err.err, err.desc);
+                    }
+                }
+                logDebug("WebSocketHandler::endAsyncConnection() cid: %y connection closed (code %d)", cid,
+                    ws_poll_op.getCloseCode());
+            } else {
+                logDebug("WebSocketHandler::endAsyncConnection() cid: %y H2/H3 stream closed", cid);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception logging the end of a WebSocket connection: %s", get_exception_string(ex));
+        }
+        if (!ws_poll_op) {
+            try {
+                wsc.setStreamProcessor();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception clearing a WebSocket stream processor: %s", get_exception_string(ex));
+            }
+        }
+        try {
+            # the connection's close callbacks run in this handler's thread-local context, as they did on the
+            # thread that ran startImpl() and as gotMessage() does on a thread of the pool (for example a Qorus
+            # service's context)
+            *hash<auto> tld_save = saveThreadLocalData();
+            on_exit restoreThreadLocalData(tld_save);
+            finishConnection(wsc, ws_poll_op, cid);
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception ending a WebSocket connection: %s", get_exception_string(ex));
+        }
+        handlerStopped(lid);
+        if (server_end) {
+            try {
+                server_end();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception ending a WebSocket connection in the server: %s", get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Releases the end's reference to a connection that has ended
+    /** The connection's destructor runs here when this was its last reference, as it ran when startImpl() returned
+        while it waited for the connection; an error that it raises is logged instead of escaping the handler-pool
+        task.
+
+        @param wsc the end's reference, which is cleared
+    */
+    private releaseEndedConnection(reference<*WebSocketConnection> wsc) {
+        try {
+            wsc = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            logError("WebSocket connection destructor error: %s", get_exception_string(ex));
+        }
+    }
+
+    #! This handler's cleanup of a connection that has ended
+    /** Run when startImpl() returns, or, for an asynchronous HTTP/1.1 connection, by endAsyncConnection(): clears
+        the connection's poll operation, closes its stream context, deregisters it (deregisterConnectionImpl(),
+        \c WebSocketConnection::connectionClosed()), marks it ended and removes it.
+
+        @param wsc the connection
+        @param ws_poll_op the connection's poll operation, if any
+        @param cid the connection ID
+    */
+    private finishConnection(WebSocketConnection wsc, *HttpWebSocketPollOperationBase ws_poll_op,
+            string cid) {
+        # Clear async WebSocket poll op resources
+        if (ws_poll_op) {
+            try {
+                wsc.setWsPollOp();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception clearing WebSocket poll op: %s", get_exception_string(ex));
+            }
+        }
+        # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it
+        try {
+            *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+            if (ctx) {
+                ctx.close();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception closing WebSocket stream: %s", get_exception_string(ex));
+        }
+        try {
+            deregisterConnectionImpl(wsc);
+            wsc.connectionClosed();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception deregistering WebSocket connection: %s", get_exception_string(ex));
+        }
+        # a stop that waits for the connection to end (see startClosingConnections()) can go on
+        wsc.markEnded();
+        rwl.writeLock();
+        on_exit rwl.writeUnlock();
+        remove ch{cid};
+        # Safety net: clean up any pending extension data for this connection
+        remove pending_extensions{cid};
     }
 
     #! called when a connection is established; the default implementation creates a WebSocketConnection object
@@ -3258,15 +3454,11 @@ handler.setCloseTimeout(2s);
 
         ## Deadlock Prevention
 
-        WebSocket connections run in their own threads (startImpl blocks on a Counter) and may
-        be waiting on:
-        - A Counter for async H1 WebSocket connections (C++ poll operation drives I/O)
-        - A Counter for HTTP/2 and HTTP/3 stream connections (WebSocketStreamProcessor drives I/O)
-
-        Without this method, the server shutdown sequence would hang waiting for these threads
-        to notice the shutdown flag. By calling forceStop() on each connection, we:
+        The server's stop waits until every connection has ended (the end of an asynchronous connection runs when
+        its poll operation or stream processor ends, and the end of a connection that a thread waits for when that
+        thread returns).  By calling forceStop() on each connection, we:
         1. Set the connection's stop_flag to True
-        2. Abort the poll operation or stream processor (decrements the done Counter)
+        2. Abort the poll operation or stream processor, which ends the connection
 
         @param lid the listener ID being stopped
 

@@ -711,6 +711,21 @@ public:
         return hta || htb ? false : true;
     }
 
+    //! Returns true if every value of type @a source is accepted by @a target unchanged
+    /** A compiled call or store can then skip @a target's input check.  Unlike isInputIdentical(), which compares
+        signatures (date<absolute> and date are the same signature), this is false when @a target validates the
+        values of the types it accepts: a date value must still be checked for a date<absolute> parameter.
+    */
+    DLLLOCAL static bool acceptsInputUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        if (target == source) {
+            return true;
+        }
+        if (!isInputIdentical(target, source)) {
+            return false;
+        }
+        return !target || !target->validatesInputImpl();
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool isOutputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
         if (a == b)
@@ -1087,6 +1102,11 @@ protected:
     // returns true if this type could contain an object or a closure
     DLLLOCAL virtual bool needsScanImpl() const {
         return true;
+    }
+
+    //! returns true if this type rejects some values of the types its accept specs match (see acceptsInputUnchecked())
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return false;
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -2452,6 +2472,10 @@ protected:
         return false;
     }
 
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
+    }
+
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
         return true;
     }
@@ -2478,6 +2502,10 @@ protected:
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
+    }
 };
 
 class QoreRelativeDateTypeInfo : public QoreTypeInfo {
@@ -2494,6 +2522,10 @@ protected:
 
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
+    }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
     }
 
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
@@ -2521,6 +2553,10 @@ protected:
 
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
+    }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
     }
 };
 
