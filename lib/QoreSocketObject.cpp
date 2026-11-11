@@ -6851,6 +6851,11 @@ static bool qore_socket_object_set_action_consume_hook(AbstractAsyncAction* acti
         a->setConsumeHook(hook);
         return true;
     }
+    // startSseStreaming(): the events are taken from the action's Queue
+    if (SseAction* a = dynamic_cast<SseAction*>(action)) {
+        a->setConsumeHook(hook);
+        return true;
+    }
     return false;
 }
 

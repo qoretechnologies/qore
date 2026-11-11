@@ -54,17 +54,18 @@ WebSocketStreamFrameState::~WebSocketStreamFrameState() {
     }
 }
 
-void WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> stream_hook) {
-    item_hook = std::make_shared<QueueItemConsumeHook>(std::move(stream_hook));
+void WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
     if (msg_queue) {
-        msg_queue->setConsumeHook(item_hook);
+        // the queue's hook serves every stream whose messages it receives
+        item_hook = msg_queue->getItemConsumeHook();
+        stream_hook = std::move(hook);
     }
 }
 
 void WebSocketStreamFrameState::creditUnusedData() {
     // data that made no message and is not part of a frame still being read (control frames) is reported at once
-    if (item_hook && pending_bytes && !decoder.bufferedBytes()) {
-        item_hook->creditNow(pending_bytes);
+    if (stream_hook && pending_bytes && !decoder.bufferedBytes()) {
+        stream_hook->consumed(pending_bytes);
         pending_bytes = 0;
     }
 }
@@ -74,8 +75,8 @@ int WebSocketStreamFrameState::feedData(const void* data, size_t len) {
         // Ignore further data once the stream is done — control-frame
         // responses have already been dispatched (or never will be).
         // The ignored data counts as consumed (issue #5820).
-        if (item_hook && len) {
-            item_hook->creditNow(len + pending_bytes);
+        if (stream_hook && len) {
+            stream_hook->consumed(len + pending_bytes);
             pending_bytes = 0;
         }
         return 0;
@@ -264,7 +265,7 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
     if (!xs && msg_queue) {
         // the data fed since the last message is reported with this message (issue #5820)
         if (item_hook) {
-            item_hook->record(*h, pending_bytes);
+            item_hook->record(*h, stream_hook, pending_bytes);
             pending_bytes = 0;
         }
         msg_queue->push(&xs, h.release());
@@ -358,8 +359,8 @@ void WebSocketStreamFrameState::sendClose(uint16_t code, const char* reason) {
 
 void WebSocketStreamFrameState::pushCloseSentinel() {
     // the data of a message that the stream did not end makes no message
-    if (item_hook && pending_bytes) {
-        item_hook->creditNow(pending_bytes);
+    if (stream_hook && pending_bytes) {
+        stream_hook->consumed(pending_bytes);
         pending_bytes = 0;
     }
     if (!msg_queue) {

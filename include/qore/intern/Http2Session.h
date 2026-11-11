@@ -395,7 +395,7 @@ public:
         @param stream_id the stream
         @param len the number of bytes consumed
 
-        @return the number of bytes credited
+        @return the number of bytes credited if a WINDOW_UPDATE is now pending (the caller wakes the I/O thread), else 0
     */
     DLLLOCAL size_t creditConsumedStreamData(int32_t stream_id, size_t len);
 
@@ -527,8 +527,11 @@ public:
     /** @param stream_id stream ID
         @param max_bytes maximum bytes to return; 0 means all available
         @param xsink Exception sink for error reporting
+        @param credit_deferred true if the caller hands the data to its consumer directly: the stream credit deferred
+        for it is granted now; false if it is delivered through a Channel or Queue that reports its consumption
     */
-    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
+        bool credit_deferred = true);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();

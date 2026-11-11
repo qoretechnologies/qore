@@ -38,6 +38,7 @@
 #include <qore/QoreCondition.h>
 
 class QoreConsumeHook;
+class QueueItemConsumeHook;
 
 class QoreQueueNode;
 
@@ -152,6 +153,13 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook);
+
+    //! Returns the queue's item consume hook, which is created if the queue has none (internal)
+    /** Shared by the streams whose items are pushed to the queue; see QueueItemConsumeHook (issue #5820).
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
 };
 
 class Queue : public AbstractPrivateData, public QoreQueue {

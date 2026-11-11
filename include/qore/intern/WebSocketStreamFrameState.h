@@ -196,6 +196,8 @@ public:
 private:
     //! reports the data that the messages were made from, if the stream's credit is granted as they are taken
     std::shared_ptr<QueueItemConsumeHook> item_hook;
+    //! the hook of the stream, which the data is reported to
+    std::shared_ptr<QoreConsumeHook> stream_hook;
     //! the data fed since the last message, which no message has been made from yet
     size_t pending_bytes = 0;
 

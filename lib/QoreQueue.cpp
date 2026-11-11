@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreQueue.h>
 #include "qore/intern/QoreQueueIntern.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 
@@ -85,6 +86,18 @@ void qore_queue_private::measureAllIntern(QoreConsumeNotifier& cn) {
 void qore_queue_private::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
     AutoLocker al(&l);
     consume_hook = std::move(hook);
+}
+
+std::shared_ptr<QueueItemConsumeHook> qore_queue_private::getItemConsumeHook() {
+    AutoLocker al(&l);
+    std::shared_ptr<QueueItemConsumeHook> rv = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    if (!rv) {
+        // a queue whose items no stream reports yet; any other hook would not know the items
+        assert(!consume_hook);
+        rv = std::make_shared<QueueItemConsumeHook>();
+        consume_hook = rv;
+    }
+    return rv;
 }
 
 void qore_queue_private::takeAllIntern(NodeListRelease& release) {
@@ -676,6 +689,10 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 
 void QoreQueue::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
     priv->setConsumeHook(std::move(hook));
+}
+
+std::shared_ptr<QueueItemConsumeHook> QoreQueue::getItemConsumeHook() {
+    return priv->getItemConsumeHook();
 }
 
 QoreQueue::QoreQueue(int n_max) : priv(new qore_queue_private(n_max)) {

@@ -267,6 +267,11 @@ class ClientReceiveCreditTest inherits QUnit::Test {
 
     constructor() : Test("ClientReceiveCreditTest", "1.0") {
         foreach string proto in (("h2", "h3")) {
+            addTestCase(proto + ": every byte consumed is credited while the stream is open", \testCreditAccounting(),
+                proto);
+        }
+        addTestCase("h2: oversized responses do not pin the connection", \testOversizedResponses());
+        foreach string proto in (("h2", "h3")) {
             addTestCase(proto + ": a client that does not read is bounded, and then reads everything",
                 \testNonReadingThenDrain(), proto);
             addTestCase(proto + ": a stream that is not read does not hold up the other streams",
@@ -278,7 +283,6 @@ class ClientReceiveCreditTest inherits QUnit::Test {
                 proto);
         }
         addTestCase("h2: HTTPClient streaming (receive callback) gets every byte", \testHttpClientRecvCallback());
-        addTestCase("every deferred byte is credited once", \testCreditAccounting());
         set_return_value(main());
     }
 
@@ -342,7 +346,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         # the client holds the data it received without granting its stream credit, at most the stream's window
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             hash<auto> stats = call_function("dbg_http_stream_credit_stats");
-            int outstanding = stats.deferred - stats.credited;
+            int outstanding = stats.deferred - stats.credited - stats.settled;
             assertGt(0, outstanding, "the client holds unread data without granting its stream credit");
             assertLt(MaxWindow + 1, outstanding, "the data held for the client is bounded by the stream window");
         }
@@ -399,12 +403,13 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             hash<auto> s = openStream(mgr);
             HttpClientStreamingIo::SseStreamReader reader(s.stream);
             string payload = strmul("e", 65536);
+            int events = proto == "h3" ? 400 : 64;
             Counter written(1);
             *hash<ExceptionInfo> write_err;
             background sub () {
                 on_exit written.dec();
                 try {
-                    foreach int i in (xrange(64)) {
+                    foreach int i in (xrange(events)) {
                         s.writer.writeAll(sprintf("id: %d\ndata: %s\n\n", i, payload));
                     }
                     s.writer.end();
@@ -417,7 +422,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
                 assertEq(string(n), e.id);
                 ++n;
             }
-            assertEq(64, n, "SseStreamReader gets every event");
+            assertEq(events, n, "SseStreamReader gets every event");
             assertEq(0, written.waitForZero(HangGuard));
             assertNothing(write_err, "the server wrote every event");
         }
@@ -427,12 +432,13 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
             Writer w(handler.streams.get(HangGuard));
             string payload = strmul("q", 65536);
+            int events = proto == "h3" ? 400 : 64;
             Counter written(1);
             *hash<ExceptionInfo> write_err;
             background sub () {
                 on_exit written.dec();
                 try {
-                    foreach int i in (xrange(64)) {
+                    foreach int i in (xrange(events)) {
                         w.writeAll(sprintf("id: %d\ndata: %s\n\n", i, payload));
                     }
                     w.end();
@@ -449,7 +455,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
                 assertEq(string(n), e.id);
                 ++n;
             }
-            assertEq(64, n, "the event Queue gets every event");
+            assertEq(events, n, "the event Queue gets every event");
             assertEq(0, written.waitForZero(HangGuard));
             assertNothing(write_err, "the server wrote every event");
             stream.cancel();
@@ -503,18 +509,75 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             }
             bytes += v.size();
         }
-        assertGe(0, bytes, "the unread data can be read or dropped after the session has ended");
+        assertGe(bytes, 256 * 1024, "the data read after the session ended is at most what was written");
         remove s;
     }
 
-    testCreditAccounting() {
+    testCreditAccounting(string proto) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the credit accounting is only in debug builds");
         }
-        # every client of the earlier cases is gone: every deferred byte has been credited once, when it was consumed
-        # or settled with its stream (reports after that are counted as excess or orphaned, and credit nothing)
-        hash<auto> stats = call_function("dbg_http_stream_credit_stats");
-        assertGt(0, stats.deferred, "stream credit was deferred");
-        assertEq(stats.deferred, stats.credited, sprintf("every deferred byte is credited once: %y", stats));
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        hash<auto> s = openStream(mgr);
+        hash<auto> before = call_function("dbg_http_stream_credit_stats");
+        # more than the stream's window (64 KiB on HTTP/2, 16 MiB on HTTP/3): lost credit stalls the stream
+        int size = 24 * 1024 * 1024;
+        Counter written(1);
+        *hash<ExceptionInfo> write_err;
+        background sub () {
+            on_exit written.dec();
+            try {
+                s.writer.writeAll(binary(strmul("a", size)));
+            } catch (hash<ExceptionInfo> ex) {
+                write_err = ex;
+            }
+        }();
+        # every byte is read while the stream is still open
+        int bytes = 0;
+        while (bytes < size) {
+            auto v = s.stream.readData(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            if (v.typeCode() == NT_HASH) {
+                # the response headers, or the end of the stream
+                if (v.end_stream || v.error) {
+                    break;
+                }
+                continue;
+            }
+            bytes += v.size();
+        }
+        assertEq(size, bytes, "every byte arrives");
+        assertEq(0, written.waitForZero(HangGuard));
+        assertNothing(write_err);
+        hash<auto> after = call_function("dbg_http_stream_credit_stats");
+        int deferred = after.deferred - before.deferred;
+        assertEq(size, deferred, "the stream credit of every byte was deferred");
+        assertEq(deferred, after.credited - before.credited, "every byte consumed was credited");
+        assertEq(0, after.settled - before.settled, "nothing was left to settle");
+        s.writer.end();
+    }
+
+    testOversizedResponses() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+            "max_response_body_size": 4096,
+        });
+        on_exit delete mgr;
+        # the discarded data of each oversized response is credited, so the connection never pins
+        foreach int i in (xrange(8)) {
+            *string err;
+            try {
+                mgr.request(getUrl(), "GET", "/plain", NOTHING, NOTHING, HangGuard, False);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertRegex("TOO-LARGE", err ?? "", sprintf("round %d: the oversized response is refused", i));
+        }
     }
 }

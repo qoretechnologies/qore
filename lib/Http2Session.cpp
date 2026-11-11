@@ -405,7 +405,7 @@ Http2Session::~Http2Session() {
 #ifdef DEBUG
     // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
     for (auto& i : deferred_stream_credit) {
-        qore_dbg_stream_credit_stats.credited.fetch_add(i.second, std::memory_order_relaxed);
+        qore_dbg_stream_credit_stats.settled.fetch_add(i.second, std::memory_order_relaxed);
     }
 #endif
     // No io_uring cleanup needed here — PendingRead holds a weak_ptr<Http2Session>,
@@ -1119,16 +1119,39 @@ void qore_http_stream_wake_socket(const std::string& sock_hash) {
     xsink.clear();
 }
 
-QueueItemConsumeHook::QueueItemConsumeHook(std::shared_ptr<QoreConsumeHook> target) : target(std::move(target)) {
-    assert(this->target);
+namespace {
+//! the item data that QueueItemConsumeHook::measure() took on this thread, to be reported by consumed()
+thread_local std::vector<std::pair<std::shared_ptr<QoreConsumeHook>, size_t>> queue_item_credit;
 }
 
-void QueueItemConsumeHook::record(const void* item, size_t bytes) {
+void QueueItemConsumeHook::record(const void* item, const std::shared_ptr<QoreConsumeHook>& stream_hook,
+        size_t bytes) {
     if (!bytes) {
         return;
     }
     std::lock_guard<std::mutex> lg(m);
-    sizes[item] += bytes;
+    auto& e = sizes[item];
+    e.first = stream_hook;
+    e.second += bytes;
+}
+
+void QueueItemConsumeHook::forget(const void* item) {
+    std::shared_ptr<QoreConsumeHook> hook;
+    size_t bytes = 0;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        auto i = sizes.find(item);
+        if (i == sizes.end()) {
+            return;
+        }
+        hook = std::move(i->second.first);
+        bytes = i->second.second;
+        sizes.erase(i);
+    }
+    // the item's data is consumed with the item, which was dropped
+    if (hook && bytes) {
+        hook->consumed(bytes);
+    }
 }
 
 size_t QueueItemConsumeHook::measure(const QoreValue& v) const {
@@ -1141,10 +1164,21 @@ size_t QueueItemConsumeHook::measure(const QoreValue& v) const {
     if (i == sizes.end()) {
         return 0;
     }
-    size_t rv = i->second;
-    // an item is reported once: taken, or dropped with the queue
+    size_t rv = i->second.second;
+    // an item is reported once: taken, or dropped with the queue; reported to its stream by consumed()
+    queue_item_credit.emplace_back(std::move(i->second.first), rv);
     sizes.erase(i);
     return rv;
+}
+
+void QueueItemConsumeHook::consumed(size_t bytes) {
+    std::vector<std::pair<std::shared_ptr<QoreConsumeHook>, size_t>> items;
+    items.swap(queue_item_credit);
+    for (auto& i : items) {
+        if (i.first) {
+            i.first->consumed(i.second);
+        }
+    }
 }
 
 #ifdef DEBUG
@@ -1155,7 +1189,8 @@ void qore_http_stream_credit_orphaned(size_t bytes) {
 
 void Http2Session::setStreamCreditOnConsume(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    Http2StreamInfo* stream = getOrCreateStream(stream_id);
+    // a stream that has already ended is not recreated
+    Http2StreamInfo* stream = getStream(stream_id);
     if (stream) {
         stream->credit_on_consume = true;
     }
@@ -1184,6 +1219,10 @@ size_t Http2Session::creditConsumedStreamData(int32_t stream_id, size_t len) {
         int rv = nghttp2_session_consume_stream(session, stream_id, take);
         if (rv) {
             printd(5, "creditConsumedStreamData() stream %d: %s\n", stream_id, nghttp2_strerror(rv));
+        }
+        // nghttp2 sends a WINDOW_UPDATE once half of the window has been consumed: the I/O thread is woken only then
+        if (!nghttp2_session_want_write(session)) {
+            return 0;
         }
     }
     return take;
@@ -1540,7 +1579,8 @@ Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
     return nullptr;
 }
 
-BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
+        bool credit_deferred) {
     std::lock_guard<std::recursive_mutex> lg(m);
     (void)xsink;
     auto it = streams.find(stream_id);
@@ -1557,6 +1597,11 @@ BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, Ex
     BinaryNode* rv = new BinaryNode();
     rv->append(it->second->body.data(), take);
     it->second->body.erase(it->second->body.begin(), it->second->body.begin() + take);
+    // a caller that hands the data to its consumer directly (not through a Channel or Queue with a consume hook)
+    // has it consumed now: its deferred stream credit is granted (issue #5820); the I/O thread sends the update
+    if (credit_deferred && it->second->credit_on_consume) {
+        creditConsumedStreamData(stream_id, take);
+    }
     return rv;
 }
 
@@ -2441,6 +2486,8 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 stream->body_too_large = true;
                 std::vector<char>().swap(stream->body);
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_CANCEL);
+                // the discarded data is credited (in manual mode nghttp2 does not do it for data it handed over)
+                h2->consumeReceivedData(stream_id, len);
                 return 0;
             }
         }
@@ -2454,6 +2501,10 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
                     NGHTTP2_REFUSED_STREAM);
                 stream->body.clear();
+                // the discarded data is credited; data credited on consumption before is settled with the stream
+                if (len && !h2->is_server) {
+                    h2->consumeReceivedData(stream_id, len);
+                }
                 return 0;
             }
             // A request stream is not reset here: a reset would discard the error response the server sends, and
@@ -2529,7 +2580,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         auto dit = h2->deferred_stream_credit.find(stream_id);
         if (dit != h2->deferred_stream_credit.end()) {
 #ifdef DEBUG
-            qore_dbg_stream_credit_stats.credited.fetch_add(dit->second, std::memory_order_relaxed);
+            qore_dbg_stream_credit_stats.settled.fetch_add(dit->second, std::memory_order_relaxed);
 #endif
             h2->deferred_stream_credit.erase(dit);
         }

@@ -95,36 +95,31 @@ private:
 
 //! Reports the response data that the events or messages taken from a Queue were parsed from (issue #5820)
 /** The SSE parser (SseAction) and the WebSocket decoder (WebSocketStreamFrameState) turn a stream's data into events
-    or messages that the application takes from a Queue: the parser records the data that each item was made from
-    (record()) before it pushes the item, and the Queue reports the item's data when the application takes it, or
-    when it is dropped with the Queue; data that makes no item (comments, control frames) is credited at once
-    (creditNow()).  The item sizes are kept under a leaf mutex, which no other lock is taken under.
+    or messages that the application takes from a Queue: the parser records the data that each item was made from,
+    with the hook of the item's stream (record()), before it pushes the item, and the Queue reports the item's data
+    to that stream when the application takes the item, or when the item is dropped with the Queue.  One hook serves
+    every stream whose items are pushed to the same Queue (see QoreQueue::getItemConsumeHook()).
+
+    measure() moves the entries of the items taken into a list of the calling thread, and consumed(), which the
+    Queue calls on the same thread after its lock is released, reports them to their streams.  The item sizes are
+    kept under a leaf mutex, which no other lock is taken under.
 */
 class QueueItemConsumeHook : public QoreConsumeHook {
 public:
-    //! @param target the hook of the stream that the data was received on
-    DLLLOCAL explicit QueueItemConsumeHook(std::shared_ptr<QoreConsumeHook> target);
+    //! Records the data that an item was made from, for the given stream; called before the item is pushed
+    DLLLOCAL void record(const void* item, const std::shared_ptr<QoreConsumeHook>& stream_hook, size_t bytes);
 
-    //! Records the data that an item was made from; called before the item is pushed
-    DLLLOCAL void record(const void* item, size_t bytes);
-
-    //! Reports data that makes no item at once
-    DLLLOCAL void creditNow(size_t bytes) {
-        if (bytes) {
-            target->consumed(bytes);
-        }
-    }
+    //! Forgets an item that was not pushed
+    DLLLOCAL void forget(const void* item);
 
     DLLLOCAL size_t measure(const QoreValue& v) const override;
 
-    DLLLOCAL void consumed(size_t bytes) override {
-        target->consumed(bytes);
-    }
+    //! Reports the data of the items that measure() took on this thread to their streams
+    DLLLOCAL void consumed(size_t bytes) override;
 
 private:
-    std::shared_ptr<QoreConsumeHook> target;
     mutable std::mutex m;
-    mutable std::unordered_map<const void*, size_t> sizes;
+    mutable std::unordered_map<const void*, std::pair<std::shared_ptr<QoreConsumeHook>, size_t>> sizes;
 };
 
 #endif

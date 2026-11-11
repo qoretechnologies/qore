@@ -587,11 +587,12 @@ public:
     /** @param stream_hook the hook of the stream; the events of the queue, and data that makes no event, are
         reported to it
     */
-    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> stream_hook) {
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
         std::lock_guard<std::mutex> lg(mtx);
-        item_hook = std::make_shared<QueueItemConsumeHook>(std::move(stream_hook));
         if (queue) {
-            queue->setConsumeHook(item_hook);
+            // the queue's hook serves every stream whose events it receives
+            item_hook = queue->getItemConsumeHook();
+            stream_hook = std::move(hook);
         }
     }
 
@@ -642,14 +643,21 @@ private:
     bool too_large = false; //!< true once an event exceeded MaxEventSize; the rest of the stream is discarded
     //! reports the data that the events were made from, if the stream's credit is granted as they are taken
     std::shared_ptr<QueueItemConsumeHook> item_hook;
+    //! the hook of the stream, which the data is reported to
+    std::shared_ptr<QoreConsumeHook> stream_hook;
+
+    //! Reports data that makes no event at once
+    DLLLOCAL void creditNow(size_t bytes) {
+        if (stream_hook && bytes) {
+            stream_hook->consumed(bytes);
+        }
+    }
     //! the data of the event read so far, which no event has been made from yet
     size_t pending_bytes = 0;
 
     //! Reports the data of the event read so far at once; called with the lock held
     DLLLOCAL void creditPendingLocked() {
-        if (item_hook && pending_bytes) {
-            item_hook->creditNow(pending_bytes);
-        }
+        creditNow(pending_bytes);
         pending_bytes = 0;
     }
 

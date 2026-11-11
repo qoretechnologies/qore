@@ -19877,7 +19877,7 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
 
 //! returns the accounting of the client stream credit deferred until the application consumes the data
-/** @return a hash with keys \c deferred, \c credited, \c excess and \c orphaned (bytes); see
+/** @return a hash with keys \c deferred, \c credited, \c settled, \c excess and \c orphaned (bytes); see
     QoreDbgStreamCreditStats
 */
 static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, RuntimeConfig& rc,
@@ -19886,6 +19886,7 @@ static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, Runt
     QoreDbgStreamCreditStats& s = qore_dbg_stream_credit_stats;
     h->setKeyValue("deferred", s.deferred.load(), xsink);
     h->setKeyValue("credited", s.credited.load(), xsink);
+    h->setKeyValue("settled", s.settled.load(), xsink);
     h->setKeyValue("excess", s.excess.load(), xsink);
     h->setKeyValue("orphaned", s.orphaned.load(), xsink);
     return h.release();

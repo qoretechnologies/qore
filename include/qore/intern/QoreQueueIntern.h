@@ -264,6 +264,9 @@ public:
     */
     DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook);
 
+    //! Returns the queue's item consume hook, which is created if the queue has none
+    DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
+
     //! Reports the values of the queue to the consume hook, when the lock is released; called with the lock held
     DLLLOCAL void measureAllIntern(QoreConsumeNotifier& cn);
 

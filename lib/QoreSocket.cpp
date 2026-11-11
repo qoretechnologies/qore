@@ -11489,9 +11489,7 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
 
     // the stream is discarded after an event exceeded the maximum size; its data counts as consumed
     if (too_large) {
-        if (item_hook) {
-            item_hook->creditNow(qore_http_stream_value_body_size(output));
-        }
+        creditNow(qore_http_stream_value_body_size(output));
         output.discard(xsink);
         return;
     }
@@ -11554,12 +11552,12 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
             // a block without a field is not an event, as no field of it was kept
             if (evt && !evt->empty() && queue) {
                 if (item_hook) {
-                    item_hook->record(*evt, block_bytes);
+                    item_hook->record(*evt, stream_hook, block_bytes);
                 }
                 queue->pushAndTakeRef(evt.release());
                 pushed = true;
-            } else if (item_hook) {
-                item_hook->creditNow(block_bytes);
+            } else {
+                creditNow(block_bytes);
             }
             continue;
         }
@@ -11567,9 +11565,7 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
             too_large = true;
             framer.reset();
             // the event read so far and the rest of the data are discarded
-            if (item_hook) {
-                item_hook->creditNow(pending_bytes + (len - block_start));
-            }
+            creditNow(pending_bytes + (len - block_start));
             pending_bytes = 0;
             return pushed;
         }
@@ -21736,7 +21732,8 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     while (batch < MAX_STREAMING_BATCH
                             && h2_session->hasStreamingData(streaming_id)) {
                         // Take body data from the streaming stream
-                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink);
+                        // delivered through the stream's action, whose Channel or Queue reports the consumption (issue #5820)
+                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink, false);
                         if (*xsink) {
                             return nullptr;
                         }

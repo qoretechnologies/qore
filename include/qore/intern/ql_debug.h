@@ -119,14 +119,16 @@ typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
 
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
-//! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited (a
-//! byte is credited when it is consumed, or settled with its stream when the stream or its session ends); excess
-//! and orphaned count reports that credit nothing
+//! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
+//! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
+//! before it is consumed); excess and orphaned count reports that credit nothing
 struct QoreDbgStreamCreditStats {
     //! bytes whose stream credit was deferred when they were received
     std::atomic<int64_t> deferred{0};
-    //! bytes whose deferred stream credit was granted when they were consumed (or credited to a closed stream)
+    //! bytes whose deferred stream credit was granted when they were consumed
     std::atomic<int64_t> credited{0};
+    //! bytes whose deferred stream credit was settled when their stream or session ended before they were consumed
+    std::atomic<int64_t> settled{0};
     //! bytes reported as consumed beyond the stream's deferred credit (credited when received, or reported twice)
     std::atomic<int64_t> excess{0};
     //! bytes reported as consumed after their session was gone

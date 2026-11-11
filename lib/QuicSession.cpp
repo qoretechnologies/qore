@@ -987,7 +987,7 @@ QuicSession::~QuicSession() {
 #ifdef DEBUG
     // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
     for (auto& i : deferred_stream_credit_) {
-        qore_dbg_stream_credit_stats.credited.fetch_add(i.second, std::memory_order_relaxed);
+        qore_dbg_stream_credit_stats.settled.fetch_add(i.second, std::memory_order_relaxed);
     }
     {
         std::lock_guard<std::mutex> g(quic_test_settings_m);
@@ -4919,7 +4919,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         auto dit = session->deferred_stream_credit_.find(stream_id);
         if (dit != session->deferred_stream_credit_.end()) {
 #ifdef DEBUG
-            qore_dbg_stream_credit_stats.credited.fetch_add(dit->second, std::memory_order_relaxed);
+            qore_dbg_stream_credit_stats.settled.fetch_add(dit->second, std::memory_order_relaxed);
 #endif
             session->deferred_stream_credit_.erase(dit);
         }
