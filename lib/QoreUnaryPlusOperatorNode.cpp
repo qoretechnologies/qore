@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreUnaryPlusOperatorNode::unaryplus_str("unary plus (+) operator expression");
 
@@ -47,7 +48,7 @@ int QoreUnaryPlusOperatorNode::getAsString(QoreString &str, int foff, ExceptionS
 }
 
 QoreValue QoreUnaryPlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 

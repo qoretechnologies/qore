@@ -5928,17 +5928,21 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             (void)qore_check_cancel(nullptr, "LLVM call argument release");
         }
         uint32_t id = inst->operands[i - 1].id;
-        // a value created by a call, a Phi of such values that took their references over (see consumable_phis), and
-        // a value read from a variable that the read gave a reference of its own to are released; a value borrowed
-        // from a variable or a constant has no cleanup slot.  A read through a reference keeps its reference in the
-        // slot of its read site, which is released if it still holds the value
+        // a temporary that the frame owns is released: a value created by a call, a Phi of such values that took
+        // their references over (see consumable_phis), a value read from a variable that the read gave a reference
+        // of its own to, and a list or hash literal or the result of AddAny whose release can be observed
+        // (f((o,)), f(l + o); qore_ir_find_observable_temp_call_args(), qore#5712); a value borrowed from a variable
+        // or a constant has no cleanup slot.
+        // A read through a reference keeps its reference in the slot of its read site, which is released if it
+        // still holds the value
         if (!id || weak_load_result_ids.count(id)) {
             continue;
         }
         auto ref_read_it = reference_read_slots.find(id);
         bool reference_read = ref_read_it != reference_read_slots.end() && ref_read_it->second;
         if (!reference_read && ((!value_defined_by_call.count(id) && !consumable_phis.count(id)
-                    && !value_defined_by_variable_read.count(id))
+                    && !value_defined_by_variable_read.count(id)
+                    && !(id < observable_temp_call_args.size() && observable_temp_call_args[id]))
                 || invoke_alloca_map.find(id) == invoke_alloca_map.end())) {
             continue;
         }
@@ -12241,6 +12245,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     value_defined_by_variable_read.clear();
+    // the literals and AddAny results that a call releases when it returns (qore#5712)
+    qore_ir_find_observable_temp_call_args(func, observable_temp_call_args);
     {
         // the call arguments that a later execution of the call uses again, such as a read hoisted out of a loop:
         // no call releases them (see design/temporary-lifetime.md); a cancelled analysis fails the compilation, as

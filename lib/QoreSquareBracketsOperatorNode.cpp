@@ -391,7 +391,8 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), string_index_char,
             negative_offsets, xsink);
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the index is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 

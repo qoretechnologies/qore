@@ -748,6 +748,9 @@ private:
     std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
     // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
     std::unordered_set<uint32_t> value_defined_by_call;
+    //! the call arguments that are list or hash literals or AddAny results whose release at the call's return can be
+    //! observed, by value id (qore_ir_find_observable_temp_call_args())
+    std::vector<uint8_t> observable_temp_call_args;
     // the values read from a variable (LoadLocal, LoadArg, LoadClosure, LoadGlobal, LoadThreadLocal): one that the
     // read gave a reference of its own to (a cleanup slot) and that a call takes as an argument is released when the
     // call returns, as any argument

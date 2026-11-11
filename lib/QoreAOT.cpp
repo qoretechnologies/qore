@@ -2809,6 +2809,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
     // Classify locals as IR-only vs AST-visible for optimization
     ir_func->computeIROnlyLocals();
+    // a read of a plain local that the statement writes later is released after its last use (qore#5712)
+    ir_func->releasePlainLocalReadsBeforeWrites();
     if (sig) {
         for (unsigned i = 0; i < sig->numParams(); ++i) {
             ir_func->param_local_vars[static_cast<int>(i)] = sig->lv[i];

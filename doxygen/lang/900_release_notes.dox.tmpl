@@ -134,10 +134,10 @@
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
-    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
-    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
-    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
+    A temporary value, such as an object returned by a call in a chain of member accesses and method calls, the operand
+    of an operator or a value read through a reference, lives until the end of its statement; given to a call as an
+    argument, it is released when the call returns.  Code that relies on earlier destruction must assign the value to
+    a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1691,10 +1691,10 @@
     - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
       local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
       took time quadratic in the number of iterations, and memory grew with it
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
-      comparison, \c instanceof, \c exists or a slice, for the source of a functional operator and for the elements of
-      a list or hash literal were destroyed when the statement ended (ex: <tt>f(new T("a") == new T("b"), g())</tt>
-      destroyed them after \c g() ran); they are now destroyed when they have been used, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the sequence of a
+      slice, for the source of a functional operator and for the elements of a list or hash literal were destroyed
+      when the statement ended (ex: <tt>f(map $1.n, mk(), g())</tt> destroyed them after \c g() ran); they are now
+      destroyed when they have been used, as with the AST interpreter
     - in the IR execution mode, the last element of a \c map or \c select over an iterator was destroyed when the
       statement ended, and in every compiled mode an exception that left a fused pipeline of functional operators for
       a \c catch block released the pipeline's source after the block; both are now released as with the AST

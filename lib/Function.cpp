@@ -6450,6 +6450,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // Classify locals as IR-only vs AST-visible for optimization; the variant's flags describing the body are set
     // only if and when it is published (see publishIRContextFlags())
     func->computeIROnlyLocals();
+    // a read of a plain local that the statement writes later is released after its last use (qore#5712)
+    func->releasePlainLocalReadsBeforeWrites();
 
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
