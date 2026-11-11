@@ -80,6 +80,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Plain Functions Resolve Names Without a Class Context
+    A plain function no longer resolves names in the class context of the method that first calls it, so a reference
+    to a static member or constant of a class from a plain function must be qualified with the class name
+    (<tt>Class::member</tt>); an unqualified reference is a parse error.
+
     @par Dynamic Static Method Calls Respect Private Access
     call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
