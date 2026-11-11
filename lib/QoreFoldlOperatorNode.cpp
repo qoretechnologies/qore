@@ -106,6 +106,10 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
             QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
+        // a fold does not set $#, which is unset in its expression, also in the per-element code of an enclosing
+        // operator or foreach statement (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.unsetFlags(PF_IMPLICIT_ELEMENT);
 
         parse_context.typeInfo = nullptr;
         {

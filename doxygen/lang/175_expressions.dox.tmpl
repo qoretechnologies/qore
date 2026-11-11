@@ -203,9 +203,11 @@ list l = select list, !($1 % 2);
     \c 0, as for a list of one element.
 
     <tt>$#</tt> belongs to the operator or statement whose per-element code encloses it in the same function: in a
-    function, method, closure or call reference called from that code, and anywhere else (the
-    @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, or top-level code outside any of these
-    constructs), <tt>$#</tt> is unset and gives @ref nothing.  An operator in the called code gives its own elements
+    function, method, closure or call reference called from that code, and anywhere else (the expression of the
+    @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, also when they are used in the
+    per-element code of another operator or of a foreach statement, or top-level code outside any of these
+    constructs), <tt>$#</tt> is unset and gives @ref nothing, and using it where a value of another type is required
+    (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.  An operator in the called code gives its own elements
     their index, and the caller's <tt>$#</tt> is the same when the call returns.
 
     @par Example
@@ -213,8 +215,8 @@ list l = select list, !($1 % 2);
 # create a list of indexes with negative values
 list l = map $#, list, ($1 < 0);
 
-auto sub index() { return $#; }
+auto sub get_index() { return $#; }
 # a function called from a map body does not see the map's index: gives (NOTHING, NOTHING)
-list l2 = map index(), (1, 2);
+list l2 = map get_index(), (1, 2);
     @endcode
 */

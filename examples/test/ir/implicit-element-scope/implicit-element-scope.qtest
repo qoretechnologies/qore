@@ -16,7 +16,7 @@
 #! issue #5690: the implicit index ($#) belongs to the operator or foreach statement whose per-element code encloses it
 /** In a function, method, closure or call reference called from the per-element code of map, select, map-select,
     hash map, hash map-select, the streaming predicates or a foreach statement, \c $# is unset (NOTHING), as it is in a
-    fold and at the top level; an operator in the called code gives its own elements their index, and the caller's
+    fold (also one nested in that code) and at the top level; an operator in the called code gives its own elements their index, and the caller's
     \c $# is the same after the call.  An operator over a single value gives it the index 0.  Before, the AST
     interpreter gave the called code the caller's index and the compiled modes 0, and a single value the enclosing
     index.
@@ -65,6 +65,15 @@ class ImplicitElementScopeTest inherits QUnit::Test {
             "single in map [0, 0, 0]",
             "fold \"a--\"",
             "foldr \"c--\"",
+            "fold in map [101, 101, 101]",
+            "foldr in map [102, 102, 102]",
+            "fold in select [\"a\", \"b\", \"c\"]",
+            "fold in map-select [101, 101]",
+            "fold in hash map {a: 101, b: 101, c: 101}",
+            "fold in fused [101, 101]",
+            "fold in foreach [\"a\", 101, \"b\", 101, \"c\", 101]",
+            "fold source in map [10, 11, 12]",
+            "map in fold 3",
             "function null",
             "fn args [\"x\", \"y\"]",
         );

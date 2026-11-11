@@ -68,6 +68,21 @@ sub cases(...) {
     # no operator sets it
     out += "fold " + fmt(foldl $1 + ($# ?? "-"), l);
     out += "foldr " + fmt(foldr $1 + ($# ?? "-"), l);
+    # a fold does not set it, also in the per-element code of an operator or foreach statement
+    out += "fold in map " + fmt(map (foldl $1 + ($# ?? 100), (1, 2)), l);
+    out += "foldr in map " + fmt(map (foldr $1 + ($# ?? 100), (1, 2)), l);
+    out += "fold in select " + fmt(select l, (foldl $1 + ($# ?? 100), (1, 2)) == 101);
+    out += "fold in map-select " + fmt(map (foldl $1 + ($# ?? 100), (1, 2)), l, $# != 1);
+    out += "fold in hash map " + fmt(map {$1: (foldl $1 + ($# ?? 100), (1, 2))}, l);
+    out += "fold in fused " + fmt((take 2, (map (foldl $1 + ($# ?? 100), (1, 2)), l)));
+    list ff;
+    foreach string s in (l) {
+        ff += (s, (foldl $1 + ($# ?? 100), (1, 2)));
+    }
+    out += "fold in foreach " + fmt(ff);
+    # the source of a fold is evaluated with the enclosing index, and a map in its expression sets its own
+    out += "fold source in map " + fmt(map (foldl $1 + $2, ($#, 10)), l);
+    out += "map in fold " + fmt(foldl $1 + (map $#, (5, 6)).size(), (1, 2));
     out += "function " + fmt($#);
     out += "fn args " + fmt(argv);
     foreach string line in (out) {
