@@ -4072,20 +4072,9 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
         }
     }
 
-    // a value that is not a list, a string or a binary object is removed as a whole, unless a selector raised an
-    // exception
-    if (sel.raised()) {
-        return;
-    }
-    bool static_assignment = false;
-    QoreValue tmp = lvh.remove(static_assignment);
-    if (static_assignment)
-        tmp.ref();
-#ifdef DEBUG
-    assert(!rv.assignAssumeInitial(tmp));
-#else
-    rv.assignAssumeInitial(tmp);
-#endif
+    // a list of selectors selects nothing from a value that is not a list, a string or a binary object: the selectors
+    // have been evaluated, in order, and nothing is removed, as in the other execution modes and as the expression
+    // as a value gives NOTHING (qore#5695); a single index still removes the value as a whole
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op) {
