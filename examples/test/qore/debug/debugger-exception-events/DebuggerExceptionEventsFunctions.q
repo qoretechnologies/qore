@@ -67,7 +67,7 @@ our bool Step = ARGV[0] == "step";
 
 #! the first and the last line of the functions
 const FirstLine = 72;
-const LastLine = 138;
+const LastLine = 148;
 
 sub f_throw() {
     throw "B";
@@ -125,6 +125,16 @@ sub f_on_error_rethrow_caught() {
     } catch (hash<ExceptionInfo> ex) {
     }
 }
+class Thrower {
+    destructor() {
+        throw "DTOR";
+    }
+}
+sub f_dtor(int x) {
+    if (x) {
+        new Thrower();
+    }
+}
 *int sub f_dismiss() {
     int z = 0;
     int y = 1 / z;
@@ -147,10 +157,10 @@ background sub () {
     # the functions are called through call_function(), so that each call is dispatched through the tiered entry of
     # the variant, as calls between separately compiled AOT objects are
     foreach string fn in (("f_throw", "f_nested", "f_builtin", "f_caught", "f_loop", "f_caller", "f_catch_rethrow",
-            "f_builtin_caught", "f_closure", "f_on_exit_throw", "f_on_error_rethrow_caught")) {
+            "f_builtin_caught", "f_closure", "f_on_exit_throw", "f_on_error_rethrow_caught", "f_dtor")) {
         r.seen = ();
         try {
-            fn == "f_nested" ? call_function(fn, 1) : call_function(fn);
+            fn == "f_nested" || fn == "f_dtor" ? call_function(fn, 1) : call_function(fn);
         } catch (hash<ExceptionInfo> ex) {
         }
         printf("%s: %y\n", fn, r.seen);

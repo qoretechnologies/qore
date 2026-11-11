@@ -4163,13 +4163,14 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             terminated = true;
             break;
         }
-        if (builder.getFunction()->emit_debug_statements) {
-            builder.createDebugStatementEnd(statement_depth, (*it)->loc);
-        }
         if (statement_needs_cleanup) {
             createDiscardTemps((*it)->loc);
         } else {
             builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
+        }
+        // after the release of the statement's temporaries, whose destructors raise exceptions of the statement
+        if (builder.getFunction()->emit_debug_statements) {
+            builder.createDebugStatementEnd(statement_depth, (*it)->loc);
         }
     }
 

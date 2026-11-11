@@ -87,7 +87,8 @@
     - the top-level code of an AOT-compiled program that has no parse tree runs as native code and gets no event
     - code that was already running when the debugger attached keeps running as it did until it returns: on the IR
       interpreter, it gets the events of its statements from its next statement on, but not of the statements that
-      contain them and that started before the debugger attached, and after a debugger dismisses an exception, the
+      contain them and that started before the debugger attached, an exception in the condition of a loop gets an
+      event for the last statement of its body too, and after a debugger dismisses an exception, the
       function can end there, with no value, instead of continuing after the statement; as native code, it gets no
       event
 

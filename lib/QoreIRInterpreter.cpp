@@ -7031,6 +7031,10 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
         return false;
     }
     QoreIRDebugNest& n = *st.nest;
+    // the statements that the frame is in can have changed since the chain started (as with a handler's statements)
+    if (n.chain > static_cast<int>(n.entries.size()) - 2) {
+        n.chain = static_cast<int>(n.entries.size()) - 2;
+    }
     bool rc = false;
     while (n.chain >= 0) {
         const QoreIRDebugNestEntry& e = n.entries[n.chain];

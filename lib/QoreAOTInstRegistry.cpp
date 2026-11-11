@@ -2576,8 +2576,9 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // tree does not exist when the serialized IR is deserialized.  The instruction has no operands and no result; its
 // only runtime-relevant datum besides the statement pointer is the statement's source location, which the generic
 // base-instruction record already serializes from inst->loc (set to statement->loc by
-// QoreIRBuilder::createDebugStatement()).  So nothing group-specific is written here, and the reader reconstructs
-// the instruction with a null statement pointer.  The IR interpreter's DebugStatement handler resolves the
+// QoreIRBuilder::createDebugStatement()).  So the statement is not written here, and the reader reconstructs the
+// instruction with a null statement pointer; from format version 25, the nesting of the statement is written (see
+// writeDebugStatement()).  The IR interpreter's DebugStatement handler resolves the
 // statement from the instruction's source location at runtime when the raw pointer is null (see
 // QoreIRInterpreter.cpp), matching the step behavior of the AST and IR tiers for code whose statement index is
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
