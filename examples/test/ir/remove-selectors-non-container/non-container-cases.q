@@ -9,6 +9,8 @@ class Obj {
     public {
         string name;
         *hash<auto> h;
+        auto o;
+        static auto sv;
     }
 
     constructor(string n) {
@@ -37,6 +39,11 @@ int sub f(string tag, int rv) {
 int sub thr(string tag) {
     print("  sel throw " + tag + "\n");
     throw "SEL-ERROR", tag;
+}
+
+#! removes with a list of selectors through a reference
+auto sub remove_ref(reference<auto> r) {
+    return remove r[f("a", 0), f("b", 1)];
 }
 
 #! runs a case and prints its result or its exception
@@ -74,12 +81,26 @@ sub main() {
     # a global
     t("remove global hash", auto sub () { g = {"a": 1}; auto r = remove g[f("a", 0), f("b", 1)]; return (r, g); });
     t("delete global int", auto sub () { g = 7; delete g[f("a", 0), f("b", 1)]; return g; });
-    # a member of an object, which is reported only if it changes
+    # a member of an object, which is reported when it is resolved for the removal, also if nothing changes
     t("remove member hash", auto sub () {
         gn.h = {"a": 1};
         auto r = remove gn.h[f("a", 0), f("b", 1)];
         return (r, gn.h);
     });
+    t("delete member object", auto sub () {
+        gn.o = new Obj("mo");
+        delete gn.o[f("a", 0), f("b", 1)];
+        return gn.o.name;
+    });
+    # through a reference, a static class variable, a value on a path and a path that does not exist
+    t("remove through reference", auto sub () {
+        hash<auto> h = {"a": 1};
+        auto i = 5;
+        return (remove_ref(\h), h, remove_ref(\i), i);
+    });
+    t("remove static", auto sub () { Obj::sv = {"a": 1}; auto r = remove Obj::sv[f("a", 0), f("b", 1)]; return (r, Obj::sv); });
+    t("remove path value", auto sub () { hash<auto> h = {"a": 5}; auto r = remove h.a[f("a", 0), f("b", 1)]; return (r, h); });
+    t("remove missing path", auto sub () { hash<auto> h = {}; auto r = remove h.a.b[f("a", 0), f("b", 1)]; return (r, h); });
     # a later selector that raises an exception: nothing is removed, the exception is raised
     t("raise later hash", auto sub () {
         hash<auto> h = {"a": 1};

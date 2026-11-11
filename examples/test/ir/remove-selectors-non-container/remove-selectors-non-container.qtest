@@ -50,7 +50,7 @@ class RemoveSelectorsNonContainerTest inherits QUnit::Test {
     private astTest() {
         string out = astOutput();
         list<string> lines = out.split("\n");
-        assertEq(19, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        assertEq(24, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
         # every selector is evaluated, in order, and nothing is removed
         assertTrue(out =~ /^remove hash:\n  sel a\n  sel b\n  = \[null, \{a: 1, b: 2\}\]\n/, "hash");
         assertTrue(out =~ /\nremove hash range:\n  sel a\n  sel b\n  sel c\n  = \[null, \{a: 1\}\]\n/, "range");
@@ -60,6 +60,16 @@ class RemoveSelectorsNonContainerTest inherits QUnit::Test {
         assertTrue(out =~ /\ndelete object:\n  sel a\n  sel b\n  destroy ld\n  = "ld"\n/, "delete object");
         assertTrue(out =~ /\nremove nothing:\n  sel a\n  sel b\n  = \[null, null\]\n/, "NOTHING");
         assertTrue(out =~ /\ndelete global int:\n  sel a\n  sel b\n  = 7\n/, "global");
+        # a member is reported when it is resolved for the removal; an object is not deleted
+        assertTrue(out =~ /\nremove member hash:\n  notify h\n  sel a\n  sel b\n  notify h\n  = \[null, \{a: 1\}\]\n/,
+            "member notification");
+        assertTrue(out =~ /\ndelete member object:\n  notify o\n  sel a\n  sel b\n  notify o\n  = "mo"\n/, "member object");
+        # through a reference, a static variable, a value on a path and a missing path that is not created
+        assertTrue(out =~ /\nremove through reference:\n  sel a\n  sel b\n  sel a\n  sel b\n  = \[null, \{a: 1\}, null, 5\]\n/,
+            "reference");
+        assertTrue(out =~ /\nremove static:\n  sel a\n  sel b\n  = \[null, \{a: 1\}\]\n/, "static variable");
+        assertTrue(out =~ /\nremove path value:\n  sel a\n  sel b\n  = \[null, \{a: 5\}\]\n/, "value on a path");
+        assertTrue(out =~ /\nremove missing path:\n  sel a\n  sel b\n  = \[null, \{\}\]\n/, "missing path");
         # a later selector that raises: nothing is removed
         assertTrue(out =~ /\nraise later hash:\n  sel a\n  sel throw second\n  caught SEL-ERROR\n  = \{a: 1\}\n/,
             "raise later");
