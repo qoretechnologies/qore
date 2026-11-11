@@ -41,6 +41,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/qore_program_private.h"
@@ -11065,6 +11066,16 @@ extern "C" DLLEXPORT int qore_aot_run(
         ExceptionSink xsink;
         ExceptionSink wsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -11474,6 +11485,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -13219,6 +13240,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -13591,6 +13622,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // Use a local variable for the program being created.  Loading dependencies
     // via runTimeLoadModule() can trigger nested calls to qore_aot_module_init()
     // for other AOT modules, which would overwrite the global aot_module_pgm.
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
@@ -14206,6 +14245,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
@@ -15990,6 +16037,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {

@@ -39,6 +39,8 @@
 #include <unordered_set>
 #include <vector>
 
+class QoreParseOptions;
+
 class QoreProgramLocation;
 class QoreProgram;
 class QoreClass;
@@ -127,6 +129,14 @@ DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
 //! Returns true while a single-file AOT compile is parsing/committing source
 //! with sibling `.qo` metadata preloaded.
 DLLEXPORT bool qore_aot_source_parse_active();
+
+//! Returns false with the description of the conflict in \a error if the parse options have %modern and a compatibility
+//! option that it does not allow (issue #5682)
+/** For the paths that create a Program from options given together: qcc --parse-option, AOT artifacts and their
+    entry points, and QoreProgramHelper; such options are refused, as by Program::constructor().  The bare C++
+    QoreProgram constructors have no exception sink: callers must not give them such options
+*/
+DLLEXPORT bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error);
 
 //! Set the active build-group source-symbol manifest for the current thread.
 /** The manifest lets standalone source compiles prefer declarations provided by

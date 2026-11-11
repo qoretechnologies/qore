@@ -36,6 +36,7 @@
 // build
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -4539,9 +4540,25 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
         xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "module '%s' is not loaded", name);
         return -1;
     }
-    mi->addParseOptionMask(mask);
     // the module's code runs with the parse options of its Program
     QoreProgram* mpgm = mi->getModuleProgram();
+    // the mask can complete %modern (it can add parts of it, such as PO_STRONG_ENCAPSULATION), which cannot be in
+    // effect with a compatibility option of the module that %modern does not allow (issue #5682); the mask is refused
+    // before anything is changed
+    if (mpgm && !mask.empty()) {
+        QoreParseOptions current = mpgm->getParseOptions();
+        QoreParseOptions masked = mask.apply(current);
+        if (qore_program_private_base::isModern(masked)
+                && (masked & qore_program_private_base::modernIncompatibleOptions())) {
+            QoreStringNode* desc = new QoreStringNodeMaker("module '%s': the parse option mask cannot be applied: ",
+                name);
+            qore_program_private_base::describeModernSetConflict(current, masked & ~current,
+                masked & qore_program_private_base::modernIncompatibleOptions(), "set", *desc);
+            xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", desc);
+            return -1;
+        }
+    }
+    mi->addParseOptionMask(mask);
     if (mpgm && !mask.empty()) {
         qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
         qore_program_private::setAOTInheritedParseOptions(*mpgm,

@@ -25415,18 +25415,14 @@ static bool applyAOTModernSourceDefault(QoreParseOptions& po,
     if (!by_extension && !qore_program_private::isModern(po)) {
         return true;
     }
-    QoreParseOptions conflict = po & qore_program_private::modernIncompatibleOptions();
-    if (conflict) {
-        QoreString desc("PARSE-OPTION-ERROR: ");
-        if (qore_program_private::isModern(po)) {
-            desc.concat("%modern cannot be set while ");
-        } else {
-            desc.sprintf("'%s' is parsed in %%modern mode by its extension, which cannot be used while ",
-                files[0].c_str());
+    if (qore_program_private::isModern(po)) {
+        // %modern given with the options (qcc -M, --parse-option)
+        if (!qore_check_modern_parse_options(po, error)) {
+            return false;
         }
-        qore_program_private::describeParseOptions(conflict, desc);
-        desc.concat(" is in effect: the option changes the meaning of code, and %modern guarantees a consistent set "
-            "of parse options");
+    } else if (QoreParseOptions conflict = po & qore_program_private::modernIncompatibleOptions()) {
+        QoreString desc("PARSE-OPTION-ERROR: ");
+        qore_program_private::describeModernSourceDefaultConflict(files[0].c_str(), conflict, desc);
         error = desc.c_str();
         return false;
     }
@@ -28688,14 +28684,12 @@ bool QoreAOT::compileScriptFilesBatch(
     batch_memory.beginParse(batch_source_bytes);
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
-    if (!applyAOTModernSourceDefault(po, target_files, error)) {
-        return false;
-    }
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
     // before QoreProgram construction so method-domain checks
     // (e.g. PO_ALLOW_INJECTION-gated `Program::loadApplyTo*`)
     // align with what the runtime host installs via
-    // `qpgm->parseSetParseOptions(...)`.
+    // `qpgm->parseSetParseOptions(...)`; they are applied before the %modern default of the sources' extensions, which
+    // refuses a compatibility option among them that %modern does not allow (issue #5682)
     for (const std::string& flag : parse_option_flags) {
         QoreParseOptions add;
         if (!resolveParseOptionFlag(flag, add)) {
@@ -28703,6 +28697,9 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
         po |= add;
+    }
+    if (!applyAOTModernSourceDefault(po, target_files, error)) {
+        return false;
     }
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -29505,6 +29502,10 @@ bool QoreAOT::compileScriptAggregate(
         }
         po |= add;
         ++flag_i;
+    }
+    // %modern cannot be given with a compatibility option that it does not allow (issue #5682)
+    if (!qore_check_modern_parse_options(po, error)) {
+        return false;
     }
 
     ExceptionSink xsink;
@@ -36901,15 +36902,26 @@ void captureLastError(ExceptionSink& xsink) {
 }
 }  // namespace
 
+//! Creates the Program of an AOT executable, or returns nullptr with qore_last_error() set if its options have %modern
+//! and a compatibility option that it does not allow (an artifact built before issue #5682; it must be rebuilt)
+static QoreProgram* qore_create_checked_program(const QoreParseOptions& po) {
+    std::string error;
+    if (!qore_check_modern_parse_options(po, error)) {
+        qore_last_error_storage = error + "; rebuild the program with this version of Qore";
+        return nullptr;
+    }
+    qore_last_error_storage.clear();
+    return new QoreProgram(po);
+}
+
 extern "C" DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options) {
-    // Delegate to the standard QoreProgram constructor.  QoreParseOptions
-    // has an implicit ctor from int64 that zero-fills the high 64 bits —
-    // matches common.h's PO_* flag layout.
-    return new QoreProgram(QoreParseOptions(parse_options));
+    // QoreParseOptions has an implicit ctor from int64 that zero-fills the high 64 bits — matches common.h's PO_*
+    // flag layout.
+    return qore_create_checked_program(QoreParseOptions(parse_options));
 }
 
 extern "C" DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi) {
-    return new QoreProgram(QoreParseOptions(parse_options_lo, parse_options_hi));
+    return qore_create_checked_program(QoreParseOptions(parse_options_lo, parse_options_hi));
 }
 
 extern "C" DLLEXPORT void qore_destroy_program(QoreProgram* pgm) {
