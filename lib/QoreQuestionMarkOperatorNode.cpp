@@ -133,7 +133,15 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     }
 
     // FIXME: find common type if l != r type
-    parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo) ? leftTypeInfo : nullptr;
+    // two different types are compared as the types of their run-time values: date<absolute> and date<relative>
+    // return the same values as date, so a date of either subtype is a date (issue #5722)
+    const QoreTypeInfo* common_left = leftTypeInfo;
+    const QoreTypeInfo* common_right = rightTypeInfo;
+    if (common_left != common_right) {
+        common_left = QoreTypeInfo::getRuntimeValueType(common_left);
+        common_right = QoreTypeInfo::getRuntimeValueType(common_right);
+    }
+    parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(common_left, common_right) ? common_left : nullptr;
     set_ternary_analysis(parse_context, left_analysis, right_analysis);
     return err;
 }

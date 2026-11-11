@@ -132,7 +132,8 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         if (parse_init_value(e[1], parse_context) && !err) {
             err = -1;
         }
-        expTypeInfo2 = parse_context.typeInfo;
+        // the values in the result are those of run-time values: a date has no subtype then (issue #5722)
+        expTypeInfo2 = QoreTypeInfo::getRuntimeValueType(parse_context.typeInfo);
     }
 
     parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2,

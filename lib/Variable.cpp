@@ -4715,6 +4715,10 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
         return;
     }
 
+    // the type is kept for the code that follows, which can change the value without narrowing it again (a compound
+    // assignment such as += does not): a date has no subtype at run time (issue #5722)
+    ti = QoreTypeInfo::getRuntimeValueType(ti);
+
     // Handle assignment of untyped values by resetting narrowing
     if (!QoreTypeInfo::hasType(ti)) {
         narrowedTypeInfo = nullptr;
@@ -4743,6 +4747,8 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
 }
 
 void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
+    // a date has no subtype at run time (issue #5722; see LocalVar::parseSetNarrowedType())
+    ti = QoreTypeInfo::getRuntimeValueType(ti);
     if (!is_auto_type) {
         return;  // Only narrow auto types
     }
@@ -4820,6 +4826,8 @@ bool Var::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*& base
 }
 
 void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
+    // a date has no subtype at run time (issue #5722; see LocalVar::parseSetNarrowedType())
+    ti = QoreTypeInfo::getRuntimeValueType(ti);
     if (!is_auto_type) {
         return;  // Only narrow auto types
     }
@@ -4855,6 +4863,8 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
 }
 
 void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {
+    // a date has no subtype at run time (issue #5722; see LocalVar::parseSetNarrowedType())
+    ti = QoreTypeInfo::getRuntimeValueType(ti);
     if (!is_auto_type) {
         return;  // Only narrow auto types
     }

@@ -179,12 +179,14 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d key type '%s': value type '%s'\n",
         //    this, i, keys[i].getFullTypeName(), values[i].getFullTypeName());
 
+        // the value type of the container is that of the run-time values: a date has no subtype then, while the
+        // type of each value keeps it (call arguments are checked with it) (issue #5722)
         if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {
-                vtype = vtypes[0];
+                vtype = QoreTypeInfo::getRuntimeValueType(vtypes[0]);
                 vcommon = true;
             }
-        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vtypes[i])) {
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, QoreTypeInfo::getRuntimeValueType(vtypes[i]))) {
             vcommon = false;
         }
 

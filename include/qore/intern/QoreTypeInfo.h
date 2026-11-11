@@ -334,6 +334,55 @@ public:
         return QoreTypeInfo::hasType(first) ? first->runtimeTypeMatch(second) : QTI_AMBIGUOUS;
     }
 
+    //! Returns the subtype of a date type: 1 for date<absolute>, 2 for date<relative> (with or without NOTHING), 0 for
+    //! any other type (issue #5722)
+    DLLLOCAL static int getDateSubtype(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateAbsoluteOrNothingTypeInfo) {
+            return 1;
+        }
+        if (ti == dateRelativeTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return 2;
+        }
+        return 0;
+    }
+
+    //! Returns the type of a value known at parse time, such as the value of a constant: a date has the type of its
+    //! subtype, as a date literal does (issue #5722)
+    DLLLOCAL static const QoreTypeInfo* getKnownValueType(const QoreValue& val) {
+        if (val.getType() == NT_DATE) {
+            return val.get<const DateTimeNode>()->isRelative() ? dateRelativeTypeInfo : dateAbsoluteTypeInfo;
+        }
+        return val.getTypeInfo();
+    }
+
+    //! Returns the type of the run-time values of a type: date<absolute> and date<relative> are date (issue #5722)
+    /** A date value has no subtype at run time, so a type that the parser keeps for code that follows, such as the
+        value type of a container built from a literal, the common type of a ternary or the narrowed type of a local,
+        is the plain date type, while the expression itself keeps its subtype for the checks of its own use.
+    */
+    DLLLOCAL static const QoreTypeInfo* getRuntimeValueType(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateRelativeTypeInfo) {
+            return dateTypeInfo;
+        }
+        if (ti == dateAbsoluteOrNothingTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return dateOrNothingTypeInfo;
+        }
+        return ti;
+    }
+
+    //! Returns true if one type is date<absolute> and the other date<relative>, with or without NOTHING (issue #5722)
+    /** Both accept and return dates, so only their subtypes tell them apart; a value of one is never a value of the
+        other.
+    */
+    DLLLOCAL static bool isDateSubtypeMismatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        int first_subtype = getDateSubtype(first);
+        if (!first_subtype) {
+            return false;
+        }
+        int second_subtype = getDateSubtype(second);
+        return second_subtype && second_subtype != first_subtype;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_t getSingleReturnType(const QoreTypeInfo* ti) {
         if (!hasType(ti) || ti->return_vec.size() > 1)

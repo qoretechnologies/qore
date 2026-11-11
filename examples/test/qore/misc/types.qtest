@@ -1775,14 +1775,12 @@ class TypeTest inherits QUnit::Test {
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("sub t() { date<absolute> i = 1s; }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("sub t() { date<absolute> i = 1s; }", ""));
             }
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("sub t() { date<relative> i = 2017-07-10; }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("sub t() { date<relative> i = 2017-07-10; }", ""));
             }
 
             {
@@ -1816,26 +1814,22 @@ class TypeTest inherits QUnit::Test {
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("sub t(date<absolute> d) { return d; } sub r() { t(1s); }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "r");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("sub t(date<absolute> d) { return d; } sub r() { t(1s); }", ""));
             }
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("sub t(date<relative> d) { return d; } sub r() { t(2017-07-10); }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "r");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("sub t(date<relative> d) { return d; } sub r() { t(2017-07-10); }", ""));
             }
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("date<absolute> sub t() { return 1s; }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("date<absolute> sub t() { return 1s; }", ""));
             }
 
             {
                 Program p(PO_NEW_STYLE);
-                p.parse("date<relative> sub t() { return 2017-07-10; }", "");
-                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("date<relative> sub t() { return 2017-07-10; }", ""));
             }
         }
 
