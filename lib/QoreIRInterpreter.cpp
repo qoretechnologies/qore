@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 429,
+static_assert(QORE_IR_MAX_OPCODE == 430,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -13560,12 +13560,20 @@ load_local_done:
             }
             case QoreIROpcode::IteratorCreate:
             case QoreIROpcode::IteratorCreateIterate:
-            case QoreIROpcode::IteratorCreateSelectors: {
+            case QoreIROpcode::IteratorCreateSelectors:
+            case QoreIROpcode::IteratorCreateSource: {
                 auto* iter_inst = static_cast<QoreIRIteratorCreateInstruction*>(inst);
                 QoreValue iterable = getIRValue(values, iter_inst->iterable);
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = nullptr;
-                if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                if (inst->opcode == QoreIROpcode::IteratorCreateSource) {
+                    // operands[0] = the kind; operands[1] = the flags; operands[2] and operands[3] = the indices
+                    iter = reinterpret_cast<FunctionalOperatorInterface*>(qore_rt_iterator_create_source(
+                        toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(),
+                        getIRValue(values, inst->operands[1]).getAsBigInt(),
+                        toBits(getIRValue(values, inst->operands[2])), toBits(getIRValue(values, inst->operands[3])),
+                        xsink));
+                } else if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
                     // operands[0] = the flags; operands[1] = the number of selectors
                     iter = reinterpret_cast<FunctionalOperatorInterface*>(qore_rt_iterator_create_selectors(
                         toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(),

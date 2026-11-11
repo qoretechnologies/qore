@@ -203,7 +203,7 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
 }
 
 QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value, const QoreValue& start_value,
-        const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const {
+        const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) {
     // the evaluated operands, under the names that the code below has always used
     const QoreValue* seq = &seq_value;
     const QoreValue* start_index = &start_value;
@@ -301,26 +301,38 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
 
 FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
         FunctionalValueType& value_type, ExceptionSink* xsink) const {
-    value_type = list;
-
     ValueEvalRefHolder seq(rc, e[0], xsink);
     if (*xsink)
         return nullptr;
-    // the iterator made below keeps the sequence, which the indexes can release (see evalImpl())
-    holdBorrowedSequence(seq);
+    // the iterator made below keeps the sequence for the whole iteration, while the code that runs meanwhile - the
+    // indexes, the body of a foreach loop, or the expression of a functional operator - can assign the variable that
+    // it was read from another value, which released the only reference to it: a sequence borrowed from a variable
+    // gets a reference of its own, as QoreFunctionalSquareBracketsOperator takes one (qore#5675, qore#5770)
+    if (!seq.isTemp() && seq->hasNode()) {
+        seq.ensureReferencedValue();
+    }
+
+    // the indices are evaluated once each, after the sequence (qore#5684)
+    ValueEvalRefHolder start_index(rc, e[1], xsink);
+    if (*xsink)
+        return nullptr;
+    ValueEvalRefHolder stop_index(rc, e[2], xsink);
+    if (*xsink)
+        return nullptr;
+    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+    return getSliceIterator(seq, *start_index, *stop_index, po, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getSliceIterator(ValueEvalRefHolder& seq,
+        const QoreValue start_index, const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type,
+        ExceptionSink* xsink) {
+    value_type = list;
 
     if (seq->getType() == NT_LIST || seq->getType() == NT_BUFFER) {
-        QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
         bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
         bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
         int64 start, stop, seq_size;
-        ValueEvalRefHolder start_index(rc, e[1], xsink);
-        if (*xsink)
-            return nullptr;
-        ValueEvalRefHolder stop_index(rc, e[2], xsink);
-        if (*xsink)
-            return nullptr;
-        if (getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
+        if (getEffectiveRange(*seq, start, stop, seq_size, start_index, stop_index, broken_list_range,
                 negative_offsets, xsink)) {
             if (!(po & PO_BROKEN_RANGE)) {
                 if (start <= stop) {
@@ -336,7 +348,7 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
         }
         // an empty range: its value is made from the operands evaluated above, which are not evaluated again
         // (qore#5684)
-        ValueHolder res(slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink), xsink);
+        ValueHolder res(slice(*seq, start_index, stop_index, broken_list_range, negative_offsets, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -348,18 +360,8 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
         return new QoreFunctionalSingleValueOperator(res.release(), xsink);
     }
 
-    // any other sequence: its value is made from the sequence evaluated above and the indices, evaluated once each
-    // (qore#5684)
-    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-    ValueEvalRefHolder start_index(rc, e[1], xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    ValueEvalRefHolder stop_index(rc, e[2], xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    ValueHolder res(slice(*seq, *start_index, *stop_index, static_cast<bool>(po & PO_BROKEN_LIST_RANGE),
+    // any other sequence: its value is made from the sequence and the indices
+    ValueHolder res(slice(*seq, start_index, stop_index, static_cast<bool>(po & PO_BROKEN_LIST_RANGE),
         static_cast<bool>(po & PO_NEGATIVE_OFFSETS), xsink), xsink);
 
     if (*xsink) {

@@ -93,6 +93,7 @@
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QoreKeysOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
@@ -290,6 +291,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_iterator_create_iterate", reinterpret_cast<void*>(&qore_rt_iterator_create_iterate) },
     { "qore_rt_iterator_create_iterate_throwing",
         reinterpret_cast<void*>(&qore_rt_iterator_create_iterate_throwing) },
+    { "qore_rt_iterator_create_source", reinterpret_cast<void*>(&qore_rt_iterator_create_source) },
+    { "qore_rt_iterator_create_source_throwing",
+        reinterpret_cast<void*>(&qore_rt_iterator_create_source_throwing) },
     { "qore_rt_context_max_pos", reinterpret_cast<void*>(&qore_rt_context_max_pos) },
     { "qore_rt_context_set_pos", reinterpret_cast<void*>(&qore_rt_context_set_pos) },
     { "qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy) },
@@ -17889,6 +17893,45 @@ extern "C" DLLEXPORT void* qore_rt_iterator_create_iterate(uint64_t iterable_bit
     return iter;
 }
 
+extern "C" DLLEXPORT void* qore_rt_iterator_create_source(uint64_t operand_bits, int64_t kind, int64_t flags,
+        uint64_t first_bits, uint64_t second_bits, ExceptionSink* xsink) {
+    // the operand belongs to the frame, which releases it once the iterator is made: an iterator that keeps it holds
+    // a reference of its own, as the AST's holds the value of the operator's operand for the whole loop (qore#5770)
+    QoreValue operand = fromBits(operand_bits);
+    FunctionalOperator::FunctionalValueType value_type = FunctionalOperator::nothing;
+    FunctionalOperatorInterface* iter = nullptr;
+    switch (static_cast<QoreIRIteratorSourceKind>(kind)) {
+        case QoreIRIteratorSourceKind::Keys: {
+            ValueOptionalRefHolder marg(operand, false, xsink);
+            iter = QoreKeysOperatorNode::getKeysIterator(marg, value_type, xsink);
+            break;
+        }
+        case QoreIRIteratorSourceKind::Slice: {
+            ValueEvalRefHolder seq(xsink);
+            seq.setValue(operand.refSelf(), true);
+            iter = QoreSquareBracketsRangeOperatorNode::getSliceIterator(seq, fromBits(first_bits),
+                fromBits(second_bits), runtime_get_parse_options(), value_type, xsink);
+            break;
+        }
+        case QoreIRIteratorSourceKind::Indexes: {
+            ValueEvalRefHolder lhs(xsink);
+            lhs.setValue(operand.refSelf(), true);
+            ValueEvalRefHolder rhs(xsink);
+            rhs.setValue(fromBits(first_bits).refSelf(), true);
+            iter = QoreSquareBracketsOperatorNode::getIndexesIterator(lhs, rhs,
+                static_cast<bool>(flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)),
+                static_cast<bool>(flags & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)), value_type,
+                xsink);
+            break;
+        }
+    }
+    if ((xsink && *xsink) || value_type == FunctionalOperator::nothing) {
+        delete iter;
+        return nullptr;
+    }
+    return iter;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_iterate_value(uint64_t source_bits, ExceptionSink* xsink) {
     QoreValue source = fromBits(source_bits);
     return toBits(QoreIterateOperatorNode::evalIteratorValue(source,
@@ -18249,6 +18292,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_aot
 extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_iterate_throwing(
         uint64_t iterable_bits, ExceptionSink* xsink) {
     void* result = qore_rt_iterator_create_iterate(iterable_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_source_throwing(uint64_t operand_bits,
+        int64_t kind, int64_t flags, uint64_t first_bits, uint64_t second_bits, ExceptionSink* xsink) {
+    void* result = qore_rt_iterator_create_source(operand_bits, kind, flags, first_bits, second_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

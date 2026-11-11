@@ -418,6 +418,16 @@ public:
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorCreateInstruction* createIteratorCreateIterate(QoreIRValue iterable,
         const QoreProgramLocation* loc = nullptr);
+    //! Creates the iterator of a foreach statement over keys, a slice or a list of indices; see
+    //! QoreIROpcode::IteratorCreateSource
+    /** @param operand the evaluated operand: the operand of keys, or the sequence
+        @param kind the operator
+        @param flags the QoreIRListSelectorFlag flags of a list of indices (StringIndexChar, NegativeOffsets)
+        @param first the start of a slice, or the list of indices; invalid for keys
+        @param second the end of a slice; invalid otherwise
+    */
+    QoreIRIteratorCreateInstruction* createIteratorCreateSource(QoreIRValue operand, QoreIRIteratorSourceKind kind,
+        int64_t flags, QoreIRValue first, QoreIRValue second, const QoreProgramLocation* loc = nullptr);
     //! Creates the iterator of a list of selectors with ranges; see QoreIROpcode::IteratorCreateSelectors
     /** @param seq the sequence
         @param flags the QoreIRListSelectorFlag flags (StringIndexChar)

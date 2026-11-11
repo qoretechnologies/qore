@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 429,
+static_assert(QORE_IR_MAX_OPCODE == 430,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -33620,7 +33620,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Iterator operations ===
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
-        case QoreIROpcode::IteratorCreateSelectors: {
+        case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource: {
             const auto* iter_inst = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
             // Get the iterable value (NaN-boxed)
             auto* iterable_val = getVal(iter_inst->iterable.id, error);
@@ -33682,6 +33683,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, 0), state.selector);
                     selector_segment_states[inst->result.id] = state;
                 }
+            } else if (inst->opcode == QoreIROpcode::IteratorCreateSource) {
+                // operands[0] = the kind; operands[1] = the flags (native ints); operands[2] and operands[3] = the
+                // indices, boxed
+                if (inst->operands.size() < 4) {
+                    error = "IteratorCreateSource: missing operands";
+                    return false;
+                }
+                auto* kind = getVal(inst->operands[0].id, error);
+                auto* flags = getVal(inst->operands[1].id, error);
+                if (!kind || !flags) {
+                    return false;
+                }
+                llvm::Value* kind_int = ensureIntTypeInline(kind, inst->operands[0].id);
+                llvm::Value* flags_int = ensureIntTypeInline(flags, inst->operands[1].id);
+                auto* first_val = getVal(inst->operands[2].id, error);
+                auto* second_val = first_val ? getVal(inst->operands[3].id, error) : nullptr;
+                if (!second_val) {
+                    return false;
+                }
+                llvm::Value* first = boxValue(first_val, inst->operands[2].id);
+                llvm::Value* second = boxValue(second_val, inst->operands[3].id);
+                auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, i64_type, i64_type, i64_type,
+                    ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_source", ft);
+                auto helper_throwing = module.getOrInsertFunction("qore_rt_iterator_create_source_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {iterable_boxed, kind_int, flags_int, first, second, xsink_arg}, module, llvm_func, inst);
             } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);

@@ -1561,6 +1561,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref foreach "foreach" loop over a slice of a list read from a variable (ex:
+      <tt>foreach auto v in (l[1..2])</tt>) read freed memory when its body removed or assigned the variable; the loop
+      now keeps the list until it ends (issue #5770)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

@@ -264,6 +264,18 @@ scalars needs nothing):
 - the lazily evaluated `foreach` over `map`, `select` and the other functional operators
   (`lowerForeachLazyPipelineFused()`) does the same for the source and its iterator.
 
+The list of a `foreach` statement that is `keys`, a slice (`seq[a..b]`) or a list of indices without a range
+(`seq[i, j]`) is iterated by the AST interpreter with the iterator of the operator, which keeps the hash, or a list
+sequence, until the loop ends, while the other temporaries of the list expression are released before the body runs
+(the keys of an object are copied first, and a one-index or non-list value is made first).  The IR lowering
+(`getForeachSource()`, `lowerForeachSourceIterator()`) creates the same iterator with `IteratorCreateSource`, from
+the operand and indices that it evaluates in a temp scope of its own, which ends once the iterator is made; the
+runtime helper calls the operators' own functions (`QoreKeysOperatorNode::getKeysIterator()`,
+`QoreSquareBracketsRangeOperatorNode::getSliceIterator()`, `QoreSquareBracketsOperatorNode::getIndexesIterator()`),
+and the iterator has the `ForeachSource` entries above.  Only an operand that can hold an object is iterated so: the
+list of any other operand is built first, since its release cannot be observed (qore#5770,
+`examples/test/ir/foreach-source-lifetime/`).
+
 `IteratorRelease` and `ReleaseOwnedTemp` release on the path that they are on only, and clear the slot, so the
 release at the end of the frame finds nothing; they do not change the native code generator's compile-time slot maps,
 which the other paths of the loop still use, and do not check for an exception, since they also run on the path of

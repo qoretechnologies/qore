@@ -1792,6 +1792,28 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     return inst;
 }
 
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSource(QoreIRValue operand,
+        QoreIRIteratorSourceKind kind, int64_t flags, QoreIRValue first, QoreIRValue second,
+        const QoreProgramLocation* loc) {
+    QoreIRValue kind_val = createConstInt(static_cast<int64_t>(kind), loc)->result;
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    if (!first.isValid()) {
+        first = createConstNothing(loc)->result;
+    }
+    if (!second.isValid()) {
+        second = createConstNothing(loc)->result;
+    }
+    auto inst = append<QoreIRIteratorCreateInstruction>(operand);
+    inst->opcode = QoreIROpcode::IteratorCreateSource;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(kind_val);
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(first);
+    inst->operands.push_back(second);
+    return inst;
+}
+
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
         int64_t count, const QoreProgramLocation* loc) {
     QoreIRValue flags_val = createConstInt(flags, loc)->result;

@@ -272,6 +272,39 @@ public:
 
         @return the iterator handle, or an invalid value on error
     */
+    //! The list of a foreach statement that is iterated with the AST interpreter's iterator of its operator
+    struct ForeachSourceOperator {
+        //! the operator
+        QoreIRIteratorSourceKind kind = QoreIRIteratorSourceKind::Keys;
+        //! the operand of keys, or the sequence
+        QoreValue operand;
+        //! the start of a slice, or the list of indices
+        QoreValue first;
+        //! the end of a slice
+        QoreValue second;
+        //! the QoreIRListSelectorFlag flags of a list of indices
+        int64_t flags = 0;
+        //! true if the list is such an operator
+        bool valid = false;
+
+        explicit operator bool() const {
+            return valid;
+        }
+    };
+    //! Returns true and sets \a src if \a list, the list of a foreach statement, is keys, a slice or a list of indices
+    //! (without a range) whose operand can hold an object
+    /** The AST interpreter's iterator of the operator keeps the hash or the sequence for the whole loop, while the
+        other temporaries of the list are released before the body runs; an object that it holds is then destroyed
+        after the loop (qore#5770).  An operand that holds no object cannot show when it is released: its list is
+        built first, as for any other expression.
+    */
+    bool getForeachSource(const QoreValue& list, ForeachSourceOperator& src);
+    //! Lowers the iterator of the foreach source \a src: its operand and indices, and IteratorCreateSource, in a temp
+    //! scope of their own that ends once the iterator is made
+    /** @return the iterator handle, or an invalid value on error
+    */
+    QoreIRValue lowerForeachSourceIterator(const ForeachSourceOperator& src, const QoreProgramLocation* loc,
+        std::string& error);
     QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
         bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
     //! Emits the iteration of a lazy list of selectors in place of IteratorNext
