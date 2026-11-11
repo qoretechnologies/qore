@@ -870,9 +870,6 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
     #! The batch operations send XML documents, where an unescaped value is a malformed or altered request
     batchOperationsTest() {
-%ifdef NoXml
-        testSkip("no xml module: the S3 responses are XML");
-%endif
         # an object key may contain "&" or "<", both ordinary characters in a key; unescaped, the first
         # produces a request that means something else and the second one the server rejects
         assertEq("a&amp;b&lt;c&gt;d", AwsS3ExtendedXml::escape("a&b<c>d"));
@@ -897,6 +894,10 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                 "object_keys": (map sprintf("k%d", $1), xrange(0, MaxDeleteKeys + 1)),
             });
         });
+%ifdef NoXml
+        # the rest reads the XML responses of the requests
+        testSkip("no xml module: the S3 responses are XML");
+%endif
         # ... and exactly the cap is accepted, since an off-by-one here would reject a legal batch
         rest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><DeleteResult></DeleteResult>',);
         hash<auto> full = dp.doRequest({

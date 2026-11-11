@@ -541,9 +541,6 @@ class AwsTest inherits QUnit::Test {
         instead.
     */
     s3ContentSha256Test() {
-%ifdef NoXml
-        testSkip("no xml module: the response is XML");
-%endif
         HttpServer srv(\log(), \log());
         int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
@@ -595,9 +592,6 @@ class AwsTest inherits QUnit::Test {
 
     #! The I/O client must retain AWS credentials when copied and sign pre-serialized bodies
     ioRawCopyTest() {
-%ifdef NoXml
-        testSkip("no xml module: the response is XML");
-%endif
         HttpServer srv(\log(), \log());
         int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
@@ -648,8 +642,9 @@ class HeaderCaptureHandler inherits AbstractHttpRequestHandler {
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         last_hdr = hdr;
-        return makeResponse(200, "<?xml version=\"1.0\"?><ListAllMyBucketsResult></ListAllMyBucketsResult>",
-            {"Content-Type": "application/xml"});
+        # the tests check the requests only: the response is JSON, which every client can decode, so that they need
+        # no xml module
+        return makeResponse(200, "{}", {"Content-Type": "application/json"});
     }
 }
 
