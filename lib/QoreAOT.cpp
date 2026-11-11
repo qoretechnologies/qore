@@ -632,6 +632,13 @@ void qore_aot_record_folded_constant_import(const QoreProgramLocation* consumer_
             || *provider_file == '<' || !strcmp(consumer_file, provider_file)) {
         return;
     }
+    // only a preloaded sibling object provides the constant to a link: one of an %include'd file is part of this
+    // object, and one of a loaded module is provided at run time, so importing either would make the link fail with
+    // an unresolved import (the parse labels cover the included files and the modules too, so they cannot tell)
+    const std::unordered_set<std::string> provider_files = {provider_file};
+    if (!qore_aot_source_provider_is_preloaded(provider_files)) {
+        return;
+    }
     const std::string path = qore_aot_constant_symbol_path(ptr, ce->getName());
     qore_program_private::recordSourceParseConstantImport(pgm, consumer_loc, path.c_str(), ce, !ptr.isNs());
 }

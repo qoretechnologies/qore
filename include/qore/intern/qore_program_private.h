@@ -1039,6 +1039,8 @@ public:
     };
 
     std::vector<source_parse_constant_import_t> source_parse_constant_imports;
+    //! the (entry, consuming source file) pairs already recorded
+    std::set<std::pair<const ConstantEntry*, std::string>> source_parse_constant_import_keys;
 
     enum class source_parse_call_import_kind_t {
         Function,
@@ -3347,10 +3349,8 @@ public:
             return;
         }
         // one record per constant and consuming source file
-        for (const source_parse_constant_import_t& rec : source_parse_constant_imports) {
-            if (rec.entry == entry && rec.source_file == file) {
-                return;
-            }
+        if (!source_parse_constant_import_keys.insert({entry, file}).second) {
+            return;
         }
         source_parse_constant_imports.push_back({file, qore_path, entry, class_constant});
     }
