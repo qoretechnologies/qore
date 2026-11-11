@@ -9722,7 +9722,8 @@ static int link_script_objects_to_executable(const std::string& output,
         "    QoreProgram* pgm = qore_create_program_ext(\n"
         "        (int64_t)0x%016llxULL, (int64_t)0x%016llxULL);\n"
         "    if (!pgm) {\n"
-        "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
+        "        const char* err = qore_last_error(nullptr);\n"
+        "        fprintf(stderr, \"qore_create_program failed: %%s\\n\", err ? err : \"unknown error\");\n"
         "        qore_cleanup();\n"
         "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
@@ -11380,6 +11381,12 @@ int main(int argc, char** argv) {
     int rc = 0;
     QoreParseOptions compile_po = PO_DEFAULT;
     if (!apply_parse_option_flags(compile_po, error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        qore_cleanup();
+        return 1;
+    }
+    // %modern cannot be given with a compatibility option that it does not allow (issue #5682)
+    if (!qore_check_modern_parse_options(compile_po, error)) {
         fprintf(stderr, "error: %s\n", error.c_str());
         qore_cleanup();
         return 1;

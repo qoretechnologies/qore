@@ -1179,6 +1179,16 @@ public:
     //! Appends the parse directives of the given options to the string, separated by ", "
     DLLLOCAL static void describeParseOptions(const QoreParseOptions& po, QoreString& str);
 
+    //! Appends the description of setting the options \a po in a Program with the options \a current that %modern
+    //! does not allow (\a conflict, from getModernConflict()) with the verb ("set" or "used") (issue #5682)
+    DLLLOCAL static void describeModernSetConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+            const QoreParseOptions& conflict, const char* verb, QoreString& desc);
+
+    //! Appends the description of a source file that is parsed in %modern mode by its extension while options that
+    //! %modern does not allow (\a conflict) are in effect (issue #5682)
+    DLLLOCAL static void describeModernSourceDefaultConflict(const char* filename, const QoreParseOptions& conflict,
+            QoreString& desc);
+
     //! Returns the options of the change that %modern does not allow with the given parse options, if any
     /** While %modern is in effect, a compatibility option that changes the meaning of code cannot be set
         (\a set true), nor can %modern be set while such an option is in effect (the option is returned), and an
@@ -1217,7 +1227,7 @@ public:
         @return -1 if the options are not allowed, with the exception raised, 0 if they are
     */
     DLLLOCAL static int checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
-            ExceptionSink* xsink);
+            ExceptionSink* xsink, const char* what = "Program::constructor()");
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
     /** %modern implies further options; the compatibility options that change the meaning of code cannot be in

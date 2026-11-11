@@ -40,6 +40,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -3867,6 +3868,48 @@ void qore_program_private_base::describeParseOptions(const QoreParseOptions& po,
     }
 }
 
+//! The reason that ends the descriptions of the conflicts between %modern and the options it does not allow
+static constexpr const char* qore_modern_conflict_reason = ": the option changes the meaning of code, and %modern "
+    "guarantees a consistent set of parse options";
+
+void qore_program_private_base::describeModernSetConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+        const QoreParseOptions& conflict, const char* verb, QoreString& desc) {
+    if (isModern(current)) {
+        // an option that %modern does not allow is set while %modern is in effect
+        describeParseOptions(conflict & po, desc);
+        desc.sprintf(" cannot be %s while %%modern is in effect", verb);
+    } else {
+        // the options set put %modern in effect: given as such, or completed by the options set
+        desc.concat((po & PO_MODERN) == PO_MODERN ? "%modern" : "%modern (which the options set complete)");
+        QoreParseOptions with = conflict & po;
+        QoreParseOptions in_effect = conflict & ~po;
+        if (with) {
+            desc.concat(" and ");
+            describeParseOptions(with, desc);
+            desc.sprintf(" cannot be %s together", verb);
+            if (in_effect) {
+                desc.concat(", nor while ");
+                describeParseOptions(in_effect, desc);
+                desc.concat(" is in effect");
+            }
+        } else {
+            desc.sprintf(" cannot be %s while ", verb);
+            describeParseOptions(in_effect, desc);
+            desc.concat(" is in effect");
+        }
+    }
+    desc.concat(qore_modern_conflict_reason);
+}
+
+void qore_program_private_base::describeModernSourceDefaultConflict(const char* filename,
+        const QoreParseOptions& conflict, QoreString& desc) {
+    desc.sprintf("'%s' is parsed in %%modern mode by its extension, which cannot be used while ", filename);
+    describeParseOptions(conflict, desc);
+    desc.concat(" is in effect");
+    desc.concat(qore_modern_conflict_reason);
+    desc.concat("; parse the code as a .q file, or without the option");
+}
+
 int qore_program_private_base::checkModernConflict(const QoreParseOptions& current, const QoreParseOptions& po, bool set,
         const char* what, ExceptionSink* xsink) {
     QoreParseOptions conflict = getModernConflict(current, po, set);
@@ -3874,19 +3917,12 @@ int qore_program_private_base::checkModernConflict(const QoreParseOptions& curre
         return 0;
     }
     QoreStringNode* desc = new QoreStringNodeMaker("%s: ", what);
-    if (set && !(conflict & po)) {
-        // %modern is set while the option is in effect
-        desc->concat("%modern cannot be set while ");
-        describeParseOptions(conflict, *desc);
-        desc->concat(" is in effect: the option changes the meaning of code, and %modern guarantees a consistent set "
-            "of parse options");
+    if (set) {
+        describeModernSetConflict(current, po, conflict, "set", *desc);
     } else {
-        describeParseOptions(set ? conflict & po : conflict, *desc);
-        desc->concat(set
-            ? " cannot be set while %modern is in effect: the option changes the meaning of code, and %modern "
-                "guarantees a consistent set of parse options"
-            : " cannot be disabled while %modern is in effect, which implies the option and guarantees a consistent "
-                "set of parse options");
+        describeParseOptions(conflict, *desc);
+        desc->concat(" cannot be disabled while %modern is in effect, which implies the option and guarantees a "
+            "consistent set of parse options");
     }
     xsink->raiseException("OPTION-ERROR", desc);
     return -1;
@@ -3899,17 +3935,11 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         return 0;
     }
     QoreStringNode* desc = new QoreStringNode;
-    if (set && !(conflict & po)) {
-        // %modern is set while the option is in effect
-        desc->concat("%modern cannot be used while ");
-        describeParseOptions(conflict, *desc);
-        desc->concat(" is in effect: the option changes the meaning of code, and %modern guarantees a consistent set "
-            "of parse options; remove the option, or parse the code without %modern");
-    } else if (set) {
-        describeParseOptions(conflict & po, *desc);
-        desc->concat(" cannot be used while %modern is in effect: the option changes the meaning of code, and %modern "
-            "guarantees a consistent set of parse options; remove the directive, or parse the code without %modern (as "
-            "a .q file, or after %old-style)");
+    if (set) {
+        describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
+        desc->concat(isModern(pwo.parse_options)
+            ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
+            : "; remove the option, or parse the code without %modern");
     } else {
         // %no-negative-offsets is the only directive that disables an option that %modern implies
         desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
@@ -3927,32 +3957,44 @@ int qore_program_private::checkModernSourceDefault(const QoreParseOptions& curre
     if (!conflict) {
         return 0;
     }
-    QoreStringNode* desc = new QoreStringNodeMaker("'%s' is parsed in %%modern mode by its extension, which cannot be "
-        "used while ", filename);
-    describeParseOptions(conflict, *desc);
-    desc->concat(" is in effect: the option changes the meaning of code, and %modern guarantees a consistent set of "
-        "parse options; parse the code as a .q file, or without the option");
+    QoreStringNode* desc = new QoreStringNode;
+    describeModernSourceDefaultConflict(filename, conflict, *desc);
     xsink->raiseException("PARSE-OPTION-ERROR", desc);
     return -1;
 }
 
-int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
-        ExceptionSink* xsink) {
-    // a child Program has its parent's options too, unless the parent allows other options for its children
-    QoreParseOptions effective = po;
-    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
-        effective |= parent->priv->pwo.parse_options;
+bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error) {
+    if (!qore_program_private_base::isModern(po)) {
+        return true;
     }
-    if (!isModern(effective)) {
+    QoreParseOptions conflict = po & qore_program_private_base::modernIncompatibleOptions();
+    if (!conflict) {
+        return true;
+    }
+    QoreString desc("PARSE-OPTION-ERROR: ");
+    // the options are given together: nothing is in effect before them
+    qore_program_private_base::describeModernSetConflict(QoreParseOptions(), po, conflict, "set", desc);
+    error = desc.c_str();
+    return false;
+}
+
+int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
+        ExceptionSink* xsink, const char* what) {
+    // a child Program has its parent's options too, unless the parent allows other options for its children
+    QoreParseOptions inherited;
+    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+        inherited = parent->priv->pwo.parse_options;
+    }
+    if (!isModern(inherited | po)) {
         return 0;
     }
-    if (isModern(po)) {
-        return checkModernConflict(effective, po, true, "Program::constructor()", xsink);
+    if (isModern(po) || !isModern(inherited)) {
+        return checkModernConflict(inherited, po, true, what, xsink);
     }
     // %modern comes from the parent
-    return checkModernConflict(effective, po, true, "Program::constructor() (the new Program has %modern from its "
-        "parent, which can allow other options for its child Programs with %no-child-restrictions, or create an "
-        "independent Program)", xsink);
+    QoreStringMaker label("%s (the new Program has %%modern from its parent, which can allow other options for its "
+        "child Programs with %%no-child-restrictions, or create an independent Program)", what);
+    return checkModernConflict(inherited, po, true, label.c_str(), xsink);
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {

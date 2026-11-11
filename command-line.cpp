@@ -1625,15 +1625,33 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
        QoreJIT::setJITThreshold(jit_jit_threshold);
    }
 
+   // %modern from -M, or by default for code given on the command line or read from stdin, cannot be in effect with a
+   // compatibility option given with -p that it does not allow (issue #5682); this is refused before the Program is
+   // created, with one message that says how to run the code without %modern
+   {
+      bool cl_source_modern = (eval_arg || cl_pgm || !program_file_name) && !old_style_default_enabled();
+      std::string po_error;
+      if ((cmd_modern || cl_source_modern)
+            && !qore_check_modern_parse_options(parse_options | QoreParseOptions(PO_MODERN), po_error)) {
+         fprintf(stderr, "%s: %s; %s\n", pn, po_error.c_str(), cmd_modern
+            ? "remove -M or the option"
+            : "code given on the command line or read from stdin is parsed in %modern mode; remove the option, or "
+              "set QORE_OLD_STYLE_DEFAULT=1 to parse it without %modern");
+         qore_cleanup();
+         qore_fork_child_quick_exit(2);
+         return 2;
+      }
+   }
+
    ExceptionSink wsink, xsink;
    {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
-      qpgm->setExecMode(exec_mode, user_requested_exec_mode);
       if (cmd_modern) {
-         // raises a parse exception if an option given with -p is a compatibility option that %modern does not allow
+         // before the execution mode is set, as before: -M selects the default mode of %modern code only through it
          qpgm->parseSetParseOptions(PO_MODERN);
       }
+      qpgm->setExecMode(exec_mode, user_requested_exec_mode);
       if (ir_dump) {
           qpgm->setIRDump(true);
       }
