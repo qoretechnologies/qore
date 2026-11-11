@@ -1050,8 +1050,44 @@ private:
     AOTSlotResolutionCache* previous;
 };
 
+std::string qore_aot_get_function_identity_name(const FunctionEntry* fe) {
+    assert(fe && fe->getNamespace());
+    std::string qualified;
+    fe->getNamespace()->getPath(qualified);
+    // a root function gets the leading "::" and no namespace
+    qualified += "::";
+    qualified += fe->getName();
+    return qualified;
+}
+
+std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {
+    const QoreFunction* f = fcr ? fcr->getFunction() : nullptr;
+    if (!f) {
+        return std::string();
+    }
+    // the bare name of a function of the root namespace would find the builtin of that name when the reference is
+    // loaded
+    const FunctionEntry* fe = fcr->getFunctionEntry();
+    if (fe && fe->getNamespace()) {
+        std::string path;
+        fe->getNamespace()->getPath(path);
+        if (path.empty()) {
+            return qore_aot_get_function_identity_name(fe);
+        }
+    }
+    return f->getName();
+}
+
 static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
     qore_program_private* pp = qore_program_private::get(*pgm);
+    // "::name": the function of the root namespace itself, never the builtin of the same name that the root function
+    // index would find first
+    if (name[0] == ':' && name[1] == ':' && name[2]) {
+        if (FunctionEntry* fe = qore_ns_private::get(*pp->RootNS)->func_list.findNode(name + 2)) {
+            return fe;
+        }
+        return nullptr;
+    }
     if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
         return fe;
     }
@@ -1127,6 +1163,10 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
         return QoreValue();
     }
 
+    // call_function() looks a name up by its scope: it does not take the "::" of a function of the root namespace
+    if (name[0] == ':' && name[1] == ':' && name[2]) {
+        name += 2;
+    }
     QoreParseListNode* dynamic_args = new QoreParseListNode(&loc_builtin);
     dynamic_args->add(new QoreStringNode(name), &loc_builtin);
     if (args) {
@@ -4369,8 +4409,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (fe) {
                         QoreFunction* f = fe->getFunction();
                         if (f) {
-                            ctx->exprs[i] = toBitsNB(QoreValue(
-                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
+                            LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+                            fcr->setFunctionEntry(fe);
+                            ctx->exprs[i] = toBitsNB(QoreValue(fcr));
                             continue;
                         }
                     }

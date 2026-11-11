@@ -1119,9 +1119,10 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     }
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
-        const QoreFunction* f = qore_root_ns_private::parseResolveFunction(*scope);
-        if (f) {
-            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, f);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope);
+        if (fe) {
+            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, fe->getFunction());
+            fr->setFunctionEntry(fe);
             // the explicit type arguments of \NS::f<T>() instantiate the function when the reference is called
             if (!explicit_parse_type_args.empty()) {
                 std::vector<const QoreTypeInfo*> type_args;
