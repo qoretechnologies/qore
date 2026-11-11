@@ -122,7 +122,13 @@ static thread_local const QoreTypeParamInstantiation* runtime_type_param_instant
 
 UserSignatureTypeParamContextHelper::UserSignatureTypeParamContextHelper(const UserSignature* sig)
         : old_sig(parse_signature_type_param_context) {
-    parse_signature_type_param_context = sig && sig->hasTypeParameters() ? sig : nullptr;
+    if (sig && sig->hasTypeParameters()) {
+        parse_signature_type_param_context = sig;
+    } else if (!sig || !sig->closure) {
+        // a closure, which has no type parameters of its own, names those of the code that it is in, which is
+        // parsed around it (qore#5733); the type parameters of any other code are not visible in a function
+        parse_signature_type_param_context = nullptr;
+    }
 }
 
 UserSignatureTypeParamContextHelper::~UserSignatureTypeParamContextHelper() {
@@ -1261,8 +1267,22 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             // again, as for a call without a committed variant, and called with the arguments as the caller gave
             // them, not as they were converted for the variant that does not match (issue #5686).
             saved.restore(tmp);
+            // the type parameters that a closure names (those of the code that created it) are bound by the type
+            // arguments of that code, which are current: the variant is resolved with them as the explicit type
+            // arguments, so that they are not inferred from the arguments that the closure does not accept, which
+            // then raise the error that a call of a function with the same signature raises (qore#5733)
+            bool closure_type_args = variant_needs_type_param_substitution && variant->isUser()
+                && variant->getUserVariantBase()->getUserSignature()->closure;
+            const QoreTypeParamInstantiation* old_explicit_inst = explicit_type_param_instantiation;
+            if (closure_type_args) {
+                explicit_type_param_instantiation = runtime_get_type_param_instantiation();
+            }
             // if no match can be found, return with the exception raised
-            if (findVariant(func, variant, cctx)) {
+            int find_rc = findVariant(func, variant, cctx);
+            if (closure_type_args) {
+                explicit_type_param_instantiation = old_explicit_inst;
+            }
+            if (find_rc) {
                 xsink2.clear();
                 return;
             }
@@ -1432,6 +1452,26 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
             old_type_param_instantiation = nullptr;
         }
         return 0;
+    }
+
+    // a closure has no type parameters of its own; the type parameters that its signature names (its generic
+    // signature is the code that created it) are bound by the type arguments of that code, which are current (see
+    // QoreClosureTypeContextHelper; qore#5733), so the call leaves them as they are instead of inferring them from the
+    // closure's arguments; only a closure whose signature names type parameters gets here
+    // (sig is the variant's own signature: only a variant whose generic signature is another one can be a closure)
+    if (static_cast<const AbstractFunctionSignature*>(generic_sig) != sig) {
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        if (uvb && uvb->getUserSignature()->closure) {
+            // the parameter and return types of the closure are substituted with them
+            const QoreTypeParamInstantiation* current = variant_needs_type_param_substitution
+                ? runtime_get_type_param_instantiation() : nullptr;
+            if (current) {
+                type_param_instantiation = *current;
+            } else {
+                type_param_instantiation.clear();
+            }
+            return 0;
+        }
     }
 
     // an explicit type argument can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic class
@@ -2114,6 +2154,10 @@ int UserSignature::resolve() {
     }
 
     resolved = true;
+    // a closure names the type parameters of the code that it is in (qore#5733)
+    if (closure && type_params.empty() && !enclosing_signature) {
+        enclosing_signature = parse_get_signature_type_param_context();
+    }
     UserSignatureTypeParamContextHelper type_param_context(this);
 
     int err = 0;
@@ -8557,9 +8601,15 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // setup call, save runtime position
     // issue #1303: do not check for object validity here in the call, we already have a weak reference to the object,
     // so it will stay valid, if the closure code itself refers to the object, it will fail then if the object is invalid
+    // the closure's code, including its parameter types, runs with the type arguments of the code that created it
+    // (qore#5733)
+    QoreClosureTypeContextHelper type_context(&closure_base);
+    // the receiver type of a generic class that created the closure binds the type parameters of the class in the
+    // closure's parameter and return types (qore#5733)
+    const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm);
+        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr);
     if (*xsink) {
         return QoreValue();
     }

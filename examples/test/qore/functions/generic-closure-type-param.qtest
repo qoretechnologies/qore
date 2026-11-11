@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT closures of generic code (closure calls and AOT closure signatures)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericClosureTypeParamTest
+
+#! A closure in generic code names the type parameters of that code in every mode (qore#5733)
+/** A closure in a generic function or method could not name its type parameters (PARSE-EXCEPTION "reference to
+    undefined type"), as the closure's signature hid those of the code that it is in; and a closure returned by a
+    generic call was not bound by its type arguments when called after that call had returned.  A closure now names
+    the type parameters of the code that it is in, is created with the type arguments and the receiver type of that
+    code, and runs with them wherever it is called.  The probes (generic-closure-type-param/probes.q: closures in
+    generic static methods, in a generic function and in a method of a generic class, called in the generic code,
+    after it has returned, from another function, and nested) run at the top level and in a child Program, in each
+    execution mode in a child process, at the IR tier and promoted to native code with tiered execution, and as
+    qcc-compiled executables (-O0, -O3).
+*/
+class GenericClosureTypeParamTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "1 integer; 2 integer; RUNTIME-OVERLOAD-ERROR; \"b\" string; RUNTIME-OVERLOAD-ERROR; 4 inte"
+            "ger; RUNTIME-OVERLOAD-ERROR; 5 integer; RUNTIME-OVERLOAD-ERROR; 6 integer; RUNTIME-OVERLOA"
+            "D-ERROR; 7 integer; RUNTIME-OVERLOAD-ERROR; 8 integer; RUNTIME-OVERLOAD-ERROR; 9 integer; "
+            "RUNTIME-OVERLOAD-ERROR; 10 integer; RUNTIME-OVERLOAD-ERROR; 11 integer; RUNTIME-OVERLOAD-E"
+            "RROR; 12 integer; RUNTIME-OVERLOAD-ERROR; 13 integer";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericClosureTypeParam", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-closure-type-param" + DirSep
+            + "probes.q");
+        for (int i = 0; i < 8; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("closures of generic code name its type parameters in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-closure-type-param-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes());\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE);\np.parse(ReadOnlyFile::readTextFile(%y), "
+            "\"probes\");\nprint(p.callFunction(\"probes\"));\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

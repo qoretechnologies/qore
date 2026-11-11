@@ -246,6 +246,21 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
 constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
 constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
 
+//! returns the signature whose type parameters the code of the function whose AOT context is being built names
+/** (see QoreAOTTypeParamOwnerHelper); a closure read in that context names them (qore#5733)
+*/
+DLLLOCAL const UserSignature* qore_aot_get_type_param_owner();
+
+//! sets the signature returned by qore_aot_get_type_param_owner() for its scope
+class QoreAOTTypeParamOwnerHelper {
+public:
+    DLLLOCAL QoreAOTTypeParamOwnerHelper(const UserSignature* owner);
+    DLLLOCAL ~QoreAOTTypeParamOwnerHelper();
+
+private:
+    const UserSignature* old_owner;
+};
+
 struct QoreAOTStaticMethodRef {
     const char* method_name = nullptr;
     const char* variant_class_path = nullptr;

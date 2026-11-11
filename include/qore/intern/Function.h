@@ -518,6 +518,22 @@ public:
     LocalVar* argvid;
     LocalVar* selfid;
     bool resolved;
+    //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
+    bool closure = false;
+    //! for the signature of a closure: the signature whose type parameters the closure names, if any (qore#5733)
+    /** Set when the closure's signature is resolved in its code at parse time, and when a qcc-compiled closure is
+        loaded in the function that creates it
+    */
+    const UserSignature* enclosing_signature = nullptr;
+
+    //! returns the signature whose type parameters this signature names: its own, or for a closure the enclosing one
+    DLLLOCAL const UserSignature* getTypeParamOwner() const {
+        const UserSignature* rv = this;
+        while (rv->closure && rv->type_params.empty() && rv->enclosing_signature) {
+            rv = rv->enclosing_signature;
+        }
+        return rv;
+    }
     int err = 0;
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po);
@@ -2710,6 +2726,7 @@ protected:
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
         is_closure = true;
+        signature.closure = true;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

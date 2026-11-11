@@ -1961,6 +1961,39 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
     }
 }
 
+//! makes the type arguments and the receiver type of a specialized IR function current while it creates a closure
+/** The specialization binds the type parameters of the generic code statically, so they are not current at run time;
+    a closure in generic code is created with them (see QoreClosureBase::captureTypeContext(); qore#5733)
+*/
+class IRClosureSpecializationGuard {
+public:
+    DLLLOCAL IRClosureSpecializationGuard(const QoreIRFunction* func, const QoreClosureParseNode* closure)
+            : active(func && closure && closure->needsTypeContext() && func->hasTypeSpecialization()) {
+        if (active) {
+            old_receiver = runtime_set_receiver_type_info(func->specialization_receiver_type_info
+                ? func->specialization_receiver_type_info : runtime_get_receiver_type_info());
+            old_inst = runtime_set_type_param_instantiation(func->specialization_type_param_instantiation.empty()
+                ? runtime_get_type_param_instantiation() : &func->specialization_type_param_instantiation);
+        }
+    }
+
+    DLLLOCAL IRClosureSpecializationGuard(const QoreIRFunction& func, const QoreClosureParseNode* closure)
+            : IRClosureSpecializationGuard(&func, closure) {
+    }
+
+    DLLLOCAL ~IRClosureSpecializationGuard() {
+        if (active) {
+            runtime_set_type_param_instantiation(old_inst);
+            runtime_set_receiver_type_info(old_receiver);
+        }
+    }
+
+private:
+    bool active;
+    const QoreTypeInfo* old_receiver = nullptr;
+    const QoreTypeParamInstantiation* old_inst = nullptr;
+};
+
 //! Releases the value of a local on the runtime stack that the frame instantiated, at the exit of the function
 /** The variable is removed from the stack afterwards (cleanupInstantiatedLocals(), or the caller for a pre-instantiated
     local); its value is released here, at its slot's place among the IR-only locals, so that a function left by an
@@ -5530,6 +5563,11 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     if (irFunctionDebuggerAttached(callee_ir)) {
         return false;
     }
+    // a closure created in generic code runs with the type arguments of that code (qore#5733), which the call path
+    // installs (UserClosureFunction::evalClosure()); such a closure is not inlined, so other closures pay one test
+    if (cb->getTypeContext()) {
+        return false;
+    }
     for (int i = 0; i < nargs; ++i) {
         if (fromBits(args[i]).isNothing()) {
             return false;
@@ -6509,6 +6547,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         case QoreIROpcode::CreateClosure: {
             if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(inv->expr.getInternalNode())) {
+                IRClosureSpecializationGuard type_context(func, closure);
                 return fromBits(qore_rt_create_closure(closure, xsink));
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -11730,6 +11769,7 @@ load_local_done:
                                 function_own_locals, &locally_uninstantiated);
                         }
                     }
+                    IRClosureSpecializationGuard type_context(func, cc_inst->closure_node);
                     out = const_cast<QoreClosureParseNode*>(cc_inst->closure_node)->eval(
                             needs_deref, xsink);
                     if (!needs_deref && out.needsRef()) {
@@ -11749,6 +11789,7 @@ load_local_done:
                                 function_own_locals, &locally_uninstantiated);
                         }
                     }
+                    IRClosureSpecializationGuard type_context(func, closure_node);
                     out = closure_node->eval(needs_deref, xsink);
                     if (!needs_deref && out.needsRef()) {
                         out = out.refSelf();

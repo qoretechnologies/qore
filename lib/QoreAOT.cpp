@@ -35375,9 +35375,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         id.kind = AOTExprKind::CLOSURE_CREATE;
         UserClosureFunction* ucf = closure->getFunction();
-        // ref1 = flags: "lambda,in_method" (comma-separated booleans)
+        // ref1 = flags: "lambda,in_method,type_context" (comma-separated booleans; type_context: the closure is in
+        // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
-                + (closure->isInMethod() ? "1" : "0");
+                + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {
