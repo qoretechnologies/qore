@@ -5500,6 +5500,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
                     closure_ir_missing = true;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
 
@@ -5513,6 +5516,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     setClosureIRError(msg);
                     closure_ir_missing = true;
                     ptr = ir_boundary;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
                 const uint8_t* ir_end_ptr = ptr + ir_size;

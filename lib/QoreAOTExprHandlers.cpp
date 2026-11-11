@@ -1424,6 +1424,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Read closure body IR
     uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!has_ir) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
         ctx.error = "closure has no IR data";
         return QoreValue();
     }
@@ -1434,9 +1437,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         for (QoreValue& v : defaults) {
             v.discard(nullptr);
         }
-        if (ctx.ptr <= ctx.end && ir_size <= static_cast<size_t>(ctx.end - ctx.ptr)) {
-            ctx.ptr = ir_end_ptr;
-        }
+        // past the IR, or at the end of the data if the record is out of its bounds, so that no reader reads the
+        // IR as an expression
+        ctx.ptr = (ctx.ptr <= ctx.end && ir_size <= static_cast<size_t>(ctx.end - ctx.ptr)) ? ir_end_ptr : ctx.end;
         ctx.error = std::move(default_error);
         return QoreValue();
     }
