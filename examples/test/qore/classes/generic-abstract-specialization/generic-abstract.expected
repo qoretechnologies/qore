@@ -1,0 +1,5 @@
+leaf: 1 "f3" 12
+sbox: "s" "fx" "abab"
+wrap: 7 "w5" 6
+multi: 2 "i3" 7
+negative: ABSTRACT-CLASS-ERROR: 2 unimplemented

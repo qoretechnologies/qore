@@ -215,7 +215,13 @@ public:
         return i < names.size() ? names[i].c_str() : 0;
     }
 
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false) const;
+    //! Compares this signature with \a sig (an abstract method's signature)
+    /** @param receiver if not nullptr, the class whose parameterized bases give the type arguments of the type
+        parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
+        implemented in a subclass of a specialization; issue #5773)
+    */
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -839,10 +845,12 @@ public:
         return qc->getNamespacePath(true);
     }
 
-    DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false) const {
+    //! @param receiver see AbstractFunctionSignature::compare()
+    DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match);
+        return getSignature()->compare(sig, relaxed_match, receiver);
     }
 
     // only returns a non-nullptr value for normal user method variants
@@ -2380,7 +2388,9 @@ public:
     DLLLOCAL void parseSignatures(QoreString& csig, const char* mod) const;
 
     // if an identical signature is found to the passed variant, then it is removed from the abstract list
-    DLLLOCAL MethodVariantBase* parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
+    //! @param receiver see AbstractFunctionSignature::compare()
+    DLLLOCAL MethodVariantBase* parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false,
+            const QoreTypeInfo* receiver = nullptr) const;
 
     // runtime version - assumes signatures are already resolved
     DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
