@@ -21,6 +21,14 @@ method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
   local handler: OBJECT-ALREADY-DELETED
 call of an int:
@@ -71,6 +79,14 @@ method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
   local handler: OBJECT-ALREADY-DELETED
 call of an int:
@@ -121,6 +137,14 @@ method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
   local handler: OBJECT-ALREADY-DELETED
 call of an int:

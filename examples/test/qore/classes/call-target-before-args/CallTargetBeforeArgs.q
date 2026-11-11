@@ -35,6 +35,11 @@ class Gate {
     }
 }
 
+#! returns a value whose type is not known at parse time
+auto sub untyped_value() {
+    return 1;
+}
+
 int sub arg_value() {
     printf("  arg function called\n");
     return 1;
@@ -46,6 +51,23 @@ sub call_with_reference(reference r) {
     C o2 = o;
     delete o;
     o2.m(r);
+}
+
+#! the same with a parameter that can also have no value
+sub call_with_optional_reference(*reference r) {
+    C o();
+    C o2 = o;
+    delete o;
+    o2.m(r);
+}
+
+#! returns a reference to a method of an object that has been deleted
+code sub deleted_method_reference() {
+    C o();
+    C o2 = o;
+    code r = \o2.m();
+    delete o;
+    return r;
 }
 
 #! the call is made in a try block of its own, whose handler is in the same function as the call
@@ -86,6 +108,13 @@ sub cases() {
     check("method call through weak reference", sub () { C o(); C o2 := o; delete o; o2.m(new A()); });
     # an argument read through a reference
     check("reference argument", sub () { object g = new Gate(); call_with_reference(\g.y); });
+    check("optional reference argument", sub () { object g = new Gate(); call_with_optional_reference(\g.y); });
+    # a call reference given by a call, by an immediate closure and in a map expression
+    check("returned call reference", sub () { deleted_method_reference()(new A()); });
+    check("call reference from an immediate closure", sub () {
+        (code sub () { return deleted_method_reference(); })()(new A());
+    });
+    check("call of an int in map", sub () { map $1(arg_value()), (untyped_value(),); });
     # a handler in the function that makes the call
     check("local try block", \local_try());
     # calls of a value that is not a call reference
