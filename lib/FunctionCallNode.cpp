@@ -1334,7 +1334,13 @@ int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& p
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {
-    return new UnresolvedCallReferenceNode(loc, takeName());
+    UnresolvedCallReferenceNode* rv = new UnresolvedCallReferenceNode(loc, takeName());
+    // the explicit type arguments of \f<T>() go to the reference
+    if (has_explicit_type_args) {
+        rv->explicit_parse_type_args = std::move(explicit_parse_type_args);
+        explicit_parse_type_args.clear();
+    }
+    return rv;
 }
 
 AbstractQoreNode* ProgramFunctionCallNode::makeReferenceNodeAndDerefImpl() {
@@ -1566,6 +1572,11 @@ AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
    }
 
    UnresolvedStaticMethodCallReferenceNode* rv = new UnresolvedStaticMethodCallReferenceNode(loc, takeScope());
+   // the explicit type arguments of \NS::f<T>() go to the reference
+   if (has_explicit_type_args) {
+       rv->explicit_parse_type_args = std::move(explicit_parse_type_args);
+       explicit_parse_type_args.clear();
+   }
    deref();
    return rv;
 }
@@ -1713,6 +1724,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
                 if (f) {
                     FunctionCallNode* fcn = new FunctionCallNode(loc, f, takeParseArgs());
+                    // the explicit type arguments of the call (NS::f<T>()) belong to the function call
+                    fcn->moveExplicitTypeArgsFrom(*this);
                     val = fcn;
                     deref();
                     return fcn->parseInitFinalizedCall(val, parse_context);

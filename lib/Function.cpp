@@ -746,7 +746,10 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
             if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
                 return false;
             }
-            bindings[i] = explicit_type;
+            // an explicit type argument can be a type parameter of the generic code that makes the call
+            // (inner<T>() in a generic function): the callee is bound to the type of the instantiation that is
+            // running
+            bindings[i] = qore_substitute_type_params_if_needed(explicit_type);
         }
     }
     for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {
@@ -1424,8 +1427,36 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
         return 0;
     }
 
-    if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation,
-            explicit_type_param_instantiation)) {
+    // an explicit type argument can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic class
+    // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
+    // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
+    // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
+    //! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
+    //! (std::bad_alloc) leaves the inference
+    struct CallerReceiverScope {
+        const QoreTypeInfo* callee_receiver_type_info = nullptr;
+        bool active = false;
+
+        CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
+            if (active) {
+                callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
+            }
+        }
+
+        ~CallerReceiverScope() {
+            if (active) {
+                runtime_set_receiver_type_info(callee_receiver_type_info);
+            }
+        }
+    };
+    bool inferred;
+    {
+        CallerReceiverScope caller_receiver(explicit_type_param_instantiation && restore_receiver_type_info,
+            old_receiver_type_info);
+        inferred = qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info,
+            &type_param_instantiation, explicit_type_param_instantiation);
+    }
+    if (!inferred) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
             callName.c_str(), sig ? sig->getSignatureText() : "");
         return -1;

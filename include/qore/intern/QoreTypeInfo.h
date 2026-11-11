@@ -4304,6 +4304,18 @@ struct QoreTypeParamInstantiation {
 //! Returns the current call-local generic type-parameter instantiation, if any
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 
+//! Resolves the type arguments of an explicit instantiation against the instantiation that is running
+/** An explicit type argument can be a type parameter of the generic code that makes the call (\c inner<T>() in a
+    generic function): the callee must be instantiated with the type that the running instantiation gives it.  Call it
+    before the callee's instantiation is made current.
+
+    @param inst the explicit instantiation of a call
+    @param resolved receives the instantiation with the type arguments substituted, if any of them changed
+    @return true if \a resolved was set (use it instead of \a inst), false if \a inst is used unchanged
+*/
+DLLLOCAL bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
+    QoreTypeParamInstantiation& resolved);
+
 // qore_get_union_type / qore_get_union_or_nothing_type are now declared DLLEXPORT in
 // include/qore/QoreType.h so module qpp signatures can use union<...> types.
 // type_vec_t is defined in include/qore/common.h.
