@@ -2035,6 +2035,103 @@ llvm::Value* QoreIRToLLVM::emitIsBoxedFloat(llvm::Value* qv) {
 // Emits: has_node ? qore_rt_refself(val) : val
 // This avoids external function call overhead for the type check
 // Uses LLVM select to avoid extra basic blocks - inline conditional evaluation
+bool QoreIRToLLVM::checkSelectorIteratorLowered(uint32_t iterator, std::string& error) const {
+    auto def = value_definitions.find(iterator);
+    if (def == value_definitions.end() || def->second->opcode != QoreIROpcode::IteratorCreateSelectors
+            || lowered_selector_iterators.count(iterator)) {
+        return true;
+    }
+    error = "a step of a list of selectors is lowered before the creation of its iterator";
+    return false;
+}
+
+bool QoreIRToLLVM::lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction* iter_inst,
+        const SelectorSegmentState& seg, llvm::Module& module, llvm::Function* llvm_func, std::string& error) {
+    auto done_it = block_map.find(iter_inst->done_target);
+    auto cont_it = block_map.find(iter_inst->continue_target);
+    if (done_it == block_map.end() || cont_it == block_map.end()) {
+        error = "IteratorNextSelectors: target block not found";
+        return false;
+    }
+    // the output slot holds the reference of the current element, initialized to NOTHING, which the end of the
+    // frame and ReleaseOwnedTemp release, as for qore_rt_selector_iterator_next()
+    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+    llvm::Value* out_val_ptr = ab.CreateAlloca(i64_type, nullptr, "segment_out_val");
+    ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+        llvm::FunctionType::get(i64_type, {i64_type}, false));
+    auto cursor_at = [&](int part) {
+        return builder->CreateConstInBoundsGEP1_64(i64_type, seg.cursor, part);
+    };
+
+    // the element of the previous value is released first, as qore_rt_selector_iterator_next() releases it; only a
+    // node holds a reference
+    llvm::Value* old_val = builder->CreateLoad(i64_type, out_val_ptr, "segment_old_val");
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+    llvm::BasicBlock* release_block = llvm::BasicBlock::Create(ctx, "selector_segment.release", llvm_func);
+    llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "selector_segment.check", llvm_func);
+    builder->CreateCondBr(hasNodeInline(old_val), release_block, check_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(release_block);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    builder->CreateBr(check_block);
+
+    // no index left of the current selector: the done target asks for the next selector
+    builder->SetInsertPoint(check_block);
+    llvm::Value* count = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_COUNT), "segment_count");
+    llvm::BasicBlock* value_block = llvm::BasicBlock::Create(ctx, "selector_segment.value", llvm_func);
+    edge_block_map[{current_lowering_block_, iter_inst->done_target}] = builder->GetInsertBlock();
+    builder->CreateCondBr(builder->CreateICmpEQ(count, llvm::ConstantInt::get(i64_type, 0)), done_it->second,
+        value_block);
+
+    // the value at the index, or NOTHING outside of the list, as the iterator reads it
+    // (QoreSquareBracketsOperatorNode::doSquareBrackets())
+    builder->SetInsertPoint(value_block);
+    llvm::Value* index = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_INDEX), "segment_index");
+    llvm::Value* step = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_STEP), "segment_step");
+    llvm::Value* size = builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_SIZE), "segment_size");
+    builder->CreateStore(builder->CreateAdd(index, step), cursor_at(QORE_RT_SEGMENT_INDEX));
+    builder->CreateStore(builder->CreateSub(count, llvm::ConstantInt::get(i64_type, 1)),
+        cursor_at(QORE_RT_SEGMENT_COUNT));
+    llvm::BasicBlock* read_block = llvm::BasicBlock::Create(ctx, "selector_segment.read", llvm_func);
+    llvm::BasicBlock* outside_block = llvm::BasicBlock::Create(ctx, "selector_segment.outside", llvm_func);
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(ctx, "selector_segment.merge", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpULT(index, size), read_block, outside_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+    builder->SetInsertPoint(read_block);
+    llvm::Value* data = builder->CreateIntToPtr(
+        builder->CreateLoad(i64_type, cursor_at(QORE_RT_SEGMENT_DATA), "segment_data"), ptr_type);
+    llvm::Value* entry = builder->CreateLoad(i64_type, builder->CreateInBoundsGEP(i64_type, data, index),
+        "segment_entry");
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(outside_block);
+    builder->CreateBr(merge_block);
+    builder->SetInsertPoint(merge_block);
+    llvm::PHINode* val = builder->CreatePHI(i64_type, 2, "segment_val");
+    val->addIncoming(entry, read_block);
+    val->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), outside_block);
+
+    // the output slot takes a reference of its own to a node, which the list keeps
+    llvm::BasicBlock* ref_block = llvm::BasicBlock::Create(ctx, "selector_segment.ref", llvm_func);
+    llvm::BasicBlock* store_block = llvm::BasicBlock::Create(ctx, "selector_segment.store", llvm_func);
+    builder->CreateCondBr(hasNodeInline(val), ref_block, store_block,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(ref_block);
+    builder->CreateCall(refself_fn, {val});
+    builder->CreateBr(store_block);
+    builder->SetInsertPoint(store_block);
+    builder->CreateStore(val, out_val_ptr);
+    values[iter_inst->result.id] = val;
+    nanboxed_values.insert(iter_inst->result.id);
+    registerInvokeCleanupAlloca(out_val_ptr);
+    iterator_element_allocas[iter_inst->result.id] = out_val_ptr;
+    edge_block_map[{current_lowering_block_, iter_inst->continue_target}] = builder->GetInsertBlock();
+    builder->CreateBr(cont_it->second);
+    return true;
+}
+
 llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
     // Check if value has a node (inline check using NaN-boxing)
     llvm::Value* has_node = hasNodeInline(val);
@@ -11862,6 +11959,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_alloca_map.clear();
     cleanup_alloca_value_ids.clear();
     iterator_element_allocas.clear();
+    selector_segment_states.clear();
+    lowered_selector_iterators.clear();
     iterator_cleanup_allocas.clear();
     positioned_iterator_allocas.clear();
     positioned_iterator_alloca_set.clear();
@@ -26786,6 +26885,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorPending: {
             // operands: the iterator handle
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
+            auto segment_it = selector_segment_states.find(inst->operands[0].id);
+            if (segment_it != selector_segment_states.end()) {
+                // the selector-segment loop asks for a selector only when it has given every value of the previous
+                // one: the next selector, or -1 when every selector has been given
+                const SelectorSegmentState& seg = segment_it->second;
+                llvm::Value* selector = builder->CreateLoad(i64_type, seg.selector, "segment_next_selector");
+                values[inst->result.id] = builder->CreateSelect(
+                    builder->CreateICmpSLT(selector, llvm::ConstantInt::get(i64_type, seg.count)), selector,
+                    llvm::ConstantInt::get(i64_type, -1));
+                return true;
+            }
             auto* iter_ptr = getVal(inst->operands[0].id, error);
             if (!iter_ptr) { return false; }
             if (iter_ptr->getType() != ptr_type) {
@@ -26798,6 +26911,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::SelectorIteratorFeed: {
             // operands: the iterator handle, the flags, and the index or the bounds of a range
+            if (!checkSelectorIteratorLowered(inst->operands[0].id, error)) {
+                return false;
+            }
             auto* iter_ptr = getVal(inst->operands[0].id, error);
             if (!iter_ptr) { return false; }
             if (iter_ptr->getType() != ptr_type) {
@@ -26814,6 +26930,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* operand = getVal(inst->operands[i + 2].id, error);
                 if (!operand) { return false; }
                 args[i] = boxValue(operand, inst->operands[i + 2].id);
+            }
+            auto segment_it = selector_segment_states.find(inst->operands[0].id);
+            if (segment_it != selector_segment_states.end()) {
+                // the selector-segment loop: the cursor gets the indices of the selector, which raises RANGE-ERROR
+                // for a bound of a range that is NOTHING, as the iterator does
+                const SelectorSegmentState& seg = segment_it->second;
+                llvm::Value* selector = builder->CreateLoad(i64_type, seg.selector);
+                builder->CreateStore(builder->CreateAdd(selector, llvm::ConstantInt::get(i64_type, 1)),
+                    seg.selector);
+                llvm::Value* feed_flags = builder->CreateOr(ensureIntTypeInline(flags, inst->operands[1].id),
+                    llvm::ConstantInt::get(i64_type, seg.flags
+                        & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)));
+                auto segment_helper = module.getOrInsertFunction("qore_rt_selector_segment_feed",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i64_type, ptr_type,
+                            ptr_type}, false));
+                builder->CreateCall(segment_helper, {seg.seq, feed_flags, args[0], args[1], seg.cursor, xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
             }
             auto helper = module.getOrInsertFunction("qore_rt_selector_iterator_feed",
                     llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
@@ -33311,11 +33445,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!flags || !count) {
                     return false;
                 }
+                llvm::Value* flags_int = ensureIntTypeInline(flags, inst->operands[0].id);
+                llvm::Value* count_int = ensureIntTypeInline(count, inst->operands[1].id);
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_selectors", ft);
-                result = builder->CreateCall(helper, {iterable_boxed,
-                    ensureIntTypeInline(flags, inst->operands[0].id),
-                    ensureIntTypeInline(count, inst->operands[1].id), xsink_arg});
+                result = builder->CreateCall(helper, {iterable_boxed, flags_int, count_int, xsink_arg});
+                lowered_selector_iterators.insert(inst->result.id);
+                // the selector-segment loop of a list whose values hold no reference: the cursor lives in the frame,
+                // and the iterator only keeps the sequence (qore#5711)
+                auto* flags_const = llvm::dyn_cast<llvm::ConstantInt>(flags_int);
+                auto* count_const = llvm::dyn_cast<llvm::ConstantInt>(count_int);
+                if (flags_const && count_const
+                        && (flags_const->getSExtValue() & static_cast<int64_t>(QoreIRListSelectorFlag::Segment))
+                        && !q_env_is_set("QORE_DISABLE_LLVM_SELECTOR_SEGMENT_LOOP")) {
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                    SelectorSegmentState state;
+                    state.cursor = ab.CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i64_type, QORE_RT_SEGMENT_CURSOR_SIZE), "segment_cursor");
+                    state.selector = ab.CreateAlloca(i64_type, nullptr, "segment_selector");
+                    state.seq = iterable_boxed;
+                    state.flags = flags_const->getSExtValue();
+                    state.count = count_const->getSExtValue();
+                    // each evaluation of the list of selectors starts with no index and its first selector; a value
+                    // that is not a list, a string or a binary has no iterator, which the lowering of each consumer
+                    // checks before its loop, so that the loop never runs for it
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, 0),
+                        builder->CreateConstInBoundsGEP1_64(i64_type, state.cursor, QORE_RT_SEGMENT_COUNT));
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, 0), state.selector);
+                    selector_segment_states[inst->result.id] = state;
+                }
             } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);
@@ -33494,6 +33652,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* iter_inst = static_cast<const QoreIRIteratorNextInstruction*>(inst);
             // the iterator of a list of selectors is not released when it has no value, so its cleanup slot keeps it
             const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
+            if (keep_iterator) {
+                if (!checkSelectorIteratorLowered(iter_inst->iterator.id, error)) {
+                    return false;
+                }
+                auto segment_it = selector_segment_states.find(iter_inst->iterator.id);
+                if (segment_it != selector_segment_states.end()) {
+                    return lowerSelectorSegmentNext(iter_inst, segment_it->second, module, llvm_func, error);
+                }
+            }
             // Get the iterator pointer
             auto* iter_ptr = getVal(iter_inst->iterator.id, error);
             if (!iter_ptr) {

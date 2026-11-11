@@ -802,7 +802,7 @@ bool QoreFunctionalSquareBracketsOperator::getNextImpl(ValueOptionalRefHolder& v
 const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
-        case NT_LIST: return get_or_nothing_type(leftValue->get<const QoreListNode>()->getValueTypeInfo());
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
@@ -911,7 +911,7 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
 const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
-        case NT_LIST: return get_or_nothing_type(leftValue->get<const QoreListNode>()->getValueTypeInfo());
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();

@@ -1416,6 +1416,28 @@ int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value, Exce
 int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits, uint64_t second_bits,
         ExceptionSink* xsink);
 
+//! The cursor of the selector-segment loop of native code (QoreIRListSelectorFlag::Segment; qore#5711)
+enum QoreRtSelectorSegmentCursor : int {
+    //! the next index
+    QORE_RT_SEGMENT_INDEX = 0,
+    //! the number of indices left of the current selector
+    QORE_RT_SEGMENT_COUNT = 1,
+    //! the step from one index to the next: 1 or -1
+    QORE_RT_SEGMENT_STEP = 2,
+    //! the size of the list
+    QORE_RT_SEGMENT_SIZE = 3,
+    //! the values of the list (const uint64_t*)
+    QORE_RT_SEGMENT_DATA = 4,
+    //! the number of elements of the cursor
+    QORE_RT_SEGMENT_CURSOR_SIZE = 5,
+};
+
+//! Sets the cursor of the selector-segment loop to the indices of the next selector of a list of selectors over the
+//! list \a seq_bits, as the iterator of the list of selectors computes them when it is given the selector; returns 1
+//! if an exception was raised (RANGE-ERROR for a bound of a range that is NOTHING); see QoreIROpcode::SelectorIteratorFeed
+int64_t qore_rt_selector_segment_feed(uint64_t seq_bits, int64_t flags, uint64_t first_bits, uint64_t second_bits,
+        int64_t* cursor, ExceptionSink* xsink);
+
 //! Sets the exceptions of \a xsink aside and returns their handle; see QoreIROpcode::ExceptionSuspend
 void* qore_rt_exception_suspend(ExceptionSink* xsink);
 

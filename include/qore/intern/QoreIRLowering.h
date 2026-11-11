@@ -287,6 +287,11 @@ public:
     QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
         QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
         std::string& error);
+    //! Returns true if the lazy list of selectors \a src is iterated with the selector-segment loop in native code
+    /** The sequence must be a list whose values hold no reference, whose release cannot be observed, so that native
+        code can read each value from the list (qore#5711)
+    */
+    bool useSelectorSegmentLoop(const LazySelectorSource& src) const;
     //! Returns true if evaluating the selector \a selector (or the bounds of a range) can create a node temp
     static bool selectorMayCreateTemp(const QoreValue& selector);
     //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
@@ -449,7 +454,11 @@ private:
     */
     /** With \a pure_consumer_ok (a map, select, map/select or foldl operator without other stages), a list whose
         selectors have side effects is also evaluated before the iteration when the operator's expressions only
-        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other
+        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other.
+        Any other consumer iterates a list of stable selectors over a list whose values hold no reference lazily as
+        well (useSelectorSegmentLoop()) when it has at least as many ranges as single indices, which gives the same
+        values without building the list of them; a list with more single indices is built first, as a lazy single
+        index costs a step of the iteration protocol where the list costs one element (qore#5711).
     */
     bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,

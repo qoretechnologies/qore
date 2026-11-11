@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the selector-segment loop of lazily iterated lists of selectors
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectorSegmentLoopTest
+
+#! issue #5711: the selector-segment loop of lists of selectors over lists of int, float and bool values
+/** A list of selectors with ranges (l[a, b..c]) that a foreach statement or a map, select, foldl or streaming
+    operator iterates lazily over a list whose values hold no reference is iterated in native code (JIT and AOT) with
+    the selector-segment loop: the cursor of the indices of the current selector lives in the frame of the function,
+    and each value is read from the list, instead of a call of the iterator for each value.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output,
+    which shows each evaluation, must be that of the AST interpreter; the native code of the functions of a second
+    script must use the selector-segment loop for lists of int, float and bool values only.
+*/
+class SelectorSegmentLoopTest inherits QUnit::Test {
+    public {
+        #! the script whose output must be that of the AST interpreter in every execution mode
+        const Script = "segment-modes";
+
+        #! the script whose native code is checked
+        const ShapeScript = "segment-shape";
+
+        #! the script with %loose-types, whose list-typed variables can hold NOTHING
+        const LooseScript = "segment-loose";
+
+        #! the functions of ShapeScript that use the selector-segment loop
+        const SegmentFunctions = ("seg_foreach_int", "seg_map_int", "seg_select_or_nothing", "seg_foldl_float",
+            "seg_map_bool", "seg_foreach_stable");
+
+        #! the functions of ShapeScript whose stable selectors are evaluated into a list first
+        const ListFunctions = ("list_foreach_stable_indices",);
+
+        #! the functions of ShapeScript that use the iterator
+        const IteratorFunctions = ("iter_map_string", "iter_foreach_auto");
+
+        #! the output of ShapeScript
+        const ShapeOutput = "[10, [2, 3, 4, 5], [1, null, 3], 7.5, [False, True], 10, 10, [\"ax\", \"bx\", "
+            "\"cx\"], 3]\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("selector-segment loop", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        addTestCase("native code", \nativeCodeTest());
+        addTestCase("JIT native code", \jitNativeCodeTest());
+        set_return_value(main());
+    }
+
+    #! checks that the output of the AST interpreter shows the cases of the script
+    private astTest() {
+        string out = astOutput(Script);
+        list<string> lines = out.split("\n");
+        # every case ran, and none ended the script
+        assertEq(58, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertTrue(out =~ /\nrepeated:\n  = 15440\n/, "the last case ran");
+        # the selectors are evaluated lazily: the second selector after the values of the first one
+        assertTrue(out =~ /^fe int:\n  sel a\n  body 0 10\n  sel b\n  sel c\n  body 1 12\n/, "lazy evaluation");
+        # a value outside of the list is NOTHING, and a typed foreach variable rejects it
+        assertTrue(out =~ /\nfe typed nothing:\n  sel a\n  sel b\n  body 14\n  body 15\n  ! RUNTIME-TYPE-ERROR: /,
+            "NOTHING outside of the list");
+        # a bound of a range that is NOTHING raises RANGE-ERROR when the range is reached
+        assertTrue(out =~ /\nfe start nothing:\n  sel a\n  body 10\n  ! RANGE-ERROR: /, "NOTHING start");
+        # the iterated list is not the one that the body changes
+        assertTrue(out =~ /\nfe body appends:\n(  [^\n]*\n)*  = \[1, 2, 3, 13, 14, 15, 16, 17\]\n/, "body appends");
+
+        # a list-typed variable that holds NOTHING (%loose-types)
+        out = astOutput(LooseScript);
+        lines = out.split("\n");
+        assertEq(16, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "loose cases");
+        assertTrue(out =~ /\nmap impure:\n  = null\n/, "map with an impure expression");
+        assertTrue(out =~ /\nselect impure:\n  = null\n/, "select with an impure expression");
+        assertTrue(out =~ /\nfoldl impure:\n  = null\n/, "foldl with an impure expression");
+        assertTrue(out =~ /\nfe stable lazy:\n  = "done"\n/, "stable selectors in foreach");
+        assertTrue(out =~ /\nmap stable lazy:\n  = null\n/, "stable selectors in map");
+        # a list of selectors with a range, iterated lazily: no selector is evaluated and no value is given
+        assertTrue(out =~ /\nfe local selectors:\n  = "done"\n/, "foreach");
+        assertTrue(out =~ /\nmap local:\n  = null\n/, "map");
+        assertTrue(out =~ /\nfoldl local:\n  = null\n/, "foldl");
+        assertTrue(out =~ /\nfe hashdecl member:\n  = "done"\n/, "hashdecl member");
+        # a range alone raises an exception, and a list of indices without a range evaluates its selectors
+        assertTrue(out =~ /^fe local stable:\n  ! ILLEGAL-EXPRESSION: /, "range alone");
+        assertTrue(out =~ /\nmap member bool:\n  sel a\n  sel b\n  = null\n/, "list of indices");
+        assertEq(("  body 10", "  body 11", "  body 12"), (select lines, $1 =~ /^  body /), "only the assigned list "
+            "gives values");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        foreach string name in (Script, LooseScript) {
+            string exp = astOutput(name);
+            string path = scriptPath(name);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
+                    name + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+                name + ": " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    #! compiles the scripts with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("selector-segment-loop-aot-");
+        foreach string name in (Script, ShapeScript, LooseScript) {
+            string exp = astOutput(name);
+            foreach string opt in ("-O0", "-O3") {
+                string exe = sprintf("%s/%s%s", dir.path, name, opt);
+                string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                    scriptPath(name)));
+                assertTrue(is_file(exe), sprintf("%s %s: qcc compiles the script: %s", name, opt, out));
+                assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), sprintf("%s: AOT %s", name, opt));
+            }
+        }
+        assertEq(ShapeOutput, astOutput(ShapeScript), "the output of the shape script");
+    }
+
+    #! checks that the native code of the functions over lists of int, float and bool values uses the
+    #! selector-segment loop, and the native code of the other functions the iterator
+    private nativeCodeTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("selector-segment-loop-native-");
+        string exe = dir.path + "/" + ShapeScript;
+        # the optimized LLVM module of the script is written on stderr
+        string out = ExecModeHarness::run_any(sprintf("%s QORE_DUMP_IR_AFTER_OPT=1 %s -O3 -o %s %s", env, qcc_bin,
+            exe, scriptPath(ShapeScript)));
+        checkSelectorCalls(getSelectorCalls(out), "AOT");
+    }
+
+    #! checks the code that the JIT compiles for the functions, as nativeCodeTest() checks the AOT code: the
+    #! selector-segment loop needs the flags and the number of selectors as constants, without which the JIT would
+    #! use the iterator, with the same output
+    private jitNativeCodeTest() {
+        # the optimized LLVM module of each function compiled is written on stderr
+        string out = ExecModeHarness::run_any(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+            "QORE_DUMP_LLVM_IR=1 %s --exec-mode=jit %s", env, qore_bin, scriptPath(ShapeScript)));
+        checkSelectorCalls(getSelectorCalls(out), "JIT");
+    }
+
+    #! checks the calls of the selector-segment loop and of the iterator in the native code of the functions
+    private checkSelectorCalls(hash<string, hash<string, int>> calls, string what) {
+        foreach string name in (SegmentFunctions) {
+            assertTrue(calls{name}.feed > 0, what + " " + name + ": the selectors are given to the selector-segment "
+                "loop");
+            assertEq(0, calls{name}.next ?? 0, what + " " + name + ": no call of the iterator for each value");
+        }
+        foreach string name in (IteratorFunctions) {
+            assertTrue(calls{name}.next > 0, what + " " + name + ": the iterator gives each value");
+            assertEq(0, calls{name}.feed ?? 0, what + " " + name + ": no selector-segment loop");
+        }
+        foreach string name in (ListFunctions) {
+            assertTrue(exists calls{name}, what + " " + name + ": the function is in the module");
+            assertEq(0, calls{name}.feed ?? 0, what + " " + name + ": no selector-segment loop");
+            assertEq(0, calls{name}.next ?? 0, what + " " + name + ": no iterator");
+        }
+    }
+
+    #! returns the calls of the iterator's next() and of the selector-segment loop's feed in each function of the
+    #! LLVM module \a ir, by the Qore name of the function
+    private hash<string, hash<string, int>> getSelectorCalls(string ir) {
+        hash<string, hash<string, int>> rv;
+        *string func;
+        foreach string line in (ir.split("\n")) {
+            # an AOT function is named <name>_h<hash>, a JIT function "<name>@<id>"
+            *list<*string> def = (line =~ x/^define [^@]*@([a-z_]+?)_+h[0-9a-f]+/)
+                ?? (line =~ x/^define [^@]*@"([a-z_]+)@[0-9]/);
+            if (def) {
+                func = def[0];
+                rv{func} = rv{func} ?? {"feed": 0, "next": 0};
+                continue;
+            }
+            if (line == "}") {
+                remove func;
+                continue;
+            }
+            if (!func) {
+                continue;
+            }
+            if (line =~ /call [^@]*@qore_rt_selector_segment_feed\(/) {
+                ++rv{func}.feed;
+            } else if (line =~ /call [^@]*@qore_rt_selector_iterator_next\(/) {
+                ++rv{func}.next;
+            }
+        }
+        return rv;
+    }
+
+    private string scriptPath(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    #! the output of a script with the AST interpreter
+    private string astOutput(string name) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(name)));
+    }
+}

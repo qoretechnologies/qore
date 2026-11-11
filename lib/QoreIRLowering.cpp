@@ -10973,20 +10973,38 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
     }
     // a map, select or foldl operator whose expressions only compute values from numeric elements cannot observe
     // when the selectors are evaluated, and its evaluation cannot be observed either
-    if (lazy && pure_consumer_ok && stages.empty() && !written_lvalue && !block && !consumer_exprs.empty()) {
+    bool pure_consumer = false;
+    if (pure_consumer_ok && stages.empty() && !written_lvalue && !block && !consumer_exprs.empty()) {
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(op->getLeft()));
         if (elem_type == bigIntTypeInfo || elem_type == floatTypeInfo || elem_type == bigIntOrNothingTypeInfo
                 || elem_type == floatOrNothingTypeInfo) {
-            bool pure = true;
+            pure_consumer = true;
             for (const QoreValue* e : consumer_exprs) {
                 if (!e || !qore_ir_consumer_expr_is_pure(*e)) {
-                    pure = false;
+                    pure_consumer = false;
                     break;
                 }
             }
-            if (pure) {
-                lazy = false;
+        }
+    }
+    if (lazy && pure_consumer) {
+        lazy = false;
+    } else if (!lazy && !pure_consumer) {
+        // stable selectors over a list whose values hold no reference are iterated lazily as well, without the list
+        // of their values, when they have at least as many ranges as single indices: the iteration gives the same
+        // values at the same time, and the release of a value cannot be observed.  A lazy range gives its values
+        // without the list of them, while a lazy single index costs a step of the iteration protocol where the list
+        // of values costs one element, so that single indices are evaluated into the list first (qore#5711)
+        size_t ranges = 0;
+        for (const QoreValue& selector : selectors) {
+            if (dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
+                ++ranges;
             }
+        }
+        if (ranges * 2 >= selectors.size()) {
+            LazySelectorSource src;
+            src.op = op;
+            lazy = useSelectorSegmentLoop(src);
         }
     }
     lazy_selector_decisions[op] = lazy;
@@ -11054,7 +11072,11 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
         if (!source.isValid()) {
             return QoreIRValue();
         }
-        return withExceptionTarget(builder.createIteratorCreateSelectors(source, selectorIteratorFlags(src),
+        int64_t flags = selectorIteratorFlags(src);
+        if (useSelectorSegmentLoop(src)) {
+            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Segment);
+        }
+        return withExceptionTarget(builder.createIteratorCreateSelectors(source, flags,
             static_cast<int64_t>(src.selectors.size()), loc))->result;
     }
     source = in_temp_scope ? lowerExpressionInTempScope(expr, loc, error, true) : lowerExpression(expr, error);
@@ -11064,6 +11086,18 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
     return iterate
         ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))->result
         : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc))->result;
+}
+
+bool QoreIRLowering::useSelectorSegmentLoop(const LazySelectorSource& src) const {
+    if (!src || q_env_is_set("QORE_DISABLE_IR_SELECTOR_SEGMENT_LOOP")) {
+        return false;
+    }
+    // a list whose values hold no reference: native code reads each value from the list, which the iterator keeps,
+    // and releasing a value cannot be observed
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(src.op->getLeft()));
+    return elem_type == bigIntTypeInfo || elem_type == bigIntOrNothingTypeInfo
+        || elem_type == floatTypeInfo || elem_type == floatOrNothingTypeInfo
+        || elem_type == boolTypeInfo || elem_type == boolOrNothingTypeInfo;
 }
 
 //! Returns true if evaluating \a expr can create a node temp: a value that is not an int, or an intermediate temp
@@ -19707,8 +19741,12 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     QoreIRIteratorCreateInstruction* iter_inst;
     if (selector_source) {
-        iter_inst = withExceptionTarget(builder.createIteratorCreateSelectors(source,
-            selectorIteratorFlags(selector_source), static_cast<int64_t>(selector_source.selectors.size()), loc));
+        int64_t flags = selectorIteratorFlags(selector_source);
+        if (useSelectorSegmentLoop(selector_source)) {
+            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Segment);
+        }
+        iter_inst = withExceptionTarget(builder.createIteratorCreateSelectors(source, flags,
+            static_cast<int64_t>(selector_source.selectors.size()), loc));
     } else {
         iter_inst = source_uses_iterate
             ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))
