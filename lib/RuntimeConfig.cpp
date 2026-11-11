@@ -259,6 +259,10 @@ RuntimeConfig& rc_get_tls_ref() {
     return tl_runtime_config;
 }
 
+void rc_tls_set_call_site_ptr(const QoreProgramLocation** call_site_ptr) {
+    rc_get_tls_ref().implRef().call_site_ptr = call_site_ptr;
+}
+
 RuntimeConfig::Impl* rc_get_tls_impl() {
     // the thread's RuntimeConfig is set up first
     rc_get_tls_ref();

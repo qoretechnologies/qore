@@ -192,7 +192,7 @@ class Contracts inherits QUnit::Test {
                 AbstractDataProviderType restored = Serializable::deserialize(type.serialize());
                 restored = Serializable::deserialize(restored.serialize());
                 assertEq(type.getBaseTypeName(), restored.getBaseTypeName());
-                assertEq(sort(keys type.getFields()), sort(keys restored.getFields()));
+                assertEq(sort((keys type.getFields()) ?? ()), sort((keys restored.getFields()) ?? ()));
             }
         }
         AbstractDataProviderType type = AwsTextractSchema::getType("TagResourceRequest");

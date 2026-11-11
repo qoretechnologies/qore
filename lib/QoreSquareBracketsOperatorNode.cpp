@@ -760,12 +760,9 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
         if (rhs.eval(right))
             return nullptr;
 
-        // we only support functional iteration when the lhd is a list and the rhs is a list
+        // we only support functional iteration when the lhd is a list and the rhs is a list; the rhs is evaluated
+        // once (qore#5684)
         if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
-            ValueEvalOptimizedRefHolder rhs(right, xsink);
-            if (*xsink)
-                return nullptr;
-
             value_type = list;
             return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
         }

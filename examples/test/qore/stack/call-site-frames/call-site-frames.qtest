@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the executable whose call stack frames are checked
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include CallSiteFrames.qc
+
+%exec-class CallSiteFramesTest
+
+#! Tests that the call stack frames of calls are located at their call expressions in every execution mode
+/** The script records the frames of the calls that it makes, also of calls in statements of more than one line, after
+    a call in an operand that is not evaluated, of constructors, member initializers and closures, and the frame of an
+    exception's call stack.  Each execution mode must give the frames that the AST interpreter gives, with their
+    columns; an AOT-compiled executable gives the same lines without columns.
+*/
+class CallSiteFramesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("CallSiteFrames", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + CallSiteFrames::Script;
+
+        addTestCase("frames are located at their calls in every execution mode", \modeTest());
+        addTestCase("frames are located at the lines of their calls in AOT-compiled code", \aotTest());
+
+        set_return_value(main());
+    }
+
+    modeTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(CallSiteFrames::Expected, getFrames(ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, script))),
+                mode);
+        }
+        # tiered execution with every function on the IR tier
+        assertEq(CallSiteFrames::Expected, getFrames(ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, script))),
+            "IR tier");
+    }
+
+    aotTest() {
+        TmpDir tmp("qore-call-site-frames-");
+        string exe = tmp.path + DirSep + "call-site-frames";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(CallSiteFrames::getExpectedAot(), getFrames(ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe))));
+    }
+
+    #! returns the frames in the output of the script
+    private static list<string> getFrames(string out) {
+        return select out.split("\n"), $1 =~ /^[a-z ]+: /;
+    }
+}

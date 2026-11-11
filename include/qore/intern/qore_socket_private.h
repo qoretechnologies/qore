@@ -255,10 +255,27 @@ DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsi
     exception, and the call must not return as if it had completed.  Another cancel (of the operation's owner, or the
     controller's stop) ends the call in the same way.
 
+    When the calling thread has a pending cancellation, the cancellation is raised instead (see
+    qore_socket_raise_pending_cancel()).
+
     @param mname the name of the Socket method
     @param xsink for the exception
 */
 DLLLOCAL void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink);
+
+//! Raises the calling thread's pending cancellation, if any, for a synchronous call whose operation ended without
+//! reaching its goal (canceled, or ended by a close of its socket)
+/** A cancellation of the thread can end the operation before the wait for it sees the cancellation: the code that the
+    cancellation ends closes the socket (an HTTP client closes its transport), and the close cancels the operation.
+    The caller must see the cancellation, whichever event ended the operation first, not the close that it caused.
+    Also raises a sandbox limit or an interrupt of the thread's Program (see qore_check_cancel()).
+
+    @param op the operation, for the exception's description
+    @param xsink for the exception
+
+    @return true if an exception was raised
+*/
+DLLLOCAL bool qore_socket_raise_pending_cancel(const char* op, ExceptionSink* xsink);
 
 class Transform;
 
@@ -4758,6 +4775,12 @@ DLLLOCAL QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s);
     registered (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
+
+//! Debug builds: if true, a TCP connect attempt that connect() left in progress is checked only once it is writable
+/** For the C++ unit tests of the attempts whose result the check right after connect() finds, which on macOS a
+    loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
 #endif
 
 #endif
