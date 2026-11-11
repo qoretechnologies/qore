@@ -16,6 +16,11 @@
 
 %requires qore >= 0.9.3
 
+# responses with an XML content type are deserialized by RestClient only with the xml module
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
 %modern
 
 %exec-class AwsTest
@@ -294,6 +299,9 @@ class AwsTest inherits QUnit::Test {
 
     #! End-to-end: AssumeRole against a fake STS HTTP endpoint, then sign with the temp creds
     stsAssumeRoleE2ETest() {
+%ifdef NoXml
+        testSkip("no xml module: the response is XML");
+%endif
         # spin up a fake STS endpoint that returns canned credentials
         Logger logger("test", LoggerLevel::getLevelInfo());
         HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
@@ -533,6 +541,9 @@ class AwsTest inherits QUnit::Test {
         instead.
     */
     s3ContentSha256Test() {
+%ifdef NoXml
+        testSkip("no xml module: the response is XML");
+%endif
         HttpServer srv(\log(), \log());
         int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
@@ -584,6 +595,9 @@ class AwsTest inherits QUnit::Test {
 
     #! The I/O client must retain AWS credentials when copied and sign pre-serialized bodies
     ioRawCopyTest() {
+%ifdef NoXml
+        testSkip("no xml module: the response is XML");
+%endif
         HttpServer srv(\log(), \log());
         int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
