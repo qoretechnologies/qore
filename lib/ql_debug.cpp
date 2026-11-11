@@ -1186,6 +1186,57 @@ static void ut_fork_jit_background_compiler(UnitTestCounters& c) {
     }
 }
 
+//! A synchronous JIT compile that waits for the compile lock in another thread is not counted in a child process
+/** The background compile thread takes no work while a synchronous compile waits for the lock; a child created while
+    another thread waited kept the count of the thread that does not exist in it, and its background thread never
+    compiled anything
+*/
+static void ut_fork_jit_sync_compile_waiter(UnitTestCounters& c) {
+    QoreJIT& jit = QoreJIT::instance();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        jit.lockCompileForTest();
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&] { return release; });
+        ul.unlock();
+        jit.releaseCompileLock();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&] { return held; });
+    }
+    bool waiter_locked = false;
+    std::thread waiter([&]() {
+        waiter_locked = jit.lockForSyncCompileForTest();
+        if (waiter_locked) {
+            jit.releaseCompileLock();
+        }
+    });
+    bool waiting = jit.dbgWaitSyncCompileWaiting(60000);
+    UT_ASSERT(c, waiting, "a synchronous compile waits for the compile lock");
+    pid_t pid = waiting ? fork() : -1;
+    if (!pid) {
+        _exit(jit.syncCompileWaitersForTest() ? 1 : 0);
+    }
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    waiter.join();
+    UT_ASSERT(c, waiter_locked, "the synchronous compile gets the compile lock");
+    UT_ASSERT_EQ(c, 0, jit.syncCompileWaitersForTest(), "no synchronous compile waits in the parent afterwards");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "no synchronous compile waits in the child");
+    }
+}
+
 //! The AOT module initializations that other threads claimed are released in a child process
 static void ut_fork_aot_module_state(UnitTestCounters& c) {
     QoreProgram* pgm = getProgram();
@@ -17235,6 +17286,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
+    ut_fork_jit_sync_compile_waiter(c);
     ut_fork_aot_module_state(c);
     ut_fork_aot_lazy_constant_lock(c);
     ut_fork_lazy_value_in_first_use(c);
