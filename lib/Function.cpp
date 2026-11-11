@@ -7090,26 +7090,16 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
         || (type_param_instantiation && !type_param_instantiation->empty());
 }
 
-std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* type_param_instantiation) {
-    std::string key;
-    if (receiver_type_info) {
-        key += "R:";
-        key += QoreTypeInfo::getPath(receiver_type_info);
-    }
+QoreGenericSpecializationKey::QoreGenericSpecializationKey(const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation)
+        : receiver(receiver_type_info), receiver_serial(qore_get_type_identity_serial(receiver_type_info)) {
     if (type_param_instantiation && !type_param_instantiation->empty()) {
-        key += "|M:";
-        key += std::to_string(reinterpret_cast<uintptr_t>(type_param_instantiation->owner));
-        key += "<";
-        for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
-            if (i) {
-                key += ",";
-            }
-            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+        owner = type_param_instantiation->owner;
+        type_args.reserve(type_param_instantiation->type_args.size());
+        for (const QoreTypeInfo* ti : type_param_instantiation->type_args) {
+            type_args.emplace_back(ti, qore_get_type_identity_serial(ti));
         }
-        key += ">";
     }
-    return key;
 }
 
 std::string qore_make_generic_specialization_dispatch_key(
@@ -7145,10 +7135,11 @@ const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name
         return nullptr;
     }
 
-    std::string key = qore_make_generic_specialization_key(receiver_type_info, type_param_instantiation);
+    // the call's types are live; the cache is searched with them as they are, without making a key
+    const QoreGenericSpecializationView view(receiver_type_info, type_param_instantiation);
     {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
-        auto it = specialized_ir_cache.find(key);
+        auto it = specialized_ir_cache.find(view);
         if (it != specialized_ir_cache.end()) {
             return it->second.get();
         }
@@ -7163,7 +7154,9 @@ const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name
     if (!ir) {
         return nullptr;
     }
+    QoreGenericSpecializationKey key(receiver_type_info, type_param_instantiation);
     std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+    // if another thread published the specialization first, its IR is kept and this one is freed
     auto it = specialized_ir_cache.emplace(std::move(key), std::move(ir)).first;
     return it->second.get();
 }

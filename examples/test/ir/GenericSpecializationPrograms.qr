@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The fixture of GenericSpecializationPrograms.qtest: a generic function of a library Program is called with classes
+# of the same name from several Programs, live and destroyed, in each execution mode of the Programs; every call must
+# use its own Program's class.  Prints one line per execution mode.
+
+%modern
+%no-child-restrictions
+
+#! the number of Programs created and destroyed behind the library Program in each mode
+const Generations = 50;
+
+#! the calls made in each Program
+const Calls = 3;
+
+#! the library Program's generic function, shared with the other Programs
+const LibrarySource = "%modern
+public T sub spec_ident<T>(T value) {
+    # the specialization's list type names the type argument
+    list<T> l = (value,);
+    return l[0];
+}
+
+public list<T> sub spec_list<T>(T value) {
+    return (value, value);
+}
+
+sub export_to(Program pgm) {
+    pgm.importFunction(\"spec_ident\");
+    pgm.importFunction(\"spec_list\");
+}
+";
+
+#! Returns a Program with a class Foo whose values identify the Program, calling the library's generic functions
+Program sub new_user(Program lib, ExecMode mode, int id) {
+    Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+    pgm.setExecMode(mode);
+    lib.callFunction("export_to", pgm);
+    # each Program's class has a member of its own, so the classes of the same name are not equal
+    pgm.parse(sprintf("%%modern
+class Foo {
+    public {
+        int value = %d;
+        int member_%d = 0;
+    }
+}
+
+hashdecl Bar {
+    int value = %d;
+    int member_%d = 0;
+}
+
+int sub run_ident() {
+    Foo rv = spec_ident<Foo>(new Foo());
+    return rv.value;
+}
+
+int sub run_list() {
+    list<Foo> l = spec_list<Foo>(new Foo());
+    return l[1].value;
+}
+
+int sub run_hashdecl() {
+    hash<Bar> rv = spec_ident<hash<Bar>>(hash<Bar>{});
+    return rv.value;
+}
+", id, id, id, id), sprintf("spec-user-%d", id));
+    return pgm;
+}
+
+#! Calls a function of a Program and returns an error description if it does not return the expected value
+*string sub check(Program pgm, string func, int expected) {
+    try {
+        auto actual = pgm.callFunction(func);
+        if (actual !== expected) {
+            return sprintf("%s returned %y; expected %d", func, actual, expected);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s raised %s: %s", func, ex.err, ex.desc);
+    }
+}
+
+#! Runs the calls of the Programs in one execution mode and returns the errors
+list<string> sub run_mode(ExecMode mode) {
+    list<string> errors = ();
+    Program lib(PO_NO_CHILD_PO_RESTRICTIONS);
+    lib.setExecMode(mode);
+    lib.parse(LibrarySource, "spec-library");
+    # two live Programs with classes of the same name
+    Program first = new_user(lib, mode, 1);
+    Program second = new_user(lib, mode, 2);
+    for (int i = 0; i < Calls; ++i) {
+        foreach string func in (("run_ident", "run_list", "run_hashdecl")) {
+            foreach hash<auto> h in (("pgm": first, "id": 1), ("pgm": second, "id": 2)) {
+                *string err = check(h.pgm, func, h.id);
+                if (err) {
+                    push errors, sprintf("live Program %d: %s", h.id, err);
+                }
+            }
+        }
+    }
+    delete first;
+    delete second;
+    # a series of Programs, each destroyed after its calls; the library's specializations remain
+    for (int id = 3; id < Generations + 3; ++id) {
+        Program pgm = new_user(lib, mode, id);
+        for (int i = 0; i < Calls; ++i) {
+            foreach string func in (("run_ident", "run_list", "run_hashdecl")) {
+                *string err = check(pgm, func, id);
+                if (err) {
+                    push errors, sprintf("Program %d: %s", id, err);
+                }
+            }
+        }
+        delete pgm;
+    }
+    return errors;
+}
+
+foreach hash<auto> m in (("name": "ast", "mode": EM_AST), ("name": "ir", "mode": EM_IR), ("name": "jit", "mode": EM_JIT),
+        ("name": "tiered", "mode": EM_TIERED)) {
+    list<string> errors = run_mode(m.mode);
+    printf("%s: %s\n", m.name, errors ? sprintf("%d errors, first: %s", errors.size(), errors[0]) : "ok");
+}

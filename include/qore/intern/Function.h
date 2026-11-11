@@ -265,12 +265,107 @@ DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
     const QoreTypeParamInstantiation* inst);
-//! Returns the process-local identity key for a concrete generic specialization.
-//! @param receiver_type_info concrete parameterized receiver type, if any
-//! @param type_param_instantiation concrete function or method type arguments, if any
-DLLLOCAL std::string qore_make_generic_specialization_key(
-    const QoreTypeInfo* receiver_type_info,
-    const QoreTypeParamInstantiation* type_param_instantiation);
+//! The process-lifetime identity of a concrete generic specialization: the key of a variant's specialized IR
+/** Each type is identified by its address with qore_get_type_identity_serial(): a type that is freed with its
+    class, hashdecl or enum has that owner's serial, which no later type at the same address has, and every other type
+    is never freed while the library is initialized.  Types of different Programs with the same path are therefore
+    different keys, and a type freed with its Program never matches a later type allocated at its address.
+*/
+struct QoreGenericSpecializationKey {
+    //! the concrete parameterized receiver type, if any
+    const QoreTypeInfo* receiver = nullptr;
+    //! qore_get_type_identity_serial() of \a receiver
+    uint64_t receiver_serial = 0;
+    //! the signature whose type parameters \a type_args instantiate, or nullptr if there are none
+    const UserSignature* owner = nullptr;
+    //! the function or method type arguments, each with its qore_get_type_identity_serial()
+    std::vector<std::pair<const QoreTypeInfo*, uint64_t>> type_args;
+
+    //! Makes the key of a specialization; the types must be live
+    DLLLOCAL QoreGenericSpecializationKey(const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation);
+};
+
+//! A specialization's identity as a call gives it, to look up its key without making one
+struct QoreGenericSpecializationView {
+    //! the concrete parameterized receiver type, if any; must be live
+    const QoreTypeInfo* receiver;
+    //! the function or method type arguments, or nullptr if there are none; the types must be live
+    const QoreTypeParamInstantiation* inst;
+
+    DLLLOCAL QoreGenericSpecializationView(const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation)
+            : receiver(receiver_type_info),
+            inst(type_param_instantiation && !type_param_instantiation->empty() ? type_param_instantiation : nullptr) {
+    }
+};
+
+//! Hashes specialization keys and views alike: the type addresses and the owner, not the serials
+/** A key whose type was freed and a view of a later type at the same address hash alike; the serials tell them apart
+    in QoreGenericSpecializationKeyEqual.
+*/
+struct QoreGenericSpecializationKeyHash {
+    typedef void is_transparent;
+
+    DLLLOCAL static size_t mix(size_t h, const void* p) {
+        return (h ^ reinterpret_cast<uintptr_t>(p)) * 0x9e3779b97f4a7c15ULL;
+    }
+
+    DLLLOCAL size_t operator()(const QoreGenericSpecializationKey& k) const {
+        size_t h = mix(mix(0, k.receiver), k.owner);
+        for (const auto& i : k.type_args) {
+            h = mix(h, i.first);
+        }
+        return h ^ (h >> 32);
+    }
+
+    DLLLOCAL size_t operator()(const QoreGenericSpecializationView& v) const {
+        size_t h = mix(0, v.receiver);
+        if (v.inst) {
+            h = mix(h, v.inst->owner);
+            for (const QoreTypeInfo* ti : v.inst->type_args) {
+                h = mix(h, ti);
+            }
+        } else {
+            h = mix(h, nullptr);
+        }
+        return h ^ (h >> 32);
+    }
+};
+
+//! Compares specialization keys and views: the same types (addresses and identity serials) and owner
+struct QoreGenericSpecializationKeyEqual {
+    typedef void is_transparent;
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationKey& a, const QoreGenericSpecializationKey& b) const {
+        return a.receiver == b.receiver && a.receiver_serial == b.receiver_serial && a.owner == b.owner
+            && a.type_args == b.type_args;
+    }
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationKey& a, const QoreGenericSpecializationView& b) const {
+        if (a.receiver != b.receiver || a.receiver_serial != qore_get_type_identity_serial(b.receiver)) {
+            return false;
+        }
+        if (!b.inst) {
+            return !a.owner;
+        }
+        if (a.owner != b.inst->owner || a.type_args.size() != b.inst->type_args.size()) {
+            return false;
+        }
+        const std::pair<const QoreTypeInfo*, uint64_t>* ai = a.type_args.data();
+        for (const QoreTypeInfo* ti : b.inst->type_args) {
+            if (ai->first != ti || ai->second != qore_get_type_identity_serial(ti)) {
+                return false;
+            }
+            ++ai;
+        }
+        return true;
+    }
+
+    DLLLOCAL bool operator()(const QoreGenericSpecializationView& a, const QoreGenericSpecializationKey& b) const {
+        return (*this)(b, a);
+    }
+};
 //! Returns the portable dispatch key for a concrete generic specialization.
 //! Unlike the process-local cache key, this key contains no pointer identity;
 //! callers must compare it only after resolving the exact function variant.
@@ -1107,7 +1202,10 @@ protected:
     mutable std::atomic<bool> uses_self{true};
     //! Specialized IR functions keyed by concrete receiver and method type arguments
     mutable std::mutex specialized_ir_mutex;
-    mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
+    /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
+    */
+    mutable std::unordered_map<QoreGenericSpecializationKey, std::unique_ptr<QoreIRFunction>,
+        QoreGenericSpecializationKeyHash, QoreGenericSpecializationKeyEqual> specialized_ir_cache;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
     //! Serialized fallback IR installed before AOT publication and protected during materialization.
