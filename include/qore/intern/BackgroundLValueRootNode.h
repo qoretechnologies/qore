@@ -75,6 +75,12 @@ public:
         return value;
     }
 
+    //! returns the value as the storage of an lvalue; only for a node that holds the storage of one evaluation of
+    //! the lvalue (see LValueHelper::doBackgroundRootLValue()), never for a node of the copied expression
+    DLLLOCAL QoreValue& getLValueStorage() {
+        return value;
+    }
+
     //! returns the declared type of the variable or member
     DLLLOCAL const QoreTypeInfo* getValueTypeInfo() const {
         return typeInfo;
@@ -91,6 +97,13 @@ protected:
     QoreValue value;
     //! the declared type of the variable or member
     const QoreTypeInfo* typeInfo;
+
+    //! releases the value with the exception sink of the code that releases the node
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        value.discard(xsink);
+        value = QoreValue();
+        return true;
+    }
 
     //! a background lvalue root read as a value is the value that the thread took
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

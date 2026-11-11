@@ -790,8 +790,7 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), bg_root_value(o.bg_root_value),
-        removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
@@ -802,7 +801,6 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
-    o.bg_root_value = nullptr;
     // the entries created to reach the target belong to the new helper, which removes them if its operation fails
     o.vivified.clear();
     o.buffer_lvalue = nullptr;
@@ -984,13 +982,6 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
-    }
-
-    // the value of the root of a background lvalue, which nothing refers to any more (issue #5723); only the lvalues
-    // of background expressions have one
-    if (bg_root_value) {
-        bg_root_value->discard(vl.xsink);
-        delete bg_root_value;
     }
 }
 
@@ -1600,15 +1591,16 @@ int LValueHelper::doBackgroundRootLValue(const QoreValue& n) {
     }
     // the root of the lvalue of a background expression: the value that the thread took for a variable or a member,
     // as a temporary lvalue of the variable's declared type, so that a path through an object modifies the object,
-    // which the thread shares, as in the other execution modes (issue #5723)
+    // which the thread shares, as in the other execution modes (issue #5723).  The lvalue's storage is a node of its
+    // own for this evaluation, which the helper releases with its other temporary values (tvec): the node of the
+    // copied expression is never written, so a value that it gave out stays valid, and the helper of any other
+    // lvalue does nothing for it
     const BackgroundLValueRootNode* root = n.get<const BackgroundLValueRootNode>();
-    if (bg_root_value) {
-        bg_root_value->discard(vl.xsink);
-    } else {
-        bg_root_value = new QoreValue;
-    }
-    *bg_root_value = root->getValue().refSelf();
-    setValue(*bg_root_value, root->getValueTypeInfo());
+    ReferenceHolder<BackgroundLValueRootNode> storage(new BackgroundLValueRootNode(root->loc,
+        root->getValue().refSelf(), root->getValueTypeInfo()), vl.xsink);
+    tvec.push_back(*storage);
+    BackgroundLValueRootNode* storage_node = storage.release();
+    setValue(storage_node->getLValueStorage(), root->getValueTypeInfo());
     return 0;
 }
 

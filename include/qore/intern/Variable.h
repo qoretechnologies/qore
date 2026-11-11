@@ -701,11 +701,6 @@ private:
     // suppressObjectScan())
     bool no_object_scan = false;
 
-    //! the value of the root of the lvalue of a background expression, which the lvalue refers to (issue #5723);
-    //! allocated only for such an lvalue and owned by the helper, so that the helper of any other lvalue checks only
-    //! a pointer (a raw pointer: the destructor releases and deletes it under one check)
-    QoreValue* bg_root_value = nullptr;
-
     //! set when the lvalue was changed other than by the removal; see disableRemovalScanSkip()
     bool removal_no_skip = false;
     //! set when members were removed from an object; see objectRemoved()
