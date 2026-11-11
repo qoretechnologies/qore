@@ -429,6 +429,10 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
         addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
         addTestCase("the program uses the values that the debugger sets", \setValueUsedTest());
+        addTestCase("the top-level code uses a value that the debugger sets at a breakpoint",
+            \setValueTopLevelTest());
+        addTestCase("the top-level code stops at an exception that it catches", \caughtExceptionStopTest());
+        addTestCase("the locals of the blocks of the top-level code that the debugger sets", \setValueNestedTest());
         addTestCase("local variables of the frames of a thread stopped in a function", \functionFrameVariableTest());
         addTestCase("every command of a stopped thread is answered", \threadAnswerTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
@@ -625,6 +629,80 @@ try {
         e = dpc.getInterrupt(p.pgmId);
         assertEq("exception", e.func);
         dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(20)});
+        assertEq({"rc": NOTHING}, p.finish());
+        assertEq(10, p.pgm.getGlobalVariable("seen1"));
+        assertEq(20, p.pgm.getGlobalVariable("seen2"));
+    }
+
+    # a value that the debugger sets at a breakpoint of the top-level code is used by the code that runs after the
+    # stop, which native code did not read again: the top-level code runs in the IR interpreter while a debugger is
+    # attached (qore#5796)
+    setValueTopLevelTest() {
+        DebuggedProgram p(dpc, "%modern
+our int seen;
+int total = int(\"5\");
+seen = total;
+");
+        on_exit p.cleanup();
+        p.breakAt(4);
+        hash<auto> e = p.runToStop();
+        assertEq(4, e.line);
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(10)});
+        assertEq({"rc": NOTHING}, p.finish());
+        assertEq(10, p.pgm.getGlobalVariable("seen"));
+    }
+
+    # an exception that a try statement of the top-level code catches stops the thread, which native code did not do
+    # (qore#5796)
+    caughtExceptionStopTest() {
+        DebuggedProgram p(dpc, "%modern
+our int seen;
+int total = int(\"5\");
+try {
+    throw \"TEST-ERROR\";
+} catch (hash<ExceptionInfo> ex) {
+    seen = total;
+}
+");
+        on_exit p.cleanup();
+        p.breakAt(3);
+        hash<auto> e = p.runToStop();
+        assertEq(3, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        assertEq({"rc": NOTHING}, p.finish());
+        assertEq(5, p.pgm.getGlobalVariable("seen"));
+    }
+
+    # a local of a nested block of the top-level code that the debugger sets is used too, and an exception caught in a
+    # loop of the top-level code stops the thread (qore#5796)
+    setValueNestedTest() {
+        DebuggedProgram p(dpc, "%modern
+our int seen1;
+our int seen2;
+if (int(\"1\")) {
+    int inner = int(\"5\");
+    seen1 = inner;
+}
+for (int i = 0; i < 1; ++i) {
+    int n = int(\"7\");
+    try {
+        throw \"TEST-ERROR\";
+    } catch (hash<ExceptionInfo> ex) {
+        seen2 = n;
+    }
+}
+");
+        on_exit p.cleanup();
+        p.breakAt(6);
+        hash<auto> e = p.runToStop();
+        assertEq(6, e.line);
+        dpc.threadSend(p.tid, "thread/local/inner/set", {"value": AbstractDebugControl::serialize(10)});
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        dpc.threadSend(p.tid, "thread/local/n/set", {"value": AbstractDebugControl::serialize(20)});
         assertEq({"rc": NOTHING}, p.finish());
         assertEq(10, p.pgm.getGlobalVariable("seen1"));
         assertEq(20, p.pgm.getGlobalVariable("seen2"));

@@ -1064,7 +1064,11 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
 
                 std::string error;
-                if (exec_mode == QEM_JIT) {
+                // native code does not read the local variables again after a stop, where the debugger can set
+                // them, and does not stop at an exception that a try statement of the code catches: with a debugger
+                // attached, the top-level code runs in the IR interpreter, as a function runs in the AST
+                // interpreter (UserVariantBase::evalTiered()) (qore#5796)
+                if (exec_mode == QEM_JIT && !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
 
