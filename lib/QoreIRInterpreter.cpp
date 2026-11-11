@@ -121,7 +121,8 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
 // NT_STATIC_METHOD_CALL; a copy keeps the type of the node copied.  A test of the type replaces a dynamic_cast, which
 // compares the names of the classes (strcmp) on every call, at a cost that depends on where the names are in memory.
 static inline const FunctionCallNode* qore_ir_function_call_node(const AbstractQoreNode* node) {
-    const FunctionCallNode* rv = node && (node->getType() == NT_FUNCTION_CALL
+    // a plain function call is the common case: it is tested first in any build
+    const FunctionCallNode* rv = node && (__builtin_expect(node->getType() == NT_FUNCTION_CALL, 1)
             || node->getType() == NT_PROGRAM_FUNC_CALL)
         ? static_cast<const FunctionCallNode*>(node) : nullptr;
     assert(rv == dynamic_cast<const FunctionCallNode*>(node));
@@ -6978,6 +6979,14 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 #define QORE_IR_LAMBDA_INLINE
 #endif
 
+//! for lambdas of the exception paths, which are called from many places: kept out of line, so that their bodies do
+//! not weigh on the code generated for the paths of a call that raises no exception
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_IR_LAMBDA_NOINLINE __attribute__((noinline))
+#else
+#define QORE_IR_LAMBDA_NOINLINE
+#endif
+
 //! The state of the debugger's events of a frame of QoreIRInterpreter::execute() (#5795)
 /** One object, so that the debugger's helpers of the frame, which are expanded where they are called, add no state
     of their own to the frame; the work that a debugger needs is done by the functions below, out of line
@@ -6993,18 +7002,32 @@ struct QoreIRDebugFrameState {
     bool exit_dismissed = false;
     //! true once the function's exit event was made
     bool function_exit_done = false;
-    //! the statements that the frame is in, once a DebugStatement with nesting ran in it (see QoreIRDebugNest)
-    struct QoreIRDebugNest* nest = nullptr;
+    //! true once a DebugStatement with nesting ran in the frame: the statements that it is in are in its pooled frame
+    //! (IRCallFrame::dbg_nest), which a call reset then (see QoreIRDebugNest); a flag, beside the others, so that the
+    //! state costs a call no more than before
+    bool nest_used = false;
 };
 
+//! The statements that the running frame of the thread is in
+/** The frames of a thread are pushed and popped in order (QoreIRInterpreter::execute()), so the frame whose code runs is
+    the top of the thread's pool.  The state is looked up here, in the debugger's paths, and not passed from execute(),
+    so that its dispatch loop keeps no reference to the frame, which costs a call registers (qore#5816).
+*/
+static QoreIRDebugNest& qore_ir_dbg_frame_nest() {
+    IRCallFramePool& pool = TlFramePool::get();
+    assert(pool.top);
+    return pool.frames[pool.top - 1]->dbg_nest;
+}
+
 //! Records the statement of a DebugStatement instruction in the statements that the frame is in
-static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st, QoreIRDebugNest& storage,
+static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st,
         const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth) {
-    if (!st.nest) {
-        storage.reset();
-        st.nest = &storage;
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (!st.nest_used) {
+        n.reset();
+        st.nest_used = true;
     }
-    std::vector<QoreIRDebugNestEntry>& entries = st.nest->entries;
+    std::vector<QoreIRDebugNestEntry>& entries = n.entries;
     entries.resize(static_cast<size_t>(inst->nest_depth) + 1);
     QoreIRDebugNestEntry& e = entries.back();
     e.stmt = stmt;
@@ -7017,7 +7040,7 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
 //! raised after it, as in a loop's condition, is reported for
 static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState& st,
         const QoreIRDebugStatementInstruction* inst, const AbstractStatement** stmt_ptr) {
-    std::vector<QoreIRDebugNestEntry>& entries = st.nest->entries;
+    std::vector<QoreIRDebugNestEntry>& entries = qore_ir_dbg_frame_nest().entries;
     if (entries.size() > inst->nest_depth) {
         entries.resize(inst->nest_depth);
         st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
@@ -7027,10 +7050,10 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState
 
 //! Starts the events of the statements that contain the given statement, whose exception event was made
 static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractStatement* stmt) {
-    if (!st.nest) {
+    if (!st.nest_used) {
         return;
     }
-    QoreIRDebugNest& n = *st.nest;
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
     n.chain = !n.entries.empty() && n.entries.back().stmt == stmt ? static_cast<int>(n.entries.size()) - 2 : -1;
 }
 
@@ -7040,10 +7063,13 @@ static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractSta
 */
 static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameState& st,
         ThreadLocalProgramData* tlpd, ExceptionSink* xsink, size_t scope_size) {
-    if (!st.nest || st.nest->chain < 0 || !xsink || !xsink->isException()) {
+    if (!st.nest_used) {
         return false;
     }
-    QoreIRDebugNest& n = *st.nest;
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (n.chain < 0 || !xsink || !xsink->isException()) {
+        return false;
+    }
     // the statements that the frame is in can have changed since the chain started (as with a handler's statements)
     if (n.chain > static_cast<int>(n.entries.size()) - 2) {
         n.chain = static_cast<int>(n.entries.size()) - 2;
@@ -8525,9 +8551,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the exception events of the statements that contain the statement of the exception, as far as the scopes of the
     // frame are closed (see qore_ir_dbg_report_enclosing())
     auto dbgReportEnclosing = [&]() QORE_IR_LAMBDA_INLINE {
-        if (debug_active && dbg_state.nest && dbg_state.nest->chain >= 0
-                && qore_ir_dbg_report_enclosing(dbg_state, tlpd, xsink, scope_stack.size())) {
-            invalidateExternalCaches();
+        if (debug_active) [[unlikely]] {
+            if (qore_ir_dbg_report_enclosing(dbg_state, tlpd, xsink, scope_stack.size())) {
+                invalidateExternalCaches();
+            }
         }
     };
     // after handlers of the frame ran: an exception that they raised, or rethrew with a rethrow statement, was reported
@@ -8556,7 +8583,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     //
     // A debugger that dismisses the exception ends the function, which returns no value (see exitAfterUnwind()); the AST
     // interpreter continues after the statement (#5825).
-    auto unwindForException = [&]() {
+    auto unwindForException = [&]() QORE_IR_LAMBDA_NOINLINE {
         dbgReportException();
         dbgReportEnclosing();
         while (!scope_stack.empty()) {
@@ -14211,7 +14238,7 @@ load_local_done:
                     if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_END) {
                         // the statement ended: the frame is in the statement that contains it, which an exception
                         // raised after it, as in a loop's condition, is reported for
-                        if (dbg_state.nest) {
+                        if (dbg_state.nest_used) {
                             qore_ir_dbg_statement_end(dbg_state, dbg_inst, rl_cache.stmt_ptr);
                         }
                         ++ip;
@@ -14234,7 +14261,7 @@ load_local_done:
                         dbg_state.frame_stmt = dbg_stmt;
                         // the statements that the frame is in, for the exception events (#5816)
                         if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
-                            qore_ir_dbg_nest_statement(dbg_state, frame.dbg_nest, dbg_inst, dbg_stmt,
+                            qore_ir_dbg_nest_statement(dbg_state, dbg_inst, dbg_stmt,
                                 scope_stack.size());
                         }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
