@@ -258,7 +258,10 @@ log("started listener on %s", lh.desc);
     - fixed @ref HttpServer::HttpServer::setListenerLogOptions() "setListenerLogOptions()": logging response bodies
       was set by @ref HttpServer::LLO_RECV_BODY "LLO_RECV_BODY" instead of @ref HttpServer::LLO_SEND_BODY "LLO_SEND_BODY"
     - request and response log messages are masked and formatted only if they will be logged; added
-      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"
+      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"; whether the request line,
+      the request body and the response of a request are logged at the \c INFO level is decided once when the request
+      starts (for each request of a persistent session too), so a change of the log level applies to them from the
+      next request
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -4677,7 +4680,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             *data body = body_info.body;
 
-            listener.doLogRecvBody(body, cx, hdr, info);
+            if (request_helper.log_info) {
+                listener.doLogRecvBody(body, cx, hdr, info);
+            }
 
             hash<HttpResponseInfo> rv;
 
@@ -4956,8 +4961,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
-        listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
-            rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
+        if (request_helper.log_info) {
+            listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
+                rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
+        }
         # a handler can close a connection, but it cannot keep open one that the request requires to close: an
         # HTTP/1.0 request without the keep-alive option, or any request with the close option (RFC 9112 section
         # 9.3); every hash<HttpResponseInfo> has a "close" key, so a False value is not a request to keep it open
@@ -7060,6 +7067,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, hash<auto> header_info) {
         cThreads.add();
         RequestHelper request_helper(cThreads, dThreads);
+        request_helper.log_info = isLogInfoEnabled();
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -7137,8 +7145,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Check if we need to close the connection (from HTTP version negotiation)
         cx.close = header_info.close;
 
-        # Log the request
-        {
+        # Log the request; the message is built only if it is logged
+        if (request_helper.log_info) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
                 cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
@@ -7367,7 +7375,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 hdr."Content-Length" = string(async_response.body.size());
             }
             # Log the response
-            logResponse(cx, async_response);
+            if (request_helper.log_info) {
+                logResponse(cx, async_response);
+            }
 
             # For multiplexed protocols (HTTP/2, HTTP/3), don't close the connection
             # based on cx.close — the stream is closed independently
@@ -8001,8 +8011,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
-                # Reset context for new request
+                # Reset context for new request; whether its INFO messages are logged is decided for each request
                 cx = cx_listener;
+                request_helper.log_info = isLogInfoEnabled();
 
                 # Context setup — mirrors processNativeRequest()
                 cx.raw_path = req_hdr.path;
@@ -8031,8 +8042,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 cx."response-encoding" = conn_info.header_info."accept-charset";
                 cx.close = conn_info.header_info.close;
 
-                # Log the request
-                {
+                # Log the request; the message is built only if it is logged
+                if (request_helper.log_info) {
                     string http_ver = req_hdr.http_version =~ /^HTTP\//
                         ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                     string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
@@ -8227,6 +8238,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> req_hdr = conn_info.hdr;
 
             cx = cx_listener;
+            # whether the request's INFO messages are logged is decided for each request
+            request_helper.log_info = isLogInfoEnabled();
             cx.raw_path = req_hdr.path;
             req_hdr.path = decodeRequestPath(req_hdr.path);
             cx += {
@@ -8253,8 +8266,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             cx."response-encoding" = conn_info.header_info."accept-charset";
             cx.close = conn_info.header_info.close;
 
-            # Log the request
-            {
+            # Log the request; the message is built only if it is logged
+            if (request_helper.log_info) {
                 string http_ver = req_hdr.http_version =~ /^HTTP\//
                     ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                 string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y",
@@ -9191,6 +9204,14 @@ class ExternalConnectionKeeper {
     @see HttpListener::dThreads
 */
 class RequestHelper {
+    public {
+        #! if True, the request's INFO messages are logged
+        /** decided once when the request starts, as the check costs a call to the logger for each message; a change
+            of the log level applies from the next request
+        */
+        bool log_info = True;
+    }
+
     private {
         #! WaitGroup for normal connection threads (decremented if we stay in normal mode)
         WaitGroup cThreads;

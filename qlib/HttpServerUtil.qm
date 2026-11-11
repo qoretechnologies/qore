@@ -1159,6 +1159,14 @@ public string sub mask_sensitive_url_query_values(string path) {
     return rv.join("");
 }
 
+# the labels of the canonical names of the usual encodings, as http_get_charset_label() computes them
+const hash<string, string> HttpCharsetLabels = {
+    "UTF-8": "utf-8",
+    "utf-8": "utf-8",
+    "ISO-8859-1": "iso-8859-1",
+    "iso-8859-1": "iso-8859-1",
+};
+
 #! Returns response headers where the names of the fields managed by the HTTP server have their canonical case
 /** Header field names are case-insensitive, but hash keys are not.  The HTTP server checks, sets, and removes the
     header fields in @ref HttpServerManagedHeaderNames by name; without this conversion a handler that returns one
@@ -1215,7 +1223,9 @@ string content_type = MimeTypeXml + ";charset=" + http_get_charset_label(cx."res
     @since HttpServerUtil 1.6
 */
 public string sub http_get_charset_label(string encoding) {
-    return force_encoding("", encoding).encoding().lwr();
+    # this is called for every response with a string body: the canonical names of the usual encodings are looked up
+    # without converting a string
+    return HttpCharsetLabels{encoding} ?? force_encoding("", encoding).encoding().lwr();
 }
 
 #! helper function for setting HTTP response headers
