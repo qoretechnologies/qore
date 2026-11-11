@@ -82,9 +82,14 @@
 
     @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
-    flagged @ref NOOP are no longer resolved at run time, as at parse time: <tt>sort(NOTHING)</tt>, for example with
-    an unassigned member, and the other no-op calls raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant
-    value; <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing keep returning \c 0 (regular variants now).
+    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
+    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
+    The most common cases keep their results with regular variants:
+    - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
+    - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
+      no value (such as \c keys of an unassigned hash) return no value; as these calls are resolved at run time, a
+      type error in the use of their result is raised at run time;
+    - <tt>inlist()</tt> and <tt>inlist_hard()</tt> with @ref nothing as the list still return @ref False.
 
     @par Date Literals Have the Type of Their Subtype
     A date literal or constant is typed as \c date&lt;absolute&gt; or \c date&lt;relative&gt;, so one given where the

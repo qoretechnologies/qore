@@ -8,6 +8,15 @@
 
 %exec-class SortTest
 
+#! members that are never assigned have no value at run time, although their types do not admit one
+class SortNoValue {
+    public {
+        hash<string, bool> h;
+        *list<auto> l;
+        *int n;
+    }
+}
+
 class SortTest inherits QUnit::Test {
     constructor() : QUnit::Test("SortTest", "1.0") {
         addTestCase("sort() test", \sortTest());
@@ -16,6 +25,7 @@ class SortTest inherits QUnit::Test {
         addTestCase("sort_descending_stable() test", \sortDescendingStableTest());
         addTestCase("stability test", \stableTest());
         addTestCase("descending stability test", \descendingStableTest());
+        addTestCase("no value with strict arguments", \noValueTest());
 
         set_return_value(main());
     }
@@ -262,5 +272,31 @@ class SortTest inherits QUnit::Test {
 
         assertEq(correctlySorted, stableSorted);
         assertNeq(correctlySorted, unstableSorted);
+    }
+
+    #! sort() of no value returns no value with strict arguments (%modern), as its noop variant did before
+    noValueTest() {
+        SortNoValue nv();
+        foreach code sorter in ((\sort(), \sort_descending(), \sort_stable(), \sort_descending_stable())) {
+            assertNothing(sorter(keys nv.h), "keys of an unassigned hash");
+            assertNothing(sorter(nv.l), "an unassigned list");
+            assertNothing(sorter(map $1, keys nv.h), "map over no keys");
+        }
+        assertNothing(sort(keys nv.h));
+        assertNothing(sort_descending(keys nv.h));
+        assertNothing(sort_stable(nv.l));
+        assertNothing(sort_descending_stable(nv.l));
+        # a value of a list type keeps the list variant and its type
+        list<string> names = sort(keys {"b": True, "a": True});
+        assertEq(("a", "b"), names);
+        assertEq(("b", "a"), sort_descending(keys {"b": True, "a": True}));
+        # a named argument matches the regular variant for no value, which has the list variants' parameter name
+        assertNothing(sort(values: nv.l));
+        assertNothing(sort_stable(values: keys nv.h));
+        assertEq((1, 2), sort(values: (2, 1)));
+        # only the one-argument call has a variant for no value: with a comparator the call raises the error
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { sort(nv.l, "compare"); });
+        # another builtin whose only variant for no value is a noop variant still raises the error
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { chr(nv.n); });
     }
 }

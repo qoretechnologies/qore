@@ -120,6 +120,27 @@ QoreListNode* range_intern(int64 start, int64 stop, int64 step, ExceptionSink* x
     List functions
  */
 ///@{
+//! Returns @ref nothing for no value, without an error
+/** A value of a declared type that admits no value, such as \c keys of an unassigned hash or \c map over no
+    values, sorts to no value also with @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with
+    @ref modern "%modern"), where the @ref NOOP variant is not called
+
+    @par Example:
+    @code{.py}
+*list<string> names = sort(keys h.missing_key); # NOTHING
+    @endcode
+
+    @param values no value; the parameter has the name of the list variants' parameter, so a call with a named
+    argument (<tt>sort(values: x)</tt>) can match either
+
+    @return @ref nothing
+
+    @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
+    no value)
+ */
+nothing sort(nothing[doc] values) [flags=CONSTANT] {
+}
+
 //! This function variant does nothing at all
 /** it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore
     type errors in arguments
@@ -312,6 +333,27 @@ list<auto> sortDescending(list<auto> l, string func) [flags=CONSTANT,DEPRECATED]
 */
 list<auto> sortDescending(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortDescending(f, xsink);
+}
+
+//! Returns @ref nothing for no value, without an error
+/** A value of a declared type that admits no value, such as \c keys of an unassigned hash or \c map over no
+    values, sorts to no value also with @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with
+    @ref modern "%modern"), where the @ref NOOP variant is not called
+
+    @par Example:
+    @code{.py}
+*list<string> names = sort_descending(keys h.missing_key); # NOTHING
+    @endcode
+
+    @param values no value; the parameter has the name of the list variants' parameter, so a call with a named
+    argument (<tt>sort_descending(values: x)</tt>) can match either
+
+    @return @ref nothing
+
+    @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
+    no value)
+ */
+nothing sort_descending(nothing[doc] values) [flags=CONSTANT] {
 }
 
 //! This function variant does nothing at all
@@ -507,6 +549,27 @@ list<auto> sortStable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortStable(f, xsink);
 }
 
+//! Returns @ref nothing for no value, without an error
+/** A value of a declared type that admits no value, such as \c keys of an unassigned hash or \c map over no
+    values, sorts to no value also with @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with
+    @ref modern "%modern"), where the @ref NOOP variant is not called
+
+    @par Example:
+    @code{.py}
+*list<string> names = sort_stable(keys h.missing_key); # NOTHING
+    @endcode
+
+    @param values no value; the parameter has the name of the list variants' parameter, so a call with a named
+    argument (<tt>sort_stable(values: x)</tt>) can match either
+
+    @return @ref nothing
+
+    @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
+    no value)
+ */
+nothing sort_stable(nothing[doc] values) [flags=CONSTANT] {
+}
+
 //! This function variant does nothing at all
 /** It is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore
     type errors in arguments
@@ -696,6 +759,27 @@ list<auto> nl = sortDescending(l, sort_func);
 */
 list<auto> sortDescendingStable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortDescendingStable(f, xsink);
+}
+
+//! Returns @ref nothing for no value, without an error
+/** A value of a declared type that admits no value, such as \c keys of an unassigned hash or \c map over no
+    values, sorts to no value also with @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with
+    @ref modern "%modern"), where the @ref NOOP variant is not called
+
+    @par Example:
+    @code{.py}
+*list<string> names = sort_descending_stable(keys h.missing_key); # NOTHING
+    @endcode
+
+    @param values no value; the parameter has the name of the list variants' parameter, so a call with a named
+    argument (<tt>sort_descending_stable(values: x)</tt>) can match either
+
+    @return @ref nothing
+
+    @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
+    no value)
+ */
+nothing sort_descending_stable(nothing[doc] values) [flags=CONSTANT] {
 }
 
 //! This function variant does nothing at all

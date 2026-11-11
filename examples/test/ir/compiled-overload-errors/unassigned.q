@@ -1,7 +1,7 @@
 %modern
 # calls whose argument has no value at run time although its type does not include it (a member that is not assigned); see
 # compiled-overload-errors.qtest
-class O { public { hash<string, bool> consumes; string s; } }
+class O { public { hash<string, bool> consumes; list<string> names; string s; *int n; } }
 string sub take(string x) { return "take(string)"; }
 string sub ov(string x) { return "ov(string)"; }
 string sub ov(*int x) { return sprintf("ov(*int) x=%y", x); }
@@ -33,8 +33,16 @@ sub main() {
     }
 }
 sub mainCalls(O o) {
-    # a noop variant (sort(auto)) is not a candidate in %modern code: the call raises the error
+    # sort() of no value has regular variants, which return what its noop variants did; inlist() of no list matches
+    # its softlist variant
     run("sort keys", string sub () { return sprintf("%y", sort(keys o.consumes)); });
+    run("sort_descending keys", string sub () { return sprintf("%y", sort_descending(keys o.consumes)); });
+    run("sort_stable keys", string sub () { return sprintf("%y", sort_stable(keys o.consumes)); });
+    run("sort_descending_stable keys", string sub () { return sprintf("%y", sort_descending_stable(keys o.consumes)); });
+    run("inlist", string sub () { return sprintf("%y", inlist("x", o.names)); });
+    run("inlist_hard", string sub () { return sprintf("%y", inlist_hard("x", o.names)); });
+    # another noop variant (chr(auto)) is not a candidate in %modern code: the call raises the error
+    run("chr", string sub () { return chr(o.n); });
     # a single possible variant is committed; the argument without a value raises the error
     run("take", string sub () { return take(o.s); });
     # another variant accepts no value: the call is resolved at run time
