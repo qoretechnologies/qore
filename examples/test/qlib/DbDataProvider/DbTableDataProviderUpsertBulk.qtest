@@ -116,7 +116,17 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         }
         # on PostgreSQL, every connection of the run uses the run's own schema
         PgsqlRunSchema::setup(connstr, "DbTableDataProviderUpsertBulk");
-        Datasource ds(connstr);
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module
+            # API): an environment condition, as below; any other error fails
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            }
+            rethrow;
+        }
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
