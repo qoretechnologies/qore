@@ -49,11 +49,20 @@ class TypedLocalAfterDeleteTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(24, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^delete value list:\n  = \[\[null, 2\], null\]\n/, "the value of delete is NOTHING");
         assertTrue(out =~ /\nremove value list:\n  = \[\[\[0, 1, 2\], 2\], null\]\n/, "the value of remove");
         assertTrue(out =~ /\nstring eq:\n  = \[True, False, False, True\]\n/, "a deleted string equals \"\"");
         assertTrue(out =~ /\nloop read before delete:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "loop");
+        # a call that NOTHING cannot be passed to raises an exception, also after a remove later in the loop
+        assertTrue(out =~ /\ntyped param after remove:\n  = \["a", "caught"\]\n/, "typed parameter");
+        # a delete through a reference leaves the variable without a value
+        assertTrue(out =~ /\ndelete through reference:\n  = \[True, False, "!"\]\n/, "delete through a reference");
+        assertTrue(out =~ /\nswitch after delete through reference:\n  = "none"\n/, "switch");
+        # the destructor runs after the global's lock, which it reads
+        assertTrue(out =~ /\ndelete global destructor:\n  dtor X: global exists False\n  = False\n/, "destructor");
+        assertTrue(out =~ /\ndelete system object:\n  ! SYSTEM-OBJECT-ERROR: /, "system object");
+        assertTrue(out =~ /\nplain function:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "plain function");
     }
 
     #! runs the script in every execution mode and on the IR tier

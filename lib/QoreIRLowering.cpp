@@ -7013,13 +7013,20 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
         bool local_definitely_assigned = parse_context && var->getType() == VT_LOCAL && var->ref.id
             && parse_context->isLocalDefinitelyAssigned(var->ref.id);
         bool plain_local = declared_type && !QoreTypeInfo::getReferenceTarget(declared_type);
-        bool definitely_assigned = analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
-            || (local_definitely_assigned && plain_local);
+        // a local that delete or remove (also through a reference to it) can leave without a value is NOTHING when
+        // it is read after that, whatever its declared type and the parse's flow analysis say (qore#5710)
+        bool ever_deleted = (var->getType() == VT_LOCAL || var->getType() == VT_LOCAL_TS
+            || var->getType() == VT_CLOSURE) && var->ref.id && var->ref.id->everDeleted();
+        bool definitely_assigned = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || (local_definitely_assigned && plain_local));
+        if (ever_deleted && facts.type_info) {
+            facts.type_info = get_or_nothing_type_check(facts.type_info);
+        }
         facts.assigned_state = definitely_assigned
             ? QoreIRAssignedState::Assigned : QoreIRAssignedState::MaybeAssigned;
-        facts.never_nothing = analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        facts.never_nothing = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::NeverNothing)
             || (definitely_assigned && facts.type_info
-                && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL);
+                && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL));
         if (facts.never_nothing && facts.type_info) {
             if (QoreTypeInfo::isType(facts.type_info, NT_INT)) {
                 facts.representation = QoreIRValueRepresentation::NativeInt;
@@ -14344,7 +14351,8 @@ bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const
         // overload dispatch must fall back when a selected non-NOTHING variant
         // could reject that runtime value.
         const QoreTypeInfo* local_type = local->parseGetTypeInfo();
-        return !parse_context
+        // a local that delete or remove can leave without a value (qore#5710)
+        return !parse_context || local->everDeleted()
             || !parse_context->isLocalDefinitelyAssigned(local)
             || !local_type
             || QoreTypeInfo::parseReturns(

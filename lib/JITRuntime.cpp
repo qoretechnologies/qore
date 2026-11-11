@@ -15435,6 +15435,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             }
         }
 
+        // the value removed by delete is a borrowed reference (delete self)
+        bool del_static_assignment = false;
         {
             LValueHelper lvh(xsink);
             // the remove or delete of the variable itself (see LValueHelper::navigatePath())
@@ -15448,26 +15450,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     res = QoreValue();
                 }
             } else {
-                bool static_assignment = false;
-                res = lvh.remove(static_assignment);
-                if (res.getType() == NT_OBJECT) {
-                    QoreObject* o = res.get<QoreObject>();
-                    if (!o->isSystemObject()) {
-                        o->doDelete(xsink);
-                    }
-                    if (!static_assignment) {
-                        res.discard(xsink);
-                    }
-                    res = QoreValue();
-                } else if (static_assignment) {
-                    res = QoreValue();
-                }
+                // the object is deleted after the lvalue's lock, below
+                res = lvh.remove(del_static_assignment);
             }
         }
-        // delete gives NOTHING, as the AST interpreter's delete operator does: the value removed is released here,
-        // after the lvalue's lock (LValueRemoveHelper::deleteLValue(); qore#5710)
+        // delete gives NOTHING, as the AST interpreter's delete operator does: an object removed is deleted, and the
+        // value released, after the lvalue's lock, as its destructor can access the lvalue
+        // (LValueRemoveHelper::deleteLValue(); qore#5710)
         if (inst->unary_op == LVUnaryOp::Delete && !res.isNothing()) {
-            res.discard(xsink);
+            if (res.getType() == NT_OBJECT) {
+                QoreObject* o = res.get<QoreObject>();
+                if (o->isSystemObject()) {
+                    xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
+                        o->getClassName());
+                } else {
+                    o->doDelete(xsink);
+                }
+            }
+            // a borrowed reference (self) is not released: the caller's reference keeps the object until the
+            // method's frame unwinds
+            if (!del_static_assignment) {
+                res.discard(xsink);
+            }
             res = QoreValue();
         }
     } else {

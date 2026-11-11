@@ -14,6 +14,42 @@ auto sub any(auto v) {
     return v;
 }
 
+#! takes a string, which NOTHING is not
+string sub rs(string v) {
+    return v;
+}
+
+#! deletes the string that a reference refers to
+sub dels(reference<string> r) {
+    delete r;
+}
+
+#! deletes the int that a reference refers to
+sub deli(reference<int> r) {
+    delete r;
+}
+
+#! an object whose destructor reads the global that holds it
+class X {
+    destructor() {
+        printf("  dtor X: global exists %y\n", exists ::gx);
+    }
+}
+
+our *X gx;
+our int gi;
+
+#! a typed local read in a loop before it is deleted, in a function that is not a closure
+list<auto> sub plain_loop() {
+    string s = "x";
+    list<auto> rv = ();
+    for (int i = 0; i < 3; ++i) {
+        rv += (s == "", s + "!");
+        delete s;
+    }
+    return rv;
+}
+
 #! runs a case and prints its result or its exception
 sub t(string name, code<auto()> c) {
     printf("%s:\n", name);
@@ -81,6 +117,46 @@ sub main() {
         }
         return rv;
     });
+
+    # a call with a parameter type that NOTHING is not, after a remove later in the loop
+    t("typed param after remove", auto sub () {
+        string s = "a";
+        list<auto> rv = ();
+        for (int j = 0; j < 2; ++j) {
+            try {
+                rv += rs(s);
+            } catch (hash<ExceptionInfo> ex) {
+                rv += "caught";
+            }
+            remove s;
+        }
+        return rv;
+    });
+
+    # a delete through a reference to the variable
+    t("delete through reference", auto sub () {
+        string s = "a";
+        reference<string> r = \s;
+        delete r;
+        return (s == "", exists s, s + "!");
+    });
+    t("delete through reference call", auto sub () { string s = "a"; dels(\s); return (s == "", s + "!"); });
+    t("switch after delete through reference", auto sub () {
+        int i = 5;
+        deli(\i);
+        switch (i) {
+            case 0: return "zero";
+        }
+        return "none";
+    });
+
+    # a global: the value of delete, a destructor that reads the global, and a system object
+    t("delete global value", auto sub () { gi = 5; auto x = (delete gi, 1); return (x, gi); });
+    t("delete global destructor", auto sub () { gx = new X(); delete gx; return exists gx; });
+    t("delete system object", auto sub () { auto o = Qore::stdout; delete o; return "done"; });
+
+    # a function that is not a closure
+    t("plain function", \plain_loop());
 
     # assigned again after the delete
     t("reassigned", auto sub () { string s = "ab"; delete s; s = "cd"; return (s == "cd", s + "e"); });
