@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 426,
+static_assert(QORE_IR_MAX_OPCODE == 429,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -136,7 +136,8 @@ static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const 
 
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? qore_ir_function_call_node(expr.getInternalNode()) : nullptr;
-    if (!call) {
+    // only the Qore builtins, never a user or module function with the same name
+    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();
@@ -3108,6 +3109,85 @@ static bool preserveInterpreterFastCallArg(QoreValue val) {
     }
 }
 
+//! The checked string conversion: the string conversion of ToString with one dispatch on the type; returns nullptr for
+//! a type that string() does not accept (see qore_rt_builtin_conversion_accepts())
+static inline __attribute__((always_inline)) QoreStringNode* qore_ir_value_to_string_node_checked(QoreValue val,
+        qore_type_t t) {
+    switch (t) {
+        case NT_STRING: {
+            QoreStringNodeValueHelper val_str(val);
+            return val_str.getReferencedValue();
+        }
+        case NT_INT:
+        case NT_BOOLEAN:
+            return new QoreStringNodeMaker(QLLD, val.getAsBigInt());
+        case NT_FLOAT:
+            return q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
+        case NT_NOTHING:
+            return new QoreStringNode();
+        case NT_NUMBER:
+        case NT_DATE:
+        case NT_CHAR: {
+            QoreStringValueHelper sv(val);
+            return new QoreStringNode(*sv);
+        }
+        default:
+            return nullptr;
+    }
+}
+
+//! The checked conversions of string(), int() and float() with one argument (ToStringChecked, ToIntChecked,
+//! ToFloatChecked; issue #5660)
+/** Out of line: the conversion code is not part of the function that interprets every opcode
+
+    @return true with the result in \a res, false if the builtin raised an exception
+*/
+static __attribute__((noinline)) bool qore_ir_checked_conversion(int kind, QoreValue val, QoreValue& res,
+        ExceptionSink* xsink) {
+    if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
+        // as the unchecked string conversion does, with the check of the type
+        QoreStringNode* str = qore_ir_value_to_string_node_checked(val, val.getType());
+        if (str) {
+            res = str;
+            return true;
+        }
+        // any other type: the builtin raises its error, or converts a type that is not handled here
+        return qore_rt_builtin_conversion_call(kind, val, res, xsink);
+    }
+    return qore_rt_builtin_conversion_checked(kind, val, res, xsink);
+}
+
+//! Gives the parameter type error of a fast call the outcome of the AST interpreter; see qore_fast_call_param_mismatch()
+static __attribute__((noinline, cold)) void qore_ir_fast_call_param_mismatch(const QoreFunction* func,
+        const QoreTypeInfo* receiver_type_info, unsigned nargs, const uint64_t* args, ExceptionSink* xsink) {
+    if (!func) {
+        return;
+    }
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    for (unsigned i = 0; i < nargs; ++i) {
+        arg_list->push(fromBits(args[i]).refSelf(), xsink);
+    }
+    qore_fast_call_param_mismatch(func, receiver_type_info, *arg_list, xsink);
+}
+
+//! the result of instantiateInterpreterFastCallParams() for an argument that does not match its parameter
+/** The parameter type error is in the exception sink; a caller that can make the call through the generic call path
+    clears it and does so, which gives the outcome of the AST interpreter, which resolves the variant again with the
+    arguments (issue #5686)
+*/
+static constexpr int QORE_IR_FAST_CALL_PARAM_MISMATCH = -2;
+
+//! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
+//! variants); see qore_rt_callee_single_variant() in JITRuntime.cpp
+static bool qore_ir_callee_single_variant(const QoreFunction* func) {
+    return func && func->hasSingleCallVariant();
+}
+
+//! Instantiates the parameters of an inlined call
+/** @return QORE_IR_FAST_CALL_PARAM_MISMATCH for an argument that does not match its parameter, with the parameter
+    type error raised; if releasing the arguments already bound raises an exception (a destructor), -1 is returned
+    with the parameter type error and that exception chained to it
+*/
 static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsigned num_params,
         const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
     for (unsigned i = 0; i < num_params; ++i) {
@@ -3135,11 +3215,18 @@ static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsign
                 || QoreTypeInfo::mayRequireFilter(param_type_info, val))) {
             QoreTypeInfo::acceptInputParam(param_type_info, i, sig->getName(i), val, xsink);
             if (xsink && *xsink) {
+                // the type error is set aside while the arguments are released, so that an exception raised by a
+                // destructor then is kept
+                ExceptionSink type_error;
+                type_error.assimilate(*xsink);
                 val.discard(xsink);
                 for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
                     sig->lv[j]->uninstantiate(xsink);
                 }
-                return -1;
+                bool released_ok = !*xsink;
+                type_error.assimilate(*xsink);
+                xsink->assimilate(type_error);
+                return released_ok ? QORE_IR_FAST_CALL_PARAM_MISMATCH : -1;
             }
         }
 
@@ -3272,9 +3359,75 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     inst->cached_return_type = sig->getReturnTypeInfo();
     int8_t eligible_state = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(sig->numParams())
+        && qore_ir_callee_single_variant(qore_method_private::get(*method)->getFunction())
         ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
+}
+
+//! Sets the location of a call instruction as the call site of the call that it makes for the scope's lifetime
+/** As QoreRcCallSiteHelper, through the thread's call site slot cached for the function (RuntimeLocationCache), so
+    that the call stack frame of the called code is located at the call expression, as for an AST call; the call site
+    is cleared after the call.  A call without a source location leaves the call site as it is.
+*/
+class QoreIRCallSiteScope {
+public:
+    DLLLOCAL QoreIRCallSiteScope(const QoreProgramLocation** call_site_ptr, const QoreProgramLocation* loc,
+            bool is_call = true)
+            : call_site_ptr(is_call && loc && loc != &loc_builtin ? call_site_ptr : nullptr) {
+        if (this->call_site_ptr) {
+            *call_site_ptr = loc;
+        }
+    }
+
+    DLLLOCAL ~QoreIRCallSiteScope() {
+        if (call_site_ptr) {
+            *call_site_ptr = nullptr;
+        }
+    }
+
+    QoreIRCallSiteScope(const QoreIRCallSiteScope&) = delete;
+    QoreIRCallSiteScope& operator=(const QoreIRCallSiteScope&) = delete;
+
+private:
+    const QoreProgramLocation** call_site_ptr;
+};
+
+//! Sets the location of a call instruction as the call site of the call that it makes; see QoreIRCallSiteScope
+/** For the hottest calls, which clear it with qore_ir_clear_call_site() right after the call, without a scope: a
+    call reports its exceptions in its ExceptionSink, so the call site is cleared on every path
+*/
+static inline void qore_ir_set_call_site(const QoreProgramLocation** loc_ptr, const QoreProgramLocation* loc) {
+    if (loc && loc != &loc_builtin) {
+        *qore_call_site_slot(loc_ptr) = loc;
+    }
+}
+
+//! Clears the call site after a call; see qore_ir_set_call_site()
+static inline void qore_ir_clear_call_site(const QoreProgramLocation** loc_ptr) {
+    *qore_call_site_slot(loc_ptr) = nullptr;
+}
+
+//! Returns true if an instruction of an opcode, or an invoke of it, calls code whose call stack frame is located at
+//! the call site
+static bool qore_ir_opcode_is_call(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::NewObject:
+            return true;
+        default:
+            return false;
+    }
 }
 
 class QoreIRInlineCallStackLocation : public QoreStackLocation {
@@ -3410,6 +3563,7 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     inst->cached_return_type = sig->getReturnTypeInfo();
     int8_t eligible_state = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(sig->numParams())
+        && qore_ir_callee_single_variant(inst->func)
         ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
@@ -4754,10 +4908,17 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     }
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
-    if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
-        result = QoreValue();
-        return true;
+    if (!use_direct_params) {
+        int bind_rc = instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr);
+        if (bind_rc == QORE_IR_FAST_CALL_PARAM_MISMATCH) {
+            // the generic call path gives the outcome of the AST interpreter (issue #5686)
+            xsink->clear();
+            return false;
+        }
+        if (bind_rc < 0) {
+            result = QoreValue();
+            return true;
+        }
     }
     std::optional<InterpreterFastCallParamScope> param_scope;
     if (!use_direct_params) {
@@ -4862,10 +5023,17 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     SelfInstantiationHelper self_helper(selfid, self);
 
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
-    if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info) < 0) {
-        result = QoreValue();
-        return true;
+    if (!use_direct_params) {
+        int bind_rc = instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info);
+        if (bind_rc == QORE_IR_FAST_CALL_PARAM_MISMATCH) {
+            // the generic call path gives the outcome of the AST interpreter (issue #5686)
+            xsink->clear();
+            return false;
+        }
+        if (bind_rc < 0) {
+            result = QoreValue();
+            return true;
+        }
     }
     std::optional<InterpreterFastCallParamScope> param_scope;
     if (!use_direct_params) {
@@ -5127,10 +5295,17 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
-    if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
-        result = QoreValue();
-        return true;
+    if (!use_direct_params) {
+        int bind_rc = instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr);
+        if (bind_rc == QORE_IR_FAST_CALL_PARAM_MISMATCH) {
+            // the generic call path gives the outcome of the AST interpreter (issue #5686)
+            xsink->clear();
+            return false;
+        }
+        if (bind_rc < 0) {
+            result = QoreValue();
+            return true;
+        }
     }
     std::optional<InterpreterFastCallParamScope> param_scope;
     if (!use_direct_params) {
@@ -5361,7 +5536,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     bool use_direct_params = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(num_params);
     if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr) < 0) {
         result = QoreValue();
         return true;
     }
@@ -5529,6 +5704,17 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::ElementsInt: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
+        }
+        case QoreIROpcode::ToStringChecked:
+        case QoreIROpcode::ToIntChecked:
+        case QoreIROpcode::ToFloatChecked: {
+            int kind = op == QoreIROpcode::ToStringChecked ? QORE_RT_BUILTIN_CONVERSION_STRING
+                : (op == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
+                    : QORE_RT_BUILTIN_CONVERSION_FLOAT);
+            QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            QoreValue res;
+            qore_ir_checked_conversion(kind, val, res, xsink);
+            return res;
         }
         case QoreIROpcode::ToString: {
                 QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
@@ -6983,6 +7169,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 val.discard(xsink);
                                 // Error in type filtering - cleanup already-instantiated locals
                                 cleanupDirectParamSlots(i - 1);
+                                // the error of the AST interpreter when no variant matches the arguments (issue
+                                // #5686)
+                                qore_ir_fast_call_param_mismatch(func.source_qf, nullptr,
+                                    static_cast<unsigned>(direct_params->nargs), direct_params->args, xsink);
                                 return false;
                             }
                         }
@@ -8977,6 +9167,8 @@ next_instruction:
             }
             case QoreIROpcode::CallClosureDirect: {
                 // operands[0] = closure/callref value, operands[1..n] = args
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // Fast path: call through qore_rt_call_closure_* which uses
                 // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
                 auto* closure_inst = static_cast<QoreIRExprInstruction*>(inst);
@@ -9152,6 +9344,9 @@ next_instruction:
                 // Opcode guarantees instruction type; static_cast avoids RTTI overhead
                 auto* inv = static_cast<QoreIRInvokeInstruction*>(inst);
                 assert(inv);
+                // the call stack frame of code that the invoke calls is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc,
+                    qore_ir_opcode_is_call(inv->invoke_opcode));
                 // For lvalue-modifying invoke opcodes, invalidate the slot cache BEFORE
                 // the call.  evalInvoke handles these natively via evalLValueBinary/
                 // evalLValueUnary/evalLValueTernary, which use LValueHelper internally.
@@ -11331,8 +11526,11 @@ load_local_done:
                 for (int i = 0; i < nargs; ++i) {
                     nb_args[i] = toBits(getIRValue(values, no_inst->operands[i]));
                 }
-                // Dispatch via the shared no-AST runtime helper
+                // Dispatch via the shared no-AST runtime helper; the call stack frame of the constructor is located at
+                // the call
+                qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
                 uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
+                qore_ir_clear_call_site(rl_cache.loc_ptr);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
                     unwindForException();
@@ -14048,6 +14246,32 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ToStringChecked:
+            case QoreIROpcode::ToIntChecked:
+            case QoreIROpcode::ToFloatChecked: {
+                // string(), int() or float() of a value that the builtin may not accept (issue #5660)
+                int kind = inst->opcode == QoreIROpcode::ToStringChecked ? QORE_RT_BUILTIN_CONVERSION_STRING
+                    : (inst->opcode == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
+                        : QORE_RT_BUILTIN_CONVERSION_FLOAT);
+                QoreValue res;
+                // out of line, so that the conversions add no code to this function's hot paths
+                if (!qore_ir_checked_conversion(kind, getIRValue(values, inst->operands[0]), res, xsink)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    return returnAfterUnhandledException();
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ToString: {
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 if (inst->aot_int_to_string_measure) {
@@ -16047,7 +16271,9 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::CallDirect: {
-                // Fast path: bypass AST for resolved user functions with IR/JIT
+                // Fast path: bypass AST for resolved user functions with IR/JIT; the call stack frame of the called
+                // code is located at the call: the paths that create it from the call site set it (an inline IR call
+                // gives its frame the location of the instruction itself, and a native leaf has no frame)
                 auto* direct_inst = static_cast<QoreIRCallDirectInstruction*>(inst);
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
@@ -16082,9 +16308,12 @@ load_local_done:
                         if (!call_pgm) {
                             call_pgm = getProgram();
                         }
+                        // the call stack frame of the called code is located at the call
+                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
                         QoreValue res = direct_inst->func->evalFunctionTmpArgs(
                             direct_inst->variant, *arg_list, call_pgm, rc, xsink,
                             explicit_inst);
+                        qore_ir_clear_call_site(rl_cache.loc_ptr);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
@@ -16122,9 +16351,11 @@ load_local_done:
                         if (!call_pgm) {
                             call_pgm = getProgram();
                         }
+                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
                         res = direct_inst->func->evalFunctionTmpArgs(
                             direct_inst->variant, *arg_list, call_pgm, rc,
                             xsink, explicit_inst);
+                        qore_ir_clear_call_site(rl_cache.loc_ptr);
                         used_inline_ir = true;
                     } else if (type_name_fast_path) {
                         res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
@@ -16146,9 +16377,11 @@ load_local_done:
                             nargs, res, xsink, &inline_may_invalidate_external_caches);
                     }
                     if (!used_inline_ir) {
+                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
                         res = fromBits(qore_rt_call_fast(
                             direct_inst->func, direct_inst->variant, direct_inst->pgm,
                             nanboxed_args, nargs, xsink));
+                        qore_ir_clear_call_site(rl_cache.loc_ptr);
                     }
 
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
@@ -16180,6 +16413,8 @@ load_local_done:
             // fallthrough
             case QoreIROpcode::CallStaticDirect: {
                 // Fast path: bypass AST for resolved static method calls with IR/JIT
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
                 const StaticMethodCallNode* static_call_expr = qore_ir_static_method_call_node(
                     static_inst->expr.getInternalNode());
@@ -16285,6 +16520,8 @@ load_local_done:
             case QoreIROpcode::CallIndirect:
             case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // CallDirect/CallStaticDirect use their own instruction classes (with extra
                 // fields for LLVM lowering), but in the interpreter they behave identically
                 // to Call/CallStatic. Extract expr from the appropriate instruction type.
@@ -16475,6 +16712,8 @@ load_local_done:
             }
             case QoreIROpcode::CallMethodDirect: {
                 // Direct method call for devirtualized final class methods
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* direct_inst = static_cast<QoreIRCallMethodDirectInstruction*>(inst);
 
                 // Fast path: bypass QoreListNode when variant is resolved
@@ -16580,6 +16819,8 @@ load_local_done:
             }
             case QoreIROpcode::InvokeMethodDirect: {
                 // Direct method call with exception routing for devirtualized final class methods
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* invoke_inst = static_cast<QoreIRInvokeMethodDirectInstruction*>(inst);
 
                 // Fast path: bypass QoreListNode when variant is resolved
@@ -16710,6 +16951,8 @@ load_local_done:
             }
             case QoreIROpcode::DotEvalMethodDirect: {
                 // Direct dot-eval method call with pre-evaluated base + args
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* direct_inst = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst);
 
                 // operands[0] is the base expression, operands[1..n-1] are arguments
@@ -16919,6 +17162,8 @@ load_local_done:
             }
             case QoreIROpcode::InvokeDotEvalMethodDirect: {
                 // Direct dot-eval method call with exception routing
+                // the call stack frame of the called code is located at the call
+                QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* de_invoke_inst = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
 
                 // operands[0] is the base expression, operands[1..n-1] are arguments

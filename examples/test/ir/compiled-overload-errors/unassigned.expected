@@ -1,0 +1,69 @@
+sort keys: RUNTIME-OVERLOAD-ERROR: no variant matching 'sort(nothing)' can be found; the following variants were tested:
+   sort(list<auto> values)
+   sort(list<auto> values, string comparator)
+   sort(list<auto> values, code<int(auto, auto)> comparator)
+   sort(list<auto> l, code f)
+take: RUNTIME-OVERLOAD-ERROR: no variant matching 'take(nothing)' can be found; the following variants were tested:
+   take(string x)
+multi-candidate defers: ov(*int) x=null
+multi-candidate typed value: ov(string)
+multi-candidate keeps commit: RUNTIME-OVERLOAD-ERROR: no variant matching 'kv(nothing)' can be found; the following variants were tested:
+   kv(string x)
+   kv(int x)
+named: nm(*int, int) x=null
+method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+static method: RUNTIME-OVERLOAD-ERROR: no variant matching 'M::smeth(nothing)' can be found; the following variants were tested:
+   ::M::smeth(string x)
+inherited method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+method called on self: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::fmeth(nothing)' can be found; the following variants were tested:
+   ::M::fmeth(string x)
+method called on self, written parameter: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::wmeth(nothing)' can be found; the following variants were tested:
+   ::M::wmeth(string x)
+sort keys: RUNTIME-OVERLOAD-ERROR: no variant matching 'sort(nothing)' can be found; the following variants were tested:
+   sort(list<auto> values)
+   sort(list<auto> values, string comparator)
+   sort(list<auto> values, code<int(auto, auto)> comparator)
+   sort(list<auto> l, code f)
+take: RUNTIME-OVERLOAD-ERROR: no variant matching 'take(nothing)' can be found; the following variants were tested:
+   take(string x)
+multi-candidate defers: ov(*int) x=null
+multi-candidate typed value: ov(string)
+multi-candidate keeps commit: RUNTIME-OVERLOAD-ERROR: no variant matching 'kv(nothing)' can be found; the following variants were tested:
+   kv(string x)
+   kv(int x)
+named: nm(*int, int) x=null
+method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+static method: RUNTIME-OVERLOAD-ERROR: no variant matching 'M::smeth(nothing)' can be found; the following variants were tested:
+   ::M::smeth(string x)
+inherited method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+method called on self: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::fmeth(nothing)' can be found; the following variants were tested:
+   ::M::fmeth(string x)
+method called on self, written parameter: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::wmeth(nothing)' can be found; the following variants were tested:
+   ::M::wmeth(string x)
+sort keys: RUNTIME-OVERLOAD-ERROR: no variant matching 'sort(nothing)' can be found; the following variants were tested:
+   sort(list<auto> values)
+   sort(list<auto> values, string comparator)
+   sort(list<auto> values, code<int(auto, auto)> comparator)
+   sort(list<auto> l, code f)
+take: RUNTIME-OVERLOAD-ERROR: no variant matching 'take(nothing)' can be found; the following variants were tested:
+   take(string x)
+multi-candidate defers: ov(*int) x=null
+multi-candidate typed value: ov(string)
+multi-candidate keeps commit: RUNTIME-OVERLOAD-ERROR: no variant matching 'kv(nothing)' can be found; the following variants were tested:
+   kv(string x)
+   kv(int x)
+named: nm(*int, int) x=null
+method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+static method: RUNTIME-OVERLOAD-ERROR: no variant matching 'M::smeth(nothing)' can be found; the following variants were tested:
+   ::M::smeth(string x)
+inherited method: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::meth(nothing)' can be found; the following variants were tested:
+   ::M::meth(string x)
+method called on self: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::fmeth(nothing)' can be found; the following variants were tested:
+   ::M::fmeth(string x)
+method called on self, written parameter: RUNTIME-OVERLOAD-ERROR: no variant matching '::M::wmeth(nothing)' can be found; the following variants were tested:
+   ::M::wmeth(string x)

@@ -221,10 +221,14 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
             edesc);
     } else {
         // issue #3157: try to handle timeout + date specially
-        if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+        // (a *timeout is a timeout too: its value in milliseconds, or NOTHING, which is no int to subtract as
+        // milliseconds)
+        if ((QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+                || QoreTypeInfo::equal(leftTypeInfo, timeoutOrNothingTypeInfo))
             && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
             check_timeout_date_variant = true;
-        } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+        } else if ((QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+                || QoreTypeInfo::equal(rightTypeInfo, timeoutOrNothingTypeInfo))
             && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
             check_date_timeout_variant = true;
         }

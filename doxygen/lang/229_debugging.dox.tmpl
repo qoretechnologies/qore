@@ -359,10 +359,10 @@ qdbg-remote localhost:8001 < commands.txt
     - Data breakpoints, which stop when a value changes
       (<a href="https://github.com/qoretechnologies/qore/issues/5565">issue 5565</a>), jumping to a line and restarting
       a frame (<a href="https://github.com/qoretechnologies/qore/issues/5566">issue 5566</a>) are not supported.
-    - Stepping into a call matches the functions that the statement calls with the name of the call and the number
-      of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
-      <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead
-      (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>).
+    - In AOT-compiled code, whose calls have no columns, stepping into a call matches the functions that the
+      statement calls with the name of the call and the number of its calls before it; when an operand of a
+      conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the
+      same name can be stepped into instead.
     - When a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
       stops when it runs again.
     - The columns of the debugger count bytes; the clients convert them to characters with the text of the line, and
