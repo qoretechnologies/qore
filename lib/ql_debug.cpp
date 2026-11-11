@@ -117,6 +117,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <unordered_map>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -19797,8 +19798,8 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
 
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
 /** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
-    the request; \c "close": an HTTP/1 client connection that is being closed has been invalidated (new calls on it
-    are refused) and is not closed yet
+    the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
+    calls on it are refused) and is not closed yet
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -19833,6 +19834,37 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     h.reached = reached.release();
     h.release = release.release();
     return QoreValue();
+}
+
+namespace {
+//! the HTTP client connections whose closeConnection() runs now, with the number of closes of each
+std::mutex dbg_http_closing_m;
+std::unordered_map<const void*, int> dbg_http_closing;
+//! the number of times a close of a connection started while another close of it ran
+std::atomic<int64_t> dbg_http_concurrent_closes{0};
+}
+
+QoreDbgHttpCloseScope::QoreDbgHttpCloseScope(const void* conn) : conn(conn) {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    if (dbg_http_closing[conn]++) {
+        dbg_http_concurrent_closes.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+QoreDbgHttpCloseScope::~QoreDbgHttpCloseScope() {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    auto i = dbg_http_closing.find(conn);
+    assert(i != dbg_http_closing.end());
+    if (!--i->second) {
+        dbg_http_closing.erase(i);
+    }
+}
+
+//! returns the number of times a close of an HTTP client connection started while another close of the same
+//! connection was running
+static QoreValue f_dbg_http_concurrent_closes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_http_concurrent_closes.load(std::memory_order_relaxed);
 }
 
 //! disarms the points armed by dbg_http_hold_at() that were not reached
@@ -21104,6 +21136,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");

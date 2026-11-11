@@ -191,12 +191,23 @@ DLLLOCAL void qore_dbg_http_wait_submit_after_close();
 enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HTTPClient::startPollSendRecv() has checked out its connection and is about to submit the request
     Submit,
-    //! Http1ClientConnection::closeConnection() has invalidated the connection and is about to close it
+    //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
     CloseAfterInvalidate,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
+//! records the end of the close
+class QoreDbgHttpCloseScope {
+public:
+    DLLLOCAL QoreDbgHttpCloseScope(const void* conn);
+    DLLLOCAL ~QoreDbgHttpCloseScope();
+
+private:
+    const void* conn;
+};
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook

@@ -913,6 +913,10 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // another thread's `rc.get()` safe — the other thread either
     // completes its call first (we wait) or gets a clean Qore exception
     // (we've already invalidated).  See HttpClientConnection.h.
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
 #ifdef DEBUG

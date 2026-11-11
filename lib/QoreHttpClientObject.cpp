@@ -9307,7 +9307,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // call itself, however the close and the start interleave.  Mirrors the deferred-error pattern in
     // startPollConnectConnMgr (SOCKET-CONNECT-ERROR test case).
     auto deferred_error = [&] (const std::string& err_str, const std::string& desc_str) -> QoreObject* {
-        mgr.closeAndEvict(conn, xsink);
+        // a connection that another thread is closing (invalidated, not closed yet) is left to that thread: a second
+        // closeConnection() must not run beside it; the pool drops it once it is closed (#5814)
+        if (conn->isClosed() || !conn->isInvalidated()) {
+            mgr.closeAndEvict(conn, xsink);
+        }
         release_local_conn_ref();
 
         // Signal notifier so first drivePoll wakes up and sees deferred_err
@@ -9383,6 +9387,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         std::string err_str(err->c_str());
         std::string desc_str(desc->c_str());
         xsink->clear();
+        // a connection closed by HTTPClient::disconnect() is reported as the poll operations report a disconnect
+        // (see HttpClientConnMgrPollOp::continuePoll())
+        if (user_disconnect_in_progress.load(std::memory_order_acquire)) {
+            err_str = "SOCKET-NOT-OPEN";
+            desc_str = "HTTPClient was disconnected during poll operation";
+        }
         return deferred_error(err_str, desc_str);
     };
 
