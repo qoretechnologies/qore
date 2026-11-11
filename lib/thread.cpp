@@ -815,6 +815,9 @@ public:
     // user thread-local data
     u_tld_map_t u_tld_map;
 
+    //! the objects of QoreThreadLocalObject that this thread created, released when the thread's data is deleted
+    std::vector<std::pair<void (*)(void*), void*>> exit_cleanups;
+
     // thread-local values
     tlvmap_t tlvmap;
 
@@ -978,6 +981,13 @@ public:
     DLLLOCAL ~ThreadData() {
         // the registry keeps no pointer into the map of a thread whose data is deleted
         unregisterThreadLocalVars();
+
+        // the thread's QoreThreadLocalObject objects, last created first: they are released here, when the thread ends
+        // (or the main thread's data is deleted by qore_cleanup()), and not by a thread-local destructor
+        for (size_t i = exit_cleanups.size(); i > 0; --i) {
+            exit_cleanups[i - 1].first(exit_cleanups[i - 1].second);
+        }
+        exit_cleanups.clear();
 
         // delete all user TLD
         for (auto& i : u_tld_map) {
@@ -5639,6 +5649,19 @@ bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {
         return false;
     }
     tid = td->tid;
+    return true;
+}
+
+bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    try {
+        td->exit_cleanups.emplace_back(fn, data);
+    } catch (...) {
+        return false;
+    }
     return true;
 }
 

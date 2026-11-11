@@ -30,6 +30,7 @@
 
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRExprRegistry.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreHashNode.h>
@@ -432,9 +433,14 @@ static bool qoreIrExprClaimIsTypeCacheable(QoreIRExprClaimFn claim) {
     return claim != claimConstant && claim != claimBuiltinTypeConversion && claim != claimFunctionCall;
 }
 
+namespace {
+using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
+// not a thread_local object with a destructor (qore#5778): see QoreThreadLocalObject
+struct HandlerCacheTag {};
+}
+
 const QoreIRExprHandlerInfo* qore_ir_find_expr_handler(const QoreValue& expr) {
-    using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
-    static thread_local HandlerCache handler_cache;
+    HandlerCache& handler_cache = QoreThreadLocalObject<HandlerCache, HandlerCacheTag>::get();
     static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_IR_EXPR_HANDLER_CACHE");
     const bool cache_enabled = !cache_enabled_env.get();
 

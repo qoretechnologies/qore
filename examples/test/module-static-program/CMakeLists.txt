@@ -26,3 +26,22 @@ set_target_properties(staticpgm PROPERTIES
     SUFFIX "-api-${MODULE_API_MAJOR}.${MODULE_API_MINOR}.qmod"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/staticpgm")
 target_link_libraries(staticpgm PRIVATE libqore)
+
+# the same source with a Program that runs code from a static destructor (qore#5778)
+add_library(staticpgmcode MODULE staticpgm-module.cpp)
+add_dependencies(staticpgmcode libqore)
+target_include_directories(staticpgmcode PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(staticpgmcode PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    STATICPGM_CODE=1
+    PACKAGE_VERSION="${VERSION}")
+set_target_properties(staticpgmcode PROPERTIES
+    PREFIX ""
+    SUFFIX "-api-${MODULE_API_MAJOR}.${MODULE_API_MINOR}.qmod"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/staticpgmcode")
+target_link_libraries(staticpgmcode PRIVATE libqore)
