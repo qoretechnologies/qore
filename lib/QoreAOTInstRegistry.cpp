@@ -3402,6 +3402,14 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
             for (uint32_t sid : step.slice_operand_ids) {
                 ctx.writer.writeU32(sid);
             }
+            // which selectors of a list of selectors are ranges (qore#5736)
+            if (step.kind == LVPathStepKind::ListIndexSlice) {
+                assert(&step == &pi->path.back());
+                assert(pi->slice_ranges.size() == step.slice_operand_ids.size());
+                for (bool range : pi->slice_ranges) {
+                    ctx.writer.writeU8(range ? 1 : 0);
+                }
+            }
         } else if (step.kind == LVPathStepKind::Cast) {
             // the cast operator whose type the step checks
             assert(step.cast_node);
@@ -3471,6 +3479,24 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                     return nullptr;
                 }
                 step.slice_operand_ids.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
+            }
+            if (step.kind == LVPathStepKind::ListIndexSlice) {
+                // which selectors are ranges (QORE_AOT_SLICE_RANGES_VERSION); an older step takes each as a range
+                if (ctx.reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                    pi->slice_ranges.clear();
+                    pi->slice_ranges.reserve(num_slice_ops);
+                    for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                        if (k && !(k % 100)
+                                && qore_check_cancel(nullptr, "AOT lvalue slice range deserialization")) {
+                            ctx.error = "operation cancelled during AOT lvalue slice range deserialization";
+                            delete pi;
+                            return nullptr;
+                        }
+                        pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ctx.ptr) != 0);
+                    }
+                } else {
+                    pi->slice_ranges.assign(num_slice_ops, true);
+                }
             }
         } else if (step.kind == LVPathStepKind::Cast) {
             std::string error;

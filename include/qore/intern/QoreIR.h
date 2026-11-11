@@ -2096,6 +2096,14 @@ public:
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
 
+    //! A path ending with a ListIndexSlice step: for each of its selectors, true if it is a range
+    /** A range's value is the list of the indexes it selects; any other selector is one index, even if its value is
+        a list (getAsBigInt()), as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#5736).  It is kept
+        here and not in the step, so that the steps that a dynamic path copies for each execution (patchLVPath())
+        stay as small as they were.
+    */
+    std::vector<bool> slice_ranges;
+
     //! For LValuePathAssign: the representation the store uses
     AssignmentMode mode = AssignmentMode::Normal;
 
@@ -2148,8 +2156,9 @@ class LValueHelper;  // forward
 DLLLOCAL QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink);
+//! (\a slice_ranges: QoreIRLValuePathInstruction::slice_ranges, for a ListIndexSlice step)
 DLLLOCAL QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
-        const LVPathStep& last_step, LVUnaryOp unary_op,
+        const LVPathStep& last_step, const std::vector<bool>& slice_ranges, LVUnaryOp unary_op,
         ExceptionSink* xsink);
 DLLLOCAL QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,

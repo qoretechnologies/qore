@@ -13990,6 +13990,14 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     for (uint32_t sid : step.slice_operand_ids) {
                         writer.writeU32(sid);
                     }
+                    // which selectors of a list of selectors are ranges (qore#5736)
+                    if (step.kind == static_cast<uint8_t>(LVPathStepKind::ListIndexSlice)) {
+                        assert(&step == &lvid.steps.back());
+                        assert(lvid.slice_ranges.size() == step.slice_operand_ids.size());
+                        for (bool range : lvid.slice_ranges) {
+                            writer.writeU8(range ? 1 : 0);
+                        }
+                    }
                 }
             }
         }

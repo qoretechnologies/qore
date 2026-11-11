@@ -5116,9 +5116,13 @@ static bool isDynamicKeyHashSubscript(const std::unordered_set<const LocalVar*>&
 // multi-index list slice (l[1,3,5]) lvalues are accepted and encoded as
 // HashKeySlice / ListIndexSlice / ListRangeSlice terminal steps; only remove and
 // delete take a slice (check_lvalue() rejects a slice lvalue for any other operator).
+//
+// `slice_ranges`: for a ListIndexSlice terminal step, receives for each selector whether it is a range (see
+// QoreIRLValuePathInstruction::slice_ranges); required when `allow_slice` is true.
 static bool extractLValuePath(const QoreValue& expr,
         std::vector<LVPathStep>& path, std::vector<QoreValue>& dynamic_operands,
-        bool allow_slice = false) {
+        bool allow_slice = false, std::vector<bool>* slice_ranges = nullptr) {
+    assert(!allow_slice || slice_ranges);
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
         return false;
@@ -5215,7 +5219,7 @@ static bool extractLValuePath(const QoreValue& expr,
         if (!allow_slice) {
             return false;
         }
-        if (!extractLValuePath(sbr->get(0), path, dynamic_operands, allow_slice)) {
+        if (!extractLValuePath(sbr->get(0), path, dynamic_operands, allow_slice, slice_ranges)) {
             return false;
         }
         LVPathStep step;
@@ -5243,7 +5247,7 @@ static bool extractLValuePath(const QoreValue& expr,
                 // binary-mut ops) fall back to the AST-eval path.
                 return false;
             }
-            if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice)) {
+            if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice, slice_ranges)) {
                 return false;
             }
             LVPathStep step;
@@ -5269,7 +5273,7 @@ static bool extractLValuePath(const QoreValue& expr,
             return true;
         }
         // Recurse on left side (container)
-        if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice)) {
+        if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice, slice_ranges)) {
             return false;
         }
         // Add hash key step
@@ -5301,7 +5305,7 @@ static bool extractLValuePath(const QoreValue& expr,
             if (!allow_slice) {
                 return false;
             }
-            if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice)) {
+            if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice, slice_ranges)) {
                 return false;
             }
             LVPathStep step;
@@ -5310,11 +5314,17 @@ static bool extractLValuePath(const QoreValue& expr,
                 const QoreParseListNode* pln = right.get<const QoreParseListNode>();
                 const QoreParseListNode::nvec_t& vl = pln->getValues();
                 step.slice_operand_ids.reserve(vl.size());
+                slice_ranges->clear();
+                slice_ranges->reserve(vl.size());
                 for (const QoreValue& sub : vl) {
                     dynamic_operands.push_back(sub);
                     step.slice_operand_ids.push_back(UINT32_MAX);
+                    // only a range selects the indexes of its value (qore#5736)
+                    slice_ranges->push_back(sub.getType() == NT_OPERATOR
+                        && dynamic_cast<const QoreRangeOperatorNode*>(sub.getInternalNode()));
                 }
             } else {
+                // the selectors of a constant list are values, each one index, as in the AST interpreter
                 const QoreListNode* l = right.get<const QoreListNode>();
                 size_t n = l->size();
                 step.slice_operand_ids.reserve(n);
@@ -5322,12 +5332,13 @@ static bool extractLValuePath(const QoreValue& expr,
                     dynamic_operands.push_back(l->retrieveEntry(i));
                     step.slice_operand_ids.push_back(UINT32_MAX);
                 }
+                slice_ranges->assign(n, false);
             }
             path.push_back(std::move(step));
             return true;
         }
         // Recurse on left side (container)
-        if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice)) {
+        if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice, slice_ranges)) {
             return false;
         }
         // Add list index step
@@ -12368,8 +12379,8 @@ static QoreValue qore_ir_lvalue_path_root(QoreValue expr) {
 }
 
 bool QoreIRLowering::extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
-        std::vector<QoreValue>& dynamic_operands, bool allow_slice) {
-    if (!::extractLValuePath(expr, path, dynamic_operands, allow_slice)) {
+        std::vector<QoreValue>& dynamic_operands, bool allow_slice, std::vector<bool>* slice_ranges) {
+    if (!::extractLValuePath(expr, path, dynamic_operands, allow_slice, slice_ranges)) {
         return false;
     }
     if (bg_helper && !path.empty() && path[0].kind == LVPathStepKind::SelfMember) {
@@ -13778,7 +13789,8 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     const bool allow_slice = (opcode == QoreIROpcode::LValuePathUnary
             && (unary_op == LVUnaryOp::Remove
                     || unary_op == LVUnaryOp::Delete));
-    if (!extractLValuePath(lvalue, lv_path, dynamic_operands, allow_slice)) {
+    std::vector<bool> slice_ranges;
+    if (!extractLValuePath(lvalue, lv_path, dynamic_operands, allow_slice, allow_slice ? &slice_ranges : nullptr)) {
         return QoreIRValue();
     }
     if (lv_path.empty()) {
@@ -13887,6 +13899,10 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     auto* path_inst = builder.append<QoreIRLValuePathInstruction>(opcode);
     path_inst->result = builder.getFunction()->createValue();
     path_inst->path = std::move(lv_path);
+    if (!path_inst->path.empty() && path_inst->path.back().kind == LVPathStepKind::ListIndexSlice) {
+        assert(slice_ranges.size() == path_inst->path.back().slice_operand_ids.size());
+        path_inst->slice_ranges = slice_ranges;
+    }
     path_inst->mode = mode;
     path_inst->compound_op = compound_op;
     path_inst->unary_op = unary_op;
@@ -13915,7 +13931,8 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         size_t slice_start = dyn_vals.size() - partial_path.back().slice_operand_ids.size();
         for (size_t i = slice_start + 1; i < dyn_vals.size(); ++i) {
             if (partial_blocks[i]) {
-                emitPartialSliceRemove(partial_blocks[i], partial_path, dyn_vals, i - slice_start, mode, loc);
+                emitPartialSliceRemove(partial_blocks[i], partial_path, slice_ranges, dyn_vals, i - slice_start, mode,
+                    loc);
             }
         }
     }
@@ -13932,10 +13949,12 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
 }
 
 void QoreIRLowering::emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
+        const std::vector<bool>& slice_ranges,
         const std::vector<QoreIRValue>& dyn_vals, size_t selector_count, AssignmentMode mode,
         const QoreProgramLocation* loc) {
     assert(!path.empty() && path.back().kind == LVPathStepKind::ListIndexSlice);
     assert(selector_count && selector_count < path.back().slice_operand_ids.size());
+    assert(slice_ranges.size() == path.back().slice_operand_ids.size());
     QoreIRBasicBlock* current = builder.getBlock();
     QoreIRBasicBlock* outer = getCurrentExceptionTarget();
     // the block uses the values of the selectors before the one that raised: it comes after them for native code
@@ -13953,6 +13972,7 @@ void QoreIRLowering::emitPartialSliceRemove(QoreIRBasicBlock* partial_block, con
     partial_path.back().slice_operand_ids.resize(selector_count);
     auto* remove_inst = builder.append<QoreIRLValuePathInstruction>(QoreIROpcode::LValuePathUnary);
     remove_inst->path = std::move(partial_path);
+    remove_inst->slice_ranges.assign(slice_ranges.begin(), slice_ranges.begin() + selector_count);
     remove_inst->mode = mode;
     remove_inst->unary_op = LVUnaryOp::Remove;
     remove_inst->loc = loc;
