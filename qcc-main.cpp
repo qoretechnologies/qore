@@ -2513,6 +2513,23 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
 static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end);
 
+//! skips the compile-time value that AOT format v15 and later write after the value of a pending constant
+/** the writer (writePendingConstantParseValue()) writes a presence byte and, when it is set, a serialized value;
+    the loader reads it for every pending constant of a v15 or later image, so the scanners must too, or they
+    read the next entry from the middle of it
+*/
+static bool dump_skip_pending_constant_parse_value(const QoreAOTBinaryReader& reader, const uint8_t*& p,
+        const uint8_t* end, bool pending) {
+    if (!pending || reader.getHeader().version < QORE_AOT_CONST_PARSE_VALUE_VERSION) {
+        return true;
+    }
+    uint8_t present = 0;
+    if (!dump_read_u8(p, end, present)) {
+        return false;
+    }
+    return !present || dump_skip_serialized_value_no_summary(reader, p, end);
+}
+
 static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
         AOTSlotMapDumpSummary& summary, const std::string& func_name,
@@ -3586,8 +3603,13 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 error = "truncated class constant entry";
                 return false;
             }
+            const bool pending = has_const_pending_flag && *(p - 1);
             if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                     "class constant", owner, dump_owner_name(cname, nullptr))) {
+                return false;
+            }
+            if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+                error = "truncated class constant compile-time value";
                 return false;
             }
         }
@@ -3720,8 +3742,13 @@ static bool dump_scan_constant_defaults(const QoreAOTBinaryReader& reader,
             error = "truncated constant entry";
             return false;
         }
+        const bool pending = *(p - 1) != 0;
         if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                 "constant", "", dump_owner_name(name, nullptr))) {
+            return false;
+        }
+        if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+            error = "truncated constant compile-time value";
             return false;
         }
     }
