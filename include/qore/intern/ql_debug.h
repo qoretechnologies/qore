@@ -135,6 +135,10 @@ struct QoreDbgStreamCreditStats {
     std::atomic<int64_t> orphaned{0};
 };
 DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (QuicSession::connect_stream_data_),
+//! for dbg_quic_connect_buffered_bytes() (issue #5821)
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_connect_buffered;
+
 //! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
 DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 
