@@ -58,7 +58,7 @@ class WsProgramEndServer {
         EchoHandler handler();
         server.setHandler("ws", "", MimeTypeHtml, handler);
         server.setDefaultHandler("ws", handler);
-        int port = server.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         out(sprintf("port %d", port));
         # a line from the client tells the main program to return; its connection is open then
         stdin.readLine();
