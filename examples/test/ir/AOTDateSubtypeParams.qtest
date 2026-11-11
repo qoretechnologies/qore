@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of direct calls to native function entries
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTDateSubtypeParamsTest
+
+#! date<absolute> and date<relative> parameters reject a date of the wrong kind in every mode and in AOT (#5730)
+/** A date-typed argument has the same accept specs as these types, so compiled calls treated it as already
+    accepted and called the callee's native entry without the parameter check.
+*/
+class AOTDateSubtypeParamsTest inherits QUnit::Test {
+    public {
+        #! the number of cases in probe.q whose invalid call must raise RUNTIME-TYPE-ERROR
+        const NumCases = 19;
+    }
+
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTDateSubtypeParams/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("AOT date subtype parameters", "1.0", \ARGV) {
+        addTestCase("AST rejects every invalid call", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        list<string> errors = (select out.split("\n"), $1 =~ /: RUNTIME-TYPE-ERROR/);
+        assertEq(NumCases, errors.size(), out);
+        assertFalse(out =~ /no error/, out);
+    }
+
+    #! runs probe.q in each mode; run() runs it with ExecModeHarness::TraceEnv, whose QORE_JIT_SYNC_COMPILE=1 and
+    #! QORE_JIT_THRESHOLD=1 compile the hot callees before their invalid call in jit and tiered mode
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-date-subtype-params-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

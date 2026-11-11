@@ -163,6 +163,11 @@ DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_taken;
 //! and that went to a callback worker; read by dbg_async_io_sync_release_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_refused;
 
+//! holds the thread that converts the end of a synchronous socket call's operation (canceled, or ended by a close of
+//! its socket) into an error, before it checks the thread's pending cancellation, when dbg_hold_socket_cancel_conversion()
+//! has armed the hold; see qore_socket_raise_pending_cancel()
+DLLLOCAL void qore_dbg_socket_cancel_conversion();
+
 //! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
 //! socket's descriptor; set by dbg_http1_send_failure_arm()
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);

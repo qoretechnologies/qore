@@ -860,6 +860,17 @@ public:
     */
     static std::string getLinkTargetFlags();
 
+    //! Return the target triple AOT code is compiled for when no target is given
+    /** This is LLVM's default (host) triple, except on macOS, where the OS version is the version the native links
+        target (see getLinkTargetFlags()): an explicit \c MACOSX_DEPLOYMENT_TARGET, or else the version libqore was
+        built for.  The host triple names the Darwin kernel version, which LLVM maps to a macOS version that can be
+        newer than that, and an object file built for a newer macOS than its link makes the linker warn on every
+        link.
+
+        @return the target triple, e.g. \c "arm64-apple-macosx26.6"
+    */
+    static std::string getDefaultTargetTriple();
+
     //! Return the configured runtime-library search-path policy for native AOT links
     /** @return true unless the CMake-generated link configuration disables RPATH
         @note CMAKE_SKIP_RPATH and CMAKE_SKIP_INSTALL_RPATH disable it for package builds.

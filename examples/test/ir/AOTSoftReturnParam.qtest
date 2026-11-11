@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of inlined function summaries
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTSoftReturnParamTest
+
+#! a soft return type converts a returned parameter of another type in every mode and in AOT (#5724)
+/** The AOT float-expression summary of <tt>softfloat sub fb(bool b) { return b; }</tt> was the bool parameter
+    itself, so a caller that inlined the summary got the bool (\c True) instead of \c 1.0.  A bool parameter as an
+    operand or a Select value of a float summary (<tt>h.x + b</tt>), or a comparison as one of an integer summary
+    (<tt>(h.x.size() == b) + 1</tt>), made the summary emitter fail after it had created the hash projection
+    blocks: qcc failed with "LLVM lowering failed" for a function that called it, and wrote an executable that
+    printed nothing for top-level code that did.
+*/
+class AOTSoftReturnParamTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTSoftReturnParam/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("AOT soft return types of parameters", "1.0", \ARGV) {
+        addTestCase("AST converts the returned parameters", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        foreach string line in ("fb(True): 1.0 (float)", "fb(False): 0.0 (float)", "fb(x > 1): 1.0 (float)",
+                "fwrap(True): 1.0 (float)", "fsum(True): 2.0 (float)", "fb(True) + fb(False): 1.0 (float)",
+                "loop sum: 2.0 (float)", "sf_b(True): 1.0 (float)", "ib(True): 1 (integer)",
+                "fh_add(True): 2.5 (float)", "w_fh_add(True): 2.5 (float)", "w_fh_sub(True): 0.5 (float)",
+                "w_fh_selv(True, True): 1.0 (float)", "w_fp_add(True): 2.5 (float)", "w_fp_div(True): 1.5 (float)",
+                "division by False: DIVISION-BY-ZERO", "w_ih_sadd(1): 2 (integer)", "w_ih_sel(1, 2): 0 (integer)") {
+            assertTrue(out.find(line + "\n") >= 0, line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-soft-return-param-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

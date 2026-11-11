@@ -672,6 +672,127 @@ if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSE
 6. **Connection pooling**: Reused connections may bypass checks on subsequent use
 7. **Library callbacks**: HTTP libraries with callbacks may connect without checks
 
+### 2.6 Java Code and Other I/O That Qore Does Not See
+
+The policies above are enforced only for I/O that goes through Qore (sockets, QUIC, `File`/`Dir`). Code that
+does its own I/O bypasses them. Java code called through the jni module (`java.net`, `java.nio`, `java.io`, JDBC
+drivers, Java client libraries) is the main case, and any module that embeds another runtime or an I/O library has
+the same gap. The JDK has no in-process Security Manager (JEP 411, JEP 486), so the code itself must apply the
+policy. Imported Java classes are tagged `QDOM_UNCONTROLLED_API`, but sandboxed code can still reach Java code
+indirectly, for example through a Java-backed data provider action.
+
+Java code applies the policy of its Qore caller with `org.qore.jni.QoreSandbox` (jni module; see its
+"Sandboxing Java I/O" documentation and module-jni `design/java-sandbox-io.md`):
+
+- `checkNetworkAccess(host, port[, proto])` resolves the host once with the Qore resolver, checks every address
+  with the host name against the socket policy, raises `NETWORK-ACCESS-DENIED`, and returns the checked
+  `InetAddress[]`
+- `checkFileAccess(path, mode)` applies the `File`/`Dir` policy (`QoreSandbox.READ`, `WRITE`, `EXECUTE`,
+  `DELETE`, `CREATE`, the `QSEC_*` values)
+- `capture()` returns a `QoreSandbox.Policy` for work on Java threads; a check on a Java thread with no Qore
+  caller and no captured policy raises `JNI-SANDBOX-ERROR`
+
+#### Audit rules for sandbox-aware Java code
+
+Java code may be offered to sandboxed callers only if an audit confirms all of the following:
+
+1. **Every network destination is checked before use** with `checkNetworkAccess()`, and the connection is made to
+   one of the returned addresses, never to the host name (a second lookup reopens DNS rebinding).
+2. **Self-discovered destinations are controlled.** A library that resolves the host name again, or that connects
+   to destinations it discovers itself (the brokers a Kafka bootstrap server returns, cluster members, HTTP
+   redirects, proxy auto-configuration), is configured not to, or each such destination is checked as well.
+3. **Every path is checked before use** with `checkFileAccess()`, with the access mode of the operation (`READ`
+   to read or list, `WRITE` to write an existing file, `CREATE | WRITE` to create a file, `DELETE` to delete,
+   `CREATE | DELETE` for a rename target), and with the path exactly as it is then opened.
+4. **Work on other threads uses a captured policy.** The policy is captured with `QoreSandbox.capture()` in the
+   call from Qore, before work is handed to an executor, pool, or library thread, and the checks on that thread
+   use it (`Policy.checkNetworkAccess()`, or the static methods inside `Policy.run()`, `call()`, or `wrap()`).
+5. **No I/O happens before its check**, and an operation that cannot be checked is not performed.
+
+#### Declaring external I/O in data provider apps
+
+A data provider app whose actions do I/O that Qore does not see (Java, Python, JavaScript, native client
+libraries) sets `external_io` in its `DataProviderAppInfo`. It sets `sandbox_aware` only after an audit against
+the rules above confirms that all of that I/O is checked. A sandboxed caller is refused an app with `external_io`
+and without `sandbox_aware` (`APP-SANDBOX-ACCESS-DENIED`); trusted callers are never refused.
+
+The catalog enforces this itself, for code that a sandbox governs:
+`DataProviderActionCatalog::getDataProviderForAction()` refuses the provider of such an app's action (and of an app
+that is not registered; the class it creates must be the one registered for the action, or its own class hierarchy
+decides, so an action hash cannot name an allowed app with another app's class), and every factory method that creates a provider (`AbstractDataProviderFactory::create()`,
+`createWithTemplate()`, `getProviderFromExample()`, `getExampleProviderRecordOutput()`) refuses a factory whose class
+belongs to a module that registers such an app, however the factory was obtained (`DataProvider::getFactoryObject()`,
+`getFactory()`, `getFactoryEx()`, or creating it); reading its info is not refused. Every `AbstractConnection` method
+that does I/O (`get()`, `getAsync()`, `ping()`, `getFileLocationHandler()`, `getFileLocationRedirect()`) refuses a
+connection whose class belongs to such a module, also when trusted code created it, and a refused ping does not
+change the connection's status. Factories and connections decide with `DataProviderSandboxCheck` by their class
+hierarchy, so a subclass defined elsewhere is refused too; a module's deferred app (`registerPendingApp()`) is
+initialized for a sandboxed caller before the decision, and a sandboxed caller is refused if it cannot be
+initialized. The flag is per app: a factory or connection of a module without such an app is not refused, and an
+action that a module contributes to another module's app is decided by that app. For a trusted caller the checks cost
+one `SandboxManager::isSandboxed()` call, with no lock.
+
+Consumers that serve a sandboxed caller on a thread its sandbox does not govern call
+`DataProviderActionCatalog::checkSandboxAccess(app_name, sandboxed)` before using an app for the caller, and
+`AbstractConnection::checkSandboxAccess(sandboxed)` before using a connection for it. They pass the
+app's name, so the registered info decides, never a hash the caller supplied, and decide `sandboxed` from what they
+know about the caller, never from a value the caller supplied. Without an explicit `sandboxed` argument, the caller
+is sandboxed if
+`SandboxManager::isSandboxed()` is true, which also sees the sandbox through a policy barrier or a system-policy
+capability, so the default fails closed; trusted code that uses the app on purpose in a capability passes `False`,
+and a consumer that serves a tenant from a trusted thread passes `True`. (`isSandboxed()` is used, rather than
+`isGoverned()`, because it is not restricted, so the DataProvider module can be loaded first by a Program with
+`PO_NO_UNCONTROLLED_APIS`.) A Program that is only restricted with parse options (`PO_NO_UNCONTROLLED_APIS`,
+`PO_NO_NETWORK`, `PO_NO_FILESYSTEM`) and has no `SandboxManager` is not sandboxed for this rule; it cannot use the
+jni module's Java classes itself.
+
+Audit findings for apps:
+
+1. **Undeclared external I/O**: an app that does its own I/O without `external_io` is offered to sandboxed callers
+   unchecked
+2. **Unaudited `sandbox_aware`**: setting `sandbox_aware` without the audit removes the only protection
+3. **Consumers that skip the check**: every path that runs an action, or creates a provider or a connection for an
+   app, on behalf of a sandboxed caller on a thread its sandbox does not govern applies `checkSandboxAccess()`
+4. **Forwarded decisions**: a consumer that passes `checkSandboxAccess()` a `sandboxed` value, or app info, that its
+   caller supplied lets the caller decide for itself
+5. **Direct use of a provider module's classes**: sandboxed code that loads a provider module and creates its
+   connection or provider classes itself does not go through the catalog; a module with an `external_io` app must
+   refuse sandboxed callers in its own entry points as well: its connection and provider constructors, with
+   `DataProviderActionCatalog::checkSandboxAccess(<app name>)`, and every public method that does I/O and is not one
+   of the `AbstractConnection` methods that check already: an object that trusted code created can be used by
+   sandboxed code later (a connection that a server pings on a tenant's behalf, for example). An object of such a
+   module that does I/O for its callers and is neither a factory nor a connection uses `DataProviderSandboxCheck`,
+   created with the object (in a member initializer, not lazily while serving a caller, as its methods run with the
+   provenance of the code that created it)
+6. **Uncontrolled actions in a controlled app**: an action's provider is decided by the declarations of the app it
+   belongs to, so a module must not contribute an action whose class does uncontrolled external I/O to the app of
+   another module that does not declare `external_io` (or that is `sandbox_aware`); register such an action in an
+   app of its own that declares it
+7. **Registrations by sandboxed code**: the catalog refuses every process-wide registration and removal to sandboxed
+   code (`DATA-PROVIDER-REGISTRATION-DENIED`: `registerApp()`, `registerPendingApp()`, `registerAction()`,
+   `registerPendingAppAction()`, `registerLazyAppActions()`, `registerAppFileApi()`,
+   `registerDiscoveryInventoryProvider()` and their removals,
+   `deregisterDynamicApp()`, `DataProvider::registerFactory()`, `DataProvider::registerType()`), so that a tenant
+   cannot take a name from the module that owns it, add an action to an app it does not own, or remove one; register
+   them in module initialization, which no sandbox governs (a deferred initialization that trusted code registered may
+   still register on a sandboxed reader's thread)
+8. **Uncontrolled module commands**: a module command runs in the Program that it is issued in, whoever issues it,
+   so it follows that Program's sandbox and restrictions like the module's functions do: a command that changes
+   process-wide state or runs code is refused to a sandbox and in a Program with `PO_NO_UNCONTROLLED_APIS`, and a
+   command that reads files checks them against the filesystem policy (see the jni module's `add-classpath`,
+   `set-property`, `kotlin-eval` and `define-class` commands)
+
+#### Common Java audit findings
+
+1. **Connecting by host name after the check**: `new Socket(host, port)` or a client URL built from the host name
+   resolves again; connect to the returned `InetAddress` instead (it keeps the host name for TLS verification)
+2. **Library-managed connections**: connection pools, cluster discovery, and reconnect logic connect without the
+   caller's check
+3. **Checks on the wrong thread**: a check on a pool thread without a captured policy raises `JNI-SANDBOX-ERROR`;
+   capturing on the pool thread is not possible, because it has no Qore caller
+4. **Paths derived after the check**: temporary files, extracted archive entries, and paths resolved by the
+   library need their own checks
+
 ---
 
 ## Part 3: Resource Limits

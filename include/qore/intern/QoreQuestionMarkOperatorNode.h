@@ -61,6 +61,12 @@ public:
         return 0;
     }
 
+    //! Returns the expression of the given branch: 0 for the condition, 1 if it is true, 2 if it is false
+    DLLLOCAL QoreValue getExpression(unsigned i) const {
+        assert(i < 3);
+        return e[i];
+    }
+
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
     }
