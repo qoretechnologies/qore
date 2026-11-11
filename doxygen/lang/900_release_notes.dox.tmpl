@@ -2193,6 +2193,10 @@
     - after a failed parse, a @ref Qore::Program "Program" with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" kept
       the classes, constants, hashdecls, enums and namespaces that the failed parse had declared, so a new parse could
       not declare them again
+    - a function first referenced in a method (a call, also in a member initializer, default argument or closure)
+      was parse-initialized in the method's class context, so its body could call the class's private methods or
+      use its private inheritance, and the function could then be called from anywhere; a function's body is now
+      always outside every class (see @ref private_methods)
 
     @section qore_2_2_1 Qore 2.2.1
 

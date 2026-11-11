@@ -7805,7 +7805,39 @@ void QoreFunction::parseRollback() {
     // noop: object will be destroyed
 }
 
+namespace {
+//! sets no class context and the namespace context of a plain function while its body is parse-initialized
+class QorePlainFunctionParseContextHelper {
+public:
+    explicit QorePlainFunctionParseContextHelper(qore_ns_private* ns) {
+        thread_set_class_and_ns(nullptr, ns ? ns : parse_get_ns(), old_cls, old_ns);
+    }
+
+    ~QorePlainFunctionParseContextHelper() {
+        thread_set_class_and_ns(old_cls, old_ns);
+    }
+
+private:
+    const qore_class_private* old_cls;
+    qore_ns_private* old_ns;
+};
+}
+
 int QoreFunction::parseInit(qore_ns_private* ns) {
+    if (parse_init_done || parse_init_in_progress) {
+        return 0;
+    }
+    if (getClass()) {
+        // a method: the caller has set the class context
+        return parseInitIntern(ns);
+    }
+    // issue #5749: a plain function's body is parse-initialized without the class context of the code that
+    // references it first (ex: a call in a method's body), or it would get the class's access to private members
+    QorePlainFunctionParseContextHelper pch(ns);
+    return parseInitIntern(ns);
+}
+
+int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     if (parse_init_done || parse_init_in_progress) {
         return 0;
     }

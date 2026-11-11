@@ -357,7 +357,8 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     @subsection private_methods Private Methods
     Methods declared with the <tt><b>private</b></tt> access modifier can only be called by other member methods of the same class or in the same class hierarchy. Any attempt to call these methods from outside the class hierarchy will result in a run-time exception.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
     Methods declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared method.  This can be used to ensure that the declared method can be changed in later versions of the class without affecting API compatibility.\n\n
-    Methods declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
+    Methods declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.\n\n
+    The body of a @ref qore_functions "function" is always outside every class, also when the function is called from a method of the class, so it cannot call the class's private methods or rely on its private inheritance; a @ref closure "closure" declared in a method is inside the method's class.
 
     @subsection synchronized_methods Synchronized Methods
     Methods declared with the <tt><b>synchronized</b></tt> keyword will only run in one thread at a time.\n\n

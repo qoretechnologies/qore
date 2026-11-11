@@ -1840,6 +1840,13 @@ public:
 
     DLLLOCAL void addBuiltinVariant(AbstractQoreFunctionVariant* variant);
 
+    //! parse-initializes the pending variants of a function or a method
+    /** A method's body is parse-initialized in the class context that the caller sets.  A plain function's body is
+        always parse-initialized with no class context and with \a ns (or the current namespace if \a ns is nullptr)
+        as the namespace context, whatever triggers it: a call to it may be the first reference to it, in the body of
+        a method, and its body must not get the class's access to its private members (issue #5749).  Closures, which
+        keep the class context of the code they are in, use UserClosureFunction::parseInitClosure() instead.
+    */
     DLLLOCAL int parseInit(qore_ns_private* ns);
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseRollback();
@@ -2015,6 +2022,9 @@ public:
     }
 
 protected:
+    //! parse-initializes the pending variants in the thread's current parse context; see parseInit()
+    DLLLOCAL int parseInitIntern(qore_ns_private* ns);
+
     std::string name;
 
     // list of function variants
@@ -2393,6 +2403,14 @@ public:
     DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0), serial(UserVariantBase::getNextSerial()) {
         addPendingVariant(new UserClosureVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags));
     }
+
+    //! parse-initializes the closure in the current parse context: the class and namespace of the code it is in
+    DLLLOCAL int parseInitClosure() {
+        return parseInitIntern(nullptr);
+    }
+
+    //! a closure keeps the class context of the code it is in; use parseInitClosure()
+    DLLLOCAL int parseInit(qore_ns_private* ns) = delete;
 
     //! returns the identity of the closure function and of its variant, which is never reused; see \a serial
     DLLLOCAL uint64_t getSerial() const {

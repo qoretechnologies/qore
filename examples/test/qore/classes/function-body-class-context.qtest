@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class FunctionBodyClassContextTest
+
+#! issue #5749: a plain function's body is parse-initialized without the class context of the code that references it first
+/** A function whose first reference is in the body of a method (a call, a call in a member initializer, in a default
+    argument or in a closure) used to be parse-initialized in the method's class context: its body could then call
+    the class's private methods, and the function could be called from anywhere
+*/
+class FunctionBodyClassContextTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        TmpDir tmp("function-body-class-context-");
+
+        const Unresolved = "PARSE-EXCEPTION: cannot resolve call 'C::psm()'";
+
+        #! scripts that must fail to parse in every execution mode: name -> source, expected error
+        const Failing = {
+            # the issue's script: a call in the body of a static method is the first reference to the functions
+            "issue": (
+                "src": "class C {\n"
+                    "    private int pm() { return 1; }\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run(C c) { printf(\"%y %y\\n\", f_pm(c), f_psm()); }\n"
+                    "}\n"
+                    "int sub f_pm(C o) { return o.pm(); }\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C c();\n"
+                    "C::run(c);\n"
+                    "printf(\"top %y\\n\", f_pm(c));\n",
+                "err": Unresolved,
+            ),
+            # a private method called through an object is not resolved at parse time outside the class: the parse
+            # warning shows it (the warning is an error here, so nothing runs)
+            "private-method": (
+                "src": "%enable-warning non-existent-method-call\n"
+                    "class C {\n"
+                    "    private int pm() { return 1; }\n"
+                    "    run() { printf(\"%y\\n\", f_pm(self)); }\n"
+                    "}\n"
+                    "int sub f_pm(C o) { return o.pm(); }\n"
+                    "C c();\n"
+                    "c.run();\n",
+                "opts": "--warnings-are-errors",
+                "err": "NON-EXISTENT-METHOD-CALL: call to non-existent method 'C::pm()'",
+            ),
+            # a private static method
+            "private-static-method": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run() { printf(\"%y\\n\", f_psm()); }\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C::run();\n",
+                "err": Unresolved,
+            ),
+            # private inheritance: an object<C> is an object<Base> only in C's class context
+            "private-inheritance": (
+                "src": "class Base {}\n"
+                    "class C inherits private Base {\n"
+                    "    run() { printf(\"%y\\n\", f(self) == self); }\n"
+                    "}\n"
+                    "Base sub f(C o) { return o; }\n"
+                    "C c();\n"
+                    "c.run();\n",
+                "err": "PARSE-TYPE-ERROR: return value for this block expects object<Base>, but value given to the "
+                    "return statement is object<C>",
+            ),
+            # the first reference is in a member initializer and in a static member initializer
+            "member-initializer": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    public {\n"
+                    "        int x = f_psm();\n"
+                    "        static int y = f_psm();\n"
+                    "    }\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C c();\n"
+                    "printf(\"%y %y %y\\n\", f_psm(), c.x, C::y);\n",
+                "err": Unresolved,
+            ),
+            # the first reference is in a default argument
+            "default-argument": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run(int a = f_psm()) { printf(\"%y\\n\", a); }\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C::run();\n",
+                "err": Unresolved,
+            ),
+            # the first reference is in a closure in a method, which has the class context of the method
+            "closure-in-method": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run() { code c = int sub () { return f_psm(); }; printf(\"%y\\n\", c()); }\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C::run();\n",
+                "err": Unresolved,
+            ),
+            # the first reference is a call reference in a method
+            "call-reference": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run() { code f = \\f_psm(); printf(\"%y\\n\", f()); }\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "C::run();\n",
+                "err": Unresolved,
+            ),
+            # the first reference is in a class constant
+            "class-constant": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    const X = f_psm();\n"
+                    "}\n"
+                    "int sub f_psm() { return C::psm(); }\n"
+                    "printf(\"%y\\n\", C::X);\n",
+                "err": Unresolved,
+            ),
+        };
+
+        #! a script that must run: what keeps its context
+        const Working = "namespace N {\n"
+            "    const K = 1;\n"
+            "    public int sub nf() { return K; }\n"
+            "}\n"
+            "namespace M {\n"
+            "    const K = 2;\n"
+            "    class C {\n"
+            "        private static int psm() { return 3; }\n"
+            # a function called first from a method is parse-initialized in its own namespace
+            "        static int runf() { return N::nf(); }\n"
+            # a closure keeps the class context of the method that it is in
+            "        static int runc() { code c = int sub () { return C::psm(); }; return c(); }\n"
+            "    }\n"
+            "}\n"
+            # a function that calls public methods
+            "int sub f(M::C c) { return M::C::runf() + M::C::runc(); }\n"
+            "printf(\"%d %d %d\\n\", M::C::runf(), M::C::runc(), f(new M::C()));\n";
+    }
+
+    constructor() : QUnit::Test("FunctionBodyClassContextTest", "1.0", \ARGV) {
+        foreach string name in (keys Failing) {
+            string script = name;
+            addTestCase(sprintf("%s fails to parse", script), sub () { testFailing(script); });
+        }
+        addTestCase("functions and closures keep their own context", \testWorking());
+        addTestCase("qcc compile fails", \testQcc());
+        set_return_value(main());
+    }
+
+    private testFailing(string name) {
+        string path = writeScript(name, Failing{name}.src);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s--exec-mode=%s %s",
+                shellQuote(qore_bin), Failing{name}.opts ? Failing{name}.opts + " " : "", mode, shellQuote(path)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+            assertNeq(0, r.rc, sprintf("%s: %s: exit status", name, mode));
+            assertTrue(r.out.find(Failing{name}.err) >= 0, sprintf("%s: %s: parse error: %s", name, mode, r.out));
+            # nothing ran (qore writes this line after warnings that are errors)
+            assertEq("", replace(r.stdout, "exiting due to the above warnings...\n", ""),
+                sprintf("%s: %s: no output", name, mode));
+        }
+    }
+
+    private testWorking() {
+        string path = writeScript("working", Working);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                shellQuote(qore_bin), mode, shellQuote(path)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq("1 3 4\n", r.out, mode);
+        }
+    }
+
+    private testQcc() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        foreach string name in (("issue", "private-static-method", "private-inheritance")) {
+            string path = writeScript(name, Failing{name}.src);
+            string exe = tmp.path + "/" + name;
+            int rc;
+            string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe),
+                shellQuote(path)), \rc);
+            assertNeq(0, rc, sprintf("%s: qcc exit status: %s", name, out));
+            assertTrue(out.find(Failing{name}.err) >= 0, sprintf("%s: qcc parse error: %s", name, out));
+            assertFalse(is_file(exe), sprintf("%s: no executable", name));
+        }
+    }
+
+    private string writeScript(string name, string src) {
+        string path = tmp.path + "/" + name + ".q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + src);
+        f.close();
+        return path;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
