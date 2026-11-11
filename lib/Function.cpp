@@ -1365,15 +1365,30 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
     // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
     // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
-    const QoreTypeInfo* callee_receiver_type_info = nullptr;
-    const bool caller_receiver_current = explicit_type_param_instantiation && restore_receiver_type_info;
-    if (caller_receiver_current) {
-        callee_receiver_type_info = runtime_set_receiver_type_info(old_receiver_type_info);
-    }
-    const bool inferred = qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation);
-    if (caller_receiver_current) {
-        runtime_set_receiver_type_info(callee_receiver_type_info);
+    //! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
+    //! (std::bad_alloc) leaves the inference
+    struct CallerReceiverScope {
+        const QoreTypeInfo* callee_receiver_type_info = nullptr;
+        bool active = false;
+
+        CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
+            if (active) {
+                callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
+            }
+        }
+
+        ~CallerReceiverScope() {
+            if (active) {
+                runtime_set_receiver_type_info(callee_receiver_type_info);
+            }
+        }
+    };
+    bool inferred;
+    {
+        CallerReceiverScope caller_receiver(explicit_type_param_instantiation && restore_receiver_type_info,
+            old_receiver_type_info);
+        inferred = qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info,
+            &type_param_instantiation, explicit_type_param_instantiation);
     }
     if (!inferred) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
