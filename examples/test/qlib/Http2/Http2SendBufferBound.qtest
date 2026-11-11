@@ -166,7 +166,9 @@ class Http2SendBufferBoundTest inherits QUnit::Test {
 
     constructor() : Test("Http2SendBufferBoundTest", "1.0") {
         addTestCase("the output held for a peer that does not read is bounded whatever window it grants",
-            \testNonReadingPeer());
+            \testNonReadingPeer(), False);
+        addTestCase("the output held for a TLS peer that does not read is bounded whatever window it grants",
+            \testNonReadingPeer(), True);
         addTestCase("a response larger than the high-water mark reaches a reading client", \testLargeResponse());
         set_return_value(main());
     }
@@ -208,15 +210,21 @@ class Http2SendBufferBoundTest inherits QUnit::Test {
 
     #! The server writes to a peer that grants the largest window and never reads: the data that the stream can
     #! take is bounded, and the stream reports a full buffer, before MaxBytes have been taken
-    testNonReadingPeer() {
+    testNonReadingPeer(bool tls) {
         Socket s();
-        s.connect(sprintf("127.0.0.1:%d", h2c_port), HangGuard);
+        if (tls) {
+            s.setAlpnProtocols(("h2",));
+            s.connectSSL(sprintf("127.0.0.1:%d", tls_port), HangGuard);
+        } else {
+            s.connect(sprintf("127.0.0.1:%d", h2c_port), HangGuard);
+        }
         on_exit s.close();
         # SETTINGS_INITIAL_WINDOW_SIZE (0x4) = 2^31-1, and the connection window raised to 2^31-1 as well
         binary settings = h2_frame(4, 0, 0, <00047fffffff>);
         binary conn_window = h2_frame(8, 0, 0, parse_hex_string(sprintf("%08x", 0x7fffffff - 65535)));
-        # GET / with accept: text/event-stream; no dynamic table and no Huffman coding
-        binary block = <8286> + <04> + b1(1) + binary("/") + <01> + b1(9) + binary("localhost")
+        # GET / with accept: text/event-stream (:scheme http or https: static index 6 or 7); no dynamic table and no
+        # Huffman coding
+        binary block = (tls ? <8287> : <8286>) + <04> + b1(1) + binary("/") + <01> + b1(9) + binary("localhost")
             + <00> + b1(6) + binary("accept") + b1(17) + binary("text/event-stream");
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + conn_window + h2_frame(1, 0x5, 1, block));
 
