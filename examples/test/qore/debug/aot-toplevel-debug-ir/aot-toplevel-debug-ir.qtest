@@ -18,17 +18,50 @@
 /** Top-level code compiled ahead of time ran as native code while a debugger was attached: the debugger got no step
     events and no event for an exception that a try statement of the top-level code catches.  It now runs its debug
     IR in the IR interpreter, as a function compiled ahead of time does.  AOTTopLevelDebugIR.q attaches a recorder
-    from a Program of its own before its top-level code runs and gives the events of the AST interpreter in every
-    execution mode and compiled with qcc.
+    before its top-level code runs and gives the events of the AST interpreter, with the values of top-level local
+    variables that the top-level code, a closure and a function change, in every execution mode and compiled with
+    qcc.
 
-    The top-level code has no local variables: a debugger attached while the constants of a Program are initialized
-    leaves its top-level local variables uninstantiated (https://github.com/qoretechnologies/qore/issues/5860).
+    The recorder is in the debugged Program: one in a Program of its own, as that of DebugProgramControl, leaves the
+    top-level local variables uninstantiated when it attaches while the constants are initialized
+    (https://github.com/qoretechnologies/qore/issues/5860).
 */
 class AOTTopLevelDebugIRTest inherits QUnit::Test {
     public {
         #! the output of AOTTopLevelDebugIR.q with the AST interpreter
-        const Expected = "start
-events: [\"step@72\", \"step@73\", \"step@74\", \"step@75\", \"TL@75\", \"TL@74\", \"step@79\", \"step@80\", \"step@82\", \"step@83\", \"step@84\", \"TH@56\", \"TH@84\", \"step@83\", \"step@84\", \"TH@56\", \"TH@84\", \"step@89\", \"step@94\", \"step@95\", \"step@90\", \"step@91\", \"CL@91\", \"CL@90\", \"CL@95\", \"step@98\"]
+        const Expected = "a=14 b=19
+step@68 a=null b=null
+step@69 a=1 b=null
+step@70 a=3 b=null
+step@72 a=3 b=6
+step@75 a=3 b=6
+step@73 a=3 b=6
+step@76 a=13 b=6
+step@77 a=13 b=19
+step@78 a=13 b=19
+step@79 a=13 b=19
+TL@79
+TL@78
+step@84 a=13 b=19
+step@85 a=13 b=19
+step@86 a=13 b=19
+TH@49
+TH@86
+step@88 a=13 b=19
+step@85 a=13 b=19
+step@86 a=13 b=19
+TH@49
+TH@86
+step@88 a=13 b=19
+step@91 a=14 b=19
+step@96 a=14 b=19
+step@97 a=14 b=19
+step@92 a=14 b=19
+step@93 a=14 b=19
+CL@93
+CL@92
+CL@97
+step@100 a=14 b=19
 ";
 
         #! the optimization levels of the AOT compiles
