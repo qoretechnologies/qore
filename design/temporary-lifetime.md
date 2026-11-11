@@ -320,6 +320,10 @@ operation through a runtime helper (an untyped division, modulo, addition, subtr
 division, a string concatenation) on the path where the helper returns NOTHING, which it returns when it raises: left
 pending, the exception let the code after it run, and the operator's `next()` then took it for its own.
 
+A hash map and a hash map-select over an iterator have the same exception cleanup as map, with the hash built so far
+as the partial result and the key and the value as the values the expressions gave; they had none, and an exception
+released their iterator after the handler (qore#5830).
+
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map
 and select (`lowerWithSourceRelease()`).

@@ -19630,6 +19630,15 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Create iterator from input
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hm->loc));
     QoreIRValue iter_val = iter_inst->result;
+    // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
+    iter_inst->restore_on_exception_exit = true;
+
+    // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
+    // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
+    FunctionalLoopExceptionCleanup loop_cleanup(*this);
+    if (!loop_cleanup.init("hashmap.exception.cleanup", error)) {
+        return QoreIRValue();
+    }
 
     // Create loop blocks AFTER expression evaluation
     QoreIRBasicBlock* preheader_block = createBlock("hashmap.preheader");
@@ -19672,10 +19681,16 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val,
         track_value_type ? loop_exit_block : exit_block, body_block, hm->loc));
     QoreIRValue element_val = next_inst->result;
+    // an exception that next() raises releases the iterator and the source before the hash
+    if (!loop_cleanup.routeNext(next_inst, error)) {
+        return QoreIRValue();
+    }
 
     // Body block: evaluate key and value expressions
     builder.setBlock(body_block);
     size_t body_block_count = builder.getFunction()->blocks.size();
+    // the body releases nothing on an exception before the loop's cleanup does (see UnmarkedExceptionTempScope)
+    UnmarkedExceptionTempScope body_scope(builder, loop_cleanup.get() != nullptr);
 
     // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -19766,6 +19781,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     index_phi->incoming.push_back({next_index, body_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
+    body_scope.end();
+    loop_cleanup.finish(iter_val, input_list, element_val, result_hash, hm->loc,
+        {qore_ir_observable_release(key_result, getExprTypeInfo(hm->get(0))),
+         qore_ir_observable_release(value_result, getExprTypeInfo(hm->get(1)))});
     qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
         {loop_exit_block != header_block ? loop_exit_block : nullptr, exit_block});
     if (type_state_phi) {
@@ -20035,6 +20054,15 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Create iterator from input
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hms->loc));
     QoreIRValue iter_val = iter_inst->result;
+    // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
+    iter_inst->restore_on_exception_exit = true;
+
+    // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
+    // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
+    FunctionalLoopExceptionCleanup loop_cleanup(*this);
+    if (!loop_cleanup.init("hashmapselect.exception.cleanup", error)) {
+        return QoreIRValue();
+    }
 
     // Create loop blocks AFTER expression evaluation
     QoreIRBasicBlock* preheader_block = createBlock("hashmapselect.preheader");
@@ -20080,10 +20108,16 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val,
         track_value_type ? loop_exit_block : exit_block, body_block, hms->loc));
     QoreIRValue element_val = next_inst->result;
+    // an exception that next() raises releases the iterator and the source before the hash
+    if (!loop_cleanup.routeNext(next_inst, error)) {
+        return QoreIRValue();
+    }
 
     // Body block: evaluate select predicate
     builder.setBlock(body_block);
     size_t body_block_count = builder.getFunction()->blocks.size();
+    // the body releases nothing on an exception before the loop's cleanup does (see UnmarkedExceptionTempScope)
+    UnmarkedExceptionTempScope body_scope(builder, loop_cleanup.get() != nullptr);
 
     // Set virtual implicit context: $1 = element, $# = index
     VirtualImplicitContext saved = virtual_implicit;
@@ -20200,6 +20234,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     index_phi->incoming.push_back({next_index, cont_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
+    body_scope.end();
+    loop_cleanup.finish(iter_val, input_list, element_val, result_hash, hms->loc,
+        {qore_ir_observable_release(key_result, getExprTypeInfo(hms->get(0))),
+         qore_ir_observable_release(value_result, getExprTypeInfo(hms->get(1)))});
     qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
         {loop_exit_block != header_block ? loop_exit_block : nullptr, exit_block});
     if (type_state_phi) {
