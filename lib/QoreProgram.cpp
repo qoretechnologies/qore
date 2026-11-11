@@ -3558,6 +3558,11 @@ void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, Qo
 }
 
 void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, ExceptionSink* xsink) {
+    // A sink can request thread exit without holding an exception. Only real exceptions have an
+    // exception object for the debugger callback; non-exception unwinds preserve the current run state.
+    if (!xsink || !xsink->isException()) {
+        return;
+    }
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         checkAttach(xsink);
