@@ -57,6 +57,15 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
 
         #! partitions created per transaction during setup, well within the lock table
         const CreateBatch = 100;
+
+        #! the most partitions a case creates to exceed the lock table
+        /** Above this, the lock table of the server is too large to exceed in the test's time; the default
+            PostgreSQL configuration (64 locks per transaction for 100 connections) needs 2400 partitions
+        */
+        const MaxPartitions = 3000;
+
+        #! the partitions of a table when the lock table is too large to exceed
+        const SmallPartitions = 20;
     }
 
     constructor() : Test("Dropping partitioned PostgreSQL tables", "1.0", \ARGV) {
@@ -81,6 +90,21 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
         Datasource ds(PgsqlRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_PGSQL));
         ds.open();
         return ds;
+    }
+
+    #! Returns the number of partitions that exceed the lock table in one transaction
+    /** @return the number of partitions, or NOTHING if that is more than MaxPartitions
+    */
+    private static *int partitionsAboveBudget(AbstractDatasource ds) {
+        int budget = lockBudget(ds);
+        # a drop in one transaction locks RelationsPerPartition relations of every partition
+        int partitions = budget / RelationsPerPartition + budget / 8;
+        if (partitions > MaxPartitions) {
+            printf("the lock table holds %d locks; %d partitions would exceed it, more than the %d the test creates: "
+                "the drops are checked without exceeding it\n", budget, partitions, MaxPartitions);
+            return;
+        }
+        return partitions;
     }
 
     #! Returns the number of locks the server's lock table holds for all connections
@@ -130,22 +154,23 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
 
     tableDropCommit() {
         Datasource ds = datasource();
-        int budget = lockBudget(ds);
-        # a drop in one transaction locks RelationsPerPartition relations of every partition
-        int partitions = budget / RelationsPerPartition + budget / 8;
+        *int above = partitionsAboveBudget(ds);
+        int partitions = above ?? SmallPartitions;
         string name = "psd_table";
         on_exit cleanup(ds, (name,));
         createPartitionedTable(ds, name, partitions);
 
-        # the setup is above the budget: the table cannot be dropped in one transaction
-        try {
-            ds.execRaw("drop table " + name);
-            ds.commit();
-            fail(sprintf("a table of %d partitions was dropped in one transaction with a lock budget of %d",
-                partitions, budget));
-        } catch (hash<ExceptionInfo> ex) {
-            ds.rollback();
-            assertRegex("out of shared memory", ex.desc, "a drop in one transaction exceeds the lock table");
+        if (above) {
+            # the setup is above the budget: the table cannot be dropped in one transaction
+            try {
+                ds.execRaw("drop table " + name);
+                ds.commit();
+                fail(sprintf("a table of %d partitions was dropped in one transaction with a lock budget of %d",
+                    partitions, lockBudget(ds)));
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+                assertRegex("out of shared memory", ex.desc, "a drop in one transaction exceeds the lock table");
+            }
         }
 
         Table t(ds, name);
@@ -161,9 +186,9 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
 
     schemaDrop() {
         Datasource ds = datasource();
-        int budget = lockBudget(ds);
         # the two tables together exceed the budget in one transaction
-        int partitions = budget / (2 * RelationsPerPartition) + budget / 16;
+        *int above = partitionsAboveBudget(ds);
+        int partitions = above ? above / SchemaTables.size() : SmallPartitions;
         on_exit cleanup(ds, SchemaTables);
         foreach string name in (SchemaTables) {
             createPartitionedTable(ds, name, partitions);
