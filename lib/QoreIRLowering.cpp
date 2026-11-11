@@ -12292,6 +12292,12 @@ bool QoreIRLowering::lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv,
         return false;
     }
 
+    rv = builder.createLoadLocal(backgroundLeafParam(std::move(key), expr), loc)->result;
+    return true;
+}
+
+LocalVar* QoreIRLowering::backgroundLeafParam(std::string key, const QoreValue& expr) {
+    assert(bg_helper);
     size_t index;
     auto i = bg_helper->leaf_index.find(key);
     if (i != bg_helper->leaf_index.end()) {
@@ -12306,7 +12312,47 @@ bool QoreIRLowering::lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv,
         bg_helper->leaves.push_back(expr);
         bg_helper->leaf_index.emplace(std::move(key), index);
     }
-    rv = builder.createLoadLocal(bg_helper->params[index].get(), loc)->result;
+    return bg_helper->params[index].get();
+}
+
+//! returns the root of the access path of an lvalue: the variable or member that it starts with
+static QoreValue qore_ir_lvalue_path_root(QoreValue expr) {
+    while (true) {
+        const AbstractQoreNode* node = expr.getInternalNode();
+        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            expr = sb->getLeft();
+        } else if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            expr = hd->getLeft();
+        } else if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+            expr = sbr->get(0);
+        } else if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            expr = cast->getExp();
+        } else {
+            return expr;
+        }
+    }
+}
+
+bool QoreIRLowering::extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
+        std::vector<QoreValue>& dynamic_operands, bool allow_slice) {
+    if (!::extractLValuePath(expr, path, dynamic_operands, allow_slice)) {
+        return false;
+    }
+    if (bg_helper && !path.empty() && path[0].kind == LVPathStepKind::SelfMember) {
+        QoreValue member = qore_ir_lvalue_path_root(expr);
+        auto* self_ref = dynamic_cast<const SelfVarrefNode*>(member.getInternalNode());
+        if (!self_ref) {
+            return false;
+        }
+        // the value of the member that the thread took, held by the same parameter as when the member is read
+        LocalVar* param = backgroundLeafParam(std::string("member:") + self_ref->str, member);
+        LVPathStep step;
+        step.kind = LVPathStepKind::LocalVar;
+        step.ref_ptr = param;
+        step.name = param->getName();
+        step.type_info = param->getTypeInfo();
+        path[0] = std::move(step);
+    }
     return true;
 }
 

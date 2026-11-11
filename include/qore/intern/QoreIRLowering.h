@@ -975,6 +975,19 @@ private:
     */
     bool lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv, std::string& error);
 
+    //! Returns the parameter of the background helper being lowered that holds a value the expression takes when the
+    //! thread starts, created for the key if it does not exist yet (see lowerBackgroundLeaf())
+    LocalVar* backgroundLeafParam(std::string key, const QoreValue& expr);
+
+    //! Extracts the access path of an lvalue (the file-level extractLValuePath() function)
+    /** In a background helper, the root of a path that is a member of the object of the code that starts the thread is
+        the value of the member that the thread took when it started, as for the AST interpreter, which the helper
+        holds in a parameter: the new thread has no object context (issue #5723: <tt>background (o.x = 1)</tt> in a
+        method of a class with an object member \c o raised "no object context for self member access")
+    */
+    bool extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
+            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false);
+
     //! Lowers a background expression to a helper function and the instruction starting the thread with it
     /** See QoreIRBackgroundInstruction.
     */
