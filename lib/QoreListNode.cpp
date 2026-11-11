@@ -758,9 +758,10 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "named argument evaluation")) {
                 return nullptr;
             }
-            // qore_list_eval_entry() returns nothing when it raises an exception
             QoreValue v = qore_list_eval_entry(entry[i], xsink);
             if (*xsink) {
+                // a value that came with the exception is released
+                v.discard(xsink);
                 return nullptr;
             }
             size_t pos = (*eval_pos_map)[i];
@@ -773,9 +774,10 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
         return nl.release();
     }
     for (size_t i = 0; i < length; ++i) {
-        // qore_list_eval_entry() returns nothing when it raises an exception
         QoreValue v = qore_list_eval_entry(entry[i], xsink);
         if (*xsink) {
+            // a value that came with the exception is released
+            v.discard(xsink);
             return nullptr;
         }
         //printd(5, "qore_list_private::eval() %d: '%s'\n", i, v->getFullTypeName());
