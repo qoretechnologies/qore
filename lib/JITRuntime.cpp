@@ -18619,9 +18619,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
     const bool use_specialized_ir = !uvb->hasCachedAOT() && receiver_type_info
         && QoreTypeInfo::getParameterizedClassType(receiver_type_info);
-    const QoreIRFunction* ir = use_specialized_ir
+    // the call holds a specialization while it runs (issue #5765); the variant's own IR lives with the variant
+    QoreSpecializedIRRef specialized_ir_ref = use_specialized_ir
         ? uvb->getOrCreateSpecializedIRForFastCall(method->getName(), receiver_type_info)
-        : uvb->getCachedIR();
+        : QoreSpecializedIRRef();
+    const QoreIRFunction* ir = use_specialized_ir ? specialized_ir_ref.get() : uvb->getCachedIR();
     if (use_specialized_ir && !ir) {
         return false;
     }

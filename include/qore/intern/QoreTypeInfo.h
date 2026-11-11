@@ -34,6 +34,7 @@
 #define _QORE_QORETYPEINFO_H
 
 #include <map>
+#include <set>
 #include "qore/intern/qore_string_private.h"
 #include <vector>
 #include <utility>
@@ -4349,6 +4350,84 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
     @param ti2 a second type being destroyed (the or-nothing variant); may be nullptr
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
+
+//! What a generic cache removed, released after every lock is released
+/** A removed entry can hold the last reference to an object whose destruction purges types
+    (qore_purge_derived_types()) and so runs a cache eviction itself: a specialization's IR or a concrete declaration
+    of a generic hashdecl.  Each element releases its object when the list is cleared or destroyed.
+*/
+class qore_generic_cache_release_list_t {
+public:
+    DLLLOCAL qore_generic_cache_release_list_t() = default;
+    qore_generic_cache_release_list_t(const qore_generic_cache_release_list_t&) = delete;
+    qore_generic_cache_release_list_t& operator=(const qore_generic_cache_release_list_t&) = delete;
+
+    //! Releases everything added, in the order added
+    DLLLOCAL ~qore_generic_cache_release_list_t() {
+        for (auto& i : entries) {
+            i.second(i.first);
+        }
+    }
+
+    //! Adds an object to release with \a release
+    /** Allocates no memory when it fails: the caller removes the entry from its cache only once this has succeeded,
+        so an allocation failure leaves the entry in the cache instead of releasing it under the caller's locks.
+
+        @return true if the object was added, false if no memory could be allocated
+    */
+    DLLLOCAL bool add(void* p, void (*release)(void*)) {
+        try {
+            entries.emplace_back(p, release);
+        } catch (std::bad_alloc&) {
+            return false;
+        }
+        return true;
+    }
+
+private:
+    std::vector<std::pair<void*, void (*)(void*)>> entries;
+};
+
+//! A cache whose keys name types that can be destroyed: the specializations of a generic variant, the concrete
+//! declarations of a generic hashdecl (issue #5765)
+/** The cache registers the types of each key it adds (qore_generic_cache_insert()); when one of those types is
+    destroyed, qore_purge_derived_types() calls evictDeadTypes() of every cache that registered it, so the memory of a
+    specialization or declaration made for the types of a destroyed Program is freed.  A cache unregisters itself with
+    qore_generic_cache_unregister() before it is destroyed.
+*/
+class QoreGenericTypeCache {
+public:
+    DLLLOCAL virtual ~QoreGenericTypeCache() = default;
+
+    //! Removes the entries whose key names a type in \a dead
+    /** Called with the registry locked; takes the cache's own lock.  Nothing may be released here: each removed
+        entry is moved to \a release, which is cleared after every lock is released.
+    */
+    DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+            qore_generic_cache_release_list_t& release) = 0;
+};
+
+//! Adds an entry to a generic cache and registers the types of its key
+/** \a insert adds the entry under the cache's own lock; it runs with the registry locked, so an eviction of one of
+    \a types cannot run between the insertion and the registration.
+
+    @param cache the cache
+    @param types the types of the key of the entry (null pointers are ignored)
+    @param insert adds the entry to the cache
+*/
+DLLLOCAL void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert);
+
+//! The number of live specialized IR functions (generic function and method specializations), for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_generic_specializations;
+//! The number of live concrete declarations of generic hashdecls, for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_parameterized_hashdecls;
+//! Returns the number of types registered by generic caches (qore_generic_cache_insert()), for debug checks
+DLLLOCAL size_t qore_generic_cache_registered_type_count();
+
+//! Unregisters a generic cache that is about to be destroyed
+/** Waits for an eviction that is running on the cache: no eviction calls the cache after this returns. */
+DLLLOCAL void qore_generic_cache_unregister(QoreGenericTypeCache* cache);
 
 //! Returns the never-reused identity of a type that is freed with its class, hashdecl or enum, or 0 for any other type
 /** The type of a class, hashdecl or enum (and its or-nothing type) is freed with its owner, and a later owner's type

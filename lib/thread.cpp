@@ -1905,12 +1905,18 @@ tid_node::~tid_node() {
 class BGThreadHelper {
 public:
     QoreBackgroundHelperCode code;
+    //! the generic specialization whose code started the thread, if any: the helper's IR is its own (issue #5765)
+    /** Taken when the thread is created, so the specialization outlives its cache entry and the call that started the
+        thread; released when the thread is done
+    */
+    QoreSpecializedIRRef owner;
     //! the helper's parameters
     std::vector<LocalVar*> params;
     //! the value of each parameter: referenced, owned until the thread instantiates the parameters
     std::vector<QoreValue> values;
 
-    DLLLOCAL BGThreadHelper(const QoreBackgroundHelperCode& code) : code(code) {
+    DLLLOCAL BGThreadHelper(const QoreBackgroundHelperCode& code) : code(code),
+            owner(qore_ref_helper_specialization(code.ir)) {
     }
 
     DLLLOCAL ~BGThreadHelper() {

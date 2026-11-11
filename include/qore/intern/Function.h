@@ -366,6 +366,100 @@ struct QoreGenericSpecializationKeyEqual {
         return (*this)(b, a);
     }
 };
+//! A specialization's IR shared by its cache entry and the calls that run it (issue #5765)
+struct QoreSpecializedIR {
+    //! the references: the cache entry's and one per running call
+    std::atomic<uint32_t> refs{1};
+    //! the specialized IR, owned
+    const QoreIRFunction* ir;
+
+    DLLLOCAL QoreSpecializedIR(const QoreIRFunction* ir) : ir(ir) {
+    }
+};
+
+//! Frees a specialization's IR when its last reference is released
+DLLLOCAL void qore_free_specialized_ir(QoreSpecializedIR* s);
+
+//! A reference to a specialization's IR (issue #5765)
+/** The cache entry holds one, and a call holds one while it runs, so an entry can be removed while the specialization
+    is running; the IR is freed with the last reference.
+*/
+class QoreSpecializedIRRef {
+public:
+    DLLLOCAL QoreSpecializedIRRef() = default;
+
+    //! Takes the reference that \a s was made with
+    DLLLOCAL explicit QoreSpecializedIRRef(QoreSpecializedIR* s) : s(s) {
+    }
+
+    DLLLOCAL QoreSpecializedIRRef(const QoreSpecializedIRRef& old) : s(old.s) {
+        if (s) {
+            s->refs.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+
+    DLLLOCAL QoreSpecializedIRRef(QoreSpecializedIRRef&& old) : s(old.s) {
+        old.s = nullptr;
+    }
+
+    DLLLOCAL ~QoreSpecializedIRRef() {
+        reset();
+    }
+
+    DLLLOCAL QoreSpecializedIRRef& operator=(QoreSpecializedIRRef&& old) {
+        if (this != &old) {
+            reset();
+            s = old.s;
+            old.s = nullptr;
+        }
+        return *this;
+    }
+
+    QoreSpecializedIRRef& operator=(const QoreSpecializedIRRef&) = delete;
+
+    DLLLOCAL const QoreIRFunction* get() const {
+        return s ? s->ir : nullptr;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return s;
+    }
+
+    //! Returns the specialization without a reference
+    DLLLOCAL QoreSpecializedIR* getEntry() const {
+        return s;
+    }
+
+    //! Returns the reference to the caller, which must release it with qore_release_specialized_ir()
+    DLLLOCAL QoreSpecializedIR* release() {
+        QoreSpecializedIR* rv = s;
+        s = nullptr;
+        return rv;
+    }
+
+    DLLLOCAL void reset() {
+        if (s) {
+            if (s->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                qore_free_specialized_ir(s);
+            }
+            s = nullptr;
+        }
+    }
+
+private:
+    QoreSpecializedIR* s = nullptr;
+};
+
+//! Releases a reference returned by QoreSpecializedIRRef::release()
+DLLLOCAL inline void qore_release_specialized_ir(QoreSpecializedIR* s) {
+    QoreSpecializedIRRef ref(s);
+}
+
+//! Returns a reference to the generic specialization that \a helper_ir belongs to, if any (issue #5765)
+/** \a helper_ir is the IR of a background expression's helper; the thread that runs it holds the reference
+*/
+DLLLOCAL QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper_ir);
+
 //! Returns the portable dispatch key for a concrete generic specialization.
 //! Unlike the process-local cache key, this key contains no pointer identity;
 //! callers must compare it only after resolving the exact function variant.
@@ -1204,8 +1298,25 @@ protected:
     mutable std::mutex specialized_ir_mutex;
     /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
     */
-    mutable std::unordered_map<QoreGenericSpecializationKey, std::unique_ptr<QoreIRFunction>,
+    /** The IR is shared with the calls that run it: a call holds it while it runs, so an entry can be removed while
+        the specialization is running (issue #5765)
+    */
+    mutable std::unordered_map<QoreGenericSpecializationKey, QoreSpecializedIRRef,
         QoreGenericSpecializationKeyHash, QoreGenericSpecializationKeyEqual> specialized_ir_cache;
+    //! The registration of specialized_ir_cache by the types of its keys (issue #5765)
+    class SpecializedIRCache : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL SpecializedIRCache(const UserVariantBase& v) : v(v) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release);
+
+    private:
+        const UserVariantBase& v;
+    };
+    //! created with the first specialization, under specialized_ir_mutex; unregistered by the destructor
+    mutable std::unique_ptr<SpecializedIRCache> specialized_ir_registration;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
     //! Serialized fallback IR installed before AOT publication and protected during materialization.
@@ -1243,7 +1354,7 @@ protected:
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
             bool mark_failure, bool raise_on_failure) const;
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
+    DLLLOCAL QoreSpecializedIRRef getOrCreateSpecializedIR(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
             bool raise_on_failure) const;
@@ -1305,7 +1416,7 @@ public:
         @param type_param_instantiation optional concrete method or function type arguments
         @return the cached specialized IR, or nullptr when specialization is unavailable
     */
-    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIRForFastCall(const char* name,
+    DLLLOCAL QoreSpecializedIRRef getOrCreateSpecializedIRForFastCall(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
         return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
@@ -1428,7 +1539,8 @@ public:
     DLLLOCAL bool ensureAOTContext(const char* name, ExceptionSink* xsink) const;
 
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
-    DLLLOCAL bool hasCachedFunction() const {
+    //! always inlined: it is called on the fast path of every compiled method call
+    DLLLOCAL __attribute__((always_inline)) bool hasCachedFunction() const {
         return current_tier.load(std::memory_order_acquire) == TIER_JIT
             && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn);
     }

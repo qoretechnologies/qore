@@ -4153,6 +4153,13 @@ public:
     //! specialization runs on the IR tier until it reaches the JIT threshold, as the variant it specializes does
     mutable std::atomic<uint64_t> specialization_exec_count{0};
 
+    //! The generic specialization whose IR contains this function, if it is the helper of a background expression in
+    //! it (issue #5765)
+    /** Set when the specialization is created (qore_mark_specialization_helpers()); a thread that runs the helper takes
+        a reference to the specialization, so the helper outlives the cache entry and the call that started the thread
+    */
+    struct QoreSpecializedIR* specialization_owner = nullptr;
+
     // Cached interpreter metadata.  These vectors are structural properties of
     // the IR function, so compute them once and reuse them across recursive and
     // hot call paths instead of rescanning the instruction stream per execute().

@@ -704,17 +704,123 @@ void init_qore_types() {
 //! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
 static std::vector<QoreTypeInfo*> retired_derived_types;
 
-void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
-    std::set<const QoreTypeInfo*> dead;
-    if (ti1) {
-        dead.insert(ti1);
+namespace {
+//! The registry of the generic caches by the types that their keys name (issue #5765)
+class QoreGenericCacheRegistry {
+public:
+    DLLLOCAL void insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+            const std::function<void()>& insert_entry) {
+        std::lock_guard<std::mutex> lock(m);
+        // the types are registered first: if that fails, no entry is added (a type registered without an entry is
+        // only an index entry for nothing); if the entry is added, it is always registered
+        std::unordered_set<const QoreTypeInfo*>& cache_types = by_cache[cache];
+        for (const QoreTypeInfo* ti : types) {
+            if (ti && cache_types.insert(ti).second) {
+                by_type[ti].insert(cache);
+            }
+        }
+        empty.store(by_type.empty(), std::memory_order_release);
+        insert_entry();
     }
-    if (ti2) {
-        dead.insert(ti2);
+
+    DLLLOCAL void unregister(QoreGenericTypeCache* cache) {
+        std::lock_guard<std::mutex> lock(m);
+        auto i = by_cache.find(cache);
+        if (i == by_cache.end()) {
+            return;
+        }
+        for (const QoreTypeInfo* ti : i->second) {
+            auto t = by_type.find(ti);
+            assert(t != by_type.end());
+            t->second.erase(cache);
+            if (t->second.empty()) {
+                by_type.erase(t);
+            }
+        }
+        by_cache.erase(i);
+        empty.store(by_type.empty(), std::memory_order_release);
     }
-    if (!owner && dead.empty()) {
-        return;
+
+    DLLLOCAL size_t registeredTypeCount() {
+        std::lock_guard<std::mutex> lock(m);
+        return by_type.size();
     }
+
+    //! Evicts the entries that name a dead type from every cache that registered one
+    /** @param release receives what the caches removed, to be released by the caller after the lock is released
+    */
+    DLLLOCAL void evict(const std::set<const QoreTypeInfo*>& dead, qore_generic_cache_release_list_t& release) {
+        // every class, hashdecl and enum destruction purges its types: no lock while no cache has an entry
+        if (empty.load(std::memory_order_acquire)) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        // this runs in destructors: if memory cannot be allocated, the entries are left in the caches (their keys
+        // never match a later type), not released
+        std::unordered_set<QoreGenericTypeCache*> caches;
+        try {
+            for (const QoreTypeInfo* ti : dead) {
+                auto t = by_type.find(ti);
+                if (t != by_type.end()) {
+                    caches.insert(t->second.begin(), t->second.end());
+                }
+            }
+        } catch (std::bad_alloc&) {
+            return;
+        }
+        for (const QoreTypeInfo* ti : dead) {
+            auto t = by_type.find(ti);
+            if (t == by_type.end()) {
+                continue;
+            }
+            for (QoreGenericTypeCache* cache : t->second) {
+                auto c = by_cache.find(cache);
+                assert(c != by_cache.end());
+                c->second.erase(ti);
+            }
+            by_type.erase(t);
+        }
+        for (QoreGenericTypeCache* cache : caches) {
+            cache->evictDeadTypes(dead, release);
+        }
+        empty.store(by_type.empty(), std::memory_order_release);
+    }
+
+private:
+    std::mutex m;
+    //! the caches that have an entry whose key names each type
+    std::unordered_map<const QoreTypeInfo*, std::unordered_set<QoreGenericTypeCache*>> by_type;
+    //! the types that each cache registered
+    std::unordered_map<QoreGenericTypeCache*, std::unordered_set<const QoreTypeInfo*>> by_cache;
+    //! true while no type is registered
+    std::atomic<bool> empty{true};
+};
+
+//! the generic cache registry; never destroyed, as caches unregister during library cleanup
+QoreGenericCacheRegistry& qore_generic_cache_registry() {
+    static QoreGenericCacheRegistry* registry = new QoreGenericCacheRegistry;
+    return *registry;
+}
+}
+
+void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert) {
+    qore_generic_cache_registry().insert(cache, types, insert);
+}
+
+std::atomic<int64_t> qore_live_generic_specializations{0};
+std::atomic<int64_t> qore_live_parameterized_hashdecls{0};
+
+size_t qore_generic_cache_registered_type_count() {
+    return qore_generic_cache_registry().registeredTypeCount();
+}
+
+void qore_generic_cache_unregister(QoreGenericTypeCache* cache) {
+    qore_generic_cache_registry().unregister(cache);
+}
+
+//! Purges the derived types; \a dead receives the destroyed types and every derived type retired with them
+static void qore_purge_derived_types_intern(const void* owner, std::set<const QoreTypeInfo*>& dead) {
 
     auto any_dead = [&dead](const type_vec_t& types) -> bool {
         for (const QoreTypeInfo* t : types) {
@@ -727,8 +833,12 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
 
     AutoLocker al(ctl);
 
-    if (!(owner && derived_type_keys.count(owner)) && !(ti1 && derived_type_keys.count(ti1))
-            && !(ti2 && derived_type_keys.count(ti2))) {
+    // dead holds the destroyed types here (at most two)
+    bool keyed = owner && derived_type_keys.count(owner);
+    for (auto i = dead.begin(), e = dead.end(); !keyed && i != e; ++i) {
+        keyed = derived_type_keys.count(*i);
+    }
+    if (!keyed) {
         return;
     }
 
@@ -809,6 +919,26 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
     }
     for (const QoreTypeInfo* t : dead) {
         derived_type_keys.erase(t);
+    }
+}
+
+void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+    std::set<const QoreTypeInfo*> dead;
+    if (ti1) {
+        dead.insert(ti1);
+    }
+    if (ti2) {
+        dead.insert(ti2);
+    }
+    if (!owner && dead.empty()) {
+        return;
+    }
+    qore_purge_derived_types_intern(owner, dead);
+    // issue #5765: the generic caches drop the entries made for the destroyed types; what they removed is released
+    // after the registry's lock is released, as releasing it can purge types in turn
+    if (!dead.empty()) {
+        qore_generic_cache_release_list_t release;
+        qore_generic_cache_registry().evict(dead, release);
     }
 }
 
