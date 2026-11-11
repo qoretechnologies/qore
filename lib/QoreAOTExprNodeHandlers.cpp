@@ -574,8 +574,36 @@ static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
     return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
 }
 
+//! splits the class reference of an EN_NEW / EN_SCOPED_NEW node into the class and the object type of a generic class
+/** @return false if the object type cannot be resolved
+*/
+static bool en_splitObjectClassRef(AOTExprNodeReadCtx& ctx, std::string& class_name,
+        const QoreTypeInfo*& object_type_info) {
+    static constexpr const char* type_marker = "\ntype:";
+    size_t pos = class_name.find(type_marker);
+    object_type_info = nullptr;
+    if (pos == std::string::npos) {
+        return true;
+    }
+    std::string path = class_name.substr(pos + strlen(type_marker));
+    class_name.erase(pos);
+    QoreAOTTypeResolver resolver(ctx.pgm);
+    std::string error;
+    object_type_info = resolver.resolve(path.c_str(), error);
+    if (!object_type_info || !error.empty()) {
+        printd(0, "AOT EXPR_TREE: cannot resolve object type '%s' for new: %s\n", path.c_str(), error.c_str());
+        return false;
+    }
+    return true;
+}
+
 static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if (!en_splitObjectClassRef(ctx, class_name, object_type_info)) {
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     ReferenceHolder<QoreListNode> args_list(nullptr, nullptr);
     if (num_children > 0) {
@@ -608,13 +636,18 @@ static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
             printd(5, "  constructor vlist=%d\n", static_cast<int>(cf->numVariants()));
         }
     }
-    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release());
+    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release(), object_type_info);
     printd(5, "  nocn variant=%p\n", (void*)nocn->getVariant());
     return QoreValue(nocn);
 }
 
 static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if (!en_splitObjectClassRef(ctx, class_name, object_type_info)) {
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     SimpleRefHolder<QoreParseListNode> pln;
     if (num_children > 0) {
@@ -633,7 +666,7 @@ static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
         ctx.failed = true;
         return QoreValue();
     }
-    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln.release());
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln.release(), object_type_info);
     socn->resolveParseArgs();
     return QoreValue(socn);
 }
