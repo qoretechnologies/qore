@@ -4938,7 +4938,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -5049,7 +5049,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -5321,7 +5321,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -5390,6 +5390,11 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         caller_pgm = getProgram();
     }
     if (!caller_pgm) {
+        return false;
+    }
+    // the code of a debugged Program runs with the debugger's events, which this path does not make: the closure is
+    // called as any other call, on the AST interpreter or with its debug IR
+    if (qore_program_private::get(*caller_pgm)->hasDebuggerAttached()) {
         return false;
     }
 
@@ -5554,7 +5559,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), uvb->pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -6727,7 +6732,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
-        std::vector<QoreValue>* parent_slot_cache = nullptr) {
+        std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
+        QoreProgram* dbg_pgm = nullptr) {
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
     // the enclosing IR function is executed — a handler-lowering failure
@@ -6746,16 +6752,19 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
         return;
     }
     QoreValue rv;
+    // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
+    // with the AST interpreter, but not those of a function (see QoreIRInterpreter::execute())
     QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
-                               &handler.handler_ir->pre_instantiated_cache, nullptr, nullptr, nullptr,
-                               false, nullptr, parent_slot_cache);
+                               &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
+                               false, nullptr, parent_slot_cache, true);
     rv.discard(obe_xsink);
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
 // StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
 static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink,
-        std::vector<QoreValue>* parent_slot_cache = nullptr) {
+        std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
+        QoreProgram* dbg_pgm = nullptr) {
     if (handlers.empty()) {
         return 0;
     }
@@ -6778,7 +6787,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache);
+                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm);
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -6828,7 +6837,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
         const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt,
-        const IRDirectParams* direct_params, std::vector<QoreValue>* parent_slot_cache) {
+        const IRDirectParams* direct_params, std::vector<QoreValue>* parent_slot_cache, bool handler_frame) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;
@@ -7271,7 +7280,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         except->makeExceptionObject(), xsink));
                                 }
                             }
-                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector());
+                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
+                                        statements, pgm);
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -7788,6 +7798,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Only runtimeCheck() can change (debugger attaches mid-execution).
     bool can_debug = tlpd && statements && pgm;
     bool debug_active = can_debug && tlpd->runtimeCheck();
+    // the current statement of the frame while a debugger is attached, set by its DebugStatement instructions; the
+    // runtime statement of the thread is set by the frames of its calls too, and code without debug events, such as
+    // a closure that runs inline, clears it without setting it back
+    const AbstractStatement* dbg_frame_stmt = nullptr;
+    // a handler frame (on_exit, on_error and on_success code) has the debug events of its statements, but not those
+    // of a function, as with the AST interpreter
+    const bool dbg_function_events = !handler_frame;
+    // true once the function's exit event was made, which unwindForException() makes if it was not
+    bool dbg_function_exit_done = false;
+    auto dbgFunctionExit = [&]() {
+        if (debug_active && dbg_function_events && !dbg_function_exit_done) {
+            dbg_function_exit_done = true;
+            tlpd->dbgFunctionExit(statements, return_value, xsink);
+        }
+    };
     bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop (legacy fallback)
     // Set by dbgStep RC_BREAK to the exit block of the loop enclosing the break point.
     // Execution then continues normally (running statement/scope cleanups) until the
@@ -7809,7 +7834,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // statement found by the instruction's location otherwise, which on a line with several statements is the first
     // of them
     auto get_exception_statement = [&](const QoreIRInstruction* inst) -> const AbstractStatement* {
-        const AbstractStatement* stmt = *rl_cache.stmt_ptr;
+        const AbstractStatement* stmt = dbg_frame_stmt;
         if (stmt && inst->loc && stmt->loc && stmt->loc->getFile() == inst->loc->getFile()
             && stmt->loc->start_line <= inst->loc->start_line && stmt->loc->end_line >= inst->loc->start_line) {
             return stmt;
@@ -7869,14 +7894,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Call dbgFunctionEnter if debug is active, then fire block-entry event.
     // AST mode fires dbgStep(block, nullptr) at block entry (StatementBlock.cpp:239)
     // to signal the debugger that a new block scope is being entered.
-    if (debug_active) {
+    if (debug_active && dbg_function_events) {
         tlpd->dbgFunctionEnter(statements, xsink);
         if (*xsink) {
             return false;  // local_cleanup RAII handles cleanup
         }
         int dbg_rc = tlpd->dbgStep(statements, nullptr, xsink);
         if (dbg_rc || *xsink) {
-            tlpd->dbgFunctionExit(statements, return_value, xsink);
+            dbgFunctionExit();
             return false;  // local_cleanup RAII handles cleanup
         }
         // the debugger can set the local variables of the frame while the thread is stopped, through the runtime
@@ -8183,13 +8208,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    // Releases the values of the frame and runs the handlers of the scopes left when the frame is left without a
-    // handler in it, on an exception or a thread_exit: scope by scope from the innermost, the temps of the statements
-    // of the scope are released, then its handlers run, as the AST interpreter unwinds the blocks; the temps of the
-    // statements that enclose every scope, and the other values of the frame, are released last.  Releasing all the
-    // values first released the temporaries of a statement in a foreach body before the handlers of the body ran,
-    // but its list after them; running the handlers first released the temporaries of the statement that raised the
-    // exception after the handlers.
     // The exception event of the debugger for the current statement of the frame when an exception leaves it (#5795):
     // the AST interpreter calls ThreadLocalProgramData::dbgException() for each statement that an exception leaves
     // (StatementBlock::execIntern()).  Code with a parse tree runs on the AST interpreter while a debugger is
@@ -8209,7 +8227,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (except == dbg_exc_reported) {
             return;
         }
-        const AbstractStatement* stmt = *rl_cache.stmt_ptr;
+        const AbstractStatement* stmt = dbg_frame_stmt;
         if (!stmt) {
             return;
         }
@@ -8221,6 +8239,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         } else {
             dbg_exc_reported = nullptr;
             dbg_exit_dismissed = true;
+        }
+    };
+    // after handlers of the frame ran: an exception that they raised, or rethrew with a rethrow statement, was reported
+    // by their frame, for its statement, as with the AST interpreter, where the handlers are not a statement of the
+    // block
+    auto dbgHandlersRan = [&]() {
+        if (debug_active && xsink && xsink->isException()) {
+            dbg_exc_reported = xsink->getException();
         }
     };
     // the result of the frame after unwindForException() on an exception: false, or true if the debugger dismissed
@@ -8235,6 +8261,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return true;
     };
 
+    // Releases the values of the frame and runs the handlers of the scopes left when the frame is left without a
+    // handler in it, on an exception or a thread_exit: scope by scope from the innermost, the temps of the statements
+    // of the scope are released, then its handlers run, as the AST interpreter unwinds the blocks; the temps of the
+    // statements that enclose every scope, and the other values of the frame, are released last.  Releasing all the
+    // values first released the temporaries of a statement in a foreach body before the handlers of the body ran,
+    // but its list after them; running the handlers first released the temporaries of the statement that raised the
+    // exception after the handlers.
+    // While a debugger is attached, the exception event of the current statement comes first, and the function's
+    // exit event follows the handlers, as with the AST interpreter.
     auto unwindForException = [&]() {
         dbgReportException();
         while (!scope_stack.empty()) {
@@ -8243,8 +8278,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
         if (!on_block_exit_handlers.empty()) {
-            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), statements, pgm);
         }
+        dbgFunctionExit();
         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
     };
 
@@ -8253,11 +8289,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             fprintf(stderr, "[ir-exception] func='%s' return-unhandled xsink=%d\n",
                 func.name.c_str(), xsink && *xsink ? 1 : 0);
             fflush(stderr);
-        }
-        if (debug_active) {
-            // the statement's exception event precedes the function's exit event, as in the AST interpreter
-            dbgReportException();
-            tlpd->dbgFunctionExit(statements, return_value, xsink);
         }
         unwindForException();
         cleanupLocalCaches(false);
@@ -9632,7 +9663,8 @@ next_instruction:
                                                 except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector());
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
+                                        statements, pgm);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -9661,6 +9693,7 @@ next_instruction:
                         // non-IR-only locals through TLS.  IR-only locals are unreachable
                         // by handlers and stay valid in the slot cache.
                         invalidateExternalCaches();
+                        dbgHandlersRan();
                     }
                 }
                 ++ip;
@@ -9671,6 +9704,8 @@ next_instruction:
                 // through the propagation block; an exception pending with it is deleted, as
                 // TryStatement::execImpl() does (qore_catch_thread_exit())
                 if (inst->exception_target && qore_catch_thread_exit(xsink)) {
+                    // the pending exception, if any, was deleted: an exception raised later is another one
+                    dbg_exc_reported = nullptr;
                     prev_block = block;
                     block = inst->exception_target;
                     ip = 0;
@@ -13812,12 +13847,10 @@ load_local_done:
                     int dbg_rc = tlpd->dbgSyntheticBlockStep(dbg_block, xsink);
                     if (dbg_rc || *xsink) {
                         if (dbg_rc == RC_RETURN || *xsink) {
-                            if (debug_active) {
-                                tlpd->dbgFunctionExit(statements, return_value, xsink);
-                            }
                             unwindForException();
                             cleanupLocalCaches();
-                            return dbg_rc == RC_RETURN;
+                            bool dismissed = exitAfterUnwind();
+                            return dbg_rc == RC_RETURN || dismissed;
                         }
                         if (dbg_rc == RC_BREAK) {
                             // See the dbgStep RC_BREAK handler above for rationale.
@@ -13850,6 +13883,7 @@ load_local_done:
                     if (dbg_stmt) {
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
+                        dbg_frame_stmt = dbg_stmt;
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
                         // through the runtime stack, as a callee can: they are read from it again
@@ -13869,13 +13903,11 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            tlpd->dbgFunctionExit(statements, return_value, xsink);
                             unwindForException();
                             cleanupLocalCaches();
                             return exitAfterUnwind();
                         }
                         if (dbg_rc == RC_RETURN) {
-                            tlpd->dbgFunctionExit(statements, return_value, xsink);
                             unwindForException();
                             cleanupLocalCaches();
                             return true;
@@ -14143,7 +14175,8 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector());
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
+                                        statements, pgm);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -14177,6 +14210,7 @@ load_local_done:
                     // are unreachable by handlers, so they stay valid.
                     if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
+                        dbgHandlersRan();
                         // If handler execution raised an exception, route to the
                         // ScopeExit instruction's exception_target (try/catch landing pad)
                         if (xsink && *xsink && inst->exception_target) {
@@ -18001,30 +18035,28 @@ load_local_done:
                 } else {
                     return_value = QoreValue();
                 }
-                if (debug_active) {
-                    tlpd->dbgFunctionExit(statements, return_value, xsink);
-                }
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), statements, pgm);
+                // the function's exit event follows the handlers of the frame, as with the AST interpreter
+                dbgFunctionExit();
                 if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' return xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupLocalCaches(false);
                 return true;
             }
             case QoreIROpcode::ReturnNothing: {
                 return_value = QoreValue();
-                if (debug_active) {
-                    tlpd->dbgFunctionExit(statements, return_value, xsink);
-                }
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), statements, pgm);
+                // the function's exit event follows the handlers of the frame, as with the AST interpreter
+                dbgFunctionExit();
                 if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' return-nothing xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupLocalCaches(false);
                 return true;

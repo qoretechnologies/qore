@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of a debugged program, and the debugger's callbacks in its threads
 
 %modern
 %no-child-restrictions
@@ -28,10 +29,14 @@
     The script DebuggerExceptionEventsFunctions.q does the same for the functions of the script itself, which are
     also compiled ahead of time with qcc: with a debugger attached, AOT functions run their debug IR, whose IR
     interpreter makes the event of the current statement wherever an exception leaves a frame or reaches a handler in
-    it; before, a builtin's exception made no event, and a caller none for its statement.  The debug IR of AOT code
-    has no nesting of statements, so the statements that contain the one that raised the exception get no event, and
-    a debugger that dismisses an exception where the IR cannot continue after the statement ends the function, which
-    returns no value (see @ref debugger_aot_exception_events "the debugger's exception events in AOT code").
+    it; before, a builtin's exception made no event, a caller none for its statement, a closure and the statements of
+    on_exit and on_error code none, a rethrow in on_error code an event too many, and a function left by an exception
+    no exit event.  With the argument \c step, the debugger steps through the code, and the exit events of the
+    functions are recorded too, which must follow the exception events, as with the AST interpreter.  The debug IR
+    of AOT code has no nesting of statements, and its closures no location, so the statements that contain the one
+    that raised the exception get no event, a debugger that dismisses an exception where the IR cannot continue
+    after the statement ends the function, which returns no value, and a closure's exit event has no line (see
+    @ref debugger_aot_exception_events "the debugger's exception events in AOT code").
 */
 class DebuggerExceptionEventsTest inherits QUnit::Test {
     public {
@@ -49,33 +54,70 @@ rethrow in a catch block: [\"J@3\", \"K@5\", \"K@2\"]
 loop in a function: [\"L@5\", \"L@4\", \"L@3\", \"L@9\"]
 ";
 
-        #! the output of DebuggerExceptionEventsFunctions.q with the AST interpreter
-        const ExpectedFunctions = "f_throw: [\"B@53\"]
-f_nested: [\"C@57\", \"C@56\"]
-f_builtin: [\"DIVISION-BY-ZERO@62\"]
-f_caught: [\"E@66\", \"F@69\"]
-f_loop: [\"H@73\", \"H@72\"]
-f_caller: [\"B@53\", \"B@77\"]
-f_catch_rethrow: [\"J@81\", \"K@83\", \"K@80\"]
-f_builtin_caught: [\"DIVISION-BY-ZERO@89\"]
-f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=2
-";
+        #! the output of DebuggerExceptionEventsFunctions.q with the AST interpreter, by its argument
+        const ExpectedFunctions = {
+            "run": "f_throw: [\"B@68\"]
+f_nested: [\"C@72\", \"C@71\"]
+f_builtin: [\"DIVISION-BY-ZERO@77\"]
+f_caught: [\"E@81\", \"F@84\"]
+f_loop: [\"H@88\", \"H@87\"]
+f_caller: [\"B@68\", \"B@92\"]
+f_catch_rethrow: [\"J@96\", \"K@98\", \"K@95\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@104\"]
+f_closure: [\"CL@109\", \"CL@110\"]
+f_on_exit_throw: [\"C@114\", \"C2@113\"]
+f_on_error_rethrow_caught: [\"R@119\", \"R@118\"]
+f_dismiss: [\"DIVISION-BY-ZERO@125\"] rv=2
+",
+            "step": "f_throw: [\"B@68\", \"exit@68\"]
+f_nested: [\"C@72\", \"C@71\", \"exit@71\"]
+f_builtin: [\"DIVISION-BY-ZERO@77\", \"exit@76\"]
+f_caught: [\"E@81\", \"F@84\", \"exit@80\"]
+f_loop: [\"H@88\", \"H@87\", \"exit@87\"]
+f_caller: [\"B@68\", \"exit@68\", \"B@92\", \"exit@92\"]
+f_catch_rethrow: [\"J@96\", \"K@98\", \"K@95\", \"exit@95\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@104\", \"exit@102\"]
+f_closure: [\"CL@109\", \"exit@109\", \"CL@110\", \"exit@109\"]
+f_on_exit_throw: [\"C@114\", \"C2@113\", \"exit@113\"]
+f_on_error_rethrow_caught: [\"R@119\", \"R@118\", \"exit@117\"]
+f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=2
+",
+        };
 
-        #! the output of DebuggerExceptionEventsFunctions.q compiled ahead of time
+        #! the output of DebuggerExceptionEventsFunctions.q compiled ahead of time, by its argument
         /** it differs from that of the AST interpreter only where the debug IR of AOT code has no nesting of its
-            statements: the if, for and try statements that contain the statement that raised an exception get no
-            event, and the dismissal in f_dismiss() ends the function, which returns no value
+            statements and closures no location: the if, for and try statements that contain the statement that
+            raised an exception get no event, the dismissal in f_dismiss() ends the function, which returns no value,
+            and the exit event of the closure in f_closure() has no line (see @ref debugger_aot_exception_events)
         */
-        const ExpectedFunctionsAot = "f_throw: [\"B@53\"]
-f_nested: [\"C@57\"]
-f_builtin: [\"DIVISION-BY-ZERO@62\"]
-f_caught: [\"E@66\", \"F@69\"]
-f_loop: [\"H@73\"]
-f_caller: [\"B@53\", \"B@77\"]
-f_catch_rethrow: [\"J@81\", \"K@83\"]
-f_builtin_caught: [\"DIVISION-BY-ZERO@89\"]
-f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=null
-";
+        const ExpectedFunctionsAot = {
+            "run": "f_throw: [\"B@68\"]
+f_nested: [\"C@72\"]
+f_builtin: [\"DIVISION-BY-ZERO@77\"]
+f_caught: [\"E@81\", \"F@84\"]
+f_loop: [\"H@88\"]
+f_caller: [\"B@68\", \"B@92\"]
+f_catch_rethrow: [\"J@96\", \"K@98\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@104\"]
+f_closure: [\"CL@109\", \"CL@110\"]
+f_on_exit_throw: [\"C@114\", \"C2@113\"]
+f_on_error_rethrow_caught: [\"R@119\", \"R@118\"]
+f_dismiss: [\"DIVISION-BY-ZERO@125\"] rv=null
+",
+            "step": "f_throw: [\"B@68\", \"exit@68\"]
+f_nested: [\"C@72\", \"exit@71\"]
+f_builtin: [\"DIVISION-BY-ZERO@77\", \"exit@76\"]
+f_caught: [\"E@81\", \"F@84\", \"exit@80\"]
+f_loop: [\"H@88\", \"exit@87\"]
+f_caller: [\"B@68\", \"exit@68\", \"B@92\", \"exit@92\"]
+f_catch_rethrow: [\"J@96\", \"K@98\", \"exit@95\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@104\", \"exit@102\"]
+f_closure: [\"CL@109\", \"CL@110\", \"exit@109\"]
+f_on_exit_throw: [\"C@114\", \"C2@113\", \"exit@113\"]
+f_on_error_rethrow_caught: [\"R@119\", \"R@118\", \"exit@117\"]
+f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=null
+",
+        };
 
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
@@ -97,10 +139,16 @@ f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=null
         functions_script = get_script_dir() + "/DebuggerExceptionEventsFunctions.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": exception events", \eventsTest(), (mode,));
-            addTestCase(mode + ": exception events of functions", \functionEventsTest(), (mode,));
+            foreach string arg in (ExpectedFunctions.keys()) {
+                addTestCase(sprintf("%s: exception events of functions (%s)", mode, arg), \functionEventsTest(),
+                    (mode, arg));
+            }
         }
         foreach int opt in (OptLevels) {
-            addTestCase(sprintf("qcc -O%d: exception events of functions", opt), \aotFunctionEventsTest(), (opt,));
+            foreach string arg in (ExpectedFunctions.keys()) {
+                addTestCase(sprintf("qcc -O%d: exception events of functions (%s)", opt, arg),
+                    \aotFunctionEventsTest(), (opt, arg));
+            }
         }
         set_return_value(main());
     }
@@ -112,20 +160,20 @@ f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=null
         assertEq(Expected, output, mode + ": the exception events of the AST interpreter");
     }
 
-    functionEventsTest(string mode) {
-        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
-            libqore_dir, libqore_dir, qore_bin, mode, functions_script), NativeCheck::Jit);
-        assertEq(ExpectedFunctions, output, mode + ": the exception events of the AST interpreter");
+    functionEventsTest(string mode, string arg) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, functions_script, arg), NativeCheck::Jit);
+        assertEq(ExpectedFunctions{arg}, output, mode + ": the exception events of the AST interpreter");
     }
 
-    aotFunctionEventsTest(int opt) {
+    aotFunctionEventsTest(int opt, string arg) {
         TmpDir tmp("qore-debugger-exception-events-");
         string exe = tmp.path + DirSep + "functions";
         string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             functions_script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
-            libqore_dir, exe));
-        assertEq(ExpectedFunctionsAot, output, sprintf("qcc -O%d: the exception events of the debug IR", opt));
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, exe, arg));
+        assertEq(ExpectedFunctionsAot{arg}, output, sprintf("qcc -O%d: the exception events of the debug IR", opt));
     }
 }

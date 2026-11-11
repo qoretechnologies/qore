@@ -83,6 +83,12 @@ public:
     static bool simulateInvoke(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink);
     static int execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
             ExceptionSink* xsink);
+    //! Runs an IR function
+    /** @param statements the block of the function, which the debugger's events are given with; with \a pgm, the
+        frame makes the debugger's events while a debugger is attached
+        @param handler_frame true for the code of an on_exit, on_error or on_success handler, which makes the
+        debugger's events of its statements but not those of a function (enter and exit)
+    */
     static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
             const std::vector<QoreValue>* closure = nullptr,
@@ -91,7 +97,7 @@ public:
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
             bool suppress_guard_deopt = false,
             const IRDirectParams* direct_params = nullptr,
-            std::vector<QoreValue>* parent_slot_cache = nullptr);
+            std::vector<QoreValue>* parent_slot_cache = nullptr, bool handler_frame = false);
 
     //! Emit a `[ir-silent-fail:<tag>]` line to stderr naming the last IR
     //! opcode + source location that ran before `execute()` returned

@@ -5642,6 +5642,18 @@ void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
     aot_entry_statement = b;
 }
 
+StatementBlock* UserVariantBase::getDebugEntryStatementBlock() const {
+    if (StatementBlock* b = getEntryStatementBlock()) {
+        return b;
+    }
+    if (!pgm || !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return nullptr;
+    }
+    StatementBlock* b = qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
+    aot_debug_block.store(b, std::memory_order_release);
+    return b;
+}
+
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
     if (statements) {
         return statements->pwo.parse_options;
@@ -7601,7 +7613,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
-                StatementBlock* debug_statements = statements ? statements : aot_entry_statement;
+                StatementBlock* debug_statements = getDebugEntryStatementBlock();
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, excluded_selfid, debug_statements, pgm);
 

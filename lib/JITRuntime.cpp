@@ -12022,7 +12022,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm, false, &dp);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
@@ -12041,7 +12041,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;  // Request deopt to AST
                     return 0;
@@ -12234,7 +12234,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm, false, &dp);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
@@ -12253,7 +12253,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;  // Request deopt to AST
                     return 0;
@@ -12908,7 +12908,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm, false, &dp);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
@@ -12927,7 +12927,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
@@ -16815,7 +16815,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
                     QoreValue ir_return_value;
                     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                         nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                        uvb->getStatementBlock(), exec_pgm);
+                        uvb->getDebugEntryStatementBlock(), exec_pgm);
                     if (!ok && !*xs) {
                         inv = true;
                         return 0;
@@ -18533,7 +18533,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm, false, &dp);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
@@ -18551,7 +18551,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;  // Request deopt to AST
                     return 0;
@@ -20006,7 +20006,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), exec_pgm);
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;  // Request deopt to AST
                     return 0;
