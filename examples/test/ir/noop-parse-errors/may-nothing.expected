@@ -10,6 +10,12 @@ exists_function: RUNTIME-OVERLOAD-ERROR
 is_date_absolute: RUNTIME-OVERLOAD-ERROR
 length: 0
 strlen: 0
+length str:: 0
+strlen str:: 0
+length bin:: 0
+length str: NOTHING: 0
+length str: value: 3
+length bin: value: 2
 substr value: "bc"
 chr value: "A"
 substr: RUNTIME-OVERLOAD-ERROR
@@ -24,6 +30,12 @@ exists_function: RUNTIME-OVERLOAD-ERROR
 is_date_absolute: RUNTIME-OVERLOAD-ERROR
 length: 0
 strlen: 0
+length str:: 0
+strlen str:: 0
+length bin:: 0
+length str: NOTHING: 0
+length str: value: 3
+length bin: value: 2
 substr value: "bc"
 chr value: "A"
 substr: RUNTIME-OVERLOAD-ERROR
@@ -38,5 +50,11 @@ exists_function: RUNTIME-OVERLOAD-ERROR
 is_date_absolute: RUNTIME-OVERLOAD-ERROR
 length: 0
 strlen: 0
+length str:: 0
+strlen str:: 0
+length bin:: 0
+length str: NOTHING: 0
+length str: value: 3
+length bin: value: 2
 substr value: "bc"
 chr value: "A"

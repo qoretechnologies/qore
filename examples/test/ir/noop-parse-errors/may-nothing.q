@@ -5,6 +5,7 @@
 *int sub i() { return; }
 *list<auto> sub l() { return; }
 *date sub d() { return; }
+*binary sub b() { return; }
 sub run(string label, code<auto()> f) {
     try {
         printf("%s: %y\n", label, f());
@@ -27,6 +28,13 @@ sub main() {
         # regular variants that accept NOTHING
         run("length", auto sub () { return length(s()); });
         run("strlen", auto sub () { return strlen(s()); });
+        # the regular variants for NOTHING have the parameter names of the regular variants, so named calls bind
+        run("length str:", auto sub () { return length(str: s()); });
+        run("strlen str:", auto sub () { return strlen(str: s()); });
+        run("length bin:", auto sub () { return length(bin: b()); });
+        run("length str: NOTHING", auto sub () { return length(str: NOTHING); });
+        run("length str: value", auto sub () { return length(str: "abc"); });
+        run("length bin: value", auto sub () { return length(bin: <0102>); });
         # the same calls with values
         run("substr value", auto sub () { return substr("abc", 1); });
         run("chr value", auto sub () { return chr(65); });
