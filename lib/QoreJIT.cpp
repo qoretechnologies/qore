@@ -1221,7 +1221,20 @@ bool QoreJIT::lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string
         error = "the JIT is busy with a background compile whose result is discarded, or it is stopped";
         return false;
     }
+    // the background thread takes no more work until this compile has the lock (see sync_compile_waiters); the order
+    // of the locks is compile_mutex, then bg_queue_mutex, as for the holder of compile_mutex
+    {
+        std::lock_guard<std::mutex> g(bg_queue_mutex);
+        ++sync_compile_waiters;
+        bg_queue_cv.notify_all();
+    }
     lock.lock();
+    {
+        std::lock_guard<std::mutex> g(bg_queue_mutex);
+        if (!--sync_compile_waiters) {
+            bg_queue_cv.notify_all();
+        }
+    }
     return true;
 }
 
@@ -2313,6 +2326,15 @@ void QoreJIT::endRelease(const std::vector<const QoreProgram*>& pgms) noexcept {
     bg_queue_empty_cv.notify_all();
 }
 
+#ifdef DEBUG
+bool QoreJIT::dbgWaitSyncCompileWaiting(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    return bg_queue_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
+        return sync_compile_waiters > 0;
+    });
+}
+#endif
+
 void QoreJIT::dbgBgHold(BgCompileHoldPoint point) {
 #ifdef DEBUG
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
@@ -2420,6 +2442,14 @@ void QoreJIT::bgCompileThreadLoop() {
             }
         }
 
+        // a synchronous compile, which a thread waits for, takes compile_mutex before more work of the queue is
+        // compiled (see sync_compile_waiters)
+        {
+            std::unique_lock<std::mutex> lock(bg_queue_mutex);
+            bg_queue_cv.wait(lock, [this]() {
+                return !sync_compile_waiters || !bg_thread_running.load(std::memory_order_acquire);
+            });
+        }
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread).  It is taken before the
         // work is claimed: a synchronous compile on another thread can hold it through a long LLVM run, and a claimed
         // work item would make the teardown of its Programs wait for that run although nothing of them was read yet.

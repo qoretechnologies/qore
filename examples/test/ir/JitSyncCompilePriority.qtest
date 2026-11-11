@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT background compile thread and the synchronous compile of top-level code, which share the compile lock
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+# the process module bounds the time a child can run; without it, a child that hangs stalls the test until the test
+# runner's limit
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class JitSyncCompilePriorityTest
+
+#! A synchronous JIT compile takes the compile lock before more work of the background compile queue
+/** The background compile thread takes the compile lock for each work item of its queue.  A synchronous compile, such
+    as the compile of the top-level code of a Program with JIT execution, waits for the lock while a thread waits for
+    it; the background thread takes no more work while it waits, so it gets the lock when the work item in progress
+    is done, not when the queue is empty, which can take minutes with a long queue.
+
+    The debug build stops the background compile thread at a point of a compile until the test lets it continue,
+    holding the compile lock as a compile that takes long does, so each case runs the same steps on every run.  Each
+    case runs in a child process, so that a hang fails an assertion rather than the test run.
+*/
+class JitSyncCompilePriorityTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step of a child
+        const StepTimeout = 60000;
+
+        #! the longest that a child can run; a child that hangs fails its case
+        const ChildTimeout = 180s;
+
+        #! the execution modes of the child Programs whose functions are compiled in the background
+        const Modes = ("tiered", "jit");
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JitSyncCompilePriorityTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        foreach string mode in (Modes) {
+            addTestCase(mode + ": a synchronous compile is not starved by the background queue", \syncFirstTest(),
+                (mode,));
+        }
+        set_return_value(main());
+    }
+
+    #! the top-level code of a Program is compiled before the next function of the background queue
+    /** The background thread is stopped in the LLVM phase of f1, with f2 queued after it.  Another thread runs a
+        Program whose top-level code is compiled synchronously, which waits for the compile lock; when f1 is done, the
+        top-level code is compiled and runs before the background thread takes f2, at whose lowering a hold is armed:
+        without the priority of the synchronous compile, the background thread took f2 and stopped there with the
+        compile lock held, and the top-level code waited for it
+    */
+    syncFirstTest(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the background compile holds require a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+const T = " + StepTimeout + ";
+ExecMode em = ARGV[0] == \"jit\" ? EM_JIT : EM_TIERED;
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(em);
+p.parse(\"int sub f1(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }
+int sub f2(int x) { int s = 1; for (int i = 0; i < x; ++i) { s *= 2; } return s; }\", \"p\");
+call_function(\"dbg_hold_bg_compile\", \"llvm\", \"f1\");
+# with a JIT threshold of 1, each call submits its function for a background compile
+int sum = 0;
+for (int i = 0; i < 5; ++i) {
+    sum += p.callFunction(\"f1\", 10);
+}
+bool held_f1 = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+for (int i = 0; i < 5; ++i) {
+    sum += p.callFunction(\"f2\", 3);
+}
+# the top-level code of q is compiled synchronously with JIT execution
+Program q(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+q.setExecMode(EM_JIT);
+q.parse(\"our int r = 1 + 1;\", \"q\");
+Counter ran(1);
+background sub () {
+    q.run();
+    ran.dec();
+}();
+bool sync_waiting = call_function(\"dbg_wait_sync_compile_waiting\", T);
+call_function(\"dbg_hold_bg_compile\", \"lowering\", \"f2\");
+bool continued_f1 = call_function(\"dbg_continue_bg_compile\", T);
+# the top-level code runs before the background thread takes f2, which then stops at its lowering
+bool sync_first = !ran.waitForZero(T);
+bool held_f2 = call_function(\"dbg_wait_bg_compile_held\", \"lowering\", T);
+bool continued_f2 = call_function(\"dbg_continue_bg_compile\", T);
+ran.waitForZero();
+call_function(\"dbg_wait_bg_compile_idle\");
+printf(\"sum=%d held_f1=%y sync_waiting=%y continued_f1=%y sync_first=%y held_f2=%y continued_f2=%y r=%y\\n\",
+    sum, held_f1, sync_waiting, continued_f1, sync_first, held_f2, continued_f2, q.getGlobalVariable(\"r\"));
+", mode);
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=265 held_f1=True sync_waiting=True continued_f1=True sync_first=True held_f2=True "
+            "continued_f2=True r=2", r.output, "the top-level code was compiled and ran before the background thread "
+            "took more work");
+    }
+
+    #! runs a child script and returns its exit status and output
+    /** @param code the script
+        @param mode the execution mode of the child Programs, given to the script as its argument
+    */
+    private hash<auto> runChild(string code, string mode) {
+        TmpDir tmp("qore-jit-sync-compile-priority-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        # every function is submitted for native compilation at its first call; the child's own code runs on the AST
+        # interpreter, so that only the child Programs' code is compiled
+        hash<string, string> env = {"QORE_JIT_THRESHOLD": "1", "QORE_JIT_TIMING": "1"};
+        list<string> args = ("--enable-debug", "--exec-mode=ast", script, mode);
+%ifdef NoProcess
+        # the variables are assigned by the shell, which runs the child itself
+        string output = backquote(sprintf("%s %s %s 2>&1; echo \"rc=$?\"",
+            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "), shellQuote(qore_bin),
+            (map shellQuote($1), args).join(" ")));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertTrue(exists rc, "the child's status is known: " + output);
+        return {"rc": rc[0].toInt(), "output": output};
+%else
+        StringOutputStream out();
+        StringOutputStream err();
+        Process p(qore_bin, args, {"stdout": out, "stderr": err, "env": Process::getEnvironment() + env});
+        # a hang fails the case instead of stalling the run
+        bool done = p.wait(ChildTimeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        string output = out.getData() + err.getData();
+        assertTrue(done, "the child ended: " + output);
+        return {"rc": p.exitCode(), "output": output};
+%endif
+    }
+
+    #! quotes a string for the shell
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}
