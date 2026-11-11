@@ -3577,7 +3577,7 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     assert(source);
     assert(target_base);
 
-    if (source->getBaseClass() == target_base) {
+    if (sameDeclaration(source->getBaseClass(), target_base)) {
         return source;
     }
 
@@ -3587,7 +3587,7 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
         if (!parent_pti) {
             continue;
         }
-        if (parent_pti->getBaseClass() == target_base) {
+        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
             return subst;
         }
         const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
@@ -3604,7 +3604,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         bool allow_raw_self) const {
     assert(target_base);
 
-    if (allow_raw_self && cls == target_base && hasTypeParams() && rawConstructionDefaultsToAuto()) {
+    if (allow_raw_self && sameDeclaration(cls, target_base) && hasTypeParams() && rawConstructionDefaultsToAuto()) {
         type_vec_t raw_args(type_params.size(), autoTypeInfo);
         return getTypeInfo(raw_args);
     }
@@ -3618,7 +3618,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         if (!parent_pti) {
             continue;
         }
-        if (parent_pti->getBaseClass() == target_base) {
+        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
             return parent_type;
         }
         const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
@@ -3635,7 +3635,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         if (&base == cls) {
             continue;
         }
-        if (&base == target_base) {
+        if (sameDeclaration(&base, target_base)) {
             const qore_class_private* target = qore_class_private::get(base);
             if (!raw_target_fallback && target->hasTypeParams() && target->rawConstructionDefaultsToAuto()) {
                 type_vec_t raw_args(base.getTypeParameterCount(), autoTypeInfo);
