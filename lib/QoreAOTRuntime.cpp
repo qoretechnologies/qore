@@ -4302,10 +4302,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (target_type_arg_pos != std::string::npos) {
                     const size_t count_start = target_type_arg_pos + strlen(target_type_arg_marker);
                     size_t count_end = encoded_target.find('\n', count_start);
+                    // a named string: count_tail points into it and is read after strtoul() returns (a pointer into a
+                    // temporary is dangling then, which clang's stack reuse made fail on macOS)
+                    const std::string count_text = encoded_target.substr(count_start,
+                        count_end == std::string::npos ? std::string::npos : count_end - count_start);
                     char* count_tail = nullptr;
-                    const unsigned long count = strtoul(
-                        encoded_target.substr(count_start, count_end == std::string::npos
-                            ? std::string::npos : count_end - count_start).c_str(), &count_tail, 10);
+                    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
                     auto inst = std::make_shared<QoreTypeParamInstantiation>();
                     QoreAOTTypeResolver type_resolver(pgm);
                     const UserSignature* target_signature = uvb ? uvb->getUserSignature() : nullptr;
