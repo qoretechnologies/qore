@@ -1226,15 +1226,21 @@ bool QoreJIT::lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string
     {
         std::lock_guard<std::mutex> g(bg_queue_mutex);
         ++sync_compile_waiters;
-        bg_queue_cv.notify_all();
+#ifdef DEBUG
+        dbg_sync_compile_waiting_cv.notify_all();
+#endif
     }
-    lock.lock();
-    {
-        std::lock_guard<std::mutex> g(bg_queue_mutex);
-        if (!--sync_compile_waiters) {
-            bg_queue_cv.notify_all();
+    // the count is decremented however the wait ends
+    struct SyncWaiterHelper {
+        QoreJIT& jit;
+        ~SyncWaiterHelper() {
+            std::lock_guard<std::mutex> g(jit.bg_queue_mutex);
+            if (!--jit.sync_compile_waiters) {
+                jit.bg_queue_cv.notify_all();
+            }
         }
-    }
+    } waiter_helper{*this};
+    lock.lock();
     return true;
 }
 
@@ -2327,9 +2333,24 @@ void QoreJIT::endRelease(const std::vector<const QoreProgram*>& pgms) noexcept {
 }
 
 #ifdef DEBUG
+bool QoreJIT::lockForSyncCompileForTest() {
+    std::unique_lock<std::mutex> lock;
+    std::string error;
+    if (!lockForSyncCompile(lock, error)) {
+        return false;
+    }
+    lock.release();
+    return true;
+}
+
+int QoreJIT::syncCompileWaitersForTest() {
+    std::lock_guard<std::mutex> g(bg_queue_mutex);
+    return sync_compile_waiters;
+}
+
 bool QoreJIT::dbgWaitSyncCompileWaiting(int64_t timeout_ms) {
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
-    return bg_queue_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
+    return dbg_sync_compile_waiting_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
         return sync_compile_waiters > 0;
     });
 }
@@ -2429,9 +2450,11 @@ void QoreJIT::bgCompileThreadLoop() {
         BgCompileWork work;
         {
             std::unique_lock<std::mutex> lock(bg_queue_mutex);
-            // Wait for work or shutdown signal
+            // Wait for work or shutdown signal; a synchronous compile, which a thread waits for, takes compile_mutex
+            // before more work of the queue is compiled (see sync_compile_waiters)
             bg_queue_cv.wait(lock, [this]() {
-                return !bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire);
+                return (!bg_compile_queue.empty() && !sync_compile_waiters)
+                    || !bg_thread_running.load(std::memory_order_acquire);
             });
             if (bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire)) {
                 // Check if all work is truly complete (queue empty AND no in-progress compilations)
@@ -2442,14 +2465,6 @@ void QoreJIT::bgCompileThreadLoop() {
             }
         }
 
-        // a synchronous compile, which a thread waits for, takes compile_mutex before more work of the queue is
-        // compiled (see sync_compile_waiters)
-        {
-            std::unique_lock<std::mutex> lock(bg_queue_mutex);
-            bg_queue_cv.wait(lock, [this]() {
-                return !sync_compile_waiters || !bg_thread_running.load(std::memory_order_acquire);
-            });
-        }
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread).  It is taken before the
         // work is claimed: a synchronous compile on another thread can hold it through a long LLVM run, and a claimed
         // work item would make the teardown of its Programs wait for that run although nothing of them was read yet.
@@ -3109,6 +3124,8 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     bg_in_progress_detached.store(false, std::memory_order_relaxed);
     // a thread that released the references of a detached compile does not exist in the child either
     bg_detach_releases.clear();
+    // and neither does a thread that waited for compile_mutex for a synchronous compile
+    sync_compile_waiters = 0;
     bg_thread_abandoned.store(false, std::memory_order_relaxed);
     bg_thread_done.store(false, std::memory_order_relaxed);
     // it pointed at the stack of the compile thread, which does not exist in the child
