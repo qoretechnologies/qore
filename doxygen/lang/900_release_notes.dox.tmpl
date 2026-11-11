@@ -133,6 +133,11 @@
     it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
+    @par A List of Selectors Removes Nothing From a Value That Is Not a List, a String or a Binary
+    @ref remove "remove" and @ref delete "delete" with a list of selectors in square brackets on a hash, a number, an
+    object or @ref nothing (ex: <tt>remove h[0, 1]</tt>) evaluate the selectors and remove nothing in every execution
+    mode; the AST interpreter removed the whole value without evaluating them (see @ref remove_selector_list).
+
     @par Temporary Values Live Until the End of Their Statement
     A temporary value, such as an object returned by a call in a chain of member accesses and method calls, the operand
     of an operator or a value read through a reference, lives until the end of its statement; given to a call as an
