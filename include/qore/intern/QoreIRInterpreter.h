@@ -125,6 +125,14 @@ DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
+//! Applies a step of a list of selectors for the IR interpreter (QoreIROpcode::ListSelectorStep)
+/** As qore_rt_list_selector_step(), but the selector values are read from the IR value slots \a slots, at the
+    \a count value IDs \a selector_ids, instead of from an array, which would be in the frame of
+    QoreIRInterpreter::execute() and so in the frame of every interpreted call
+*/
+DLLLOCAL uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const QoreValue* slots, const QoreIRValue* selector_ids, int32_t count, ExceptionSink* xsink);
+
 //! Applies a compound assignment to an lvalue as the AST interpreter does
 /** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see
     doPlusEqualsOnLValue()); the holder must be declared before the LValueHelper.

@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of lists of selectors of every step size
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires FsUtil
+%requires ExecModeHarness
+
+%exec-class SelectorStepSizesTest
+
+#! lists of selectors give the same result with every number of selector values in a step
+/** A list of selectors (l[f()..1, 2, 3..4]) is applied in steps (QoreIROpcode::ListSelectorStep): a step applies a
+    selector that can have side effects and the selectors after it that cannot, up to QORE_IR_LIST_SELECTOR_STEP_MAX
+    selectors, each of which has one value (an index) or two (a range).  Compiled code passes the values of a step to
+    the runtime in an array; the IR interpreter passes the slots of its values instead, as an array of the maximum
+    size of a step in QoreIRInterpreter::execute() would be in the frame of every interpreted call, and so in the
+    stack that each level of a recursion of interpreted Qore code uses.
+
+    The script that the test writes has steps with numbers of values up to and beyond the maximum of a step, of
+    indexes and of ranges, applied to a list and to a string; it runs in every execution mode, on the IR tier and as
+    an AOT executable, and its output must be the result that the test computes from the selectors.
+*/
+class SelectorStepSizesTest inherits QUnit::Test {
+    public {
+        #! the numbers of selectors after the first selector of a step, which has side effects
+        /** At least one, as a single selector is a plain index or range, not a list of selectors.  A step has the
+            first selector and up to QORE_IR_LIST_SELECTOR_STEP_MAX - 1 (54) selectors after it: 54 indexes or ranges
+            after the first fill a step, of 55 values or of 110, the most that a step has, and 55 take two steps
+        */
+        const SelectorCounts = (1, 3, 4, 5, 7, 8, 9, 15, 16, 31, 53, 54, 55, 56, 70, 110, 111);
+
+        #! the length of the sequences, which every selector selects from
+        const SeqLen = 128;
+
+        #! the scripts print their lines this many times, so that tiered execution compiles their functions
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        TmpDir dir("selector-step-sizes-");
+        string script;
+    }
+
+    constructor() : QUnit::Test("selector step sizes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        script = dir.path + "/steps.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(scriptSource());
+        f.close();
+
+        addTestCase("expected results", \expectedTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the expected results themselves: each case selects its own selector values, in order
+    private expectedTest() {
+        list<string> lines = expectedLines();
+        assertEq(SelectorCounts.size() * 4, lines.size());
+        # the list case with 8 indexes after the first selects 0 .. 8, the one with 4 ranges after the first 0 .. 9
+        assertEq("list idx 8: [0, 1, 2, 3, 4, 5, 6, 7, 8]", lines[5 * 4]);
+        assertEq("list rng 4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]", lines[2 * 4 + 1]);
+        assertEq("string idx 1: \"AB\"", lines[2]);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the expected output
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exe = dir.path + "/steps";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! the selector text and the offsets that a case selects
+    /** @param ranges true for ranges of two offsets each (2*i..2*i+1), false for indexes
+        @param n the number of selectors after the first, which is f(0) or f(0)..1
+    */
+    private static hash<auto> selectors(bool ranges, int n) {
+        list<string> sel;
+        list<int> offsets;
+        if (ranges) {
+            sel = ("f(0)..1",);
+            offsets = (0, 1);
+            foreach int i in (xrange(1, n + 1)) {
+                int start = (2 * i) % SeqLen;
+                sel += sprintf("%d..%d", start, start + 1);
+                offsets += (start, start + 1);
+            }
+        } else {
+            sel = ("f(0)",);
+            offsets = (0,);
+            foreach int i in (xrange(1, n + 1)) {
+                int off = i % SeqLen;
+                sel += string(off);
+                offsets += off;
+            }
+        }
+        return {"text": sel.join(", "), "offsets": offsets};
+    }
+
+    #! the script: one function per case, each applying one list of selectors to a list or a string
+    private string scriptSource() {
+        string src = "%modern\n"
+            "# written by selector-step-sizes.qtest\n"
+            "int sub f(int i) { return i; }\n"
+            + sprintf("list<int> l = map $1, xrange(%d);\n", SeqLen)
+            + sprintf("string s = (foldl $1 + $2, (map chr(65 + ($1 %% 58)), xrange(%d))) ?? \"\";\n", SeqLen);
+        list<string> calls;
+        int fn = 0;
+        foreach int n in (SelectorCounts) {
+            foreach bool ranges in ((False, True)) {
+                hash<auto> h = selectors(ranges, n);
+                string kind = ranges ? "rng" : "idx";
+                src += sprintf("auto sub c%d() { return l[%s]; }\n", fn, h.text);
+                calls += sprintf("printf(\"list %s %d: %%y\\n\", c%d());", kind, n, fn);
+                ++fn;
+                src += sprintf("auto sub c%d() { return s[%s]; }\n", fn, h.text);
+                calls += sprintf("printf(\"string %s %d: %%y\\n\", c%d());", kind, n, fn);
+                ++fn;
+            }
+        }
+        # the lines in the order of expectedLines(): for each count, the list and string cases of indexes, then of
+        # ranges, are grouped as list idx, list rng, string idx, string rng
+        list<string> ordered;
+        for (int i = 0; i < calls.size(); i += 4) {
+            ordered += (calls[i], calls[i + 2], calls[i + 1], calls[i + 3]);
+        }
+        src += sprintf("sub main() {\n    for (int i = 0; i < %d; ++i) {\n        %s\n    }\n}\nmain();\n",
+            Iterations, ordered.join("\n        "));
+        return src;
+    }
+
+    #! the lines of one iteration of the script's output
+    private list<string> expectedLines() {
+        list<int> l = map $1, xrange(SeqLen);
+        string s = (foldl $1 + $2, (map chr(65 + ($1 % 58)), xrange(SeqLen))) ?? "";
+        list<string> lines;
+        foreach int n in (SelectorCounts) {
+            hash<auto> idx = selectors(False, n);
+            hash<auto> rng = selectors(True, n);
+            lines += sprintf("list idx %d: %y", n, (map l[$1], idx.offsets));
+            lines += sprintf("list rng %d: %y", n, (map l[$1], rng.offsets));
+            lines += sprintf("string idx %d: %y", n, (foldl $1 + $2, (map s.substr($1, 1), idx.offsets)) ?? "");
+            lines += sprintf("string rng %d: %y", n, (foldl $1 + $2, (map s.substr($1, 1), rng.offsets)) ?? "");
+        }
+        return lines;
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, expectedLines()) + "\n", Iterations);
+    }
+}

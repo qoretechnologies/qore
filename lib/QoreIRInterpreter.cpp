@@ -9074,18 +9074,18 @@ next_instruction:
                 // operands: [the result of the Begin step,] the sequence, the flags, and the selector values; only
                 // the Begin step has a result, and no result operand
                 size_t first = inst->result.isValid() ? 0 : 1;
-                uint64_t selector_bits[QORE_IR_LIST_SELECTOR_STEP_MAX * 2];
                 size_t count = inst->operands.size() - first - 2;
                 assert(count <= QORE_IR_LIST_SELECTOR_STEP_MAX * 2);
-                for (size_t i = 0; i < count; ++i) {
-                    selector_bits[i] = toBits(getIRValue(values, inst->operands[first + 2 + i]));
-                }
+                // the selector values are read from their slots: an array of them here would be in the frame of
+                // every interpreted call, and so in the stack used by each level of a recursion of Qore code
+                assert(std::all_of(inst->operands.begin() + first + 2, inst->operands.end(),
+                    [&values] (QoreIRValue id) { return id.isValid() && id.id < values.size(); }));
                 // only the Begin step has a result, which it owns
-                QoreValue res = fromBits(qore_rt_list_selector_step(
+                QoreValue res = fromBits(qore_ir_list_selector_step(
                     first ? toBits(getIRValue(values, inst->operands[0])) : 0,
                     toBits(getIRValue(values, inst->operands[first])),
                     getIRValue(values, inst->operands[first + 1]).getAsBigInt(),
-                    selector_bits, static_cast<int32_t>(count), xsink));
+                    values.vec.data(), inst->operands.data() + first + 2, static_cast<int32_t>(count), xsink));
                 if (xsink && *xsink) {
                     assert(res.isNothing());
                     if (inst->exception_target) {

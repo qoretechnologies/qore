@@ -2858,8 +2858,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
     return toBits(QoreValue());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
-        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink) {
+//! Returns the selector value \a i of a step of a list of selectors from an array of the values
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_selector_value(const uint64_t* selector_vals, int32_t i) {
+    return fromBits(selector_vals[i]);
+}
+
+namespace {
+//! The selector values of a step of a list of selectors in the IR value slots of the IR interpreter
+struct QoreIRSelectorSlots {
+    //! the IR value slots
+    const QoreValue* slots;
+    //! the value IDs of the selector values
+    const QoreIRValue* ids;
+};
+}
+
+//! Returns the selector value \a i of a step of a list of selectors from the IR value slots of the IR interpreter
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_selector_value(const QoreIRSelectorSlots& selector_vals,
+        int32_t i) {
+    return selector_vals.slots[selector_vals.ids[i].id];
+}
+
+//! Applies a step of a list of selectors; see qore_rt_list_selector_step()
+/** @param selector_vals the \a count selector values, which qore_rt_selector_value() returns, each once, in order,
+    as the selectors are applied: an array of them, or the IR value slots that hold them
+
+    Inlined into its callers: qore_rt_list_selector_step(), which compiled code calls with the selector values in an
+    array, and qore_ir_list_selector_step(), which the IR interpreter calls with the slots of its values, so that it
+    needs no array for them in the frame of QoreIRInterpreter::execute()
+*/
+template <typename SelectorVals>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_selector_step_intern(uint64_t result_val, uint64_t seq_val,
+        int64_t flags, SelectorVals selector_vals, int32_t count, ExceptionSink* xsink) {
     QoreValue seq = fromBits(seq_val);
     ValueHolder created(xsink);
     QoreValue result;
@@ -2887,11 +2917,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, ui
         assert(i < QORE_IR_LIST_SELECTOR_STEP_MAX);
         bool is_range = flags & (static_cast<int64_t>(1)
             << (static_cast<int64_t>(QoreIRListSelectorFlag::RangeShift) + i));
-        QoreValue first = fromBits(selector_vals[vi++]);
+        QoreValue first = qore_rt_selector_value(selector_vals, vi++);
         QoreValue second;
         if (is_range) {
             assert(vi < count);
-            second = fromBits(selector_vals[vi++]);
+            second = qore_rt_selector_value(selector_vals, vi++);
         }
         if (qore_rt_apply_list_selector(result, seq, is_range, first, second, string_index_char, negative_offsets,
                 fold_here ? &fold : nullptr, xsink)) {
@@ -2918,6 +2948,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, ui
         qore_list_private::get(*ret)->complexTypeInfo = qore_get_complex_list_type(vtype);
     }
     return toBits(created.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink) {
+    return qore_rt_list_selector_step_intern(result_val, seq_val, flags, selector_vals, count, xsink);
+}
+
+uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags, const QoreValue* slots,
+        const QoreIRValue* selector_ids, int32_t count, ExceptionSink* xsink) {
+    return qore_rt_list_selector_step_intern(result_val, seq_val, flags, QoreIRSelectorSlots{slots, selector_ids},
+        count, xsink);
 }
 
 namespace {
