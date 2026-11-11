@@ -5888,7 +5888,34 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
         // stale thread-local implicit state at runtime.
         std::vector<QoreIRValue> selector_operands;
         const QoreValue& lv_expr = parse_ref->getLVExp();
-        if (lv_expr.hasNode()) {
+        if (ParseReferenceNode::pathKeyCount(lv_expr) >= 2) {
+            // the keys of a path of two or more steps are evaluated from the root out, as for the lvalue itself,
+            // and given to the reference as a list (ParseReferenceNode::evalToRefWithResolvedPathKeys(), qore#5753)
+            std::vector<QoreValue> key_exprs;
+            QoreValue n = lv_expr;
+            while (n.getType() == NT_OPERATOR) {
+                if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode())) {
+                    key_exprs.push_back(sb->getRight());
+                    n = sb->getLeft();
+                } else if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode())) {
+                    key_exprs.push_back(hd->getRight());
+                    n = hd->getLeft();
+                } else {
+                    break;
+                }
+            }
+            std::vector<QoreIRValue> keys;
+            keys.reserve(key_exprs.size());
+            for (size_t i = key_exprs.size(); i; --i) {
+                QoreIRValue key = lowerExpression(key_exprs[i - 1], error);
+                if (!key.isValid()) {
+                    return QoreIRValue();
+                }
+                keys.push_back(key);
+            }
+            QoreIRInstruction* list = withExceptionTarget(builder.createMakeList(keys, parse_ref->loc));
+            selector_operands.push_back(list->result);
+        } else if (lv_expr.hasNode()) {
             auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                 lv_expr.getInternalNode());
             if (hd) {

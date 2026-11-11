@@ -154,6 +154,11 @@
     it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
+    @par The Keys of an Lvalue Path Are Evaluated From the Root Out
+    The AST interpreter evaluated the keys and indices of an lvalue path of two or more steps from the last step to
+    the root (ex: <tt>h.(k1()).(k2())[i()] = v</tt> evaluated \c i(), \c k2(), \c k1()); every execution mode now
+    evaluates them from the root out, also for a reference (see @ref lvalue_evaluation_order).
+
     @par A List of Selectors Removes Nothing From a Value That Is Not a List, a String or a Binary
     @ref remove "remove" and @ref delete "delete" with a list of selectors in square brackets on a hash, a number, an
     object or @ref nothing (ex: <tt>remove h[0, 1]</tt>) evaluate the selectors and remove nothing in every execution
