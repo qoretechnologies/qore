@@ -416,6 +416,15 @@ private:
     // (block-scoped locals that need mid-function destruction)
     std::unordered_set<const void*> block_scoped_locals;
 
+    //! The locals that an on_block_exit handler of the current function declares in a scope of its own
+    /** These have explicit InstantiateLocal and UninstantiateLocal instructions in the IR of the handler, not in the
+        IR of the function.  The handler instantiates and pops them at its own scope: instantiating a closure-bound
+        one at the function's entry as well put its variable below the variables that the function declares, so that
+        popping it at the end of its scope, which pops the top of the closure variable stack, popped one of them
+        instead (qore#5707)
+    */
+    std::unordered_set<const void*> handler_block_scoped_locals;
+
     // Set of all body locals owned by the current IR function.  This is
     // intentionally separate from pre_instantiated_locals: IR-only body locals
     // can be callee-owned without being present on the runtime local stack.
@@ -712,6 +721,21 @@ private:
     std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
     // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
     std::unordered_set<uint32_t> value_defined_by_call;
+    // the values read from a variable (LoadLocal, LoadArg, LoadClosure, LoadGlobal, LoadThreadLocal): one that the
+    // read gave a reference of its own to (a cleanup slot) and that a call takes as an argument is released when the
+    // call returns, as any argument
+    std::unordered_set<uint32_t> value_defined_by_variable_read;
+    // non-zero for each value id of a call argument that a later execution of the call uses again without the value
+    // being defined again, such as a read hoisted out of a loop (qore_ir_find_reused_call_args()): no call releases
+    // it or takes its cleanup slot
+    std::vector<uint8_t> reused_call_args;
+    // the values read through a reference by a local with a reference flag -> the slot holding the reference that the
+    // read took (see emitReferenceLocalRead()): the slot is not a cleanup slot of the value, as the value is the
+    // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
+    // only if it holds the value (qore_rt_release_reference_read())
+    std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the slot of the last reference read emitted by emitReferenceLocalRead()
+    llvm::AllocaInst* last_reference_read_slot = nullptr;
 
     // Single-use or nonescaping stored closure values consumed directly by
     // CallClosureDirect. Their creation can be fused into the call without
@@ -827,9 +851,11 @@ private:
         site releases it earlier); the AST interpreter releases it when the expression using it completes
 
         @param cached the value in the local's cache
+        @param inst the load whose exception edge an exception raised by the read takes (the referenced lvalue can be
+        gone), or nullptr if the caller checks for an exception itself
     */
     llvm::Value* emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
-            llvm::Function* llvm_func);
+            llvm::Function* llvm_func, const QoreIRInstruction* inst = nullptr);
 
     //! Emits the reference flag of a value (an i8, non-zero if the value is a reference) at the builder's position
     /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only, and not at all for
@@ -1006,7 +1032,22 @@ private:
             uint32_t object_base_id = UINT32_MAX,
             const char* fallback_throwing_name = nullptr,
             const char* fallback_consume_throwing_name = nullptr,
-            bool require_exact_object_class = false);
+            bool require_exact_object_class = false,
+            const std::vector<uint8_t>* date_kind_guards = nullptr);
+
+    //! Returns @a can_use_fast_entry ANDed with the date kind checks @a date_kind_guards of a call's arguments
+    /** @a date_kind_guards has a QoreDateKindGuardFlags entry (0: no check) per argument, as set by
+        qore_ir_fast_entry_args_need_no_binding(); the check of a date argument for a date<absolute> or date<relative>
+        parameter that the fast entry does not check (#5730)
+    */
+    llvm::Value* emitFastEntryDateKindGuards(llvm::Module& module, llvm::Value* can_use_fast_entry,
+            const std::vector<uint8_t>& date_kind_guards, const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids, const std::vector<llvm::Value*>& boxed_args);
+
+    //! Converts the NaN-boxed result of a generic fallback call to the return ABI of @a callee_info's fast entry
+    //! and releases the boxed result if it was converted
+    llvm::Value* emitFallbackResultToFastReturnKind(llvm::Module& module, const BatchCalleeInfo& callee_info,
+            llvm::Value* fallback_result);
 
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary
     // is absent, disabled, or not valid for the supplied native arguments.
@@ -1167,6 +1208,8 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
+    llvm::Value* call_site_cache_ptr = nullptr;
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
@@ -1179,6 +1222,13 @@ private:
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Sets the location of a call instruction as the thread's call site, for the frame of the called code
+    /** As QoreRcCallSiteHelper: the frame of the called code takes the location, so that it is located at the call
+        expression, as for an AST call; emitCallSiteClear() clears it after the call.
+    */
+    void emitCallSiteSet(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Clears the thread's call site after a call or when an exception leaves it; see emitCallSiteSet()
+    void emitCallSiteClear();
 
     // Initialize types and helpers
     void initTypes();
@@ -2051,12 +2101,7 @@ private:
             llvm::Module& module, std::string& error);
 };
 
-// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion() and
-// qore_ir_nothing_return_needs_filter() are declared in QoreIRAnalysis.h
-
-//! Returns true if the declared return type leaves every value returned by the function unchanged
-/** A call-site summary that substitutes the callee's returned value is only valid in this case
-*/
-DLLLOCAL bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type);
+// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion(),
+// qore_ir_nothing_return_needs_filter() and qore_ir_function_returns_pass_through() are declared in QoreIRAnalysis.h
 
 #endif

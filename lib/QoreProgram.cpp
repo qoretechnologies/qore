@@ -456,6 +456,11 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
+    // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
+    // while it was being constructed, after it was registered, has no hub yet
+    if (thread_hub) {
+        thread_hub->forkChild(tid, ++activity_gen, !own);
+    }
     if (parse_tid != tid) {
         // a thread of the parent was parsing; the parse does not go on in the child
         parse_count = 0;
@@ -532,7 +537,14 @@ QoreProgramRegistryForkHandler program_registry_fork_handler;
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
+    // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
+    // every Program wherever it is created, and before the Program is registered and can be found
+    if (qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
+    }
     registerProgram();
+    // the Program's ID is known now
+    thread_hub = new ProgramThreadHub(programId);
     // every member of this object now exists, so the Program can serve as a runtime context; until
     // this point code reached from the base constructor can see the Program but must not switch
     // into it
@@ -547,6 +559,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         for (const auto& i : dmap) {
             source_defines.insert(i.first);
         }
+    }
+}
+
+void qore_program_private::markSandboxedParse() {
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
     }
 }
 
@@ -565,14 +584,22 @@ class QoreProgramTeardownScope {
 public:
     QoreProgramTeardownScope(const QoreProgram* pgm) {
         qore_programs_torn_down.push_back(pgm);
+        counted = qore_thread_program_teardown_enter();
     }
 
     ~QoreProgramTeardownScope() {
+        if (counted) {
+            qore_thread_program_teardown_leave();
+        }
         qore_programs_torn_down.pop_back();
     }
 
     QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
     QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
+
+private:
+    //! the thread's data records the teardown (see qore_reference_program_needs_entry())
+    bool counted;
 };
 }
 
@@ -646,6 +673,12 @@ qore_program_private::~qore_program_private() {
     statementIds.clear();
     reverseStatementIds.clear();
     statementByLabelIndex.clear();
+
+    // threads that have left the Program and have not published FINISHED yet keep the hub
+    if (thread_hub) {
+        thread_hub->deref();
+        thread_hub = nullptr;
+    }
 
     assert(!parseSink);
     assert(!warnSink);
@@ -1562,29 +1595,25 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     joinThreadDataFamily(p_pgm);
 
     {
-        // make sure no parsing is running in the parent while we copy namespaces
-        ProgramRuntimeParseAccessHelper rah(0, p_pgm);
+        // keeps the parent from being cleared while its namespaces are copied; it takes no parse lock: the copy is
+        // made under the parent's namespace read lock, and ProgramControl::createEvalProgram() holds the parent's
+        // parse lock as well, so that no code is parsed in it meanwhile.  The parent is the current Program
+        // (Program::constructor()), or a Program that the caller holds a thread count on (createEvalProgram()), so
+        // its data are not cleared while they are copied, also if its deletion starts meanwhile, in which case
+        // entering it fails and the exception is discarded
+        ExceptionSink rah_xsink;
+        ProgramRuntimeParseAccessHelper rah(&rah_xsink, p_pgm);
+        rah_xsink.clear();
         // setup derived namespaces
         RootNS = qore_root_ns_private::copy(*p_pgm->priv->RootNS, n_parse_options, pgm);
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
-    // Inherit an explicit parent execution mode only while the child has the
-    // same effective parse options.  Otherwise the child must select its
-    // automatic mode from its own parse options (modern -> tiered, legacy ->
-    // AST), even if the parent was started with an explicit optimized mode.
+    // An explicit parent execution mode is inherited for as long as the child's parse options support it, including
+    // after they change (by the child's own %modern, for example); otherwise the child selects its automatic mode from
+    // its own parse options (modern -> tiered, legacy -> AST); see syncExecModeWithParseOptions()
     applyParseOptionImplications();
-    if (p_pgm->priv->user_requested_exec_mode
-        && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
-        exec_mode = p_pgm->priv->exec_mode;
-        user_requested_exec_mode = true;
-        inherited_user_requested_exec_mode = true;
-        inherited_exec_mode_parse_options = pwo.parse_options;
-    } else {
-        inherited_user_requested_exec_mode = false;
-        user_requested_exec_mode = false;
-        applyDefaultExecMode();
-    }
+    inheritExecMode(p_pgm->priv);
 
     // copy parent feature list; this Program is not visible to other threads yet, but the parent's list gains
     // entries while a module is loaded into the parent in another thread
@@ -1851,6 +1880,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // clear the thread entry and exit handlers: they ran for the destructors run above, which are the last code
         // that runs in the Program on behalf of other threads' data
         setThreadEntryHandler(nullptr, nullptr, xsink);
+
+        // no thread can start in the Program anymore: the lifecycle subscriptions are closed once the threads that
+        // have left it have published their FINISHED events
+        thread_hub->close(xsink);
 
         // free the thread-local data of every thread in this Program's family if it is a root; this is where the
         // data of the tearing-down thread used to be cleared, so that destructors run above can still use it
@@ -2121,9 +2154,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             }
 
             // After directives and extension-based defaults are known, choose
-            // the implicit execution mode.  Modern code defaults to tiered,
-            // which also validates the %modern IR-lowerability guarantee below.
-            applyDefaultExecMode();
+            // the execution mode: an inherited explicit mode if the final parse options support it (they may have
+            // been restored without a sync, see restoreParseOptions()), otherwise the implicit mode; modern code
+            // defaults to tiered, which also validates the %modern IR-lowerability guarantee below.
+            syncExecModeWithParseOptions();
 
             // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
             // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
@@ -2908,6 +2942,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
     setThreadEntryHandler(nullptr, nullptr, xsink);
+
+    // and lifecycle subscriptions
+    thread_hub->close(xsink);
 
     base_object = false;
 
@@ -3859,8 +3896,8 @@ void QoreProgram::parse(const char* code, const char* label, ExceptionSink* xsin
 
 void QoreProgram::parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
         bool only_first_except) {
-    priv->only_first_except = only_first_except;
-    priv->parseFile(filename, xsink, wS, wm);
+    // set with the parse lock held (see qore_program_private::parseFile())
+    priv->parseFile(filename, xsink, wS, wm, only_first_except);
 }
 
 void QoreProgram::parsePending(const QoreString* str, const QoreString* lstr, ExceptionSink* xsink, ExceptionSink* wS,
@@ -3970,6 +4007,12 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that the
+    // commit runs (see QoreCallerSandboxHelper)
+    QoreCallerSandboxHelper caller_sandbox(this, xsink);
+    if (*xsink) {
+        return;
+    }
     ProgramRuntimeParseCommitContextHelper pch(xsink, this);
     if (*xsink)
         return;
@@ -3982,8 +4025,8 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
 
 void QoreProgram::setExecMode(qore_exec_mode_t mode, bool user_requested) {
     priv->exec_mode = mode;
-    priv->user_requested_exec_mode = user_requested;
-    priv->inherited_user_requested_exec_mode = false;
+    priv->user_requested_exec_mode.store(user_requested, std::memory_order_release);
+    priv->inherited_user_requested_exec_mode.store(false, std::memory_order_release);
 }
 
 qore_exec_mode_t QoreProgram::getExecMode() const {
@@ -4284,6 +4327,12 @@ void QoreProgram::parseCmdLineDefines(const std::map<std::string, std::string> d
 }
 
 void QoreProgram::parseCmdLineDefines(ExceptionSink& xs, ExceptionSink& ws, int wm, const std::map<std::string, std::string>& defmap) {
+    // before the parse switches to the Program, as for any parse (see qore_program_private::parse())
+    QoreCallerSandboxHelper caller_sandbox(this, &xs);
+    if (xs) {
+        return;
+    }
+    priv->markSandboxedParse();
     ProgramRuntimeParseCommitContextHelper pch(&xs, this);
 
     if (xs) {
@@ -4725,6 +4774,15 @@ private:
             addCall(call->getVariant(), call->loc, nullptr, "constructor");
             return;
         }
+        // a declaration that creates an object: "C c(args)"
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (vrn->isObjectConstruct()) {
+                addArgs(vrn->getParseArgs(), vrn->getArgs());
+                addCall(vrn->getVariant(), vrn->loc, QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo()),
+                    "constructor");
+            }
+            return;
+        }
         if (auto* call = dynamic_cast<const AbstractMethodCallNode*>(node)) {
             addArgs(call->getParseArgs(), call->getArgs());
             addCall(call->getVariant(), call->loc, call->getClass(), call->getName());
@@ -4947,8 +5005,15 @@ void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
         if (sm) {
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
+            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
+            priv->sandboxed.store(true, std::memory_order_release);
         }
         old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
+        // after the manager is published: a thread that finds the new generation finds the manager (see
+        // ProgramThreadCountContextHelper::sandboxChainClear())
+        if (sm) {
+            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
+        }
     }
     if (old) {
         old->deref(nullptr);

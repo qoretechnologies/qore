@@ -1,0 +1,753 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class AppExternalIoTest
+
+#! Tests the external I/O declarations of data provider apps and the rule for sandboxed callers
+/** An app declares with \c external_io that it does I/O that the sandbox does not see, and with \c sandbox_aware
+    that it checks that I/O against its caller's policy; DataProviderActionCatalog::checkSandboxAccess() refuses a
+    sandboxed caller an app with \c external_io and without \c sandbox_aware, and never refuses a trusted caller
+*/
+public class AppExternalIoTest inherits QUnit::Test {
+    public {
+        #! The declaration combinations: declarations -> whether sandboxed callers may use the app
+        const Combinations = (
+            {"decl": {}, "allowed": True},
+            {"decl": {"external_io": True}, "allowed": False},
+            {"decl": {"external_io": True, "sandbox_aware": True}, "allowed": True},
+            {"decl": {"external_io": True, "sandbox_aware": False}, "allowed": False},
+            {"decl": {"sandbox_aware": True}, "allowed": True},
+            {"decl": {"external_io": False}, "allowed": True},
+            {"decl": {"external_io": False, "sandbox_aware": False}, "allowed": True},
+        );
+
+        #! The apps of ProviderIndexExternalIoFixture.qm and whether sandboxed callers may use them
+        const FixtureApps = {
+            "QoreTestIndexIoNone": True,
+            "QoreTestIndexIoExternal": False,
+            "QoreTestIndexIoAware": True,
+            "QoreTestIndexIoAwareOnly": True,
+            "QoreTestIndexIoFalse": True,
+        };
+
+        #! The declarations of the fixture apps, as in ProviderIndexExternalIoFixture.qm
+        const FixtureDeclarations = {
+            "QoreTestIndexIoNone": {},
+            "QoreTestIndexIoExternal": {"external_io": True},
+            "QoreTestIndexIoAware": {"external_io": True, "sandbox_aware": True},
+            "QoreTestIndexIoAwareOnly": {"sandbox_aware": True},
+            "QoreTestIndexIoFalse": {"external_io": False, "sandbox_aware": False},
+        };
+    }
+
+    private {
+        # registers the provider module in QORE_PROVIDER_INDEX_FIXTURE_MODULE
+        string registration_module = normalize_dir(get_script_dir()) + "/ProviderIndexEnvironmentMapFixture.qm";
+        # registers the fixture apps
+        string fixture_module = normalize_dir(get_script_dir()) + "/ProviderIndexExternalIoFixture.qm";
+        # registers a factory and an app with external I/O that is not sandbox-aware
+        string external_factory_module = normalize_dir(get_script_dir()) + "/ExternalIoFactoryFixture.qm";
+        # registers a factory and an app with sandbox-aware external I/O
+        string aware_factory_module = normalize_dir(get_script_dir()) + "/SandboxAwareFactoryFixture.qm";
+        # registers a factory and a deferred app with external I/O that is not sandbox-aware
+        string pending_module = normalize_dir(get_script_dir()) + "/PendingExternalIoFixture.qm";
+        # registers a factory and a deferred app whose initialization fails
+        string pending_fail_module = normalize_dir(get_script_dir()) + "/PendingFailFixture.qm";
+        # an index published by origin/develop's DataProvider before the declarations existed
+        string develop_index = normalize_dir(get_script_dir()) + "/ProviderIndexDevelopFixture";
+
+        # environment variables changed by the tests and their original values
+        hash<string, auto> saved_env;
+
+        # the index directory of the environment, restored when the test ends
+        *string ambient_index_dir;
+        # an empty index directory used instead of it
+        string empty_index_dir;
+    }
+
+    constructor() : Test("DataProvider app external I/O declarations", "1.0") {
+        addTestCase("the declarations are registered and returned with the app", \registrationTest());
+        addTestCase("the declarations must be booleans and cannot change on re-registration",
+            \registrationNegativeTest());
+        addTestCase("isSandboxAllowed() decides by the declarations", \allowedTest());
+        addTestCase("the decision by name is made from the registered app", \byNameTest());
+        addTestCase("info that is not a typed app never decides", \untypedTest());
+        addTestCase("a trusted caller is never refused", \trustedTest());
+        addTestCase("an explicitly sandboxed caller is refused an undeclared external I/O app",
+            \explicitSandboxedTest());
+        addTestCase("a sandboxed caller is refused an undeclared external I/O app", \sandboxedTest());
+        addTestCase("a system-policy capability called by sandboxed code is refused unless it says it is trusted",
+            \capabilityTest());
+        addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
+        addTestCase("the catalog refuses sandboxed code the factories of a module with such an app",
+            \centralFactoryTest());
+        addTestCase("sandboxed code registers nothing in the process-wide catalog", \sandboxedRegistrationTest());
+        addTestCase("a trusted lazy registration runs for a sandboxed reader", \trustedLazyRegistrationTest());
+        addTestCase("a subclass of a refused factory is refused", \factorySubclassTest());
+        addTestCase("an action hash naming an allowed app is decided by the class it creates", \forgedActionTest());
+        addTestCase("a factory of a module with a deferred app is decided by the app's declarations",
+            \pendingAppTest());
+        addTestCase("the declarations survive the provider index", \indexRoundTripTest());
+        addTestCase("an index published before the declarations existed is read", \developIndexTest());
+        addTestCase("an index of an app that is not registered reports it as unavailable", \indexMissingAppTest());
+        set_return_value(main());
+    }
+
+    #! Isolates the test from an ambient provider index: by-name decisions read the index for apps not loaded
+    globalSetUp() {
+        ambient_index_dir = getenv(ProviderIndexEnvVar);
+        empty_index_dir = make_tmp_dir();
+        ProviderIndexUtil::setEnvironmentVariable(empty_index_dir);
+        resetIndexState();
+    }
+
+    globalTearDown() {
+        if (ambient_index_dir) {
+            ProviderIndexUtil::setEnvironmentVariable(ambient_index_dir);
+        }
+        remove_tree(empty_index_dir);
+    }
+
+        #! Returns the info of a test app with the given declarations
+    private static hash<DataProviderAppInfo> appInfo(string app, hash<auto> decl = {}) {
+        return cast<hash<DataProviderAppInfo>>({
+            "name": app,
+            "display_name": app + " Display",
+            "short_desc": "external I/O test",
+            "desc": "external I/O test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        } + decl);
+    }
+
+    private static string newName(string prefix) {
+        return prefix + "_" + get_random_string(8);
+    }
+
+    #! Returns a Program with a sandbox that calls the code it is given
+    private static Program getSandboxed(int opts = PO_NEW_STYLE) {
+        SandboxManager sm();
+        sm.blockPrivateNetworks();
+        sm.setNetworkDefaultPolicy(True);
+        Program p(opts);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "app-external-io-sandbox");
+        return p;
+    }
+
+    #! Asserts that a sandboxed caller is refused the app, with an error naming it
+    private assertRefused(hash<auto> app, code check, string label) {
+        try {
+            check();
+            fail(label + ": the app was not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("APP-SANDBOX-ACCESS-DENIED", ex.err, label);
+            assertRegex(app.name, ex.desc, label + ": the error names the app");
+            assertRegex(app.display_name ?? app.name, ex.desc, label + ": the error has the display name");
+        }
+    }
+
+    registrationTest() {
+        foreach hash<auto> c in (Combinations) {
+            string name = newName("AppExternalIoReg");
+            DataProviderActionCatalog::registerApp(appInfo(name, c.decl));
+            hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(name);
+            assertEq(c.decl.external_io, app.external_io, sprintf("%y: external_io", c.decl));
+            assertEq(c.decl.sandbox_aware, app.sandbox_aware, sprintf("%y: sandbox_aware", c.decl));
+            # the app is listed with its declarations without initializing anything
+            *hash<DataProviderAppInfo> listed = (map $1, DataProviderActionCatalog::getAllAppsNoInit(),
+                $1.name == name)[0];
+            assertEq(c.decl.external_io, listed.external_io, sprintf("%y: listed external_io", c.decl));
+            assertEq(c.decl.sandbox_aware, listed.sandbox_aware, sprintf("%y: listed sandbox_aware", c.decl));
+            # registering the same definition again is accepted
+            DataProviderActionCatalog::registerApp(appInfo(name, c.decl));
+            assertEq(c.decl.external_io, DataProviderActionCatalog::getAppEx(name).external_io,
+                sprintf("%y: unchanged by an identical registration", c.decl));
+        }
+    }
+
+    registrationNegativeTest() {
+        # the declarations are booleans
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { appInfo(newName("AppExternalIoType"), {"external_io": "yes"}); });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { appInfo(newName("AppExternalIoType"), {"sandbox_aware": 1}); });
+
+        # a module cannot change the declarations of an app that is registered: neither remove them nor add them
+        string name = newName("AppExternalIoChange");
+        DataProviderActionCatalog::registerApp(appInfo(name, {"external_io": True}));
+        assertThrows("APP-ERROR", \DataProviderActionCatalog::registerApp(), appInfo(name),
+            "the external I/O declaration cannot be removed");
+        assertThrows("APP-ERROR", \DataProviderActionCatalog::registerApp(),
+            appInfo(name, {"external_io": True, "sandbox_aware": True}),
+            "an app cannot be made sandbox-aware by another registration");
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(name);
+        assertTrue(app.external_io, "the registered declaration is kept");
+        assertNothing(app.sandbox_aware, "the registered declaration is kept");
+    }
+
+    allowedTest() {
+        foreach hash<auto> c in (Combinations) {
+            assertEq(c.allowed, DataProviderActionCatalog::isSandboxAllowed(appInfo("AppExternalIoAllowed", c.decl)),
+                sprintf("%y", c.decl));
+        }
+    }
+
+    byNameTest() {
+        foreach hash<auto> c in (Combinations) {
+            string name = newName("AppExternalIoByName");
+            DataProviderActionCatalog::registerApp(appInfo(name, c.decl));
+            assertEq(c.allowed, DataProviderActionCatalog::isSandboxAllowed(name), sprintf("%y", c.decl));
+            # the registered app decides, not info that a caller gives
+            hash<DataProviderAppInfo> forged = appInfo(name, {"external_io": True, "sandbox_aware": True});
+            assertTrue(DataProviderActionCatalog::isSandboxAllowed(forged));
+            if (c.allowed) {
+                DataProviderActionCatalog::checkSandboxAccess(name, True);
+            } else {
+                assertRefused(appInfo(name), sub () { DataProviderActionCatalog::checkSandboxAccess(name, True); },
+                    sprintf("%y", c.decl));
+            }
+            DataProviderActionCatalog::checkSandboxAccess(name, False);
+            DataProviderActionCatalog::checkSandboxAccess(name);
+        }
+        # an app that is registered nowhere cannot be decided on: sandboxed callers are refused it
+        string unknown = newName("AppExternalIoUnknown");
+        assertFalse(DataProviderActionCatalog::isSandboxAllowed(unknown));
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not registered", \DataProviderActionCatalog::checkSandboxAccess(),
+            (unknown, True));
+        DataProviderActionCatalog::checkSandboxAccess(unknown, False);
+        Program p = getSandboxed();
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not registered", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(unknown); });
+        });
+    }
+
+    untypedTest() {
+        # a plain hash is not an app's registered info: it is rejected, never decided on
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = {"name": "x", "external_io": True};
+            DataProviderActionCatalog::isSandboxAllowed(info);
+        });
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = {"name": "x", "external_io": True};
+            DataProviderActionCatalog::checkSandboxAccess(info, True);
+        });
+        # a stringified boolean cannot be made into a declaration that allows the app
+        foreach hash<auto> decl in ({"external_io": "false"}, {"external_io": True, "sandbox_aware": "true"},
+                {"external_io": 0}, {"sandbox_aware": "1"}) {
+            assertThrows("RUNTIME-TYPE-ERROR", sub () { appInfo("AppExternalIoString", decl); }, NOTHING,
+                sprintf("%y", decl));
+        }
+        # a wrong typed hash is not an app's info
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = <ExceptionInfo>{"err": "x", "desc": "y"};
+            DataProviderActionCatalog::isSandboxAllowed(info);
+        });
+    }
+
+    trustedTest() {
+        assertFalse(SandboxManager::isSandboxed(), "the test runs trusted");
+        foreach hash<auto> c in (Combinations) {
+            hash<DataProviderAppInfo> app = appInfo("AppExternalIoTrusted", c.decl);
+            DataProviderActionCatalog::checkSandboxAccess(app);
+            DataProviderActionCatalog::checkSandboxAccess(app, False);
+        }
+        # the trusted calls above returned for every combination, including the refused one
+        assertEq(7, Combinations.size());
+    }
+
+    explicitSandboxedTest() {
+        # a consumer that serves a sandboxed caller from a trusted thread
+        foreach hash<auto> c in (Combinations) {
+            hash<DataProviderAppInfo> app = appInfo("AppExternalIoExplicit", c.decl);
+            code check = sub () { DataProviderActionCatalog::checkSandboxAccess(app, True); };
+            if (c.allowed) {
+                check();
+            } else {
+                assertRefused(app, check, sprintf("%y", c.decl));
+            }
+        }
+    }
+
+    sandboxedTest() {
+        foreach int opts in (PO_NEW_STYLE, PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS) {
+            Program p = getSandboxed(opts);
+            string label = opts & PO_NO_UNCONTROLLED_APIS ? "restricted sandbox" : "sandbox";
+            assertTrue(p.callFunction("through", \SandboxManager::isSandboxed()), label + ": the caller is sandboxed");
+            foreach hash<auto> c in (Combinations) {
+                hash<DataProviderAppInfo> app = appInfo("AppExternalIoSandboxed", c.decl);
+                code check = sub () {
+                    p.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app); });
+                };
+                if (c.allowed) {
+                    check();
+                } else {
+                    assertRefused(app, check, sprintf("%s: %y", label, c.decl));
+                }
+                # a consumer that knows its caller is trusted decides so explicitly
+                p.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, False); });
+            }
+        }
+    }
+
+    capabilityTest() {
+        Program p = getSandboxed();
+        hash<DataProviderAppInfo> app = appInfo("AppExternalIoCapability", {"external_io": True});
+        code check = sub () { DataProviderActionCatalog::checkSandboxAccess(app); };
+        assertRefused(app, sub () { p.callFunction("through", check); }, "called directly from the sandbox");
+        # the default fails closed: a capability called by sandboxed code still serves a sandboxed caller
+        assertRefused(app, sub () { p.callFunction("through", SandboxManager::createSystemPolicyCall(check)); },
+            "a system-policy capability called by sandboxed code");
+        assertRefused(app, sub () {
+            p.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(check); });
+        }, "a policy barrier in sandboxed code");
+        # trusted code that uses the app on purpose in a capability says so
+        p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
+            DataProviderActionCatalog::checkSandboxAccess(app, False);
+        }));
+    }
+
+    centralActionTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        hash<DataProviderActionInfo> external = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestExternalIoFactoryApp", "run");
+        hash<DataProviderActionInfo> aware = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestSandboxAwareFactoryApp", "run");
+        # sandboxed code that uses the catalog directly is refused, with no consumer involved
+        assertRefused(DataProviderActionCatalog::getAppEx("QoreTestExternalIoFactoryApp"), sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(external); });
+        }, "sandboxed: external I/O");
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getDataProviderForAction(aware).getName();
+        }), "sandboxed: sandbox-aware");
+        # trusted code is not refused
+        assertEq("ExternalIoFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(external).getName());
+        assertEq("SandboxAwareFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(aware).getName());
+    }
+
+    centralFactoryTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        string app = "QoreTestExternalIoFactoryApp";
+        # every factory getter that creates a provider
+        hash<string, code> getters = {
+            "getFactoryObject": auto sub (string f) { return DataProvider::getFactoryObject(f); },
+            "getFactoryObjectFromString": auto sub (string f) { return DataProvider::getFactoryObjectFromString(f); },
+            "getFactoryObjectFromStringUseEnv": auto sub (string f) {
+                return DataProvider::getFactoryObjectFromStringUseEnv(f);
+            },
+            "getFactoryObjectWithTemplate": auto sub (string f) {
+                return DataProvider::getFactoryObjectWithTemplate(f, NOTHING, NOTHING);
+            },
+        };
+        foreach hash<auto> g in (getters.pairIterator()) {
+            code get = g.value;
+            try {
+                p.callFunction("through", sub () { get("qoretestexternalio"); });
+                fail(g.key + ": the factory was not refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("APP-SANDBOX-ACCESS-DENIED", ex.err, g.key);
+                assertRegex(app, ex.desc, g.key + ": the error names the app");
+                assertRegex("qoretestexternalio", ex.desc, g.key + ": the error names the factory");
+            }
+            assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+                return get("qoretestsandboxaware").getName();
+            }), g.key + ": sandbox-aware");
+            # a factory of a module without such an app
+            assertEq("NullDataProvider", p.callFunction("through", auto sub () { return get("null").getName(); }),
+                g.key + ": null factory");
+            # trusted code is not refused
+            assertEq("ExternalIoFixtureProvider", get("qoretestexternalio").getName(), g.key + ": trusted");
+        }
+
+        # a factory returned by getFactory() or getFactoryEx(), or created directly, creates no provider for sandboxed
+        # code; its info can still be read
+        hash<string, code> factories = {
+            "getFactory": AbstractDataProviderFactory sub () { return DataProvider::getFactory("qoretestexternalio"); },
+            "getFactoryEx": AbstractDataProviderFactory sub () {
+                return DataProvider::getFactoryEx("qoretestexternalio");
+            },
+            "created directly": AbstractDataProviderFactory sub () {
+                return Class::forName("ExternalIoFixtureFactory").newObject();
+            },
+        };
+        hash<string, code> creators = {
+            "create": auto sub (AbstractDataProviderFactory f) { return f.create(); },
+            "createWithTemplate": auto sub (AbstractDataProviderFactory f) { return f.createWithTemplate({}, {}); },
+            "getProviderFromExample(data)": auto sub (AbstractDataProviderFactory f) {
+                return f.getProviderFromExample("example");
+            },
+            "getProviderFromExample(InputStream)": auto sub (AbstractDataProviderFactory f) {
+                return f.getProviderFromExample(new StringInputStream("example"));
+            },
+            "getExampleProviderRecordOutput(data)": auto sub (AbstractDataProviderFactory f) {
+                return f.getExampleProviderRecordOutput("example");
+            },
+            "getExampleProviderRecordOutput(InputStream)": auto sub (AbstractDataProviderFactory f) {
+                return f.getExampleProviderRecordOutput(new StringInputStream("example"));
+            },
+        };
+        foreach hash<auto> fi in (factories.pairIterator()) {
+            code get_factory = fi.value;
+            assertEq("qoretestexternalio", p.callFunction("through", auto sub () {
+                return get_factory().getInfo().name;
+            }), fi.key + ": the info can be read");
+            foreach hash<auto> ci in (creators.pairIterator()) {
+                code create = ci.value;
+                string label = fi.key + ": " + ci.key;
+                try {
+                    p.callFunction("through", sub () { create(get_factory()); });
+                    fail(label + ": not refused");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("APP-SANDBOX-ACCESS-DENIED", ex.err, label);
+                    assertRegex(app, ex.desc, label + ": the error names the app");
+                }
+            }
+            # trusted code creates the provider
+            assertEq("ExternalIoFixtureProvider", get_factory().create().getName(), fi.key + ": trusted");
+        }
+        # a sandbox-aware module's factory creates providers for sandboxed code
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProvider::getFactoryEx("qoretestsandboxaware").create().getName();
+        }));
+    }
+
+    sandboxedRegistrationTest() {
+        load_module(external_factory_module);
+        Program p = getSandboxed();
+        # a name that the tenant would take from the module that owns it
+        string name = newName("AppExternalIoSquat");
+        hash<DataProviderAppInfo> info = appInfo(name);
+        # an app that trusted code registered, controlled: a tenant must not add actions or a file API to it
+        string owned = newName("AppExternalIoOwned");
+        DataProviderActionCatalog::registerApp(appInfo(owned));
+        hash<DataProviderActionInfo> action = <DataProviderActionInfo>{
+            "app": owned, "action": "tenant", "path": "/tenant", "display_name": "tenant", "short_desc": "tenant",
+            "desc": "tenant", "action_code": DPAT_API, "cls": "ExternalIoFixtureProvider",
+        };
+        string type_path = "/qore/test/" + newName("AppExternalIoType");
+        foreach hash<auto> i in ({
+            "registerAction": sub () { DataProviderActionCatalog::registerAction(action); },
+            "registerPendingAppAction": sub () {
+                DataProviderActionCatalog::registerPendingAppAction(owned, "tenant", sub () {
+                    DataProviderActionCatalog::registerAction(action);
+                });
+            },
+            "registerLazyAppActions": sub () {
+                DataProviderActionCatalog::registerLazyAppActions(owned, sub () {
+                    DataProviderActionCatalog::registerAction(action);
+                });
+            },
+            "registerAppFileApi": sub () {
+                DataProviderActionCatalog::registerAppFileApi(owned, <DataProviderFileApiInfo>{
+                    "read_action": "tenant", "read_path_option": "path",
+                });
+            },
+            "registerType": sub () {
+                DataProvider::registerType(type_path, AbstractDataProviderType::get(StringType));
+            },
+            "registerApp": sub () { DataProviderActionCatalog::registerApp(info); },
+            "registerPendingApp": sub () {
+                DataProviderActionCatalog::registerPendingApp(name, sub () {
+                    DataProviderActionCatalog::registerApp(info);
+                });
+            },
+            "registerFactory": sub () {
+                DataProvider::registerFactory(Class::forName("ExternalIoFixtureFactory").newObject());
+            },
+        }.pairIterator()) {
+            code reg = i.value;
+            assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", "sandboxed code cannot register", sub () {
+                p.callFunction("through", reg);
+            }, NOTHING, i.key);
+        }
+        # nothing was registered: no action of the owned app, no file API, no type
+        assertNothing(DataProviderActionCatalog::getAppAction(owned, "tenant"), "no action was added to the app");
+        assertNothing(DataProviderActionCatalog::getAppFileApi(owned), "no file API was attached to the app");
+        assertNothing(DataProvider::getType(type_path), "no type was registered");
+        # the name is not taken: the owner registers it with its own declarations
+        assertNothing(DataProviderActionCatalog::getApp(name), "the refused registration left nothing");
+        DataProviderActionCatalog::registerApp(appInfo(name, {"external_io": True}));
+        assertTrue(DataProviderActionCatalog::getAppEx(name).external_io);
+        assertFalse(DataProviderActionCatalog::isSandboxAllowed(name));
+        # the same registrations through a system-policy capability called by sandboxed code, or under a policy
+        # barrier, are refused too
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
+            p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
+                DataProviderActionCatalog::registerApp(appInfo(newName("AppExternalIoSquat")));
+            }));
+        });
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
+            p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
+                DataProviderActionCatalog::registerAction(action);
+            }));
+        }, NOTHING, "registerAction in a capability");
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
+            p.callFunction("through", sub () {
+                SandboxManager::callWithSystemPolicy(sub () { DataProviderActionCatalog::registerAction(action); });
+            });
+        }, NOTHING, "registerAction under a policy barrier");
+        assertNothing(DataProviderActionCatalog::getAppAction(owned, "tenant"));
+        # trusted code registers the same action
+        DataProviderActionCatalog::registerAction(action);
+        assertEq("tenant", DataProviderActionCatalog::getAppActionEx(owned, "tenant").action);
+    }
+
+    trustedLazyRegistrationTest() {
+        # a lazy registration that trusted code made runs when a sandboxed reader first reads the app, and its
+        # registrations are not refused
+        string app = newName("AppExternalIoLazy");
+        DataProviderActionCatalog::registerApp(appInfo(app));
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": app, "action": "lazy", "path": "/lazy", "display_name": "lazy", "short_desc": "lazy",
+                "desc": "lazy", "action_code": DPAT_API,
+            });
+        });
+        Program p = getSandboxed();
+        assertEq("lazy", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getAppActionEx(app, "lazy").action;
+        }));
+    }
+
+    factorySubclassTest() {
+        load_module(external_factory_module);
+        # a factory class defined outside the module, inheriting the refused one under another name
+        Program sub_pgm(PO_NEW_STYLE);
+        sub_pgm.loadModule("DataProvider");
+        sub_pgm.loadModule(external_factory_module);
+        sub_pgm.parse("class RenamedFactory inherits ExternalIoFixtureFactory {\n"
+            "    private hash<DataProviderFactoryInfo> getInfoImpl() {\n"
+            "        return <DataProviderFactoryInfo>{\"name\": \"renamed-external-io\", \"desc\": \"renamed\"};\n"
+            "    }\n"
+            "}\n"
+            "AbstractDataProviderFactory sub make() { return new RenamedFactory(); }\n", "factory-subclass");
+        AbstractDataProviderFactory factory = sub_pgm.callFunction("make");
+        assertEq("renamed-external-io", factory.getName());
+        Program p = getSandboxed();
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { factory.create(); });
+        });
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () { factory.createWithTemplate({}, {}); });
+        });
+        # trusted code creates the provider
+        assertEq("ExternalIoFixtureProvider", factory.create().getName());
+    }
+
+    forgedActionTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        hash<DataProviderActionInfo> aware = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestSandboxAwareFactoryApp", "run");
+        hash<DataProviderActionInfo> external = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestExternalIoFactoryApp", "run");
+        # the allowed app's action with the class of the app that is not allowed
+        hash<DataProviderActionInfo> forged = cast<hash<DataProviderActionInfo>>(aware + external{"cls", "cls_mod"});
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(forged); });
+        }, NOTHING, "a forged action");
+        # an action that is not registered, with the class of the app that is not allowed
+        hash<DataProviderActionInfo> unregistered = cast<hash<DataProviderActionInfo>>(forged
+            + {"action": newName("unregistered")});
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestExternalIoFactoryApp", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(unregistered); });
+        }, NOTHING, "an unregistered action");
+        # the registered action is allowed
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getDataProviderForAction(aware).getName();
+        }), "the registered action");
+        # trusted code is not refused
+        assertEq("ExternalIoFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(forged).getName(),
+            "trusted code");
+    }
+
+    pendingAppTest() {
+        load_module(pending_module);
+        load_module(pending_fail_module);
+        Program p = getSandboxed();
+        # trusted code is not refused and does not initialize the app
+        assertEq("PendingExternalIoProvider", DataProvider::getFactoryObject("qoretestpendingexternalio").getName(),
+            "trusted code");
+        # a sandboxed caller initializes the deferred app first, and is refused by its declarations
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestPendingExternalIoApp", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingexternalio"); });
+        }, NOTHING, "a deferred external I/O app");
+        assertTrue(DataProviderActionCatalog::getAppEx("QoreTestPendingExternalIoApp").external_io,
+            "the deferred app was initialized");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "QoreTestPendingExternalIoApp", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingexternalio"); });
+        }, NOTHING, "the decision after the initialization");
+
+        # a deferred app that cannot be initialized cannot be decided: a sandboxed caller is refused
+        assertEq("PendingFailProvider", DataProvider::getFactoryObject("qoretestpendingfail").getName(),
+            "trusted code: a failing deferred app");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "could not be initialized", sub () {
+            p.callFunction("through", sub () { DataProvider::getFactoryObject("qoretestpendingfail"); });
+        }, NOTHING, "a deferred app that cannot be initialized");
+        assertNothing(DataProviderActionCatalog::getApp("QoreTestPendingFailApp"), "the app was not registered");
+    }
+
+    indexRoundTripTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+%ifdef NoProcess
+        testSkip("no process module 2.2 or later");
+%endif
+        setEnv("QORE_DATA_PROVIDERS", registration_module);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", fixture_module);
+        # a worker process loads the fixture module and writes the metadata of its apps: the apps are not registered
+        # in this process, so what is read below comes from the index
+        ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_typescript_actions": False,
+            "workers": 1,
+            "apps": keys FixtureApps,
+        });
+        hash<string, bool> registered = map {$1: True}, DataProviderActionCatalog::getAppNamesNoInit();
+        foreach string app in (keys FixtureApps) {
+            assertFalse(registered{app} ?? False, app + ": only in the index");
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        foreach hash<auto> i in (FixtureApps.pairIterator()) {
+            *hash<auto> app = ProviderIndexUtil::tryGetAppInfo(i.key);
+            assertEq(i.key, app.name, i.key + ": indexed");
+            hash<auto> decl = FixtureDeclarations{i.key};
+            assertEq(decl.external_io, app.external_io, i.key + ": external_io read from the index");
+            assertEq(decl.sandbox_aware, app.sandbox_aware, i.key + ": sandbox_aware read from the index");
+            # by name: the registered info, here the index's
+            assertEq(i.value, DataProviderActionCatalog::isSandboxAllowed(i.key), i.key + ": decision from the index");
+            string name = i.key;
+            if (i.value) {
+                DataProviderActionCatalog::checkSandboxAccess(name, True);
+            } else {
+                assertRefused(app, sub () { DataProviderActionCatalog::checkSandboxAccess(name, True); },
+                    i.key + ": refused from the index");
+            }
+        }
+    }
+
+    indexMissingAppTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        # an app filter that matches no registered app builds an index without it and reports the app as
+        # unavailable; the build raised a RUNTIME-TYPE-ERROR, as the list of apps to index was left without a value
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        # no ambient provider modules: only the app filter decides what is indexed
+        setEnv("QORE_DATA_PROVIDERS");
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE");
+        string app = newName("AppExternalIoNotRegistered");
+        hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_typescript_actions": False,
+            "workers": 0,
+            "apps": (app,),
+        });
+        hash<DataProviderDiscoveryReportInfo> report = info.summary.qualification;
+        assertEq((), report.failures, "no failure blocks the build");
+        assertFalse(report.complete, "the index is not complete");
+        assertEq((app,), map $1.app, report.unavailable, "the missing app is reported as unavailable");
+        assertEq(0, info.summary.apps, "no app is indexed");
+    }
+
+    developIndexTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        # the fixture is read from a copy, so that reading it cannot change the committed files
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        Dir src();
+        src.chdir(develop_index);
+        foreach string file in (src.listFiles()) {
+            copy_file(develop_index + DirSep + file, dir + DirSep + file);
+        }
+        # ProviderIndexUtil reads the index directory from its own environment
+        *string prev_index_dir = getenv(ProviderIndexEnvVar);
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        on_exit if (prev_index_dir) {
+            ProviderIndexUtil::setEnvironmentVariable(prev_index_dir);
+        }
+        # the index of an earlier test case may be in use: read this one instead of it
+        hash<ProviderIndexReloadInfo> reload = ProviderIndexUtil::reloadIndex();
+        assertTrue(reload.reloaded, sprintf("reloaded: %y", reload.error));
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        foreach string app in ("QoreTestIndexHealthyApp", "QoreTestIndexPartialApp") {
+            *hash<auto> info = ProviderIndexUtil::tryGetAppInfo(app);
+            assertEq(app, info.name, app + ": read");
+            assertNothing(info.external_io, app + ": no declaration");
+            assertNothing(info.sandbox_aware, app + ": no declaration");
+            assertTrue(DataProviderActionCatalog::isSandboxAllowed(app), app + ": allowed");
+        }
+    }
+
+    #! Sets a process environment variable until restoreEnv() is called
+    private setEnv(string var, *string value) {
+        if (!saved_env.hasKey(var)) {
+            saved_env{var} = getenv(var);
+        }
+        if (exists value) {
+            setenv(var, value);
+            ENV{var} = value;
+        } else {
+            unsetenv(var);
+            remove ENV{var};
+        }
+    }
+
+    #! Restores the environment variables changed by setEnv()
+    private restoreEnv() {
+        foreach hash<auto> i in (saved_env.pairIterator()) {
+            if (exists i.value) {
+                setenv(i.key, i.value);
+                ENV{i.key} = i.value;
+            } else {
+                unsetenv(i.key);
+                remove ENV{i.key};
+            }
+        }
+        saved_env = {};
+    }
+
+    #! Makes ProviderIndexUtil read the index again
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+}

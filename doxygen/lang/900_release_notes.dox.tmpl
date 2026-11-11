@@ -80,6 +80,17 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
+    flagged @ref NOOP are no longer resolved at run time, as at parse time: <tt>sort(NOTHING)</tt>, for example with
+    an unassigned member, and the other no-op calls raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant
+    value; <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing keep returning \c 0 (regular variants now).
+
+    @par Call Stack Frames Are Located at Their Calls
+    Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
+    its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
+    more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
     @par The Implicit Index Is Unset Outside the Code of Its Operator
     An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
     map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
@@ -97,21 +108,47 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Restricted Code Cannot Change a Module's State
+    The code of a sandboxed %Program, or of a %Program with \c PO_NO_PROCESS_CONTROL set, can read but no longer
+    change the public variables of a trusted module or the static members of its classes, which every importer
+    shares: a change raises \c MODULE-VARIABLE-READ-ONLY, and such code must call a function or method that the
+    module exports to set the value; see @ref module_public_variables.
+
+    @par Modules May Not Declare Public thread_local Variables
+    A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
+    compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module
+    compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
+    %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
+
+    @par The Descriptor of a Socket Is Not Available to Qore Code
+    \c Socket::getSocket() is removed and @ref Qore::Socket::getPollableDescriptor() "Socket::getPollableDescriptor()"
+    raises \c SOCKET-DESCRIPTOR-ERROR: every operation on a socket is made by the async I/O controller, which owns
+    its non-blocking descriptor; a poll operation that waits for a socket gives the socket itself
+    (@ref Qore::ExtraPollFdInfo "ExtraPollFdInfo" \c pollable).
+
+    @par Destructors Cannot Assign Thread-Local Variables While a Worker Thread Releases Its Values
+    A worker thread of a @ref Qore::Thread::ThreadPool "ThreadPool" or of the
+    @ref Qore::AsyncIoController "AsyncIoController" releases the values of its @ref thread_local variables between
+    its tasks; as at the end of a thread, the destructors that the release runs now cannot assign
+    <tt><b>thread_local</b></tt> variables (\c DESTRUCTOR-ERROR): a destructor giving a variable a value whose
+    destructor gave it a value again kept the worker releasing values for ever (see @ref thread_local_lifetime)
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;
     both are now parse errors.
 
-    @par Module Code Runs with the Restrictions of Its Caller
-    A method of a user-module class, a closure created in module code and the module code they call run with the
-    restrictions of their caller as well as their own, and a module function looks up names at run time in its
-    caller's %Program, where only the module's exported names exist; see @ref user_module_runtime_context.
+    @par Module Code Runs in the Module's Program
+    User code called from another %Program, such as a module function, a method of a module class or a function
+    imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
+    it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
+    and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of
-    member accesses and method calls, lives until the end of its statement instead of until the call that used it
-    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  See
-    @ref temporary_lifetime.
+    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
+    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
+    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
+    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -512,6 +549,12 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par Destructors on a Cancelled or Interrupted Thread
+    The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
+    so it completes, the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
+    limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
+    @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -521,6 +564,12 @@
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
+
+    @par Program Thread Lifecycle Events
+    @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()" delivers events to a
+    @ref Qore::Thread::Queue "Queue" when the Program's background threads start, are asked to cancel and end (with
+    how they ended), and when the Program becomes idle or active
+    (<a href="https://github.com/qoretechnologies/qore/issues/5633">issue 5633</a>).
 
     @par Waiting for a Thread to Terminate
     @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
@@ -774,8 +823,15 @@
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
-    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes; see
+    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
+    an operation against a captured policy on any thread; see
     @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread".
+
+    @par Sandboxing I/O That Qore Does Not See
+    Java code called through the \c jni module checks its own I/O with \c org.qore.jni.QoreSandbox; data provider
+    apps declare I/O that the sandbox does not see with the new \c external_io and \c sandbox_aware fields, and
+    sandboxed callers are refused the actions, factories and connections of an app that is not sandbox-aware (see
+    @ref sandbox_external_io).
 
     @par C++ API: Cancellable Waits in Binary Modules
     \c qore_cancellable_poll() and the \c QoreCancelWakeupHelper class let a binary module's waits end when the
@@ -1488,6 +1544,71 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
+      dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
+      at exit; the records of the module that the reload replaces are now kept until the module is deleted
+    - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
+      @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
+      and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output
+      now matches the AST interpreter
+    - qcc (and <tt>qore --compile</tt>) now fails the build when the top-level code of a program cannot be lowered to
+      native code, as it does for a function; it wrote an executable that did nothing and exited with status 0
+    - the AST interpreter added a @ref timeout_type "timeout" variable to a @ref date_type "date" of no declared type
+      (such as the argument of a @ref map "map" expression) as seconds instead of milliseconds with the \c + operator,
+      unlike the \c - operator and the IR, JIT and AOT modes; a \c *timeout operand counts as milliseconds too, in every
+      mode, with the \c + and \c - operators (a \c softint or \c int operand is still seconds)
+    - the value of a @ref thread_local "thread_local" variable could be read by the code of a
+      @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
+      another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
+      threads other than the deleting one were kept until the threads ended, and their destructors could raise
+      \c PROGRAM-ERROR; the values of every thread are now released with the variable, and a thread that ends or
+      clears its values while the Program is deleted in another thread releases them while the Program can still run
+      their destructors (see @ref thread_local_lifetime)
+    - a thread that ended made every @ref thread_local "thread_local" variable that a destructor read while it ended
+      read-only in every thread ("illegal variable assignment after second phase of variable destruction")
+    - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
+      function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
+      @ref references_overview)
+    - calling a @ref call_reference "call reference" to a function of a deleted @ref Qore::Program "Program", made in
+      that Program (for example returned by one of its functions), crashed or returned a wrong value; it now raises a
+      \c PROGRAM-ERROR exception, as a call of a reference made in a Program that imported the function does
+    - calling a function imported with @ref Qore::Program::importFunction() "Program::importFunction()" after the
+      @ref Qore::Program "Program" it was imported from had been deleted used the freed data of that Program and could
+      crash; it now raises a \c PROGRAM-ERROR exception, as documented
+    - a thread running the code of a @ref Qore::Program "Program" whose deletion waited for it could not call into the
+      Program again through the code of another Program (\c PROGRAM-ERROR); see @ref threads_and_program_deletion
+    - in the IR, JIT and tiered execution modes, leaving the scope of a variable holding a reference to a lvalue that
+      was gone, such as a member of a deleted object, raised an exception that the AST interpreter does not raise
+    - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
+      pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
+      links them by their full paths
+    - a call whose argument is returned as a reference from another call (ex: <tt>d.m(c.get())</tt>, with
+      <tt>reference&lt;int&gt; get()</tt>) could select a variant with a parameter of the referenced type at parse
+      time, which does not accept the reference; the variant resolved at run time instead was called without its
+      arguments; such a call is now resolved at run time (see @ref overloading)
+    - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
+      @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
+      without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
+      its whole timeout again; it now waits only for the rest of it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a list of selectors with ranges
+      (ex: <tt>l[f(), 1..g()]</tt>) iterated by \c foreach or by the @ref map "map", @ref select "select", @ref foldl
+      "foldl" or a streaming operator was evaluated as a whole before the first value was used; each selector is now
+      evaluated when the values of the previous ones have been used, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, @ref remove "remove" and @ref delete "delete"
+      with a list of selectors whose later selector raised an exception removed nothing; they now remove what the
+      earlier selectors selected, as with the AST interpreter
+    - iterating a list of selectors with a range (ex: <tt>foreach x in (l[0, 1..-1])</tt>) with negative offsets gave
+      other elements than the same expression as a value; it now gives the same elements
+    - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
+      selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
+      \c foreach or a functional operator could read a list that the loop had released, which could crash
+    - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with square brackets evaluated their
+      selectors while they held the lock of a global variable, an object member or a static class variable, so that a
+      selector that read it aborted debug builds or deadlocked; the selectors are now evaluated after the path to the
+      lvalue and before its lock, as in the other execution modes
+    - with the AST interpreter, \c foreach and the @ref op_functional "functional operators" evaluated the indices of
+      a list of indices without a range (ex: <tt>l[f(), g()]</tt>), the bounds and the sequence of an empty range, and
+      the sequence of a string or binary range twice, and leaked a list of indices; each is now evaluated once
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
@@ -1628,6 +1749,9 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
+    - in the IR, JIT and tiered execution modes, a closure of an @ref Qore::Expression "Expression" or a
+      @ref Qore::Program "Program" created after another one had been deleted could run the freed closure's code,
+      giving wrong results, exceptions or a crash; a closure now runs its own code (see @ref closure)
     - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
       read after an assignment or an in-place change in the same function could give a value it does not hold, such
       as the unconverted value assigned or its value before the change; the variable's value is now given, as with
@@ -1782,6 +1906,15 @@
       value in the new thread, and modifying a member of the object is a parse error
     - fixed crashes, leaks and unhandled destructor exceptions of @ref background "background" when preparing its
       expression failed, its thread could not be created, or it released the last reference to an object
+    - fixed @ref background "background" expressions that use a local variable in the arguments of a
+      @ref new "new" expression or in the object of an object method reference (such as
+      <tt><b>background</b> f(<b>new</b> C(x))</tt> or <tt><b>background</b> (\\o.m())()</tt>): the thread raised
+      \c LVALUE-ERROR or used no value for the variable instead of the value it had when the thread started; with the
+      IR, JIT, tiered and AOT execution modes this happened with <tt>new hash<K, V>(...)</tt> and
+      <tt>new list<T>(...)</tt>
+    - modifying a local variable in an argument of a call in a @ref background "background" expression crashed the
+      AST interpreter and modified a copy in the other execution modes; it is now a parse error, as elsewhere in the
+      expression
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
@@ -4774,7 +4907,7 @@
       initialized or at runtime
       (<a href="https://github.com/qoretechnologies/qore/issues/3561">issue 3561</a>)
     - fixed a bug where different connections on the same @ref Qore::Socket "Socket" object could not be identified;
-      code that relied on @ref Qore::Socket::getSocket() "Socket::getSocket()" is unreliable as the same descriptor
+      code that relied on \c Socket::getSocket() is unreliable as the same descriptor
       can be reassigned
       (<a href="https://github.com/qoretechnologies/qore/issues/3558">issue 3558</a>)
     - fixed a core dump in @ref Qore::FileLineIterator::getFileName() "FileLineIterator::getFileName()"

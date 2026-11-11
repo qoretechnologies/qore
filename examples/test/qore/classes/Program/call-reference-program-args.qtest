@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CallReferenceProgramArgsTest
+
+#! the function that the call reference refers to; it runs in this Program, which defines it
+string sub defined(auto a, *auto b) {
+    return sprintf("%y:%y", a, b);
+}
+
+#! A call through a call reference to a function of another Program evaluates its arguments in the caller's context
+/** A call reference made in Program A to a function that Program B defines runs the function in B, and the call is
+    made from A, which the call enters first (QoreFunction::evalFunction()).  When code of a third Program (C) makes
+    the call, its arguments are C's: an AST call gives its argument expressions to the call, and they were evaluated
+    after the call had entered A, where the locals of C that they read do not exist, and the call raised LVALUE-ERROR
+    ("local variable ... is not instantiated in the current context").  The arguments are now evaluated in C's
+    context before A is entered.  C runs in every execution mode.
+
+    Here B is this Program, A is a Program that imports the function and makes the reference, and C is a Program in
+    each execution mode.
+*/
+class CallReferenceProgramArgsTest inherits QUnit::Test {
+    public {
+        #! the code of the Program that makes the call reference to the imported function
+        const MakerCode = "%modern
+code sub make() { return \\defined(); }";
+
+        #! the code of the Program that calls the reference with arguments that read its own locals
+        const CallerCode = "%modern
+auto sub local_arg(code c) { int i = 2; return c(i, i + 1); }
+auto sub param_arg(code c, auto arg) { return c(arg); }
+auto sub closure_arg(code c) { int i = 5; code f = auto sub () { return c(i, \"closure\"); }; return f(); }
+auto sub nested_arg(code c) { hash<auto> h = {\"k\": 7}; return c(h.k, c(h.k)); }
+auto sub raising_arg(code c) { int i = 1; return c(i, throw_it()); }
+auto sub throw_it() { throw \"ARG-ERROR\", \"from the argument\"; }";
+
+        #! the execution modes of the calling Program
+        const Modes = (ExecMode::EM_AST, ExecMode::EM_IR, ExecMode::EM_JIT, ExecMode::EM_TIERED);
+    }
+
+    constructor() : QUnit::Test("CallReferenceProgramArgsTest", "1.0", \ARGV) {
+        addTestCase("a call reference to another Program's function called by a third Program", \argsTest());
+        set_return_value(main());
+    }
+
+    argsTest() {
+        Program maker(PO_NO_CHILD_PO_RESTRICTIONS);
+        maker.importFunction("defined");
+        maker.parse(MakerCode, "maker");
+        code ref = maker.callFunction("make");
+        foreach ExecMode mode in (Modes) {
+            Program caller(PO_NO_CHILD_PO_RESTRICTIONS);
+            caller.setExecMode(mode);
+            caller.parse(CallerCode, "caller");
+            assertEq(mode, caller.getExecMode(), "the mode of the calling Program");
+            assertEq("2:3", caller.callFunction("local_arg", ref), mode + ": locals");
+            assertEq("\"x\":null", caller.callFunction("param_arg", ref, "x"), mode + ": parameter");
+            assertEq("5:\"closure\"", caller.callFunction("closure_arg", ref), mode + ": closure-bound local");
+            assertEq("7:\"7:null\"", caller.callFunction("nested_arg", ref), mode + ": nested call");
+            assertThrows("ARG-ERROR", "from the argument", \caller.callFunction(), ("raising_arg", ref),
+                mode + ": an argument that raises an exception");
+        }
+    }
+}

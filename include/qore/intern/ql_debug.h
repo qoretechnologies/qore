@@ -101,6 +101,13 @@ DLLLOCAL extern std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_
 
 //! called by ClosureVarValue::deref() when a dereference of a closure-bound variable that has a collection decision
 //! to make has taken its count, before it decides; called with no lock held; set by dbg_hold_closure_var_deref()
+//! called by an LValueHelper whose lvalue was reached through a reference and holds an integer, before it releases
+//! the lvalue's locks and leaves the Programs of the references
+/** see dbg_hold_reference_lvalue(): a test holds the thread there, after it assigned the value through the reference
+*/
+typedef void (*qore_dbg_reference_lvalue_hook_t)(int64 value);
+DLLLOCAL extern std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook;
+
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook;
 
@@ -147,6 +154,19 @@ DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
 //! the number of TLS close_notify alerts sent by SSLSocketHelper::sendCloseNotify() (SSL_shutdown() calls); read by
 //! dbg_ssl_close_notify_count()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_ssl_close_notify_count;
+
+//! the number of sets of references of synchronous operations that their callers took (AsyncIoSyncRelease) instead of
+//! a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_taken;
+
+//! the number of sets of references of synchronous operations that their callers refused, as their waits had ended,
+//! and that went to a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_refused;
+
+//! holds the thread that converts the end of a synchronous socket call's operation (canceled, or ended by a close of
+//! its socket) into an error, before it checks the thread's pending cancellation, when dbg_hold_socket_cancel_conversion()
+//! has armed the hold; see qore_socket_raise_pending_cancel()
+DLLLOCAL void qore_dbg_socket_cancel_conversion();
 
 //! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
 //! socket's descriptor; set by dbg_http1_send_failure_arm()

@@ -53,9 +53,13 @@
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
 #define PF_IN_TRY                (1 << 12) //!< parsing the body of a try statement of the function being parsed
+//! parsing anywhere in a background expression, also in the arguments of its calls: the expression may not modify the
+//! local variables or the members of the code that starts the thread (PF_BACKGROUND is set for the expression run in
+//! the new thread only, not for the arguments of its calls)
+#define PF_BACKGROUND_EXPR       (1 << 13)
 //! parsing code that an operator or a foreach statement runs for each element with the element's index as the
 //! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
-#define PF_IMPLICIT_ELEMENT      (1 << 13)
+#define PF_IMPLICIT_ELEMENT      (1 << 14)
 
 // all definitions in this file are private to the library and subject to change
 // forward references

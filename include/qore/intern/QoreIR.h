@@ -909,7 +909,103 @@ enum class QoreIROpcode : uint16_t {
     //! (QoreStreamingOperatorNode).
     CheckCancelEvery = 418,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (419, 420, ...)
+    //! Raise RANGE-ERROR for the start of a range operator (..) that evaluated to NOTHING, before the end is
+    //! evaluated
+    //!
+    //! operands[0] = the bound; operands[1] = the QoreIRRangeBound that it is (native int); no result.  The AST
+    //! interpreter checks the start of a range for NOTHING before it evaluates the end
+    //! (QoreRangeOperatorNode::getFunctionalIteratorImpl()), so an end expression with side effects does not run
+    //! when the start is NOTHING.  The lowering emits one for the start of a range whose end can have side effects
+    //! and whose start can be NOTHING; the operation that makes the range raises the same error for the end, and for
+    //! a start that is not checked here.  An exception goes to the instruction's exception target (qore#5665).
+    CheckRangeBound = 419,
+
+    //! Apply selectors of a list of selectors with ranges (l[a..b, c]) to the sequence, as the AST interpreter does
+    //! (QoreSquareBracketsOperatorNode::doSquareBracketsListRange())
+    //!
+    //! With QoreIRListSelectorFlag::Begin: operands[0] = the sequence; operands[1] = the QoreIRListSelectorFlag flags
+    //! (native int); operands[2...] = selectors; the result is an empty list, string or binary object for a sequence
+    //! of that type, with the selectors applied, and NOTHING for any other sequence, to which the AST interpreter
+    //! applies no selector.  A Begin step without selectors comes before the selectors when the type of the sequence
+    //! is not known, and the lowering branches past them when its result is NOTHING; when the sequence is known to be
+    //! a list, a string or a binary object, the first step that applies selectors is the Begin step.  Every other
+    //! step has no result: operands[0] = the result of the Begin step; operands[1] = the sequence; operands[2] = the
+    //! flags; operands[3...] = the selectors; it adds what they select to the result of the Begin step, which it
+    //! changes in place.  The selectors are given in order: an index, or the start and the end of a range (see
+    //! QoreIRListSelectorFlag::RangeShift).  With QoreIRListSelectorFlag::Last a list result also gets the type of the
+    //! values that it holds.  The result of the Begin step is the value of the expression, and it holds the only
+    //! reference to it, which keeps it unshared.  The AST interpreter evaluates each selector only after it has
+    //! applied the previous one, and stops at the first exception, so the lowering emits a step before each selector
+    //! that can have side effects or raise; a step also applies the selectors after that one that cannot (constants
+    //! and reads of int locals), since the order in which they are evaluated cannot be observed.  An exception goes
+    //! to the instruction's exception target (qore#5665).  A list of selectors none of which can have side effects
+    //! or raise is lowered as one ListIndexDynamic instruction instead.
+    ListSelectorStep = 420,
+
+    //! Create the iterator of a list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional
+    //! or streaming operator uses as its source, as the AST interpreter iterates it
+    //! (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl())
+    //!
+    //! A QoreIRIteratorCreateInstruction: iterable = the sequence; operands[0] = the QoreIRListSelectorFlag flags
+    //! (native int: StringIndexChar, NegativeOffsets); operands[1] = the number of selectors (native int); result =
+    //! the iterator handle, as with IteratorCreate, which IteratorNextSelectors, IteratorRelease and the cleanups of the
+    //! frame use; no iterator (0) for a sequence that is not a list, a string or a binary object.  The AST interpreter iterates the selectors of a list
+    //! sequence lazily (QoreFunctionalSquareBracketsComplexOperator): a selector is evaluated only when the elements
+    //! of the previous ones have been given to the loop body or the operator's expression, and a range gives its
+    //! indices one after the other, each normalized as an index of its own.  For a string or a binary sequence it
+    //! evaluates every selector first and iterates the result as a single value, and for any other sequence it
+    //! evaluates no selector and iterates nothing.  The lowering evaluates each selector in the loop when
+    //! IteratorNextSelectors has no value and SelectorIteratorPending asks for it, and gives it to the iterator with
+    //! SelectorIteratorFeed (qore#5675).
+    IteratorCreateSelectors = 421,
+
+    //! Return the index of the selector that the iterator of IteratorCreateSelectors needs before the next
+    //! IteratorNext, or -1 if it needs none
+    //!
+    //! operands[0] = the iterator handle; result = the index (native int).  -1 means that the iterator has the next
+    //! value or has no more values; IteratorNext then gives the value or ends the loop (qore#5675).
+    SelectorIteratorPending = 422,
+
+    //! Give the iterator of IteratorCreateSelectors the value of its next selector
+    //!
+    //! operands[0] = the iterator handle; operands[1] = the QoreIRListSelectorFlag flags (native int: Range);
+    //! operands[2] = the index, or the start of a range; operands[3] = the end of a range; no result.  A range raises
+    //! RANGE-ERROR for a bound that is NOTHING, as the range operator does; an exception goes to the instruction's
+    //! exception target (qore#5675).
+    SelectorIteratorFeed = 423,
+
+    //! Set the exceptions raised aside, so that the code that follows runs as if none was raised
+    //!
+    //! No operands; result = the handle of the exceptions (native int), which ExceptionResume takes.  It runs on the
+    //! path of an exception, for code that the AST interpreter runs while the exception is raised and that must not
+    //! take the exception as its own: the removal of the elements that the selectors of a remove or delete
+    //! expression evaluated before a later selector raised an exception (LValueRemoveHelper; qore#5675).
+    ExceptionSuspend = 424,
+
+    //! Raise again the exceptions that ExceptionSuspend set aside, before any exception raised since
+    //!
+    //! operands[0] = the handle of ExceptionSuspend; no result.  The instruction does not branch: the code that
+    //! follows routes the exceptions, as a synthetic Rethrow does (qore#5675).
+    ExceptionResume = 425,
+
+    //! Give the next value of the iterator of IteratorCreateSelectors, or branch if it has none now
+    //!
+    //! A QoreIRIteratorNextInstruction, as IteratorNext, except that the iterator is not released when it has no
+    //! value: it then needs the value of its next selector (SelectorIteratorPending), or it has given every value and
+    //! the lowering releases it with IteratorRelease.  One instruction per value, as for the iterator of a list
+    //! (qore#5675).
+    IteratorNextSelectors = 426,
+
+    //! string(), int() and float() with one argument whose value the builtin may not accept (issue #5660)
+    /** The conversion of ToString, ToInt and ToFloat for the values that the builtin accepts (a string, an int, a
+        float, a number, a boolean, a date and NOTHING, and NULL for int()); any other value raises the error of the
+        builtin call (RUNTIME-OVERLOAD-ERROR).  Operand 0 is the value; the result is that of the unchecked opcode.
+    */
+    ToStringChecked = 427,
+    ToIntChecked = 428,
+    ToFloatChecked = 429,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (430, 431, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -918,9 +1014,36 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCancelEvery);
-static_assert(QORE_IR_MAX_OPCODE == 418, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
+static_assert(QORE_IR_MAX_OPCODE == 429, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
+
+//! The flags of QoreIROpcode::ListSelectorStep (operands[2])
+enum class QoreIRListSelectorFlag : int64_t {
+    //! the selector given to SelectorIteratorFeed is a range: operands[2] is its start and operands[3] its end;
+    //! ListSelectorStep marks its ranges with the bits from RangeShift
+    Range = 1 << 0,
+    //! the step applies the last selectors: the result is finished
+    Last = 1 << 1,
+    //! an index of a string selects a character (the parse option no-string-index-char is not set)
+    StringIndexChar = 1 << 2,
+    //! the first step, which makes the result: the empty result for the sequence with the selectors of the step
+    //! applied, or NOTHING if no selector applies to the sequence
+    Begin = 1 << 3,
+    //! bit RangeShift + i is set if the selector i of the step is a range, whose start and end are two operands
+    RangeShift = 8,
+    //! negative indices count from the end (the parse option negative-offsets); IteratorCreateSelectors only
+    NegativeOffsets = 1 << 4,
+};
+
+//! The largest number of selectors of one QoreIROpcode::ListSelectorStep (QoreIRListSelectorFlag::RangeShift)
+constexpr size_t QORE_IR_LIST_SELECTOR_STEP_MAX = 64 - static_cast<size_t>(QoreIRListSelectorFlag::RangeShift) - 1;
+
+//! The bound of a range that QoreIROpcode::CheckRangeBound checks (operands[1])
+enum class QoreIRRangeBound : int64_t {
+    Start = 0,
+    End = 1,
+};
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
 #include "qore/intern/QoreOpcodeRegistry.h"
@@ -3534,6 +3657,27 @@ public:
         }
     }
 
+    //! Move an existing block right after another block in the block list.
+    //! LLVM lowering processes blocks in list order, so a block whose values the blocks after \a after use is
+    //! placed before them; nothing happens if either block is not in the list.
+    void moveBlockAfter(QoreIRBasicBlock* block, QoreIRBasicBlock* after) {
+        assert(block != after);
+        auto it = std::find_if(blocks.begin(), blocks.end(),
+                [block](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == block; });
+        if (it == blocks.end()) {
+            return;
+        }
+        auto ptr = std::move(*it);
+        blocks.erase(it);
+        auto pos = std::find_if(blocks.begin(), blocks.end(),
+                [after](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == after; });
+        if (pos == blocks.end()) {
+            blocks.push_back(std::move(ptr));
+            return;
+        }
+        blocks.insert(pos + 1, std::move(ptr));
+    }
+
     QoreIRValue createValue() {
         QoreIRValue value(next_value_id++);
         if (value_facts.size() <= value.id) {
@@ -3639,6 +3783,18 @@ public:
     // Slot IDs 0..parent_slot_count-1 come from the parent, rest are handler-own
     // At runtime, parent's local values are copied into these inherited slots
     uint32_t parent_slot_count = 0;
+
+    //! For handler IR functions: the closure-bound parent-slot locals that the handler declares itself
+    /** The lowering of a handler records the closure-bound locals of the handler code (including those of its
+        nested handlers), which it does not mark pre-instantiated, and the IR serialization writes their slots
+        (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from serialized IR gets the same
+        pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
+    */
+    std::unordered_set<const LocalVar*> handler_own_locals;
+
+    //! True if handler_own_locals is the set that the lowering gave (lowered IR, or IR read from an artifact that
+    //! records it)
+    bool handler_own_locals_known = false;
 
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
@@ -3890,6 +4046,28 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Derives the handler's own closure-bound parent-slot locals from its IR, for an artifact without them
+    /** These are the closure-bound parent-slot locals that the handler instantiates or uninstantiates itself.  This is
+        only an approximation of the set that the lowering gives (handler_own_locals): a catch variable of a catch
+        block that ends in a throw or rethrow has no UninstantiateLocal, and the locals of a nested handler that is not
+        lowered inline appear only in the nested handler's IR; it is used only for handlers read from an artifact older
+        than QORE_AOT_HANDLER_OWN_LOCALS_VERSION.
+
+        @return the handler's own closure-bound parent-slot locals as its IR gives them; empty if this is not a handler
+    */
+    std::unordered_set<const LocalVar*> deriveHandlerOwnClosureLocalsFromIR() const;
+
+    //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
+    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
+        handler declares (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's
+        variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
+        from it (an AOT closure run from its IR, or lazy debugger IR) has to restore them from the handler's own locals
+        that the artifact records (or, for an older artifact, that its IR gives; see
+        deriveHandlerOwnClosureLocalsFromIR()): without them, the handler took every closure-bound variable of the
+        function it belongs to for one of its own, which started with no value, and its updates were lost.
+    */
+    void restoreHandlerPreInstantiatedLocals();
 
     //! Computes reference_store_locals: the locals of a StoreLocal whose operand can be a reference
     /** An operand can be a reference unless the instruction that produces it is known never to give one (a

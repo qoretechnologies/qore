@@ -53,6 +53,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cinttypes>
 #include <cctype>
 #include <cerrno>
 #include <climits>
@@ -2662,6 +2663,23 @@ bool parse_is_readonly_receiver_expression(QoreValue n, int pflag) {
     return n.hasNode() && parse_is_readonly_receiver_node(n.getInternalNode(), pflag);
 }
 
+bool parse_is_self_member_lvalue(QoreValue n) {
+    if (n.getType() != NT_OPERATOR) {
+        return false;
+    }
+    const QoreHashObjectDereferenceOperatorNode* op =
+        dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreValue left = op->getLeft();
+    if (left.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vrn = left.get<const VarRefNode>();
+    return vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf();
+}
+
 int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n) {
     if (!parse_is_readonly_receiver_expression(n, PF_CONST_METHOD)) {
         return 0;
@@ -3402,10 +3420,14 @@ int qore_get_ptr_hash(QoreString& str, const void* ptr) {
 static std::atomic<uint64_t> io_obj_id_seq{0};
 
 AbstractPollableIoObjectBase::AbstractPollableIoObjectBase() {
+    // the identity is unique for the life of the process (the sequence number), whatever the object's address, and it
+    // contains no address, so it reveals none where it is shown (a key or an owner of the async I/O controller); it
+    // needs no digest, which cost about 18,000 instructions for every pollable object (every Socket object, every
+    // accepted socket, every controller wrapper)
     uint64_t oid = io_obj_id_seq.fetch_add(1, std::memory_order_relaxed);
-    QoreString tmp;
-    qore_get_object_hash(tmp, this, oid);
-    io_unique_hash = tmp.c_str();
+    char buf[32];
+    snprintf(buf, sizeof buf, "io-%" PRIx64, oid);
+    io_unique_hash = buf;
 }
 
 int AbstractPollableIoObjectBase::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {

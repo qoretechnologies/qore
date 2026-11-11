@@ -364,8 +364,9 @@ public class DiscordHeartbeat {
     # The state is changed in synchronized methods and waited for with a Queue and a Counter: the changes are made
     # also by cleanup on a cancelled thread (the end of a cancelled heartbeat thread), and neither a synchronized
     # method nor a Queue push nor a Counter decrement is a cancellation point, while a Mutex lock is (see
-    # design/cooperative-cancellation.md "Cleanup Critical Sections"); a destructor running on a cancelled thread is
-    # not covered: it takes Mutex locks before it stops the heartbeat
+    # design/cooperative-cancellation.md "Cleanup Critical Sections"); a destructor running on a cancelled thread
+    # takes Mutex locks before it stops the heartbeat, which it can because the destructor of a trusted class runs
+    # with cancellation deferred (see "Destructors" there)
 
     #! Returns @ref True if the thread must stop
     synchronized bool isStopped() {
@@ -1443,8 +1444,8 @@ hash<auto> h = ws.getInfo();
         @param detach mark the record detached (its thread is not waited for)
     */
     private static stopHeartbeatRecord(DiscordHeartbeat h, *bool detach) {
-        # not a cancellation point; note that a destructor running on a cancelled thread does not get here: it takes the
-        # heartbeat lock (a Mutex, a cancellation point) first
+        # not a cancellation point; a destructor running on a cancelled thread gets here after it took the heartbeat
+        # lock (a Mutex, a cancellation point), because the destructor of a trusted class runs with cancellation deferred
         h.requestStop(detach);
     }
 

@@ -137,7 +137,7 @@
     |@ref require-types "%require-types"|Requires type declarations for all function and method parameters, return types, variables, and object members; equivalent to parse option @ref Qore::PO_REQUIRE_TYPES and the <tt>-</tt><tt>-require-types</tt> command line option; also implies @ref strict-args "%strict-args" <br/><br/>Since %Qore 0.8.0
     |@ref requires "%requires"<tt>[(reexport)] <em>feature</em> [\<\|\<=\|=\|\>=\|\> <em>version</em>]</tt>|If the named feature is not already present in %Qore, then the \c QORE_MODULE_DIR environment variable is used to provide a list of directories to seach for a module with the same name (<em>feature</em><tt>[-api-</tt><em>x</em><tt>.</tt><em>y</em><tt>].qmod</tt> for binary modules or <em>feature</em><tt>.qm</tt> for user modules). If the module is not found, then the qore default module directory is checked unless \c QORE_MODULE_DIR_ONLY is set.<br/><br/>This directive must be used to load modules providing parse support (i.e. modules providing classes, constants, functions, etc that are resolved at parse time).<br/><br/>If version information is provided, then it is compared with the module's version information, and if it does not match a parse exception is raised. <br/><br/>See also @ref Qore::load_module() for a function providing run-time module loading and @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" for a similar parse directive that allows module loading errors to be handled at runtime
     |@ref set-time-zone "%set-time-zone"|Sets the time zone for the current program from a UTC offset (with format \c "+/-[00[:00[:00]]"; \c ":" characters are optional) or a time zone region name (ex: \c "Europe/Prague") <br/><br/>Since %Qore 0.8.3
-    |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br/><br/>Since %Qore 0.8.0
+    |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref NOOP or @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br/><br/>Since %Qore 0.8.0
     |@ref strict-bool-eval "%strict-bool-eval"|Sets qore's default strict mathematic boolean evaluation mode, where any value converted to 0 is @ref False "False" and otherwise it's is @ref True "True"; this was how qore behaved by default prior to v0.8.6. <br/><br/>Equivalent to parse option @ref Qore::PO_STRICT_BOOLEAN_EVAL and the <tt>-pstrict-bool-eval</tt> command line option. <br/><br/>See also @ref perl-bool-eval "%perl-bool-eval"<br/><br/>Since %Qore 0.8.6
     |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br/><br/>Since %Qore 0.8.13
@@ -2445,6 +2445,10 @@ sub legacy() {
     - unsetenv()
     - usleep()
 
+    Code in a @ref Qore::Program "Program" with this option can also read but not change the public variables of a
+    trusted module and the static members of its classes, which every importer of the module shares; see
+    @ref module_public_variables.
+
     <hr>
     @section no-reflection %no-reflection
 
@@ -2896,7 +2900,7 @@ if (str)
     @ref Qore::PO_STRICT_ARGS
 
     @par Description:
-    Prohibits access to builtin functions and methods flagged with @ref RUNTIME_NOOP and also causes errors to be raised if excess
+    Prohibits access to builtin functions and methods flagged with @ref NOOP or @ref RUNTIME_NOOP and also causes errors to be raised if excess
     arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push,
     @ref pop, or @ref shift.
     Additionally, If a function, method, or @ref code_type "code" call is made with excess arguments not handled by the target, a

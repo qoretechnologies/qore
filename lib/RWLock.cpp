@@ -229,14 +229,20 @@ int RWLock::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeout_m
             "read-to-write lock upgrades are not supported and would result in a deadlock", mtid);
         return -1;
     }
+    // a wait that ends with the lock still held waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     while (tid >= 0 || (tid == Lock_Unlocked && num_readers)) {
+        int64 wait_ms = timeout_ms;
+        if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+            return -1;
+        }
         ++waiting;
         int rc;
         // if the write lock is grabbed, send vl (only one thread owns the lock)
         if (tid >= 0)
-            rc = nvl->waitOn((AbstractSmartLock *)this, vl, xsink, timeout_ms);
+            rc = nvl->waitOn((AbstractSmartLock *)this, vl, xsink, wait_ms);
         else  // otherwise the read lock is grabbed, so send vmap (many threads own the lock)
-            rc = nvl->waitOn((AbstractSmartLock *)this, vmap, xsink, timeout_ms);
+            rc = nvl->waitOn((AbstractSmartLock *)this, vmap, xsink, wait_ms);
         --waiting;
         if (rc)
             return -1;
@@ -444,10 +450,16 @@ int RWLock::readLock(ExceptionSink *xsink, int64 timeout_ms) {
 // assumes the write lock is not grabbed by this thread
 int RWLock::grab_read_lock_intern(int mtid, VLock *nvl, int64 timeout_ms, ExceptionSink *xsink) {
     if (tid >= 0) {
+        // a wait that ends with the write lock still held waits again only for the rest of the timeout
+        QoreWaitDeadline deadline(timeout_ms);
         do {
+            int64 wait_ms = timeout_ms;
+            if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+                return -1;
+            }
             ++readRequests;
             int rc;
-            rc = nvl->waitOn((AbstractSmartLock *)this, &read, vl, xsink, timeout_ms);
+            rc = nvl->waitOn((AbstractSmartLock *)this, &read, vl, xsink, wait_ms);
             --readRequests;
             if (rc)
                 return -1;

@@ -1,0 +1,352 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ModulePublicThreadLocalTest
+
+#! A module may not declare a public thread_local variable (qore#5662)
+/** A module's public thread_local variable would be one variable shared by every Program that imports the module,
+    trusted or sandboxed: a value written on a thread by one importer could be read on the same thread by any other
+    importer.  Declaring one is a parse error that says what to do instead; a module keeps its thread-local state
+    private and exports functions or methods that read and set it.
+
+    A public thread_local variable of a Program, which the Program passes to the child Programs it creates, stays
+    supported.
+
+    Every scenario runs in a child process in each execution mode, and the modules are also compiled with qcc.
+
+    A module merge also refuses a public thread_local that an AOT module image compiled by an earlier qcc with the same
+    AOT runtime identity still exports.  That path needs such a qcc: set \c QORE_OLD_QCC to it (and
+    \c QORE_OLD_LIBDIR to the directory of its libqore, if it is not the directory of the qcc) to run the case that
+    covers it; without one the case is skipped, and the path is covered by manual verification only.
+*/
+class ModulePublicThreadLocalTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    #! the exception code of the refusal
+    const ErrCode = "MODULE-PUBLIC-THREAD-LOCAL";
+
+    #! the execution modes
+    const ExecModes = ("ast", "ir", "jit", "tiered");
+
+    #! the modules that declare a public thread_local variable, each in a different form
+    const PublicModules = {
+        # in a public namespace, with a type
+        "PubTlNs": "public namespace PubTlNs {\n    public thread_local int value;\n}\n",
+        # in a public namespace, without a type
+        "PubTlUntyped": "public namespace PubTlUntyped {\n    public thread_local auto value;\n}\n",
+        # a list of declarations
+        "PubTlList": "public namespace PubTlList {\n    public thread_local (int a, string b);\n}\n",
+        # in a private namespace: still refused, although it would not be exported
+        "PubTlPrivNs": "namespace PubTlPrivNs {\n    public thread_local int value;\n}\n"
+            "public namespace PubTlPrivNsApi {\n    public sub f() {}\n}\n",
+        # in the root namespace
+        "PubTlRoot": "public thread_local int pub_tl_root_value;\n",
+        # loaded with load_module()
+        "PubTlLoad": "public namespace PubTlLoad {\n    public thread_local int value;\n}\n",
+        # loaded by a sandboxed Program
+        "PubTlSandbox": "public namespace PubTlSandbox {\n    public thread_local int value;\n}\n",
+    };
+
+    #! modules with a public variable list declaration that has an element with another scope ("my a")
+    /** the element raises a parse error; it is a local variable reference when the list is made public, which must
+        not crash the parse
+    */
+    const ListScopeModules = {
+        "PubTlListMy": "public namespace PubTlListMy {\n    public sub f() { public thread_local (my a, b); }\n}\n",
+        "PubOurListMy": "public namespace PubOurListMy {\n    public sub f() { public our (my a, b); }\n}\n",
+    };
+
+    #! a module with public thread_local variables in two namespaces, compiled by an earlier qcc
+    const OldModuleSource = "%modern\n"
+        "module OldPubTl { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+        "public namespace OldPubTl {\n"
+        "    public thread_local int value;\n"
+        "    public namespace Inner {\n"
+        "        public thread_local int inner_value;\n"
+        "    }\n"
+        "}\n";
+
+    #! the expected probe results
+    const Expected = {
+        "requires-PubTlNs": ErrCode,
+        "requires-PubTlUntyped": ErrCode,
+        "requires-PubTlList": ErrCode,
+        "requires-PubTlPrivNs": ErrCode,
+        "requires-PubTlRoot": ErrCode,
+        "load-module": ErrCode,
+        "sandbox": ErrCode,
+        # a public list declaration with an element of another scope is a parse error, in a module and in a locked-down
+        # Program
+        "requires-PubTlListMy": "PARSE-EXCEPTION",
+        "requires-PubOurListMy": "PARSE-EXCEPTION",
+        "lockdown-list-thread-local": "PARSE-EXCEPTION",
+        "lockdown-list-our": "PARSE-EXCEPTION",
+        # the error says what to do instead
+        "message": "ok",
+        # a private module thread_local has one value per thread
+        "private": "5:NOTHING:5",
+        # a private module thread_local is not visible to the importer
+        "private-hidden": "PARSE-EXCEPTION",
+        # a public thread_local of a Program is passed to its child Programs, with one value per thread
+        "program-inherit": "7:8:NOTHING",
+    };
+
+    constructor() : QUnit::Test("module public thread_local test", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a module may not declare a public thread_local in any execution mode", \sourceTest());
+        addTestCase("qcc refuses a module with a public thread_local", \aotRefusalTest());
+        addTestCase("a compiled module keeps a private thread_local", \aotPrivateTest());
+        addTestCase("a module compiled by an earlier qcc that exports a public thread_local is refused",
+            \aotOldImageTest());
+        addTestCase("a Program-level public thread_local in this Program is passed to a child Program",
+            \inProcessInheritTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        foreach string mode in (ExecModes) {
+            TmpDir tmp("qore-module-public-tl-" + mode + "-");
+            writeFixtures(tmp.path);
+            checkProbe(runProbe(tmp.path, mode), Expected, mode);
+        }
+    }
+
+    aotRefusalTest() {
+        TmpDir tmp("qore-module-public-tl-aot-");
+        writeFixtures(tmp.path);
+        foreach string mod_name in (keys PublicModules) {
+            string qmod = tmp.path + DirSep + mod_name + ".qmod";
+            hash<auto> rv = compile(tmp.path, mod_name);
+            assertNeq(0, rv.status, mod_name + ": " + rv.out);
+            assertFalse(is_file(qmod), mod_name);
+            assertRegex(ErrCode, rv.out, mod_name);
+            assertRegex("keep it private", rv.out, mod_name);
+        }
+    }
+
+    aotOldImageTest() {
+        *string old_qcc = ENV.QORE_OLD_QCC;
+        if (!old_qcc.val()) {
+            testSkip("QORE_OLD_QCC is not set: this case needs a qcc that predates the refusal of public thread_local "
+                "variables in modules and has the AOT runtime identity of this Qore; the load-time refusal is otherwise "
+                "covered by manual verification only");
+        }
+        string old_libdir = ENV.QORE_OLD_LIBDIR ?? dirname(old_qcc);
+        TmpDir tmp("qore-module-public-tl-old-");
+        write(tmp.path, "OldPubTl.qm", OldModuleSource);
+        string qmod = tmp.path + DirSep + "OldPubTl.qmod";
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module --strip-source -o %s %s 2>&1", old_libdir, old_libdir, old_libdir, tmp.path, old_qcc, qmod,
+            tmp.path + DirSep + "OldPubTl.qm"), \status);
+        if (status || !is_file(qmod)) {
+            testSkip(sprintf("QORE_OLD_QCC (%s) did not compile a module with a public thread_local variable, so it "
+                "does not predate the refusal: %s", old_qcc, out));
+        }
+        # the probe must load the compiled module, not its source
+        unlink(tmp.path + DirSep + "OldPubTl.qm");
+        write(tmp.path, "old.q", "%modern\n"
+            "Program p(PO_NEW_STYLE);\n"
+            "try {\n"
+            "    p.parse(\"%requires OldPubTl\\n\", \"old\");\n"
+            "    printf(\"old=loaded\\n\");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"old=%s\\ndesc=%s\\n\", ex.err, ex.desc);\n"
+            "}\n");
+        foreach string mode in (ExecModes) {
+            string probe = runProbe(tmp.path, mode, "old.q");
+            if (probe =~ /AOT runtime identity/) {
+                testSkip(sprintf("QORE_OLD_QCC (%s) has a different AOT runtime identity, so its modules are refused "
+                    "by the identity check before they are merged: %s", old_qcc, probe));
+            }
+            assertRegex("(^|\n)old=MODULE-LOAD-ERROR\n", probe, mode);
+            # every exported public thread_local is named in the one error
+            assertRegex("'OldPubTl::value'", probe, mode);
+            assertRegex("'OldPubTl::Inner::inner_value'", probe, mode);
+            assertRegex("must be changed and recompiled", probe, mode);
+            assertRegex("keep it private", probe, mode);
+        }
+    }
+
+    aotPrivateTest() {
+        TmpDir tmp("qore-module-public-tl-aot-priv-");
+        writeFixtures(tmp.path);
+        hash<auto> rv = compile(tmp.path, "PrivTl");
+        if (rv.status || !is_file(tmp.path + DirSep + "PrivTl.qmod")) {
+            testSkip(sprintf("qcc could not compile PrivTl: %s", rv.out));
+        }
+        # the probe must load the compiled module, not its source
+        unlink(tmp.path + DirSep + "PrivTl.qm");
+        foreach string mode in (ExecModes) {
+            checkProbe(runProbe(tmp.path, mode, "private.q"), Expected{"private", "private-hidden"},
+                "AOT " + mode);
+        }
+    }
+
+    inProcessInheritTest() {
+        # a public thread_local declared by this Program's code, set in this thread
+        Program parent(PO_NEW_STYLE);
+        parent.parse("public thread_local int pt;\n"
+            "sub set(int v) { pt = v; }\n"
+            "auto sub child_get() {\n"
+            "    Program c(PO_NEW_STYLE);\n"
+            "    c.parse(\"auto sub get() { return pt; }\", \"child\");\n"
+            "    return c.callFunction(\"get\");\n"
+            "}\n", "parent");
+        parent.callFunction("set", 3);
+        assertEq(3, parent.callFunction("child_get"));
+    }
+
+    private hash<auto> compile(string dir, string mod_name) {
+        string src = dir + DirSep + mod_name + ".qm";
+        string qmod = dir + DirSep + mod_name + ".qmod";
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, dir, qcc_bin, qmod, src),
+            \status);
+        return {"status": status, "out": out};
+    }
+
+    private checkProbe(string out, hash<auto> expected, string mode) {
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-zA-Z-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        # one comparison reports every scenario that differs, not only the first one
+        assertEq(expected, results, sprintf("%s probe output:\n%s", mode, out));
+    }
+
+    private string runProbe(string dir, string mode, string script = "probe.q") {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            libqore_dir, libqore_dir, dir, qore_bin, mode, dir + DirSep + script));
+    }
+
+    private writeFixtures(string dir) {
+        foreach hash<auto> i in ((PublicModules + ListScopeModules).pairIterator()) {
+            write(dir, i.key + ".qm", "%modern\n"
+                "module " + i.key + " { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+                    "url = \"https://qore.org\"; }\n" + i.value);
+        }
+        write(dir, "PrivTl.qm", "%modern\n"
+            "module PrivTl { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace PrivTl {\n"
+            "    thread_local *int value;\n"
+            "    public *int sub get() { return value; }\n"
+            "    public sub set(int v) { value = v; }\n"
+            "}\n");
+        write(dir, "probe.q", ProbeHeader + ProbeSource + PrivateSource);
+        write(dir, "private.q", ProbeHeader + PrivateSource);
+    }
+
+    private write(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+
+    const ProbeHeader = "%modern\n"
+        "sub result(string key, string value) { printf(\"%s=%s\\n\", key, value); }\n"
+        "string sub str(auto v) { return exists v ? v.toString() : \"NOTHING\"; }\n";
+
+    const ProbeSource =
+        "# a public thread_local of this Program, passed to child Programs\n"
+        "public thread_local int pt;\n"
+        "\n"
+        "# returns the exception code of parsing src in a new Program, or \"ok\"\n"
+        "string sub parse_code(string src, *SandboxManager sm, int opts = PO_NEW_STYLE) {\n"
+        "    Program p(opts);\n"
+        "    if (sm) {\n"
+        "        p.setSandboxManager(sm);\n"
+        "    }\n"
+        "    try {\n"
+        "        p.parse(src, \"probe\");\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err;\n"
+        "    }\n"
+        "    return \"ok\";\n"
+        "}\n"
+        "\n"
+        "foreach string mod in ((\"PubTlNs\", \"PubTlUntyped\", \"PubTlList\", \"PubTlPrivNs\", \"PubTlRoot\",\n"
+        "        \"PubTlListMy\", \"PubOurListMy\")) {\n"
+        "    result(\"requires-\" + mod, parse_code(\"%requires \" + mod + \"\\n\"));\n"
+        "}\n"
+        "\n"
+        "# load_module() at runtime\n"
+        "try {\n"
+        "    load_module(\"PubTlLoad\");\n"
+        "    result(\"load-module\", \"ok\");\n"
+        "    result(\"message\", \"no exception\");\n"
+        "} catch (hash<ExceptionInfo> ex) {\n"
+        "    result(\"load-module\", ex.err);\n"
+        "    bool ok = (ex.desc =~ /public thread_local variable 'value'/)\n"
+        "        && (ex.desc =~ /keep it private/)\n"
+        "        && (ex.desc =~ /functions or methods that read and set it/);\n"
+        "    result(\"message\", ok ? \"ok\" : ex.desc);\n"
+        "}\n"
+        "\n"
+        "# a module loaded by a sandboxed Program that cannot control threads\n"
+        "{\n"
+        "    SandboxManager sm();\n"
+        "    sm.setFilesystemDefaultPolicy(False);\n"
+        "    result(\"sandbox\", parse_code(\"%requires PubTlSandbox\\n\", sm,\n"
+        "        PO_NEW_STYLE | PO_NO_THREAD_CONTROL));\n"
+        "}\n"
+        "\n"
+        "# a public variable list with an element of another scope in a locked-down Program\n"
+        "result(\"lockdown-list-thread-local\", parse_code(\"sub f() { public thread_local (my a, b); }\\n\", NOTHING,\n"
+        "    PO_NEW_STYLE | PO_LOCKDOWN));\n"
+        "result(\"lockdown-list-our\", parse_code(\"sub f() { public our (my a, b); }\\n\", NOTHING,\n"
+        "    PO_NEW_STYLE | PO_LOCKDOWN));\n"
+        "\n"
+        "# a public thread_local of a Program is passed to its child Programs\n"
+        "{\n"
+        "    pt = 7;\n"
+        "    Program c(PO_NEW_STYLE);\n"
+        "    c.parse(\"auto sub get() { return pt; }\\nsub set(int v) { pt = v; }\\n\", \"child\");\n"
+        "    string r = str(c.callFunction(\"get\"));\n"
+        "    c.callFunction(\"set\", 8);\n"
+        "    r += \":\" + str(pt);\n"
+        "    Queue q();\n"
+        "    background q.push(str(c.callFunction(\"get\")));\n"
+        "    r += \":\" + q.get();\n"
+        "    result(\"program-inherit\", r);\n"
+        "}\n";
+
+    const PrivateSource =
+        "%requires PrivTl\n"
+        "{\n"
+        "    PrivTl::set(5);\n"
+        "    string r = str(PrivTl::get());\n"
+        "    Queue q();\n"
+        "    background q.push(str(PrivTl::get()));\n"
+        "    r += \":\" + q.get() + \":\" + str(PrivTl::get());\n"
+        "    result(\"private\", r);\n"
+        "    Program p(PO_NEW_STYLE);\n"
+        "    try {\n"
+        "        p.parse(\"%requires PrivTl\\nauto sub get() { return PrivTl::value; }\\n\", \"hidden\");\n"
+        "        result(\"private-hidden\", \"ok\");\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        result(\"private-hidden\", ex.err);\n"
+        "    }\n"
+        "}\n";
+}

@@ -166,8 +166,13 @@ printf("finally some_value is 0\n");
     @throw THREAD-CANCELLED the thread was cancelled while the method was blocked (see
     @ref Qore::cancel_thread() "cancel_thread()"); the method returns as soon as cancellation is requested
 
-    @note The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
-    \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
+    @note
+    - The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
+      \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
+    - As with a POSIX condition variable, the method can return 0 although neither signal() nor broadcast() was
+      called (a spurious wakeup), for example when a @ref Qore::SandboxManager::requestInterrupt() "program interrupt"
+      of another %Program, or a cancellation request that is not delivered to the thread, wakes the wait; wait in a
+      loop that tests the wait condition, as in the example, and wait only for the remaining time with a timeout
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -210,8 +215,13 @@ while (some_value > 0) {
     @throw THREAD-CANCELLED the thread was cancelled while the method was blocked (see
     @ref Qore::cancel_thread() "cancel_thread()"); the method returns as soon as cancellation is requested
 
-    @note The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
-    \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
+    @note
+    - The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
+      \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
+    - As with a POSIX condition variable, the method can return 0 although neither signal() nor broadcast() was
+      called (a spurious wakeup), for example when a @ref Qore::SandboxManager::requestInterrupt() "program interrupt"
+      of another %Program, or a cancellation request that is not delivered to the thread, wakes the wait; wait in a
+      loop that tests the wait condition, as in the example, and wait only for the remaining time with a timeout
 
     @since %Qore 3.0
  */

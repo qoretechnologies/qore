@@ -155,12 +155,20 @@ x=null@endverbatim
     by the end of the root's destruction, and a child Program that is still alive then has thread-local data of its
     own, empty at first.
 
-    A user module's Program is created without a parent, so it is the root of a family of its own: code that runs in
-    the module's Program (a method of a module class, or a closure created in module code) uses the module's
-    thread-local data, which the Programs that use the module cannot read or change, and the module code cannot read
-    or change theirs.  A module function is the exception: it runs in its caller's Program and so uses its caller's
-    thread-local data.  For this reason, module code running in its own Program can use these functions even when
-    its caller may not (see @ref OWN_PROGRAM_STATE).
+    A user module's Program is created without a parent, so it is the root of a family of its own: module code, which
+    runs in the module's Program (a module function, a method of a module class, or a closure created in module
+    code), uses the module's thread-local data, which the Programs that use the module cannot read or change, and the
+    module code cannot read or change theirs.  For this reason, module code can use these functions even when its
+    sandboxed caller may not (see @ref OWN_PROGRAM_STATE).
+
+    @subsection threads_and_program_deletion Threads in a Program That Is Deleted
+    The deletion of a @ref Qore::Program "Program" waits for the threads running its code to leave it; once it has
+    started to delete the Program's data, no other thread can enter the Program, and a call into it raises a
+    \c PROGRAM-ERROR exception.  A thread that is still running the Program's code while the deletion waits for it can
+    call into the Program again, also through code of other Programs (a closure of the Program called by a child
+    Program, for example), until it leaves the Program.  The values of @ref thread_local variables of the Program
+    that other threads release when they end or between their tasks are released before the Program's data is
+    deleted (see @ref thread_local_lifetime).
 
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
@@ -378,8 +386,9 @@ queue.push(value: "wrong");  # PARSE-TYPE-ERROR
 
     A thread blocked at a check point is woken as soon as cancellation is requested, so the wait ends at once with
     \c THREAD-CANCELLED; @ref Qore::Thread::Condition::wait() "Condition::wait()" returns with its lock held also
-    then.  Inside a @ref cancel_cleanup "cleanup critical section" no cancellation can be delivered, so lock
-    acquisitions there wait until the lock is acquired.
+    then.  Inside a @ref cancel_cleanup "cleanup critical section" and in the destructor of a
+    @ref cancel_destructors "trusted class" no cancellation can be delivered, so lock acquisitions there wait until
+    the lock is acquired.
 
     @subsection cancel_handling Handling Cancellation
 
@@ -473,6 +482,74 @@ release() {
     task - runs with the request already ended, so it cannot be aborted part-way through, and a request aimed at one
     pooled task never cancels an unrelated later task on the same worker thread.
 
+    @anchor cancel_destructors
+    @subsection cancel_destructors_section Destructors on a Cancelled Thread
+
+    A destructor often runs on a cancelled thread: an object held in a local variable is released while
+    \c THREAD-CANCELLED (or \c PROGRAM-INTERRUPTED) unwinds the stack, or the cancelled code deletes it with
+    @ref delete "delete".  What happens depends on the class whose destructor it is; the rule applies to each class
+    of the object's class hierarchy on its own:
+
+    |!Class|!Destructor on a cancelled or interrupted thread
+    |a builtin class, or a class defined by a @ref Qore::Program "Program" without a \
+        @ref Qore::SandboxManager "SandboxManager" (the program's own classes and those of the modules that trusted \
+        code loads)|runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred, as in \
+        @ref Qore::defer_thread_cancel() "defer_thread_cancel()": its locks, waits and loops complete, and the \
+        pending request is raised at the first check point after the destructor returns, with its original reason
+    |a class defined by a @ref Qore::Program "Program" with a @ref Qore::SandboxManager "SandboxManager"|never \
+        runs with cancellation deferred; if a cancellation, a program interrupt or a \
+        @ref sandbox_resources "sandbox limit" is pending when it would run, the destructor is skipped: the \
+        object's members are released without it, and the request stays pending
+
+    So a client object that disconnects and waits for its own threads in its destructor completes that work when the
+    thread that holds it is cancelled:
+
+    @code{.py}
+%modern
+background sub () {
+    WebSocketClient client(callback, {"url": url});
+    client.connect();
+    # cancelled here: the client's destructor still disconnects and waits for its threads
+    work_queue.get();
+}();
+    @endcode
+
+    The following rules make sure that sandboxed code cannot use a destructor to evade cancellation, and that a
+    destructor cannot run without bound:
+    - code of a sandboxed %Program that a trusted destructor calls (a method that a sandboxed subclass overrides, a
+      callback that sandboxed code supplied) runs with cancellation not deferred
+    - a sandboxed object released by a trusted destructor, or inside
+      @ref Qore::defer_thread_cancel() "defer_thread_cancel()", does not run its destructor under that deferral either
+    - a @ref sandbox_resources "sandbox limit" is not deferred in a trusted destructor: when the wall time or CPU
+      time of the sandbox call that runs the destructor is used up, or its memory limit is exceeded, the destructor
+      ends with \c SANDBOX-TIMEOUT or \c SANDBOX-MEMORY-LIMIT at its next check point
+
+    A class is sandboxed if the %Program that defines it has a @ref Qore::SandboxManager "SandboxManager", or had
+    one, or was created by sandboxed code (a %Program that sandboxed code creates has no sandbox manager of its own,
+    but its code is sandboxed all the same).  This holds also for a %Program that a module or %Qore itself creates
+    for sandboxed code, such as one created by
+    @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" or a user module that
+    trusted code loads while it serves sandboxed code (such a module stays sandboxed for every later caller), or
+    that sandboxed code loads by a path it chose into a %Program that it was handed, with
+    @ref Qore::Program::loadModule() "Program::loadModule()"; the sandbox of sandboxed code that parses code in, or
+    loads a module into, another %Program governs the code that this runs (the initializers of the code, the
+    initialization of the module).  A
+    %Program that sandboxed code parses code in, with @ref Qore::Program::parse() "Program::parse()" or
+    @ref Qore::Program::parsePending() "Program::parsePending()" or as an @ref Qore::Expression "Expression", is
+    sandboxed from then on, also if trusted code created it; the classes that it already had are then sandboxed as
+    well.  Library code that sandboxed code loads first, and the %Program objects that the library's own
+    initialization creates, stay trusted; a library whose initialization parses code that sandboxed code supplied
+    must parse it in a sandboxed %Program itself.
+
+    @note
+    - A trusted destructor must not wait for something that only a cancelled thread could release: a cancellation
+      cannot end that wait.  In a sandbox, the @ref sandbox_resource_limits "wall time limit" is the hard stop: a
+      trusted destructor that waits on state that the sandbox controls is ended by the limit, while a cancellation or
+      @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" alone cannot end it.
+    - The destructors of a cancelled or interrupted sandboxed program do not run, so external state that only such a
+      destructor would undo is not undone; the resources that builtin and module objects hold are still released,
+      because their classes are trusted.
+
     @subsection cancel_security Cancellation and Sandboxing
 
     Thread cancellation integrates with the @ref Qore::SandboxManager "SandboxManager" interrupt mechanism. Internally,
@@ -487,6 +564,13 @@ release() {
     @ref Qore::defer_thread_cancel() "defer_thread_cancel()", making cancellation effectively unavoidable. This is intentional: it ensures that
     untrusted code cannot ignore cancellation requests from the host environment.  Trusted code that can defer still
     cannot make a thread permanently uncancellable, because the deferral ends when the cleanup call returns.
+
+    Sandboxed code never runs with cancellation deferred: @ref Qore::defer_thread_cancel() "defer_thread_cancel()"
+    called by sandboxed code only calls its code, and when trusted code defers cancellation (in
+    @ref Qore::defer_thread_cancel() "defer_thread_cancel()", in the @ref cancel_destructors "destructor of a trusted class",
+    or in thread teardown) and calls sandboxed code there (an observer, a callback, a method that a sandboxed
+    subclass overrides, a thread resource), the sandboxed code is not deferred: a cancellation, a
+    @ref sandbox_interrupt "program interrupt" and a @ref sandbox_resources "sandbox limit" end it as anywhere else.
 
     @since %Qore 3.0
 */

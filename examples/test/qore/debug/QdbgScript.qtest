@@ -393,7 +393,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "display a * 10",
             "display",
             "go run",
-            # the call stack with the columns of the statements
+            # the call stack with the columns of the statement and of the call
             "bt",
             "go run",
             "undisplay 1",
@@ -414,7 +414,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertInOrder(res.out, (
             # the expressions are shown at each stop
             "Paused at breakpoint 1 at ", "1: a = 0", "2: a * 10 = 0",
-            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:31",
+            # the frame of the caller is located at its call of f(), in "total += f(i);"
+            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:40",
             "Paused at breakpoint 1 at ", "1: a = 1", "2: a * 10 = 10",
             "Paused at breakpoint 1 at ", "1: a * 10 = 20",
             "there is no display expression 5",

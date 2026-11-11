@@ -63,6 +63,9 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
 
         // the task's count was added when it was submitted; while it runs, it belongs to this thread
         ++qore_thread_counter_share;
+        // a task of the module cleanup can enter the Programs of the modules until the thread-local data that it
+        // created is cleared below (ThreadTask applies it to the task's own code)
+        QoreModuleCleanupDelegateHelper cleanup_delegate(task->isModuleCleanupDelegate());
         sl.unlock();
         task->run(xsink).discard(xsink);
         // Handle any exceptions from the task so they don't leak into the next task
@@ -81,6 +84,7 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // have access to thread-local state if needed, while preventing leakage
         // between unrelated tasks on the same worker thread.
         clear_all_program_thread_local_data();
+        cleanup_delegate.reset();
         // Task complete — decrement thread_counter that was incremented at submit time
         --qore_thread_counter_share;
         thread_counter.dec();

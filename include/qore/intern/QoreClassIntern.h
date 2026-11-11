@@ -271,6 +271,10 @@ public:
         return false;
     }
 
+    DLLLOCAL virtual const MethodVariantBase* getMethodVariantBase() const override {
+        return this;
+    }
+
     //! Returns true when this method variant can use a fast call entry.
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastMethodCallEligible(bool allow_type_parameters = false) const {
@@ -306,7 +310,7 @@ public:
         return qmethod;
     }
 
-    DLLLOCAL const QoreClass* getClass() const {
+    DLLLOCAL const QoreClass* getClass() const override {
         return qmethod->getClass();
     }
 
@@ -1280,6 +1284,21 @@ public:
     //! the name of the class, for the error that checkOwnerReleased() raises
     const char* owner_class_name = nullptr;
 
+    //! What a static variable of a class of a trusted module records about the module (qore#5664)
+    struct TrustedModuleStatic {
+        //! the ID of the Program of the module that declares the class, whose code may always write the variable
+        qore_program_id_t pgm_id;
+        //! the name of the module
+        std::string module_name;
+        //! the path of the variable, ex: \c "MyModule::MyClass::var"
+        std::string path;
+    };
+    //! Set once for a static variable of a class of a trusted module, and then never changed until it is destroyed
+    /** Every Program that imports the module shares the variable; see checkTrustedModuleWrite().  Reads never look at
+        it.
+    */
+    std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
+
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1295,7 +1314,49 @@ public:
 
     DLLLOCAL ~QoreVarInfo() {
         assert(!val.hasValue());
+        delete trusted_module.load(std::memory_order_relaxed);
     }
+
+    //! Records that the variable belongs to a class of a trusted module; the first record is kept
+    /** @param pgm_id the ID of the module's Program
+        @param module_name the name of the module, or nullptr if unknown
+        @param class_path the path of the class, ex: \c "MyModule::MyClass"
+        @param var_name the name of the variable
+    */
+    DLLLOCAL void setTrustedModule(qore_program_id_t pgm_id, const char* module_name, const std::string& class_path,
+            const char* var_name);
+
+    //! Checks a write to the variable when it belongs to a class of a trusted module (qore#5664)
+    /** The code of the module's Program may always write it; the code of another Program may not when that Program
+        is sandboxed or has \c PO_NO_PROCESS_CONTROL set (see qore_program_private::restrictsModuleVarWrites())
+
+        @param lvh the helper resolving the variable: one that only reads it is not refused (see
+        LValueHelper::ReadAccess)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int checkTrustedModuleWrite(LValueHelper& lvh) const {
+        TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+        return tm ? checkTrustedModuleWriteIntern(*tm, lvh) : 0;
+    }
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the current code may not remove the variable's value
+    DLLLOCAL int checkTrustedModuleRemove(ExceptionSink* xsink) const;
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the code of \a writer may not write the variable
+    /** For code that writes for another Program, such as the reflection API (see
+        QoreExternalStaticMember::setValue())
+    */
+    DLLLOCAL int checkTrustedModuleWriter(const QoreProgram* writer, ExceptionSink* xsink) const;
+
+private:
+    DLLLOCAL int checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const;
+    //! Returns true if the current code may not write the variable of a class of a trusted module
+    DLLLOCAL bool trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const;
+    //! Returns true if the code of \a writer may not write the variable of a class of a trusted module
+    DLLLOCAL static bool trustedModuleWriteRestrictedFor(const TrustedModuleStatic& tm, const QoreProgram* writer);
+
+public:
 
     //! evaluates the variable's initializer if it has not been evaluated yet
     /** @param name the variable's name, for error messages
@@ -1392,6 +1453,10 @@ public:
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
         // checked before evalInit(), which runs the initializer, and again under the lock (see below)
         if (checkOwnerReleased(name, lvh.vl.xsink)) {
+            return -1;
+        }
+        // a static variable of a class of a trusted module is shared by every Program that imports it (qore#5664)
+        if (checkTrustedModuleWrite(lvh)) {
             return -1;
         }
         if (get_cb) {
@@ -2245,6 +2310,11 @@ typedef vector_map_t<QoreClass*, unsigned> qc_ref_map_t;
 */
 DLLLOCAL bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm);
 
+//! see qore_thread_intern.h
+DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
+//! see qore_thread_intern.h
+DLLLOCAL bool qore_module_lifetime_active();
+
 class qore_class_private {
 public:
     const QoreProgramLocation* loc; // location of declaration
@@ -2274,6 +2344,9 @@ public:
     QoreMemberMap members;
     // member initialization list in hierarchy initialization order
     member_init_list_t member_init_list;
+    //! whether a member initializer of member_init_list is evaluated when an object is created: -1 not yet known,
+    //! 0 no, 1 yes; determined when the first object is created, as the initializers do not change at runtime
+    mutable std::atomic<int8_t> member_init_evaluates{-1};
 
     // static var list (map)
     QoreVarMap vars;
@@ -2476,12 +2549,23 @@ public:
     */
     std::atomic<QoreProgram*> spgm{nullptr};
 
-    //! the source Program that released the class with deleteClassData(), for identification only
+    //! the ID of the source Program that released the class with deleteClassData(), or 0
     /** Set before spgm is cleared there: from then on, the namespace of the class is destroyed with that Program in
         its thread, so method calls in other threads do not use it (see qore_get_method_pgm_context() and
-        getMethodForEval()); never dereferenced
+        getMethodForEval()).  The ID identifies the Program: its address can be given to a Program created after it
+        was deleted, which would have been taken for it.
     */
-    std::atomic<const QoreProgram*> released_spgm{nullptr};
+    std::atomic<qore_program_id_t> released_spgm_id{0};
+
+    //! true once a call has found that the source Program has module lifetime (see
+    //! qore_program_has_module_lifetime()): it stays allocated while any code can run, so a call from another Program
+    //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
+    mutable std::atomic<bool> spgm_module_lifetime{false};
+
+    //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
+    /** Set with released_spgm_id, under gate.asl_lock
+    */
+    std::atomic<bool> released_sandboxed{false};
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
@@ -3540,6 +3624,8 @@ public:
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
+    //! initializes the members of member_init_list; called by initMembers() with the object context set
+    DLLLOCAL int initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
 
     DLLLOCAL int initMember(QoreObject& o, bool& need_scan, const char* member_name, const QoreMemberInfo& info, const qore_class_private* member_class_ctx, ExceptionSink* xsink) const;
 
@@ -3643,7 +3729,8 @@ public:
             {
                 // see getReferencedSourceProgram()
                 AutoLocker al(gate.asl_lock);
-                released_spgm.store(pgm);
+                released_spgm_id.store(pgm->getProgramId());
+                released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -3658,7 +3745,8 @@ public:
                 AutoLocker al(gate.asl_lock);
                 p = spgm.load();
                 if (p) {
-                    released_spgm.store(p);
+                    released_spgm_id.store(p->getProgramId());
+                    released_sandboxed.store(qore_program_is_sandboxed(p));
                     p = spgm.exchange(nullptr);
                 }
             }
@@ -3667,6 +3755,14 @@ public:
             }
         }
     }
+
+    //! Returns true if the code of the class is sandboxed: it was defined by a Program with a sandbox manager
+    /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
+        sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
+        once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
+        for the class's destructor (see QoreDestructorCancelHelper).
+    */
+    DLLLOCAL bool isSandboxedCode() const;
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
     /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read
@@ -3688,7 +3784,8 @@ public:
         @param deleted if not null, set to true if the class has a source Program, but it is being deleted (its last
         reference has been released): the code of the class cannot run then
     */
-    DLLLOCAL QoreProgram* getSourceProgramForCall(bool& referenced, bool* deleted = nullptr) const {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCall(bool& referenced,
+            bool* deleted = nullptr) const {
         referenced = false;
         QoreProgram* p = spgm.load();
         if (!p) {
@@ -3697,12 +3794,26 @@ public:
         if (p == ::getProgram()) {
             return p;
         }
+        // a module's Program stays allocated while any code can run (module lifetime): entering it fails once its
+        // teardown has started, so no reference is needed
+        if (spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+            return p;
+        }
+        return getSourceProgramForCallSlow(referenced, deleted);
+    }
+
+    //! the part of getSourceProgramForCall() for a source Program that is neither current nor has module lifetime
+    DLLLOCAL QORE_INTERN_NOINLINE QoreProgram* getSourceProgramForCallSlow(bool& referenced, bool* deleted) const {
+        QoreProgram* p;
         {
             // see getReferencedSourceProgram()
             AutoLocker al(gate.asl_lock);
             p = spgm.load();
             if (p && p->optRef()) {
                 referenced = true;
+                if (qore_program_has_module_lifetime(p)) {
+                    spgm_module_lifetime.store(true, std::memory_order_release);
+                }
             } else if (p && !qore_program_torn_down_by_current_thread(p)) {
                 // the Program's last reference has been released, and another thread deletes it
                 p = nullptr;
@@ -3716,7 +3827,7 @@ public:
 #ifdef DEBUG
         if (p) {
             if (dbg_source_program_taken_t hook = dbg_source_program_taken.load()) {
-                hook(*this, p, referenced);
+                hook(this, p, referenced);
             }
         }
 #endif
@@ -3724,10 +3835,11 @@ public:
     }
 
 #ifdef DEBUG
-    //! debug-only hook called when a call into the class's code from another Program has taken the source Program
-    /** Called before the thread enters the Program, without locks; tests delete the Program at this point
+    //! debug-only hook called when a call into user code from another Program has taken the code's Program
+    /** Called before the thread enters the Program, without locks; tests delete the Program at this point.  \a cls
+        is the class for the code of a class, or nullptr for a function (see QoreSourceProgramHolder::setVariant())
     */
-    typedef void (*dbg_source_program_taken_t)(const qore_class_private& cls, QoreProgram* pgm, bool referenced);
+    typedef void (*dbg_source_program_taken_t)(const qore_class_private* cls, QoreProgram* pgm, bool referenced);
     DLLLOCAL static std::atomic<dbg_source_program_taken_t> dbg_source_program_taken;
 #endif
 
@@ -4495,12 +4607,15 @@ protected:
         DLLLOCAL ~qore_class_private();
 };
 
-//! Holds the source Program of a class while its code runs in the calling thread
-/** The code of a class belongs to the Program that defines it, which can be deleted in another thread while a Program
-    sharing the class calls the code: the holder keeps the Program allocated (see
-    qore_class_private::getSourceProgramForCall()), and entering it (ProgramThreadCountContextHelper) fails once its
-    teardown has started.  Declared before the ProgramThreadCountContextHelper (or the CodeEvaluationHelper) that
-    enters the Program, so that the Program is released after the thread has left it.
+//! Holds the Program that user code runs in while the calling thread runs it: the source Program of a class or the
+//! Program that defined a function
+/** User code belongs to the Program that defines it, and runs in that Program when another Program calls it: the
+    methods of a class in the source Program of the class (set()), and a function in the Program that defined it
+    (setVariant()), so that a function and a method of a module behave alike at the Program barrier.  That Program can
+    be deleted in another thread while a Program sharing the code calls it: the holder keeps it allocated, and
+    entering it (ProgramThreadCountContextHelper) fails once its teardown has started.  A call within the Program, the
+    usual case, takes no reference and no lock.  Declared before the ProgramThreadCountContextHelper (or the
+    CodeEvaluationHelper) that enters the Program, so that the Program is released after the thread has left it.
 */
 class QoreSourceProgramHolder {
 public:
@@ -4513,11 +4628,10 @@ public:
         set(c);
     }
 
-    DLLLOCAL ~QoreSourceProgramHolder() {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~QoreSourceProgramHolder() {
+        // a call within the Program, or into a module's Program, takes no reference
         if (referenced) {
-            // releasing the last reference deletes the Program, which needs a sink for its destructors
-            assert(xsink);
-            pgm->deref(xsink);
+            release();
         }
     }
 
@@ -4528,6 +4642,40 @@ public:
     DLLLOCAL void set(const qore_class_private* c) {
         assert(!pgm);
         pgm = c ? c->getSourceProgramForCall(referenced, &deleted) : nullptr;
+    }
+
+    //! takes the Program that defined a user variant (the code of a function); may be called once
+    /** The Program is identified by its address and ID (UserVariantBase::pgm and UserVariantBase::pgm_id), as it can
+        have been deleted: a reference is taken only if it is still registered, and \a sourceDeleted() is true if it
+        is not.  No reference is taken if the Program is \a cur_pgm, the thread's current Program, or \a call_pgm, the
+        explicit Program of the call, which the caller keeps allocated for the call (QoreProgram::callFunction()), or
+        if it has module lifetime
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void setVariant(const UserVariantBase* uvb, const QoreProgram* cur_pgm,
+            const QoreProgram* call_pgm = nullptr) {
+        assert(!pgm);
+        assert(uvb);
+        QoreProgram* p = uvb->pgm;
+        if (!p) {
+            return;
+        }
+        // the ID tells the variant's Program from a later one at the same address
+        if ((p == cur_pgm || p == call_pgm) && p->getProgramId() == uvb->pgm_id) {
+            pgm = p;
+            return;
+        }
+        // a module's Program stays allocated while any code can run (module lifetime), so a call from another Program
+        // needs no reference to it; entering it fails once its teardown has started
+        if (uvb->pgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+            pgm = p;
+            return;
+        }
+        setVariantSlow(uvb);
+    }
+
+    //! takes the Program that defined a user variant, called from the thread's current Program; see setVariant()
+    DLLLOCAL void setVariant(const UserVariantBase* uvb) {
+        setVariant(uvb, ::getProgram());
     }
 
     //! the Program, or nullptr if the class has no source Program (it has released the class, or it is deleted)
@@ -4550,6 +4698,12 @@ private:
     ExceptionSink* xsink;
     bool referenced = false;
     bool deleted = false;
+
+    //! takes the Program of a variant that is neither current nor held by the caller nor has module lifetime
+    DLLLOCAL QORE_INTERN_NOINLINE void setVariantSlow(const UserVariantBase* uvb);
+
+    //! releases the reference taken to the Program
+    DLLLOCAL QORE_INTERN_NOINLINE void release();
 };
 
 //! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
@@ -4558,6 +4712,22 @@ private:
 */
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
+
+//! Returns the Program that a call of a function runs in; \a holder keeps that Program for the call
+/** A user function runs in the Program that defined it, as a method runs in the source Program of its class (see
+    qore_get_method_pgm_context()): a module function called from another Program runs in the module's Program.  A
+    function with only builtin variants runs in \a call_pgm, the Program the call is made in (its explicit Program,
+    if any, otherwise the caller's), which must stay allocated while the call is made, or nullptr for the current
+    Program.  \a variant is the variant of the call if it is known; otherwise the Program of the function's user
+    variants is used, as all of them are defined by one Program.
+
+    @return the Program to run the call in, or nullptr with an exception raised in the holder's sink if the Program
+    that defined the function is being deleted
+
+    The holder must be declared before the helper that enters the Program returned.
+*/
+DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreSourceProgramHolder& holder, QoreProgram* call_pgm);
 
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one

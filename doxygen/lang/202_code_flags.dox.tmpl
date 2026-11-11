@@ -3,7 +3,7 @@
     Builtin functions (and methods) can be tagged with flags that give some properties of the code to be executed as in the following sections.
     
     @section NOOP
-    Code with this flag makes no calculations, but rather returns a constant value. This flag is given to function and method variants that return a default value depending on the type of argument(s). When variants with this flag are resolved at parse time, a @ref call-with-type-errors warning is raised (assuming this warning is enabled).
+    Code with this flag makes no calculations, but rather returns a constant value. This flag is given to function and method variants that return a default value depending on the type of argument(s). When variants with this flag are resolved at parse time, a @ref call-with-type-errors warning is raised (assuming this warning is enabled). If either Qore::PO_REQUIRE_TYPES or Qore::PO_STRICT_ARGS is set (as with @ref modern "%modern"), then these variants are not candidates at parse time or at run time: a call that only such a variant would accept, such as <tt>sort(NOTHING)</tt> or <tt>chr(NOTHING)</tt>, raises \c RUNTIME-OVERLOAD-ERROR (since %Qore 3.0 also at run time).
 
     @section RUNTIME_NOOP
     Code with this flag makes no calculations, but rather returns a constant value. This flag is given to function and method variants that return a default value depending on the type of argument(s). When variants with this flag are resolved at parse time, a @ref call-with-type-errors warning is raised (assuming this warning is enabled), unless Qore::PO_REQUIRE_TYPES or Qore::PO_STRICT_ARGS is set. If either Qore::PO_REQUIRE_TYPES or Qore::PO_STRICT_ARGS is set, then these variants are inaccessible; resolving to a variant with this flag set at parse time or run time causes an exception to be thrown. These variants are included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments.
@@ -47,12 +47,12 @@
     @section OWN_PROGRAM_STATE
     The function or method changes or reads only the state that the Program running it keeps for the current thread,
     such as its @ref thread_local_data_family "thread-local data": it cannot affect another Program, another thread, or the
-    process.  Code of a user module runs with the restrictions of the code that calls it as well as its own, but a
-    variant with this flag that module code calls while running in the module's own Program (a method of a module
-    class, or a closure created in module code) is checked against the module's own restrictions only, since it can
-    reach only the module's own state, which the caller cannot reach in any case.  The flag changes nothing in any
-    other context: called directly by restricted code, or by a module function, which runs in its caller's Program,
-    the variant is checked against all the restrictions in effect.
+    process.  Code of a user module runs in the module's own Program, and for a sandboxed caller with the caller's
+    restrictions as well as its own (see @ref user_module_runtime_context), but a variant with this flag that module
+    code calls is checked against the module's own restrictions only, since it can reach only the module's own state,
+    which the caller cannot reach in any case.  The flag changes nothing in any other context: called directly by
+    restricted code, or by code of another Program that runs while module code runs (a callback of the caller), the
+    variant is checked against all the restrictions in effect.
 
     @section CURRENT_THREAD_ONLY
     The function or method affects or reads only the calling thread: it waits or yields (@ref Qore::sleep() "sleep()",
@@ -60,9 +60,9 @@
     @ref Qore::channel_select() "channel_select()") or reads the thread's own state
     (@ref Qore::active_exception() "active_exception()",
     @ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()").  A caller that runs module
-    code gives it its thread for the duration of the call, so module code running in the module's own Program checks
-    such a variant against the module's own restrictions only.  Called directly by restricted code, or by a module
-    function, which runs in its caller's Program, the variant is checked against all the restrictions in effect.
+    code gives it its thread for the duration of the call, so module code running for a sandboxed caller checks such a
+    variant against the module's own restrictions only.  Called directly by restricted code, the variant is checked
+    against all the restrictions in effect.
 
     @section MODULE_OWNED
     The function or method runs code passed to it asynchronously
@@ -71,10 +71,10 @@
     @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()",
     @ref Qore::parallel_foreach() "parallel_foreach()") or with thread cancellation deferred
     (@ref Qore::defer_thread_cancel() "defer_thread_cancel()"), or acts on timers
-    (@ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()").  Module code running in the
-    module's own Program for a caller with restrictions, such as one with
-    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", checks such a variant without the restrictions it inherits
-    from its caller, and the variant then checks what it acts on:
+    (@ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()").  Module code running for a
+    sandboxed caller with restrictions, such as one with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL",
+    checks such a variant without the restrictions it inherits from its caller (see @ref user_module_runtime_context),
+    and the variant then checks what it acts on:
     - the code must belong to a Program that allows what the caller may not, with thread control always included:
       the module's own closures and methods qualify, while the caller's own code (a closure, or a method that a
       class of the caller overrides) is refused with \c INVALID-FUNCTION-ACCESS, naming the restriction that the
@@ -85,8 +85,8 @@
       chain of callers that is not a module;
       @ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()" returns @ref False otherwise
 
-    This keeps the caller's restrictions: a caller that may not control threads cannot use module code to run its own
-    code in another thread or to escape a cancellation request, while modules such as
+    This keeps the restrictions of a sandboxed caller: a sandboxed caller that may not control threads cannot use
+    module code to run its own code in another thread or to escape a cancellation request, while modules such as
     @ref asyncsocketiointro "AsyncSocketIo" and the WebSocket clients keep their
     own timers and tasks for it.  Called directly by restricted code, the variant is checked against all the
     restrictions in effect.

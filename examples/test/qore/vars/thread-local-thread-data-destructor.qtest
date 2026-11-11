@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadLocalThreadDataDestructorTest
+
+# the variable that the destructors of a thread's thread data use while the thread ends
+thread_local *int tl;
+
+# what each destructor did, in the order they ran
+our list<string> dtor_results;
+
+# a value of a thread's thread data (save_thread_data()) that uses tl when the thread ends
+class TlDtor {
+    private {
+        string action;
+    }
+
+    constructor(string action) {
+        self.action = action;
+    }
+
+    destructor() {
+        try {
+            switch (action) {
+                case "assign": tl = 10; break;
+                case "increment": ++tl; break;
+                case "read": *int v = tl; remove v; break;
+            }
+            dtor_results += action + ": ok";
+        } catch (hash<ExceptionInfo> ex) {
+            dtor_results += action + ": " + ex.err;
+        }
+    }
+}
+
+#! Regression test for issue #5715
+/** A destructor of a thread's thread data that used a thread_local variable while the thread ended made the variable
+    finalized for every thread: every later use of it in any thread, also in a thread started afterwards, raised
+    \c DESTRUCTOR-ERROR ("illegal variable assignment after second phase of variable destruction").  The variable is
+    finalized for the ending thread only: its destructors cannot give it a value again, while every other thread uses
+    its own value.
+*/
+public class ThreadLocalThreadDataDestructorTest inherits QUnit::Test {
+    constructor() : Test("thread_local variable used by a thread data destructor", "1.0") {
+        addTestCase("assignment in a thread data destructor", \assignInDestructor());
+        addTestCase("increment in a thread data destructor", \incrementInDestructor());
+        addTestCase("read in a thread data destructor", \readInDestructor());
+        addTestCase("several threads ending one after another", \severalThreads());
+
+        set_return_value(main());
+    }
+
+    assignInDestructor() {
+        check("assign", "assign: DESTRUCTOR-ERROR");
+    }
+
+    incrementInDestructor() {
+        check("increment", "increment: DESTRUCTOR-ERROR");
+    }
+
+    readInDestructor() {
+        # reading does not give the variable a value
+        check("read", "read: ok");
+    }
+
+    severalThreads() {
+        tl = 100;
+        dtor_results = ();
+        for (int i = 0; i < 5; ++i) {
+            endThread("assign");
+            # each new thread has a value of its own, which it can assign
+            assertEq(i + 1, otherThreadUse(i), "thread " + i);
+        }
+        assertEq((map "assign: DESTRUCTOR-ERROR", xrange(5)), dtor_results);
+        assertEq(100, tl);
+    }
+
+    private check(string action, string expected) {
+        tl = 1;
+        dtor_results = ();
+        endThread(action);
+        assertEq((expected,), dtor_results);
+
+        # the main thread's value is its own, and it can still be assigned
+        assertEq(1, tl);
+        ++tl;
+        assertEq(2, tl);
+        tl = 3;
+        assertEq(3, tl);
+
+        # a thread started afterwards has a value of its own, which it can assign
+        assertEq(43, otherThreadUse(42));
+        assertEq(3, tl);
+    }
+
+    # runs a thread that assigns tl and saves thread data that uses tl when the thread ends; returns when it has ended
+    private endThread(string action) {
+        int tid = background sub () {
+            tl = 5;
+            save_thread_data("dtor", new TlDtor(action));
+        }();
+        thread_join(tid);
+    }
+
+    # runs a thread that assigns tl and increments it; returns the thread's value, or the error it raised
+    private auto otherThreadUse(int start) {
+        Queue q();
+        background sub () {
+            try {
+                *int initial = tl;
+                if (exists initial) {
+                    q.push("initial value: " + initial);
+                    return;
+                }
+                tl = start;
+                ++tl;
+                q.push(tl);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    }
+}

@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <unordered_set>
 
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
@@ -616,6 +617,12 @@ static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
     }
 }
 
+// returns true for a step of a list of selectors after the first, which reads the sequence (operands[1]) that the
+// first step holds (see QoreIROpcode::ListSelectorStep)
+static bool qore_ir_list_selector_step_reads_seq(const QoreIRInstruction& inst) {
+    return qore_ir_release_class_opcode(&inst) == QoreIROpcode::ListSelectorStep && !inst.result.isValid();
+}
+
 // returns true for an operation that builds a list or a hash of its operands, which the AST interpreter builds
 // element by element, so an exception releases the elements built with the container, first element first
 static bool qore_ir_opcode_builds_container(QoreIROpcode op) {
@@ -642,7 +649,17 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
             if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
                 continue;
             }
+            // the sequence of a list of selectors is held by its first step (QoreIROpcode::ListSelectorStep with
+            // QoreIRListSelectorFlag::Begin, the only step with a result) as the receiver of the operation, as
+            // ListIndexDynamic holds it; the later steps of the same operation read it from there, so they are not
+            // uses of their own (qore#5665)
+            const QoreIRValue* step_seq = qore_ir_list_selector_step_reads_seq(*inst)
+                ? &inst->operands[1] : nullptr;
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (step_seq && operand.id == step_seq->id) {
+                    step_seq = nullptr;
+                    return;
+                }
                 if (operand.isValid() && operand.id < uses.size()) {
                     ++uses[operand.id];
                 }
@@ -691,6 +708,10 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
                     set_class(operand, serial + 1);
                 }
             } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
+                set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+            } else if (op == QoreIROpcode::ListSelectorStep && inst->result.isValid()) {
+                // the sequence of a list of selectors (operands[0] of the Begin step), which
+                // QoreSquareBracketsOperatorNode holds as a receiver
                 set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
             }
         }
@@ -2175,8 +2196,10 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
             return visit(static_cast<const QoreIRSwitchStringInstruction&>(inst).switch_val);
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             return visit(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             return visit(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
@@ -2243,6 +2266,7 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
             break;
         }
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:
@@ -2268,6 +2292,28 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
         default:
             break;
     }
+}
+
+//! Visits the exception edges of a block: the exception target of each instruction and of each throw
+/** A target can be visited more than once.  With \a check_count, polls cancellation and returns false if it is
+    requested; without it, runs without check points.
+*/
+static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const QoreIRBlockVisitor& visitor,
+        size_t* check_count, const char* operation) {
+    for (const auto& inst : block.instructions) {
+        if (check_count && qore_ir_analysis_cancelled(*check_count, operation)) {
+            return false;
+        }
+        if (inst->exception_target) {
+            visitor(inst->exception_target);
+        }
+        if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+            if (throw_inst->exception_target) {
+                visitor(throw_inst->exception_target);
+            }
+        }
+    }
+    return true;
 }
 
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
@@ -2315,17 +2361,10 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 successors[block_id].push_back(it->second);
                 predecessors[it->second].push_back(block_id);
             };
-            for (const auto& inst : block->instructions) {
-                if (qore_ir_analysis_cancelled(check_count,
-                        "IR exceptional control-flow analysis")) {
-                    cancelled = true;
-                    return;
-                }
-                add_exception_successor(inst->exception_target);
-                if (const auto* throw_inst =
-                        dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
-                    add_exception_successor(throw_inst->exception_target);
-                }
+            if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
+                    "IR exceptional control-flow analysis")) {
+                cancelled = true;
+                return;
             }
         }
     }
@@ -2411,6 +2450,179 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
 bool QoreIRControlFlowGraph::dominates(size_t dominator, size_t block) const {
     return dominator < blocks.size() && block < blocks.size() && reachable[block]
         && (dominators[block][dominator / 64] & (uint64_t(1) << (dominator % 64)));
+}
+
+bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
+    static const char* const operation = "IR reused call argument analysis";
+    auto cancelled = [&]() -> bool {
+        return check_count && qore_ir_analysis_cancelled(*check_count, operation);
+    };
+    reused.assign(func.max_value_id + 1, 0);
+    const size_t nblocks = func.blocks.size();
+    std::unordered_map<const QoreIRBasicBlock*, size_t> block_ids;
+    block_ids.reserve(nblocks);
+    for (size_t i = 0; i < nblocks; ++i) {
+        block_ids.emplace(func.blocks[i].get(), i);
+    }
+    // the defining block of each value
+    std::vector<uint32_t> def_block(reused.size(), UINT32_MAX);
+    // the successors of each block: the edges of QoreIRControlFlowGraph with include_exception_edges, which also
+    // computes dominators (not needed here) and always polls cancellation
+    std::vector<std::vector<size_t>> succ(nblocks);
+    for (size_t i = 0; i < nblocks; ++i) {
+        const QoreIRBasicBlock* block = func.blocks[i].get();
+        auto add = [&](QoreIRBasicBlock* target) {
+            auto it = block_ids.find(target);
+            if (it != block_ids.end()
+                    && std::find(succ[i].begin(), succ[i].end(), it->second) == succ[i].end()) {
+                succ[i].push_back(it->second);
+            }
+        };
+        if (!block->instructions.empty()) {
+            qore_ir_visit_successors(*block->instructions.back(), add);
+        }
+        if (!qore_ir_visit_exception_targets(*block, add, check_count, operation)) {
+            return false;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid() && inst->result.id < def_block.size()) {
+                def_block[inst->result.id] = static_cast<uint32_t>(i);
+            }
+        }
+    }
+
+    // the strongly connected components (iterative Tarjan); a block can only run again through a cycle of its
+    // component
+    std::vector<size_t> comp(nblocks, SIZE_MAX);
+    std::vector<uint8_t> comp_cyclic;
+    {
+        std::vector<size_t> index(nblocks, SIZE_MAX);
+        std::vector<size_t> low(nblocks, 0);
+        std::vector<uint8_t> on_stack(nblocks, 0);
+        std::vector<size_t> stack;
+        std::vector<std::pair<size_t, size_t>> work;
+        size_t next_index = 0;
+        for (size_t root = 0; root < nblocks; ++root) {
+            if (index[root] != SIZE_MAX) {
+                continue;
+            }
+            work.emplace_back(root, 0);
+            index[root] = low[root] = next_index++;
+            stack.push_back(root);
+            on_stack[root] = 1;
+            while (!work.empty()) {
+                if (cancelled()) {
+                    return false;
+                }
+                size_t v = work.back().first;
+                size_t& pos = work.back().second;
+                if (pos < succ[v].size()) {
+                    size_t w = succ[v][pos++];
+                    if (index[w] == SIZE_MAX) {
+                        index[w] = low[w] = next_index++;
+                        stack.push_back(w);
+                        on_stack[w] = 1;
+                        work.emplace_back(w, 0);
+                    } else if (on_stack[w]) {
+                        low[v] = std::min(low[v], index[w]);
+                    }
+                    continue;
+                }
+                work.pop_back();
+                if (!work.empty()) {
+                    size_t parent = work.back().first;
+                    low[parent] = std::min(low[parent], low[v]);
+                }
+                if (low[v] == index[v]) {
+                    size_t c = comp_cyclic.size();
+                    size_t members = 0;
+                    size_t w;
+                    do {
+                        w = stack.back();
+                        stack.pop_back();
+                        on_stack[w] = 0;
+                        comp[w] = c;
+                        ++members;
+                    } while (w != v);
+                    bool self_loop = std::find(succ[v].begin(), succ[v].end(), v) != succ[v].end();
+                    comp_cyclic.push_back(members > 1 || self_loop);
+                }
+            }
+        }
+    }
+
+    // (call block, defining block) -> whether the call's block can run again without the defining block
+    std::unordered_map<uint64_t, bool> answers;
+    // the blocks visited by the current search, by the search's stamp
+    std::vector<uint32_t> visited(nblocks, 0);
+    uint32_t stamp = 0;
+    std::vector<size_t> worklist;
+    bool search_cancelled = false;
+    // the call's block is in a cyclic component (the caller checks)
+    auto reentered = [&](size_t use, size_t def) -> bool {
+        // every cycle through the call's block stays in its component: if the defining block is outside, any of
+        // them runs the call again without it; only a defining block in the component needs the search
+        if (comp[def] != comp[use]) {
+            return true;
+        }
+        uint64_t key = (static_cast<uint64_t>(use) << 32) | static_cast<uint64_t>(def);
+        auto it = answers.find(key);
+        if (it != answers.end()) {
+            return it->second;
+        }
+        bool found = false;
+        ++stamp;
+        worklist.clear();
+        worklist.push_back(use);
+        while (!found && !worklist.empty()) {
+            if (cancelled()) {
+                search_cancelled = true;
+                return true;
+            }
+            size_t b = worklist.back();
+            worklist.pop_back();
+            for (size_t s : succ[b]) {
+                if (s == use) {
+                    found = true;
+                    break;
+                }
+                if (s == def || visited[s] == stamp || comp[s] != comp[use]) {
+                    continue;
+                }
+                visited[s] = stamp;
+                worklist.push_back(s);
+            }
+        }
+        answers.emplace(key, found);
+        return found;
+    };
+
+    for (size_t i = 0; i < nblocks; ++i) {
+        for (const auto& inst : func.blocks[i]->instructions) {
+            if (cancelled()) {
+                return false;
+            }
+            int arg_start = qore_ir_call_arg_start(inst.get());
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t op = static_cast<size_t>(arg_start); op < inst->operands.size(); ++op) {
+                QoreIRValue arg = inst->operands[op];
+                if (!arg.isValid() || arg.id >= def_block.size() || def_block[arg.id] == UINT32_MAX
+                        || def_block[arg.id] == i || comp[i] == SIZE_MAX || !comp_cyclic[comp[i]]) {
+                    continue;
+                }
+                bool again = reentered(i, def_block[arg.id]);
+                if (search_cancelled) {
+                    return false;
+                }
+                if (again) {
+                    reused[arg.id] = 1;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg) {
@@ -2674,9 +2886,12 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
     This asks the question structurally rather than through the ownership facts, which are only
     approximate here - a native float carries QoreIRValueOwnership::Unknown rather than an answer -
     and getting it wrong means releasing a value another consumer still holds.  A LoadLocal result
-    is never tracked for cleanup, so it is the case that can be admitted without any of that
-    reasoning, and it is the one that matters: it is what stops a loop-invariant call whose argument
-    is a local or a parameter from leaving the loop.
+    is the case that can be admitted without any of that reasoning, and it is the one that matters:
+    it is what stops a loop-invariant call whose argument is a local or a parameter from leaving the
+    loop.  A call does release a LoadLocal argument that has a reference of its own when the call
+    returns (design/temporary-lifetime.md), but only one defined again for each execution of the
+    call: a load hoisted to the preheader is defined once for all iterations, which the interpreter
+    and native code check with qore_ir_find_reused_call_args(), so for them it stays a plain read.
 */
 static bool qore_ir_call_cannot_consume_operand(
         const std::unordered_map<uint32_t, QoreIRInstruction*>* definitions, QoreIRValue value) {
@@ -2803,9 +3018,11 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
             break;
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
             break;
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
             break;
         case QoreIROpcode::TypedForeachNextInt:
@@ -3520,7 +3737,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     func.specializeType(facts->type_info));
                 if (!QoreTypeInfo::hasType(member_type)
                         || !QoreTypeInfo::hasType(value_type)
-                        || !QoreTypeInfo::isInputIdentical(
+                        || !QoreTypeInfo::acceptsInputUnchecked(
                             member_type, value_type)) {
                     exact_values = false;
                     break;
@@ -7086,6 +7303,8 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
                 case QoreIROpcode::ListSetInt:
                 case QoreIROpcode::ListSetFloat:
                 case QoreIROpcode::ListSetValue:
+                // adds the values that a selector selects to the result list in operands[0]
+                case QoreIROpcode::ListSelectorStep:
                     if (!inst->operands.empty()) {
                         safety.mutated_lists.insert(inst->operands[0].id);
                     }
@@ -7191,6 +7410,7 @@ static bool qore_ir_may_mutate_list(QoreIROpcode opcode) {
         case QoreIROpcode::ListSetValue:
         case QoreIROpcode::ListPush:
         case QoreIROpcode::ListIndexStore:
+        case QoreIROpcode::ListSelectorStep:
             return true;
         default:
             return false;
@@ -9897,7 +10117,7 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         const QoreTypeInfo* value_type =
             qore_get_value_type(func.specializeType(facts->type_info));
         if (!QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(
+                || !QoreTypeInfo::acceptsInputUnchecked(
                     target_value_type, value_type)) {
             return false;
         }
@@ -9976,7 +10196,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
         }
         if (!QoreTypeInfo::hasType(member_type)
                 || !QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(member_type, value_type)) {
+                || !QoreTypeInfo::acceptsInputUnchecked(member_type, value_type)) {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: hashdecl literal value mismatch for '%s': "
@@ -10392,6 +10612,30 @@ private:
     }
 };
 
+const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func) {
+    const QoreFunction* qf = func.source_qf;
+    if (!qf) {
+        // a method that qcc lowers without its function has its variant
+        const MethodVariantBase* mv = dynamic_cast<const MethodVariantBase*>(func.source_variant);
+        return mv ? mv->getClassPriv() : nullptr;
+    }
+    const QoreClass* qc = qf->getClass();
+    if (!qc) {
+        // a closure: the class of the method in which it was parsed, if recorded
+        const UserClosureFunction* ucf = dynamic_cast<const UserClosureFunction*>(qf);
+        qc = ucf ? QoreTypeInfo::getUniqueReturnClass(ucf->getClassType()) : nullptr;
+    }
+    return qc ? qore_class_private::get(*qc) : nullptr;
+}
+
+// a function without code of its own (neither source_qf nor source_variant: the IR function of a try or catch block,
+// or of a background expression, lowered as part of the function that contains the code) keeps the class context of
+// that function, as its code runs in it; top-level code, lowered on its own, has none
+QoreIRClassContextHelper::QoreIRClassContextHelper(const QoreIRFunction& func)
+        : QoreIRClassContextHelper(!func.source_qf && !func.source_variant && isSet() ? parse_get_class_priv()
+            : qore_ir_function_class_context(func)) {
+}
+
 //! Removes the checks of return values that the function proves unnecessary
 /** The declared return type accepts such a value as it is (see qore_ir_return_needs_coercion() and
     QoreIRReturnValueProof): it has a value, or the type accepts no value, and its type is accepted without a
@@ -10402,6 +10646,8 @@ private:
     @return the number of checks removed
 */
 static size_t qore_ir_elide_proven_return_checks(QoreIRFunction& func, size_t& check_count) {
+    // the type checks of the proof are made in the class context of the function's code (qore#5750)
+    QoreIRClassContextHelper class_ctx(func);
     size_t elided = 0;
     QoreIRReturnValueProof proof(func, check_count);
     const QoreTypeInfo* return_type = func.specializeType(func.return_type_info);
@@ -14016,6 +14262,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     return projections.size() + virtualized.size()
         + virtualized_phis.size();
 }
+//! Returns true if every type of the given type is accepted by the builtin conversion string(), int()
+//! (\a int_conversion) or float(); see qore_ir_conversion_accepts_type() in QoreIRLowering.cpp
+static bool qore_ir_analysis_conversion_accepts_type(bool int_conversion, const QoreTypeInfo* type) {
+    if (!type || !QoreTypeInfo::hasType(type) || type->return_vec.empty()) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        switch (ret.spec.getType()) {
+            case NT_NOTHING:
+            case NT_STRING:
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_BOOLEAN:
+            case NT_DATE:
+            case NT_CHAR:
+                break;
+            case NT_NULL:
+                if (int_conversion) {
+                    break;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+    return true;
+}
+
 
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         size_t* exception_edges_elided) {
@@ -14127,6 +14402,22 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             QoreIRValueFacts* specialized_facts = nullptr,
             bool commit = true) {
         if (!inst || !inst->result.isValid()) {
+            return;
+        }
+        // a checked builtin conversion of a value whose type has only types that the builtin accepts is the unchecked
+        // conversion (issue #5660): e.g. "auto i = 7; string(i)"
+        if (inst->operands.size() == 1
+                && (inst->opcode == QoreIROpcode::ToStringChecked || inst->opcode == QoreIROpcode::ToIntChecked
+                    || inst->opcode == QoreIROpcode::ToFloatChecked)) {
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+            if (facts && (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat
+                    || facts->representation == QoreIRValueRepresentation::NativeBool
+                    || qore_ir_analysis_conversion_accepts_type(inst->opcode == QoreIROpcode::ToIntChecked,
+                        facts->type_info))) {
+                inst->opcode = inst->opcode == QoreIROpcode::ToStringChecked ? QoreIROpcode::ToString
+                    : (inst->opcode == QoreIROpcode::ToIntChecked ? QoreIROpcode::ToInt : QoreIROpcode::ToFloat);
+            }
             return;
         }
         if (inst->operands.size() == 1
