@@ -53,6 +53,7 @@
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
@@ -73,6 +74,8 @@
     - \c license_str — the license as a string (e.g. \c "MIT", \c "LGPL", \c "GPL")
     - \c dependencies — a list of other binary module names this module depends on (\c strvec_t)
     - \c info — an optional @ref QoreHashNode pointer with extra module metadata (default: \c nullptr)
+    - \c ns — the module's namespace with static storage duration, if any (default: \c nullptr); it is purged when
+      the module is deleted, see @ref qore_module_teardown (since %Qore 3.0, @ref QORE_HAS_MODULE_NS_PURGE)
 
     @note The @ref QoreModuleInfo struct uses default member initializers, so fields like \c license (defaults to
     @ref QL_MIT) and callback pointers (default to \c nullptr) only need to be set if non-default values are
@@ -109,7 +112,8 @@
     @endcode
 
     Called when the module is unloaded (typically when the %Qore library shuts down).  Free any resources allocated
-    during initialization.
+    during initialization, including every Qore value the module holds outside its namespace; see
+    @ref qore_module_teardown.
 
     @par Parse Command Handler — \c qore_module_parse_cmd_t (optional)
 
@@ -131,6 +135,9 @@
     static void mymodule_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
     static void mymodule_module_delete();
 
+    // Reference namespace — initialized once, copied for each QoreProgram
+    static QoreNamespace MyModuleNS("Qore::mymodule");
+
     // Module description function — the entry point discovered by the Qore library
     extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
         mod_info.name = "mymodule";
@@ -143,12 +150,11 @@
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        // the namespace is purged when the module is deleted, before the types are freed
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
-
-    // Reference namespace — initialized once, copied for each QoreProgram
-    static QoreNamespace MyModuleNS("Qore::mymodule");
 
     static void mymodule_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         // Register classes, constants, and functions in the namespace
@@ -162,7 +168,7 @@
     }
 
     static void mymodule_module_delete() {
-        // Free any resources allocated during initialization
+        // Free any resources allocated during initialization; MyModuleNS is purged after this returns
     }
     @endcode
 
@@ -174,6 +180,57 @@
 
     @note Classes must not be created more than once, because each Qore class gets a unique ID at creation time.
     Initialize classes in the \c init callback and use \c copy() in the \c ns_init callback.
+
+    @subsection qore_module_teardown Releasing Module State at Shutdown
+
+    A module releases all the %Qore state it owns when it is deleted: its namespace and the constants, classes,
+    hashdecls and enums in it, and any %Qore value it keeps elsewhere (objects, call references, hashes, lists,
+    strings, and Programs that the module created).  Modules are deleted by qore_cleanup(), modules that require
+    another module before it, and all of this must be released then, before the library frees the types.  It must
+    never be left to a C++ static destructor: static destructors run after qore_cleanup() has freed the types, when
+    releasing a %Qore value (and running a destructor of a Qore object) is no longer safe, and they do not run at
+    all when the process ends with \c _exit() (as it does when a background JIT compile is still running when the
+    process exits, or in a child process that requested qore_fork_child_exit_quickly()), so a leak checker such as
+    valgrind reports their values as lost.
+
+    - a namespace with static storage duration is registered with QoreModuleInfo::ns in the description function;
+      after the module's \c del function has run, it is purged with QoreNamespace::purge(), which releases
+      everything in it and leaves it empty, so that its C++ static destructor has nothing left to release.  The
+      \c del function can still use the namespace, and does not need to call QoreNamespace::clear() or
+      QoreNamespace::purge() itself
+    - everything else is released by the \c del function: a QoreProgram that the module owns is deleted there (with
+      QoreProgram::waitForTerminationAndDeref()), and objects, call references and other values are dereferenced
+      there
+    - a module that also supports %Qore versions without QoreModuleInfo::ns tests @ref QORE_HAS_MODULE_NS_PURGE and
+      calls QoreNamespace::clear() in its \c del function otherwise
+
+    @code{.cpp}
+    static QoreNamespace MyModuleNS("Qore::mymodule");
+    static ResolvedCallReferenceNode* my_callback = nullptr;
+
+    extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
+        // ...
+        mod_info.del = mymodule_module_delete;
+    #ifdef QORE_HAS_MODULE_NS_PURGE
+        mod_info.ns = &MyModuleNS;
+    #endif
+    }
+
+    static void mymodule_module_delete() {
+        if (my_callback) {
+            ExceptionSink xsink;
+            my_callback->deref(&xsink);
+            my_callback = nullptr;
+        }
+    #ifndef QORE_HAS_MODULE_NS_PURGE
+        MyModuleNS.clear(nullptr);
+    #endif
+    }
+    @endcode
+
+    Debug builds of the library count the module namespaces that still hold values when the types are freed;
+    with the \c QORE_TEARDOWN_REPORT environment variable set, the count and each such namespace are printed on
+    \c stderr, and a registered namespace destroyed with content after that point fails an assertion.
 
     @subsection module_cpp_api_dev Sharing a C++ API Between Modules
 

@@ -179,7 +179,24 @@ struct QoreModuleInfo {
         @since %Qore 3.0
     */
     std::string aot_runtime_identity;
+
+    //! the namespace of the module with static storage duration, if any
+    /** A module that keeps its namespace in a variable with static storage duration sets this in its description
+        function.  When the module is deleted during qore_cleanup(), after its \a del function has run, the namespace
+        is purged with QoreNamespace::purge(), so that its constants, classes and other Qore values are released
+        before the types are freed instead of by the C++ static destructor of the namespace.  Other module-owned
+        Qore state (static Programs, objects, call references) is released by the \a del function.  See
+        @ref qore_module_teardown.
+
+        @since %Qore 3.0 (check @ref QORE_HAS_MODULE_NS_PURGE)
+    */
+    QoreNamespace* ns = nullptr;
 };
+
+//! defined if QoreModuleInfo::ns and QoreNamespace::purge() are available
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_MODULE_NS_PURGE 1
 
 //! Module description function
 typedef void (*qore_binary_module_desc_t)(QoreModuleInfo& mod_info);
