@@ -2612,7 +2612,7 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
 
 static bool qore_bind_class_type_param(const QoreClass* cls, const QoreTypeParameterTypeInfo* tpi,
         const QoreTypeInfo* actual, type_vec_t& bindings) {
-    if (tpi->getOwnerClass() != cls) {
+    if (!qore_class_private::sameDeclaration(tpi->getOwnerClass(), cls)) {
         return true;
     }
     if (!actual || !QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
