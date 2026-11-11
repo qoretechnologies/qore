@@ -2435,6 +2435,30 @@ static AbstractQoreFunctionVariant* doSingleVariantTypeException(const QoreProgr
     return nullptr;
 }
 
+//! Raises a parse error for an argument that is a date of the other subtype than its parameter's (issue #5722)
+/** The variant is chosen with such an argument matched as a date (see qore_variant_match_arg_type()); the variant
+    chosen at parse time checks it then, as its parameter checks the value at run time.
+
+    @param args the types of the arguments, in the order of the parameters
+
+    @return -1 if a parse error was raised, 0 if not
+*/
+static int qore_check_date_subtype_args(const QoreProgramLocation* loc, const AbstractQoreFunctionVariant* variant,
+        const char* class_name, const char* name, const type_vec_t& args, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_inst) {
+    const AbstractFunctionSignature* sig = variant->getSignature();
+    size_t num_params = sig->numParams();
+    for (size_t pi = 0; pi < args.size() && pi < num_params; ++pi) {
+        const QoreTypeInfo* param = sig->getParamTypeInfo(pi);
+        if (QoreTypeInfo::isDateSubtypeMismatch(param, args[pi])) {
+            doSingleVariantTypeException(loc, static_cast<int>(pi), variant, class_name, name, sig, param, args[pi],
+                receiver_type_info, type_param_inst);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void do_call_str(QoreString &desc, const QoreFunction* func, const type_vec_t& argTypeInfo,
         const type_vec_t* explicit_type_args = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
         bool use_path = false) {
@@ -2899,6 +2923,15 @@ struct ClassReceiverInferenceResult {
     bool ambiguous = false;
 };
 
+//! Returns the argument type with which a variant is chosen at parse time (issue #5722)
+/** A date of the other subtype than the parameter's (date<absolute> or date<relative>) is matched as a date: the
+    variant is chosen as at run time, where a date of either subtype matches a parameter of either subtype and the
+    parameter then checks the value; the variant chosen checks the subtype (see qore_check_date_subtype_args()).
+*/
+static const QoreTypeInfo* qore_variant_match_arg_type(const QoreTypeInfo* param, const QoreTypeInfo* arg) {
+    return QoreTypeInfo::isDateSubtypeMismatch(param, arg) ? QoreTypeInfo::getRuntimeValueType(arg) : arg;
+}
+
 static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunctionVariant* variant,
         const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
         const type_vec_t* explicit_type_args, int& score, int& nperfect, int& score_len) {
@@ -2946,7 +2979,8 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunc
         if (rc == QTI_UNASSIGNED) {
             bool may_not_match = false;
             bool may_need_filter = false;
-            rc = QoreTypeInfo::parseAccepts(formal, actual, may_not_match, may_need_filter, max_rc, true);
+            rc = QoreTypeInfo::parseAccepts(formal, qore_variant_match_arg_type(formal, actual), may_not_match,
+                may_need_filter, max_rc, true);
             if (may_not_match) {
                 return false;
             }
@@ -3940,7 +3974,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 if (rc == QTI_UNASSIGNED) {
                     bool may_not_match = false;
                     bool may_need_filter = false;
-                    rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                    rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                        may_need_filter, max_rc, true);
                     if (may_not_match) {
                         variant_soft_match = true;
                         variant_runtime_match = true;
@@ -4196,6 +4231,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
+        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+                best_binding.arg_types, receiver_type_info, &best_type_param_inst) && !err) {
+            err = -1;
+        }
+
         AbstractFunctionSignature* sig = variant->getSignature();
         if (!variant->hasVarargs() && best_binding.arg_types.size() > sig->numParams()) {
             if (warn_excess_args(loc, this, best_binding.arg_types, variant, sig, receiver_type_info,
@@ -4382,7 +4422,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     if (rc == QTI_UNASSIGNED) {
                         bool may_not_match = false;
                         bool may_need_filter = false;
-                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                            may_need_filter, max_rc, true);
                         if (may_not_match) {
                             variant_soft_match = true;
                             variant_runtime_match = true;
@@ -4642,7 +4683,8 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
                     continue;
                 }
                 const QoreTypeInfo* a = pi < num_args ? argTypeInfo[pi] : nothingTypeInfo;
-                if (!QoreTypeInfo::hasType(a) || QoreTypeInfo::parseAccepts(t, a) != QTI_NOT_EQUAL) {
+                if (!QoreTypeInfo::hasType(a)
+                        || QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a)) != QTI_NOT_EQUAL) {
                     continue;
                 }
                 may_match = false;
@@ -4762,7 +4804,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
                     }
                     const QoreTypeInfo* a = supplied[pi] && pi < param_types.size() ? param_types[pi]
                         : nothingTypeInfo;
-                    if (!QoreTypeInfo::hasType(a) || QoreTypeInfo::parseAccepts(t, a) != QTI_NOT_EQUAL) {
+                    if (!QoreTypeInfo::hasType(a)
+                            || QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a)) != QTI_NOT_EQUAL) {
                         continue;
                     }
                     may_match = false;
@@ -4944,7 +4987,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (rc == QTI_UNASSIGNED) {
                         bool may_not_match = false;
                         bool may_need_filter = false;
-                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        rc = QoreTypeInfo::parseAccepts(t, qore_variant_match_arg_type(t, a), may_not_match,
+                            may_need_filter, max_rc, true);
                         //printd(5, "QoreFunction::parseFindVariant() %s(%s) pi: %d (%s <= %s) rc: %d max_rc: %d "
                         //    "may_not_match: %d\n", getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t),
                         //    QoreTypeInfo::getName(a), rc, max_rc, may_not_match);
@@ -5172,6 +5216,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             desc->concat("; to disable this warning, use '%disable-warning invalid-operation' in your code");
             qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_CALL_WITH_TYPE_ERRORS,
                 "CALL-WITH-TYPE-ERRORS", desc);
+        }
+
+        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+                argTypeInfo, receiver_type_info, &best_type_param_inst) && !err) {
+            err = -1;
         }
 
         AbstractFunctionSignature* sig = variant->getSignature();

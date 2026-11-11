@@ -6534,6 +6534,12 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         may_not_match = true;
         return QTI_AMBIGUOUS;
     }
+    // date<absolute> and date<relative> have no value in common: both accept and return dates, so only their
+    // subtypes tell them apart, and a value of one is never accepted by the other (issue #5722)
+    if (isDateSubtypeMismatch(first, second)) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
+    }
     return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
 }
 

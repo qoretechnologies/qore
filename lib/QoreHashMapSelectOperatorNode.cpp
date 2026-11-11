@@ -101,7 +101,8 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
             }
             value_analysis = parse_context.analysis;
         }
-        expTypeInfo2 = parse_context.typeInfo;
+        // the values in the result are those of run-time values: a date has no subtype then (issue #5722)
+        expTypeInfo2 = QoreTypeInfo::getRuntimeValueType(parse_context.typeInfo);
         // check select expression
         parse_context.typeInfo = nullptr;
         parse_context.expected_type_info = nullptr;

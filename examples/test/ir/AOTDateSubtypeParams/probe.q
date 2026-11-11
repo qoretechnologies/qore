@@ -58,7 +58,10 @@ class AOTDateSubtypeParamsProbe {
         # each case is called once with a value of the right kind and once with one of the wrong kind
         list<hash<auto>> cases = (
             {"name": "fa(date)", "ok": sub () { fa(dabs); }, "bad": sub () { fa(drel); }},
-            {"name": "fa(literal)", "ok": sub () { fa(2026-01-01T00:00:00Z); }, "bad": sub () { fa(1s); }},
+            {"name": "fa(literal)", "ok": sub () { fa(2026-01-01T00:00:00Z); },
+                # a relative date literal is a parse error there (issue #5722): a constant typed as a date is
+                # checked when the call runs
+                "bad": sub () { fa(cast<date>(1s)); }},
             {"name": "fr(date)", "ok": sub () { fr(drel); }, "bad": sub () { fr(dabs); }},
             {"name": "fan(*date)", "ok": sub () { fan(ndabs); fan(nothing_date); }, "bad": sub () { fan(ndrel); }},
             {"name": "fan(date)", "ok": sub () { fan(dabs); }, "bad": sub () { fan(drel); }},

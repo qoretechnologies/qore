@@ -268,7 +268,9 @@ DateTimeNode* DateTimeNode::makeRelativeFromSeconds(int64 s, int u) {
 }
 
 int DateTimeNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
-    parse_context.typeInfo = dateTypeInfo;
+    // a date value in the code, such as a literal, has the type of its subtype, so that a relative date given where
+    // an absolute one is required, or the reverse, is a parse error (issue #5722)
+    parse_context.typeInfo = isRelative() ? dateRelativeTypeInfo : dateAbsoluteTypeInfo;
     return 0;
 }
 

@@ -137,7 +137,8 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
             }
             left_analysis = parse_context.analysis;
         }
-        expTypeInfo = parse_context.typeInfo;
+        // the values in the result are those of run-time values: a date has no subtype then (issue #5722)
+        expTypeInfo = QoreTypeInfo::getRuntimeValueType(parse_context.typeInfo);
     }
 
     // issue #4318: make sure complex types are not stripped from the iterand
