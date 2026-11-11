@@ -78,20 +78,47 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
     return false;
 }
 
-QoreSwitchStringValue::QoreSwitchStringValue(const QoreString& value) : value(value) {
+QoreSwitchStringValue::QoreSwitchStringValue(QoreValue v) {
+    // an enum value is compared with its base value, as qore_switch_case_equal() compares it
+    if (v.isEnum()) {
+        v = v.getEnumBaseValue();
+    }
+    if (v.isShortString()) {
+        // an inline short string is in UTF-8
+        v.getShortString(short_buf);
+        buf = short_buf;
+        len = v.shortStringLen();
+        ascii_compat = true;
+        return;
+    }
+    if (v.getType() == NT_STRING) {
+        setString(*v.get<const QoreStringNode>());
+    }
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(const QoreString& value) {
+    setString(value);
+}
+
+void QoreSwitchStringValue::setString(const QoreString& value) {
     // the data of the value, read directly, as a lookup does for each switch
     const qore_string_private* p = qore_string_private::get(value);
+    str = &value;
     buf = p->effective_buf();
     len = p->len;
     ascii_compat = qore_encoding_private::get(*p->getEncoding())->isAsciiCompat();
 }
 
-bool QoreSwitchStringValue::equalsConverted(const char* case_str, ExceptionSink* xsink) const {
+bool QoreSwitchStringValue::equalsConverted(const char* case_str, size_t case_len) const {
+    assert(str);
     // another encoding (UTF-16, UTF-32, a stateful encoding): compared as the AST interpreter compares the strings
-    QoreString case_string(case_str, strlen(case_str), QCS_DEFAULT);
-    bool rv = value.equalSoft(case_string, xsink);
-    if (xsink && *xsink) {
-        exception_raised = true;
+    // (QoreValue::isEqualHard()), for which an encoding conversion error means that they are not equal
+    QoreString case_string(case_str, case_len, QCS_DEFAULT);
+    ExceptionSink xsink;
+    bool rv = str->equalSoft(case_string, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
     }
     return rv;
 }

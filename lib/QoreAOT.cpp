@@ -35220,6 +35220,18 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
+        // a CONST_STRING is rebuilt as a UTF-8 string from its bytes up to a null byte, so the value of a program
+        // constant in another encoding or with a null byte (such as the case of a switch on
+        // convert_encoding("+", "UTF-7")) keeps its identity, as a container value does
+        if (const_reverse_map && (str_node->getEncoding() != QCS_UTF8
+                || memchr(str_node->c_str(), '\0', str_node->size()))) {
+            auto cit = const_reverse_map->find(node);
+            if (cit != const_reverse_map->end()) {
+                id.kind = AOTExprKind::RUNTIME_CONST_REF;
+                id.ref1 = cit->second.path;
+                return id;
+            }
+        }
         id.kind = AOTExprKind::CONST_STRING;
         id.ref1 = str_node->c_str();
         return id;

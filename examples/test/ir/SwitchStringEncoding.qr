@@ -38,6 +38,79 @@ string sub auto_switch(auto v) {
     return "default";
 }
 
+# cases of the lengths that a lookup compares in different ways (a byte loop up to 3 bytes, two overlapping 4-byte
+# words up to 7, two overlapping 8-byte words up to 16, memcmp() after that)
+string sub length_switch(string s) {
+    switch (s) {
+        case "abcd": return "4";
+        case "abcdefg": return "7";
+        case "abcdefgh": return "8";
+        case "abcdefghi": return "9";
+        case "abcdefghijklmno": return "15";
+        case "abcdefghijklmnop": return "16";
+        case "abcdefghijklmnopq": return "17";
+        case "abcdefghijklmnopqrst": return "20";
+    }
+    return "default";
+}
+
+# a switch with a case that is not a letter, whose byte is another character in some encodings (SHIFT_JIS "\\" is
+# U+00A5 with libiconv) and a try block around it: a conversion error in the comparison with a plain case means that
+# the value is not the case, as with QoreValue::isEqualHard(), so the switch takes the default case
+string sub try_switch(string s) {
+    try {
+        switch (s) {
+            case "a": return "a";
+            case "\\": return "bs";
+            case "+": return "plus";
+        }
+        return "default";
+    } catch (hash<ExceptionInfo> ex) {
+        return "caught " + ex.err;
+    }
+}
+
+# "case ==" compares with the == operator, which raises an encoding conversion error
+string sub eq_switch(string s) {
+    switch (s) {
+        case == "a": return "eq-a";
+        case == "\\": return "eq-bs";
+        case == "+": return "eq-plus";
+    }
+    return "default";
+}
+
+# constant cases in encodings that are not ASCII-compatible or whose bytes are other ASCII characters: UTF-7 "+" is
+# "+-", and SHIFT_JIS U+00A5 is the byte of "\\"
+const UTF7_PLUS = convert_encoding("+", "UTF-7");
+const SJIS_YEN = convert_encoding("\u00a5", "SHIFT_JIS");
+
+class SwitchConstants {
+    const UTF16_AB = convert_encoding("ab", "UTF-16LE");
+}
+
+string sub const_switch(string s) {
+    switch (s) {
+        case UTF7_PLUS: return "utf7-plus";
+        case SJIS_YEN: return "sjis-yen";
+        case SwitchConstants::UTF16_AB: return "utf16-ab";
+        case LATE_UTF7_A: return "utf7-a";
+        case "a": return "a";
+    }
+    return "default";
+}
+
+# a constant declared after the function that uses it as a case
+const LATE_UTF7_A = convert_encoding("a+", "UTF-7");
+
+string sub safe(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return "EX " + ex.err;
+    }
+}
+
 list<string> sub values() {
     return (
         "a", "abc", "ab", "abcd", "", "x", "ABC",
@@ -51,16 +124,72 @@ list<string> sub values() {
     );
 }
 
+list<string> sub conversion_values() {
+    list<string> l = (
+        # values with invalid bytes, which cannot be converted for a comparison with a case
+        force_encoding(binary_to_string(<1b2442ff>), "ISO-2022-JP"), force_encoding(binary_to_string(<2bff>), "UTF-7"),
+        force_encoding(binary_to_string(<d800>), "UTF-16LE"),
+        # the byte of "\\", which is U+00A5 in SHIFT_JIS
+        force_encoding(binary_to_string(<5c>), "SHIFT_JIS"),
+        "\\", "+", "+-", "a+", "ab",
+    );
+    foreach string v in (("+", "A", "ABC", "\\", "a", "ab", "a+")) {
+        foreach string enc in (("SHIFT_JIS", "UTF-7", "UTF-16LE")) {
+            # a character that the encoding does not have (libiconv's SHIFT_JIS has no backslash) is left out
+            try {
+                push l, convert_encoding(v, enc);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+    return l;
+}
+
+list<string> sub length_values() {
+    list<string> l;
+    foreach string c in (("abcd", "abcdefg", "abcdefgh", "abcdefghi", "abcdefghijklmno", "abcdefghijklmnop",
+            "abcdefghijklmnopq", "abcdefghijklmnopqrst")) {
+        push l, c;
+        # the first, a middle and the last byte changed
+        foreach int i in ((0, c.size() / 2, c.size() - 1)) {
+            push l, c.substr(0, i) + "X" + c.substr(i + 1);
+        }
+        # a prefix and an extension
+        push l, c.substr(0, -1);
+        push l, c + "z";
+        push l, convert_encoding(c, "UTF-16LE");
+    }
+    return l;
+}
+
 list<string> vl = values();
+list<string> ll = length_values();
+list<string> cl = conversion_values();
 # enough rounds for the functions to be compiled in the tiered modes
 for (int round = 0; round < 3; ++round) {
     foreach string v in (vl) {
         printf("%d %s %y: typed=%s lwr=%s auto=%s\n", round, v.encoding(), binary(v), typed_switch(v), lwr_switch(v),
             auto_switch(v));
     }
+    foreach string v in (cl) {
+        printf("%d %s %y: try=%s eq=%s const=%s\n", round, v.encoding(), binary(v), safe(string sub () { return try_switch(v); }),
+            safe(string sub () { return eq_switch(v); }), safe(string sub () { return const_switch(v); }));
+    }
+    printf("%d lengths:", round);
+    foreach string v in (ll) {
+        printf(" %s", length_switch(v));
+    }
+    printf("\n");
     for (int i = 0; i < 100; ++i) {
+        length_switch("abcdefghijklmnop");
         typed_switch("abc");
         lwr_switch("ABC");
         auto_switch("abc");
+        try_switch("a");
+        eq_switch("a");
+        const_switch("a");
     }
 }

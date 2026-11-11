@@ -4,8 +4,10 @@
 #
 # A switch on a string value whose cases are ASCII strings, which the compiled tiers dispatch with a string lookup,
 # compares the value with the cases as the AST interpreter does: with the value's encoding and length, so a UTF-16
-# value matches the case with its characters and a value with a null byte after a case does not match the case
-# (SwitchStringEncoding.qr, in every execution mode and as qcc executables)
+# value matches the case with its characters and a value with a null byte after a case does not match the case; a
+# value that cannot be converted for the comparison is not the case (and "case ==" raises the conversion error), and
+# a constant case in another encoding is compared with its characters (SwitchStringEncoding.qr, in every execution
+# mode and as qcc executables)
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
@@ -51,7 +53,11 @@ class SwitchStringEncodingTest inherits QUnit::Test {
     astOutput() {
         string out = getExpected();
         # 3 rounds of 19 values
-        assertEq(57, out.split("\n").size());
+        assertEq(57, (select out.split("\n"), $1 =~ / typed=/).size());
+        # and of the values for the conversion cases, which depend on the encodings of the platform's iconv
+        int conv = (select out.split("\n"), $1 =~ / try=/).size();
+        assertEq(0, conv % 3);
+        assertGe(3 * 20, conv);
         # a value in another encoding matches the case with its characters
         assertRegex("\n0 UTF-16LE !!binary YQBiAGMA: typed=abc lwr=abc auto=abc\n", out, "UTF-16LE abc");
         assertRegex("\n0 UTF-16BE !!binary AGEAYgBj: typed=abc lwr=abc auto=abc\n", out, "UTF-16BE abc");
@@ -66,6 +72,28 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         assertRegex("\n0 UTF-8 !!binary YWJjZA==: typed=default lwr=default auto=default\n", out, "abcd");
         # an empty string in any encoding is the empty case
         assertRegex("\n0 UTF-16LE !!binary : typed=empty lwr=empty auto=empty\n", out, "UTF-16LE empty");
+        # a value with a changed byte or an extension of a case is no case, and a prefix is the case that it is
+        string lens;
+        foreach list<string> c in ((("4", "default"), ("7", "default"), ("8", "7"), ("9", "8"), ("15", "default"),
+                ("16", "15"), ("17", "16"), ("20", "default"))) {
+            lens += sprintf(" %s default default default %s default %s", c[0], c[1], c[0]);
+        }
+        assertRegex("\n0 lengths:" + lens + "\n", out, "case lengths");
+        # a value that cannot be converted for a comparison with a plain case is not the case, and the switch raises
+        # no exception (as QoreValue::isEqualHard() compares them); "case ==" raises the conversion error
+        assertRegex("\n0 ISO-2022-JP !!binary GyRC/w==: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n",
+            out, "invalid ISO-2022-JP");
+        assertRegex("\n0 UTF-7 !!binary K/8=: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n", out,
+            "invalid UTF-7");
+        # a constant case in another encoding is compared with its characters: UTF-7 "+" is "+-"
+        assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-8 +");
+        assertRegex("\n0 UTF-8 !!binary Ky0=: try=default eq=default const=default\n", out, "UTF-8 +-");
+        assertRegex("\n0 UTF-7 !!binary Ky0=: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-7 +");
+        # the SHIFT_JIS constant is U+00A5, not "\\"
+        assertRegex("\n0 UTF-8 !!binary XA==: try=bs eq=eq-bs const=default\n", out, "UTF-8 \\");
+        # a UTF-16LE class constant and a UTF-7 constant declared after the function
+        assertRegex("\n0 UTF-8 !!binary YWI=: try=default eq=default const=utf16-ab\n", out, "UTF-8 ab");
+        assertRegex("\n0 UTF-8 !!binary YSs=: try=default eq=default const=utf7-a\n", out, "UTF-8 a+");
     }
 
     executionModes() {

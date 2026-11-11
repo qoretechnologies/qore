@@ -46,45 +46,83 @@ DLLLOCAL bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, E
     have the same characters, in any encoding of the value.  A value in an ASCII-compatible encoding has the length and
     the bytes of the case then; another value is compared with the case converted to its encoding
     (QoreString::equalSoft()).  The value's data and encoding are got once, for all the cases of a lookup.
+
+    A comparison never raises an exception: as with QoreValue::isEqualHard(), which compares a plain case in the AST
+    interpreter, a conversion error means that the value is not the case, so a lookup needs no exception check and its
+    instruction no exception target.
 */
 class QoreSwitchStringValue {
 public:
+    //! For a value of any type; a value that is not a string (after an enum value is unwrapped) matches no case
+    /** an inline short string is read into this object, without a string node
+    */
+    DLLLOCAL QoreSwitchStringValue(QoreValue v);
+
+    //! For a string
     DLLLOCAL QoreSwitchStringValue(const QoreString& value);
 
     //! Returns true if the value is the case
     /** @param case_str the case: ASCII characters without a null byte
-        @param xsink for an exception raised by the conversion of the case to the encoding of the value
+        @param case_len the length of the case in bytes
     */
-    DLLLOCAL bool equals(const char* case_str, ExceptionSink* xsink) const {
+    DLLLOCAL bool equals(const char* case_str, size_t case_len) const {
         assert(case_str);
         if (ascii_compat) {
-            // the case is read no further than its terminator, which ends a case shorter than the value, so a value
-            // with a null byte after a prefix that is the case is not the case
-            for (size_t i = 0; i < len; ++i) {
-                if (case_str[i] != buf[i] || !case_str[i]) {
-                    return false;
-                }
-            }
-            return !case_str[len];
+            return len == case_len && bytesEqual(buf, case_str, len);
         }
-        return equalsConverted(case_str, xsink);
-    }
-
-    //! Returns true if a comparison raised an exception (only the conversion of a case to the value's encoding can)
-    DLLLOCAL bool raised() const {
-        return exception_raised;
+        return str && equalsConverted(case_str, case_len);
     }
 
 private:
-    const QoreString& value;
-    const char* buf;
-    size_t len;
-    bool ascii_compat;
-    //! true if a comparison raised an exception
-    mutable bool exception_raised = false;
+    //! the string value; null for an inline short string and for a value that is not a string
+    const QoreString* str = nullptr;
+    //! the data of the value; null if it is not a string
+    const char* buf = nullptr;
+    size_t len = 0;
+    //! true if the value's encoding is ASCII-compatible; false for a value that is not a string
+    bool ascii_compat = false;
+    //! the data of an inline short string
+    char short_buf[QoreValue::SHORTSTR_MAX_BYTES + 1];
+
+    //! Sets the data of a string
+    DLLLOCAL void setString(const QoreString& value);
+
+    //! Returns true if \a n bytes at \a a and \a b are the same
+    /** cases are short: a string of up to 16 bytes is compared inline as two words that overlap for a length that is
+        not twice the word's size, which is faster than a call to memcmp()
+    */
+    DLLLOCAL static bool bytesEqual(const char* a, const char* b, size_t n) {
+        if (n >= 8) {
+            if (n > 16) {
+                return !memcmp(a, b, n);
+            }
+            uint64_t a0, b0, a1, b1;
+            memcpy(&a0, a, 8);
+            memcpy(&b0, b, 8);
+            memcpy(&a1, a + n - 8, 8);
+            memcpy(&b1, b + n - 8, 8);
+            return a0 == b0 && a1 == b1;
+        }
+        if (n >= 4) {
+            uint32_t a0, b0, a1, b1;
+            memcpy(&a0, a, 4);
+            memcpy(&b0, b, 4);
+            memcpy(&a1, a + n - 4, 4);
+            memcpy(&b1, b + n - 4, 4);
+            return a0 == b0 && a1 == b1;
+        }
+        for (size_t i = 0; i < n; ++i) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     //! Compares a value that is not in an ASCII-compatible encoding with the case converted to its encoding
-    DLLLOCAL bool equalsConverted(const char* case_str, ExceptionSink* xsink) const;
+    /** an encoding conversion error means that the strings are not equal
+    */
+    DLLLOCAL bool equalsConverted(const char* case_str, size_t case_len) const;
 };
 
 class CaseNode {

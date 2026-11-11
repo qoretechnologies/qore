@@ -10288,29 +10288,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed_soft(
     return toBits(QoreValue(result));
 }
 
-extern "C" DLLEXPORT int32_t qore_rt_switch_string_lookup_v1(uint64_t switch_val_bits, const char** case_strings,
-        int32_t num_cases, ExceptionSink* xsink) {
-    QoreValue switch_val = fromBits(switch_val_bits);
-    if (switch_val.getType() != NT_STRING) {
-        return -1;  // Not a string, go to default
-    }
-    QoreStringNodeValueHelper str(switch_val);
-    // compared as the AST interpreter compares them, with the value's encoding and length
-    QoreSwitchStringValue sv(**str);
+extern "C" DLLEXPORT int32_t qore_rt_switch_string_lookup_v2(uint64_t switch_val_bits, const char** case_strings,
+        const uint64_t* case_lens, int32_t num_cases) {
+    // compared as the AST interpreter compares them, with the value's encoding and length; a value that is not a
+    // string matches no case, and an inline short string is read without a string node
+    QoreSwitchStringValue sv(fromBits(switch_val_bits));
     for (int32_t i = 0; i < num_cases; ++i) {
-        if (sv.equals(case_strings[i], xsink)) {
+        if (sv.equals(case_strings[i], case_lens[i])) {
             return i;
-        }
-        if (sv.raised()) {
-            return -1;
         }
     }
     return -1;  // No match, go to default
 }
 
 //! Transform an assigned string and look up an ASCII switch case without retaining the result.
-extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard(
-        uint64_t value, const char** case_strings, int32_t num_cases,
+extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard_v2(
+        uint64_t value, const char** case_strings, const uint64_t* case_lens, int32_t num_cases,
         int32_t upper, ExceptionSink* xsink) {
     QoreValue v = fromBits(value);
     QoreStringValueHelper str(v);
@@ -10324,11 +10317,8 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard(
     // compared as the AST interpreter compares them, with the value's encoding and length
     QoreSwitchStringValue sv(transformed);
     for (int32_t i = 0; i < num_cases; ++i) {
-        if (sv.equals(case_strings[i], xsink)) {
+        if (sv.equals(case_strings[i], case_lens[i])) {
             return i;
-        }
-        if (sv.raised()) {
-            return -1;
         }
     }
     return -1;

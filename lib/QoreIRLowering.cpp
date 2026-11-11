@@ -3509,13 +3509,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 break;
             }
             // Check for range operators - not supported for SwitchString
-            if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
-                op_log_func_t op_func = op_case->getOpFunc();
-                // Only soft equality is compatible with SwitchString
-                if (op_func != QoreLogicalEqualsOperatorNode::softEqual) {
-                    use_switch_string = false;
-                    break;
-                }
+            // an operator case is compared with its operator (even "case ==", whose
+            // QoreLogicalEqualsOperatorNode::softEqual() raises an encoding conversion error, which a SwitchString
+            // lookup does not), so it is in the comparison chain
+            if (dynamic_cast<const CaseNodeWithOperator*>(node)) {
+                use_switch_string = false;
+                break;
             }
             // Check if case value is a string constant
             if (node->val.getType() != NT_STRING) {
@@ -3523,7 +3522,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 break;
             }
             QoreStringValueHelper str(node->val);
-            if (!str->isDataAscii()
+            // the lookup compares a case's bytes as ASCII characters, so a case in an encoding that is not
+            // ASCII-compatible (such as UTF-7 "+-" for "+") is in the comparison chain
+            if (!str->getEncoding()->isAsciiCompat() || !str->isDataAscii()
                     || std::memchr(str->c_str(), '\0', str->size())) {
                 use_switch_string = false;
                 break;
