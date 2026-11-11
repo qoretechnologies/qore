@@ -18053,6 +18053,12 @@ static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeC
     return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
 }
 
+//! waits until a synchronous JIT compile waits for the compilation lock; returns False on timeout
+static QoreValue f_dbg_wait_sync_compile_waiting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgWaitSyncCompileWaiting(get_param_value(params, 0).getAsBigInt());
+}
+
 //! returns True if the background JIT compiler is stopped at a hold point
 static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return QoreJIT::instance().dbgBgCompileHeld();
@@ -20944,6 +20950,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_sync_compile_waiting", f_dbg_wait_sync_compile_waiting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_wait_bg_compile_teardown_waiting", f_dbg_wait_bg_compile_teardown_waiting,
