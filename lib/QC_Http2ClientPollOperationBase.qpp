@@ -1248,9 +1248,9 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
             }
             break;
         }
+        // the queue takes the reference, also when it refuses the value (issue #5840)
         queue->push(&xsink, data);
         if (xsink) {
-            data->deref(&xsink);
             xsink.clear();
             break;
         }
@@ -1343,14 +1343,23 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
     }
 
     std::vector<int32_t> completed;
+    // set when reading a stream fails: the drain ends, after the streams completed so far are removed
+    bool read_failed = false;
     for (auto& [stream_id, info] : stream_queues) {
         int drain_count = 0;
+        // a queue that refuses a value (one in an error state; a deleted queue drops values without an error) ends
+        // the registration of its stream: the refusal is the consumer's, not an error of the connection, so it is not
+        // raised to the caller of the poll operation (issue #5840)
+        bool refused = false;
+        // the queue's own exceptions, which are not raised (see above)
+        ExceptionSink push_xsink;
         // the data of a stream decoded by a frame state reaches the queue through the frame state; reading it here
         // would take it from the decoder
         while (!info.frame_state) {
             BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
-                return;
+                read_failed = true;
+                break;
             }
             if (!data) {
                 break;
@@ -1360,25 +1369,36 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                 break;
             }
             ++drain_count;
-            info.queue->push(xsink, data);
-            if (*xsink) {
-                data->deref(xsink);
-                return;
+            // the queue takes the reference, also when it refuses the value
+            info.queue->push(&push_xsink, data);
+            if (push_xsink) {
+                push_xsink.clear();
+                refused = true;
+                break;
             }
         }
 
-        if (drain_count > 0) {
+        if (read_failed) {
+            break;
+        }
+        // a refused stream is dispatched too, so that its listener reads its queue and sees the error; the reading
+        // cycle may have listed the stream already
+        if (drain_count > 0 && std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
+                == data_ready_streams.end()) {
             data_ready_streams.push_back(stream_id);
+        }
+        if (refused) {
+            completed.push_back(stream_id);
+            continue;
         }
 
         // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
         if (sock_obj->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
                 || sock_obj->isHttp2StreamClosedForAsyncPoll(stream_id)) {
-            // Push NOTHING sentinel so the handler thread knows the stream is done
-            info.queue->push(xsink, QoreValue());
-            if (*xsink) {
-                return;
-            }
+            // Push NOTHING sentinel so the handler thread knows the stream is done; a queue that refuses it ends the
+            // registration all the same, and its listener reads the error from it
+            info.queue->push(&push_xsink, QoreValue());
+            push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
                 data_ready_streams.push_back(stream_id);
@@ -1427,7 +1447,10 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
         err_hash->setKeyValue("error", true, xsink);
         err_hash->setKeyValue("end_stream", true, xsink);
-        info.queue->push(xsink, err_hash.release());
+        // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840)
+        ExceptionSink push_xsink;
+        info.queue->push(&push_xsink, err_hash.release());
+        push_xsink.clear();
         if (info.notifier) {
             info.notifier->notify();
         }
@@ -2459,6 +2482,10 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
     @param notifier optional EventNotifier for handler wake-up
 
     @note Must be called on the I/O controller thread before the handler starts reading.
+
+    @note A Queue that refuses a value (one in an error state, see Queue::setError()) ends the registration: the
+    value is dropped, the stream is still dispatched to its listener, which reads the Queue's error, and the rest of
+    the stream's data goes to its handle or response; the refusal is not raised to the connection
 
     @since %Qore 3.0
 */

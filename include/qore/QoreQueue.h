@@ -64,19 +64,28 @@ public:
     DLLEXPORT void pushAndTakeRef(QoreValue n);
 
     //! push at the end of the queue
+    /** The queue takes the reference to the value in every case: also when it raises an exception (a queue in an
+        error state, an interrupted wait, or a queue deleted while the push waits for space), when it times out
+        (\a to is set, and no exception is raised), and when it drops the value silently (a queue already deleted).
+        The caller must not release the value afterwards.
+    */
     DLLEXPORT void push(ExceptionSink* xsink, QoreValue n, int timeout_ms = 0, bool* to = 0);
 
     //! insert at the beginning of the queue
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+    */
     DLLEXPORT void insert(ExceptionSink* xsink, QoreValue n, int timeout_ms = 0, bool* to = 0);
 
     //! push at the end of the queue and scan for recursive references
-    /**
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+
         @since %Qore 0.9
     */
     DLLEXPORT void push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms = 0, bool* to = nullptr);
 
     //! insert at the beginning of the queue and scan for recursive references
-    /**
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+
         @since %Qore 0.9
     */
     DLLEXPORT void insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms = 0, bool* to = nullptr);
