@@ -1135,6 +1135,12 @@ const FunctionEntry* qore_aot_resolve_function_ref(QoreProgram* pgm, const char*
             ? type_resolver.resolveForSignature(path.c_str(), type_error, containing_signature)
             : type_resolver.resolve(path.c_str(), type_error);
         if (!type_arg || !type_error.empty()) {
+            // a type parameter of a generic function cannot be resolved without the signature of that function,
+            // which the loader of a nested expression does not have: the reference is made without the explicit type
+            // arguments (as the AOT image did before they were recorded) rather than failing to load
+            if (!containing_signature && qore_aot_type_path_has_signature_type_param(path.c_str())) {
+                return fe;
+            }
             return nullptr;
         }
         resolved.push_back(type_arg);
@@ -4485,7 +4491,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Function call reference: resolve function by name
                 ref1 = reader.readStringRef(ptr);   // function_name
                 if (ref1 && *ref1) {
-                    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(pgm, ref1)) {
+                    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(pgm, ref1,
+                            uvb ? uvb->getUserSignature() : nullptr)) {
                         ctx->exprs[i] = toBitsNB(QoreValue(fcr));
                         continue;
                     }
