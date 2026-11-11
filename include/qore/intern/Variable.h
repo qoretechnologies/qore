@@ -52,6 +52,7 @@ enum qore_var_t {
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <vector>
 #include <set>
 #include <string>
 
@@ -837,6 +838,19 @@ private:
     int (*root_hook)(void*) = nullptr;
     //! the argument of root_hook
     void* root_hook_arg = nullptr;
+    //! the keys and indices of the path to the root that evalPathKeys() evaluated, the one nearest the root first
+    /** The path is resolved from its last step to the root, each step taking its key from the end (qore#5753). */
+    std::vector<std::unique_ptr<ValueEvalOptimizedRefHolder>> path_keys;
+
+    //! evaluates the keys and indices of the path \a n to the root, from the root out (path_keys)
+    /** As the other execution modes and the expression as a value do: <tt>h.(k1()).(k2())[i()] = v</tt> evaluates
+        k1(), k2() and i() in this order.  Nothing is evaluated unless at least two keys need an evaluation, as the
+        order cannot be observed otherwise; each key is a statement of its own, whose temporaries are released when
+        it has been evaluated.
+
+        @return -1 if a key raised an exception, 0 if not
+    */
+    DLLLOCAL int evalPathKeys(const QoreValue& n);
 
     //! runs the root hook once, if any; returns its return value, or 0 if there is no hook
     DLLLOCAL int runRootHook() {

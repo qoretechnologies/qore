@@ -2250,6 +2250,8 @@ if (x || y)
     @par Synopsis
     Assigns a value to an lvalue and returns the value assigned.
 
+    @anchor lvalue_evaluation_order The keys and indices of an lvalue path are evaluated from the root out, and the index of its last step after them, in every @ref execution_modes "execution mode", as when the path is read as a value: <tt>h.(k1()).(k2())[i()] = v()</tt> evaluates \c v(), \c k1(), \c k2() and \c i() in this order.  The same order applies to every operator that changes an lvalue (compound assignments, \c ++ and \c --, @ref remove "remove", @ref delete "delete", @ref splice "splice", @ref extract "extract", @ref push "push", @ref unshift "unshift", @ref pop "pop") and to a @ref lvalue_references "reference" to it; a key that raises an exception stops the evaluation, and the lvalue is not changed.
+
     @par Syntax
     \a lvalue <tt>=</tt> \a expression
 

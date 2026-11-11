@@ -128,10 +128,32 @@ protected:
         return evalToRef(rc, xsink);
     }
 
+    //! the keys and indices of a path that compiled code evaluated, from the root out (qore#5753)
+    struct ResolvedPathKeys {
+        //! the keys, the one nearest the root first
+        const QoreListNode* keys;
+        //! the next key to take
+        size_t pos = 0;
+    };
+
+    //! evaluates the keys and indices of the path \a n from the root out, or takes them from \a resolved
     DLLLOCAL QoreValue doPartialEval(QoreValue n, QoreObject*& self, const void*& lvalue_id,
-            const qore_class_private*& qc, ExceptionSink* xsink) const;
+            const qore_class_private*& qc, ExceptionSink* xsink, ResolvedPathKeys* resolved = nullptr) const;
     DLLLOCAL QoreValue doPartialEval(QoreValue n, RuntimeConfig& rc, QoreObject*& self, const void*& lvalue_id,
-            const qore_class_private*& qc, ExceptionSink* xsink) const;
+            const qore_class_private*& qc, ExceptionSink* xsink, ResolvedPathKeys* resolved = nullptr) const;
+
+public:
+    //! returns the number of keys and indices of the path of an lvalue expression of a reference (the [] and {}
+    //! steps that doPartialEval() evaluates)
+    /** Compiled code that creates the reference evaluates the keys itself: one key is given to
+        evalToRefWithResolvedHashKey(), two or more as a list of them, the one nearest the root first (qore#5753)
+    */
+    DLLLOCAL static size_t pathKeyCount(const QoreValue& lvexp);
+
+protected:
+    //! creates the reference from the keys of its path that compiled code evaluated (see pathKeyCount())
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedPathKeys(RuntimeConfig* rc, QoreValue keys,
+            ExceptionSink* xsink) const;
 
     //! initializes during parsing
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
