@@ -73,6 +73,10 @@ f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
 f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
 f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
 f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"DO@220\", \"DO@219\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=5
 ",
@@ -90,6 +94,10 @@ f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
 f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
 f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
 f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\", \"exit@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\", \"exit@191\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\", \"exit@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"exit@215\", \"DO@220\", \"DO@219\", \"exit@219\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
 ",
@@ -114,6 +122,10 @@ f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
 f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
 f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
 f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"DO@220\", \"DO@219\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=null
 ",
@@ -131,6 +143,10 @@ f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
 f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
 f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
 f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\", \"exit@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\", \"exit@191\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\", \"exit@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"exit@215\", \"DO@220\", \"DO@219\", \"exit@219\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=null
 ",

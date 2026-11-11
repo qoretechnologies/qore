@@ -4019,8 +4019,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // nothing to order, and the handlers fire from the enclosing landing pad or the function-exit
     // guard exactly as they did before the anchor existed.  The scan only ever answers "no" when
     // it can prove it, so an unrecognized statement keeps the anchor.
+    //
+    // The debug IR of AOT code anchors a block with handlers and locals of its own as well: the frame-level unwind
+    // releases the locals of the frame only after the debugger's exception events of the statements that contain
+    // the block, which the AST interpreter makes after the block's locals are released (#5816).  The debug IR runs
+    // only while a debugger is attached, and the native code of the function is outlined as before.
     const bool needs_handler_anchor = has_on_block_exit
-            && qoreIrBlockEnclosesScopeLocals(block);
+            && (qoreIrBlockEnclosesScopeLocals(block) || (lvars && builder.getFunction()->emit_debug_statements));
     // A block with handlers inside an exception region of the frame has its own exception target as well: it leaves
     // the scope at runtime, running the handlers that have not run yet, before the exception reaches the enclosing
     // target, whose own ScopeExit would otherwise leave this scope in place of its own (the interpreter pops the

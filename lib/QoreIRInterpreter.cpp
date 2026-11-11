@@ -1475,10 +1475,14 @@ struct QoreIRDebugNest {
     std::vector<QoreIRDebugNestEntry> entries;
     //! the index of the next statement to report for the current exception, or -1
     int chain = -1;
+    //! the statement that ended last, which tells whether the block that it was in is a try block or a catch block
+    //! when the handlers of the block raise an exception after it (see qore_ir_dbg_start_chain_innermost())
+    QoreIRDebugNestEntry last_end;
 
     DLLLOCAL void reset() {
         entries.clear();
         chain = -1;
+        last_end = QoreIRDebugNestEntry();
     }
 };
 
@@ -7040,8 +7044,10 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
 //! raised after it, as in a loop's condition, is reported for
 static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState& st,
         const QoreIRDebugStatementInstruction* inst, const AbstractStatement** stmt_ptr) {
-    std::vector<QoreIRDebugNestEntry>& entries = qore_ir_dbg_frame_nest().entries;
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    std::vector<QoreIRDebugNestEntry>& entries = n.entries;
     if (entries.size() > inst->nest_depth) {
+        n.last_end = entries[inst->nest_depth];
         entries.resize(inst->nest_depth);
         st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
         *stmt_ptr = st.frame_stmt;
@@ -7055,6 +7061,31 @@ static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractSta
     }
     QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
     n.chain = !n.entries.empty() && n.entries.back().stmt == stmt ? static_cast<int>(n.entries.size()) - 2 : -1;
+}
+
+//! Starts the events of the statements that the frame is in, for an exception raised by the handlers of a block on its
+//! normal exit, which the handlers' frame made the event of; the innermost statement is the one that contains the block
+static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFrameState& st) {
+    if (!st.nest_used) {
+        return;
+    }
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (n.entries.empty()) {
+        n.chain = -1;
+        return;
+    }
+    // the statement of the block that ended last stands for the block, which makes no event: a try statement whose
+    // try block it was in catches the exception (see qore_ir_dbg_report_enclosing()); if it is not known, the block is
+    // taken as a try block, which makes no event for a try statement that contains it
+    QoreIRDebugNestEntry child;
+    if (n.last_end.depth == n.entries.size()) {
+        child = n.last_end;
+    }
+    child.stmt = nullptr;
+    child.depth = static_cast<uint16_t>(n.entries.size());
+    child.scope_depth = n.entries.back().scope_depth;
+    n.entries.push_back(child);
+    n.chain = static_cast<int>(n.entries.size()) - 2;
 }
 
 //! Makes the exception events of the statements that contain the statement of the exception, as far as the scopes
@@ -14534,13 +14565,17 @@ load_local_done:
                     // a scope closed on the path of an exception: the exception events of the statements in it come
                     // before its handlers run, as the AST interpreter makes them as the exception leaves each statement
                     // of a block before the block's handlers run (#5816); a dismissal ends the function
-                    if (debug_active && xsink && xsink->isException()) [[unlikely]] {
-                        dbgReportException();
-                        dbgReportEnclosing();
-                        if (dbg_state.exit_dismissed) {
-                            unwindForException();
-                            cleanupLocalCaches();
-                            return exitAfterUnwind();
+                    bool dbg_exception_before = false;
+                    if (debug_active) [[unlikely]] {
+                        dbg_exception_before = xsink && xsink->isException();
+                        if (dbg_exception_before) {
+                            dbgReportException();
+                            dbgReportEnclosing();
+                            if (dbg_state.exit_dismissed) {
+                                unwindForException();
+                                cleanupLocalCaches();
+                                return exitAfterUnwind();
+                            }
                         }
                     }
                     size_t scope_start = scope_stack.back().handler_start;
@@ -14603,13 +14638,15 @@ load_local_done:
                     if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
                         dbgHandlersRan();
-                        // the events of the statements that the closed scope was in (#5816)
-                        if (debug_active && xsink && xsink->isException()) [[unlikely]] {
-                            dbgReportEnclosing();
-                            if (dbg_state.exit_dismissed) {
-                                unwindForException();
-                                cleanupLocalCaches();
-                                return exitAfterUnwind();
+                        // an exception that the handlers raised on a normal exit of the scope: the statements that contain
+                        // the block get its events too, as with the AST interpreter (#5816); they are made, as those
+                        // of an exception that was pending, where the exception goes next (a landing pad, the
+                        // ScopeExit of an enclosing scope, a rethrow, the unwind of the frame), after the locals of
+                        // the block are released, as the AST interpreter releases them before the event of the
+                        // statement that contains the block
+                        if (debug_active) [[unlikely]] {
+                            if (!dbg_exception_before && xsink && xsink->isException()) {
+                                qore_ir_dbg_start_chain_innermost(dbg_state);
                             }
                         }
                         // If handler execution raised an exception, route to the
