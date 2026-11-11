@@ -45,6 +45,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         string qore_exe;
         #! environment the children need to pick up the same build as the parent
         string env_prefix = "";
+        #! 1 if the test module "staticpgm" can be loaded, 0 if not, -1 if it was not checked yet
+        int staticpgm_available = -1;
     }
 
     constructor() : Test("ProgramCleanupAtExitTest", "1.0") {
@@ -96,6 +98,25 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         return rc;
     }
 
+    #! checks that the test module "staticpgm" is in the module path, and fails the test case with the reason if not
+    /** "staticpgm" is a test module of the build tree (target "staticpgm"), put in the module path by run_tests.sh
+        when it exists.  A build tree that was not built completely lacks it, and the children then die with a
+        module load error that says nothing about the build: say what is missing and how to build it instead.
+
+        @return true if the module can be loaded
+    */
+    private bool requireStaticPgm() {
+        if (staticpgm_available < 0) {
+            staticpgm_available = system(sprintf("%s%s -l staticpgm -e 'exit(0);' >/dev/null 2>&1", env_prefix,
+                qore_exe)) == 0 ? 1 : 0;
+        }
+        assertTrue(staticpgm_available == 1, "the test module 'staticpgm' cannot be loaded: it is not in the module "
+            "path (QORE_MODULE_DIR) because the build tree does not have it; build it with: cmake --build "
+            "<build directory> --target staticpgm (run_tests.sh puts the modules of the build tree in the module "
+            "path)");
+        return staticpgm_available == 1;
+    }
+
     #! a child that returns normally, to show the harness reports a clean run as 0
     /** without this, an "exit(0) gives 0" assertion could pass for the wrong reason
     */
@@ -133,11 +154,17 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         singleton's std::mutex after ~QoreJIT() had already destroyed it
     */
     private staticProgramExitTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(0, runChild("exit(0);", 0, "staticpgm"),
             "exit(0) tears the process down without crashing");
     }
 
     private staticProgramExitStatusTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(7, runChild("exit(7);", 7, "staticpgm"),
             "the exit status set by the script survives teardown");
     }
