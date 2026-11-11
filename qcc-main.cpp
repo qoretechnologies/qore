@@ -9686,6 +9686,13 @@ static int link_script_objects_to_executable(const std::string& output,
                 po_error.c_str());
             return 1;
         }
+        // objects compiled before issue #5682 can store %modern with a compatibility option that it does not allow;
+        // the executable could not create its Program
+        if (!qore_check_modern_parse_options(link_po, po_error)) {
+            fprintf(stderr, "error: %s link failed for output '%s': %s; rebuild the objects with this version of "
+                "Qore\n", mode_label, output.c_str(), po_error.c_str());
+            return 1;
+        }
     }
 
     FILE* glue = fopen(glue_path.c_str(), "w");

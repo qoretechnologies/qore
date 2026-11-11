@@ -132,8 +132,9 @@ DLLEXPORT bool qore_aot_source_parse_active();
 
 //! Returns false with the description of the conflict in \a error if the parse options have %modern and a compatibility
 //! option that it does not allow (issue #5682)
-/** For the paths that create a Program from options given together (qcc --parse-option, AOT artifacts, the C++
-    QoreProgram constructors, which have no exception sink): such options are refused, as by Program::constructor()
+/** For the paths that create a Program from options given together: qcc --parse-option, AOT artifacts and their
+    entry points, and QoreProgramHelper; such options are refused, as by Program::constructor().  The bare C++
+    QoreProgram constructors have no exception sink: callers must not give them such options
 */
 DLLEXPORT bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error);
 

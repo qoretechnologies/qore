@@ -3262,7 +3262,7 @@ public:
         }
 
         // the options given must be consistent: %modern with no compatibility option that changes the meaning of code
-        if (checkModernConflict(po, po, true, "Program::replaceParseOptions()", xsink)) {
+        if (checkModernConflict(QoreParseOptions(), po, true, "Program::replaceParseOptions()", xsink)) {
             return -1;
         }
         //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);

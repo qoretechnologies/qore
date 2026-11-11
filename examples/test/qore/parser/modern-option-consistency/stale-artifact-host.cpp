@@ -9,12 +9,10 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreAOT.h>
 
 #include <cstdint>
 #include <cstdio>
-
-extern "C" QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi);
-extern "C" const char* qore_last_error(QoreProgram* pgm);
 
 int main(int /*argc*/, char** /*argv*/) {
     qore_init(QL_GPL, "UTF-8", true);
@@ -31,6 +29,24 @@ int main(int /*argc*/, char** /*argv*/) {
     } else {
         const char* err = qore_last_error(nullptr);
         printf("STALE-REFUSED: %s\n", err ? err : "(no error)");
+    }
+
+    // QoreProgramHelper (also used by the entry points of AOT executables) raises OPTION-ERROR
+    {
+        ExceptionSink xsink;
+        {
+            QoreProgramHelper qpgm(stale, xsink);
+            if (xsink.isException()) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                QoreStringValueHelper desc(xsink.getExceptionDesc());
+                printf("HELPER-REFUSED: %s: %s\n", err->c_str(), desc->c_str());
+                xsink.clear();
+            } else {
+                printf("HELPER-CREATED\n");
+                rc = 1;
+            }
+        }
+        xsink.clear();
     }
 
     // consistent options are accepted

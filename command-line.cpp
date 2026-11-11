@@ -1634,7 +1634,8 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       if ((cmd_modern || cl_source_modern)
             && !qore_check_modern_parse_options(parse_options | QoreParseOptions(PO_MODERN), po_error)) {
          fprintf(stderr, "%s: %s; %s\n", pn, po_error.c_str(), cmd_modern
-            ? "remove -M or the option"
+            ? "remove the option, or -M (a file is also parsed in %modern mode by its extension unless it is a .q "
+              "file)"
             : "code given on the command line or read from stdin is parsed in %modern mode; remove the option, or "
               "set QORE_OLD_STYLE_DEFAULT=1 to parse it without %modern");
          qore_cleanup();

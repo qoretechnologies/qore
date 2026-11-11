@@ -10981,6 +10981,16 @@ extern "C" DLLEXPORT int qore_aot_run(
         ExceptionSink xsink;
         ExceptionSink wsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -11390,6 +11400,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -13135,6 +13155,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
