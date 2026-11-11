@@ -192,14 +192,24 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
     bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
 
-    qore_type_t seq_type = seq->getType();
-    int64 start, stop, seq_size;
     ValueEvalRefHolder start_index(rc, e[1], xsink);
     if (*xsink)
         return QoreValue();
     ValueEvalRefHolder stop_index(rc, e[2], xsink);
     if (*xsink)
         return QoreValue();
+
+    return slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink);
+}
+
+QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value, const QoreValue& start_value,
+        const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const {
+    // the evaluated operands, under the names that the code below has always used
+    const QoreValue* seq = &seq_value;
+    const QoreValue* start_index = &start_value;
+    const QoreValue* stop_index = &stop_value;
+    qore_type_t seq_type = seq->getType();
+    int64 start, stop, seq_size;
 
     if (qore_plugin_value_may_have_operation(*seq)) {
         ReferenceHolder<QoreListNode> plugin_args(new QoreListNode(autoTypeInfo), xsink);
@@ -321,10 +331,36 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
             }
             return new QoreFunctionalSquareBracketsRangeOperator(seq, start, stop, xsink);
         }
+        if (*xsink) {
+            return nullptr;
+        }
+        // an empty range: its value is made from the operands evaluated above, which are not evaluated again
+        // (qore#5684)
+        ValueHolder res(slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        assert(res->getType() == NT_LIST || res->getType() == NT_BUFFER);
+        if (res->getType() == NT_LIST) {
+            return new QoreFunctionalListOperator(true, res.release().get<QoreListNode>(), xsink);
+        }
+        value_type = single;
+        return new QoreFunctionalSingleValueOperator(res.release(), xsink);
     }
 
-    bool needs_deref;
-    ValueHolder res(evalImpl(rc, needs_deref, xsink), xsink);
+    // any other sequence: its value is made from the sequence evaluated above and the indices, evaluated once each
+    // (qore#5684)
+    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+    ValueEvalRefHolder start_index(rc, e[1], xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ValueEvalRefHolder stop_index(rc, e[2], xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ValueHolder res(slice(*seq, *start_index, *stop_index, static_cast<bool>(po & PO_BROKEN_LIST_RANGE),
+        static_cast<bool>(po & PO_NEGATIVE_OFFSETS), xsink), xsink);
 
     if (*xsink) {
         return nullptr;

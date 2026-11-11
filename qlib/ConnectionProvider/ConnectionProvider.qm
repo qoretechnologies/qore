@@ -29,7 +29,7 @@
 
 %requires(reexport) Util
 %requires Logger
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 %requires AsyncSocketIo
 %requires FtpClientIo
 %requires HttpClientIo
@@ -181,6 +181,14 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data
+      provider app with external I/O that is not sandbox-aware (\c APP-SANDBOX-ACCESS-DENIED), also when trusted code
+      created the connection: @ref ConnectionProvider::AbstractConnection::get() "AbstractConnection::get()",
+      \c getAsync(), \c ping(), \c getFileLocationHandler() and \c getFileLocationRedirect() check it first, and a
+      refused ping does not change the connection's status; added
+      @ref ConnectionProvider::AbstractConnection::checkSandboxAccess() "AbstractConnection::checkSandboxAccess()" for
+      subclasses and for code that serves a sandboxed caller on a thread that no sandbox governs; the module requires
+      DataProvider 3.12
     - added @ref ConnectionProvider::PollingConnectionMonitor::startPollConnect() "PollingConnectionMonitor::startPollConnect()",
       which a subclass can override to decide how the monitor opens the connection of a ping
     - added source-owned connection presentation and catalogs for shared scheme options and setup messages;

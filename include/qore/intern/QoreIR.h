@@ -996,7 +996,16 @@ enum class QoreIROpcode : uint16_t {
     //! (qore#5675).
     IteratorNextSelectors = 426,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (427, 428, ...)
+    //! string(), int() and float() with one argument whose value the builtin may not accept (issue #5660)
+    /** The conversion of ToString, ToInt and ToFloat for the values that the builtin accepts (a string, an int, a
+        float, a number, a boolean, a date and NOTHING, and NULL for int()); any other value raises the error of the
+        builtin call (RUNTIME-OVERLOAD-ERROR).  Operand 0 is the value; the result is that of the unchecked opcode.
+    */
+    ToStringChecked = 427,
+    ToIntChecked = 428,
+    ToFloatChecked = 429,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (430, 431, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1005,8 +1014,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::IteratorNextSelectors);
-static_assert(QORE_IR_MAX_OPCODE == 426, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
+static_assert(QORE_IR_MAX_OPCODE == 429, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])

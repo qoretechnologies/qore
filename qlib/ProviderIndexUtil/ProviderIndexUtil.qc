@@ -4934,7 +4934,7 @@ class IndexedTypeGraphForm {
     static hash<auto> getStoredForm(*hash<auto> actions) {
         IndexedTypeGraphForm form();
         hash<auto> stored = {};
-        foreach string name in (sort(keys actions)) {
+        foreach string name in (sort(keys (actions ?? {}))) {
             stored{name} = form.storeAction(actions{name});
         }
         hash<auto> rv = {};

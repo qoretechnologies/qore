@@ -4774,6 +4774,15 @@ private:
             addCall(call->getVariant(), call->loc, nullptr, "constructor");
             return;
         }
+        // a declaration that creates an object: "C c(args)"
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (vrn->isObjectConstruct()) {
+                addArgs(vrn->getParseArgs(), vrn->getArgs());
+                addCall(vrn->getVariant(), vrn->loc, QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo()),
+                    "constructor");
+            }
+            return;
+        }
         if (auto* call = dynamic_cast<const AbstractMethodCallNode*>(node)) {
             addArgs(call->getParseArgs(), call->getArgs());
             addCall(call->getVariant(), call->loc, call->getClass(), call->getName());

@@ -509,6 +509,7 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     }
     // a caller that the boundary applies to can be given a public variant whose arguments only another variant
     // accepts: the variant is then selected among the public variants as well
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
         nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0));
 }

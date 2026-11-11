@@ -2124,12 +2124,14 @@ QoreValue QoreObject::evalMethod(const QoreMethod& method, const QoreClass* clas
 
 QoreValue QoreObject::evalMethodVariant(const QoreMethod& method, const QoreExternalMethodVariant* variant,
         const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::evalNormalVariant(method, xsink, rc, this, variant, args);
 }
 
 QoreValue QoreObject::evalMethodVariant(const QoreMethod& method, const QoreClass* class_ctx,
         const QoreExternalMethodVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::evalNormalVariant(method, xsink, rc, this, variant, args);
@@ -2149,12 +2151,14 @@ QoreValue QoreObject::evalStaticMethod(const QoreMethod& method, const QoreClass
 
 QoreValue QoreObject::evalStaticMethodVariant(const QoreMethod& method, const QoreExternalMethodVariant* variant,
         const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::evalNormalVariant(method, xsink, rc, nullptr, variant, args);
 }
 
 QoreValue QoreObject::evalStaticMethodVariant(const QoreMethod& method, const QoreClass* class_ctx,
         const QoreExternalMethodVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::evalNormalVariant(method, xsink, rc, nullptr, variant, args);
