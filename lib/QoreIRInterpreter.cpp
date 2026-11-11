@@ -13998,15 +13998,15 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
-                if (!raised && xsink && xsink->isException() && debug_active) {
-                    tlpd->dbgException(get_exception_statement(inst), xsink);
-                    invalidateExternalCaches();
-                    if (!*xsink) {
-                        // Dismissal ends the function with no value (#5825 tracks AST continuation parity).
-                        return returnAfterUnhandledException();
-                    }
-                }
                 if (!raised && xsink && *xsink) {
+                    if (debug_active && xsink->isException()) {
+                        tlpd->dbgException(get_exception_statement(inst), xsink);
+                        invalidateExternalCaches();
+                        if (!*xsink) {
+                            // Dismissal ends the function with no value (#5825 tracks AST continuation parity).
+                            return returnAfterUnhandledException();
+                        }
+                    }
                     // a temporary's destructor raised an exception, which the statement raises, as in the AST
                     // interpreter (QoreStatementTempScope): the statement's temps and its mark are gone, so the
                     // handler is entered without releasing anything else
