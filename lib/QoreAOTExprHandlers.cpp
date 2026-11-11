@@ -1432,14 +1432,23 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     }
 
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    // the IR must be in the data, as in the slot-map reader (buildContextFromSlotMap())
+    if (ctx.ptr > ctx.end || ir_size > static_cast<size_t>(ctx.end - ctx.ptr)) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        // at the end of the data, so that no reader reads the IR as an expression
+        ctx.ptr = ctx.end;
+        ctx.error = default_error.empty() ? std::string("closure IR range exceeds the expression data")
+            : std::move(default_error);
+        return QoreValue();
+    }
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
     if (!default_error.empty()) {
         for (QoreValue& v : defaults) {
             v.discard(nullptr);
         }
-        // past the IR, or at the end of the data if the record is out of its bounds, so that no reader reads the
-        // IR as an expression
-        ctx.ptr = (ctx.ptr <= ctx.end && ir_size <= static_cast<size_t>(ctx.end - ctx.ptr)) ? ir_end_ptr : ctx.end;
+        ctx.ptr = ir_end_ptr;
         ctx.error = std::move(default_error);
         return QoreValue();
     }
