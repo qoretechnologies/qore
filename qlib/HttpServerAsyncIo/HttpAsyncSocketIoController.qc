@@ -507,6 +507,13 @@ public class HttpAsyncSocketIoController {
             logShutdownException("flushing cancellation callbacks", ex);
         }
 
+        # the SSE streams of the stopped connections have ended: their close callbacks run on the handler pool, which
+        # the stop below waits for (qore#5758)
+        endSseStreams(detached_connections);
+        foreach hash<HttpListenerInfo> linfo in (detached_listeners.iterator()) {
+            notifyH3StreamsEnded(linfo);
+        }
+
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
         try {
@@ -573,11 +580,25 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             logShutdownException("flushing late cancellation callbacks", ex);
         }
+        endSseStreams(race_connections);
         if (race_connections) {
             try {
                 race_connections = NOTHING;
             } catch (hash<ExceptionInfo> ex) {
                 logShutdownException("destroying late connections", ex);
+            }
+        }
+    }
+
+    #! Ends the streams of connections removed by a stop of the controller; see dispatchSseStreamEnd()
+    private endSseStreams(*hash<string, hash<HttpActiveConnectionInfo>> conns) {
+        foreach hash<auto> i in (conns.pairIterator()) {
+            try {
+                hash<HttpActiveConnectionInfo> cinfo = cast<hash<HttpActiveConnectionInfo>>(i.value);
+                notifyH2StreamsEnded(cinfo.stream_op);
+                endConnectionSseStream(i.key, cinfo);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("ending SSE stream " + i.key, ex);
             }
         }
     }
@@ -1034,6 +1055,8 @@ public class HttpAsyncSocketIoController {
             }
         }
         cancelDelayedResponses(conn_keys);
+        # the streams of an HTTP/3 listener share its operation
+        notifyH3StreamsEnded(linfo);
 
         if (linfo && linfo.http_version == HttpVersionMode::H3) {
             try {
@@ -2671,6 +2694,7 @@ public class HttpAsyncSocketIoController {
     */
     private submitConnectionOp(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         # Check shutdown flag — handler tasks may call this after stop() begins
+        bool stopped_conn;
         {
             AutoWriteLock al(m);
             if (stopping) {
@@ -2688,8 +2712,14 @@ public class HttpAsyncSocketIoController {
                 if (cinfo.stream_op) {
                     cinfo.stream_op.onComplete(<SocketPollResultInfo>{});
                 }
-                return;
+                stopped_conn = True;
             }
+        }
+        if (stopped_conn) {
+            # a connection dropped here has ended, as has its SSE stream if it has one (the stop's snapshot of the
+            # connections did not include it); not in an on_exit block, which costs every call of this method
+            endConnectionSseStream(uh, cinfo);
+            return;
         }
         submitConnectionOpIntern(uh, cinfo);
     }
@@ -2863,6 +2893,7 @@ public class HttpAsyncSocketIoController {
                     && cinfo.state != HttpConnectionState::Http3Sending) {
                 try { cinfo.sock.close(); } catch () {}
             }
+            endConnectionSseStream(uh, cinfo);
         }
     }
 
@@ -2913,6 +2944,12 @@ public class HttpAsyncSocketIoController {
             }
             if (cancel_cinfo.after_send && orig_state == HttpConnectionState::SendStreamResponse) {
                 dispatchResponseSendResult(cancel_cinfo.target, cancel_cinfo.after_send, False);
+            }
+            # an SSE stream whose operation was canceled (by the removal of its listener) has ended, as have the
+            # streams of a canceled HTTP/2 connection
+            if (cancel_cinfo) {
+                notifyH2StreamsEnded(cancel_cinfo.stream_op);
+                endConnectionSseStream(uh, cancel_cinfo);
             }
             return;
         }
@@ -3349,6 +3386,10 @@ public class HttpAsyncSocketIoController {
         if (state != HttpConnectionState::Http3 && state != HttpConnectionState::Http3Sending) {
             try { cinfo.sock.close(); } catch () {}
         }
+        # an SSE stream that ends with an error (or whose response headers could not be sent) has ended, as have the
+        # streams of a failed HTTP/2 connection
+        notifyH2StreamsEnded(cinfo.stream_op);
+        endConnectionSseStream(uh, cinfo);
     }
 
     #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), then closes the connection
@@ -4007,6 +4048,8 @@ public class HttpAsyncSocketIoController {
                     log(LoggerLevel::ERROR, "Error sending SSE response for %y: %s: %s",
                         uh, ex.err, ex.desc);
                     try { sock.close(); } catch () {}
+                    # the stream has ended before it started
+                    dispatchSseStreamEnd(target, result.stream_operation, uh);
                 }
             } else {
                 hash<HttpActiveConnectionInfo> cinfo;
@@ -4097,6 +4140,10 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             remove connections{uh};
         }
+        # an SSE stream whose response headers could not be sent has ended; checked here, as every connection ends here
+        if (cinfo.pending_stream_op || cinfo.state == HttpConnectionState::Sse) {
+            endConnectionSseStream(uh, cinfo);
+        }
 
         # Do NOT cancel the shared UDP socket for HTTP/3 connections — the
         # socket is shared across all QUIC sessions and cancelling it would
@@ -4112,6 +4159,138 @@ public class HttpAsyncSocketIoController {
             controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
+    }
+
+    #! Runs the close callback of an HTTP/1.x SSE stream that ended without a disconnect
+    /** A stream also ends with a connection error, a failed send of its response headers, the removal of its listener
+        or a stop of the controller; its close callback (see
+        @ref HttpSseStreamPollOperation::setCloseCallback()) must run then too, or the handler keeps the connection
+        registered and an event source is never stopped (qore#5758).  The callback is taken from the operation, so it
+        runs at most once; it runs on a thread of the handler pool, or, if the pool does not take it (when it is
+        stopping), on a thread of its own, and in the calling thread if no thread can be started.
+
+        @param target the async target of the connection
+        @param op the connection's operation; nothing is done unless it is an SSE stream operation
+        @param uh the connection's unique hash, for logging
+    */
+    private dispatchSseStreamEnd(*HttpAsyncTarget target, *AbstractPollOperation op, string uh) {
+        if (!(op instanceof HttpSseStreamPollOperation)) {
+            return;
+        }
+        *code<nothing()> cb;
+        try {
+            cb = cast<HttpSseStreamPollOperation>(op).takeCloseCallback();
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "cannot take the SSE close callback for %s: %s: %s", uh, ex.err, ex.desc);
+            return;
+        }
+        if (!cb) {
+            return;
+        }
+        runOnHandlerPool(target, sub () {
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "SSE close callback threw for %s: %s: %s", uh, ex.err, ex.desc);
+            }
+        });
+    }
+
+    #! Ends the SSE stream of a connection that has been removed, if it has one; see dispatchSseStreamEnd()
+    /** Called on every path that removes a connection: an HTTP/1.x SSE stream is the connection's operation, or its
+        pending operation while its response headers are being sent.
+    */
+    private endConnectionSseStream(string uh, *hash<HttpActiveConnectionInfo> cinfo) {
+        if (!cinfo) {
+            return;
+        }
+        dispatchSseStreamEnd(cinfo.target, cinfo.stream_op, uh);
+        dispatchSseStreamEnd(cinfo.target, cinfo.pending_stream_op, uh);
+    }
+
+    #! Runs code on a thread of the handler pool, on a thread of its own if the pool does not take it (when it is
+    #! stopping), or in the calling thread if no thread can be started
+    /** For code that must run exactly once, such as the end of a stream.
+    */
+    private runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+        if (target) {
+            try {
+                submitToHandlerPool(target, c);
+                return;
+            } catch (hash<ExceptionInfo> ex) {
+                # the pool is stopping: run it on a thread of its own
+            }
+        }
+        try {
+            background c();
+        } catch () {
+            # no thread can be started (a thread limit): the code must still run, so it runs here
+            c();
+        }
+    }
+
+    #! Runs code on a thread of its own, or in the calling thread if no thread can be started
+    private runOnThreadOfItsOwn(code<nothing()> c) {
+        try {
+            background c();
+        } catch () {
+            # no thread can be started (a thread limit): the code must still run, so it runs here
+            c();
+        }
+    }
+
+    #! Notifies the stream listeners of an HTTP/2 connection that the connection has ended
+    /** A connection whose operation is canceled (by the removal of its listener or a stop of the controller) or
+        fails ends its streams as a connection close does (see handleHttp2ConnectionClosed()): an SSE stream's close
+        notifier or a WebSocket stream processor learns of the end only from its listener (qore#5758).  The streams
+        of an HTTP/3 listener share the listener's operation, and are notified when the listener is removed (see
+        notifyH3StreamsEnded()).
+
+        The listeners run user code (a WebSocket stream's close hooks), so they are notified on a thread of their own
+        (see runOnThreadOfItsOwn()), not on the calling controller worker or stopping thread.  Not on the handler
+        pool: a WebSocket stream over HTTP/2 or HTTP/3 holds a thread of the pool until its listener is notified, so
+        with every thread of the pool held by such streams, a notification queued on the pool would never run.
+
+        @param op the connection's operation; nothing is done unless it is an HTTP/2 connection operation
+    */
+    private notifyH2StreamsEnded(*AbstractPollOperation op) {
+        if (op instanceof Http2PollOperation) {
+            Http2PollOperation h2op = cast<Http2PollOperation>(op);
+            runOnThreadOfItsOwn(sub () {
+                try {
+                    h2op.notifyStreamListenersClosed();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the controller may be gone by the time this thread runs
+                    try {
+                        log(LoggerLevel::DEBUG, "error notifying the streams of an ended HTTP/2 connection: %s: %s",
+                            ex.err, ex.desc);
+                    } catch () {
+                    }
+                }
+            });
+        }
+    }
+
+    #! Notifies the stream listeners of an HTTP/3 listener that its operation has ended
+    /** @param linfo the listener; nothing is done unless it is an HTTP/3 listener
+    */
+    private notifyH3StreamsEnded(*hash<HttpListenerInfo> linfo) {
+        if (linfo.h3op) {
+            Http3ServerPollOperation h3op = linfo.h3op;
+            # on a thread of its own, as for HTTP/2 (see notifyH2StreamsEnded())
+            runOnThreadOfItsOwn(sub () {
+                try {
+                    h3op.notifyStreamListenersClosed();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the controller may be gone by the time this thread runs
+                    try {
+                        log(LoggerLevel::DEBUG, "error notifying the streams of an ended HTTP/3 listener: %s: %s",
+                            ex.err, ex.desc);
+                    } catch () {
+                    }
+                }
+            });
         }
     }
 
@@ -4140,17 +4319,11 @@ public class HttpAsyncSocketIoController {
             log(LoggerLevel::DEBUG, "Error closing SSE socket for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
+        # the stream's close callback runs exactly once, also when the pool no longer takes tasks
+        dispatchSseStreamEnd(cinfo.target, op, uh);
+
         try {
-            *code<nothing()> stream_close_callback = op.getCloseCallback();
             submitToHandlerPool(cinfo.target, sub () {
-                if (stream_close_callback) {
-                    try {
-                        stream_close_callback();
-                    } catch (hash<ExceptionInfo> ex) {
-                        log(LoggerLevel::ERROR, "SSE close callback threw for %s: %s: %s",
-                            uh, ex.err, ex.desc);
-                    }
-                }
                 try {
                     cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
                 } catch (hash<ExceptionInfo> ex) {

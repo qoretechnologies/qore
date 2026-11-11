@@ -38,10 +38,11 @@ public namespace ServerSentEventHandler {
 
     @ref SseObservableBridge encapsulates that bookkeeping.  It is itself
     a @ref DataProvider::Observer "Observer": once registered on an
-    Observable, every matching event is SSE-framed and handed to the HTTP
-    server's response-writer thread.  No auxiliary threads are created; the
-    response-writer simply blocks on a condition variable waiting for the
-    next event.
+    Observable, every matching event is SSE-framed and pushed to the stream when it
+    occurs.  It is also an @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource":
+    the HTTP server sets up the stream on its async I/O controller for every HTTP version and
+    starts the bridge with it, so no thread waits for the events of the stream, and open
+    streams do not hold the threads of the server's handler pool.
 
     @par Usage
 
@@ -64,33 +65,34 @@ public namespace ServerSentEventHandler {
     }
     @endcode
 
-    For finer control — for example, to plug the bridge into an
-    @ref HttpServer::AbstractHttpSocketHandler "AbstractHttpSocketHandler"
-    that manages its own response plumbing — callers may construct an
-    @ref SseObservableBridge directly and drive @ref nextChunk() from their
-    own send loop.
+    For finer control, callers may construct an @ref SseObservableBridge directly and return it
+    in the \c sse_source key of a response with an event stream \c Content-Type, or drive
+    @ref nextChunk() from their own send loop (which waits for each event in the calling thread).
 
     @par Lifecycle
 
-    - The bridge registers itself as an Observer in its constructor.
+    - The bridge registers itself as an Observer in its constructor; events emitted before the
+      stream is started are queued and sent first.
     - When the stream is closed (either by a matching \c terminate_on event
-      or by an explicit @ref close() call), the bridge deregisters itself
-      as soon as the response-writer drains the last queued chunk.
-    - If the Observable is the only strong reference to the bridge, the
-      bridge stays alive until the stream closes, ensuring all pending
-      events are delivered before teardown.
+      or by an explicit @ref close() call), the queued events are sent and the stream ends;
+      the server then calls @ref stop(), which deregisters the bridge.
+    - When the client goes away, or the listener or server is stopped, the server calls
+      @ref stop(), which deregisters the bridge, so an Observable never keeps a bridge whose
+      stream has ended.
 
     @par Concurrency
 
-    All state transitions are guarded by a single Mutex/Condition pair.
+    All state transitions are guarded by a single Mutex/Condition pair, and the
+    events are pushed to the stream in order under a second lock.
     @ref update() is expected to be called from the Observable's publisher
-    thread(s); @ref nextChunk() is called from the HTTP server's
-    response-writer thread.  The Condition variable handshake ensures the
-    writer never busy-waits.
+    thread(s), which queue each event on the stream; on HTTP/2 and HTTP/3, a
+    stream whose flow-control window is exhausted makes the publisher wait until the
+    client has read enough data (backpressure).  @ref nextChunk() waits on the
+    Condition variable for the next event in the thread that calls it.
 
     @since %Qore 3.0
 */
-public class SseObservableBridge inherits DataProvider::Observer {
+public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyncIo::AbstractSseEventSource {
     public {
         #! Default serialization for @c data fields of emitted events
         const DefaultSerialization = "json";
@@ -106,6 +108,15 @@ public class SseObservableBridge inherits DataProvider::Observer {
     private {
         Mutex m();
         Condition cond();
+
+        #! Serializes the pushes to @ref stream, so that events are sent in order; always taken before @ref m
+        Mutex send_lock();
+
+        #! The stream the events are pushed to once the server has started the bridge; see @ref start()
+        *HttpServerAsyncIo::AbstractSseConnection stream;
+
+        #! True once the server has stopped the bridge (see @ref stop()); later events are dropped
+        bool stopped = False;
 
         #! Queued SSE-framed chunks waiting to be written to the client
         list<string> chunks = ();
@@ -222,10 +233,10 @@ public class SseObservableBridge inherits DataProvider::Observer {
             "event": event_id,
             "data": data_,
         };
-        pushMessage(msg);
-        if (exists terminate_on && event_id == terminate_on) {
-            close();
-        }
+        msg = validateOutgoingEvent(msg);
+        # a terminal event is queued and closes the stream in one step, so that no event of another publisher
+        # thread follows it
+        pushChunkIntern(encodeMessage(msg), exists terminate_on && event_id == terminate_on);
     }
 
     #! Close the stream cleanly after any queued chunks are drained.
@@ -233,12 +244,62 @@ public class SseObservableBridge inherits DataProvider::Observer {
         in the queue will still be delivered before the stream ends.
     */
     close() {
-        AutoLock al(m);
-        if (closed) {
-            return;
+        # the stream is closed after the events queued before
+        AutoLock sl(send_lock);
+        *HttpServerAsyncIo::AbstractSseConnection s;
+        {
+            AutoLock al(m);
+            if (closed) {
+                return;
+            }
+            closed = True;
+            cond.broadcast();
+            s = stream;
         }
+        if (s) {
+            closeStream(s);
+        }
+    }
+
+    #! Called by the HTTP server with the stream of the response; pushes the events queued so far
+    /** Every later event is pushed to the stream when it occurs; the stream is closed when the bridge is closed.
+        No thread waits for the events.
+
+        @param conn the stream of the response
+    */
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        AutoLock sl(send_lock);
+        list<string> pending;
+        bool close_now;
+        {
+            AutoLock al(m);
+            if (stopped) {
+                return;
+            }
+            stream = conn;
+            pending = chunks;
+            chunks = ();
+            close_now = closed;
+        }
+        foreach string chunk in (pending) {
+            if (!pushChunk(conn, chunk)) {
+                return;
+            }
+        }
+        if (close_now) {
+            closeStream(conn);
+        }
+    }
+
+    #! Called by the HTTP server exactly once when the stream has ended; deregisters the bridge from the Observable
+    stop() {
+        AutoLock al(m);
+        stopped = True;
         closed = True;
+        remove stream;
+        chunks = ();
         cond.broadcast();
+        deregisterLocked();
     }
 
     #! Fetch the next SSE-framed chunk; intended to be called from the
@@ -280,10 +341,59 @@ public class SseObservableBridge inherits DataProvider::Observer {
     */
     pushMessage(hash<SseMessageInfo> msg) {
         msg = validateOutgoingEvent(msg);
-        string chunk = encodeMessage(msg);
-        AutoLock al(m);
-        chunks += chunk;
-        cond.broadcast();
+        pushChunkIntern(encodeMessage(msg), False);
+    }
+
+    #! Queues a chunk, or pushes it to the stream once the bridge has been started; closes the stream after it if
+    #! @p close_after is set
+    /** Pushes are serialized, so that the events are sent in the order they were queued; an event queued after the
+        stream was closed is dropped.
+    */
+    private pushChunkIntern(string chunk, bool close_after) {
+        AutoLock sl(send_lock);
+        *HttpServerAsyncIo::AbstractSseConnection s;
+        {
+            AutoLock al(m);
+            if (stopped || closed) {
+                return;
+            }
+            if (close_after) {
+                closed = True;
+            }
+            cond.broadcast();
+            s = stream;
+            if (!s) {
+                chunks += chunk;
+                return;
+            }
+        }
+        pushChunk(s, chunk);
+        if (close_after) {
+            closeStream(s);
+        }
+    }
+
+    #! Pushes a chunk to the stream; returns @ref False if the stream can no longer take it
+    /** A stream that has gone away is not an error of the publisher: the server stops the bridge when it reports
+        the end of the stream.
+    */
+    private bool pushChunk(HttpServerAsyncIo::AbstractSseConnection s, string chunk) {
+        try {
+            s.queueRawString(chunk);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has ended (SSE-CLOSED, or a transport error); the server stops the bridge
+            return False;
+        }
+    }
+
+    #! Closes the stream, which ends it after the events queued before
+    private closeStream(HttpServerAsyncIo::AbstractSseConnection s) {
+        try {
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended
+        }
     }
 
     #! Serialize an @ref Qore::SseMessageInfo "SseMessageInfo" as an SSE
@@ -428,7 +538,10 @@ public class SseObservableBridge inherits DataProvider::Observer {
     need to push a progress stream.  Creates an
     @ref ServerSentEventHandler::SseObservableBridge "SseObservableBridge",
     subscribes it to @a source, and assembles a ready-to-return response
-    hash whose @c send_callback is wired to the bridge's @ref SseObservableBridge::nextChunk().
+    hash with the bridge as its \c sse_source, so that the HTTP server pushes each event to the stream when it
+    occurs, and no thread waits for the events (open streams do not hold the threads of the server's handler pool).
+    Its \c send_callback, wired to the bridge's @ref SseObservableBridge::nextChunk(), is used only by a server that
+    cannot set up such a stream.
 
     @param source the @ref DataProvider::Observable "Observable" whose
     events should be streamed to the client
@@ -458,6 +571,7 @@ public hash<HttpServer::HttpHandlerResponseInfo> sub sseObservableResponse(
     return cast<hash<HttpServer::HttpHandlerResponseInfo>>({
         "code": opts.code ?? 200,
         "hdr": hdr,
+        "sse_source": bridge,
         "send_callback": *string sub () {
             return bridge.nextChunk();
         },

@@ -1,0 +1,739 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SSE streams over HTTP/1.1, 2 and 3, the async I/O controller's handler pool and socket closes
+
+/*  SseEventSourcePool.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5758: an SSE stream of ServerSentEventHandler::sseObservableResponse() waited for its events in
+    SseObservableBridge::nextChunk() on a thread of the HttpServer handler pool for the life of the stream, so
+    max_handler_threads open streams stopped every other request, and a stop of the server waited for them forever.
+    The bridge is now an event source (HttpServerAsyncIo::AbstractSseEventSource) that pushes its events to a stream
+    of the async I/O controller; no thread waits for them, and every end of the stream (a close by the source or the
+    client, a stop of the listener or the server) stops the source, which deregisters it from its Observable.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires json
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class SseEventSourcePoolTest
+
+#! An Observable that counts the observers registered on it
+class CountingObservable inherits Observable {
+    public {
+        #! The observers registered now
+        Counter live();
+    }
+
+    private {
+        #! Decremented by each registration of the current round
+        Counter registered();
+    }
+
+    #! Prepares a round in which @p n observers register
+    expect(int n) {
+        registered = new Counter(n);
+    }
+
+    #! Waits until the observers of the round have registered; returns 0 if they did
+    int waitForRegistered(timeout t) {
+        return registered.waitForZero(t);
+    }
+
+    registerObserver(Observer observer, ...) {
+        Observable::registerObserver(observer);
+        live.inc();
+        registered.dec();
+    }
+
+    bool deregisterObserver(Observer observer) {
+        bool rv = Observable::deregisterObserver(observer);
+        if (rv) {
+            live.dec();
+        }
+        return rv;
+    }
+}
+
+#! The source of the events of the streams, shared by the handlers of a server
+class SourceHolder {
+    public {
+        CountingObservable src();
+    }
+
+    hash<HttpHandlerResponseInfo> response(*hash<auto> hdr) {
+        return sseObservableResponse(src, {
+            "initial_event": {"event": "hello", "data": {"n": 0}},
+            "terminate_on": "end",
+            "hdr": hdr,
+        });
+    }
+}
+
+#! Decremented once per WebSocket connection ended on the server side
+our *Counter ws_closed;
+
+#! Echoes each message
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        if (ws_closed) {
+            ws_closed.dec();
+        }
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    public {
+        #! The unique hashes of the sockets of the connections of the streams, in the order of their start
+        list<string> socks = ();
+    }
+
+    private {
+        Mutex socks_lock();
+    }
+
+    constructor() : WebSocketHandler() {
+    }
+
+    #! Records the socket of the connection of the stream; an HTTP/2 stream's start holds its thread until it ends
+    bool start(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        {
+            AutoLock al(socks_lock);
+            socks += s.uniqueHash();
+        }
+        return WebSocketHandler::start(lid, cx, hdr, s);
+    }
+
+    list<string> getSockets() {
+        AutoLock al(socks_lock);
+        return socks;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+#! An event source of its own: pushes one event and closes the stream, or fails to start
+class TestSource inherits AbstractSseEventSource {
+    public {
+        #! Decremented by stop()
+        Counter stopped(1);
+    }
+
+    private {
+        bool fail_start;
+        Mutex m();
+        int stop_calls;
+    }
+
+    constructor(bool fail_start = False) {
+        self.fail_start = fail_start;
+    }
+
+    start(AbstractSseConnection conn) {
+        if (fail_start) {
+            throw "TEST-ERROR", "the source failed to start";
+        }
+        conn.queueRawString("event: custom\ndata: x\n\n");
+        conn.close();
+    }
+
+    stop() {
+        {
+            AutoLock al(m);
+            ++stop_calls;
+        }
+        stopped.dec();
+    }
+
+    int getStopCalls() {
+        AutoLock al(m);
+        return stop_calls;
+    }
+}
+
+#! Returns responses with event sources of its own
+class CustomSourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! The source of the last request
+        *TestSource last;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /badtype/) {
+            return {"code": 200, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": new Mutex()};
+        }
+        last = new TestSource(hdr.path =~ /throw/);
+        if (hdr.path =~ /badcode/) {
+            # an invalid response code: the response is replaced by an error, and the source is not used
+            return {"code": 999, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": last};
+        }
+        if (hdr.path =~ /notfound/) {
+            # a source on a response that is not an event stream is not used
+            return {"code": 404, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": last};
+        }
+        return {"code": 200, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": last};
+    }
+}
+
+#! A plain request handler (not a socket handler) that streams the source
+class PlainSseHandler inherits AbstractHttpRequestHandler {
+    private {
+        SourceHolder sh;
+    }
+
+    constructor(SourceHolder sh) {
+        self.sh = sh;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /fallback/) {
+            # not an event stream response: the bridge's send_callback sends the events queued so far, here the
+            # terminal initial event
+            return sseObservableResponse(new Observable(), {
+                "code": 404,
+                "initial_event": {"event": "end", "data": {"n": 0}},
+                "terminate_on": "end",
+            });
+        }
+        if (hdr.path =~ /charset/) {
+            # an event stream media type with a parameter
+            return sh.response({"Content-Type": MimeTypeSse + ";charset=utf-8"});
+        }
+        return sh.response();
+    }
+}
+
+#! A ServerSentEventHandler that streams the source; its own stream setup registers the connection
+class SocketSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    private {
+        SourceHolder sh;
+    }
+
+    constructor(SourceHolder sh) : ServerSentEventHandler() {
+        self.sh = sh;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        return sh.response();
+    }
+}
+
+#! Answers ordinary requests
+class ProbeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! A client stream
+class Client {
+    public {
+        HttpClientIo::HttpClientConnectionManager mgr;
+        HttpClientIo::HttpClientStreamHandle stream;
+        HttpClientStreamingIo::SseStreamReader reader;
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts, string url, string path) {
+        mgr = new HttpClientIo::HttpClientConnectionManager(opts);
+        stream = mgr.acquireAndStartStreaming(url, "GET", path, {"Accept": MimeTypeSse});
+        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+    }
+
+    close() {
+        try {
+            stream.cancel();
+        } catch () {
+        }
+        delete mgr;
+    }
+}
+
+class SseEventSourcePoolTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        #! The threads of the server's handler pool
+        const PoolThreads = 2;
+
+        #! The open streams: three times the threads of the pool
+        const Streams = PoolThreads * 3;
+
+        #! Upper bound for any wait that a regression turns into a hang
+        const HangTimeout = 30s;
+
+        #! The protocols of the streams
+        const Protocols = ("h1", "h2", "h3");
+
+        #! The handlers: a plain request handler, and a ServerSentEventHandler
+        const Handlers = ("plain", "socket");
+    }
+
+    constructor() : Test("SseEventSourcePoolTest", "1.0") {
+        foreach string proto in (Protocols) {
+            foreach string h in (Handlers) {
+                addTestCase(sprintf("%s %s: more open streams than handler threads get their events, and requests "
+                    "are served", proto, h), \testMoreStreamsThanThreads(), (proto, h));
+                addTestCase(sprintf("%s %s: a close by the clients stops every source", proto, h),
+                    \testClientClose(), (proto, h));
+                addTestCase(sprintf("%s %s: a stop of the listener with open streams finishes", proto, h),
+                    \testListenerStop(), (proto, h));
+                addTestCase(sprintf("%s %s: a stop of the server with open streams finishes", proto, h),
+                    \testServerStop(), (proto, h));
+            }
+            # an event stream media type with a parameter took the path of a blocking send_callback, which held a
+            # thread of the handler pool for the life of each stream
+            addTestCase(sprintf("%s charset: more open streams than handler threads get their events, and requests "
+                "are served", proto), \testMoreStreamsThanThreads(), (proto, "charset"));
+        }
+        # the end of a multiplexed connection is reported to its WebSocket streams on a thread of its own: a stream
+        # can hold a thread of the handler pool until it is told, so the report must not wait for one
+        foreach string proto in (("h2", "h3")) {
+            addTestCase(sprintf("%s: WebSocket streams that hold every handler thread end at a stop of the listener",
+                proto), \testWebSocketStreamsListenerStop(), proto);
+        }
+        addTestCase("h2: a canceled connection ends its WebSocket stream while streams hold every handler thread",
+            \testWebSocketStreamConnectionCancel());
+        addTestCase("h1: an event stream media type with a parameter is not given a Content-Length",
+            \testMediaTypeParameter());
+        addTestCase("h1: a HEAD request stops the source that it does not use", \testHead());
+        addTestCase("h1: a source of its own pushes its events and closes its stream, and is stopped once",
+            \testCustomSource());
+        addTestCase("h1: a source whose start fails closes its stream and is stopped", \testCustomSourceStartError());
+        addTestCase("h1: an sse_source that is not an AbstractSseEventSource is an error", \testBadSourceType());
+        addTestCase("h1: a source on a response that is not a stream is stopped at once", \testSourceNotUsed());
+        addTestCase("h1: a source on a response with an invalid code is stopped", \testSourceInvalidCode());
+        addTestCase("h1: a bridge on a response that is not a stream sends its events with its send_callback",
+            \testBridgeFallback());
+        addTestCase("a response without a body whose media type is text/event-stream has no Content-Length",
+            \testEventStreamMediaType());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("sse-event-source-pool-test", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        mLogger.addAppender(new StdoutAppender());
+    }
+
+    #! Starts a server with a handler pool of PoolThreads threads
+    /** The streams use a listener of their own (an HTTP/1.1 listener for h1, a TLS listener for h2 and h3), and
+        ordinary requests the HTTP/1.1 listener; the case is skipped if no TLS listener can be created
+    */
+    private ServerCtx startServer(string proto) {
+        ServerCtx ctx();
+        ctx.server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "max_handler_threads": PoolThreads,
+        });
+        ctx.server.setHandler("plain", "/plain", NOTHING, new PlainSseHandler(ctx.sh));
+        ctx.server.setHandler("socket", "/socket", NOTHING, new SocketSseHandler(ctx.sh));
+        ctx.server.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
+        ctx.server.setHandler("custom", "/custom", NOTHING, ctx.custom);
+        ctx.server.setHandler("ws", "/ws", NOTHING, ctx.ws);
+        ctx.probe_port = ctx.server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+        }).port;
+        hash<auto> info;
+        if (proto == "h1") {
+            info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+            });
+        } else {
+            try {
+                info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                    "node": "localhost",
+                    "service": 0,
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                    "http_version": proto == "h2" ? "2.0" : "auto",
+                    "enable_h3": proto == "h3",
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                delete ctx.server;
+                testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+            }
+        }
+        ctx.port = info.port;
+        ctx.lid = info.id;
+        ctx.server.waitForAsyncIo();
+        return ctx;
+    }
+
+    #! Opens Streams streams and checks that each one gets the initial event of its source
+    private list<Client> openStreams(ServerCtx ctx, string proto, string h) {
+        list<Client> clients = ();
+        on_error map $1.close(), clients;
+        ctx.sh.src.expect(Streams);
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> opts = <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "request_timeout": HangTimeout,
+            "connect_timeout": HangTimeout,
+        };
+        if (proto != "h1") {
+            opts.accept_all_certs = True;
+        }
+        string url = sprintf("%s://localhost:%d", proto == "h1" ? "http" : "https", ctx.port);
+        for (int i = 0; i < Streams; ++i) {
+            Client c(opts, url, h == "charset" ? "/plain/charset" : "/" + h);
+            clients += c;
+            # each request needs a thread of the handler pool, which the open streams must not hold
+            *hash<SseMessageInfo> ev = c.reader.readEvent(HangTimeout);
+            assertEq("hello", ev.event, sprintf("stream %d got the initial event", i));
+        }
+        assertEq(0, ctx.sh.src.waitForRegistered(HangTimeout), "every stream's source is registered");
+        return clients;
+    }
+
+    #! Checks that every source has been stopped, i.e. deregistered from the Observable
+    private checkStopped(ServerCtx ctx, string msg) {
+        assertEq(0, ctx.sh.src.live.waitForZero(HangTimeout), msg + ": every source was stopped");
+    }
+
+    #! Sends an ordinary request
+    private probe(ServerCtx ctx, string msg) {
+        Socket s();
+        s.connect(sprintf("localhost:%d", ctx.probe_port), HangTimeout);
+        on_exit s.close();
+        s.sendHTTPMessage("GET", "/probe", "1.1", {"Host": "localhost", "Connection": "close"});
+        hash<auto> resp = s.readHTTPHeader(HangTimeout);
+        assertEq(200, resp.status_code, msg);
+        assertEq("ok", s.recv(int(resp."content-length"), HangTimeout), msg);
+    }
+
+    testMoreStreamsThanThreads(string proto, string h) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        list<Client> clients = openStreams(ctx, proto, h);
+        on_exit map $1.close(), clients;
+        probe(ctx, "an ordinary request while more streams than handler threads are open");
+
+        # an event reaches every stream
+        ctx.sh.src.notifyObservers("tick", {"n": 1});
+        foreach Client c in (clients) {
+            *hash<SseMessageInfo> ev = c.reader.readEvent(HangTimeout);
+            assertEq("tick", ev.event, sprintf("stream %d got the event", $#));
+            assertEq({"n": 1}, parse_json(ev.data), sprintf("stream %d got the event's data", $#));
+        }
+
+        # the terminal event closes every stream after it is sent, and stops every source
+        ctx.sh.src.notifyObservers("end", {"n": 2});
+        foreach Client c in (clients) {
+            *hash<SseMessageInfo> ev = c.reader.readEvent(HangTimeout);
+            assertEq("end", ev.event, sprintf("stream %d got the terminal event", $#));
+            assertEq(NOTHING, c.reader.readEvent(HangTimeout), sprintf("stream %d has ended", $#));
+        }
+        checkStopped(ctx, "after the terminal event");
+        probe(ctx, "an ordinary request after the streams ended");
+    }
+
+    testClientClose(string proto, string h) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        # twice: the threads of the pool that stopped the first sources serve the second streams
+        for (int round = 0; round < 2; ++round) {
+            list<Client> clients = openStreams(ctx, proto, h);
+            map $1.close(), clients;
+            checkStopped(ctx, sprintf("round %d", round));
+        }
+        probe(ctx, "an ordinary request after the clients closed their streams");
+    }
+
+    testListenerStop(string proto, string h) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        list<Client> clients = openStreams(ctx, proto, h);
+        on_exit map $1.close(), clients;
+        # a stop that does not finish fails the assertion below
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            ctx.server.stopListenerID(ctx.lid);
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the listener with open streams finished");
+        checkStopped(ctx, "after the stop of the listener");
+        probe(ctx, "an ordinary request on another listener after the stop of the stream listener");
+    }
+
+    testServerStop(string proto, string h) {
+        ServerCtx ctx = startServer(proto);
+        list<Client> clients = openStreams(ctx, proto, h);
+        on_exit map $1.close(), clients;
+        # a stop that does not finish fails the assertion below
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            delete ctx.server;
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the server with open streams finished");
+        checkStopped(ctx, "after the stop of the server");
+    }
+
+    testWebSocketStreamsListenerStop(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        ws_closed = new Counter(PoolThreads);
+        on_exit remove ws_closed;
+        list<WebSocketClient> clients = openWebSocketStreams(ctx, proto);
+        on_exit map $1.disconnect(), clients;
+        # a stop that does not finish fails the assertion below
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            ctx.server.stopListenerID(ctx.lid);
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the listener with open WebSocket streams finished");
+        assertEq(0, ws_closed.waitForZero(HangTimeout), "every WebSocket stream ended on the server");
+    }
+
+    #! Opens PoolThreads WebSocket streams, each of which holds a thread of the handler pool, and checks their echoes
+    private list<WebSocketClient> openWebSocketStreams(ServerCtx ctx, string proto) {
+        list<WebSocketClient> clients = ();
+        on_error map $1.disconnect(), clients;
+        for (int i = 0; i < PoolThreads; ++i) {
+            Queue received();
+            WebSocketClient wsc(sub (*data msg) {
+                received.push(msg);
+            }, {
+                "url": sprintf("wss://localhost:%d/ws", ctx.port),
+                "http_version": proto == "h2" ? "2.0" : "3.0",
+                "ssl_verify_cert": False,
+                "timeout": 30000,
+            });
+            wsc.connect();
+            clients += wsc;
+            if ((proto == "h2" && !wsc.isHttp2()) || (proto == "h3" && !wsc.isHttp3())) {
+                testSkip(sprintf("%s was not negotiated", proto));
+            }
+            wsc.send("msg-" + i);
+            assertEq("msg-" + i, received.get(HangTimeout), sprintf("WebSocket stream %d got its echo", i));
+        }
+        return clients;
+    }
+
+    testWebSocketStreamConnectionCancel() {
+        ServerCtx ctx = startServer("h2");
+        on_exit delete ctx.server;
+        ws_closed = new Counter(1);
+        on_exit remove ws_closed;
+        list<WebSocketClient> clients = openWebSocketStreams(ctx, "h2");
+        on_exit map $1.disconnect(), clients;
+        # every thread of the handler pool now waits for the end of a stream; the cancel of a connection's operation
+        # (as by the removal of its listener, without the handler's own stop) must still report the end to its stream
+        AsyncIoController::cancelByOwner(ctx.ws.getSockets()[0]);
+        assertEq(0, ws_closed.waitForZero(HangTimeout), "the stream of the canceled connection ended on the server");
+        probe(ctx, "an ordinary request after the canceled connection's stream ended");
+    }
+
+    testMediaTypeParameter() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        ctx.sh.src.expect(1);
+        Socket s();
+        s.connect(sprintf("localhost:%d", ctx.port), HangTimeout);
+        on_exit s.close();
+        s.sendHTTPMessage("GET", "/plain/charset", "1.1", {"Host": "localhost"});
+        hash<auto> resp = s.readHTTPHeader(HangTimeout);
+        assertEq(200, resp.status_code);
+        assertEq(MimeTypeSse + ";charset=utf-8", resp."content-type");
+        # a Content-Length of 0 ended the stream for the client before it started
+        assertEq(NOTHING, resp."content-length", "the stream has no Content-Length");
+        assertEq(0, ctx.sh.src.waitForRegistered(HangTimeout), "the source is registered");
+        ctx.sh.src.notifyObservers("end", {"n": 1});
+        # the stream is delimited by the end of the connection; the read that receives the end closes the socket
+        string body;
+        while (s.isOpen()) {
+            *binary b = s.recvBinary(0, HangTimeout);
+            if (!b) {
+                break;
+            }
+            body += b.toString();
+        }
+        assertEq("event: hello\ndata: {\"n\":0}\n\nevent: end\ndata: {\"n\":1}\n\n", body);
+        checkStopped(ctx, "after the terminal event");
+    }
+
+    #! Sends a request on a connection of its own and reads the response until the server closes the connection
+    private hash<auto> rawRequest(ServerCtx ctx, string method, string path) {
+        Socket s();
+        s.connect(sprintf("localhost:%d", ctx.port), HangTimeout);
+        on_exit s.close();
+        s.sendHTTPMessage(method, path, "1.1", {"Host": "localhost", "Connection": "close"});
+        hash<auto> resp = s.readHTTPHeader(HangTimeout);
+        string body;
+        if (exists resp."content-length") {
+            int len = int(resp."content-length");
+            if (len) {
+                body = s.recv(len, HangTimeout);
+            }
+        } else {
+            while (s.isOpen()) {
+                *binary b = s.recvBinary(0, HangTimeout);
+                if (!b) {
+                    break;
+                }
+                body += b.toString();
+            }
+        }
+        return resp + {"body": body};
+    }
+
+    testCustomSource() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/custom");
+        assertEq(200, resp.status_code);
+        assertEq("event: custom\ndata: x\n\n", resp.body, "the source's event was sent before the stream ended");
+        assertEq(0, ctx.custom.last.stopped.waitForZero(HangTimeout), "the source was stopped");
+        TestSource src = ctx.custom.last;
+        # every end path has run once the server has stopped
+        delete ctx.server;
+        assertEq(1, src.getStopCalls(), "the source was stopped exactly once");
+    }
+
+    testCustomSourceStartError() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/custom/throw");
+        assertEq(200, resp.status_code);
+        assertEq("", resp.body ?? "", "the stream ended without events");
+        assertEq(0, ctx.custom.last.stopped.waitForZero(HangTimeout), "the source was stopped");
+        probe(ctx, "an ordinary request after a source failed to start");
+    }
+
+    testBadSourceType() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/custom/badtype");
+        assertEq(500, resp.status_code);
+        assertRegex("SSE-HANDLER-ERROR", resp.body);
+    }
+
+    testSourceNotUsed() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/custom/notfound");
+        assertEq(404, resp.status_code);
+        assertEq(0, ctx.custom.last.stopped.waitForZero(HangTimeout), "the unused source was stopped");
+        assertEq(1, ctx.custom.last.getStopCalls(), "the unused source was stopped once");
+    }
+
+    testSourceInvalidCode() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/custom/badcode");
+        assertEq(500, resp.status_code);
+        assertEq(0, ctx.custom.last.stopped.waitForZero(HangTimeout), "the source was stopped");
+        assertEq(1, ctx.custom.last.getStopCalls(), "the source was stopped once");
+    }
+
+    testBridgeFallback() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", "/plain/fallback");
+        assertEq(404, resp.status_code);
+        # the body is chunked; it carries the queued event
+        assertRegex("event: end\ndata: \\{\"n\":0\\}\n\n", resp.body, "the queued event was sent");
+    }
+
+    #! Sends a response without a body with the given Content-Type and returns the received headers
+    private hash<auto> bodylessResponseHeaders(string content_type) {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        Socket client();
+        client.connect(sprintf("localhost:%d", listener.getSocketInfo().port), HangTimeout);
+        on_exit client.close();
+        Socket server = listener.accept(HangTimeout);
+        on_exit server.close();
+        server.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": content_type});
+        return client.readHTTPHeader(HangTimeout);
+    }
+
+    testEventStreamMediaType() {
+        # an event stream is delimited by the end of the connection: no Content-Length, whatever the case of the
+        # media type, its parameters and the whitespace around it (RFC 9110 section 8.3.1)
+        foreach string ct in (("text/event-stream", "TEXT/Event-Stream", "text/event-stream;charset=utf-8",
+                " text/event-stream ; charset=utf-8")) {
+            assertEq(NOTHING, bodylessResponseHeaders(ct)."content-length", sprintf("%y has no Content-Length", ct));
+        }
+        # any other media type without a body has a Content-Length of 0 (issue #3879)
+        foreach string ct in (("text/event-streamx", "text/plain", "text/event")) {
+            assertEq("0", bodylessResponseHeaders(ct)."content-length", sprintf("%y has a Content-Length of 0", ct));
+        }
+    }
+
+    testHead() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        ctx.sh.src.expect(1);
+        Socket s();
+        s.connect(sprintf("localhost:%d", ctx.port), HangTimeout);
+        on_exit s.close();
+        s.sendHTTPMessage("HEAD", "/plain", "1.1", {"Host": "localhost"});
+        hash<auto> resp = s.readHTTPHeader(HangTimeout);
+        assertEq(200, resp.status_code);
+        assertEq(MimeTypeSse, resp."content-type");
+        assertEq(0, ctx.sh.src.waitForRegistered(HangTimeout), "the source was registered");
+        checkStopped(ctx, "after the HEAD response");
+    }
+}
+
+#! A test server and the source of its streams
+class ServerCtx {
+    public {
+        *HttpServer server;
+        SourceHolder sh();
+        CustomSourceHandler custom();
+        EchoHandler ws();
+        int probe_port;
+        int port;
+        int lid;
+    }
+}

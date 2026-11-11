@@ -1543,6 +1543,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
+      another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
+      stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
     - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
       dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
       at exit; the records of the module that the reload replaces are now kept until the module is deleted
