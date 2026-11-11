@@ -7193,7 +7193,15 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
             QoreValue ir_return_value;
             bool ok = false;
             qore_exec_mode_t exec_mode = pgm->getExecMode();
-            if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+            // in tiered mode, the specialization is promoted to the JIT tier when it is hot, as evalTiered() promotes
+            // the variant: on reaching the JIT threshold or when the IR interpreter detects a hot loop (OSR)
+            bool use_jit = exec_mode == QEM_JIT;
+            if (exec_mode == QEM_TIERED) {
+                uint64_t count = ir->specialization_exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+                use_jit = count >= QoreJIT::getJITThreshold()
+                    || ir->osr_jit_requested.exchange(false, std::memory_order_relaxed);
+            }
+            if (use_jit) {
                 std::string error;
                 ok = QoreJIT::instance().executeWithFallback(*ir, ir_return_value, xsink, error,
                     ir->cached_pre_instantiated);

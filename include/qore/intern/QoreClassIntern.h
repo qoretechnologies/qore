@@ -4903,7 +4903,11 @@ public:
             return NMETHF(func)->evalMethod(xsink, rc, 0, self, args, cctx, pgm_ctx,
                 explicit_type_param_instantiation);
         }
-        return SMETHF(func)->evalMethod(xsink, rc, 0, args, cctx, pgm_ctx, receiver_type_info,
+        // issue #5769: a static method called through an object (self.method() in a method) has the object's type as
+        // its receiver, as a normal method does, so the type parameters of a generic class that the object's class
+        // inherits a specialization of are substituted when the variant is resolved at run time
+        return SMETHF(func)->evalMethod(xsink, rc, 0, args, cctx, pgm_ctx,
+            receiver_type_info ? receiver_type_info : (self ? qore_get_object_receiver_type_info(self) : nullptr),
             explicit_type_param_instantiation);
     }
 
@@ -4917,7 +4921,9 @@ public:
             return NMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, self, args, cctx,
                 explicit_type_param_instantiation, resolved_variant);
         }
-        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, args, cctx, receiver_type_info,
+        // issue #5769: see eval()
+        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, args, cctx,
+            receiver_type_info ? receiver_type_info : (self ? qore_get_object_receiver_type_info(self) : nullptr),
             explicit_type_param_instantiation, resolved_variant);
     }
 
