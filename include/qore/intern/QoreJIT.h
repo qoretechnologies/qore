@@ -962,6 +962,20 @@ public:
     //! For tests: returns true if the background compile thread is stopped at a hold point
     bool dbgBgCompileHeld();
 
+    //! For tests: takes the compilation mutex as a synchronous compile does (see lockForSyncCompile())
+    /** @return false if the JIT refused, as for a synchronous compile; else the mutex is held: release it with
+        releaseCompileLock()
+    */
+    bool lockForSyncCompileForTest();
+
+    //! For tests: the number of synchronous compiles that wait for the compilation mutex
+    int syncCompileWaitersForTest();
+
+    //! For tests: waits until a synchronous compile waits for the compilation mutex (see sync_compile_waiters)
+    /** @return false if no synchronous compile waited within \a timeout_ms milliseconds
+    */
+    bool dbgWaitSyncCompileWaiting(int64_t timeout_ms);
+
     //! For tests: lets the held background compile continue and waits until it has left the hold point
     /** @return -1 if no compile is held, 0 if it did not leave the hold point within \a timeout_ms milliseconds,
         1 if it did
@@ -1112,6 +1126,17 @@ private:
     std::atomic<bool> bg_thread_running{false};             //!< shutdown flag
     std::atomic<int> bg_active_work{0};                     //!< count of pending+in-progress compilations
     std::condition_variable bg_queue_empty_cv;              //!< signals when queue becomes empty
+    //! the number of synchronous compiles that wait for compile_mutex; protected by bg_queue_mutex
+    /** The background thread takes no more work while a synchronous compile waits: a thread waits for that compile
+        (top-level code, for example), and the background thread, which takes compile_mutex for each work item of its
+        queue, would otherwise take it again and again, as a mutex grants no order, so that the synchronous compile
+        waited until the queue was empty.  Changes are signalled with bg_queue_cv (see lockForSyncCompile())
+    */
+    int sync_compile_waiters = 0;
+#ifdef DEBUG
+    //! signalled when sync_compile_waiters is incremented, for dbgWaitSyncCompileWaiting()
+    std::condition_variable dbg_sync_compile_waiting_cv;
+#endif
     //! The work item currently being compiled by the bg thread (nullptr when
     //! idle).  Protected by bg_queue_mutex; points at the bg thread's local while
     //! it holds compile_mutex.  Used by waitForBgCompileQueue(QoreProgram*) to

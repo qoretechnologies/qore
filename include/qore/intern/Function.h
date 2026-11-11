@@ -1498,9 +1498,32 @@ public:
         return statements;
     }
     DLLLOCAL StatementBlock* getEntryStatementBlock() const {
-        return statements ? statements : aot_entry_statement;
+        if (statements) {
+            return statements;
+        }
+        return aot_entry_statement;
+    }
+    //! Returns the block that the debugger's events of the variant's code are given with
+    /** As getEntryStatementBlock(), but code without a parse tree or an entry block, as an AOT closure, gets a block
+        at the location of its signature while a debugger is attached to its Program, so that its debug IR makes the
+        debugger's events as the debug IR of an AOT function does with its entry block (#5795).  The block gives the
+        variant no parse options, unlike the entry block of a function (setAOTEntryStatementBlock()); its Program
+        owns it and keeps it by location (qore_program_private::getAOTClosureDebugBlock()), so that the variant has
+        no state for it.  Without a debugger, the code runs without a block, as before.
+    */
+    DLLLOCAL StatementBlock* getDebugEntryStatementBlock() const {
+        if (statements) {
+            return statements;
+        }
+        return aot_entry_statement ? aot_entry_statement : getAOTClosureDebugBlock();
     }
     DLLLOCAL void setAOTEntryStatementBlock(StatementBlock* b);
+
+protected:
+    //! the block of getDebugEntryStatementBlock() for code without a parse tree or an entry block: an AOT closure
+    DLLLOCAL StatementBlock* getAOTClosureDebugBlock() const;
+
+public:
 
     DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 

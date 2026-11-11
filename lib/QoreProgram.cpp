@@ -762,6 +762,10 @@ qore_program_private::~qore_program_private() {
 
     statementByFileIndex.clear();
     statementIds.clear();
+    for (auto& i : aot_closure_debug_blocks) {
+        delete i.second;
+    }
+    aot_closure_debug_blocks.clear();
     reverseStatementIds.clear();
     statementByLabelIndex.clear();
 
@@ -3262,6 +3266,19 @@ AbstractStatement* qore_program_private::findIndexedStatementForLocation(const c
         return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
     }
     return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+}
+
+StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
+    AutoLocker al(&plock);
+    if (!loc) {
+        loc = getLocation(0, 0);
+    }
+    StatementBlock*& b = aot_closure_debug_blocks[loc];
+    if (!b) {
+        b = new StatementBlock(this, loc);
+        registerStatement(pgm, b, false);
+    }
+    return b;
 }
 
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {

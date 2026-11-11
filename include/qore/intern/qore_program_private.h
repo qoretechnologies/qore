@@ -1614,6 +1614,14 @@ public:
     */
     bool library_module = false;
 
+    //! Returns the block of an AOT closure at the given location, which the debugger's events of the debug IR of the
+    //! closure are given with, as the entry block of an AOT function (#5795)
+    /** Made and registered once per location, and owned by the Program, as the closure functions of AOT code are made
+        again when their IR is read again; locks plock.  The closures of AOT code have no location (their signature
+        has the Program's location with no line), so that they share one block, and one statement ID
+    */
+    DLLLOCAL StatementBlock* getAOTClosureDebugBlock(const QoreProgramLocation* loc);
+
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;
@@ -5216,6 +5224,10 @@ private:
     // statementId to AbstractStatement resolving
     typedef std::vector<AbstractStatement*> StatementVector_t;
     StatementVector_t statementIds;
+    //! the blocks of AOT closures, by location, which the debugger's events of their debug IR are given with; owned
+    /** see getAOTClosureDebugBlock(); protected by plock
+    */
+    std::map<const QoreProgramLocation*, StatementBlock*> aot_closure_debug_blocks;
     //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
     std::map<std::tuple<std::string, int, int>, const StatementBlock*> blockIndexCache;
 
