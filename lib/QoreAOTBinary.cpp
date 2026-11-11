@@ -12203,12 +12203,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (deferred_source_function) {
             writer.writeStringRef(deferred_source_function);
         } else if (fe && fe->getNamespace()) {
-            std::string qualified;
-            fe->getNamespace()->getPath(qualified);
-            if (!qualified.empty()) {
-                qualified += "::";
-            }
-            qualified += fe->getName();
+            std::string qualified = qore_aot_get_function_identity_name(fe);
             writer.writeStringRef(qualified.c_str());
         } else {
             writer.writeStringRef(call->getName());
@@ -13448,8 +13443,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
-        QoreFunction* f = fcr->getFunction();
-        writer.writeStringRef(f ? f->getName() : "");
+        std::string ref_name = qore_aot_get_function_ref_name(fcr);
+        writer.writeStringRef(ref_name.c_str());
         return true;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {

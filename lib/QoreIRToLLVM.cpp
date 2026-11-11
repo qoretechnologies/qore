@@ -19813,9 +19813,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "function metadata";
                                 return false;
                             }
+                            std::string ref_name = qore_aot_get_function_ref_name(fcr);
                             llvm::Value* function_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    func->getName(), "function_call_ref_name");
+                                    ref_name.c_str(), "function_call_ref_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
@@ -29528,9 +29529,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "function metadata";
                             return false;
                         }
+                        std::string ref_name = qore_aot_get_function_ref_name(fcr);
                         llvm::Value* function_name =
                             qore_ir_create_global_string_ptr(builder,
-                                func->getName(), "function_call_ref_name");
+                                ref_name.c_str(), "function_call_ref_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(

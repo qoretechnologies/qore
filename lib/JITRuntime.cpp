@@ -4147,8 +4147,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
         return toBits(QoreValue());
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, function_name);
+    // a name with a leading "::" is the function of the root namespace itself (see qore_aot_get_function_ref_name())
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, function_name);
     QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
     if (!func) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",

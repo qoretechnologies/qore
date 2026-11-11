@@ -1685,7 +1685,9 @@ static QoreValue read_node_EN_FUNC_REF(AOTExprNodeReadCtx& ctx) {
         // Create a call reference (\func()), not a function call (func())
         QoreFunction* f = fe->getFunction();
         if (f) {
-            return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
+            LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+            fcr->setFunctionEntry(fe);
+            return QoreValue(fcr);
         }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve function ref '%s'\n", name.c_str());
