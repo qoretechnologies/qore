@@ -82,8 +82,8 @@
 
     @par Dynamic Static Method Calls Respect Private Access
     call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
-    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" raise \c METHOD-IS-PRIVATE, as
-    documented, for a private static method called from outside its class and subclasses; before, they called it.
+    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
+    the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
     @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
