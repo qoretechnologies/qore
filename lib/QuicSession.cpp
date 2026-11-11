@@ -4414,7 +4414,10 @@ int QuicSession::resetStream(int64_t stream_id) {
 
 
 
-QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
+QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
     if (it == streams_.end()) {
@@ -4444,7 +4447,13 @@ QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
     // consumes data, not when it arrives. This naturally caps the buffer to the
     // initial flow control window (QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256KB)
     // and provides backpressure when the handler is slow.
-    if (conn_) {
+    if (conn_ && it->second->streaming && !is_server_) {
+        // a client streaming response was credited as it was received: the connection always, the stream unless
+        // its credit is deferred until the data is consumed (issue #5820), which is now
+        if (it->second->credit_on_consume && creditConsumedStreamData(stream_id, consumed) && credit_due) {
+            *credit_due = true;
+        }
+    } else if (conn_) {
         ngtcp2_conn_extend_max_stream_offset(conn_, stream_id,
                                               static_cast<uint64_t>(consumed));
         ngtcp2_conn_extend_max_offset(conn_, static_cast<uint64_t>(consumed));
@@ -5961,7 +5970,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             if (stream->credit_on_consume) {
                 session->deferred_stream_credit_[stream_id] += datalen;
 #ifdef DEBUG
-                qore_dbg_stream_credit_stats.deferred.fetch_add(datalen, std::memory_order_relaxed);
+                qore_dbg_stream_credit_deferred(datalen);
 #endif
             } else {
                 ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,

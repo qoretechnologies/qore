@@ -42,6 +42,11 @@ class QoreValue;
     consumed() is called after the Channel's or Queue's lock has been released, so it can take the session's lock:
     the Channel or Queue lock is never held while a session lock is taken.
 
+    progress(), closeItem() and consumed() are also called with the mutex of the action that parses the stream held,
+    if it has one (SseAction, ChannelAction; FrameStateAction has none, as its calls are made on the I/O thread): the
+    order is action mutex, then the hook's own leaf mutex (released before the session is credited), then the session
+    lock; no session code takes an action's mutex.  closeItem() takes only the hook's leaf mutex.
+
     The hook is held with a std::shared_ptr by the Channel or Queue, and holds no strong reference to the session or
     socket that it reports to, so a Channel that outlives its session, and a session destroyed with an unread
     Channel, are safe.
@@ -57,6 +62,20 @@ public:
     /** Called without the Channel's or Queue's lock; never called with 0.
     */
     virtual void consumed(size_t bytes) = 0;
+
+    //! Reports data received for an item (an event or a message) that is not complete yet
+    /** An item can be larger than the stream's flow-control window, so its data cannot wait for the item to be
+        consumed: the hook of a stream can grant its credit in advance, and take the advance back from the data
+        consumed later.  Called without the Channel's or Queue's lock; the default does nothing.
+    */
+    virtual void progress(size_t bytes) {
+    }
+
+    //! Ends the item in progress: all of its data, including that reported with progress(), is reported again
+    /** with consumed(), once the item is consumed or dropped.  The default does nothing.
+    */
+    virtual void closeItem() {
+    }
 };
 
 //! Calls QoreConsumeHook::consumed() when it goes out of scope, after the lock that a later local holds is released

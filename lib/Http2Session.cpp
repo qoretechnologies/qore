@@ -1220,7 +1220,8 @@ size_t Http2Session::creditConsumedStreamData(int32_t stream_id, size_t len) {
         if (rv) {
             printd(5, "creditConsumedStreamData() stream %d: %s\n", stream_id, nghttp2_strerror(rv));
         }
-        // nghttp2 sends a WINDOW_UPDATE once half of the window has been consumed: the I/O thread is woken only then
+        // nghttp2 queues a WINDOW_UPDATE once half of the window has been consumed; the I/O thread is woken only if
+        // the session has something to send (that update, or any other frame that it queued meanwhile)
         if (!nghttp2_session_want_write(session)) {
             return 0;
         }
@@ -1580,7 +1581,10 @@ Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
 }
 
 BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
-        bool credit_deferred) {
+        bool credit_deferred, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     (void)xsink;
     auto it = streams.find(stream_id);
@@ -1599,10 +1603,17 @@ BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, Ex
     it->second->body.erase(it->second->body.begin(), it->second->body.begin() + take);
     // a caller that hands the data to its consumer directly (not through a Channel or Queue with a consume hook)
     // has it consumed now: its deferred stream credit is granted (issue #5820); the I/O thread sends the update
-    if (credit_deferred && it->second->credit_on_consume) {
-        creditConsumedStreamData(stream_id, take);
+    if (credit_deferred && it->second->credit_on_consume && creditConsumedStreamData(stream_id, take)
+            && credit_due) {
+        *credit_due = true;
     }
     return rv;
+}
+
+void Http2Session::sendStreamCredit(const std::string& route_key) {
+    // only the thread that owns the socket writes to it: it is woken to send the update, and the wake-up runs its
+    // poll operation again, which writes what the session has to send
+    qore_http_stream_wake_socket(route_key);
 }
 
 Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
@@ -2520,9 +2531,8 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             }
         }
     }
-    // With auto-window-update enabled on the client (see init()), nghttp2 emits
-    // WINDOW_UPDATE automatically as the app consumes data via this callback —
-    // we must NOT credit data on the client branch or we double-credit.
+    // The client is in manual window mode (see init()): it credits data with nghttp2_session_consume() below;
+    // the stream credit of a response that a consume hook reports is deferred until it is consumed (issue #5820).
     // The server is in manual mode and credits the stream and the connection with nghttp2_session_consume(), which
     // keeps nghttp2's own accounting of the DATA it consumes itself (DATA on a stream the server has reset, such as
     // the rest of a body after the server's RST_STREAM(NO_ERROR), and padding): WINDOW_UPDATE frames submitted
@@ -2545,7 +2555,7 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             }
             h2->deferred_stream_credit[stream_id] += len;
 #ifdef DEBUG
-            qore_dbg_stream_credit_stats.deferred.fetch_add(len, std::memory_order_relaxed);
+            qore_dbg_stream_credit_deferred(len);
 #endif
         } else {
             int rv = h2->consumeReceivedData(stream_id, len);

@@ -267,6 +267,34 @@ public:
     //! Returns the queue's item consume hook, which is created if the queue has none
     DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
 
+    //! Tells the item consume hook, if any, that a value it may know was not queued (issue #5820)
+    /** Called without the lock and before the value is released, so that its address is not reused meanwhile; the
+        data reported with the value counts as consumed.
+    */
+    DLLLOCAL void forgetRefusedItem(const AbstractQoreNode* node);
+
+    //! Forgets a value that is not queued when it goes out of scope; declared after the value's holder
+    class RefusedItemGuard {
+    public:
+        DLLLOCAL RefusedItemGuard(qore_queue_private& q, const QoreValue& v) : q(q), node(v.getInternalNode()) {
+        }
+
+        DLLLOCAL ~RefusedItemGuard() {
+            if (node) {
+                q.forgetRefusedItem(node);
+            }
+        }
+
+        //! The value was queued
+        DLLLOCAL void queued() {
+            node = nullptr;
+        }
+
+    private:
+        qore_queue_private& q;
+        const AbstractQoreNode* node;
+    };
+
     //! Reports the values of the queue to the consume hook, when the lock is released; called with the lock held
     DLLLOCAL void measureAllIntern(QoreConsumeNotifier& cn);
 

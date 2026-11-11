@@ -529,9 +529,22 @@ public:
         @param xsink Exception sink for error reporting
         @param credit_deferred true if the caller hands the data to its consumer directly: the stream credit deferred
         for it is granted now; false if it is delivered through a Channel or Queue that reports its consumption
+        @param credit_due if not null, set to true if credit was granted and the session has a frame to send (the
+        WINDOW_UPDATE, or any other frame queued meanwhile); the caller then calls
+        sendStreamCredit() (on any thread)
+
+        Raises no exception.
     */
     DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
-        bool credit_deferred = true);
+        bool credit_deferred = true, bool* credit_due = nullptr);
+
+    //! Sends the stream credit that a take queued (issue #5820)
+    /** The socket's I/O thread is woken to send it, as only the thread that owns the socket writes to it; this is
+        also correct on that thread, as the wake-up runs its poll operation again.
+
+        @param route_key the socket's I/O identity hash, to wake the I/O thread with
+    */
+    DLLLOCAL void sendStreamCredit(const std::string& route_key);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();

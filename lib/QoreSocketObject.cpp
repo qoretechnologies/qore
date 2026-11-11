@@ -684,7 +684,12 @@ private:
         }
 
         bool complete = false;
-        QoreValue chunk = session->takeStreamData(stream_id, complete);
+        bool credit_due;
+        QoreValue chunk = session->takeStreamData(stream_id, complete, &credit_due);
+        if (credit_due) {
+            // the credit granted is sent by the session's poll operation, which the wake-up runs again
+            qore_http_stream_wake_socket(sock->getIoIdentityHash());
+        }
         if (chunk.getType() == NT_BINARY) {
             data = chunk.take<BinaryNode>();
             done = true;
@@ -1534,7 +1539,12 @@ public:
             return nullptr;
         }
 
-        data = h2->takeStreamData(stream_id, max_bytes, xsink);
+        bool credit_due;
+        data = h2->takeStreamData(stream_id, max_bytes, xsink, true, &credit_due);
+        // the stream credit granted for the data taken (issue #5820) is sent by the session's poll operation
+        if (credit_due) {
+            h2->sendStreamCredit(sock->getIoIdentityHash());
+        }
         done = true;
         return nullptr;
     }
@@ -5852,7 +5862,14 @@ BinaryNode* QoreSocketObject::readHttp2StreamDataForAsyncPoll(int32_t stream_id,
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return nullptr;
     }
-    return h2->takeStreamData(stream_id, max_bytes, xsink);
+    bool credit_due;
+    BinaryNode* rv = h2->takeStreamData(stream_id, max_bytes, xsink, true, &credit_due);
+    // the stream credit granted for the data taken (issue #5820) is sent by the session's poll operation; this is
+    // called on the I/O thread and on the thread that registers a stream queue
+    if (credit_due) {
+        h2->sendStreamCredit(getIoIdentityHash());
+    }
+    return rv;
 }
 
 int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
@@ -6848,13 +6865,11 @@ static bool qore_socket_object_set_action_consume_hook(AbstractAsyncAction* acti
         return true;
     }
     if (FrameStateAction* a = dynamic_cast<FrameStateAction*>(action)) {
-        a->setConsumeHook(hook);
-        return true;
+        return a->setConsumeHook(hook);
     }
     // startSseStreaming(): the events are taken from the action's Queue
     if (SseAction* a = dynamic_cast<SseAction*>(action)) {
-        a->setConsumeHook(hook);
-        return true;
+        return a->setConsumeHook(hook);
     }
     return false;
 }

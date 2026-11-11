@@ -42,6 +42,7 @@
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires WebSocketUtil
 
 %exec-class ClientReceiveCreditTest
 
@@ -59,6 +60,7 @@ const MaxWindow = 16 * 1024 * 1024;
 
 #! The size of the plain response returned whole
 const PlainSize = 8 * 1024 * 1024;
+const RandomSize = 256 * 1024;
 
 const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -141,6 +143,39 @@ class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
 class PlainHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(200, binary(strmul("p", PlainSize)), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+#! Serves 256 KiB of random data, which the server does not compress
+class RandomHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the client ports of the connections that the requests came in on
+        hash<string, bool> ports;
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        # a connection is identified by the client's port
+        int port = cx."peer-info".port;
+        if (port <= 0) {
+            throw "PORT-ERROR", sprintf("no client port: %y", cx."peer-info");
+        }
+        ports{port} = True;
+        int size = hdr."x-size" ? hdr."x-size".toInt() : RandomSize;
+        return makeResponse(200, get_random_bytes(size), {"Content-Type": "application/octet-stream"});
+    }
+
+    list<string> takePorts() {
+        m.lock();
+        on_exit m.unlock();
+        list<string> rv = keys ports;
+        remove ports;
+        return rv;
     }
 }
 
@@ -260,6 +295,7 @@ class BodyReader {
 
 class ClientReceiveCreditTest inherits QUnit::Test {
     private {
+        RandomHandler random_handler();
         HttpServer server;
         PushHandler handler();
         int tls_port;
@@ -279,6 +315,16 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             addTestCase(proto + ": streams reset with data in flight do not pin the connection",
                 \testResetInFlight(), proto);
             addTestCase(proto + ": large downloads through every read path", \testReadPaths(), proto);
+            addTestCase(proto + ": events that a Queue refuses are credited", \testRefusedEvents(), proto);
+            addTestCase(proto + ": events larger than the stream window arrive", \testLargeEvents(), proto);
+            addTestCase(proto + ": an event in progress waits for the unconsumed event before it",
+                \testItemBehindUnconsumed(), (proto, "sse"));
+            # the messages that this case needs on HTTP/3 (more than its 16 MiB window) exceed the decoder's maximum
+            # message size (16 MiB), so it runs on HTTP/2 only
+            if (proto == "h2") {
+                addTestCase(proto + ": a fragmented message waits for the unconsumed message before it",
+                    \testItemBehindUnconsumed(), (proto, "ws"));
+            }
             addTestCase(proto + ": a stream's channel outlives its session", \testChannelOutlivesSession(),
                 proto);
         }
@@ -297,6 +343,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         });
         server.setDefaultHandler("push", handler);
         server.setHandler("plain", "^/?plain", NOTHING, new PlainHandler());
+        server.setHandler("random", "^/?random", NOTHING, random_handler);
         server.waitForAsyncIo();
         tls_port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
@@ -462,6 +509,180 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         }
     }
 
+    testRefusedEvents(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(getUrl());
+        on_exit stream.cancel();
+        Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
+        Writer w(handler.streams.get(HangGuard));
+        # the Queue refuses every event: their data counts as consumed, so the server can write far more than the
+        # stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3); lost credit would block its writes
+        q.setError("TEST-ERROR", "the queue refuses its events");
+        *hash<auto> before = Option::HAVE_LIBRARY_DEBUGGING ? call_function("dbg_http_stream_credit_stats") : NOTHING;
+        string payload = strmul("x", 65536);
+        # more than twice the stream's window, plus what the server may still hold when its writes return (about 1
+        # MiB), so that more than a window is certainly deferred
+        int events = proto == "h3" ? 600 : 64;
+        Counter written(1);
+        *hash<ExceptionInfo> write_err;
+        background sub () {
+            on_exit written.dec();
+            try {
+                foreach int i in (xrange(events)) {
+                    w.writeAll(sprintf("id: %d\ndata: %s\n\n", i, payload));
+                }
+                w.end();
+            } catch (hash<ExceptionInfo> ex) {
+                write_err = ex;
+            }
+        }();
+        assertEq(0, written.waitForZero(HangGuard), "the server writes every event");
+        assertNothing(write_err, "the server wrote every event");
+        if (before) {
+            # the data still in flight is not known here, so only what flow control guarantees is checked: more than
+            # the stream's window was deferred, which only credit granted for the refused events allows (a stream
+            # credited as it receives its data defers nothing), and at most a window of it is not credited
+            hash<auto> after = call_function("dbg_http_stream_credit_stats");
+            int window = proto == "h3" ? 16 * 1024 * 1024 : 1024 * 1024;
+            int deferred = after.deferred - before.deferred;
+            assertGt(window, deferred, "more than the stream's window was deferred");
+            assertGe(deferred - window, after.credited - before.credited, "the refused events' data was credited");
+        }
+    }
+
+    testLargeEvents(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(getUrl());
+        on_exit stream.cancel();
+        Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
+        Writer w(handler.streams.get(HangGuard));
+        # each event is larger than the stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3): the credit of the event
+        # in progress is granted in advance, or the stream stalls
+        int size = proto == "h3" ? 20 * 1024 * 1024 : 3 * 1024 * 1024;
+        int events = 3;
+        Counter written(1);
+        *hash<ExceptionInfo> write_err;
+        background sub () {
+            on_exit written.dec();
+            try {
+                foreach int i in (xrange(events)) {
+                    w.writeAll(sprintf("id: %d\ndata: %s\n\n", i, strmul("L", size)));
+                }
+                w.end();
+            } catch (hash<ExceptionInfo> ex) {
+                write_err = ex;
+            }
+        }();
+        foreach int i in (xrange(events)) {
+            auto e = q.get(HangGuard);
+            assertEq(string(i), e.id, sprintf("event %d arrives", i));
+            assertEq(size, e.data.size(), sprintf("event %d arrives whole", i));
+        }
+        assertEq(0, written.waitForZero(HangGuard), "the server writes every event");
+        assertNothing(write_err, "the server wrote every event");
+    }
+
+    #! An item larger than the window is followed by one that the client receives while the first is not consumed
+    /** The credit of an item in progress is advanced only while no advance is outstanding for a complete item: the
+        data of the second item that the client receives while the first is not consumed gets no credit (the stream
+        is bounded by the window plus the first item), and the second item completes once the first is taken.  The
+        client's receipt is waited for with dbg_http_stream_credit_wait_deferred(), so the checks are made after the
+        client received the data.
+    */
+    testItemBehindUnconsumed(string proto, string fmt) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the credit accounting is only in debug builds");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        hash<auto> s = openStream(mgr);
+        on_exit s.stream.cancel();
+        Writer w = s.writer;
+        Queue q();
+        if (fmt == "sse") {
+            s.stream.installSseState(q);
+        } else {
+            s.stream.installFrameState(q);
+        }
+        int window = proto == "h3" ? 16 * 1024 * 1024 : 1024 * 1024;
+        int piece = 64 * 1024;
+        hash<auto> before = call_function("dbg_http_stream_credit_stats");
+
+        # writes item data in pieces; a WebSocket message is sent as a fragment per piece
+        code write_item = int sub (string c, int size, bool first, bool last) {
+            int bytes = 0;
+            for (int off = 0; off < size; off += piece) {
+                int n = min(piece, size - off);
+                data d = binary(strmul(c, n));
+                if (fmt == "ws") {
+                    d = ws_encode_frame(d, (first && !off) ? WSOP_Binary : WSOP_Continuation, False,
+                        last && off + n >= size);
+                }
+                w.writeAll(d);
+                bytes += d.size();
+            }
+            return bytes;
+        };
+
+        # item 0: twice the window, complete
+        int size0 = 2 * window;
+        int bytes0 = 0;
+        if (fmt == "sse") {
+            w.writeAll("id: 0\ndata: ");
+            bytes0 = 12 + write_item("a", size0, True, True);
+            w.writeAll("\n\n");
+            bytes0 += 2;
+        } else {
+            bytes0 = write_item("a", size0, True, True);
+        }
+        # item 1, first part: about half the window, which the client receives (nearly all of it) without granting
+        # credit for it
+        int size1 = window / 2;
+        int bytes1 = 0;
+        if (fmt == "sse") {
+            w.writeAll("id: 1\ndata: ");
+            bytes1 = 12;
+        }
+        bytes1 += write_item("b", size1, True, False);
+        # the client has received item 0 and the first part of item 1 except its last piece, which the window may not
+        # admit (the window is announced in steps of half its size)
+        assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + bytes0 + bytes1 - piece,
+            HangGuard), "the client receives item 0 and the first part of item 1");
+        # no data of item 1 is credited while item 0 is not consumed: the credit granted is at most item 0's (the
+        # counters are process-wide: the cases of this test run one at a time, and each ends its streams)
+        hash<auto> after = call_function("dbg_http_stream_credit_stats");
+        assertLe(bytes0, after.credited - before.credited, "no data of item 1 is credited before item 0 is taken");
+
+        # item 0 is taken: the data of item 1 that waited is credited, and item 1 completes, although its rest is
+        # larger than the window
+        auto e0 = q.get(HangGuard);
+        assertEq(size0, e0.data.size(), "item 0 arrives whole");
+        Counter done(1);
+        *hash<ExceptionInfo> write_err;
+        background sub () {
+            on_exit done.dec();
+            try {
+                write_item("b", 2 * window, False, True);
+                if (fmt == "sse") {
+                    w.writeAll("\n\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                write_err = ex;
+            }
+        }();
+        auto e1 = q.get(HangGuard);
+        if (fmt == "sse") {
+            assertEq("1", e1.id, "item 1 is the second event");
+        } else {
+            assertEq("binary", e1.type, "item 1 is a binary message");
+        }
+        assertEq(size1 + 2 * window, e1.data.size(), "item 1 arrives whole once item 0 is taken");
+        assertEq(0, done.waitForZero(HangGuard));
+        assertNothing(write_err);
+    }
+
     testHttpClientRecvCallback() {
         HTTPClient hc({"url": getUrl()});
         hc.setHttp2Mode("required");
@@ -521,7 +742,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         on_exit delete mgr;
         hash<auto> s = openStream(mgr);
         hash<auto> before = call_function("dbg_http_stream_credit_stats");
-        # more than the stream's window (64 KiB on HTTP/2, 16 MiB on HTTP/3): lost credit stalls the stream
+        # more than the stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3): lost credit stalls the stream
         int size = 24 * 1024 * 1024;
         Counter written(1);
         *hash<ExceptionInfo> write_err;
@@ -561,23 +782,35 @@ class ClientReceiveCreditTest inherits QUnit::Test {
     }
 
     testOversizedResponses() {
+        # the body arrives as sent (random data, no compression), so the HTTP/2 session refuses it as it arrives; every
+        # request uses the one connection
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h2",
             "accept_all_certs": True,
             "request_timeout": HangGuard,
             "connect_timeout": HangGuard,
+            "accept_encoding": "",
             "max_response_body_size": 4096,
+            "max_connections_per_host": 1,
         });
         on_exit delete mgr;
-        # the discarded data of each oversized response is credited, so the connection never pins
-        foreach int i in (xrange(8)) {
+        # the data of each oversized response that the session discards is credited to the connection; without it,
+        # each response leaked a DATA frame (about 16 KiB) of the 64 KiB connection window, which pinned the
+        # connection after a few responses
+        foreach int i in (xrange(16)) {
             *string err;
             try {
-                mgr.request(getUrl(), "GET", "/plain", NOTHING, NOTHING, HangGuard, False);
+                mgr.request(getUrl(), "GET", "/random", NOTHING, NOTHING, HangGuard, False);
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
             }
-            assertRegex("TOO-LARGE", err ?? "", sprintf("round %d: the oversized response is refused", i));
+            assertEq("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", err, sprintf("round %d: the oversized response is refused",
+                i));
         }
+        # a response under the limit still arrives
+        assertEq(4000, mgr.request(getUrl(), "GET", "/random", {"x-size": "4000"}, NOTHING, HangGuard,
+            False).body.size(), "a response under the limit arrives");
+        # and every request used the one connection: one that lost its credit would have been replaced
+        assertEq(1, random_handler.takePorts().size(), "every request used the one connection");
     }
 }

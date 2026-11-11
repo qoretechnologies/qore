@@ -729,9 +729,11 @@ public:
         Used by handler threads to incrementally read request body data.
         @param stream_id the HTTP/3 stream ID
         @param complete [out] set to true if body_complete (END_STREAM received) or stream not found
+        @param credit_due [out] if not null, set to true if credit was granted for the data taken (issue #5820): the
+        caller wakes the socket's I/O thread to send it
         @return body data as BinaryNode*, or NOTHING if no data available
     */
-    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
+    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete, bool* credit_due = nullptr);
 
     //! Returns True if the request body of the stream exceeded the maximum request body size (server)
     /** @see QuicStreamInfo::body_too_large

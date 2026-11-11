@@ -500,6 +500,9 @@ struct qore_socketsource_private {
 */
 DLLLOCAL bool qore_on_async_io_thread();
 
+//! Returns the key that the operations of the socket are registered under with the async I/O controller
+DLLLOCAL std::string qore_socket_async_io_route_key(const qore_socket_private* priv);
+
 //! Returns true if the calling thread is executing a Qore continuePoll() callback for async I/O
 DLLLOCAL bool qore_in_async_io_continue_poll_worker();
 

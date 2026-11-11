@@ -222,13 +222,11 @@ public:
                 "cannot install frame state after SSE state has been installed");
             return;
         }
-        // the stream's credit is granted as the messages are taken from the queue (issue #5820); the data still in
-        // the channel is reported with the messages made from it, not when it is moved out of the channel below
-        if (consume_hook) {
-            fs->setConsumeHook(consume_hook);
-            if (channel) {
-                channel->setConsumeHook(nullptr);
-            }
+        // the frame state reports the data from now on (issue #5820): with the messages made from it as they are
+        // taken from the queue (or at once without a queue); the data still in the channel is reported with the
+        // messages made from it, not when it is moved out of the channel below
+        if (consume_hook && fs->setConsumeHook(consume_hook) && channel) {
+            channel->setConsumeHook(nullptr);
         }
         if (initial.getType() != NT_NOTHING) {
             feedHashBodyLocked(initial, fs.get());
@@ -584,16 +582,20 @@ public:
     }
 
     //! Has the stream credit of the data granted as the events made from it are taken from the queue (issue #5820)
-    /** @param stream_hook the hook of the stream; the events of the queue, and data that makes no event, are
-        reported to it
+    /** @param stream_hook the hook of the stream; the events of the queue, and data that makes no event (or every
+        event without a queue), are reported to it
+
+        @return true: the action always reports the data
     */
-    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
         std::lock_guard<std::mutex> lg(mtx);
+        // the queue's hook serves every stream whose events it receives; without a queue, no event is kept, and the
+        // data is credited as it is parsed
         if (queue) {
-            // the queue's hook serves every stream whose events it receives
             item_hook = queue->getItemConsumeHook();
-            stream_hook = std::move(hook);
         }
+        stream_hook = std::move(hook);
+        return true;
     }
 
     //! Pushes an error hash to the Queue
@@ -654,9 +656,28 @@ private:
     }
     //! the data of the event read so far, which no event has been made from yet
     size_t pending_bytes = 0;
+    //! the part of pending_bytes reported to the stream hook as the data of an event in progress
+    size_t progress_bytes = 0;
+
+    //! Ends the event in progress for the stream hook: its data is reported with the event, or at once
+    DLLLOCAL void closeItemLocked() {
+        if (stream_hook && progress_bytes) {
+            stream_hook->closeItem();
+        }
+        progress_bytes = 0;
+    }
+
+    //! Reports the data of the event in progress that was not reported yet (it can exceed the stream's window)
+    DLLLOCAL void reportProgressLocked() {
+        if (stream_hook && pending_bytes > progress_bytes) {
+            stream_hook->progress(pending_bytes - progress_bytes);
+            progress_bytes = pending_bytes;
+        }
+    }
 
     //! Reports the data of the event read so far at once; called with the lock held
     DLLLOCAL void creditPendingLocked() {
+        closeItemLocked();
         creditNow(pending_bytes);
         pending_bytes = 0;
     }
@@ -684,13 +705,11 @@ inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* noti
     }
 
     ReferenceHolder<SseAction> action(new SseAction(queue, notifier, notifier_obj), xsink);
-    // the stream's credit is granted as the events are taken from the queue (issue #5820); the data still in the
-    // channel is reported with the events made from it, not when it is moved out of the channel below
-    if (consume_hook) {
-        action->setConsumeHook(consume_hook);
-        if (channel) {
-            channel->setConsumeHook(nullptr);
-        }
+    // the action reports the data from now on (issue #5820): with the events made from it as they are taken from the
+    // queue (or at once without a queue); the data still in the channel is reported with the events made from it,
+    // not when it is moved out of the channel below
+    if (consume_hook && action->setConsumeHook(consume_hook) && channel) {
+        channel->setConsumeHook(nullptr);
     }
     if (initial.getType() != NT_NOTHING) {
         action->execute(initial, xsink);
@@ -800,8 +819,10 @@ public:
     }
 
     //! Has the flow-control credit of the data granted as the messages made from it are taken from the queue
-    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
-        frame_state->setConsumeHook(std::move(hook));
+    /** @return false if the action has no frame state (after cleanup()): nothing reports the data then
+    */
+    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        return frame_state && frame_state->setConsumeHook(std::move(hook));
     }
 
 private:

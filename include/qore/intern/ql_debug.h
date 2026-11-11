@@ -135,6 +135,8 @@ struct QoreDbgStreamCreditStats {
     std::atomic<int64_t> orphaned{0};
 };
 DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
+DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference

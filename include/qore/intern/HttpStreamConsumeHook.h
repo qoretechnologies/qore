@@ -29,6 +29,7 @@
 
 #include "qore/intern/QoreConsumeHook.h"
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -68,7 +69,70 @@ public:
     }
 
     //! Never throws: it is called from destructors and after locks are released
+    /** The data consumed first repays the credit advanced for items that are complete (see progress()); when they are
+        repaid, the data of the item in progress is credited in advance.
+    */
     DLLLOCAL void consumed(size_t bytes) override {
+        size_t credit;
+        {
+            std::lock_guard<std::mutex> lg(m);
+            size_t repay = std::min(bytes, closed_advance);
+            closed_advance -= repay;
+            credit = bytes - repay;
+            if (!closed_advance && open_pending) {
+                credit += open_pending;
+                open_advance += open_pending;
+                open_pending = 0;
+            }
+        }
+        grant(credit);
+    }
+
+    //! The data of the item in progress is credited at once while no credit advanced for a complete item is still
+    //! to be repaid, and otherwise when it is
+    /** The advance is repaid by the data consumed next (that of any item, or data that makes no item), not
+        necessarily by the item it was granted for.  So the data that the client holds without granting its credit is
+        bounded by the stream's window plus about one advanced item (which is bounded by the maximum event or message
+        size), and an item larger than the window does not stall its stream.
+    */
+    DLLLOCAL void progress(size_t bytes) override {
+        size_t credit = 0;
+        {
+            std::lock_guard<std::mutex> lg(m);
+            if (closed_advance) {
+                open_pending += bytes;
+            } else {
+                open_advance += bytes;
+                credit = bytes;
+            }
+        }
+        grant(credit);
+    }
+
+    DLLLOCAL void closeItem() override {
+        std::lock_guard<std::mutex> lg(m);
+        // the data of the item is reported again when it is consumed; what was not credited in advance is credited
+        // then, and what was is taken back
+        closed_advance += open_advance;
+        open_advance = 0;
+        open_pending = 0;
+    }
+
+private:
+    //! credit advanced for complete items and not yet repaid by consumed data
+    size_t closed_advance = 0;
+    //! credit advanced for the item in progress
+    size_t open_advance = 0;
+    //! data of the item in progress waiting for the credit advanced before it to be repaid
+    size_t open_pending = 0;
+    //! a leaf mutex: no lock is taken under it
+    std::mutex m;
+
+    //! Never throws
+    DLLLOCAL void grant(size_t bytes) {
+        if (!bytes) {
+            return;
+        }
         try {
             std::shared_ptr<Session> s = session.lock();
             if (!s) {
@@ -87,7 +151,6 @@ public:
         }
     }
 
-private:
     std::weak_ptr<Session> session;
     StreamId stream_id;
     std::string sock_hash;

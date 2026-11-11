@@ -100,6 +100,17 @@ std::shared_ptr<QueueItemConsumeHook> qore_queue_private::getItemConsumeHook() {
     return rv;
 }
 
+void qore_queue_private::forgetRefusedItem(const AbstractQoreNode* node) {
+    std::shared_ptr<QueueItemConsumeHook> hook;
+    {
+        AutoLocker al(&l);
+        hook = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    }
+    if (hook) {
+        hook->forget(node);
+    }
+}
+
 void qore_queue_private::takeAllIntern(NodeListRelease& release) {
     assert(!release.head);
     release.head = head;
@@ -351,6 +362,9 @@ void qore_queue_private::pushAndTakeRef(QoreValue n) {
 
     // a deleted queue or a queue in an error state does not take the value, so the reference is released here,
     // outside the lock; this API has no exception sink, so any exception is reported by the temporary one
+    if (const AbstractQoreNode* node = n.getInternalNode()) {
+        forgetRefusedItem(node);
+    }
     ExceptionSink xsink;
     n.discard(&xsink);
 }
@@ -371,6 +385,8 @@ void qore_queue_private::countValues(QoreObject& self) {
 void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -389,6 +405,7 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
         }
 
         pushIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             tail->scan_counted = true;
             countIntern(*self);
@@ -412,6 +429,8 @@ std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook{n
 void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -430,6 +449,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
         }
 
         insertIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             head->scan_counted = true;
             countIntern(*self);
