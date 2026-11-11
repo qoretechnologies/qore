@@ -708,7 +708,7 @@ namespace {
 //! The registry of the generic caches by the types that their keys name (issue #5765)
 class QoreGenericCacheRegistry {
 public:
-    DLLLOCAL void insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+    void insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
             const std::function<void()>& insert_entry) {
         std::lock_guard<std::mutex> lock(m);
         // the types are registered first: if that fails, no entry is added (a type registered without an entry is
@@ -723,7 +723,7 @@ public:
         insert_entry();
     }
 
-    DLLLOCAL void unregister(QoreGenericTypeCache* cache) {
+    void unregister(QoreGenericTypeCache* cache) {
         std::lock_guard<std::mutex> lock(m);
         auto i = by_cache.find(cache);
         if (i == by_cache.end()) {
@@ -741,7 +741,7 @@ public:
         empty.store(by_type.empty(), std::memory_order_release);
     }
 
-    DLLLOCAL size_t registeredTypeCount() {
+    size_t registeredTypeCount() {
         std::lock_guard<std::mutex> lock(m);
         return by_type.size();
     }
@@ -749,7 +749,7 @@ public:
     //! Evicts the entries that name a dead type from every cache that registered one
     /** @param release receives what the caches removed, to be released by the caller after the lock is released
     */
-    DLLLOCAL void evict(const std::set<const QoreTypeInfo*>& dead, qore_generic_cache_release_list_t& release) {
+    void evict(const std::set<const QoreTypeInfo*>& dead, qore_generic_cache_release_list_t& release) {
         // every class, hashdecl and enum destruction purges its types: no lock while no cache has an entry
         if (empty.load(std::memory_order_acquire)) {
             return;
