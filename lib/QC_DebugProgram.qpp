@@ -85,6 +85,17 @@ const DebugFlowContinue = RC_CONTINUE;
 
     The debugger should probably handle control in separate thread.
 
+    The notification methods run with the cancellation of the thread deferred (see @ref Qore::defer_thread_cancel()
+    "defer_thread_cancel()"), so that the code of the debugger always completes and the debugged code is cancelled
+    where it would be without the debugger: a cancellation point in the debugger's code, such as a loop, a lock or a
+    wait for a client while the thread is stopped, does not raise a cancellation, which is raised when the method
+    returns if it arrived while the method ran, and otherwise where the debugged code raises it.  A thread that is
+    cancelled while it is stopped therefore stays stopped until the debugger resumes it: @ref Qore::cancel_thread()
+    "cancel_thread()" and @ref Qore::Program::cancelThreads() "Program::cancelThreads()" do not end a stopped thread,
+    and a %Program interrupt or a sandbox limit is likewise raised only when the debugged code runs again.  The
+    methods of a debugger object of a sandboxed %Program run without the deferral, as sandboxed code never runs with
+    it.
+
     The DebugProgram class defines the interface and the real functionality should be implemented in a child class.
 
     @par Example:
