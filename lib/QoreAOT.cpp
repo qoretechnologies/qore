@@ -32610,6 +32610,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -33085,6 +33086,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -33590,6 +33592,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {

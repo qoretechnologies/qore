@@ -1220,6 +1220,15 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
+    inst->operands.push_back(target);
+    inst->exception_target = exception_target;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
         const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc) {

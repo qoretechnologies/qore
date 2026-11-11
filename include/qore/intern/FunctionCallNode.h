@@ -478,6 +478,15 @@ public:
     DLLLOCAL virtual AbstractQoreNode* makeReferenceNodeAndDerefImpl();
 };
 
+//! Raises the exception for a call of the method @a name on the object @a o that has been deleted, as the AST
+//! interpreter raises it (issue #5784)
+/** Through the method resolved at parse time (@a method of the class @a qc, with its variant if known) if @a o is an
+    object of either class, or as the dynamic dispatch by name does otherwise; every execution mode uses it, so that
+    they give the same message.
+*/
+DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
+        const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
+
 class AbstractMethodCallNode : public AbstractFunctionCallNode {
 protected:
     // if a method pointer can be resolved at parse time, then the class
@@ -506,6 +515,12 @@ public:
 
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
+
+    //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if the object is valid
+    */
+    DLLLOCAL int checkObject(QoreObject* o, const char* cstr, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return qc;
@@ -544,6 +559,7 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
+
 
     DLLLOCAL virtual const char* getName() const {
         return c_str ? c_str : "copy";

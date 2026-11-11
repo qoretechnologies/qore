@@ -430,15 +430,7 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         //printd(5, "AbstractMethodCallNode::exec() using parse info for %s::%s() qc: %s (o: %s) v: %p\n",
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
-        if (!o->isValid()) {
-            if (variant) {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
-                    "already been deleted", qc->getName(), method->getName(),
-                    variant->getSignature()->getSignatureText());
-            } else {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
-                    "already been deleted", qc->getName(), method->getName());
-            }
+        if (checkObject(o, c_str, xsink)) {
             return QoreValue();
         }
 
@@ -1552,6 +1544,33 @@ QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
         class_ctx = nullptr;
     }
     return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);
+}
+
+void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
+        const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    // the exception that AbstractMethodCallNode::exec() raises: through the method saved at parse time, or through
+    // the dynamic dispatch of qore_class_private::evalMethod()
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass())) {
+        if (variant) {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
+                "already been deleted", qc->getName(), method->getName(),
+                variant->getSignature()->getSignatureText());
+        } else {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+                "already been deleted", qc->getName(), method->getName());
+        }
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+            "already been deleted", o->getClassName(), name);
+    }
+}
+
+int AbstractMethodCallNode::checkObject(QoreObject* o, const char* c_str, ExceptionSink* xsink) const {
+    if (o->isValid()) {
+        return 0;
+    }
+    qore_raise_deleted_method_call(xsink, o, c_str, qc, method, variant);
+    return -1;
 }
 
 QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {

@@ -185,6 +185,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
+    { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
+    { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -1630,6 +1632,42 @@ extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeI
 /** Raises "<return statement> expects type ..." if the type does not accept the value; the value is not changed, as
     the caller applies the declared return type to it, which converts it for a type that converts it.
 */
+int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = call.getInternalNode();
+    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        return dot->checkReceiver(target, xsink);
+    }
+    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // a value that is not a call reference raises its error when the call is made, after the arguments, as in
+        // the AST interpreter (CallReferenceCallNode::evalImpl())
+        if (const ResolvedCallReferenceNode* r = target.hasNode()
+                ? dynamic_cast<const ResolvedCallReferenceNode*>(target.getInternalNode()) : nullptr) {
+            return qore_call_reference_check_target(r, xsink);
+        }
+    }
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
+    qore_check_call_target(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
+        ExceptionSink* xsink) {
+    // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET), not its
+    // expression: the check is made from the target
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        const QoreAOTCallTarget& target = ctx->call_targets[slot];
+        const char* name = target.method ? target.method->getName() : target.method_name;
+        if (name) {
+            qore_check_method_call_receiver(fromBits(target_bits), name, target.qc, target.method, target.variant,
+                target.is_pseudo, xsink);
+        }
+        return;
+    }
+    qore_rt_check_call_target(ctx->exprs[slot], target_bits, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink) {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
@@ -18609,8 +18647,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     if (!o->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-            "already been deleted", qc->getName(), method->getName());
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
         result = toBits(QoreValue());
         return true;
     }
@@ -18812,8 +18850,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     }
     if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
-            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-                "already been deleted", qc->getName(), method->getName());
+            // as the AST interpreter raises it (issue #5784)
+            qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
             return toBits(QoreValue());
         }
         // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list while still honoring the

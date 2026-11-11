@@ -318,6 +318,18 @@ void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSin
 void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx, const char* type_path,
         ExceptionSink* xsink);
 
+//! Raises the exception that the call @a call raises for its target @a target before it evaluates its arguments, if
+//! any (QoreIROpcode::CheckCallTarget; issue #5784)
+/** @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+
+//! The JIT helper of QoreIROpcode::CheckCallTarget: qore_check_call_target() with the NaN-boxed call and target
+void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_check_call_target(), with the call identified by its expression slot
+void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits, ExceptionSink* xsink);
+
 //! Checks the value of a return statement against the declared return type as the AST interpreter checks it in the
 //! return statement, without changing the value (QoreIROpcode::CheckReturnValue)
 void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink);

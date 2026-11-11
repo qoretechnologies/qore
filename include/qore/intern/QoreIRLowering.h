@@ -553,6 +553,9 @@ private:
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
+    //! Returns true if evaluating an argument of a call can have an effect that the order of evaluation can show
+    //! (issue #5784); conservative: only a value and a read of a local variable have none
+    bool callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,

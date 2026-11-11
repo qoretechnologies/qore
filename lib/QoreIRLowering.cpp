@@ -13165,6 +13165,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     if (!base_val.isValid()) {
         return QoreIRValue();
     }
+    // the receiver is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784)
+    if (m && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
+        builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
+    }
 
     // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
     // This handles both resolved methods (class+method set) and abstract/unresolved methods
@@ -14516,6 +14521,26 @@ bool QoreIRLowering::markReferenceArgumentAssignmentsUnknown(
     return true;
 }
 
+bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const {
+    // every argument, in any order: named and mapped arguments are evaluated all the same
+    size_t count = parse_args ? parse_args->size() : (args ? args->size() : 0);
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue arg = parse_args ? parse_args->get(i) : args->retrieveEntry(i);
+        if (!arg.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = arg.getInternalNode();
+        if (!node || !node->needs_eval()) {
+            continue;
+        }
+        if (getLocalVarFromValue(arg)) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
     if (arg.isNothing()) {
         return true;
@@ -15150,6 +15175,11 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     QoreIRValue callee = lowerExpression(call->getExp(), error);
     if (!callee.isValid()) {
         return QoreIRValue();
+    }
+    // the callable is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784)
+    if (callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
+        builder.createCheckCallTarget(expr, callee, getCurrentExceptionTarget(), call->loc);
     }
     std::vector<QoreIRValue> operands;
     operands.push_back(callee);

@@ -599,9 +599,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // run the reference in the Program where it was originally created
     // NOTE: check this for race conditions
-    if (obj && !obj->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    if (checkObject(xsink)) {
         return QoreValue();
     }
     RuntimeConfig& rc = rc_get_current_ref();
@@ -637,9 +635,7 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    if (obj && !obj->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    if (checkObject(xsink)) {
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
@@ -653,6 +649,32 @@ QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
 
 const QoreMethod* RunTimeObjectMethodReferenceNode::findMethod() const {
     return obj ? obj->getClass()->findMethod(method.c_str()) : nullptr;
+}
+
+int RunTimeResolvedMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    if (obj && !obj->isValid()) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been deleted");
+        return -1;
+    }
+    return 0;
+}
+
+int RunTimeObjectMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    if (obj && !obj->isValid()) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been deleted");
+        return -1;
+    }
+    return 0;
+}
+
+int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {
+    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    if (const RunTimeObjectMethodReferenceNode* r = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    return 0;
 }
 
 const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {

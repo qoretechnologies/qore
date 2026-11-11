@@ -1010,6 +1010,14 @@ enum class QoreIROpcode : uint16_t {
     ToIntChecked = 428,
     ToFloatChecked = 429,
 
+    /** Checks the target of a call before its arguments are evaluated, as the AST interpreter does (issue #5784)
+        operands[0] = the receiver of a method call or the callable of a call through a call reference; the
+        instruction's expression is the call.  Raises the exception that the call raises for the target before it
+        evaluates its arguments (an object that has been deleted, a value without the method), if any; lowered only
+        when an argument can have side effects, so that the order cannot be seen otherwise.  No result.
+    */
+    CheckCallTarget = 430,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (430, 431, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -1019,8 +1027,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
-static_assert(QORE_IR_MAX_OPCODE == 429, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
+static_assert(QORE_IR_MAX_OPCODE == 430, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
