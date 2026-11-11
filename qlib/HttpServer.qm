@@ -4175,6 +4175,288 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! @cond nodoc
+    #! Reads the body of a request for handleRequest()
+    /** @return a hash with the body in its \c body key, or @ref nothing if the request has been answered (an error
+        response was sent or captured)
+    */
+    private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
+            *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
+            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        *data body;
+        if (cx."header-info".body_streaming && !want_streaming) {
+            # Handler doesn't support streaming — buffer body on handler thread
+            # for backward compatibility (body was previously read by I/O thread)
+            #
+            # Resume the h2/h3 poll operation on the I/O thread when this block exits
+            # (normal flow, early return on error, or exception).  This ensures the
+            # connection stays alive (PING, SETTINGS, WINDOW_UPDATE) while the handler
+            # processes the request — critical for long-running handlers like bulk
+            # object creation.  The controller also has a safety-net resume after
+            # handler return to cover wantsBodyStreaming() handlers that skip this block.
+            on_exit {
+                if (cx."header-info".resume_body_streaming) {
+                    cx."header-info".resume_body_streaming();
+                }
+            }
+            int sid = cx."header-info".stream_id;
+            binary body_data = binary();
+            # set when the body read stops because the body exceeds the maximum size
+            bool hit_max_body = False;
+            if (cx."header-info".http3) {
+                # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
+                int session_id = cx."header-info".session_id;
+                try {
+                    while (True) {
+                        *binary chunk = s.readQuicStreamDataBlock(session_id, sid, 30s);
+                        if (!chunk) {
+                            break;
+                        }
+                        body_data += chunk;
+                        # Incremental size check: reject early instead of buffering the full body
+                        if (max_body > 0 && body_data.size() > max_body) {
+                            break;
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                        listener.logError("HTTP/3 request body read timeout from %s",
+                            cx."peer-info".address_desc);
+                        cx.close = True;
+                        if (async_response_out) {
+                            async_response_out = buildAsyncErrorResponse(408,
+                                "Request Timeout", cx, listener, s, !is_multiplexed);
+                        } else {
+                            sendRequestError(listener, \cx, s, 408, "Request Timeout",
+                                NOTHING, NOTHING, cx."response-encoding",
+                                hdr.method == "HEAD");
+                        }
+                        return NOTHING;
+                    }
+                    if (ex.err != "HTTP-BODY-TOO-LARGE") {
+                        rethrow;
+                    }
+                    # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
+                    # until then were delivered first
+                    hit_max_body = True;
+                }
+                # trailers sent after the body
+                if (*hash<auto> trailers = s.getQuicStreamTrailers(session_id, sid)) {
+                    cx.trailers = trailers;
+                }
+                # NOTE: cleanupQuicStream is called by the controller's on_exit handler
+            } else {
+                # HTTP/2: drive inbound DATA frames through register_body_queue.
+                # The I/O thread drains frames into the Queue (NOTHING sentinel
+                # = END_STREAM) so the handler thread never touches the H2
+                # session lock.
+                *code<nothing(Queue)> register_body_queue
+                    = cx."header-info".register_body_queue;
+                if (!register_body_queue) {
+                    throw "HTTP2-BODY-STREAMING-ERROR",
+                        sprintf("body_streaming dispatch missing register_body_queue "
+                            "closure for stream %d", sid);
+                }
+                Queue body_queue(-1);
+                register_body_queue(body_queue);
+
+                bool h2_complete = False;
+                while (True) {
+                    auto chunk;
+                    try {
+                        chunk = body_queue.get(30s);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "QUEUE-TIMEOUT") {
+                            break;
+                        }
+                        rethrow;
+                    }
+                    if (chunk.typeCode() == NT_HASH) {
+                        if (chunk.err != "HTTP-BODY-TOO-LARGE") {
+                            # the body ended before END_STREAM (HTTP-BODY-INCOMPLETE): the handler must not
+                            # get the part received for the complete body
+                            throw chunk.err, chunk.desc;
+                        }
+                        # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
+                        # buffered until then were delivered first, and the rest of the body is discarded
+                        hit_max_body = True;
+                        break;
+                    }
+                    if (!(chunk instanceof binary)) {
+                        # NOTHING sentinel → END_STREAM observed by I/O thread
+                        h2_complete = True;
+                        break;
+                    }
+                    body_data += chunk;
+                    # Incremental size check: reject early instead of buffering the full body
+                    if (max_body > 0 && body_data.size() > max_body) {
+                        hit_max_body = True;
+                        break;
+                    }
+                }
+                # trailers sent after the body
+                if (h2_complete) {
+                    if (*hash<auto> trailers = s.getHttp2StreamTrailers(sid)) {
+                        cx.trailers = trailers;
+                    }
+                }
+                if (!h2_complete && !hit_max_body) {
+                    listener.logError("HTTP/2 request body read timeout from %s",
+                        cx."peer-info".address_desc);
+                    cx.close = True;
+                    if (async_response_out) {
+                        async_response_out = buildAsyncErrorResponse(408,
+                            "Request Timeout", cx, listener, s, !is_multiplexed);
+                    } else {
+                        sendRequestError(listener, \cx, s, 408, "Request Timeout",
+                            NOTHING, NOTHING, cx."response-encoding",
+                            hdr.method == "HEAD");
+                    }
+                    return NOTHING;
+                }
+                # Defensive consistency check: if Content-Length advertised a
+                # non-zero body but END_STREAM arrived with no DATA chunks
+                # delivered, the request body was lost in transit
+                # (intermittent multiplexed-dispatch race observed on Alpine
+                # ARM64 CI).  Fail the request explicitly with 502 instead
+                # of silently dispatching the handler with an empty body —
+                # which would otherwise be auto-converted to 204 No Content
+                # and corrupt application semantics for echo/upload paths.
+                if (h2_complete && !body_data.size() && hdr."content-length"
+                        && int(hdr."content-length") > 0) {
+                    string etxt = sprintf(
+                        "HTTP/2 request body delivery race: Content-Length "
+                        "%y advertised but no DATA chunks received before "
+                        "END_STREAM (stream=%d)",
+                        hdr."content-length", sid);
+                    listener.logError("%s: from %s", etxt,
+                        cx."peer-info".address_desc);
+                    cx.close = True;
+                    if (async_response_out) {
+                        async_response_out = buildAsyncErrorResponse(502, etxt,
+                            cx, listener, s, !is_multiplexed);
+                    } else {
+                        sendRequestError(listener, \cx, s, 502, etxt, NOTHING,
+                            NOTHING, cx."response-encoding",
+                            hdr.method == "HEAD");
+                    }
+                    return NOTHING;
+                }
+            }
+            # Apply max body size check
+            if (hit_max_body || (max_body > 0 && body_data.size() > max_body)) {
+                string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                    cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
+                    body_data.size(), max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                if (async_response_out) {
+                    async_response_out = buildAsyncErrorResponse(413, etxt, cx,
+                        listener, s, !is_multiplexed);
+                } else {
+                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                        cx."response-encoding", hdr.method == "HEAD");
+                }
+                return NOTHING;
+            }
+            if (body_data.size()) {
+                # a multipart container's octets are not text in the request charset: each part
+                # carries its own encoding, so the container is handed over as bytes
+                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                        || hdr."content-type" =~ /^application\/connect\+/
+                        || hdr."content-type" =~ /^multipart\//i) {
+                    body = body_data;
+                } else {
+                    body = decodeRequestText(hdr, body_data);
+                }
+            }
+        } else if (cx."header-info".body) {
+            # Body pre-read by I/O controller (H1 async, H2, or H3)
+            # Check body size against limit (body was already read by the
+            # async I/O layer; this is a secondary check)
+            if (max_body > 0 && cx."header-info".body.size() > max_body) {
+                string proto = cx."header-info".http3 ? "HTTP/3"
+                    : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
+                string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                    proto, cx."header-info".body.size(), max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # Body is always binary from the I/O layer — convert to string if text content type;
+            # a multipart container stays binary, as its parts carry their own encodings
+            if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                    || hdr."content-type" =~ /^application\/connect\+/
+                    || hdr."content-type" =~ /^multipart\//i) {
+                body = cx."header-info".body;
+            } else {
+                # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
+                body = decodeRequestText(hdr, cx."header-info".body);
+            }
+        } else if (exists hdr."content-length" && !is_multiplexed) {
+            # HTTP/1.x only: the request body is read from the raw socket here.
+            #
+            # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
+            # delivered as DATA frames by the multiplexed session and surface either
+            # in cx."header-info".body (pre-read by the I/O controller) or through
+            # the body_streaming branch above, where the handler reads the stream
+            # itself.  Reaching a synchronous socket read on a multiplexed connection
+            # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
+            # that still owns the socket, turning a valid request into a 400.
+            # the length is the digits of the header and nothing else: a value that another parser would read
+            # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
+            # conversion would make a length of 0 or less, for which the read below would wait for the connection
+            # to close (RFC 9110 section 8.6)
+            *int content_length = http_parse_content_length(hdr."content-length");
+            if (!exists content_length) {
+                string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # Pre-read Content-Length check against max body size limit
+            if (max_body > 0 && content_length > max_body) {
+                string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                    content_length, max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # HTTP/1.x: read body from socket; a length of 0 is no body
+            try {
+                if (!content_length) {
+                    # nothing to read
+                # a multipart container stays binary here too, so that a direct read and a
+                # buffered one hand the handler the same bytes
+                } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                        || hdr."content-type" =~ /^multipart\//i) {
+                    body = s.recvBinary(content_length, HttpServer::ReadTimeout);
+                } else {
+                    # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
+                    # body was buffered
+                    body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
+                }
+                #printf("HTTP DEBUG: %s\n", body);
+            } catch (hash<ExceptionInfo> ex) {
+                string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
+                    content_length, ex.err, ex.desc);
+                string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
+                    cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
+                listener.logError("%s", str);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    hdr.method == "HEAD");
+                return NOTHING;
+            }
+        }
+        return {"body": body};
+    }
+
     #! Handles incoming requests
     /** This method is called by listeners when a request is received.
 
@@ -4386,278 +4668,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler
                 && handler.wantsBodyStreaming(cx, hdr);
 
-            *data body;
-            if (cx."header-info".body_streaming && !want_streaming) {
-                # Handler doesn't support streaming — buffer body on handler thread
-                # for backward compatibility (body was previously read by I/O thread)
-                #
-                # Resume the h2/h3 poll operation on the I/O thread when this block exits
-                # (normal flow, early return on error, or exception).  This ensures the
-                # connection stays alive (PING, SETTINGS, WINDOW_UPDATE) while the handler
-                # processes the request — critical for long-running handlers like bulk
-                # object creation.  The controller also has a safety-net resume after
-                # handler return to cover wantsBodyStreaming() handlers that skip this block.
-                on_exit {
-                    if (cx."header-info".resume_body_streaming) {
-                        cx."header-info".resume_body_streaming();
-                    }
-                }
-                int sid = cx."header-info".stream_id;
-                binary body_data = binary();
-                # set when the body read stops because the body exceeds the maximum size
-                bool hit_max_body = False;
-                if (cx."header-info".http3) {
-                    # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
-                    int session_id = cx."header-info".session_id;
-                    try {
-                        while (True) {
-                            *binary chunk = s.readQuicStreamDataBlock(session_id, sid, 30s);
-                            if (!chunk) {
-                                break;
-                            }
-                            body_data += chunk;
-                            # Incremental size check: reject early instead of buffering the full body
-                            if (max_body > 0 && body_data.size() > max_body) {
-                                break;
-                            }
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err == "QUIC-STREAM-TIMEOUT") {
-                            listener.logError("HTTP/3 request body read timeout from %s",
-                                cx."peer-info".address_desc);
-                            cx.close = True;
-                            if (async_response_out) {
-                                async_response_out = buildAsyncErrorResponse(408,
-                                    "Request Timeout", cx, listener, s, !is_multiplexed);
-                            } else {
-                                sendRequestError(listener, \cx, s, 408, "Request Timeout",
-                                    NOTHING, NOTHING, cx."response-encoding",
-                                    hdr.method == "HEAD");
-                            }
-                            return;
-                        }
-                        if (ex.err != "HTTP-BODY-TOO-LARGE") {
-                            rethrow;
-                        }
-                        # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
-                        # until then were delivered first
-                        hit_max_body = True;
-                    }
-                    # trailers sent after the body
-                    if (*hash<auto> trailers = s.getQuicStreamTrailers(session_id, sid)) {
-                        cx.trailers = trailers;
-                    }
-                    # NOTE: cleanupQuicStream is called by the controller's on_exit handler
-                } else {
-                    # HTTP/2: drive inbound DATA frames through register_body_queue.
-                    # The I/O thread drains frames into the Queue (NOTHING sentinel
-                    # = END_STREAM) so the handler thread never touches the H2
-                    # session lock.
-                    *code<nothing(Queue)> register_body_queue
-                        = cx."header-info".register_body_queue;
-                    if (!register_body_queue) {
-                        throw "HTTP2-BODY-STREAMING-ERROR",
-                            sprintf("body_streaming dispatch missing register_body_queue "
-                                "closure for stream %d", sid);
-                    }
-                    Queue body_queue(-1);
-                    register_body_queue(body_queue);
-
-                    bool h2_complete = False;
-                    while (True) {
-                        auto chunk;
-                        try {
-                            chunk = body_queue.get(30s);
-                        } catch (hash<ExceptionInfo> ex) {
-                            if (ex.err == "QUEUE-TIMEOUT") {
-                                break;
-                            }
-                            rethrow;
-                        }
-                        if (chunk.typeCode() == NT_HASH) {
-                            if (chunk.err != "HTTP-BODY-TOO-LARGE") {
-                                # the body ended before END_STREAM (HTTP-BODY-INCOMPLETE): the handler must not
-                                # get the part received for the complete body
-                                throw chunk.err, chunk.desc;
-                            }
-                            # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
-                            # buffered until then were delivered first, and the rest of the body is discarded
-                            hit_max_body = True;
-                            break;
-                        }
-                        if (!(chunk instanceof binary)) {
-                            # NOTHING sentinel → END_STREAM observed by I/O thread
-                            h2_complete = True;
-                            break;
-                        }
-                        body_data += chunk;
-                        # Incremental size check: reject early instead of buffering the full body
-                        if (max_body > 0 && body_data.size() > max_body) {
-                            hit_max_body = True;
-                            break;
-                        }
-                    }
-                    # trailers sent after the body
-                    if (h2_complete) {
-                        if (*hash<auto> trailers = s.getHttp2StreamTrailers(sid)) {
-                            cx.trailers = trailers;
-                        }
-                    }
-                    if (!h2_complete && !hit_max_body) {
-                        listener.logError("HTTP/2 request body read timeout from %s",
-                            cx."peer-info".address_desc);
-                        cx.close = True;
-                        if (async_response_out) {
-                            async_response_out = buildAsyncErrorResponse(408,
-                                "Request Timeout", cx, listener, s, !is_multiplexed);
-                        } else {
-                            sendRequestError(listener, \cx, s, 408, "Request Timeout",
-                                NOTHING, NOTHING, cx."response-encoding",
-                                hdr.method == "HEAD");
-                        }
-                        return;
-                    }
-                    # Defensive consistency check: if Content-Length advertised a
-                    # non-zero body but END_STREAM arrived with no DATA chunks
-                    # delivered, the request body was lost in transit
-                    # (intermittent multiplexed-dispatch race observed on Alpine
-                    # ARM64 CI).  Fail the request explicitly with 502 instead
-                    # of silently dispatching the handler with an empty body —
-                    # which would otherwise be auto-converted to 204 No Content
-                    # and corrupt application semantics for echo/upload paths.
-                    if (h2_complete && !body_data.size() && hdr."content-length"
-                            && int(hdr."content-length") > 0) {
-                        string etxt = sprintf(
-                            "HTTP/2 request body delivery race: Content-Length "
-                            "%y advertised but no DATA chunks received before "
-                            "END_STREAM (stream=%d)",
-                            hdr."content-length", sid);
-                        listener.logError("%s: from %s", etxt,
-                            cx."peer-info".address_desc);
-                        cx.close = True;
-                        if (async_response_out) {
-                            async_response_out = buildAsyncErrorResponse(502, etxt,
-                                cx, listener, s, !is_multiplexed);
-                        } else {
-                            sendRequestError(listener, \cx, s, 502, etxt, NOTHING,
-                                NOTHING, cx."response-encoding",
-                                hdr.method == "HEAD");
-                        }
-                        return;
-                    }
-                }
-                # Apply max body size check
-                if (hit_max_body || (max_body > 0 && body_data.size() > max_body)) {
-                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
-                        body_data.size(), max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    if (async_response_out) {
-                        async_response_out = buildAsyncErrorResponse(413, etxt, cx,
-                            listener, s, !is_multiplexed);
-                    } else {
-                        sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                            cx."response-encoding", hdr.method == "HEAD");
-                    }
-                    return;
-                }
-                if (body_data.size()) {
-                    # a multipart container's octets are not text in the request charset: each part
-                    # carries its own encoding, so the container is handed over as bytes
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                            || hdr."content-type" =~ /^application\/connect\+/
-                            || hdr."content-type" =~ /^multipart\//i) {
-                        body = body_data;
-                    } else {
-                        body = decodeRequestText(hdr, body_data);
-                    }
-                }
-            } else if (cx."header-info".body) {
-                # Body pre-read by I/O controller (H1 async, H2, or H3)
-                # Check body size against limit (body was already read by the
-                # async I/O layer; this is a secondary check)
-                if (max_body > 0 && cx."header-info".body.size() > max_body) {
-                    string proto = cx."header-info".http3 ? "HTTP/3"
-                        : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
-                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        proto, cx."header-info".body.size(), max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                        cx."response-encoding", hdr.method == "HEAD");
-                    return;
-                }
-                # Body is always binary from the I/O layer — convert to string if text content type;
-                # a multipart container stays binary, as its parts carry their own encodings
-                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^application\/connect\+/
-                        || hdr."content-type" =~ /^multipart\//i) {
-                    body = cx."header-info".body;
-                } else {
-                    # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
-                    body = decodeRequestText(hdr, cx."header-info".body);
-                }
-            } else if (exists hdr."content-length" && !is_multiplexed) {
-                # HTTP/1.x only: the request body is read from the raw socket here.
-                #
-                # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
-                # delivered as DATA frames by the multiplexed session and surface either
-                # in cx."header-info".body (pre-read by the I/O controller) or through
-                # the body_streaming branch above, where the handler reads the stream
-                # itself.  Reaching a synchronous socket read on a multiplexed connection
-                # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
-                # that still owns the socket, turning a valid request into a 400.
-                # the length is the digits of the header and nothing else: a value that another parser would read
-                # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
-                # conversion would make a length of 0 or less, for which the read below would wait for the connection
-                # to close (RFC 9110 section 8.6)
-                *int content_length = http_parse_content_length(hdr."content-length");
-                if (!exists content_length) {
-                    string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
-                        hdr.method == "HEAD");
-                    return;
-                }
-                # Pre-read Content-Length check against max body size limit
-                if (max_body > 0 && content_length > max_body) {
-                    string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                        content_length, max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                        cx."response-encoding", hdr.method == "HEAD");
-                    return;
-                }
-                # HTTP/1.x: read body from socket; a length of 0 is no body
-                try {
-                    if (!content_length) {
-                        # nothing to read
-                    # a multipart container stays binary here too, so that a direct read and a
-                    # buffered one hand the handler the same bytes
-                    } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                            || hdr."content-type" =~ /^multipart\//i) {
-                        body = s.recvBinary(content_length, HttpServer::ReadTimeout);
-                    } else {
-                        # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
-                        # body was buffered
-                        body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
-                    }
-                    #printf("HTTP DEBUG: %s\n", body);
-                } catch (hash<ExceptionInfo> ex) {
-                    string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
-                        content_length, ex.err, ex.desc);
-                    string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
-                        cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError("%s", str);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
-                        hdr.method == "HEAD");
-                    return;
-                }
+            # the request body, read in a method of its own so that its locals and early returns are not part of the
+            # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
+            *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
+                want_streaming, info, \async_response_out);
+            if (!body_info) {
+                return;
             }
+            *data body = body_info.body;
 
             listener.doLogRecvBody(body, cx, hdr, info);
 
