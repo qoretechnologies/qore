@@ -348,6 +348,9 @@ public:
     void setFunctionalBaseSource(const QoreValue& base_source);
     //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
     class FunctionalLoopExceptionCleanup;
+    //! The exception target of code lowered with the virtual implicit context, whose runtime implicit argument and
+    //! element the lowering sets only if the code turns out to need them (see the definition)
+    class ImplicitContextExceptionBlock;
     //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
     //! are restored on every path, also when the code raises an exception (see the definition)
     template <typename F>

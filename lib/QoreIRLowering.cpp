@@ -16214,6 +16214,98 @@ QoreIRValue QoreIRLowering::lowerWithImplicitContext(QoreIRValue element, QoreIR
     return rv;
 }
 
+//! The exception target of code lowered with the virtual implicit context
+/** The code of a functional operator (a map expression, a predicate, a pipeline stage) is lowered with the element
+    and its index as the virtual implicit context; when the code delegates to the AST interpreter, the lowering then
+    sets the runtime implicit argument and element around it (PushImplicitElement, PushImplicitArg), inserted before
+    the code once it has been lowered.  An exception that the code raises must restore them before the handler in the
+    function runs, as the AST interpreter's helpers restore them when the exception unwinds the operator: the argument
+    list holds a reference to the element, which was otherwise released after the handler (qore#5670).  The code is
+    therefore lowered with a block of its own as its exception target, which restores them, if the code sets them,
+    and goes on to the handler.  With no handler in the function, the frame's exit restores them
+    (QoreIRInstruction::restore_on_exception_exit, see markRestoreOnExceptionExit()).
+*/
+class QoreIRLowering::ImplicitContextExceptionBlock {
+public:
+    //! \a unmarked_scope: the code's instructions record a temp scope that no mark opens, so that an exception
+    //! releases no temporary of the statement before the block has restored the context: the handler releases them
+    //! after it, as the AST interpreter releases the statement's temporaries after it has unwound the operator (a
+    //! loop whose exception cleanup releases its values itself, such as a fused pipeline's, keeps its scope)
+    ImplicitContextExceptionBlock(QoreIRLowering& lowering, bool unmarked_scope)
+            : lowering(lowering), outer(lowering.getCurrentExceptionTarget()) {
+        if (outer) {
+            block = lowering.createBlock("implicit.context.restore.exception");
+            if (block) {
+                lowering.exception_stack.push_back(block);
+                if (unmarked_scope) {
+                    saved_scope_id = lowering.builder.getExceptionTempScopeId();
+                    lowering.builder.setExceptionTempScopeId(lowering.builder.allocateUnmarkedTempScopeId());
+                    scope_set = true;
+                }
+                active = true;
+            }
+        }
+    }
+
+    ~ImplicitContextExceptionBlock() {
+        end();
+    }
+
+    ImplicitContextExceptionBlock(const ImplicitContextExceptionBlock&) = delete;
+    ImplicitContextExceptionBlock& operator=(const ImplicitContextExceptionBlock&) = delete;
+
+    //! returns true if the block could not be created
+    bool failed() const {
+        return outer && !block;
+    }
+
+    //! emits the block once the code has been lowered: it restores the implicit argument and element if the code
+    //! sets them (\a old_argv and \a old_element are the values of the pushes), and branches to the handler
+    void finish(bool context_set, QoreIRValue old_argv, QoreIRValue old_element, const QoreProgramLocation* loc) {
+        end();
+        if (!block) {
+            return;
+        }
+        QoreIRBuilder& builder = lowering.builder;
+        QoreIRBasicBlock* after_block = builder.getBlock();
+        builder.getFunction()->moveBlockToEnd(block);
+        builder.setBlock(block);
+        if (context_set) {
+            // the exception stays raised: a destructor that the restoration of the implicit argument runs adds its
+            // own
+            builder.createPopImplicitArg(old_argv, loc);
+            builder.createPopImplicitElement(old_element, loc);
+        }
+        builder.createBranch(outer, loc);
+        builder.setBlock(after_block);
+        block = nullptr;
+    }
+
+    //! the pushes of the implicit context are restored when an exception leaves the function
+    static void markRestoreOnExceptionExit(QoreIRInstruction* push_element, QoreIRInstruction* push_argv) {
+        push_element->restore_on_exception_exit = true;
+        push_argv->restore_on_exception_exit = true;
+    }
+
+private:
+    QoreIRLowering& lowering;
+    QoreIRBasicBlock* outer;
+    QoreIRBasicBlock* block = nullptr;
+    uint32_t saved_scope_id = 0;
+    bool scope_set = false;
+    bool active = false;
+
+    void end() {
+        if (active) {
+            lowering.exception_stack.pop_back();
+            if (scope_set) {
+                lowering.builder.setExceptionTempScopeId(saved_scope_id);
+            }
+            active = false;
+        }
+    }
+};
+
 QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
     auto* map = dynamic_cast<const QoreMapOperatorNode*>(expr.getInternalNode());
     if (!map) {
@@ -17331,6 +17423,13 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         virtual_implicit.active = true;
 
         // Lower the map expression first - check if any AST delegation occurs
+        // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+        // before the handler runs (see ImplicitContextExceptionBlock)
+        ImplicitContextExceptionBlock context_exception(*this, true);
+        if (context_exception.failed()) {
+            error = "IR builder failed to create an implicit context exception block";
+            return QoreIRValue();
+        }
         int saved_ast_count = ast_delegate_count;
         if (!need_result) {
             builder.createPushTempMark(map->loc);
@@ -17364,6 +17463,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = map->loc;
+            ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
             QoreIRValue old_argv = push_argv->result;
 
             // Find insertion point: after element load instruction(s) in body_block
@@ -17377,7 +17477,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             // Emit pop after body expression (in current block which may be invoke.cont)
             builder.createPopImplicitArg(old_argv, map->loc);
             builder.createPopImplicitElement(old_element, map->loc);
+            context_exception.finish(true, old_argv, old_element, map->loc);
         }
+        context_exception.finish(false, QoreIRValue(), QoreIRValue(), map->loc);
 
         QoreIRValue next_type_state;
         if (need_result && type_state_phi) {
@@ -17561,6 +17663,13 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     virtual_implicit.active = true;
 
     // Lower the map expression first - check if any AST delegation occurs
+    // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+    // before the handler runs (see ImplicitContextExceptionBlock)
+    ImplicitContextExceptionBlock context_exception(*this, true);
+    if (context_exception.failed()) {
+        error = "IR builder failed to create an implicit context exception block";
+        return QoreIRValue();
+    }
     int saved_ast_count = ast_delegate_count;
     if (!need_result) {
         builder.createPushTempMark(map->loc);
@@ -17589,6 +17698,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         push_argv->result = func->createValue();
         push_argv->operands.push_back(element_val);
         push_argv->loc = map->loc;
+        ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
         QoreIRValue old_argv_iter = push_argv->result;
 
         // Insert push instructions at the start of body_block
@@ -17600,7 +17710,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Emit pop after body expression (in current block which may be invoke.cont)
         builder.createPopImplicitArg(old_argv_iter, map->loc);
         builder.createPopImplicitElement(old_element_iter, map->loc);
+        context_exception.finish(true, old_argv_iter, old_element_iter, map->loc);
     }
+    context_exception.finish(false, QoreIRValue(), QoreIRValue(), map->loc);
 
     QoreIRValue next_type_state;
     if (need_result && type_state_phi) {
@@ -17811,6 +17923,13 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         virtual_implicit.active = true;
 
         // Lower predicate - track AST delegation
+        // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+        // before the handler runs (see ImplicitContextExceptionBlock)
+        ImplicitContextExceptionBlock context_exception(*this, true);
+        if (context_exception.failed()) {
+            error = "IR builder failed to create an implicit context exception block";
+            return QoreIRValue();
+        }
         int saved_ast_count = ast_delegate_count;
         QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
 
@@ -17835,6 +17954,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = select->loc;
+            ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
             QoreIRValue old_argv = push_argv->result;
 
             size_t insert_pos = 1;  // After element load
@@ -17845,7 +17965,9 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
             builder.createPopImplicitArg(old_argv, select->loc);
             builder.createPopImplicitElement(old_element, select->loc);
+            context_exception.finish(true, old_argv, old_element, select->loc);
         }
+        context_exception.finish(false, QoreIRValue(), QoreIRValue(), select->loc);
 
         // Convert predicate to bool; the predicate's value is released when the element has been decided on, as
         // in the AST interpreter (see releasePredicateValue())
@@ -18791,6 +18913,13 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         virtual_implicit.active = true;
 
         // Track AST delegation
+        // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+        // before the handler runs (see ImplicitContextExceptionBlock)
+        ImplicitContextExceptionBlock context_exception(*this, true);
+        if (context_exception.failed()) {
+            error = "IR builder failed to create an implicit context exception block";
+            return QoreIRValue();
+        }
         int saved_ast_count = ast_delegate_count;
 
         // Lower the select predicate (operand 2)
@@ -18836,6 +18965,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = ms->loc;
+            ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
             old_argv = push_argv->result;
 
             size_t insert_pos = 1;  // After element load
@@ -18903,7 +19033,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         if (needs_implicit_push) {
             builder.createPopImplicitArg(old_argv, ms->loc);
             builder.createPopImplicitElement(old_element, ms->loc);
+            context_exception.finish(true, old_argv, old_element, ms->loc);
         }
+        context_exception.finish(false, QoreIRValue(), QoreIRValue(), ms->loc);
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
@@ -19304,6 +19436,13 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         virtual_implicit.active = true;
 
         // Lower key and value expressions — track AST delegation
+        // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+        // before the handler runs (see ImplicitContextExceptionBlock)
+        ImplicitContextExceptionBlock context_exception(*this, true);
+        if (context_exception.failed()) {
+            error = "IR builder failed to create an implicit context exception block";
+            return QoreIRValue();
+        }
         int saved_ast_count = ast_delegate_count;
 
         QoreIRValue key_result = lowerExpression(hm->get(0), error);
@@ -19336,6 +19475,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = hm->loc;
+            ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
             QoreIRValue old_argv = push_argv->result;
 
             // Insert after element load instruction in body_block
@@ -19348,7 +19488,9 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
             // Pop after body expression (in current block which may be invoke.cont)
             builder.createPopImplicitArg(old_argv, hm->loc);
             builder.createPopImplicitElement(old_element, hm->loc);
+            context_exception.finish(true, old_argv, old_element, hm->loc);
         }
+        context_exception.finish(false, QoreIRValue(), QoreIRValue(), hm->loc);
 
         // Set key-value in hash; with the type of the value folded into the common value type
         QoreIRValue next_type_state;
@@ -19463,6 +19605,13 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     virtual_implicit.active = true;
 
     // Lower key and value expressions — track AST delegation
+    // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+    // before the handler runs (see ImplicitContextExceptionBlock)
+    ImplicitContextExceptionBlock context_exception(*this, true);
+    if (context_exception.failed()) {
+        error = "IR builder failed to create an implicit context exception block";
+        return QoreIRValue();
+    }
     int saved_ast_count = ast_delegate_count;
 
     QoreIRValue key_result = lowerExpression(hm->get(0), error);
@@ -19495,6 +19644,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         push_argv->result = func->createValue();
         push_argv->operands.push_back(element_val);
         push_argv->loc = hm->loc;
+        ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
         QoreIRValue old_argv = push_argv->result;
 
         // Insert after start of body_block (which follows IteratorNext)
@@ -19506,7 +19656,9 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
         builder.createPopImplicitArg(old_argv, hm->loc);
         builder.createPopImplicitElement(old_element, hm->loc);
+        context_exception.finish(true, old_argv, old_element, hm->loc);
     }
+    context_exception.finish(false, QoreIRValue(), QoreIRValue(), hm->loc);
 
     // Set key-value in hash; with the type of the value folded into the common value type
     QoreIRValue next_type_state;
@@ -19656,6 +19808,13 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         virtual_implicit.active = true;
 
         // Lower all body expressions — track AST delegation
+        // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+        // before the handler runs (see ImplicitContextExceptionBlock)
+        ImplicitContextExceptionBlock context_exception(*this, true);
+        if (context_exception.failed()) {
+            error = "IR builder failed to create an implicit context exception block";
+            return QoreIRValue();
+        }
         int saved_ast_count = ast_delegate_count;
 
         // Lower the select predicate (operand 3)
@@ -19725,6 +19884,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = hms->loc;
+            ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
             QoreIRValue old_argv = push_argv->result;
 
             // Insert after element load instruction in body_block
@@ -19737,7 +19897,9 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             // Pop in cont block (reached from both insert and skip paths)
             builder.createPopImplicitArg(old_argv, hms->loc);
             builder.createPopImplicitElement(old_element, hms->loc);
+            context_exception.finish(true, old_argv, old_element, hms->loc);
         }
+        context_exception.finish(false, QoreIRValue(), QoreIRValue(), hms->loc);
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
@@ -19846,6 +20008,13 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     virtual_implicit.active = true;
 
     // Lower all body expressions — track AST delegation
+    // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
+    // before the handler runs (see ImplicitContextExceptionBlock)
+    ImplicitContextExceptionBlock context_exception(*this, true);
+    if (context_exception.failed()) {
+        error = "IR builder failed to create an implicit context exception block";
+        return QoreIRValue();
+    }
     int saved_ast_count = ast_delegate_count;
 
     // Lower the select predicate (operand 3)
@@ -19914,6 +20083,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         push_argv->result = func->createValue();
         push_argv->operands.push_back(element_val);
         push_argv->loc = hms->loc;
+        ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_elem.get(), push_argv.get());
         QoreIRValue old_argv = push_argv->result;
 
         size_t insert_pos = 0;
@@ -19924,7 +20094,9 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
         builder.createPopImplicitArg(old_argv, hms->loc);
         builder.createPopImplicitElement(old_element, hms->loc);
+        context_exception.finish(true, old_argv, old_element, hms->loc);
     }
+    context_exception.finish(false, QoreIRValue(), QoreIRValue(), hms->loc);
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
@@ -20015,8 +20187,19 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     QoreIRValue old_element;
     QoreIRValue old_argv;
     if (force_runtime_context) {
-        old_element = builder.createPushImplicitElement(index, stage_loc)->result;
-        old_argv = builder.createPushImplicitArg(element, stage_loc)->result;
+        QoreIRInstruction* push_element = builder.createPushImplicitElement(index, stage_loc);
+        QoreIRInstruction* push_argv = builder.createPushImplicitArg(element, stage_loc);
+        ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_element, push_argv);
+        old_element = push_element->result;
+        old_argv = push_argv->result;
+    }
+
+    // an exception that the stage raises restores the implicit argument and element, if the stage sets them, before
+    // the pipeline's exception cleanup runs (see ImplicitContextExceptionBlock)
+    ImplicitContextExceptionBlock context_exception(*this, false);
+    if (context_exception.failed()) {
+        error = "IR builder failed to create the implicit context exception block of a pipeline stage";
+        return QoreIRValue();
     }
 
     VirtualImplicitContext saved = virtual_implicit;
@@ -20047,6 +20230,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
         push_argv->loc = stage_loc;
         old_argv = push_argv->result;
 
+        ImplicitContextExceptionBlock::markRestoreOnExceptionExit(push_element.get(), push_argv.get());
         entry_block->instructions.insert(entry_block->instructions.begin() + insert_pos, std::move(push_element));
         entry_block->instructions.insert(entry_block->instructions.begin() + insert_pos + 1, std::move(push_argv));
     }
@@ -20054,6 +20238,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
         builder.createPopImplicitArg(old_argv, stage_loc);
         builder.createPopImplicitElement(old_element, stage_loc);
     }
+    context_exception.finish(needs_runtime_context, old_argv, old_element, stage_loc);
     return result;
 }
 

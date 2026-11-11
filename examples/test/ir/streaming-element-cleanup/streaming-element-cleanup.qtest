@@ -43,7 +43,8 @@
     to the enclosing handler, which the IR interpreter skipped, and the release of first's element or stage value at
     its end must release the iterator and the source before the handler runs.  The value of select's predicate over
     a list is released when its element has been decided on, which the order of an exception's releases (qore#5712)
-    made visible.
+    made visible.  Code delegated to the AST interpreter that raises while an element is the implicit argument must
+    restore the implicit argument, which holds a reference to the element, before the handler runs.
 
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
@@ -119,6 +120,8 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "fr_take_nh: released x1; itdone x; catch DTOR/x1; after",
             "ap_sel_list: released h1; released h2; catch STAGE/h2; after",
             "sel_list_pred_obj: released p1; released p2; r 2; after; released s1; released s2",
+            "ic_stage: released it1; released it2; itdone it; catch DIVISION-BY-ZERO; after",
+            "ic_map_it: released it1; released it2; itdone it; catch DIVISION-BY-ZERO; after",
         );
     }
 

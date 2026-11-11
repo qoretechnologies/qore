@@ -253,12 +253,17 @@ that the code raises releases nothing before the operator's cleanup, and the arg
 still the call's.  A map-select sets the implicit argument once for its predicate and its map expression, as the AST
 interpreter does.  The IR interpreter's slot of a `PushImplicitArg` borrows the context that it restores: the context
 does not change hands until the `PopImplicitArg`, or the frame's exit, restores it, so the loop takes no reference
-per element.
+per element.  Code over a list, a map expression and a fused pipeline's stage run with the virtual implicit argument,
+and set the runtime one only when they delegate to the AST interpreter, which is known once they have been lowered:
+they are lowered with a block of their own as their exception target, which restores the implicit argument and
+element if the code sets them and goes on to the handler, as the AST interpreter's helpers restore them when an
+exception unwinds the operator (`QoreIRLowering::ImplicitContextExceptionBlock`); the argument list holds a
+reference to the element, which was otherwise released after the handler.
 
 A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
 can hold an object, the `IteratorNext` instruction releases the previous element and then the values that the stages
 gave from it, in the order of the stages, before it asks the iterator for the next element
-(`QoreIRIteratorNextInstruction::release_values`, serialized in AOT IR from format v23), and the pipeline's end
+(`QoreIRIteratorNextInstruction::release_values`, serialized in AOT IR from format `QORE_AOT_ITERATOR_RELEASES_VERSION`), and the pipeline's end
 releases them before the iterator and the source: the AST interpreter's functional map iterator releases the element
 when it has evaluated the value, and its consumer releases the value before it takes the next one.  The values are not
 operands, as the body defines them after the instruction: it releases what their slots hold, as `ReleaseOwnedTemp`

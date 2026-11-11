@@ -214,6 +214,11 @@ sub fr_take_nh_inner(Log log) { auto x = (first $1.n == "zz", (take 1, new It(lo
 sub fr_take_nh(Log log) { try { fr_take_nh_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
 # the value of select's predicate over a list is released when its element has been decided on
 sub sel_list_pred_obj(Log log) { list r = select holders(log, 3, "s"), new Holder(log, "p" + $1.n[1]); log.add("r " + r.size()); log.add("after"); }
+# code delegated to the AST interpreter that raises while the element is the implicit argument restores the implicit
+# argument, which holds a reference to the element, before the handler runs: a fused map stage and map over an
+# iterator
+sub ic_stage(Log log) { try { int c = (count True, (map exists ((10 / div_by($1)) ?? NOTHING), new It(log, 3))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub ic_map_it(Log log) { try { list r = map exists ((10 / div_by($1)) ?? NOTHING), new It(log, 3); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -230,6 +235,7 @@ const Cases = (
     "fpm_pred_log", "fpm_foreach_body", "fpm_foreach_two_maps", "fpm_nested", "strcat_try", "nh_divany_nocheck",
     "nh_modany_nocheck", "nh_divnum_nocheck", "nh_addany", "sr_list", "sr_foreach", "sr_count",
     "fr_take", "fr_stage", "fr_list", "fr_take_nh", "sel_list_pred_obj",
+    "ic_stage", "ic_map_it",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned
