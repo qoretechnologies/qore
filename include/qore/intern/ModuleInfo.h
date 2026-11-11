@@ -41,6 +41,8 @@ extern "C" {
 }
 #endif
 
+#include <cstdio>
+#include <exception>
 #include <string>
 #include <map>
 #include <set>
@@ -1330,7 +1332,16 @@ public:
         // types are freed, and not by its C++ static destructor; exceptions raised by destructors are reported here
         if (module_ns) {
             ExceptionSink xsink;
-            module_ns->purge(&xsink);
+            try {
+                module_ns->purge(&xsink);
+            } catch (const std::exception& e) {
+                // a destructor cannot throw (for example std::bad_alloc while purging); whatever was not released is
+                // released by the C++ static destructor of the namespace
+                fprintf(stderr, "module '%s': the module's namespace could not be released: %s\n", name.c_str(),
+                    e.what());
+            } catch (...) {
+                fprintf(stderr, "module '%s': the module's namespace could not be released\n", name.c_str());
+            }
         }
         set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be

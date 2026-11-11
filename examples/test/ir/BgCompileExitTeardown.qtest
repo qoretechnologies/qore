@@ -10,6 +10,11 @@
 %requires QUnit
 %requires FsUtil
 
+# the process module runs the children and bounds the time they can run
+%try-module process
+%define NoProcess
+%endtry
+
 %exec-class BgCompileExitTeardownTest
 
 #! Module-owned Qore state is released by module teardown in qore_cleanup(), not by C++ static destructors
@@ -29,11 +34,11 @@ class BgCompileExitTeardownTest inherits QUnit::Test {
         #! milliseconds to wait for the compile to stop at its hold point
         const StepTimeout = 60000;
 
-        #! seconds a child can run before it is killed
-        const ChildTimeout = 120;
+        #! the longest that a child can run; a child that hangs is killed and fails its case
+        const ChildTimeout = 120s;
 
-        #! seconds a child can run under valgrind before it is killed
-        const ValgrindTimeout = 1500;
+        #! the longest that a child can run under valgrind
+        const ValgrindTimeout = 1500s;
 
         #! the modules whose namespaces have static storage duration
         const Modules = "%requires reflection
@@ -94,19 +99,24 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
         if (!ENV.QORE_TEST_VALGRIND) {
             testSkip("set QORE_TEST_VALGRIND to run the child under valgrind");
         }
-        if (trim(backquote("command -v valgrind 2>/dev/null")) == "") {
+%ifdef NoProcess
+        testSkip("the process module is not available");
+%else
+        *string valgrind = Process::searchPath("valgrind");
+        if (!valgrind) {
             testSkip("valgrind is not installed");
         }
-        # -b: valgrind needs signal handling disabled
-        hash<auto> r = runChild(header() + DetachedCompile, sprintf("timeout -s KILL %d valgrind --leak-check=full "
-            "--show-leak-kinds=definite,indirect --errors-for-leak-kinds=definite,indirect --error-exitcode=99",
-            ValgrindTimeout));
+        # the child runs with -b, as valgrind needs signal handling disabled
+        hash<auto> r = runChild(header() + DetachedCompile, (valgrind, "--leak-check=full",
+            "--show-leak-kinds=definite,indirect", "--errors-for-leak-kinds=definite,indirect", "--error-exitcode=99"),
+            ValgrindTimeout);
         assertEq(0, r.rc, r.output);
         assertRegex("sum=45 held=True", r.output);
         assertRegex("definitely lost: 0 bytes in 0 blocks|All heap blocks were freed|no leaks are possible",
             r.output);
         assertNRegex("indirectly lost: [1-9]", r.output);
         checkReleased(r.output);
+%endif
     }
 
     #! the debug count of module namespaces left to C++ static destructors is 0
@@ -123,10 +133,6 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
 ";
     }
 
-    private static string shellQuote(string value) {
-        return "'" + replace(value, "'", "'\"'\"'") + "'";
-    }
-
     private checkDebug() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the background compile hold and the teardown count require a debug build");
@@ -135,12 +141,18 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
 
     #! runs a child script and returns its exit status and output
     /** @param code the script
-        @param wrapper a command that runs the child (valgrind), if any
+        @param wrapper the command and arguments that run the child (valgrind), if any
+        @param timeout the longest that the child can run; it is killed then, and the case fails
 
         Every function is submitted for native compilation at its first call; the child's own Program runs in the
         AST tier, so only the child Program's function is compiled in the background
     */
-    private hash<auto> runChild(string code, *string wrapper) {
+    private hash<auto> runChild(string code, *list<string> wrapper, date timeout = ChildTimeout) {
+%ifdef NoProcess
+        testSkip("the process module is not available");
+        # not reached: testSkip() throws
+        return {};
+%else
         TmpDir tmp("qore-bg-compile-exit-teardown-");
         string script = tmp.path + "/child.q";
         File f();
@@ -152,12 +164,26 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
             "QORE_JIT_TIMING": "1",
             "QORE_TEARDOWN_REPORT": "1",
         };
-        string cmd = sprintf("%s %s %s -b --enable-debug --exec-mode=ast %s 2>&1; echo \"rc=$?\"",
-            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "),
-            wrapper ?? sprintf("timeout -s KILL %d", ChildTimeout), shellQuote(qore_bin), shellQuote(script));
-        string output = backquote(cmd);
-        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
-        assertTrue(exists rc, "the child's status is known: " + output);
-        return {"rc": rc[0].toInt(), "output": output};
+        *string qore_path = qore_bin.find("/") >= 0 ? qore_bin : Process::searchPath(qore_bin);
+        assertTrue(exists qore_path, "the qore executable is found: " + qore_bin);
+        list<string> args = ("-b", "--enable-debug", "--exec-mode=ast", script);
+        string cmd = qore_path;
+        if (wrapper) {
+            cmd = shift wrapper;
+            args = wrapper + qore_path + args;
+        }
+        StringOutputStream out();
+        StringOutputStream err();
+        Process p(cmd, args, {"stdout": out, "stderr": err, "env": Process::getEnvironment() + env});
+        # a hang fails the case instead of stalling the run
+        bool done = p.wait(timeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        string output = out.getData() + err.getData();
+        assertTrue(done, "the child ended: " + output);
+        return {"rc": p.exitCode(), "output": output};
+%endif
     }
 }

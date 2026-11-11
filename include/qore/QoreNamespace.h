@@ -108,7 +108,13 @@ public:
         types are freed, rather than by its C++ static destructor, which runs after qore_cleanup() (or not at all
         when the process ends with \c _exit()).  See @ref qore_module_teardown.
 
-        @param xsink for Qore-language exceptions raised by destructors
+        Only an unattached namespace, such as the module-owned namespace registered with QoreModuleInfo::ns, can be
+        purged: a namespace in a namespace tree (a subnamespace, or the root namespace of a Program) is indexed by its
+        root namespace.  For such a namespace nothing is released and a \c NAMESPACE-PURGE-ERROR exception is raised
+        (debug builds also fail an assertion).
+
+        @param xsink for Qore-language exceptions raised by destructors and for the \c NAMESPACE-PURGE-ERROR
+        exception
 
         @since %Qore 3.0
     */

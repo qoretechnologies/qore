@@ -1025,6 +1025,16 @@ void qore_ns_set_module_owned(QoreNamespace& ns) {
 }
 
 void QoreNamespace::purge(ExceptionSink* xsink) {
+    // a namespace in a tree (a subnamespace or a root namespace) is indexed by its root, whose indexes would refer to
+    // what is released here; only an unattached namespace, such as a module's namespace, can be purged
+    if (priv->parent || priv->root) {
+        assert(false);
+        if (xsink) {
+            xsink->raiseException("NAMESPACE-PURGE-ERROR", "cannot purge namespace '%s': it is attached to a "
+                "namespace tree; only an unattached namespace can be purged", priv->path.c_str());
+        }
+        return;
+    }
     priv->purgeAll(xsink);
 }
 
