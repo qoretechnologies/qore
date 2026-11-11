@@ -2964,7 +2964,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 on_block_exit_stmt->getType(),
                 handler_code,
                 stmt->loc,
-                obe_inst  // enable compileAllHandlerIRs() to compile this handler
+                obe_inst,  // enable compileAllHandlerIRs() to compile this handler
+                debug_nest_depth
             });
         }
 
@@ -4019,13 +4020,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // nothing to order, and the handlers fire from the enclosing landing pad or the function-exit
     // guard exactly as they did before the anchor existed.  The scan only ever answers "no" when
     // it can prove it, so an unrecognized statement keeps the anchor.
-    //
-    // The debug IR of AOT code anchors a block with handlers and locals of its own as well: the frame-level unwind
-    // releases the locals of the frame only after the debugger's exception events of the statements that contain
-    // the block, which the AST interpreter makes after the block's locals are released (#5816).  The debug IR runs
-    // only while a debugger is attached, and the native code of the function is outlined as before.
     const bool needs_handler_anchor = has_on_block_exit
-            && (qoreIrBlockEnclosesScopeLocals(block) || (lvars && builder.getFunction()->emit_debug_statements));
+            && qoreIrBlockEnclosesScopeLocals(block);
     // A block with handlers inside an exception region of the frame has its own exception target as well: it leaves
     // the scope at runtime, running the handlers that have not run yet, before the exception reaches the enclosing
     // target, whose own ScopeExit would otherwise leave this scope in place of its own (the interpreter pops the
@@ -4911,6 +4907,23 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     // Lower the handler code block inline using the current parse context
     // This gives the handler natural access to parent block's scope
     bool ok;
+    // the statements of the handler have the debugger's nesting of where it is declared, not of the exit where it is
+    // lowered, as with the AST interpreter, which runs it in the block that declares it (#5816)
+    struct DebugNestDepthRestore {
+        uint16_t& depth;
+        uint16_t saved;
+        DebugNestDepthRestore(uint16_t& d, uint16_t new_depth) : depth(d), saved(d) {
+            depth = new_depth;
+        }
+        ~DebugNestDepthRestore() {
+            depth = saved;
+        }
+    } debug_nest_depth_restore(debug_nest_depth, handler.debug_nest_depth);
+    // a handler lowered at a break, a continue or a return runs after the statements that the exit leaves, down to the
+    // level of the statement that declares it, which have no end markers on that path
+    if (builder.getFunction()->emit_debug_statements && handler.debug_nest_depth) {
+        builder.createDebugStatementEnd(handler.debug_nest_depth - 1, handler.loc);
+    }
     if (set_exception_target) {
         // An exception raised by the handler goes to the exception target of the body of the handler's block
         // (or leaves the frame when there is none), not to the target of the statement that left the block,

@@ -7065,11 +7065,26 @@ static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractSta
 
 //! Starts the events of the statements that the frame is in, for an exception raised by the handlers of a block on its
 //! normal exit, which the handlers' frame made the event of; the innermost statement is the one that contains the block
-static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFrameState& st) {
+/** @param scope_size the number of scopes of the frame with the scope of the block: the statements of the block
+    started with it, and those of a block left by a break, a continue or a return are still in the frame's
+    statements, as their ends did not run
+*/
+static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFrameState& st, size_t scope_size) {
     if (!st.nest_used) {
         return;
     }
     QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    // the statements of the block, if any are left, are removed; the first one stands for the block
+    QoreIRDebugNestEntry child;
+    bool have_child = false;
+    for (size_t i = 0; i < n.entries.size(); ++i) {
+        if (n.entries[i].scope_depth >= scope_size) {
+            child = n.entries[i];
+            have_child = true;
+            n.entries.resize(i);
+            break;
+        }
+    }
     if (n.entries.empty()) {
         n.chain = -1;
         return;
@@ -7077,8 +7092,7 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFr
     // the statement of the block that ended last stands for the block, which makes no event: a try statement whose
     // try block it was in catches the exception (see qore_ir_dbg_report_enclosing()); if it is not known, the block is
     // taken as a try block, which makes no event for a try statement that contains it
-    QoreIRDebugNestEntry child;
-    if (n.last_end.depth == n.entries.size()) {
+    if (!have_child && n.last_end.depth == n.entries.size()) {
         child = n.last_end;
     }
     child.stmt = nullptr;
@@ -14566,7 +14580,10 @@ load_local_done:
                     // before its handlers run, as the AST interpreter makes them as the exception leaves each statement
                     // of a block before the block's handlers run (#5816); a dismissal ends the function
                     bool dbg_exception_before = false;
+                    // the number of scopes with the closed one: the statements that it has started with it
+                    size_t dbg_scope_size = 0;
                     if (debug_active) [[unlikely]] {
+                        dbg_scope_size = scope_stack.size();
                         dbg_exception_before = xsink && xsink->isException();
                         if (dbg_exception_before) {
                             dbgReportException();
@@ -14646,7 +14663,7 @@ load_local_done:
                         // statement that contains the block
                         if (debug_active) [[unlikely]] {
                             if (!dbg_exception_before && xsink && xsink->isException()) {
-                                qore_ir_dbg_start_chain_innermost(dbg_state);
+                                qore_ir_dbg_start_chain_innermost(dbg_state, dbg_scope_size);
                             }
                         }
                         // If handler execution raised an exception, route to the
@@ -18511,6 +18528,16 @@ load_local_done:
                 } else {
                     return_value = QoreValue();
                 }
+                // an exception that the handlers of a block raised on its normal exit: the statements that contain the
+                // block get their events before the handlers of the frame run (#5816)
+                if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
@@ -18526,6 +18553,16 @@ load_local_done:
             }
             case QoreIROpcode::ReturnNothing: {
                 return_value = QoreValue();
+                // an exception that the handlers of a block raised on its normal exit: the statements that contain the
+                // block get their events before the handlers of the frame run (#5816)
+                if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
