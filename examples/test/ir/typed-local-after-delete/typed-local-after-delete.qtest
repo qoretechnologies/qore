@@ -64,7 +64,9 @@ class TypedLocalAfterDeleteTest inherits QUnit::Test {
         assertTrue(out =~ /\ndelete system object:\n  ! SYSTEM-OBJECT-ERROR: /, "system object");
         assertTrue(out =~ /\nplain function:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "plain function");
         # the typed fast paths of builtin functions and pseudo-methods take the value that the AST interpreter does
-        assertTrue(out =~ /\nloop join:\n  = \["a,b", "RUNTIME-TYPE-ERROR"\]\n/, "join");
+        # join(string, ...) takes NOTHING as one of its values (the no-op join() is not called with strict arguments,
+        # qore#5686, qore#5717)
+        assertTrue(out =~ /\nloop join:\n  = \["a,b", ""\]\n/, "join");
         assertTrue(out =~ /\nloop join method:\n  = \["a,b", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "l.join()");
         assertTrue(out =~ /\nloop pseudo method:\n  = \["bc", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "s.substr()");
         assertTrue(out =~ /\nloop switch transform:\n  ! PSEUDO-METHOD-DOES-NOT-EXIST: /, "switch on s.lwr()");
