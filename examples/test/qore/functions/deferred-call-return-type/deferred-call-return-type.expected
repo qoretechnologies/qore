@@ -1,0 +1,11 @@
+sort: {a: ["x", "y", "z"]}
+sort_descending: {a: ["z", "y", "x"]}
+sort_stable: {a: ["x", "y", "z"]}
+sort_descending_stable: {a: ["z", "y", "x"]}
+no value: null
+value: ["a", "b"]
+type of sort(keys h): *list<auto>
+type of sort_descending(keys h): *list<auto>
+type of sort_stable(keys h): *list<auto>
+type of sort_descending_stable(keys h): *list<auto>
+type of pow(h.a ? 1 : 2.0, 2): untyped
