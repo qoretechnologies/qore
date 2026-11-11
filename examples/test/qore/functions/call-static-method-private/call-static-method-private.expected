@@ -1,0 +1,14 @@
+outside private-only=METHOD-IS-PRIVATE
+outside private overload=RUNTIME-OVERLOAD-ERROR
+outside public overload=pub-sm
+outside args private=METHOD-IS-PRIVATE
+outside internal=UNKNOWN-METHOD
+outside public=pub
+inside=PRIV-only/PRIV-sm
+inside internal=UNKNOWN-METHOD
+subclass=PRIV-only/PRIV-sm
+subclass internal=UNKNOWN-METHOD
+unrelated class=METHOD-IS-PRIVATE
+Program::callStaticMethod from a subclass=PRIV-only
+Program::callStaticMethod private=METHOD-IS-PRIVATE
+Program::callStaticMethod public=pub-q

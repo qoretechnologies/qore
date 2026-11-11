@@ -80,6 +80,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Dynamic Static Method Calls Respect Private Access
+    call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
+    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" raise \c METHOD-IS-PRIVATE, as
+    documented, for a private static method called from outside its class and subclasses; before, they called it.
+
     @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
     flagged @ref NOOP are no longer resolved at run time, as at parse time: <tt>sort(NOTHING)</tt>, for example with
