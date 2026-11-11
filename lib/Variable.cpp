@@ -1210,10 +1210,30 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
     if (state >= 0) {
         return state ? cache.keys.load(std::memory_order_relaxed) : nullptr;
     }
-    // the keys of the path, the last step's first
-    std::vector<QoreValue> keys;
+    // the keys are collected only for a path that needs them: count the keys to evaluate first
     size_t evaluated = 0;
     QoreValue c = n;
+    while (c.getType() == NT_OPERATOR) {
+        const AbstractQoreNode* node = c.getInternalNode();
+        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            evaluated += op->getRight().needsEval() ? 1 : 0;
+            c = op->getLeft();
+        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            evaluated += hop->getRight().needsEval() ? 1 : 0;
+            c = hop->getLeft();
+        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            c = cop->getExp();
+        } else {
+            break;
+        }
+    }
+    if (evaluated < 2) {
+        cache.state.store(0, std::memory_order_release);
+        return nullptr;
+    }
+    // the keys of the path, the last step's first
+    std::vector<QoreValue> keys;
+    c = n;
     while (c.getType() == NT_OPERATOR) {
         const AbstractQoreNode* node = c.getInternalNode();
         if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
@@ -1224,17 +1244,9 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
             c = hop->getLeft();
         } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
             c = cop->getExp();
-            continue;
         } else {
             break;
         }
-        if (keys.back().needsEval()) {
-            ++evaluated;
-        }
-    }
-    if (evaluated < 2) {
-        cache.state.store(0, std::memory_order_release);
-        return nullptr;
     }
     std::unique_ptr<QoreLValuePathKeys> pk = std::make_unique<QoreLValuePathKeys>();
     pk->keys.assign(keys.rbegin(), keys.rend());
@@ -1294,6 +1306,12 @@ int LValueHelper::evalPathKeys(const QoreLValuePathKeys& keys) {
             // each key is a statement of its own, whose temporaries are released when it has been evaluated
             QoreStatementTempScope temps(vl.xsink);
             v = key.eval(needs_deref, vl.xsink);
+            // a value borrowed from a variable gets a reference of its own: a later key can assign the variable
+            // (h.(key).(key = "b") = 1), and the key keeps the value that it had when it was evaluated
+            if (!needs_deref && v.hasNode()) {
+                v.refSelf();
+                needs_deref = true;
+            }
         } else {
             v = key;
             needs_deref = false;
@@ -2012,8 +2030,8 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
     } else {
         assert(ntype == NT_OPERATOR);
         // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
-        // outermost step of the path (qore#5753); a reference that the path reaches is resolved after this step
-        // returns
+        // outermost step of the path (qore#5753); the keys of a reference that the path reaches were evaluated when
+        // the reference was created
         PathKeyScope path_key_scope(*this);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
@@ -2147,8 +2165,8 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     } else {
         assert(ntype == NT_OPERATOR);
         // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
-        // outermost step of the path (qore#5753); a reference that the path reaches is resolved after this step
-        // returns
+        // outermost step of the path (qore#5753); the keys of a reference that the path reaches were evaluated when
+        // the reference was created
         PathKeyScope path_key_scope(*this);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {

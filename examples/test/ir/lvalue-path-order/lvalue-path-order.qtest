@@ -51,7 +51,7 @@ class LvaluePathOrderTest inherits QUnit::Test {
     private astTest() {
         string out = astOutput();
         list<string> lines = out.split("\n");
-        assertEq(35, (select lines, $1 =~ /^[a-z][a-z ]*:/).size(), "every case ran");
+        assertEq(37, (select lines, $1 =~ /^[a-z][a-z ]*:/).size(), "every case ran");
         # the path from the root out, then the index of the last step; the value of an assignment comes first
         assertTrue(out =~ /^assign: vr ka kb i0 = \[1, 9, 3\]\n/, "assign");
         assertTrue(out =~ /\npreinc: ka kb i0 = /, "++");
@@ -72,6 +72,11 @@ class LvaluePathOrderTest inherits QUnit::Test {
         assertTrue(out =~ /\nraise remove key: ka throwc ! KEY-ERROR unchanged\n/, "raise in the key of remove");
         # a cast in the path, a reference parameter, a hash key of a member and a list of keys
         assertTrue(out =~ /\ncast: vr ka ko kx i0 = /, "cast in the path");
+        # an earlier key keeps the value that it had when it was evaluated
+        assertTrue(out =~ /\nkey assigns earlier key: = \[\{"?a-key-long-enough-not-to-be-inline-1"?: \{b: 1\}\}, "b"\]\n/,
+            "a later key assigns the variable of an earlier key");
+        assertTrue(out =~ /\nkey changes earlier key by reference: = \[\{"?a-key-long-enough-not-to-be-inline-2"?: \{c: 1\}\}, "b"\]\n/,
+            "a later key changes the variable of an earlier key through a reference");
         assertTrue(out =~ /\nreference parameter: ka kb i0 set = \[1, 6, 3\]\n/, "reference parameter");
         assertTrue(out =~ /\nremove member key: ka kc = /, "remove of a member's key");
         assertTrue(out =~ /\nremove keys: ka kb = /, "remove of a list of keys");

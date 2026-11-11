@@ -50,6 +50,12 @@ hash<auto> sub mk() {
     return {"a": {"b": (1, 2, 3), "c": 1}};
 }
 
+#! changes the string that a reference refers to and returns a key
+string sub change(reference<string> r) {
+    r = "b";
+    return "c";
+}
+
 #! sets the value that a reference refers to
 sub setref(reference<auto> r, auto x) {
     print(" set");
@@ -135,6 +141,19 @@ sub main() {
         gh.a.d = 2;
         auto r = remove gh.(k("a")){k("b"), "c"};
         return (r, gh.a);
+    });
+    # a later key that assigns the variable that an earlier key read: the earlier key keeps the value that it had
+    t("key assigns earlier key", auto sub () {
+        hash<auto> h;
+        string key = sprintf("%s-%d", "a-key-long-enough-not-to-be-inline", 1);
+        h.(key).(key = "b") = 1;
+        return (h, key);
+    });
+    t("key changes earlier key by reference", auto sub () {
+        hash<auto> h;
+        string key = sprintf("%s-%d", "a-key-long-enough-not-to-be-inline", 2);
+        h.(key).(change(\key)) = 1;
+        return (h, key);
     });
     # a long path
     t("long path", auto sub () {
