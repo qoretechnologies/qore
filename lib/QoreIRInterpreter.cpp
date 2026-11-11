@@ -1879,8 +1879,12 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
     // Iterate in reverse (LIFO) to clean up the latest values first.  On the path of an exception (no_throw), an
     // exception raised by a destructor is added to the one that is raised, as the AST interpreter adds it when it
     // unwinds the holders of the temporaries; a null sink made execDestructor() lose it (an assertion in a debug build)
-    ExceptionSink no_throw_xsink;
-    ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
+    // the sink is constructed only when it is used: an ExceptionSink allocates, and this runs at the end of every call
+    std::optional<ExceptionSink> no_throw_xsink;
+    ExceptionSink* eff_xsink = xsink;
+    if (no_throw && !xsink) {
+        eff_xsink = &no_throw_xsink.emplace();
+    }
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         uint32_t id = *it;
         if (id >= values.size()) {
@@ -5594,10 +5598,70 @@ static void countCallArgOccurrences(const IRValueSlots& values,
     }
 }
 
+//! Up to this number of arguments, a call's arguments are counted by scanning them, which allocates nothing
+/** A call checks and releases the slots of its arguments on every call (see hasLastUseCallArgSlots() and
+    consumeLastUseCallArgSlots()); a hash map of the occurrences cost an allocation per call
+*/
+static constexpr size_t QORE_IR_CALL_ARG_SCAN_MAX = 16;
+
+//! returns true if \a operand is a slot whose uses are counted (see countCallArgOccurrences())
+static inline bool isCountedCallArg(const IRValueSlots& values, const std::vector<uint32_t>& value_use_counts,
+        QoreIRValue operand) {
+    return operand.isValid() && operand.id < values.size() && operand.id < value_use_counts.size();
+}
+
+//! returns the number of the arguments from \a start_index that are the slot \a id
+static inline uint32_t countCallArgId(const std::vector<QoreIRValue>& operands, size_t start_index, uint32_t id) {
+    uint32_t rv = 0;
+    for (size_t i = start_index, e = operands.size(); i < e; ++i) {
+        if (operands[i].isValid() && operands[i].id == id) {
+            ++rv;
+        }
+    }
+    return rv;
+}
+
+//! releases the slot of an argument whose last use is the call (see consumeLastUseCallArgSlots())
+static inline void releaseLastUseCallArgSlot(IRValueSlots& values, IRCleanupSlots& cleanup, uint32_t id,
+        const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
+    QoreValue& slot = values[id];
+    if (!slot.needsRef()) {
+        return;
+    }
+    removeAllCleanupEntries(cleanup, id);
+    if (borrowed_slots && borrowed_slots->find(id) != borrowed_slots->end()) {
+        slot = QoreValue();
+        return;
+    }
+    slot.discard(xsink);
+    slot = QoreValue();
+}
+
 static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
         const std::vector<uint32_t>& value_use_counts,
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
+    if (operands.size() - start_index <= QORE_IR_CALL_ARG_SCAN_MAX) {
+        // last argument first, as below; an argument given twice is released at its last position
+        for (size_t i = operands.size(); i > start_index; --i) {
+            QoreIRValue operand = operands[i - 1];
+            if (!isCountedCallArg(values, value_use_counts, operand)) {
+                continue;
+            }
+            bool later = false;
+            for (size_t j = i, e = operands.size(); j < e; ++j) {
+                if (operands[j].isValid() && operands[j].id == operand.id) {
+                    later = true;
+                    break;
+                }
+            }
+            if (later || value_use_counts[operand.id] != countCallArgId(operands, start_index, operand.id)) {
+                continue;
+            }
+            releaseLastUseCallArgSlot(values, cleanup, operand.id, borrowed_slots, xsink);
+        }
+        return;
+    }
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
     // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
@@ -5615,22 +5679,33 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
         if (value_use_counts[id] != occurrences_in_args) {
             continue;
         }
-        QoreValue& slot = values[id];
-        if (!slot.needsRef()) {
-            continue;
-        }
-        removeAllCleanupEntries(cleanup, id);
-        if (borrowed_slots && borrowed_slots->find(id) != borrowed_slots->end()) {
-            slot = QoreValue();
-            continue;
-        }
-        slot.discard(xsink);
-        slot = QoreValue();
+        releaseLastUseCallArgSlot(values, cleanup, id, borrowed_slots, xsink);
     }
 }
 
 static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector<QoreIRValue>& operands,
         size_t start_index, const std::vector<uint32_t>& value_use_counts) {
+    if (operands.size() - start_index <= QORE_IR_CALL_ARG_SCAN_MAX) {
+        for (size_t i = start_index, e = operands.size(); i < e; ++i) {
+            QoreIRValue operand = operands[i];
+            if (!isCountedCallArg(values, value_use_counts, operand)) {
+                continue;
+            }
+            // an argument given more than once is checked at its first position
+            bool earlier = false;
+            for (size_t j = start_index; j < i; ++j) {
+                if (operands[j].isValid() && operands[j].id == operand.id) {
+                    earlier = true;
+                    break;
+                }
+            }
+            if (!earlier && value_use_counts[operand.id] == countCallArgId(operands, start_index, operand.id)
+                    && values[operand.id].needsRef()) {
+                return true;
+            }
+        }
+        return false;
+    }
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
     for (const auto& [id, occurrences_in_args] : occurrences) {
@@ -8104,8 +8179,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         size_t cleanup_size = temp_cleanup_marks[mark_index].cleanup_size + (keep_mark ? 1 : 0);
         // on the path of an exception (no_throw), an exception raised by a destructor is added to the one that is
         // raised, as the AST interpreter adds it when it unwinds the holders of the temporaries (see cleanupValues())
-        ExceptionSink no_throw_xsink;
-        ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
+        // the sink is constructed only when it is used: an ExceptionSink allocates, and this runs at the end of every call
+        std::optional<ExceptionSink> no_throw_xsink;
+        ExceptionSink* eff_xsink = xsink;
+        if (no_throw && !xsink) {
+            eff_xsink = &no_throw_xsink.emplace();
+        }
         // an exception releases the temporaries as the AST interpreter unwinds them (no_throw is only given for one)
         if (no_throw && cleanup.size() > cleanup_size + 1) {
             cleanup.orderForException(cleanup_size, *release_groups);
