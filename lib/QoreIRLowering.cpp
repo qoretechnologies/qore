@@ -14533,8 +14533,16 @@ bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_a
         if (!node || !node->needs_eval()) {
             continue;
         }
-        if (getLocalVarFromValue(arg)) {
-            continue;
+        // a local variable whose declared type is a concrete type that cannot hold a reference is read without any
+        // effect; the read of a reference (a parameter declared as a reference, or a local of a type that can hold
+        // one, such as auto) gives the referenced value, which can run code (memberGate())
+        if (LocalVar* local = getLocalVarFromValue(arg)) {
+            const QoreTypeInfo* type = local->getTypeInfo();
+            if (QoreTypeInfo::hasType(type) && type != autoTypeInfo && type != anyTypeInfo
+                    && !QoreTypeInfo::getReferenceTarget(type)
+                    && QoreTypeInfo::parseReturns(type, NT_REFERENCE) == QTI_NOT_EQUAL) {
+                continue;
+            }
         }
         return true;
     }
@@ -15177,8 +15185,10 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
         return QoreIRValue();
     }
     // the callable is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
-    // (issue #5784)
-    if (callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
+    // (issue #5784); a closure created by the call's own expression is always callable and has no object, so it is
+    // not checked (and stays an immediate closure whose only use is the call)
+    if (!dynamic_cast<const QoreClosureParseNode*>(call->getExp().getInternalNode())
+            && callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
         builder.createCheckCallTarget(expr, callee, getCurrentExceptionTarget(), call->loc);
     }
     std::vector<QoreIRValue> operands;

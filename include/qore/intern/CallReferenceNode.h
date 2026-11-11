@@ -468,6 +468,12 @@ private:
 */
 DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
 
+//! Raises the exception for a call of a value that is not a call reference or a closure, as the AST interpreter
+//! raises it (CallReferenceCallNode::evalImpl()); every execution mode uses it (issue #5784)
+/** @param loc the location of the call, if known
+*/
+DLLLOCAL void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v);
+
 //! Raises the exception that a call through @a rcr raises before it evaluates the arguments, if any (issue #5784)
 /** A reference to a method of an object that has been deleted.
 

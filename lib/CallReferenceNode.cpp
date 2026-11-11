@@ -229,8 +229,7 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
 
     ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
     if (!r) {
-        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call " \
-            "reference (evaluated to type '%s')", lv->getTypeName());
+        qore_raise_not_call_reference(xsink, loc, *lv);
         return QoreValue();
     }
     // the location of this call is the location of the call stack frame of the called code
@@ -665,6 +664,16 @@ int RunTimeObjectMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
         return -1;
     }
     return 0;
+}
+
+void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v) {
+    if (loc) {
+        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call "
+            "reference (evaluated to type '%s')", v.getTypeName());
+    } else {
+        xsink->raiseException("REFERENCE-CALL-ERROR", "expression does not evaluate to a call reference (evaluated "
+            "to type '%s')", v.getTypeName());
+    }
 }
 
 int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {

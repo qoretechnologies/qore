@@ -1637,13 +1637,16 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
     if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         return dot->checkReceiver(target, xsink);
     }
-    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
-        // a value that is not a call reference raises its error when the call is made, after the arguments, as in
-        // the AST interpreter (CallReferenceCallNode::evalImpl())
-        if (const ResolvedCallReferenceNode* r = target.hasNode()
-                ? dynamic_cast<const ResolvedCallReferenceNode*>(target.getInternalNode()) : nullptr) {
-            return qore_call_reference_check_target(r, xsink);
+    if (const CallReferenceCallNode* call_node = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
+        // arguments are evaluated
+        const ResolvedCallReferenceNode* r = target.hasNode()
+            ? dynamic_cast<const ResolvedCallReferenceNode*>(target.getInternalNode()) : nullptr;
+        if (!r) {
+            qore_raise_not_call_reference(xsink, call_node->loc, target);
+            return -1;
         }
+        return qore_call_reference_check_target(r, xsink);
     }
     return 0;
 }
@@ -8512,7 +8515,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8554,7 +8558,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         return toBits(result);
     }
 
-    xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+    // as the AST interpreter raises it (issue #5784)
+    qore_raise_not_call_reference(xsink, nullptr, ref_val);
     return toBits(QoreValue());
 }
 
@@ -8565,7 +8570,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8601,7 +8607,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8625,7 +8632,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8662,7 +8670,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 

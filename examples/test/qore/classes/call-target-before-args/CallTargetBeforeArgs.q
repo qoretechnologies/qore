@@ -7,6 +7,7 @@
 # evaluated when the check fails (issue #5784); prints what each case evaluates and raises
 
 %modern
+%allow-weak-references
 
 class C {
     m(auto a) {
@@ -24,9 +25,39 @@ class A {
     }
 }
 
+class Sub inherits C {
+}
+
+class Gate {
+    auto memberGate(string name) {
+        printf("  memberGate %s\n", name);
+        return 1;
+    }
+}
+
 int sub arg_value() {
     printf("  arg function called\n");
     return 1;
+}
+
+#! a reference parameter is read through the reference: memberGate() runs when the argument is evaluated
+sub call_with_reference(reference r) {
+    C o();
+    C o2 = o;
+    delete o;
+    o2.m(r);
+}
+
+#! the call is made in a try block of its own, whose handler is in the same function as the call
+sub local_try() {
+    C o();
+    C o2 = o;
+    delete o;
+    try {
+        o2.m(new A());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("  local handler: %s\n", ex.err);
+    }
 }
 
 sub check(string name, code c) {
@@ -50,6 +81,16 @@ sub cases() {
     check("method call, function argument", sub () { C o(); C o2 = o; delete o; o2.m(arg_value()); });
     # a method call on no value: the "<nothing>" pseudo-class has no such method
     check("method call on nothing", sub () { C o(); delete o; o.m(new A()); });
+    # other receivers of a deleted object
+    check("method call of subclass", sub () { Sub o(); C o2 = o; delete o; o2.m(new A()); });
+    check("method call through weak reference", sub () { C o(); C o2 := o; delete o; o2.m(new A()); });
+    # an argument read through a reference
+    check("reference argument", sub () { object g = new Gate(); call_with_reference(\g.y); });
+    # a handler in the function that makes the call
+    check("local try block", \local_try());
+    # calls of a value that is not a call reference
+    check("call of an int", sub () { auto r = 1; r(arg_value()); });
+    check("call of no value", sub () { auto r; r(arg_value()); });
 
     # the same calls with arguments without side effects
     check("call reference, local argument", sub () { C o(); code r = \o.m(); int x = 1; delete o; r(x); });
