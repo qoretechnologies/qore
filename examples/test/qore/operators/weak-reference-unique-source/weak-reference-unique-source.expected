@@ -11,6 +11,13 @@ global: {og: 1, x: 2}
 top-level variable: {t: 1, x: 2} {t: 1}
 referenced local: {a: 1, z: 2}
 background local: {a: 1, z: 2}
+hash<string, int>: {a: 1} {a: 1, b: 2} {a: 1, b: 2} hash<string, int>
+hashdecl: {a: 1, b: 0} {a: 1, b: 2} {a: 1, b: 2}
+list<int>: [1, 2] [1, 2, 3] [1, 2, 3] list<int>
+optional with a hash: {u: 1} {u: 1, v: 2} {u: 1, v: 2}
+optional with NOTHING: null
+reference source: {r: 1, added: 1}
+reference source sharer: {r: 1}
 weak of weak: {a: 1, q: 1}
 int: [6, 5]
 repeated: 2000
