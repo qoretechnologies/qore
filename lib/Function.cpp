@@ -841,7 +841,8 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
     return rv;
 }
 
-bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match) const {
+bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+        const QoreTypeInfo* receiver) const {
     // check varargs flags first
     if (varargs != sig.varargs) {
         //printd(5, "AbstractFunctionSignature::compare() varargs: %d sig.varargs: %d\n", varargs, sig.varargs);
@@ -852,17 +853,23 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
         return false;
     }
 
+    // the types of a generic class's abstract method are those of the specialization that the class inherits
+    auto sig_type = [receiver] (const QoreTypeInfo* ti) {
+        return receiver ? qore_substitute_type_params_if_needed(ti, receiver) : ti;
+    };
+    const QoreTypeInfo* sig_return_type = sig_type(sig.returnTypeInfo);
+
     // return types for abstract methods must be compatible if present
-    if (sig.returnTypeInfo != nothingTypeInfo) {
+    if (sig_return_type != nothingTypeInfo) {
         bool may_not_match = false;
-        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig.returnTypeInfo, returnTypeInfo, may_not_match);
-        const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig.returnTypeInfo);
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, returnTypeInfo, may_not_match);
+        const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig_return_type);
         bool raw_generic_type_param = rtpi
             && qore_class_private::get(*rtpi->getOwnerClass())->rawConstructionDefaultsToAuto();
         if (!res || (may_not_match && !relaxed_match
                 // auto/any return types always accept any concrete return type
-                && sig.returnTypeInfo != autoTypeInfo
-                && sig.returnTypeInfo != anyTypeInfo
+                && sig_return_type != autoTypeInfo
+                && sig_return_type != anyTypeInfo
                 && !raw_generic_type_param)) {
             //printd(5, "AbstractFunctionSignature::compare() rt: %s is not compatible with %s (%p %p)\n",
             //    QoreTypeInfo::getName(returnTypeInfo), QoreTypeInfo::getName(sig.returnTypeInfo), returnTypeInfo,
@@ -874,7 +881,7 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     for (unsigned i = 0; i < typeList.size(); ++i) {
         const QoreTypeInfo* ti = sig.typeList.size() <= i
             ? nullptr
-            : sig.typeList[i];
+            : sig_type(sig.typeList[i]);
         bool match;
         if (relaxed_match) {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,

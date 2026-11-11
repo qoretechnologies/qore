@@ -2112,7 +2112,10 @@ public:
 
     DLLLOCAL void resolveCopy();
 
-    DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v) const;
+    //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
+    //! substituted in \a v's signature (issue #5773)
+    DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
+            const QoreTypeInfo* receiver = nullptr) const;
 
     // runtime version for dynamically-created classes (e.g., JNI classes)
     DLLLOCAL MethodVariantBase* runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,

@@ -6455,7 +6455,9 @@ static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, 
         QoreMethod* m = npriv->parseFindLocalMethod(method_name);
         if (m) {
             MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match);
+            // issue #5773: the abstract variant's types are those of the specialization that the class inherits
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match,
+                origin_class->getTypeInfo());
             if (ov && !ov->isAbstract()) {
                 return ov;
             }
@@ -19451,8 +19453,9 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
                 auto mi = priv->hm.find(ai->first);
                 MethodFunctionBase* f = (mi != priv->hm.end())
                     ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                // issue #5773: the abstract variant's types are those of the specialization that the class inherits
                 if (f && f->parseHasVariantWithSignature(
-                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match)) {
+                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match, priv->cls->getTypeInfo())) {
                     // Resolved — concrete override matches abstract signature
                     continue;
                 }

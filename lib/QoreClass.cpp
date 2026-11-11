@@ -418,7 +418,10 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         //    "rm: %d) '%s'\n", &m, f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, sig, f,
         //    f && f->parseHasVariantWithSignature(i.second, relaxed_match), relaxed_match, sig);
 
-        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match);
+        // issue #5773: the abstract variant's types are those of the specialization that the implementing class
+        // inherits
+        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match,
+            f->getClass() ? f->getClass()->getTypeInfo() : nullptr);
         if (has_match) {
             // add to our pending_save
             i.second->ref();
@@ -553,7 +556,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
             // pending_save
-            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second);
+            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second, qc.cls->getTypeInfo());
             if (v) {
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
@@ -3242,7 +3245,8 @@ bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
     return false;
 }
 
-MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v) const {
+MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
+        const QoreTypeInfo* receiver) const {
     for (auto& i : *this) {
         const QoreClass* nqc = (*i).sclass;
         //printd(5, "BCList::matchNonAbstractVariant() this: %p %s::%s %p (%s) ncq: %p\n", this, nqc ? nqc->getName() : "n/a", name.c_str(), v, v->getAbstractSignature(), nqc);
@@ -3255,12 +3259,12 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         QoreMethod* m = nqc->priv->parseFindLocalMethod(name);
         if (m) {
             MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match);
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match, receiver);
             if (ov && !ov->isAbstract())
                 return ov;
         }
         if (nqc->priv->scl) {
-            MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v);
+            MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v, receiver);
             if (ov)
                 return ov;
         }
@@ -5691,11 +5695,11 @@ void collect_base_method_names(const qore_class_private& qc, bool is_static, std
 }
 
 bool local_overrides_all_base_variants(MethodFunctionBase& local_func, MethodFunctionBase& base_func,
-        bool relaxed_match) {
+        bool relaxed_match, const QoreTypeInfo* receiver) {
     QoreFunctionIterator fiter(base_func);
     while (fiter.next()) {
         MethodVariantBase* base_variant = const_cast<MethodVariantBase*>(METHVB_const(fiter.getVariant()));
-        if (local_func.parseHasVariantWithSignature(base_variant, relaxed_match)) {
+        if (local_func.parseHasVariantWithSignature(base_variant, relaxed_match, receiver)) {
             continue;
         }
         base_variant->parseResolveUserSignature();
@@ -5952,7 +5956,7 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
 
             MethodFunctionBase* base_func = qore_method_private::get(*base_method)->getFunction();
             if (base_func->numVariants() > 1
-                && !local_overrides_all_base_variants(*local_func, *base_func, relaxed_match)) {
+                && !local_overrides_all_base_variants(*local_func, *base_func, relaxed_match, cls->getTypeInfo())) {
                 if (local_func->parseHasAmbiguousSignature(*base_func, relaxed_match)) {
                     ambiguous_signatures = true;
                 }
@@ -6944,13 +6948,15 @@ void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
 }
 
 // if an identical signature is found to the passed variant, then it is removed from the abstract list
-MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match) const {
+MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match,
+        const QoreTypeInfo* receiver) const {
     v->parseResolveUserSignature();
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
         MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
-        if (candidate->isSignatureIdentical(sig, relaxed_match) && method_const_contract_satisfied(v, candidate)) {
+        if (candidate->isSignatureIdentical(sig, relaxed_match, receiver)
+                && method_const_contract_satisfied(v, candidate)) {
             return candidate;
         }
     }
