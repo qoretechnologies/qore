@@ -621,7 +621,8 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     // writes are seen through the weak reference (qore#5756)
     if (mode == AssignmentMode::Weak) {
         const VarRefNode* source_var = dynamic_cast<const VarRefNode*>(right.getInternalNode());
-        if (source_var && source_var->getType() != VT_IMMEDIATE) {
+        if (source_var && source_var->getType() != VT_IMMEDIATE
+                && qore_weak_assignment_source_made_unique(source_var->getTypeInfo())) {
             LValueHelper source(right, xsink, true);
             if (*xsink) {
                 return QoreValue();
