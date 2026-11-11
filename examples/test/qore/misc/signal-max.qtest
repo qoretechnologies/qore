@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  signal-max.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5829: set_signal_handler() and remove_signal_handler() accepted the signal QORE_SIGNAL_MAX (NSIG + 1), one
+    past the end of the signal manager's handler table, and used it as an index.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SignalMaxTest
+
+class SignalMaxTest inherits QUnit::Test {
+    constructor() : Test("SignalMaxTest", "1.0") {
+        addTestCase("signal numbers at the end of the handler table", \testMax());
+        set_return_value(main());
+    }
+
+    testMax() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is disabled");
+        }
+        # QORE_SIGNAL_MAX is NSIG + 1: 66 on Linux (glibc and musl), 33 on macOS
+        int max;
+        switch (Qore::PlatformOS) {
+            case "Linux": max = 66; break;
+            case "Darwin": max = 33; break;
+            default: testSkip("NSIG is not known for " + Qore::PlatformOS);
+        }
+        # QORE_SIGNAL_MAX is refused, as is anything beyond it and below 1
+        foreach int sig in ((max, max + 1, 0, -1)) {
+            assertThrows("SET-SIGNAL-HANDLER-ERROR", sprintf("%d is not a valid signal", sig),
+                \set_signal_handler(), (sig, sub (int s) {}));
+            assertThrows("REMOVE-SIGNAL-HANDLER-ERROR", sprintf("%d is not a valid signal", sig),
+                \remove_signal_handler(), sig);
+        }
+        # the last entry of the table can be set and removed
+        set_signal_handler(max - 1, sub (int s) {});
+        remove_signal_handler(max - 1);
+        # a real signal still works after the refusals
+        Counter ran(1);
+        set_signal_handler(SIGUSR1, sub (int s) { ran.dec(); });
+        on_exit remove_signal_handler(SIGUSR1);
+        kill(getpid(), SIGUSR1);
+        assertEq(0, ran.waitForZero(60s), "the SIGUSR1 handler ran");
+    }
+}

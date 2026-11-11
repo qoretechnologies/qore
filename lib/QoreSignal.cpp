@@ -763,6 +763,7 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 }
 
 int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::setHandler(sig: %d fr: %p) pgm: %p\n", sig, fr, getProgram());
     // the code of a Program whose data is being destroyed (a destructor, for example) sets no handler: it could never
     // run, and the values that its closure captures would be released only after the Program's data (issue #5766)
@@ -855,6 +856,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 }
 
 int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::removeHandler(sig: %d)\n", sig);
     CodePgm old;
 
