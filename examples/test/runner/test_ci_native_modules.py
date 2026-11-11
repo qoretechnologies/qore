@@ -83,6 +83,9 @@ class NativeModuleFarmTest(unittest.TestCase):
         self.assertIn("-- native modules: this qore loads module API 2.1 --", result.stdout)
         # files that are not native modules are not mentioned
         self.assertNotIn("SqlUtil", result.stdout)
+        # the summary gives the coverage of the run
+        self.assertIn("-- native modules: 2 exposed, 2 left out (built for another module API): pgsql-api-2.0 "
+                      "xml-api-2.0 --", result.stdout)
         self.assertTrue(result.stdout.endswith("done\n"), result.stdout)
 
     def test_more_than_one_api(self):
@@ -102,6 +105,9 @@ class NativeModuleFarmTest(unittest.TestCase):
             "xml-api-2.1.qmod": str(first / "xml-api-2.1.qmod"),
             "zip-api-2.1.qmod": str(second / "zip-api-2.1.qmod"),
         }, self.linked())
+        # a module linked from an earlier directory is neither exposed again nor left out
+        self.assertIn("-- native modules: 2 exposed, 1 left out (built for another module API): uuid-api-2.0 --",
+                      result.stdout)
 
     def test_name_with_api_in_it(self):
         mods = self.module_dir("mods", ("my-api-tool-api-2.1.qmod", "my-api-tool-api-2.0.qmod"))
@@ -117,6 +123,8 @@ class NativeModuleFarmTest(unittest.TestCase):
                 result = self.run_farm(self.fake_qore("2.1"), mods, shell=shell)
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual({}, self.linked())
+                self.assertIn("-- native modules: 0 exposed, 0 left out (built for another module API) --",
+                              result.stdout)
                 self.assertTrue(result.stdout.endswith("done\n"), result.stdout)
 
     def test_qore_fails(self):
@@ -127,11 +135,18 @@ class NativeModuleFarmTest(unittest.TestCase):
         self.assertIn("--module-apis failed", result.stderr)
         self.assertNotIn("done", result.stdout)
         self.assertEqual({}, self.linked())
-        # a qore that gives no module API
-        result = self.run_farm(self.fake_qore(""), mods)
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("gave no module API", result.stderr)
-        self.assertEqual({}, self.linked())
+
+    def test_invalid_module_apis(self):
+        mods = self.module_dir("mods", ("pgsql-api-2.1.qmod",))
+        # an output that is not a list of <major>.<minor> items ends the script (set -e): nothing is linked
+        for output in ("", "warning: blah\n2.1\n", "2.1\nwarning: blah", "Qore 3.0.0", "2.1, warning", "2", "2.",
+                       ".1", "2.1.0", "2..1", "2.1,", "2.1, ", ",2.1", "2.1,,2.0", "2.1,  2.0", "2.1, 2.x"):
+            with self.subTest(output=output):
+                result = self.run_farm(self.fake_qore(output), mods)
+                self.assertNotEqual(0, result.returncode, result.stdout)
+                self.assertIn("did not give a list of module APIs", result.stderr)
+                self.assertNotIn("done", result.stdout)
+                self.assertEqual({}, self.linked())
 
     @unittest.skipUnless(HAVE_QORE, f"no qore build in {BUILD_DIR}")
     def test_build_qore(self):
