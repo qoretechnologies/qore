@@ -4106,6 +4106,10 @@ public:
     //! requests synchronizes on its own.
     mutable std::atomic_bool osr_jit_requested{false};
 
+    //! The number of calls of a generic specialization (UserVariantBase::evalSpecializedIR()): in tiered mode, a
+    //! specialization runs on the IR tier until it reaches the JIT threshold, as the variant it specializes does
+    mutable std::atomic<uint64_t> specialization_exec_count{0};
+
     // Cached interpreter metadata.  These vectors are structural properties of
     // the IR function, so compute them once and reuse them across recursive and
     // hot call paths instead of rescanning the instruction stream per execute().

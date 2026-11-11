@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the script runs in child processes that set their own --exec-mode, or as AOT executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class GenericImplicitSelfCallTest
+
+#! an implicit self call to a method of a generic base class has the type of the specialization that the class inherits
+/** In a class that inherits a specialization of a generic class (class FooBox inherits Box<Foo>), an implicit call to
+    a method of the base class (get() rather than self.get()) kept the type parameter as its type at parse time
+    ("no pseudo-method <T>.n()"), and a call to a static method of the base class, implicit or through self, whose
+    variant is resolved at run time did not substitute it (RUNTIME-OVERLOAD-ERROR for a value of the type argument)
+    (issue #5769).
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
+    its output must be that of the AST interpreter, which must be that of the .expected file.
+*/
+class GenericImplicitSelfCallTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("implicit-self-call",);
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("generic implicit self call", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        foreach string script in (Scripts) {
+            addTestCase(script + ": execution modes", sub () { modesTest(script); });
+            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
+            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+        }
+        set_return_value(main());
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            fail(script + ": no .expected file");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("generic-implicit-self-call-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

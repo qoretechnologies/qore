@@ -768,6 +768,11 @@ public:
             : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), method(m) {
     }
 
+    //! Sets the receiver of an implicit call in a method to a static method of a generic base class (issue #5769)
+    DLLLOCAL void setReceiverTypeInfo(const QoreTypeInfo* ti) {
+        receiver_type_info = ti;
+    }
+
     DLLLOCAL virtual ~StaticMethodCallNode() {
         delete scope;
     }
