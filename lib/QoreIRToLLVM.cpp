@@ -34185,16 +34185,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             llvm::Value* old_iter_val = builder->CreateLoad(i64_type, out_val_ptr, "old_iter_val");
-            // the slot holds no reference once it is released, so that no other release of it (a release value that
-            // an optimization made the element, see finalizeIteratorReleases(), or the frame's exit) releases it again
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+            // the slot is not cleared: the helper below writes it on every path (the next value, or NOTHING when the
+            // iterator is done or raises), and nothing between the release and the helper reads it or leaves the
+            // code (the releases of finalizeIteratorReleases() have no exception edge), so the per-element store
+            // would be dead; a release value that is the element itself is dropped below
             llvm::CallInst* element_release = builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
-            // the values that the loop derived from the previous element follow it (see finalizeIteratorReleases())
+            // the values that the loop derived from the previous element follow it (see finalizeIteratorReleases());
+            // the element is never one of them (the analysis drops a value that an optimization made the element,
+            // see QoreIRIteratorNextInstruction::release_values), and it is skipped here too, as its slot is the
+            // one that the element's release does not clear
             if (!iter_inst->release_values.empty()) {
                 std::vector<uint32_t> ids;
                 ids.reserve(iter_inst->release_values.size());
                 for (const QoreIRValue& rv : iter_inst->release_values) {
-                    ids.push_back(rv.id);
+                    if (rv.id != iter_inst->result.id) {
+                        ids.push_back(rv.id);
+                    }
                 }
                 pending_iterator_releases.emplace_back(element_release, std::move(ids));
             }

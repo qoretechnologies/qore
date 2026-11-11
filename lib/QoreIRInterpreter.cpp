@@ -921,9 +921,10 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 
 // Thread-local state for QORE_IR_TRACE_SILENT_FAIL=1 — populated before
 // each instruction dispatch in execute()'s main loop, read by
-// dumpLastSilentFail() at the caller's fallback path.  No cost when the
-// env var is off; ~2 word-stores per instruction when it's on (no
-// measurable overhead — the loop already touches these cachelines).
+// dumpLastSilentFail() at the caller's fallback path.  Only written when
+// the env var is set when execute() reads it (its readers check the same
+// variable): the two stores per instruction cost every instruction's
+// dispatch otherwise.
 static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
 static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
 
@@ -8365,22 +8366,26 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // nothing for them
     // (done in unwindForException() itself, not in a lambda of its own: each lambda that the frame defines is
     // constructed with its captures on every call of the function)
-    auto unwindForException = [&]() {
+    // the lambda is constructed with its captures on every call of the function, so it takes the frame's members
+    // through the frame and the release groups through the function, which keeps its captures as few as the code
+    // before the restoration of implicit contexts and the release of operator iterators had
+    auto unwindForException = [&func, &block, &ip, &values, &frame, &scope_stack, &releaseScopeTemps, &fireScopeExits,
+            xsink, cleanup_log]() {
         if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
             restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
         }
-        if (!active_iterators.empty()) {
-            releaseOperatorIterators(active_iterators);
+        if (!frame.active_iterators.empty()) {
+            releaseOperatorIterators(frame.active_iterators);
         }
         while (!scope_stack.empty()) {
             releaseScopeTemps(scope_stack.back());
             fireScopeExits(scope_stack.size() - 1);
         }
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
-        if (!on_block_exit_handlers.empty()) {
-            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+        if (!frame.on_block_exit_handlers.empty()) {
+            executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame.locals_slot_cache.vector());
         }
-        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
+        cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
     };
 
     auto returnAfterUnhandledException = [&]() -> bool {
@@ -8495,6 +8500,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var; read once per call, not per instruction
     static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
     const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
+    // the last instruction dispatched is recorded for dumpLastSilentFail() only when silent failures are traced
+    static constinit QoreEnvFlag trace_silent_fail_env("QORE_IR_TRACE_SILENT_FAIL");
+    const bool trace_silent_fail = trace_silent_fail_env.get();
 
     // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
     auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
@@ -8571,8 +8579,10 @@ next_instruction:
         // `ok=false` without raising an xsink exception.  Thread-local so
         // the caller (StatementBlock::execImpl / evalTiered fallback) can
         // read it post-return without plumbing it through the return value.
-        tls_last_silent_fail_opcode = inst->opcode;
-        tls_last_silent_fail_loc = inst->loc;
+        if (trace_silent_fail) {
+            tls_last_silent_fail_opcode = inst->opcode;
+            tls_last_silent_fail_loc = inst->loc;
+        }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
         // on the same source line share the same location, so we only need one check
