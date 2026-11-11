@@ -210,9 +210,12 @@ date<relative> rel = 2h + 30m;
     A date literal and a constant whose value is a date have the type of their subtype: an
     @ref absolute_dates "absolute" date/time literal such as \c 2017-07-10 is \c date&lt;absolute&gt;, and a
     @ref relative_dates "relative" one such as \c 1s or \c P1D is \c date&lt;relative&gt;.  A literal of one subtype
-    given where the other is required (an argument, an assignment, a return value or the default value of a
-    parameter) is therefore a parse error (\c PARSE-TYPE-ERROR); a date of the other subtype from any other
-    expression is checked when the code runs (\c RUNTIME-TYPE-ERROR).
+    given where the other is required (an argument, an assignment, a return value, the default value of a parameter,
+    or a value of a list or hash literal assigned to a container whose value type is the other subtype) is therefore
+    a parse error (\c PARSE-TYPE-ERROR); a date of the other subtype from any other expression is checked when the
+    code runs (\c RUNTIME-TYPE-ERROR).  A container whose value type is \c date&lt;absolute&gt; or
+    \c date&lt;relative&gt; checks each value of a container of plain \c date values that it is given, as a
+    constant, a variable or an argument, and then has its declared type.
 
     A type that is inferred from a literal for the code that follows (the value type of a list or hash built from
     literals, the type of a @ref conditional_operator "conditional" expression, the type that a local variable

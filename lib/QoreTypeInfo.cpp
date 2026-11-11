@@ -3381,7 +3381,10 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         bool& err) const {
     assert(!err);
     const QoreTypeInfo* ti = h->getValueTypeInfo();
-    if (QoreTypeInfo::equal(u.ti, ti)) {
+    // a container whose value type is accepted without a check is taken as it is; a value type with the same
+    // signature that the target still validates (date for date<absolute> or date<relative>) is folded and checked
+    // (issue #5782)
+    if (QoreTypeInfo::acceptsInputUnchecked(u.ti, ti)) {
         return true;
     }
     if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
@@ -3442,7 +3445,10 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
         bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreListNode* l,
         bool& err) const {
     const QoreTypeInfo* ti = l->getValueTypeInfo();
-    if (QoreTypeInfo::equal(u.ti, ti)) {
+    // a container whose value type is accepted without a check is taken as it is; a value type with the same
+    // signature that the target still validates (date for date<absolute> or date<relative>) is folded and checked
+    // (issue #5782)
+    if (QoreTypeInfo::acceptsInputUnchecked(u.ti, ti)) {
         return true;
     }
     if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
@@ -4419,7 +4425,9 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
             // from the fold rule, which accepts nested containers by their shape, or if its element type may not
             // match (ex: list<list<auto>> for list<list<int>>, which the type accepts as an exact match)
             const QoreTypeInfo* vti = l ? l->getValueTypeInfo() : h->getValueTypeInfo();
-            if (vti != elem_ti && !QoreTypeInfo::equal(vti, elem_ti)) {
+            // an element type that the element type still validates (date for date<absolute>) needs the check
+            // (issue #5782)
+            if (vti != elem_ti && !QoreTypeInfo::acceptsInputUnchecked(elem_ti, vti)) {
                 bool may_not_match = false;
                 if ((rv == QTI_AMBIGUOUS && t.spec.runtimeAcceptsValue(n, t.exact) == QTI_NOT_EQUAL)
                         || (QoreTypeInfo::parseAccepts(elem_ti, vti, may_not_match) && may_not_match)) {
