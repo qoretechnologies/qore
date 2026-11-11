@@ -1052,6 +1052,14 @@ uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(QoreA
 
 //! Create a new typed list from an already-evaluated constructor value
 uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);
+//! the flags of qore_rt_new_complex_from_value_consume(): a typed hash (else a list)
+#define QORE_RT_COMPLEX_INIT_HASH        (1 << 0)
+//! the flags of qore_rt_new_complex_from_value_consume(): the hash initializer's values have the value type
+#define QORE_RT_COMPLEX_INIT_PRECHECKED  (1 << 1)
+uint64_t qore_rt_new_complex_from_value_consume(const QoreTypeInfo* typeInfo, uint64_t value_bits, uint64_t* cleanup,
+    int32_t flags, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_from_value_consume_by_type_path_cached(QoreAOTContext* ctx, const char* type_path,
+    uint64_t value_bits, uint64_t* cleanup, int32_t flags, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_list_from_value_by_type_path(const char* type_path, uint64_t value_bits,
     ExceptionSink* xsink);
 

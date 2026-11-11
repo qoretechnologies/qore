@@ -120,6 +120,10 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         ri.parseInit(parse_context);
     }
 
+    // the value of the expression is its right-hand side, not the last value assigned (issue #5704: a list
+    // assignment in a typed hash initializer gave the key the type of the last lvalue, and the hash was refused)
+    parse_context.typeInfo = ri.getTypeInfo();
+
     return li.hasError() || ri.hasError() || err ? -1 : 0;
 }
 

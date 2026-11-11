@@ -1900,6 +1900,10 @@
       value in the new thread, and modifying a member of the object is a parse error
     - fixed crashes, leaks and unhandled destructor exceptions of @ref background "background" when preparing its
       expression failed, its thread could not be created, or it released the last reference to an object
+    - a @ref list_assignment "list assignment" used as an expression had the type of the last element of its
+      right-hand side that was parsed (no type when the right-hand side had fewer elements than the left-hand side, or
+      was not a list literal) instead of the type of its right-hand side, so that its value was refused where a type is
+      checked, as in a typed hash initializer
     - fixed @ref background "background" expressions that use a local variable in the arguments of a
       @ref new "new" expression or in the object of an object method reference (such as
       <tt><b>background</b> f(<b>new</b> C(x))</tt> or <tt><b>background</b> (\\o.m())()</tt>): the thread raised

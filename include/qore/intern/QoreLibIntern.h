@@ -1590,6 +1590,7 @@ public:
         // and save the return type
         parse_context.typeInfo = nullptr;
         error = parse_init_value(n, parse_context);
+        typeInfo = parse_context.typeInfo;
         //printd(5, "QorePossibleListNodeParseInitHelper::QorePossibleListNodeParseInitHelper() n: %s\n",
         //    n.getFullTypeName());
         if (n.getType() == NT_LIST) {
@@ -1611,6 +1612,11 @@ public:
 
     DLLLOCAL bool noArgument() const {
         return finished;
+    }
+
+    //! Returns the parse type of the whole expression, as its parse initialization gave it
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
     }
 
     DLLLOCAL bool next() {
@@ -1641,6 +1647,8 @@ private:
     bool finished = true;
     size_t pos = -1;
     const QoreTypeInfo* singleTypeInfo = nullptr;
+    //! the parse type of the whole expression
+    const QoreTypeInfo* typeInfo = nullptr;
     bool error = false;
 
     DLLLOCAL size_t sizeIntern() const {
