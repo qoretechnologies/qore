@@ -746,7 +746,10 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
             if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
                 return false;
             }
-            bindings[i] = explicit_type;
+            // an explicit type argument can be a type parameter of the generic code that makes the call
+            // (inner<T>() in a generic function): the callee is bound to the type of the instantiation that is
+            // running
+            bindings[i] = qore_substitute_type_params_if_needed(explicit_type);
         }
     }
     for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {

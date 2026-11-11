@@ -16504,9 +16504,21 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         const QoreTypeParamInstantiation* old = nullptr;
         bool restore = false;
 
+        //! the explicit instantiation with the type parameters of the calling generic code resolved
+        QoreTypeParamInstantiation resolved;
+        //! the instantiation made current (the explicit instantiation, or \a resolved), or the explicit one given
+        const QoreTypeParamInstantiation* effective;
+
         explicit TypeParamContextHelper(
-                const QoreTypeParamInstantiation* inst) {
+                const QoreTypeParamInstantiation* inst) : effective(inst) {
             if (inst && !inst->empty()) {
+                // resolved before the callee's instantiation is made current: the call below, which infers the
+                // callee's type arguments again, must see the resolved type arguments, as the type parameters of
+                // the caller can no longer be resolved once the callee's instantiation is current
+                if (qore_resolve_explicit_type_param_instantiation(*inst, resolved)) {
+                    inst = &resolved;
+                    effective = &resolved;
+                }
                 old = runtime_set_type_param_instantiation(inst);
                 restore = true;
             }
@@ -16667,12 +16679,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             if (arg_cleanups) {
                 return qore_rt_call_function_direct_impl(target.func,
                         target.variant, target.pgm, args, arg_cleanups, nargs,
-                        xsink, target.explicit_type_param_instantiation);
+                        xsink, type_param_context.effective);
             }
             if (!qore_rt_user_fast_call_eligible(target.variant)) {
                 return qore_rt_call_function_direct_impl(target.func,
                         target.variant, target.pgm, args, nullptr, nargs, xsink,
-                        target.explicit_type_param_instantiation);
+                        type_param_context.effective);
             }
             return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
         }
