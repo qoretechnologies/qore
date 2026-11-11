@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,7 +44,7 @@ QoreImplicitArgumentNode::~QoreImplicitArgumentNode() {
 }
 
 int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-    parse_context.typeInfo = parse_get_implicit_arg_type_info();
+    parse_context.typeInfo = getTypeInfo();
     parse_context.analysis.clear();
     parse_context.markExpressionNeverThrows();
     if (parse_context.typeInfo) {
@@ -58,7 +58,9 @@ int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
 }
 
 const QoreTypeInfo* QoreImplicitArgumentNode::getTypeInfo() const {
-    return parse_get_implicit_arg_type_info();
+    // the implicit argument type is the type of the element that an operator gives its code as $1; $2 and the
+    // following arguments, and the $argv list, are not that element, so their type is not known at parse time
+    return offset ? nullptr : parse_get_implicit_arg_type_info();
 }
 
 const QoreValue QoreImplicitArgumentNode::get() const {

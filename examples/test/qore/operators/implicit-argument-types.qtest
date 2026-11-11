@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ImplicitArgumentTypesTest
+
+#! only $1 has the type of the element that an operator gives its code; $2 and the following arguments do
+#! not, so a value built from them is not typed with the element type
+class ImplicitArgumentTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ImplicitArgumentTypesTest", "1.0") {
+        addTestCase("map", \mapTest());
+        addTestCase("select and map-select", \selectTest());
+        addTestCase("new list and hash initializers", \newTest());
+        addTestCase("$1 keeps the element type", \elementTypeTest());
+
+        set_return_value(main());
+    }
+
+    mapTest() {
+        list<int> tl = (1, 2);
+        assertEq(((NOTHING,), (NOTHING,)), map ($2,), tl);
+        assertEq(((1, NOTHING), (2, NOTHING)), map ($1, $2), tl);
+        assertEq(((NOTHING, 1), (NOTHING, 2)), map ($3, $1), tl);
+        list<string> sl = ("a", "b");
+        assertEq(((NOTHING,), (NOTHING,)), map ($2,), sl);
+    }
+
+    selectTest() {
+        list<int> tl = (1, 2);
+        assertEq((1, 2), select tl, ($2,)[0] === NOTHING);
+        assertEq(((NOTHING, 1), (NOTHING, 2)), map ($2, $1), tl, ($2,)[0] === NOTHING);
+    }
+
+    newTest() {
+        list<int> tl = (1, 2);
+        assertEq(((NOTHING,), (NOTHING,)), map new list<auto>(($2,)), tl);
+        assertEq((NOTHING, NOTHING), map (new list<auto>(($2,)))[0], tl);
+        assertEq(((1,), (2,)), map new list<auto>(($1,)), tl);
+        assertEq(({"a": NOTHING}, {"a": NOTHING}), map new hash<string, auto>({"a": $2}), tl);
+    }
+
+    elementTypeTest() {
+        list<int> tl = (1, 2);
+        list<list<int>> l = map ($1,), tl;
+        assertEq(((1,), (2,)), l);
+        assertEq("list<int>", (map ($1,), tl)[0].fullType());
+    }
+}
