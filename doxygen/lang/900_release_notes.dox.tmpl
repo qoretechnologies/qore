@@ -575,7 +575,7 @@
     @par The Signal Handling Thread Is Woken With SIGRTMIN+1 on Linux
     On Linux, the signal that wakes the signal handling thread is the real-time signal \c SIGRTMIN+1 instead of
     @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
-    a %Qore-language handler; valgrind and seccomp filters no longer interfere with the wake-up (see
+    a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
