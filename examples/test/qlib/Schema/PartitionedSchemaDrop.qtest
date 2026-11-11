@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o., all rights reserved
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Schema
+%requires SqlUtil
+%requires QUnit
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+%exec-class PartitionedSchemaDropTest
+
+#! A schema whose tables are partitioned with more partitions than the server's lock table allows in one transaction
+class PartitionedDropSchema inherits AbstractSchema {
+    constructor(AbstractDatasource ds) : AbstractSchema(ds) {
+    }
+
+    string getNameImpl() {
+        return "PartitionedDropSchema";
+    }
+
+    string getVersionImpl() {
+        return "1.0";
+    }
+
+    private *hash<auto> getTablesImpl() {
+        hash<auto> tables = {};
+        foreach string name in (PartitionedSchemaDropTest::SchemaTables) {
+            tables{name} = {
+                "columns": {
+                    "id": c_int(True),
+                    "d": c_date(True),
+                    "v": c_varchar(100),
+                },
+            };
+        }
+        return tables;
+    }
+}
+
+#! Dropping partitioned PostgreSQL tables stays within the server's default lock limits
+/** Dropping a partitioned table takes a lock on every partition and on each partition's indexes and TOAST relations
+    in one transaction; a schema dropped in one transaction holds the locks of all its tables.  With more partitions
+    than the lock table (max_locks_per_transaction times the number of connections) holds, the drop failed with
+    "out of shared memory".  The partitions are sized from the server's own limits, so the test is above them on any
+    configuration.
+*/
+class PartitionedSchemaDropTest inherits QUnit::Test {
+    public {
+        const SchemaTables = ("psd_schema_a", "psd_schema_b");
+
+        #! the relations that one partition of the test tables has: the table, its primary key index, its TOAST
+        #! table and the TOAST table's index
+        const RelationsPerPartition = 4;
+
+        #! partitions created per transaction during setup, well within the lock table
+        const CreateBatch = 100;
+    }
+
+    constructor() : Test("Dropping partitioned PostgreSQL tables", "1.0", \ARGV) {
+        addTestCase("a partitioned table above the lock budget is dropped by dropCommit()", \tableDropCommit());
+        addTestCase("a schema of partitioned tables above the lock budget is dropped", \schemaDrop());
+        addTestCase("the drop SQL of a table that is not partitioned is unchanged", \plainTable());
+        set_return_value(main());
+    }
+
+    #! Returns a datasource of the run's PostgreSQL schema, or skips the test
+    private Datasource datasource() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PartitionedSchemaDrop");
+        Datasource ds(PgsqlRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_PGSQL));
+        ds.open();
+        return ds;
+    }
+
+    #! Returns the number of locks the server's lock table holds for all connections
+    private static int lockBudget(AbstractDatasource ds) {
+        hash<auto> h = ds.selectRow("select current_setting('max_locks_per_transaction')::int * "
+            "(current_setting('max_connections')::int + current_setting('max_prepared_transactions')::int) "
+            "as budget");
+        return h.budget;
+    }
+
+    #! Creates a range-partitioned table with the given number of daily partitions, committing in batches
+    private static createPartitionedTable(AbstractDatasource ds, string name, int partitions) {
+        on_error ds.rollback();
+        ds.execRaw(sprintf("create table %s (id int not null, d date not null, v varchar(100), "
+            "primary key (id, d)) partition by range (d)", name));
+        date start = 2020-01-01;
+        for (int i = 0; i < partitions; ++i) {
+            date from = start + days(i);
+            ds.execRaw(sprintf("create table %s_p%d partition of %s for values from ('%s') to ('%s')", name, i, name,
+                from.format("YYYY-MM-DD"), (from + days(1)).format("YYYY-MM-DD")));
+            if (!((i + 1) % CreateBatch)) {
+                ds.commit();
+            }
+        }
+        ds.commit();
+    }
+
+    #! Returns True if the table exists in the run's schema
+    private static bool tableExists(AbstractDatasource ds, string name) {
+        return ds.selectRow("select pg_catalog.to_regclass(%v) is not null as found", name).found;
+    }
+
+    tableDropCommit() {
+        Datasource ds = datasource();
+        int budget = lockBudget(ds);
+        # a drop in one transaction locks RelationsPerPartition relations of every partition
+        int partitions = budget / RelationsPerPartition + budget / 8;
+        string name = "psd_table";
+        createPartitionedTable(ds, name, partitions);
+
+        # the setup is above the budget: the table cannot be dropped in one transaction
+        try {
+            ds.execRaw("drop table " + name);
+            ds.commit();
+            fail(sprintf("a table of %d partitions was dropped in one transaction with a lock budget of %d",
+                partitions, budget));
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            assertRegex("out of shared memory", ex.desc, "a drop in one transaction exceeds the lock table");
+        }
+
+        Table t(ds, name);
+        list<auto> sql = t.getDropSql();
+        assertEq(partitions + 1, sql.size(), "each partition is dropped by a statement of its own");
+        assertRegex("^drop table .*psd_table_p", sql[0], "the partitions are dropped first");
+        assertEq("drop table " + t.getSqlName(), sql.last(), "the partitioned table is dropped last");
+
+        t.dropCommit();
+        assertFalse(tableExists(ds, name), "the partitioned table is dropped");
+        assertFalse(tableExists(ds, name + "_p0"), "its partitions are dropped");
+    }
+
+    schemaDrop() {
+        Datasource ds = datasource();
+        int budget = lockBudget(ds);
+        # the two tables together exceed the budget in one transaction
+        int partitions = budget / (2 * RelationsPerPartition) + budget / 16;
+        foreach string name in (SchemaTables) {
+            createPartitionedTable(ds, name, partitions);
+        }
+
+        PartitionedDropSchema schema(ds);
+        schema.drop(False, -1, False);
+
+        foreach string name in (SchemaTables) {
+            assertFalse(tableExists(ds, name), name + ": the partitioned table is dropped");
+            assertFalse(tableExists(ds, name + "_p0"), name + ": its partitions are dropped");
+        }
+    }
+
+    plainTable() {
+        Datasource ds = datasource();
+        on_error ds.rollback();
+        string name = "psd_plain";
+        ds.execRaw(sprintf("create table %s (id int not null)", name));
+        # a table that inherits from another is not a partition
+        ds.execRaw(sprintf("create table %s_child () inherits (%s)", name, name));
+        ds.commit();
+
+        Table t(ds, name);
+        assertEq(("drop table " + t.getSqlName(),), t.getDropSql(), "only the table is dropped");
+        Table child(ds, name + "_child");
+        child.dropCommit();
+        t.dropCommit();
+        assertFalse(tableExists(ds, name), "the table is dropped");
+    }
+}

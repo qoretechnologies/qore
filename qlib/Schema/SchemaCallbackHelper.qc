@@ -153,11 +153,36 @@ public namespace Schema {
             }
         }
 
+        #! this is the SQL callback method for schema drops: each statement is committed on its own
+        sqlDropCallback(string str) {
+            sqlCallback(str);
+            schema.getDatasource().commit();
+        }
+
+        #! this is the SQL callback method for forced schema drops: each statement is committed on its own
+        nothing sqlForceDropCallback(string str) {
+            sqlForceCallback(str);
+            schema.getDatasource().commit();
+        }
+
         #! returns a callback option hash usable with @ref sqlutilintro "SqlUtil" schema operations
         hash<auto> getCallbacks(bool force = False) {
             return (
                 "info_callback": \infoCallback(),
                 "sql_callback": force ? \sqlForceCallback() : \sqlCallback(),
+                "sql_callback_executed": True,
+            );
+        }
+
+        #! returns a callback option hash for a schema drop, which commits each statement on its own
+        /** A schema drop in one transaction holds a lock on every object it drops until it commits; on PostgreSQL a
+            schema with partitioned tables exceeds the server's lock table that way.  Oracle and MySQL commit each DDL
+            statement anyway.
+        */
+        hash<auto> getDropCallbacks(bool force = False) {
+            return (
+                "info_callback": \infoCallback(),
+                "sql_callback": force ? \sqlForceDropCallback() : \sqlDropCallback(),
                 "sql_callback_executed": True,
             );
         }
