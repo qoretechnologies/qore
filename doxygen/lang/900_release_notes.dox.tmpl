@@ -337,14 +337,11 @@
 
     @par Schema and Table Drops Commit Each Statement
     @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
-    @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement they execute
-    instead of the whole drop at its end, and on PostgreSQL a partitioned table is dropped one partition per statement,
-    so a schema or table with many partitions no longer exceeds the server's lock table ("out of shared memory");
-    on a database with transactional DDL (PostgreSQL, SQL Server, SQLite, Firebird) a failed drop leaves the objects
-    dropped before it dropped, as on Oracle and MySQL, which commit each DDL statement anyway; drop it again to finish.
-    A partitioned table that a view or another table's foreign key depends on is not split, so its drop fails before
-    any partition is dropped.  @ref SqlUtil::AbstractTable::drop() "AbstractTable::drop()" still runs in the caller's
-    transaction.
+    @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
+    drop a partitioned table one partition at a time, so many partitions no longer exceed the server's lock table;
+    with transactional DDL, a failed drop now keeps what it dropped before the failure (drop again to finish), and a
+    partitioned table that a view or foreign key depends on fails before any partition is dropped.
+    @ref SqlUtil::AbstractTable::drop() "AbstractTable::drop()" still runs in the caller's transaction.
 
     @par Stream Socket Binding and Address Reporting
     A stream socket bound on all interfaces is one dual-stack socket on \c "::" (a port in use in either address
