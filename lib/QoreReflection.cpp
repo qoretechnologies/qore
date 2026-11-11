@@ -324,6 +324,26 @@ QoreValue QoreExternalMemberBase::getDefaultValue(ExceptionSink* xsink) const {
     return reinterpret_cast<const QoreMemberInfoBase*>(this)->exp.eval(xsink);
 }
 
+QoreValue QoreExternalMemberBase::getDefaultValue(const QoreClass& cls, ExceptionSink* xsink) const {
+    const QoreMemberInfoBase* mi = reinterpret_cast<const QoreMemberInfoBase*>(this);
+    // the initializer is code of the class's source Program (see QoreDeclaringProgramHelper)
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (mi->initIsCode() && qore_class_private::get(cls)->enterSourceProgramForInit(src_pgm_helper, xsink)) {
+        return QoreValue();
+    }
+    return mi->exp.eval(xsink);
+}
+
+QoreValue QoreExternalMemberBase::getDefaultValue(const TypedHashDecl& hd, ExceptionSink* xsink) const {
+    const QoreMemberInfoBase* mi = reinterpret_cast<const QoreMemberInfoBase*>(this);
+    // the initializer is code of the Program that declared the hashdecl (see QoreDeclaringProgramHelper)
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (mi->initIsCode() && typed_hash_decl_private::get(hd)->enterSourceProgram(src_pgm_helper, xsink)) {
+        return QoreValue();
+    }
+    return mi->exp.eval(xsink);
+}
+
 const QoreExternalProgramLocation* QoreExternalMemberBase::getSourceLocation() const {
     const QoreProgramLocation* loc = reinterpret_cast<const QoreMemberInfoBase*>(this)->loc;
     return reinterpret_cast<const QoreExternalProgramLocation*>(loc ? loc : &loc_builtin);

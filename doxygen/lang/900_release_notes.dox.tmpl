@@ -1576,6 +1576,13 @@
       their destructors (see @ref thread_local_lifetime)
     - a thread that ended made every @ref thread_local "thread_local" variable that a destructor read while it ended
       read-only in every thread ("illegal variable assignment after second phase of variable destruction")
+    - evaluating a member initializer of a class or @ref hashdecl "hashdecl" of a deleted
+      @ref Qore::Program "Program" (an inherited declaration, or the type of a value used with the
+      @ref reflectionintro "reflection" API) crashed; it now raises a \c PROGRAM-ERROR exception (see
+      @ref threads_and_program_deletion)
+    - a @ref Qore::Reflection::TypedHash "TypedHash", @ref Qore::Reflection::TypedHashMember "TypedHashMember" or
+      @ref Qore::Reflection::Type "Type" object read freed memory once the last value of its type was gone and the
+      Program that declared it had been deleted; it now keeps the declarations of its type
     - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
       function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
       @ref references_overview)

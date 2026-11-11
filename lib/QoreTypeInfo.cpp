@@ -1882,6 +1882,105 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
     return rv;
 }
 
+//! The declarations that a QoreExternalTypeDeclRefs object keeps
+class qore_type_decl_refs_private {
+public:
+    std::vector<const TypedHashDecl*> hashdecls;
+    std::vector<QoreClass*> classes;
+    std::vector<const QoreEnumDecl*> enums;
+
+    //! References the declarations that \a ti and the types in it refer to; \a p is created with the first one
+    /** A type is a finite tree of types: the declarations are not entered, so no type is visited twice on a path
+    */
+    DLLLOCAL static void add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                get(p).addHashDecl(hd);
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                get(p).addClass(pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    add(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                get(p).addClass(qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                get(p).addEnum(ed);
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                add(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                add(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            add(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                add(p, param, depth + 1);
+            }
+        }
+    }
+
+    DLLLOCAL ~qore_type_decl_refs_private() {
+        for (QoreClass* c : classes) {
+            qore_class_private::derefClass(*c, false, false, false);
+        }
+        for (const TypedHashDecl* hd : hashdecls) {
+            hd->deref();
+        }
+        for (const QoreEnumDecl* ed : enums) {
+            const_cast<qore_enum_decl_private*>(qore_enum_decl_private::get(*ed))->deref();
+        }
+    }
+
+private:
+    DLLLOCAL static qore_type_decl_refs_private& get(std::unique_ptr<qore_type_decl_refs_private>& p) {
+        if (!p) {
+            p.reset(new qore_type_decl_refs_private);
+        }
+        return *p;
+    }
+
+    DLLLOCAL void addHashDecl(const TypedHashDecl* hd) {
+        if (std::find(hashdecls.begin(), hashdecls.end(), hd) == hashdecls.end()) {
+            hd->ref();
+            hashdecls.push_back(hd);
+        }
+    }
+
+    DLLLOCAL void addClass(const QoreClass* qc) {
+        if (!qc) {
+            return;
+        }
+        QoreClass* c = const_cast<QoreClass*>(qc);
+        if (std::find(classes.begin(), classes.end(), c) == classes.end()) {
+            // as an object holds its class (see QoreObject)
+            qore_class_private::refClass(*c);
+            classes.push_back(c);
+        }
+    }
+
+    DLLLOCAL void addEnum(const QoreEnumDecl* ed) {
+        if (std::find(enums.begin(), enums.end(), ed) == enums.end()) {
+            qore_enum_decl_private::get(*ed)->ref();
+            enums.push_back(ed);
+        }
+    }
+};
+
+QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
+    // nothing is allocated for a type without declarations, such as a builtin type
+    std::unique_ptr<qore_type_decl_refs_private> p;
+    qore_type_decl_refs_private::add(p, ti, 0);
+    priv = p.release();
+}
+
+QoreExternalTypeDeclRefs::~QoreExternalTypeDeclRefs() {
+    delete priv;
+}
+
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
     return qore_type_contains_type_parameter(ti)
         ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
@@ -6548,8 +6647,8 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         if (src->getHashDecl() == hd) {
             return true;
         }
-        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
-            src, /*runtime_check=*/true, xsink);
+        // the element type can be a hashdecl of another Program (a member type of a hashdecl from a deleted Program)
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHashFromType(src, xsink);
         if (!coerced || (xsink && xsink->isException())) {
             if (coerced) {
                 coerced->deref(xsink);

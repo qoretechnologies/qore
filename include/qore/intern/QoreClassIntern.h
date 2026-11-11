@@ -70,6 +70,8 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 
 // forward reference to private class implementation
 class qore_class_private;
+// the source Program of a class taken for a frame; see CodeContextHelperBase
+struct QoreClassSourceProgramInfo;
 
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
@@ -1002,6 +1004,17 @@ public:
     // store parse location in case of errors
     const QoreProgramLocation* loc;
     QoreParseTypeInfo* parseTypeInfo;
+
+    //! returns true if the initialization expression is code to evaluate (a value that needs no evaluation is not)
+    /** The code is that of the Program that declared the member; see QoreDeclaringProgramHelper
+    */
+    DLLLOCAL bool initIsCode() const {
+        if (!exp.isPointer()) {
+            return false;
+        }
+        const AbstractQoreNode* n = exp.getPtr();
+        return n && n->needs_eval();
+    }
 
     DLLLOCAL QoreMemberInfoBase(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue())
@@ -2347,9 +2360,6 @@ public:
     QoreMemberMap members;
     // member initialization list in hierarchy initialization order
     member_init_list_t member_init_list;
-    //! whether a member initializer of member_init_list is evaluated when an object is created: -1 not yet known,
-    //! 0 no, 1 yes; determined when the first object is created, as the initializers do not change at runtime
-    mutable std::atomic<int8_t> member_init_evaluates{-1};
 
     // static var list (map)
     QoreVarMap vars;
@@ -2564,6 +2574,9 @@ public:
     //! qore_program_has_module_lifetime()): it stays allocated while any code can run, so a call from another Program
     //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
     mutable std::atomic<bool> spgm_module_lifetime{false};
+
+    //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
+    mutable std::atomic<int8_t> member_init_code{-1};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under gate.asl_lock
@@ -3845,6 +3858,62 @@ public:
     typedef void (*dbg_source_program_taken_t)(const qore_class_private* cls, QoreProgram* pgm, bool referenced);
     DLLLOCAL static std::atomic<dbg_source_program_taken_t> dbg_source_program_taken;
 #endif
+
+    //! Keeps the source Program of the class while the thread evaluates member initializers declared in the class
+    /** The member initializers of the class are code of its source Program, which another Program's code can create
+        an object of the class in (a class inherited or imported by another Program), also after the source Program
+        has been deleted; see QoreDeclaringProgramHelper.  A call in the source Program, or into a Program with module
+        lifetime, takes neither a reference nor the lock.
+
+        @param h the helper that enters the Program and leaves it when it is destroyed
+        @param xsink for the \c PROGRAM-ERROR exception raised if the source Program has been deleted
+
+        @return 0 for OK, -1 if the source Program has been deleted, in which case the initializers must not be
+        evaluated
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int enterSourceProgramForInit(QoreDeclaringProgramHelper& h,
+            ExceptionSink* xsink) const {
+        QoreProgram* p = spgm.load();
+        if (p && ((spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active())
+                || p == ::getProgram())) {
+            return 0;
+        }
+        return enterSourceProgramForInitSlow(h, xsink);
+    }
+
+    //! the part of enterSourceProgramForInit() for a source Program that is neither current nor has module lifetime
+    DLLLOCAL QORE_INTERN_NOINLINE int enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h,
+            ExceptionSink* xsink) const;
+
+    //! returns whether member initializers in the member initialization list are code (see initIsCode())
+    /** @return 0 if none is, 1 if only initializers of members declared by the class are, 2 if initializers of
+        members declared by a parent class are
+
+        Computed once the list is complete (see addLocalMembersForInit())
+    */
+    DLLLOCAL int8_t getMemberInitCode() const {
+        int8_t rv = member_init_code.load(std::memory_order_relaxed);
+        return rv < 0 ? computeMemberInitCode() : rv;
+    }
+
+    //! computes and caches the result of getMemberInitCode()
+    DLLLOCAL int8_t computeMemberInitCode() const;
+
+    //! initializes the members of an object with the source Programs of their classes entered; see initMembers()
+    DLLLOCAL int initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,
+            ExceptionSink* xsink) const;
+
+    //! Keeps the source Programs of the classes that declare members initialized with code while they are evaluated
+    /** See enterSourceProgramForInit()
+
+        @param h the helper that enters the Programs and leaves them when it is destroyed
+        @param spgm_info the source Program of the class, as taken for the frame of the initialization
+        @param xsink for the PROGRAM-ERROR exception
+
+        @return 0 for OK, -1 if PROGRAM-ERROR was raised
+    */
+    DLLLOCAL int enterMemberInitSourcePrograms(QoreDeclaringProgramHelper& h,
+            const QoreClassSourceProgramInfo& spgm_info, ExceptionSink* xsink) const;
 
     //! Releases the source Program of the class, which has been taken from spgm
     DLLLOCAL void releaseSourceProgram(QoreProgram* p, ExceptionSink* xsink) {

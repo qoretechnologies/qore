@@ -3957,6 +3957,16 @@ void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
         ExceptionSink* xsink, bool ref_obj) : xsink(xsink) {
+    init(code, obj, c, ref_obj, nullptr);
+}
+
+CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+        ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info) : xsink(xsink) {
+    init(code, obj, c, ref_obj, &spgm_info);
+}
+
+QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, QoreObject* obj,
+        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info) {
     ThreadData* td  = thread_data.get();
     old_code = td->current_code;
     td->current_code = code;
@@ -3998,6 +4008,10 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     QoreProgram* class_spgm = c ? c->getSourceProgramForCall(class_spgm_referenced) : nullptr;
     if (class_spgm_referenced) {
         referenced_class_pgm = class_spgm;
+    }
+    if (spgm_info) {
+        spgm_info->pgm = class_spgm;
+        spgm_info->referenced = class_spgm_referenced;
     }
     if (class_spgm) {
         call_program_context = class_spgm;
