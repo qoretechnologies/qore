@@ -89,8 +89,10 @@
 #include <dirent.h>
 #endif
 
+// only the current module API is supported: modules built for an earlier one carry the inline code of the headers
+// they were built with, which this library does not support (see QORE_MODULE_API_MINOR)
 static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
-    {2, 0},
+    {QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR},
 };
 #define QORE_MOD_API_LEN (sizeof(qore_mod_api_list_l)/sizeof(struct qore_mod_api_compat_s))
 
@@ -2668,6 +2670,94 @@ static const char* get_feature_from_path(QoreString& tmp) {
     return tmp.c_str();
 }
 
+namespace {
+//! Frees a glob() result
+class QoreGlobHolder {
+public:
+    QoreGlobHolder() {
+        memset(&buf, 0, sizeof buf);
+    }
+    ~QoreGlobHolder() {
+        globfree(&buf);
+    }
+    QoreGlobHolder(const QoreGlobHolder&) = delete;
+    QoreGlobHolder& operator=(const QoreGlobHolder&) = delete;
+
+    glob_t buf;
+};
+}
+
+//! Appends the binary modules of a feature built for an unsupported module API to a "not found" error description
+/** A binary module file is named <name>-api-<major>.<minor>.qmod, and a feature is looked up only with the module APIs
+    that this library supports (qore_mod_api_list), so a module built for another module API (ex: with the headers of
+    an earlier Qore) is not found by its feature name; this tells the user which file was found and that it must be
+    rebuilt.  The module API is taken from the file name: the module is not loaded.
+
+    @param desc the error description to append to
+    @param search_paths the module directories that the feature was looked up in
+    @param name the feature name
+*/
+static void qore_append_unsupported_api_modules(QoreString& desc, const std::vector<const std::string*>& search_paths,
+        const char* name) {
+    std::string prefix = std::string(name) + "-api-";
+    for (const std::string* dir : search_paths) {
+        // the flat and split module forms, as searched by the loader
+        for (const char* sub : {"", name}) {
+            std::string pattern = *dir;
+            if (*sub) {
+                pattern += QORE_DIR_SEP_STR;
+                pattern += sub;
+            }
+            pattern += QORE_DIR_SEP_STR;
+            pattern += prefix;
+            pattern += "*.qmod";
+            QoreGlobHolder g;
+            if (glob(pattern.c_str(), 0, nullptr, &g.buf)) {
+                continue;
+            }
+            for (size_t i = 0; i < g.buf.gl_pathc; ++i) {
+                const char* path = g.buf.gl_pathv[i];
+                const char* base = strrchr(path, QORE_DIR_SEP);
+                base = base ? base + 1 : path;
+                if (strncmp(base, prefix.c_str(), prefix.size())) {
+                    continue;
+                }
+                // the rest must be exactly <major>.<minor>.qmod
+                const char* ver = base + prefix.size();
+                // a number of 1 to 9 decimal digits: no sign, no space, no overflow
+                auto parse_num = [] (const char*& p, unsigned& n) -> bool {
+                    n = 0;
+                    const char* start = p;
+                    while (isdigit(static_cast<unsigned char>(*p))) {
+                        if (p - start == 9) {
+                            return false;
+                        }
+                        n = n * 10 + (*p - '0');
+                        ++p;
+                    }
+                    return p != start;
+                };
+                unsigned major, minor;
+                if (!parse_num(ver, major) || *ver++ != '.' || !parse_num(ver, minor) || strcmp(ver, ".qmod")) {
+                    continue;
+                }
+                bool supported = false;
+                for (unsigned ai = 0; ai < qore_mod_api_list_len; ++ai) {
+                    if (qore_mod_api_list[ai].major == major && qore_mod_api_list[ai].minor == minor) {
+                        supported = true;
+                        break;
+                    }
+                }
+                if (supported) {
+                    continue;
+                }
+                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d", path, major,
+                    minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+            }
+        }
+    }
+}
+
 QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, bool reexport, mod_op_e op, version_list_t* version, const char* src, QoreProgram* mpgm,
         unsigned load_opt, int warning_mask, qore_binary_module_desc_t mod_desc_func, QoreProgram* path_pgm,
@@ -3392,8 +3482,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         *not_found = true;
     }
 
-    QoreStringNode* desc = new QoreStringNodeMaker("feature '%s' is not builtin and no module with this name could "
-        "be found in the module path: ", name);
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module with "
+        "this name could be found in the module path: ", name));
     if (!ctx_prepended.empty()) {
         bool first = true;
         for (const std::string& p : ctx_prepended) {
@@ -3402,11 +3492,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
         desc->concat(':');
     }
-    moduleDirList.appendPath(*desc);
+    moduleDirList.appendPath(**desc);
     for (const std::string& p : ctx_appended) {
         desc->sprintf(":%s", p.c_str());
     }
-    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc);
+    qore_append_unsupported_api_modules(**desc, search_paths, name);
+    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc.release());
     return nullptr;
 }
 
@@ -5183,7 +5274,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
     suggested_sym.replaceAll("-", "_");
     xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
-        "the API 2.0 module description function '%s'", path, suggested_sym.c_str());
+        "the module description function '%s'", path, suggested_sym.c_str());
     return nullptr;
 }
 
