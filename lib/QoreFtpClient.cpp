@@ -81,10 +81,10 @@ static void qore_ftp_raise_poll_result_exception(const QoreHashNode* ex, Excepti
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
-    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation (see
-    // qore_socket_raise_pending_cancel())
-    if (err.getType() == NT_STRING && QoreStringDataHelper(err) == "SOCKET-CLOSED"
-            && qore_socket_raise_pending_cancel("FTP socket operation", xsink)) {
+    // an operation that ended with an error while the thread is cancelled reports the cancellation, whatever ended
+    // it: a close of its socket by the code that the cancellation ends, or the peer's reaction to that (see
+    // qore_socket_raise_pending_cancel(), issue #5793)
+    if (qore_socket_raise_pending_cancel("FTP socket operation", xsink)) {
         return;
     }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
