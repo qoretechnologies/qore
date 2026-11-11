@@ -1017,9 +1017,6 @@ protected:
     //! Source-stripped AOT has no executable AST body, but ProgramControl and
     //! debugger APIs still need a stable function-entry statement identity.
     StatementBlock* aot_entry_statement = nullptr;
-    //! the block that the debugger's events of code without a parse tree or entry block (an AOT closure) are given
-    //! with; not owned: its Program owns it (see getDebugEntryStatementBlock())
-    mutable std::atomic<StatementBlock*> aot_debug_block{nullptr};
     //! Source function owning this variant. Used by IR lowering to identify
     //! self-recursive direct calls by pointer identity even when JIT symbol names
     //! are uniquified.
@@ -1287,17 +1284,29 @@ public:
         if (statements) {
             return statements;
         }
-        return aot_entry_statement ? aot_entry_statement : aot_debug_block.load(std::memory_order_acquire);
+        return aot_entry_statement;
     }
     //! Returns the block that the debugger's events of the variant's code are given with
     /** As getEntryStatementBlock(), but code without a parse tree or an entry block, as an AOT closure, gets a block
-        at the location of its signature the first time it runs while a debugger is attached to its Program, so that
-        its debug IR makes the debugger's events as the debug IR of an AOT function does with its entry block (#5795).
-        The block gives the variant no parse options, unlike the entry block of a function
-        (setAOTEntryStatementBlock()); its Program owns it (qore_program_private::getAOTClosureDebugBlock()).
+        at the location of its signature while a debugger is attached to its Program, so that its debug IR makes the
+        debugger's events as the debug IR of an AOT function does with its entry block (#5795).  The block gives the
+        variant no parse options, unlike the entry block of a function (setAOTEntryStatementBlock()); its Program
+        owns it and keeps it by location (qore_program_private::getAOTClosureDebugBlock()), so that the variant has
+        no state for it.  Without a debugger, the code runs without a block, as before.
     */
-    DLLLOCAL StatementBlock* getDebugEntryStatementBlock() const;
+    DLLLOCAL StatementBlock* getDebugEntryStatementBlock() const {
+        if (statements) {
+            return statements;
+        }
+        return aot_entry_statement ? aot_entry_statement : getAOTClosureDebugBlock();
+    }
     DLLLOCAL void setAOTEntryStatementBlock(StatementBlock* b);
+
+protected:
+    //! the block of getDebugEntryStatementBlock() for code without a parse tree or an entry block: an AOT closure
+    DLLLOCAL StatementBlock* getAOTClosureDebugBlock() const;
+
+public:
 
     DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 

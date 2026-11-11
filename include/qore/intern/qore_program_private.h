@@ -1516,14 +1516,15 @@ public:
     */
     bool library_module = false;
 
-    //! Returns true if a debugger is currently attached to this program
     //! Returns the block of an AOT closure at the given location, which the debugger's events of the debug IR of the
     //! closure are given with, as the entry block of an AOT function (#5795)
     /** Made and registered once per location, and owned by the Program, as the closure functions of AOT code are made
-        again when their IR is read again; locks plock
+        again when their IR is read again; locks plock.  The closures of AOT code have no location (their signature
+        has the Program's location with no line), so that they share one block, and one statement ID
     */
     DLLLOCAL StatementBlock* getAOTClosureDebugBlock(const QoreProgramLocation* loc);
 
+    //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;
     }

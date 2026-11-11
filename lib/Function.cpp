@@ -5642,16 +5642,11 @@ void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
     aot_entry_statement = b;
 }
 
-StatementBlock* UserVariantBase::getDebugEntryStatementBlock() const {
-    if (StatementBlock* b = getEntryStatementBlock()) {
-        return b;
-    }
+StatementBlock* UserVariantBase::getAOTClosureDebugBlock() const {
     if (!pgm || !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return nullptr;
     }
-    StatementBlock* b = qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
-    aot_debug_block.store(b, std::memory_order_release);
-    return b;
+    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
