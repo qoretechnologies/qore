@@ -84,7 +84,8 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
 
 The operators hand the operands that they evaluate to it in the same way, as soon as each is evaluated
 (`QoreOperandEvalHolder`): the arithmetic, bitwise, shift, comparison, logical, regex, `keys`, `elements`, `exists`,
-`instanceof` and unary operators, and `?:` its condition.  Holding a value when it is created, as the compiled modes
+`instanceof` and unary operators, `?:` its condition, `[]` its index, `{}` its key and a scalar cast its
+operand.  Holding a value when it is created, as the compiled modes
 register a temporary when the instruction that creates it runs, gives the same order of release: the right operand
 before the left one, and the operand that an operator created for an earlier element of a functional operator when
 the operand is evaluated again.  So in `f(h + {"a": o}) + (o = NOTHING) + mark()` the hash literal, an operand of
@@ -216,7 +217,9 @@ after the read, which destroys the value in the AST interpreter (qore#5712):
   `AddAny` - is released after its last use when the statement can write the local later, in the read's block or in a
   block that the statement continues in (a `try` block, `&&`, `||` and `?:` split a statement into blocks):
   `QoreIRFunction::releasePlainLocalReadsBeforeWrites()`, which runs after `computeIROnlyLocals()`, inserts
-  `ReleaseOwnedTemp`.  So `f((o,)) + (o = NOTHING) + mark()` and
+  `ReleaseOwnedTemp`; a read whose local is declared with, or whose value facts give, a type that holds no other
+  values (an int, a float, a bool, a string, a date, a binary or a number) is skipped, as its release cannot be
+  observed (`qore_ir_value_may_be_observable()`).  So `f((o,)) + (o = NOTHING) + mark()` and
   `o.n + (o = NOTHING) + mark()` destroy the object before `mark()` runs.  A slice is not such a use: as the source of
   a functional operator, the AST interpreter iterates the sequence itself (`map $1, l[0..(l = ()).size()]`).
 

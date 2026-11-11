@@ -137,6 +137,12 @@ sub main() {
     # keys, and a comparison with a float, whose AST node takes a typed path
     t("operand of keys", auto sub () { string s = f1(keys mkh("k")) + mark("k"); });
     t("operand of float compare", auto sub () { string s = f1(mke("lt") < 1.0) + mark("lt"); });
+    # keys as the source of a functional operator, of a hash and of an object
+    t("keys source hash", auto sub () { string s = f1(map $1, keys mkh("ksh")) + mark("ksh"); });
+    t("keys source object", auto sub () { string s = f1(map $1, keys mke("kso")) + mark("kso"); });
+    # an index and a key
+    t("operand of index", auto sub () { list<auto> l = (1, 2); string s = f1(l[mke("ix")]) + mark("ix"); });
+    t("operand of key", auto sub () { hash<auto> h = {"a": 1}; string s = f1(h{mke("key").n}) + mark("key"); });
     t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });

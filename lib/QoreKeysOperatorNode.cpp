@@ -180,8 +180,9 @@ QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
 FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
-    // the hash is given to the iterator, which a functional operator holds as its source
-    ValueEvalOptimizedRefHolder marg(exp, xsink);
+    // the operand is a temporary of the statement, which lives until the statement ends, as in the other execution
+    // modes (qore#5712); the iterator takes a reference of its own to a hash
+    QoreOperandEvalHolder marg(exp, xsink);
     if (xsink && *xsink)
         return nullptr;
     return qore_keys_iterator(marg, value_type, xsink);

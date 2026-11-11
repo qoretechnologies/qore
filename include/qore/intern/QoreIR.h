@@ -4007,8 +4007,9 @@ public:
     void computeIROnlyLocals();
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
-        can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the AST interpreter borrows the value from the variable; the
-        difference can be observed only if the statement writes the variable after the read, which then destroys
+        can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
+        AST interpreter borrows the value from the variable; the difference can be observed only if the statement
+        writes the variable after the read, which then destroys
         the value in the AST interpreter: f((o,)) + (o = NOTHING) + mark(), o.n + (o = NOTHING) + mark().  For such
         a read whose uses are all later in its block and only take values from it (MakeList, MakeHash,
         MakeHashConstKeys, HashKeyAccess, AddAny; not a slice, which the AST interpreter iterates from the

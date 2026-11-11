@@ -50,7 +50,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(35, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(39, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -63,6 +63,9 @@ class TempReleasePointsTest inherits QUnit::Test {
         assertTrue(out =~ /\noperand exception:\n  dtor arg\n  dtor op\n  ! X\n/, "operand and an exception");
         assertTrue(out =~ /\ncondition:\n  mark q\n  dtor q\n/, "condition of ?:");
         assertTrue(out =~ /\noperand of keys:\n  mark k\n  dtor k\n/, "operand of keys");
+        assertTrue(out =~ /\nkeys source hash:\n  mark ksh\n  dtor ksh\n/, "keys of a hash as a functional source");
+        assertTrue(out =~ /\noperand of index:\n  mark ix\n  dtor ix\n/, "an index");
+        assertTrue(out =~ /\nkeys source object:\n  mark kso\n  dtor kso\n/, "keys of an object as a functional source");
         assertTrue(out =~ /\noperand of float compare:\n  mark lt\n  dtor lt\n/, "operand of a float comparison");
         assertTrue(out =~ /\nfloat compare exception:\n  dtor arg\n  dtor gt\n  ! X\n/, "float comparison and an exception");
         assertTrue(out =~ /\ntry block:\n  dtor try\n  mark try\n/, "try block");

@@ -242,9 +242,11 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
     list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
     operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a cast) and
     an operand that the statement holds (of an arithmetic, bitwise, shift, comparison, logical, regex, keys,
-    elements, exists, instanceof or unary operator, or the condition of ?: - QoreOperandEvalHolder), which the
-    statement holds until it ends (QoreStatementTempScope::holdReceiver()), are released last, last held first.  An engine that releases a statement's temporaries last registered first gives another order
-    (f(new T("a"), new T("b"), thr()) destroys b before a).
+    elements, exists, instanceof or unary operator, the condition of ?:, the index of [] or the key of {} -
+    QoreOperandEvalHolder), which the
+    statement holds until it ends (QoreStatementTempScope::holdReceiver()), are released last, last held first.  An
+    engine that releases a statement's temporaries last registered first gives another order (f(new T("a"),
+    new T("b"), thr()) destroys b before a).
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a

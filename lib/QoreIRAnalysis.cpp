@@ -745,6 +745,11 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
                 }
             } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
                 set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+                // the index or the key of an element access, which the statement holds too (qore#5712)
+                if (inst->operands.size() > 1 && (op == QoreIROpcode::ListIndexDynamic
+                        || op == QoreIROpcode::HashDerefDynamic || op == QoreIROpcode::ListIndexAccess)) {
+                    set_class(inst->operands[1], QORE_IR_RELEASE_RECEIVER);
+                }
             } else if (qore_ir_opcode_holds_operands(op)) {
                 for (const QoreIRValue& operand : inst->operands) {
                     set_class(operand, QORE_IR_RELEASE_RECEIVER);
