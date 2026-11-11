@@ -15,6 +15,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -26,6 +27,10 @@ HELPER = ROOT / "examples/test/docker_test/ci-native-modules.sh"
 BUILD_DIR = Path(os.environ.get("QORE_TEST_BUILD_DIR", str(ROOT / "build")))
 LIBQORE = next((BUILD_DIR / name for name in ("libqore.so", "libqore.dylib") if (BUILD_DIR / name).exists()), None)
 HAVE_QORE = (BUILD_DIR / "qore").exists() and LIBQORE is not None
+
+# the shells that the function runs in: sh, bash, and dash where it is installed (sh is dash on Debian and Ubuntu,
+# and bash on macOS)
+SHELLS = ("sh", "bash") + (("dash",) if shutil.which("dash") else ())
 
 
 class NativeModuleFarmTest(unittest.TestCase):
@@ -105,33 +110,52 @@ class NativeModuleFarmTest(unittest.TestCase):
         self.assertIn("-- native modules: 2 exposed, 1 left out (built for another module API): c-api-1.9 --",
                       result.stdout)
 
+    # the caller's shell state, set up before the call, and what it is after it: IFS as hexadecimal bytes, then
+    # whether pathname expansion is off
+    STATE_CASES = {
+        "": "ifs=set:20090a\nglob",
+        "IFS=:;": "ifs=set:3a\nglob",
+        "IFS=;": "ifs=set:\nglob",
+        "unset IFS;": "ifs=:\nglob",
+        "set -f;": "ifs=set:20090a\nnoglob",
+    }
+
+    def shell_state(self, shell, setup, qore, mods):
+        """Runs the function in the given shell after the given setup, and returns its exit status and the caller's
+        IFS and pathname expansion setting after it"""
+        script = ('. "$1"; shift; {setup} qore_ci_native_module_farm "$@" > /dev/null 2>&1; echo "rc=$?"; '
+                  'echo "ifs=${{IFS+set}}:$(printf %s "$IFS" | od -An -tx1 | tr -d " \\n")"; '
+                  'case $- in *f*) echo noglob ;; *) echo glob ;; esac')
+        for f in self.farm.iterdir():
+            f.unlink()
+        result = subprocess.run([shell, "-c", script.format(setup=setup), shell, str(HELPER), str(qore),
+                                 str(self.farm), str(mods)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, result.returncode, result.stderr)
+        rc, state = result.stdout.split("\n", 1)
+        return rc, state
+
     def test_shell_state_restored(self):
         """The caller's IFS (set, empty or unset) and pathname expansion setting are kept"""
         mods = self.module_dir("mods", ("a-api-2.1.qmod",))
         qore = self.fake_qore("2.1, 2.0")
-        # IFS as hexadecimal bytes, then whether pathname expansion is off
-        script = ('. "$1"; shift; {setup} qore_ci_native_module_farm "$@" > /dev/null; '
-                  'echo "ifs=${{IFS+set}}:$(printf %s "$IFS" | od -An -tx1 | tr -d " \\n")"; '
-                  'case $- in *f*) echo noglob ;; *) echo glob ;; esac')
-        cases = {
-            "": "ifs=set:20090a\nglob",
-            "IFS=:;": "ifs=set:3a\nglob",
-            "IFS=;": "ifs=set:\nglob",
-            "unset IFS;": "ifs=:\nglob",
-            # the modules are found also when the caller turned pathname expansion off
-            "set -f;": "ifs=set:20090a\nnoglob",
-        }
-        for shell in ("sh", "bash"):
-            for setup, expected in cases.items():
+        for shell in SHELLS:
+            for setup, expected in self.STATE_CASES.items():
                 with self.subTest(shell=shell, setup=setup):
-                    for f in self.farm.iterdir():
-                        f.unlink()
-                    result = subprocess.run([shell, "-c", script.format(setup=setup), shell, str(HELPER), str(qore),
-                                             str(self.farm), str(mods)], capture_output=True, text=True,
-                                            timeout=60)
-                    self.assertEqual(0, result.returncode, result.stderr)
-                    self.assertEqual(expected + "\n", result.stdout)
+                    self.assertEqual(("rc=0", expected + "\n"), self.shell_state(shell, setup, qore, mods))
+                    # the modules are found also when the caller turned pathname expansion off
                     self.assertEqual({"a-api-2.1.qmod"}, set(self.linked()))
+
+    def test_shell_state_restored_on_error(self):
+        """The caller's IFS and pathname expansion setting are kept when the module APIs are refused"""
+        mods = self.module_dir("mods", ("a-api-2.1.qmod",))
+        # refused while the list is split, and before it is
+        for output in ("2.1, 2.x", "2.1,,2.0", "warning: blah\n2.1"):
+            qore = self.fake_qore(output)
+            for shell in SHELLS:
+                for setup, expected in self.STATE_CASES.items():
+                    with self.subTest(output=output, shell=shell, setup=setup):
+                        self.assertEqual(("rc=1", expected + "\n"), self.shell_state(shell, setup, qore, mods))
+                        self.assertEqual({}, self.linked())
 
     def test_first_directory_wins(self):
         first = self.module_dir("first", ("xml-api-2.1.qmod",))
