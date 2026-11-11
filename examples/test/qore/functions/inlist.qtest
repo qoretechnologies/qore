@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class InlistTest
+
+#! a member that is never assigned has no value at run time, although its type does not admit one
+class InlistNoValue {
+    public {
+        list<string> names;
+        hash<string, bool> h;
+    }
+}
+
+class InlistTest inherits QUnit::Test {
+    constructor() : QUnit::Test("InlistTest", "1.0") {
+        addTestCase("inlist() test", \inlistTest());
+        addTestCase("inlist_hard() test", \inlistHardTest());
+        addTestCase("no list with strict arguments", \noValueTest());
+
+        set_return_value(main());
+    }
+
+    inlistTest() {
+        assertTrue(inlist("a", ("a", "b")));
+        assertFalse(inlist("c", ("a", "b")));
+        # soft comparisons convert types
+        assertTrue(inlist(1, ("1", "2")));
+        assertTrue(inlist("2", (1, 2)));
+        assertFalse(inlist("a", ()));
+        # a single value is a list of one element
+        assertTrue(inlist("a", "a"));
+    }
+
+    inlistHardTest() {
+        assertTrue(inlist_hard("a", ("a", "b")));
+        assertFalse(inlist_hard("c", ("a", "b")));
+        # hard comparisons do not convert types
+        assertFalse(inlist_hard(1, ("1", "2")));
+        assertTrue(inlist_hard(1, (1, 2)));
+        assertFalse(inlist_hard("a", ()));
+    }
+
+    #! inlist() and inlist_hard() of no list return False with strict arguments (%modern), as their noop variants did
+    noValueTest() {
+        InlistNoValue nv();
+        assertFalse(inlist("a", nv.names));
+        assertFalse(inlist_hard("a", nv.names));
+        assertFalse(inlist("a", keys nv.h));
+        assertFalse(inlist_hard("a", keys nv.h));
+        assertFalse(inlist(NOTHING, nv.names));
+        # a list value keeps the list variant
+        assertTrue(inlist("a", keys {"a": True}));
+        assertTrue(inlist_hard("a", keys {"a": True}));
+    }
+}

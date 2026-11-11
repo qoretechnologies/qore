@@ -1,0 +1,35 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The code of signal-handler-program-delete-worker.q that runs in the main Program and in a sub-Program: the closure of
+# a signal handler holds the only reference to an object whose destructor uses the data of its Program
+
+# set by set_handler(): an initializer would be a top-level statement, which %exec-class does not allow
+our *string state;
+
+string sub describe() {
+    return sprintf("global %s, static %s", state, Captured::name);
+}
+
+class Captured {
+    public {
+        static string name = "captured";
+    }
+
+    destructor() {
+        # the data of the Program: a global variable, a static member, and a function
+        printf("destructor: %s\n", describe());
+    }
+
+    touch() {
+    }
+}
+
+sub set_handler() {
+    state = "valid";
+    Captured c();
+    # the closure holds the only reference to the object
+    set_signal_handler(SIGTERM, sub (int sig) {
+        c.touch();
+    });
+}

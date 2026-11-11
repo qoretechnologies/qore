@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - parses Programs of every execution mode in its own process, and runs scripts in child processes that set their own execution modes and in programs compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class BackgroundLvaluePathTest
+
+#! the execution modes, by name
+const ExecModes = {
+    "ast": EM_AST,
+    "ir": EM_IR,
+    "jit": EM_JIT,
+    "tiered": EM_TIERED,
+};
+
+#! the declarations of the Programs
+const Decls = "%modern
+class C {
+    public {
+        int x = 0;
+    }
+}
+sub record(Queue q, int g, auto v) { q.push(v); }
+thread_local list<int> tl;
+";
+
+#! modifications of a value held by a variable of the code that starts the thread, which the thread copies, by name,
+#! with the error that refuses them
+const Refused = {
+    "list element": ("list<int> l = (1, 2); background (l[0] = 9)", "illegal local variable modification"),
+    "hash key": ("hash<auto> h = {\"a\": 1}; background (h.a = 2)", "illegal local variable modification"),
+    "nested hash key": ("hash<string, hash<string, int>> h = {\"a\": {\"b\": 1}}; background (h.a.b = 2)",
+        "illegal local variable modification"),
+    "element of a list in a hash": ("hash<string, list<int>> h = {\"a\": (1,)}; background (h.a[0] = 2)",
+        "illegal local variable modification"),
+    "remove of a hash key": ("hash<auto> h = {\"a\": 1}; background (remove h.a)",
+        "illegal local variable modification"),
+    "local declared as a reference": ("list<int> l = (1,); reference<list<int>> r = \\l; background (r[0] = 2)",
+        "illegal local variable modification"),
+    "closure-bound local": ("list<int> l = (1, 2); code c = sub () { background (l[0] = 9); }; c()",
+        "illegal local variable modification"),
+    "thread-local variable": ("background (tl[0] = 9)", "illegal local variable modification"),
+    "auto local": ("auto a = new C(); background (a.x = 5)", "a value of a local variable or member whose type is not "
+        "known"),
+    "any local": ("any a = new C(); background (a.x = 5)", "a value of a local variable or member whose type is not "
+        "known"),
+    "element of an untyped list": ("list<auto> l = (new C(),); background (l[0].x = 5)",
+        "a value of a local variable or member whose type is not known"),
+    "list element in a call argument": ("Queue q(); list<int> l = (1, 2); background record(q, 0, (l[0] = 9))",
+        "illegal local variable modification"),
+    "hash key in a call argument": ("Queue q(); hash<auto> h = {\"a\": 1}; background record(q, 0, (h.a = 2))",
+        "illegal local variable modification"),
+    "auto local in a call argument": ("Queue q(); auto a = new C(); background record(q, 0, (a.x += 2))",
+        "a value of a local variable or member whose type is not known"),
+};
+
+#! the same for a member of the object of the code that starts the thread, in a method
+const RefusedMembers = {
+    "member hash key": "background (m.a = 2)",
+    "member hash key through self": "background (self.m.a = 2)",
+    "member hash key in a call argument": "Queue q(); background record(q, 0, (m.a = 2))",
+};
+
+#! Regression test for issue #5723: modifications by their access path in a background expression
+/** The background operator takes the values of the local, closure-bound and thread-local variables and of the members
+    of the code that starts the thread when the thread starts: a modification of a value that one of them holds (an
+    element, a key) changes the thread's copy only, and is refused at parse time; one through an object, statically
+    known, changes the object, which the thread shares, and is allowed, with the same results in every execution mode
+    (BackgroundLvaluePaths.q: object steps followed by containers, remove and delete, every modifying operator, and the
+    members of the object of a method as roots); one through a value whose type is not known is refused.  A member of
+    a *C local holding no value raises the same error in every mode as outside a background expression
+    (BackgroundLvaluePathNothing.q).
+*/
+class BackgroundLvaluePathTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string dir = get_script_dir();
+        string fixture = dir + "/BackgroundLvaluePaths.q";
+        string expected = ReadOnlyFile::readTextFile(dir + "/BackgroundLvaluePaths.expected");
+        string nothing_fixture = dir + "/BackgroundLvaluePathNothing.q";
+    }
+
+    constructor() : QUnit::Test("background lvalue access paths", "1.0", \ARGV) {
+        foreach hash<auto> mode in (ExecModes.pairIterator()) {
+            string name = mode.key;
+            ExecMode em = mode.value;
+            addTestCase("refused: " + name, sub () { checkRefused(name, em); });
+            addTestCase("allowed paths: " + name, sub () {
+                assertEq(expected, ExecModeHarness::run(command(name, fixture)));
+            });
+            addTestCase("*C holding no value: " + name, sub () {
+                checkNothing(name, ExecModeHarness::run(command(name, nothing_fixture), NativeCheck::None));
+            });
+        }
+        addTestCase("allowed paths: IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered", fixture)));
+        });
+        addTestCase("allowed paths: qcc", \checkQcc());
+
+        set_return_value(main());
+    }
+
+    private string command(string mode, string script) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(script));
+    }
+
+    private checkRefused(string mode, ExecMode em) {
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            string label = sprintf("%s: %s: %s", mode, i.key, i.value[0]);
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            p.setExecMode(em);
+            assertThrows("PARSE-EXCEPTION", i.value[1], sub () {
+                p.parse(Decls + sprintf("sub t() { %s; }\n", i.value[0]), label);
+            }, NOTHING, label);
+        }
+        foreach hash<auto> i in (RefusedMembers.pairIterator()) {
+            string label = sprintf("%s: %s: %s", mode, i.key, i.value);
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            p.setExecMode(em);
+            assertThrows("PARSE-EXCEPTION", "illegal member modification", sub () {
+                p.parse(Decls + sprintf("class M { private { hash<auto> m = {\"a\": 1}; } t() { %s; } }\n",
+                    i.value), label);
+            }, NOTHING, label);
+        }
+    }
+
+    #! the same error inside and outside of the background expression
+    private checkNothing(string label, string output) {
+        string err = "RUNTIME-TYPE-ERROR: cannot convert lvalue declared as \\*object<BlpN> to a hash";
+        assertRegex("outside: " + err, output, label + ": outside");
+        assertRegex("(?m)^" + err + "$", output, label + ": in the new thread");
+        assertNRegex("BACKGROUND-LVALUE-ERROR", output, label);
+    }
+
+    private checkQcc() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        foreach int opt in ((0, 3)) {
+            string program = sprintf("%s/paths-O%d", tmp, opt);
+            string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+                shellQuote(fixture)));
+            assertTrue(is_file(program), sprintf("-O%d: compiled: %s", opt, output));
+            assertEq(expected, backquote(shellQuote(program) + " 2>&1"), sprintf("qcc -O%d", opt));
+
+            string nothing_program = sprintf("%s/nothing-O%d", tmp, opt);
+            output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt,
+                shellQuote(nothing_program), shellQuote(nothing_fixture)));
+            assertTrue(is_file(nothing_program), sprintf("-O%d: compiled: %s", opt, output));
+            checkNothing(sprintf("qcc -O%d", opt), backquote(shellQuote(nothing_program) + " 2>&1"));
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
@@ -154,6 +155,10 @@ QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_
     ValueEvalRefHolder b(rc, e[0], xsink);
     if (*xsink)
         return QoreValue();
+    // a temporary condition lives until the end of the statement, as in the other execution modes (qore#5712)
+    if (b.isTemp() && b->needsRef()) {
+        QoreStatementTempScope::holdReceiver(e[0], b, xsink);
+    }
 
     QoreValue exp = b->getAsBool() ? e[1] : e[2];
 

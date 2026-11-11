@@ -57,6 +57,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/BackgroundLValueRootNode.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreHashKeyHelper.h"
@@ -1672,6 +1673,32 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
     return rc;
 }
 
+//! Raises the exception for an lvalue that is a value, not a variable or a step of an access path
+static void qore_raise_background_value_lvalue_error(ExceptionSink* xsink, const QoreValue& v) {
+    xsink->raiseException("BACKGROUND-LVALUE-ERROR", "a value of type '%s' is not an lvalue", v.getFullTypeName());
+}
+
+int LValueHelper::doBackgroundRootLValue(const QoreValue& n) {
+    if (n.getType() != BackgroundLValueRootNode::getNodeType()) {
+        qore_raise_background_value_lvalue_error(vl.xsink, n);
+        clearPtr();
+        return -1;
+    }
+    // the root of the lvalue of a background expression: the value that the thread took for a variable or a member,
+    // as a temporary lvalue of the variable's declared type, so that a path through an object modifies the object,
+    // which the thread shares, as in the other execution modes (issue #5723).  The lvalue's storage is a node of its
+    // own for this evaluation, which the helper releases with its other temporary values (tvec): the node of the
+    // copied expression is never written, so a value that it gave out stays valid, and the helper of any other
+    // lvalue does nothing for it
+    const BackgroundLValueRootNode* root = n.get<const BackgroundLValueRootNode>();
+    ReferenceHolder<BackgroundLValueRootNode> storage(new BackgroundLValueRootNode(root->loc,
+        root->getValue().refSelf(), root->getValueTypeInfo()), vl.xsink);
+    tvec.push_back(*storage);
+    BackgroundLValueRootNode* storage_node = storage.release();
+    setValue(storage_node->getLValueStorage(), root->getValueTypeInfo());
+    return 0;
+}
+
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes
@@ -1892,8 +1919,11 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             clearPtr();
             return -1;
         }
+    } else if (ntype != NT_OPERATOR) {
+        if (doBackgroundRootLValue(n)) {
+            return -1;
+        }
     } else {
-        assert(ntype == NT_OPERATOR);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
             read_access = RA_ELEMENT;
@@ -2015,8 +2045,11 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             clearPtr();
             return -1;
         }
+    } else if (ntype != NT_OPERATOR) {
+        if (doBackgroundRootLValue(n)) {
+            return -1;
+        }
     } else {
-        assert(ntype == NT_OPERATOR);
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
             read_access = RA_ELEMENT;
@@ -3584,6 +3617,12 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         return;
     }
 
+    // the root of the lvalue of a background expression is the value that the thread took (issue #5723)
+    if (t == BackgroundLValueRootNode::getNodeType()) {
+        discard(rv.assignInitial(lvalue.get<const BackgroundLValueRootNode>()->getValue().refSelf()), xsink);
+        return;
+    }
+
     // could be any type if in a background expression
     if (t != NT_OPERATOR) {
         discard(rv.assignInitial(lvalue.refSelf()), xsink);
@@ -4072,20 +4111,9 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
         }
     }
 
-    // a value that is not a list, a string or a binary object is removed as a whole, unless a selector raised an
-    // exception
-    if (sel.raised()) {
-        return;
-    }
-    bool static_assignment = false;
-    QoreValue tmp = lvh.remove(static_assignment);
-    if (static_assignment)
-        tmp.ref();
-#ifdef DEBUG
-    assert(!rv.assignAssumeInitial(tmp));
-#else
-    rv.assignAssumeInitial(tmp);
-#endif
+    // a list of selectors selects nothing from a value that is not a list, a string or a binary object: the selectors
+    // have been evaluated, in order, and nothing is removed, as in the other execution modes and as the expression
+    // as a value gives NOTHING (qore#5695); a single index still removes the value as a whole
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op) {

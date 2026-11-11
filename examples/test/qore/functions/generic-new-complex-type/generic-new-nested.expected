@@ -1,0 +1,7 @@
+{a: [1, 1]}
+[{a: "x"}]
+{a: 1}
+["u"]
+{b: "five"} [5, 5]
+[2.5]
+hash<string, list<int>> list<float>

@@ -633,6 +633,33 @@ private:
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
     //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
     std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
+    //! The selector-segment loop of the iterator of a list of selectors created with QoreIRListSelectorFlag::Segment
+    //! (qore#5711): its cursor and the selector needed next live in the frame of the function, and the iterator only
+    //! keeps the sequence
+    struct SelectorSegmentState {
+        //! the cursor: an array of QORE_RT_SEGMENT_CURSOR_SIZE int64 values (see QoreRtSelectorSegmentCursor)
+        llvm::AllocaInst* cursor = nullptr;
+        //! the index of the selector needed next
+        llvm::AllocaInst* selector = nullptr;
+        //! the sequence, NaN-boxed, which dominates the loop
+        llvm::Value* seq = nullptr;
+        //! the QoreIRListSelectorFlag flags of the iterator
+        int64_t flags = 0;
+        //! the number of selectors
+        int64_t count = 0;
+    };
+    //! the selector-segment loops of the function, by the value of their iterator
+    std::unordered_map<uint32_t, SelectorSegmentState> selector_segment_states;
+    //! the iterators of lists of selectors whose IteratorCreateSelectors has been lowered
+    std::unordered_set<uint32_t> lowered_selector_iterators;
+    //! fails the lowering if the iterator of a list of selectors is used before its creation is lowered
+    /** The state of a selector-segment loop is registered when its IteratorCreateSelectors is lowered, so that the
+        pending, feed and next steps of the loop, which use it, must be lowered after it; a step lowered first would
+        use the iterator instead of the cursor (qore#5711).
+
+        @return true if \a iterator is not the iterator of a list of selectors, or if its creation has been lowered
+    */
+    DLLLOCAL bool checkSelectorIteratorLowered(uint32_t iterator, std::string& error) const;
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows
@@ -721,6 +748,9 @@ private:
     std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
     // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
     std::unordered_set<uint32_t> value_defined_by_call;
+    //! the call arguments that are list or hash literals or AddAny results whose release at the call's return can be
+    //! observed, by value id (qore_ir_find_observable_temp_call_args())
+    std::vector<uint8_t> observable_temp_call_args;
     // the values read from a variable (LoadLocal, LoadArg, LoadClosure, LoadGlobal, LoadThreadLocal): one that the
     // read gave a reference of its own to (a cleanup slot) and that a call takes as an argument is released when the
     // call returns, as any argument
@@ -1007,6 +1037,19 @@ private:
             llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
 
+    //! Emits the construction of a typed hash or list from its lowered initializer (the instruction's operand 0)
+    /** For NewComplexHash and NewComplexList with their initializer lowered as an operand (issue #5704): calls the
+        runtime helper that builds the value from the initializer, by type pointer (JIT) or type path (AOT), with the
+        hash initializer's precheck as for VrnConstruct.
+
+        @param maybe_invoke true to emit the call with emitMaybeInvoke(), false for a plain call (in an Invoke)
+
+        @return the NaN-boxed result, or nullptr with \a error set
+    */
+    llvm::Value* emitComplexConstructFromOperand(const QoreTypeInfo* type_info, bool is_hash,
+            const QoreIRInstruction* inst, bool maybe_invoke, llvm::Module& module, llvm::Function* llvm_func,
+            std::string& error);
+
     // AOT batch fast entries are only valid when the callee's own AOT context
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
@@ -1232,6 +1275,14 @@ private:
     // Lower a single instruction; returns false on unsupported opcode
     bool lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
             llvm::Module& module, std::string& error);
+
+    //! Lowers IteratorNextSelectors for the selector-segment loop of \a seg (qore#5711)
+    /** Gives the value at the next index of the cursor, read from the list, or branches to the done target when the
+        current selector has no index left; the element is held in an output slot as for the iterator
+        (qore_rt_selector_iterator_next())
+    */
+    bool lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction* iter_inst, const SelectorSegmentState& seg,
+            llvm::Module& module, llvm::Function* llvm_func, std::string& error);
 
     //! Reject AOT codegen that would execute serialized expression trees.
     bool checkNoAotExecutableExprFallback(llvm::Function* llvm_func, std::string& error) const;
@@ -1711,6 +1762,9 @@ private:
     /** A native entry called directly (a fast entry) pushes no call stack frame; the caller pushes it around the
         call (qore_rt_push_native_call_frame()) in storage of its own frame, and pops it when the call returns, with
         or without an exception (native entries report exceptions by returning), before the exception is checked.
+        When the callee is a plain function called from code that can run with an object or a class
+        (nativeCallNeedsFunctionContext()), the call also switches to the function's context
+        (emitPushNativeFunctionContext()).
 
         @param fn the native entry
         @param args the arguments of the call
@@ -1747,6 +1801,25 @@ private:
     llvm::Constant* getAotCallLocation(const QoreIRInstruction* inst, llvm::Module& module);
     //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
     void emitPopNativeCallFrame(llvm::Module& module);
+    //! Returns true if a direct native call of \a callee from the function being lowered must switch to the
+    //! callee's object and class context
+    /** A call of user code runs a plain function's body without an object or a class (UserVariantBase::eval()).
+        The function being lowered runs in that context when it is a plain function, as each call path into its body
+        establishes it; methods, closures (which run in the context they were created in) and top-level code can run
+        with an object or a class.  The callee of a closure runs in the caller's context, as it was created there; AOT
+        code calls the fast entries of methods with the context that they establish, and JIT batches take no method
+        callees.
+    */
+    bool nativeCallNeedsFunctionContext(const AbstractQoreFunctionVariant* callee) const;
+    //! Emits the switch to the context of a plain function for a direct call of its fast entry
+    /** (qore_rt_push_native_function_context_v1()); emitPopNativeFunctionContext() restores the caller's context
+        after the call returns, with or without an exception.
+        @return the call of the switch, which the caller removes if the call is replaced by a summary of the body
+        that does not observe the context
+    */
+    llvm::CallInst* emitPushNativeFunctionContext(llvm::Module& module, llvm::Function* llvm_func);
+    //! Emits the restoration of the context replaced by emitPushNativeFunctionContext()
+    void emitPopNativeFunctionContext(llvm::Module& module);
 
     //! The instructions that push the frame of an AOT call whose callee may run inline, as a body summary
     struct AotInlineCallFrame {
@@ -1791,6 +1864,10 @@ private:
     llvm::AllocaInst* native_call_frame_storage = nullptr;
     //! The current thread's data for the frames of the native calls, got once in the entry block
     llvm::Value* native_call_thread_data = nullptr;
+    //! The storage of the context of the plain functions whose fast entries the function being lowered calls
+    //! directly, created by the first call that switches to it (emitPushNativeFunctionContext())
+    /** One is enough, as for native_call_frame_storage */
+    llvm::AllocaInst* native_function_context_storage = nullptr;
 
     //! The number of background helpers emitted for the function being lowered
     unsigned bg_helper_count = 0;

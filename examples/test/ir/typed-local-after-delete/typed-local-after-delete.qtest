@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TypedLocalAfterDeleteTest
+
+#! issue #5710: typed locals after delete or remove
+/** The value of a delete expression on a local was the removed value in the IR interpreter and native code, while the
+    AST interpreter gives NOTHING, so that a list literal with it raised a type error; and a typed local that delete or
+    remove leaves without a value was compared as a value of its declared type (a deleted string was not equal to
+    ""), while the AST interpreter compares NOTHING.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class TypedLocalAfterDeleteTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "delete-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("typed locals after delete", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        assertEq(42, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertTrue(out =~ /^delete value list:\n  = \[\[null, 2\], null\]\n/, "the value of delete is NOTHING");
+        assertTrue(out =~ /\nremove value list:\n  = \[\[\[0, 1, 2\], 2\], null\]\n/, "the value of remove");
+        assertTrue(out =~ /\nstring eq:\n  = \[True, False, False, True\]\n/, "a deleted string equals \"\"");
+        assertTrue(out =~ /\nloop read before delete:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "loop");
+        # a call that NOTHING cannot be passed to raises an exception, also after a remove later in the loop
+        assertTrue(out =~ /\ntyped param after remove:\n  = \["a", "caught"\]\n/, "typed parameter");
+        # a delete through a reference leaves the variable without a value
+        assertTrue(out =~ /\ndelete through reference:\n  = \[True, False, "!"\]\n/, "delete through a reference");
+        assertTrue(out =~ /\nswitch after delete through reference:\n  = "none"\n/, "switch");
+        # the destructor runs after the global's lock, which it reads
+        assertTrue(out =~ /\ndelete global destructor:\n  dtor X: global exists False\n  = False\n/, "destructor");
+        assertTrue(out =~ /\ndelete system object:\n  ! SYSTEM-OBJECT-ERROR: /, "system object");
+        assertTrue(out =~ /\nplain function:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "plain function");
+        # the typed fast paths of builtin functions and pseudo-methods take the value that the AST interpreter does
+        # join(string, ...) takes NOTHING as one of its values (the no-op join() is not called with strict arguments,
+        # qore#5686, qore#5717)
+        assertTrue(out =~ /\nloop join:\n  = \["a,b", ""\]\n/, "join");
+        assertTrue(out =~ /\nloop join method:\n  = \["a,b", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "l.join()");
+        assertTrue(out =~ /\nloop pseudo method:\n  = \["bc", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "s.substr()");
+        assertTrue(out =~ /\nloop switch transform:\n  ! PSEUDO-METHOD-DOES-NOT-EXIST: /, "switch on s.lwr()");
+        # += and -= on a deleted local start from the type's default
+        assertTrue(out =~ /\nloop plus equals string:\n  = \["ax", "x"\]\n/, "string +=");
+        assertTrue(out =~ /\nloop plus equals list:\n  = \[2, 1\]\n/, "list +=");
+        assertTrue(out =~ /\nloop plus equals hash:\n  = \[2, 1\]\n/, "hash +=");
+        assertTrue(out =~ /\nloop minus equals int:\n  = \[7, -3\]\n/, "int -=");
+        assertTrue(out =~ /\nloop plus equals closure:\n  = \["ay", "y"\]\n/, "closure-bound string +=");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("typed-local-after-delete-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

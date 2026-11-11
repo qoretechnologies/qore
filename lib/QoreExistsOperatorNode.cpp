@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreExistsOperatorNode::Exists_str("exists operator expression");
 
@@ -47,7 +48,7 @@ int QoreExistsOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink
 }
 
 QoreValue QoreExistsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 

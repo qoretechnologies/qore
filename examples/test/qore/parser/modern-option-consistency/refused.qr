@@ -1,0 +1,4 @@
+# a file parsed in %modern mode by its extension: a directive that disables an option that %modern implies is refused
+%no-negative-offsets
+list<int> l = (1, 2, 3);
+printf("%y\n", l[-1]);

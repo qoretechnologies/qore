@@ -40,6 +40,17 @@
 
     After remove_signal_handler(), a signal is processed as if it never had a handler.
 
+    @anchor signal_handler_program_lifetime
+    A signal handler belongs to the @ref Qore::Program "Program" of the code that set it.  When the Program is
+    deleted (also when the main program of the \c qore binary ends), its handlers are removed once its threads have
+    ended and before any of its data is destroyed: the values that a handler's @ref closure "closure" captured are
+    released then, so that the destructor of an object whose last reference the closure held (a server that the
+    handler stops, for example) runs while the Program's global variables, static class members and functions can
+    still be used.  A callback that is still finishing in the signal handling thread is waited for first.  From then
+    on, a signal is processed as if the Program had set no handler for it, and set_signal_handler() called by the
+    Program's code (in a destructor run as its data is destroyed, for example) has no effect: the handler could never
+    run.
+
     Some issues to be aware of in signal handlers:
     - Thread-local storage is not persistent in signal handlers; it is deleted after every signal handler is run.
     - A signal handler that does not terminate will block the execution of further signal handlers and will block signal handling changes (such as updating the signal mask), resulting in a %Qore process that must be killed manually. Because all %Qore signal handling code is executed serially in a single thread, %Qore signal handlers should execute and return quickly to give time to execute other handlers.

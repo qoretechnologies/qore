@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# Static method and function calls whose callee runs in its own object and class context: the fixture of
+# JITStaticMethodDirectCalls.qtest, whose output must be the same in every execution mode and in AOT code
+
+%modern
+
+class Tracked {
+    private:internal { string name; }
+    constructor(string name) { self.name = name; }
+    destructor() { printf("destroyed %s\n", name); }
+}
+
+class Base {
+    private int pm() { return 42; }
+    private static int psm(int x) { return x * 2; }
+    private:internal static int pism(int x) { return x * 3; }
+    static int ism(int x) { return x + 100; }
+    static float fsm(float x) { return x * 1.5; }
+    static bool bsm(int x) { return x % 2 == 0; }
+    static string ssm(string s) { return s + "!"; }
+    # needs the class context: a private method called through an object whose class is not known at parse time
+    static int dyn(object o) { return o.pm(); }
+    static int callPriv(int x) { return Base::psm(x) + Base::pism(x); }
+    # unqualified call of a static method of the class
+    static int unq(int x) { return ism(x) + psm(x); }
+    static int ov(int x) { return x + 1; }
+    static int ov(string s) { return s.size(); }
+    # a closure made by a static method captures no object, even when the method is called from a normal method
+    static code mkClosure() { return int sub () { return 1; }; }
+    static int thrower(int x) {
+        if (x > 2) {
+            throw "STATIC-ERR", sprintf("x=%d", x);
+        }
+        return x;
+    }
+    static list<string> stack() { return map $1.function, get_thread_call_stack(); }
+    static int callFunc(object o) { return plain_private_call(o); }
+    static int rec(int n) { return n <= 0 ? 0 : n + Base::rec(n - 1); }
+    static int argv_sum(int x) { int s = x; foreach auto v in (argv) { s += v; } return s; }
+    static int defarg(int x, int y = 10) { return x + y; }
+    static synchronized int sync(int x) { return x + 7; }
+    static Tracked keep(Tracked t) { return t; }
+    static int any_ov(auto a) { return Base::ov(a); }
+}
+
+class Child inherits Base {
+    int m(int n) {
+        int s = 0;
+        for (int i = 0; i < n; ++i) {
+            s += Base::ism(i) + Child::ism(i);
+        }
+        return s;
+    }
+    code mk() { return Base::mkClosure(); }
+    static int childOnly(int x) { return Child::ism(x) + Base::psm(x); }
+    int callFuncFromMethod(object o) {
+        int s = 0;
+        for (int i = 0; i < 3; ++i) {
+            s += plain_private_call(o);
+        }
+        return s;
+    }
+    destructor() { printf("Child destroyed\n"); }
+}
+
+class Other {
+    private int pm() { return 13; }
+    # a static method of another class called from a method: its body must not see this class's context
+    int callBase(object o) {
+        int s = 0;
+        for (int i = 0; i < 3; ++i) {
+            try {
+                s += Base::dyn(o);
+            } catch (hash<ExceptionInfo> ex) {
+                s -= 1000;
+            }
+        }
+        return s;
+    }
+}
+
+int sub plain_private_call(object o) {
+    try {
+        return o.pm();
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
+int sub loop_ism(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::ism(i); } return s; }
+int sub loop_inherited(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Child::ism(i); } return s; }
+float sub loop_fsm(int n) { float s = 0.0; for (int i = 0; i < n; ++i) { s += Base::fsm(i.toFloat()); } return s; }
+int sub loop_bsm(int n) { int s = 0; for (int i = 0; i < n; ++i) { if (Base::bsm(i)) { ++s; } } return s; }
+string sub loop_ssm(int n) { string s = ""; for (int i = 0; i < n; ++i) { s = Base::ssm(s); } return s; }
+int sub loop_dyn(object o, int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::dyn(o); } return s; }
+int sub loop_priv(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::callPriv(i); } return s; }
+int sub loop_unq(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::unq(i); } return s; }
+int sub loop_ov(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::ov(i) + Base::ov("ab"); } return s; }
+int sub loop_any_ov(int n) {
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        s += Base::any_ov(i) + Base::any_ov("abc");
+    }
+    return s;
+}
+int sub loop_throw(int n) {
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        try {
+            s += Base::thrower(i);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s %s line %d stack: %y\n", ex.err, ex.desc, ex.line,
+                map $1.function, ex.callstack, $1.type == "user");
+            break;
+        }
+    }
+    return s;
+}
+int sub loop_func(object o, int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::callFunc(o); } return s; }
+list<string> sub loop_stack() { list<string> l; for (int i = 0; i < 2; ++i) { l = Base::stack(); } return l; }
+int sub loop_rec(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::rec(i); } return s; }
+int sub loop_argv(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::argv_sum(i, 1, 2); } return s; }
+int sub loop_defarg(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::defarg(i) + Base::defarg(i, 1); } return s; }
+int sub loop_sync(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Base::sync(i); } return s; }
+int sub loop_child(int n) { int s = 0; for (int i = 0; i < n; ++i) { s += Child::childOnly(i); } return s; }
+int sub loop_keep() {
+    int s = 0;
+    for (int i = 0; i < 2; ++i) {
+        # the temporary argument is released after the call returns, before the next statement
+        Base::keep(new Tracked("arg" + i));
+        printf("after keep %d\n", i);
+        ++s;
+    }
+    return s;
+}
+
+int sub loop_closure_call(int n) {
+    code c = int sub (int x) { return Base::ism(x) * 2; };
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        s += c(i);
+    }
+    return s;
+}
+
+Child c();
+Other other();
+printf("ism: %d\n", loop_ism(10));
+printf("inherited: %d\n", loop_inherited(10));
+printf("fsm: %.2f\n", loop_fsm(10));
+printf("bsm: %d\n", loop_bsm(10));
+printf("ssm: %s\n", loop_ssm(3));
+printf("dyn: %d\n", loop_dyn(c, 3));
+printf("priv: %d\n", loop_priv(10));
+printf("unq: %d\n", loop_unq(10));
+printf("ov: %d\n", loop_ov(10));
+printf("any ov: %d\n", loop_any_ov(10));
+printf("throw: %d\n", loop_throw(10));
+printf("func from static: %d\n", loop_func(c, 3));
+printf("func from method: %d\n", c.callFuncFromMethod(c));
+printf("stack: %y\n", loop_stack()[0..2]);
+printf("rec: %d\n", loop_rec(10));
+printf("argv: %d\n", loop_argv(10));
+printf("defarg: %d\n", loop_defarg(10));
+printf("sync: %d\n", loop_sync(10));
+printf("child: %d\n", loop_child(10));
+printf("keep: %d\n", loop_keep());
+printf("closure: %d\n", loop_closure_call(10));
+printf("other: %d\n", other.callBase(c));
+printf("m: %d\n", c.m(10));
+code cl = c.mk();
+printf("deleting c\n");
+delete c;
+printf("deleted c; closure: %d\n", cl());

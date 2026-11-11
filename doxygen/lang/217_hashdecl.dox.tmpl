@@ -67,6 +67,14 @@ hash<Container> h4 = new hash<Container>(("i": 2));
     In such cases, the initialization expression for the members being overridden is never executed and the
     supplied value is used instead.
 
+    @anchor hashdecl_initializer_program
+    The initialization expressions are code of the @ref Qore::Program "Program" that declared the
+    <tt><b>hashdecl</b></tt>, also when the hash is created by the code of another Program (one that inherited or
+    imported the declaration, or that has a value of the type and converts a hash to it with the
+    @ref reflectionintro "reflection" API): once the declaring Program has been deleted, creating a hash that needs
+    one of them evaluated raises a \c PROGRAM-ERROR exception (see @ref threads_and_program_deletion); an initial
+    value that needs no evaluation, such as a literal, is still assigned.
+
     Note that it's illegal to assign a value to an unassigned lvalue declared as a typed hash; in such cases a
     \c HASHDECL-IMPLICIT-CONSTRUCTION-ERROR exception is thrown as in the following example:
     @code{.py}

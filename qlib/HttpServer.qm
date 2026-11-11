@@ -4968,6 +4968,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             string str = sprintf("%s handler returned an invalid response rv: %y", cx.handler_name, rv);
             cx.close = True;
             remove cx.persistent;
+            # an event source of the response is not used; it releases what it registered
+            if (rv.sse_source instanceof HttpServerAsyncIo::AbstractSseEventSource) {
+                try {
+                    rv.sse_source.stop();
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: the unused SSE event source of handler %y could not be stopped: %s",
+                        cx.id, cx.handler_name, get_exception_string(ex));
+                }
+            }
 
             if (async_response_out) {
                 # the async I/O controller sends the error response; sending it here as well sent a second error
@@ -5018,12 +5027,26 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         bool is_sse = False;
         if (rv.hdr."Content-Type") {
             string ct = rv.hdr."Content-Type".lwr();
+            # the exact media type check is made only for a value that can be an event stream, as this runs for every
+            # response
             if (ct.startsWith(MimeTypeSse)) {
-                is_sse = True;
+                is_sse = isEventStreamMediaType(ct);
             }
         }
 
         bool is_h1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+
+        # the source of an event stream that pushes its events to a stream sent by the async I/O controller, so that no
+        # thread waits for them (qore#5758): it is replaced by its run (see takeSseSource()); no local variable is
+        # added to this method, which every response runs
+        if (rv.sse_source) {
+            rv.sse_source = takeSseSource(rv, listener, cx, is_sse && !head && rv."code" >= 200 && rv."code" < 300
+                && (!is_h1 || exists async_response_out));
+            if (rv.sse_source.isUsed()) {
+                remove rv.send_callback;
+            }
+        }
+
         # a response to an HTTP/1.0 request must not have Transfer-Encoding (RFC 9112 section 6.1); a message body of
         # unknown length is delimited by closing the connection instead (RFC 9112 section 6.3)
         bool chunked_allowed = !is_h1 || HttpServer::requestAllowsChunked(hdr);
@@ -5183,7 +5206,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # a response that does not end the exchange (a Server-Sent Events stream, a protocol upgrade, or an extended
         # CONNECT response) is never completely sent
-        if (after_send && ((rv.streaming && ext_connect) || rv.hdr."Content-Type" == MimeTypeSse
+        if (after_send && ((rv.streaming && ext_connect) || (rv.sse_source && rv.sse_source.isUsed())
+                || rv.hdr."Content-Type" == MimeTypeSse
                 || rv."code" == 101)) {
             if (async_response_out) {
                 remove async_response_out.after_send;
@@ -5291,144 +5315,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             return;
         }
-        if (rv.hdr."Content-Type" == MimeTypeSse) {
-            # SSE response — set up async SSE connection via the I/O controller.
-            # The write path depends on the HTTP version:
-            # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
-            #   controller's Sse state to drain via chunked encoding
-            # - HTTP/2: Http2SseStream pushes DATA frames directly via
-            #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
-            #   (driven by h2op on the I/O thread) flushes them to the socket
-            # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
-            #   submitQuicStreamData()
-            bool sse_is_http2 = cx."header-info".http2 ?? False;
-            bool sse_is_http3 = cx."header-info".http3 ?? False;
-            # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
-            # by the connection close anyway
-            if (handler_close) {
-                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
-                    "connection close flag set — SSE requires a persistent connection",
-                    MimeTypeSse, cx.handler_name);
-                listener.logError("cid %d: %s", cx.id, err);
-                logViaHandlerIfPossible(handler, cx.id, err);
-                throw "SSE-HANDLER-ERROR", err;
-            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y, but the "
-                    "handler does not inherit AbstractHttpSocketHandlerInterface (class: %y) — SSE "
-                    "requires a handler that implements setupAsyncSseConnection{,Http2,Http3}()",
-                    MimeTypeSse, cx.handler_name, handler.className());
-                listener.logError("cid %d: %s", cx.id, err);
-                logViaHandlerIfPossible(handler, cx.id, err);
-                throw "SSE-HANDLER-ERROR", err;
-            } else if (sse_is_http2 || sse_is_http3) {
-                # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
-                # headers directly on the stream and hand the stream to a
-                # protocol-specific SSE writer.  The handler now owns this
-                # stream lifecycle, so mark request_helper as dedicated; the
-                # async I/O controller's multiplexed-result dispatcher will
-                # leave the stream alone.
-                try {
-                    int stream_id = cx."header-info".stream_id;
-                    hash<auto> resp_hdr = rv.hdr ?? {};
-                    # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
-                    remove resp_hdr."Transfer-Encoding";
-                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
-                    Socket sse_sock = s;
-                    *code<nothing()> wake_cb;
-                    if (ctrl) {
-                        wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
-                    }
-                    string cid = sprintf("%d:%d", cx.id, stream_id);
-                    # the setup methods are resolved by name, so a handler that is not a
-                    # ServerSentEventHandler may implement them and return nothing; that costs
-                    # it the peer-close notification below but must not break its stream
-                    *HttpServerAsyncIo::AbstractSseConnection sse_conn;
-                    if (sse_is_http3) {
-                        int session_id = cx."header-info".session_id;
-                        s.submitQuicResponseStreaming(session_id, stream_id,
-                            rv."code" ?? 200, resp_hdr);
-                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
-                    } else {
-                        s.submitHttp2StreamingResponseHeaders(stream_id,
-                            rv."code" ?? 200, resp_hdr);
-                        if (wake_cb) {
-                            wake_cb();
-                        }
-                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
-                            s, cx, hdr, cid, stream_id, wake_cb);
-                    }
-                    # Deregister the connection when the peer goes away.  On
-                    # HTTP/1.x the socket is the stream, so the SSE poll
-                    # operation's close callback covers this (see the branch
-                    # below); HTTP/2 and HTTP/3 multiplex, so the transport has
-                    # to report the teardown of this one stream explicitly, and
-                    # the controller supplies the hook that wires it up.
-                    *code<nothing(object)> register_sse_close_notify =
-                        cx."header-info"."register_sse_close_notify";
-                    if (sse_conn && register_sse_close_notify) {
-                        AbstractHttpSocketHandlerInterface mux_sse_handler =
-                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
-                        sse_conn.setPeerCloseCallback(sub () {
-                            mux_sse_handler.deregisterConnection(cid);
-                        });
-                        register_sse_close_notify(sse_conn);
-                    } else {
-                        listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close "
-                            "notification (%s); the connection will stay registered after the peer "
-                            "disconnects", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
-                            cx.handler_name, sse_conn
-                                ? "the async I/O controller supplied no hook"
-                                : "the handler returned no SSE connection object");
-                    }
-                    # Tell the controller this stream is owned by the handler
-                    request_helper.setDedicated();
-                    # Wake the I/O thread to flush the HEADERS frame now (and
-                    # any DATA queued by the connection's registered() hook)
-                    if (ctrl) {
-                        ctrl.wakeSocket(s);
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    listener.logError("cid %d: error setting up %s SSE connection for handler %y: %s: %s",
-                        cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2", cx.handler_name, ex.err, ex.desc);
-                }
-            } else if (async_response_out) {
-                # HTTP/1.x SSE path — use the poll-op state machine in the
-                # async I/O controller.  See setupAsyncSseConnection() for the
-                # H1 poll loop; setWakeCallback() wires the async controller
-                # to re-run continuePoll() when events are queued.
-                try {
-                    string cid = string(cx.id);
-                    HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
-                        call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid);
-                    # Wire a wake callback so that events queued by a Qore-side
-                    # handler thread (e.g. via ServerSentEventConnection::send())
-                    # immediately trigger the async controller to re-run
-                    # continuePoll() and drain the event_channel.  Without
-                    # this, server-push SSE events sit in the channel until
-                    # the client sends something — which it never does.
-                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
-                    if (ctrl) {
-                        Socket sse_sock = s;
-                        poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
-                    }
-                    # Tell the async controller to manage this socket as an SSE stream
-                    async_response_out.code = rv."code";
-                    async_response_out.hdr = rv.hdr;
-                    async_response_out.streaming = True;
-                    async_response_out.stream_type =
-                        HttpServerAsyncIo::HttpConnectionState::Sse;
-                    async_response_out.stream_operation = poll_op;
-                    AbstractHttpSocketHandlerInterface sse_handler =
-                        cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
-                    poll_op.setCloseCallback(sub () {
-                        sse_handler.deregisterConnection(cid);
-                    });
-                } catch (hash<ExceptionInfo> ex) {
-                    listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
-                        cx.id, cx.handler_name, ex.err, ex.desc);
-                }
-            }
+        # a response with an event source (see takeSseSource()) is an event stream only if the source is used, and
+        # never needs a socket handler; the stream is set up in a method of its own, so that its locals are not part
+        # of the frame of this method, which every response runs (qore#5758)
+        if (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse) {
+            setupSseResponse(request_helper, listener, s, handler, rv, cx, hdr, handler_close, \async_response_out);
         } else if (rv."code" == 101) {
             # WebSocket upgrade — use async I/O controller
             if (handler_close) {
@@ -5643,6 +5534,259 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
     }
 
+    #! Returns @ref True if a Content-Type value has the media type of an event stream (\c text/event-stream)
+    /** The media type is compared case-insensitively and its parameters are ignored (RFC 9110 section 8.3.1), as the
+        socket layer does when it decides that a response without a message body has no \c Content-Length.
+    */
+    private static bool isEventStreamMediaType(auto ct) {
+        return ct.typeCode() == NT_STRING && ct =~ /^[ \t]*text\/event-stream[ \t]*(;|$)/i;
+    }
+
+    #! Sets up the stream of a Server-Sent Events response on the async I/O controller
+    /** Called by sendReply() for an event stream: a response of a socket handler with the \c text/event-stream
+        \c Content-Type, or a response with an event source that is used (see takeSseSource()).
+    */
+    private setupSseResponse(RequestHelper request_helper, HttpListener listener, Socket s,
+            *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, hash<auto> cx, hash<auto> hdr,
+            bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        # the run of the response's event source, if any
+        *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # SSE response — set up async SSE connection via the I/O controller.
+        # The write path depends on the HTTP version:
+        # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
+        #   controller's Sse state to drain via chunked encoding
+        # - HTTP/2: Http2SseStream pushes DATA frames directly via
+        #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
+        #   (driven by h2op on the I/O thread) flushes them to the socket
+        # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
+        #   submitQuicStreamData()
+        bool sse_is_http2 = cx."header-info".http2 ?? False;
+        bool sse_is_http3 = cx."header-info".http3 ?? False;
+        # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
+        # by the connection close anyway
+        if (handler_close) {
+            string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
+                "connection close flag set — SSE requires a persistent connection",
+                MimeTypeSse, cx.handler_name);
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        } else if (!sse_run && !(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+            string err = sprintf("SSE response (Content-Type: %s) returned from handler %y, but the "
+                "handler does not inherit AbstractHttpSocketHandlerInterface (class: %y) — SSE "
+                "requires a handler that implements setupAsyncSseConnection{,Http2,Http3}()",
+                MimeTypeSse, cx.handler_name, handler.className());
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        } else if (sse_is_http2 || sse_is_http3) {
+            # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
+            # headers directly on the stream and hand the stream to a
+            # protocol-specific SSE writer.  The handler now owns this
+            # stream lifecycle, so mark request_helper as dedicated; the
+            # async I/O controller's multiplexed-result dispatcher will
+            # leave the stream alone.
+            try {
+                int stream_id = cx."header-info".stream_id;
+                hash<auto> resp_hdr = rv.hdr ?? {};
+                # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
+                remove resp_hdr."Transfer-Encoding";
+                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                Socket sse_sock = s;
+                *code<nothing()> wake_cb;
+                if (ctrl) {
+                    wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
+                }
+                string cid = sprintf("%d:%d", cx.id, stream_id);
+                # the setup methods are resolved by name, so a handler that is not a
+                # ServerSentEventHandler may implement them and return nothing; that costs
+                # it the peer-close notification below but must not break its stream
+                *HttpServerAsyncIo::AbstractSseConnection sse_conn;
+                # a handler that is not a socket handler gets the stream from the server, for its event source
+                bool sock_handler = handler instanceof HttpServer::AbstractHttpSocketHandlerInterface;
+                if (sse_is_http3) {
+                    int session_id = cx."header-info".session_id;
+                    s.submitQuicResponseStreaming(session_id, stream_id,
+                        rv."code" ?? 200, resp_hdr);
+                    if (sock_handler) {
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
+                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
+                    } else {
+                        sse_conn = new HttpServerAsyncIo::Http3SseStream(s, session_id, stream_id, wake_cb,
+                            True);
+                    }
+                } else {
+                    s.submitHttp2StreamingResponseHeaders(stream_id,
+                        rv."code" ?? 200, resp_hdr);
+                    if (wake_cb) {
+                        wake_cb();
+                    }
+                    if (sock_handler) {
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
+                            s, cx, hdr, cid, stream_id, wake_cb);
+                    } else {
+                        sse_conn = new HttpServerAsyncIo::Http2SseStream(s, stream_id, wake_cb, True);
+                    }
+                }
+                # Deregister the connection when the peer goes away.  On
+                # HTTP/1.x the socket is the stream, so the SSE poll
+                # operation's close callback covers this (see the branch
+                # below); HTTP/2 and HTTP/3 multiplex, so the transport has
+                # to report the teardown of this one stream explicitly, and
+                # the controller supplies the hook that wires it up.
+                *code<nothing(object)> register_sse_close_notify =
+                    cx."header-info"."register_sse_close_notify";
+                if (sse_conn && register_sse_close_notify) {
+                    sse_conn.setPeerCloseCallback(getSseStreamEndCallback(sock_handler
+                        ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
+                        : NOTHING, cid, sse_run));
+                    register_sse_close_notify(sse_conn);
+                } else if (sse_run) {
+                    # an event source is stopped only when the end of its stream is reported: without the
+                    # notification, the stream is not started and is reset
+                    listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close notification "
+                        "(%s); resetting the stream of its event source", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
+                        cx.handler_name, sse_conn
+                            ? "the async I/O controller supplied no hook"
+                            : "no SSE connection object");
+                    try {
+                        if (sse_conn) {
+                            sse_conn.abort();
+                        } else if (sse_is_http3) {
+                            s.cancelQuicStream(cx."header-info".session_id, stream_id);
+                        } else {
+                            s.resetHttp2Stream(stream_id);
+                        }
+                    } catch () {
+                        # the stream has already ended
+                    }
+                    remove sse_conn;
+                    # a socket handler's connection, which its setup registered, has ended
+                    if (sock_handler) {
+                        try {
+                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler).deregisterConnection(cid);
+                        } catch (hash<ExceptionInfo> ex) {
+                            listener.logError("cid %d: error deregistering SSE connection %y of handler %y: %s",
+                                cx.id, cid, cx.handler_name, get_exception_string(ex));
+                        }
+                    }
+                } else {
+                    listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close "
+                        "notification (%s); the connection will stay registered after the peer "
+                        "disconnects", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
+                        cx.handler_name, sse_conn
+                            ? "the async I/O controller supplied no hook"
+                            : "the handler returned no SSE connection object");
+                }
+                # Tell the controller this stream is owned by the handler
+                request_helper.setDedicated();
+                # the event source pushes the events of the stream from now on
+                if (sse_run && sse_conn) {
+                    sse_run.start(sse_conn);
+                }
+                # Wake the I/O thread to flush the HEADERS frame now (and
+                # any DATA queued by the connection's registered() hook)
+                if (ctrl) {
+                    ctrl.wakeSocket(s);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                listener.logError("cid %d: error setting up %s SSE connection for handler %y: %s: %s",
+                    cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2", cx.handler_name, ex.err, ex.desc);
+            }
+        } else if (async_response_out) {
+            # HTTP/1.x SSE path — use the poll-op state machine in the
+            # async I/O controller.  See setupAsyncSseConnection() for the
+            # H1 poll loop; setWakeCallback() wires the async controller
+            # to re-run continuePoll() when events are queued.
+            try {
+                string cid = string(cx.id);
+                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
+                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
+                    ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
+                    # a handler that is not a socket handler gets the stream from the server, for its event
+                    # source
+                    : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                # Wire a wake callback so that events queued by a Qore-side
+                # handler thread (e.g. via ServerSentEventConnection::send())
+                # immediately trigger the async controller to re-run
+                # continuePoll() and drain the event_channel.  Without
+                # this, server-push SSE events sit in the channel until
+                # the client sends something — which it never does.
+                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                if (ctrl) {
+                    Socket sse_sock = s;
+                    poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
+                }
+                # Tell the async controller to manage this socket as an SSE stream
+                async_response_out.code = rv."code";
+                async_response_out.hdr = rv.hdr;
+                async_response_out.streaming = True;
+                async_response_out.stream_type =
+                    HttpServerAsyncIo::HttpConnectionState::Sse;
+                async_response_out.stream_operation = poll_op;
+                # the controller calls it exactly once when the stream has ended, for any reason
+                poll_op.setCloseCallback(getSseStreamEndCallback(
+                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
+                    ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
+                    : NOTHING, cid, sse_run));
+                # the event source pushes the events of the stream from now on; they are sent after the
+                # response headers
+                if (sse_run) {
+                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
+                    cx.id, cx.handler_name, ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Takes the event source of a response out of it and returns its run
+    /** Called by sendReply() only for a response with an event source; the work is done here so that the frame of
+        sendReply(), which every response runs, does not change (qore#5758).
+
+        @param rv the response; the caller removes its \c sse_source, and its \c send_callback too if the source is
+        used
+        @param listener the listener
+        @param cx the request context
+        @param use @ref True if the response is an event stream that the server sends on the async I/O controller
+
+        @return the run of the source; a source that is not used (see SseEventSourceRun::isUsed()) has been stopped,
+        unless the response's \c send_callback still sends its events
+
+        @throw SSE-HANDLER-ERROR the \c sse_source is not an @ref HttpServerAsyncIo::AbstractSseEventSource
+    */
+    private Priv::SseEventSourceRun takeSseSource(hash<auto> rv, HttpListener listener, hash<auto> cx, bool use) {
+        if (!(rv.sse_source instanceof HttpServerAsyncIo::AbstractSseEventSource)) {
+            string err = sprintf("handler %y returned an sse_source of class %y; expecting "
+                "HttpServerAsyncIo::AbstractSseEventSource", cx.handler_name, rv.sse_source.className());
+            listener.logError("cid %d: %s", cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        }
+        Priv::SseEventSourceRun run(rv.sse_source, listener, cx.id, cx.handler_name, getHandlerPoolSubmitter(), use);
+        if (!use && !rv.send_callback) {
+            # a source that is not used at all is stopped at once, so that it releases what it registered
+            run.stopHere();
+        }
+        return run;
+    }
+
+    #! Returns the code that the async I/O controller calls when an SSE stream has ended
+    /** Deregisters a socket handler's connection, and ends the run of the stream's event source, if any.  Created
+        here so that the frame of sendReply() keeps no locals for it.
+    */
+    private code<nothing()> getSseStreamEndCallback(*AbstractHttpSocketHandlerInterface sse_handler, string cid,
+            *Priv::SseEventSourceRun run) {
+        return sub () {
+            if (sse_handler) {
+                sse_handler.deregisterConnection(cid);
+            }
+            if (run) {
+                run.end();
+            }
+        };
+    }
+
     #! Executes an async poll operation using the global async I/O controller
     /** @par Internal Method
         This method is for internal use only and should not be called directly by user code.
@@ -5808,7 +5952,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
         # the response is logged by the code that sends it, as above; an event stream and a protocol upgrade are sent by
         # sendReply() itself, which does not log them
-        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse) {
+        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse || (rv.sse_source && rv.sse_source.isUsed())) {
             listener.logResponse(cx, rv);
         }
     }
@@ -8999,6 +9143,194 @@ class ResponseAfterSendNotifier {
 } # namespace Priv
 
 namespace Priv {
+#! Runs the event source of a Server-Sent Events stream: starts it with the stream and stops it exactly once
+/** The stream's end (the controller's close callback on HTTP/1.x, the peer-close notification on HTTP/2 and HTTP/3,
+    or a close by the source itself) calls @ref end(), which runs the source's stop on a thread of the handler pool;
+    a source whose stream could not be set up is stopped by the request's thread (@ref stopHere()).  See qore#5758.
+*/
+class SseEventSourceRun {
+    private {
+        #! the source; released when it has been stopped, as it can refer to its stream, which refers to this object
+        *HttpServerAsyncIo::AbstractSseEventSource source;
+        HttpListener listener;
+        softstring cid;
+        *string handler_name;
+        #! runs code on a thread of the handler pool (see HttpServer::getHandlerPoolSubmitter())
+        code<nothing(code<nothing()>)> submitter;
+        Mutex m();
+        bool started;
+        bool stopped;
+        #! True if the source pushes the events of a stream of the async I/O controller
+        bool used;
+    }
+
+    constructor(HttpServerAsyncIo::AbstractSseEventSource source, HttpListener listener, softstring cid,
+            *string handler_name, code<nothing(code<nothing()>)> submitter, bool used) {
+        self.source = source;
+        self.listener = listener;
+        self.cid = cid;
+        self.handler_name = handler_name;
+        self.submitter = submitter;
+        self.used = used;
+    }
+
+    #! A used source whose stream was never set up (the run is no longer referenced before start() was called) is
+    #! stopped here, so that it always releases what it registered
+    /** A source that is not used is stopped by HttpServer::takeSseSource(), unless the response's \c send_callback
+        still sends its events after this object is gone.
+    */
+    destructor() {
+        if (used && !started) {
+            stopHere();
+        }
+    }
+
+    #! Returns @ref True if the source pushes the events of a stream of the async I/O controller
+    bool isUsed() {
+        return used;
+    }
+
+    #! Returns @ref True once @ref start() has been called
+    bool isStarted() {
+        AutoLock al(m);
+        return started;
+    }
+
+    #! Starts the source with the stream; never throws
+    /** An exception of the source is logged and closes the stream, whose end stops the source.
+    */
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        {
+            AutoLock al(m);
+            started = True;
+        }
+        *HttpServerAsyncIo::AbstractSseEventSource src;
+        {
+            AutoLock al(m);
+            src = source;
+        }
+        # stopped already (the stream ended before it was started)
+        if (!src) {
+            return;
+        }
+        SseEventSourceStream stream(conn, self);
+        try {
+            src.start(stream);
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %s: the SSE event source of handler %y failed to start; closing the stream: %s",
+                cid, handler_name, get_exception_string(ex));
+            stream.close();
+        }
+    }
+
+    #! Called when the stream has ended; stops the source once, on a thread of the handler pool
+    end() {
+        if (!claim()) {
+            return;
+        }
+        try {
+            submitter(sub () {
+                stopIntern();
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the stop must still run once
+            stopIntern();
+        }
+    }
+
+    #! Stops the source once in the calling thread; used when its stream was never set up
+    stopHere() {
+        if (!claim()) {
+            return;
+        }
+        stopIntern();
+    }
+
+    private bool claim() {
+        AutoLock al(m);
+        if (stopped) {
+            return False;
+        }
+        stopped = True;
+        return True;
+    }
+
+    private stopIntern() {
+        *HttpServerAsyncIo::AbstractSseEventSource src;
+        {
+            AutoLock al(m);
+            src = remove source;
+        }
+        if (!src) {
+            return;
+        }
+        try {
+            src.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %s: the SSE event source of handler %y could not be stopped: %s", cid,
+                handler_name, get_exception_string(ex));
+        }
+    }
+}
+
+#! The stream given to an SSE event source: a close or abort by the source also ends the source's run
+/** On HTTP/2 and HTTP/3 a stream that the server ends itself is not reported by the peer-close notification, so
+    the source's own close ends its run here; the other end paths are reported by the transport.
+*/
+class SseEventSourceStream inherits HttpServerAsyncIo::AbstractSseConnection {
+    private {
+        HttpServerAsyncIo::AbstractSseConnection conn;
+        SseEventSourceRun run;
+    }
+
+    constructor(HttpServerAsyncIo::AbstractSseConnection conn, SseEventSourceRun run) {
+        self.conn = conn;
+        self.run = run;
+    }
+
+    string getProtocol() {
+        return conn.getProtocol();
+    }
+
+    queueEvent(*string event_type, string data, *string id, *int retry) {
+        conn.queueEvent(event_type, data, id, retry);
+    }
+
+    queueRawEvent(hash<auto> event) {
+        conn.queueRawEvent(event);
+    }
+
+    queueRawString(string data) {
+        conn.queueRawString(data);
+    }
+
+    setHeartbeat(int interval_ms, string msg = HttpServerAsyncIo::DefaultSseHeartbeatMsg) {
+        conn.setHeartbeat(interval_ms, msg);
+    }
+
+    bool isOpen() {
+        return conn.isOpen();
+    }
+
+    bool isDisconnected() {
+        return conn.isDisconnected();
+    }
+
+    int getQueueSize() {
+        return conn.getQueueSize();
+    }
+
+    close() {
+        on_exit run.end();
+        conn.close();
+    }
+
+    abort() {
+        on_exit run.end();
+        conn.abort();
+    }
+}
+
 #! Holds the request helper of a dedicated connection that its handler manages externally until it has ended
 /** The request helper counts the connection in the listener's dedicated connections (which a stop of the listener
     waits for) until it is destroyed; the holder is released by the server's end of the connection when the
