@@ -594,6 +594,13 @@
     limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
+    @par Slow Server-Sent Events Clients Are Dropped
+    Every SSE stream bounds the data queued for its client (the \c sse_max_buffer_size listener and
+    \c ServerSentEventHandler options, default 1 MiB): queueing an event never waits for the client, a client whose
+    data would exceed the bound is dropped, and a send to that stream alone raises \c SSE-CLIENT-OVERFLOW, while a
+    send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer
+    (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -1206,6 +1213,8 @@
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
+      - every SSE stream bounds the data held for its client, and a slow client is dropped instead of making the
+        publisher wait or the server's memory grow (see @ref httpserverasyncio_sse_buffer)
       - see @ref serversenteventhandler_v1_2_0 for all changes
 
     - @ref servicenowrestdataproviderintro "ServiceNowRestDataProvider" module

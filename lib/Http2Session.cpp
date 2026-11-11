@@ -2442,6 +2442,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    h2->stream_send_limits.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2726,6 +2727,24 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     return 0;
 }
 
+int Http2Session::setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    if (limit <= 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid send limit %lld for stream %d: must be > 0", (long long)limit,
+            stream_id);
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    if ((!stream || stream->state == Http2StreamState::Closed)
+            && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+        xsink->raiseException("HTTP2-ERROR", "cannot set the send limit of stream %d: the stream is not open",
+            stream_id);
+        return -1;
+    }
+    stream_send_limits[stream_id] = (size_t)limit;
+    return 0;
+}
+
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
@@ -2788,9 +2807,19 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     // Limit to 1MB per stream to prevent unbounded memory growth
     // Allow zero-length end_stream sends through — they just set the flag without
     // adding data, so they must not be rejected by backpressure
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+    // A stream with its own limit (setStreamSendLimit()) refuses data that would take the buffer over it
     auto it = pending_body_data.find(stream_id);
-    if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
+    auto lit = stream_send_limits.find(stream_id);
+    if (lit != stream_send_limits.end()) {
+        if (len > 0 && it != pending_body_data.end()) {
+            size_t pending = it->second.data.size() - it->second.offset;
+            if (pending > 0 && pending + len > lit->second) {
+                printd(2, "sendStreamData() stream %d over its send limit: %zu bytes pending + %zu > %zu, data "
+                    "dropped\n", stream_id, pending, len, lit->second);
+                return 1;
+            }
+        }
+    } else if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
         size_t pending = it->second.data.size() - it->second.offset;
         if (pending > MAX_STREAM_BUFFER) {
             // Return 1 (buffer full, non-fatal) — caller decides how to handle
