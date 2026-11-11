@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of generic functions and methods
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class GenericCallReferenceExplicitTypeArgsTest
+
+#! explicit type arguments of a namespace-qualified call and of a call reference (qore#5779)
+/** `NS::mk<number>()` and `\\mk0<string>()` were parsed with their explicit type arguments and ran with them
+    ignored in every mode (the result was list<auto>): the conversion of the static-call form to the function call
+    dropped them, and a call reference did not keep them.  A call reference with explicit type arguments to a
+    function (also `\\NS::f<T>()`) now instantiates the function when it is called, also in a qcc executable, whose
+    AOT image carries the type arguments with the name of the referenced function; one to a method is a parse error
+    (it would be ignored).
+
+    The programs are in \c generic-call-reference-explicit-type-args/.
+*/
+class GenericCallReferenceExplicitTypeArgsTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string dir = get_script_dir() + "/generic-call-reference-explicit-type-args";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("namespace-calls", "call-references");
+        #! the programs that qcc compiles
+        const CompiledPrograms = Programs;
+    }
+
+    constructor() : QUnit::Test("GenericCallReferenceExplicitTypeArgsTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("a call reference to a method with explicit type arguments is a parse error", \testMethodReference());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testMethodReference() {
+        Program p(PO_NEW_STYLE);
+        string err;
+        try {
+            p.parse("class C { static list<U> m<U>() { return new list<U>(); } }\ncode c = \\C::m<int>();\n", "method-ref");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.desc;
+        }
+        assertTrue(err =~ /explicit type arguments are not supported in the call reference/, "parse error: " + err);
+        # the bare-name spelling of a reference to a static method of the class
+        Program p2(PO_NEW_STYLE);
+        err = "";
+        try {
+            p2.parse("class C { static list<U> m<U>() { return new list<U>(); } code t() { return \\m<int>(); } }\n",
+                "bare-method-ref");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.desc;
+        }
+        assertTrue(err =~ /explicit type arguments are not supported in the call reference/,
+            "bare-name parse error: " + err);
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-generic-call-reference-explicit-type-args-");
+        foreach string name in (CompiledPrograms) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                if (rc || !is_file(exe)) {
+                    testSkip("qcc is not available or cannot compile " + name + ": " + out);
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

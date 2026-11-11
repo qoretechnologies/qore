@@ -4093,8 +4093,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
         return toBits(QoreValue());
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, function_name);
+    // a name with a leading "::" is the function of the root namespace itself (see qore_aot_get_function_ref_name())
+    // the explicit type arguments (\f<T>()) follow the name
+    std::vector<const QoreTypeInfo*> type_args;
+    // a type parameter of the generic function or method that creates the reference is resolved with the signature of
+    // the instantiation of the current call, as for the types of values
+    const QoreTypeParamInstantiation* creator_inst = runtime_get_type_param_instantiation();
+    const FunctionEntry* fe = qore_aot_resolve_function_ref(pgm, function_name,
+        creator_inst ? creator_inst->owner : nullptr, type_args);
     QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
     if (!func) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
@@ -4104,7 +4110,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
 
     RuntimeConfig& rc = rc_get_current_ref();
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
-    return toBits(QoreValue(new FunctionCallReferenceNode(&loc_builtin, func, call_pgm)));
+    FunctionCallReferenceNode* fcr = new FunctionCallReferenceNode(&loc_builtin, func, call_pgm);
+    fcr->setExplicitTypeArgs(std::move(type_args));
+    // a type parameter of the generic code that creates the reference is bound to the running instantiation
+    fcr->bindExplicitTypeArgs();
+    return toBits(QoreValue(fcr));
 }
 
 // --- Method reference creation helper (delegates to call ref - identical behavior) ---
@@ -16698,9 +16708,21 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         const QoreTypeParamInstantiation* old = nullptr;
         bool restore = false;
 
+        //! the explicit instantiation with the type parameters of the calling generic code resolved
+        QoreTypeParamInstantiation resolved;
+        //! the instantiation made current (the explicit instantiation, or \a resolved), or the explicit one given
+        const QoreTypeParamInstantiation* effective;
+
         explicit TypeParamContextHelper(
-                const QoreTypeParamInstantiation* inst) {
+                const QoreTypeParamInstantiation* inst) : effective(inst) {
             if (inst && !inst->empty()) {
+                // resolved before the callee's instantiation is made current: the call below, which infers the
+                // callee's type arguments again, must see the resolved type arguments, as the type parameters of
+                // the caller can no longer be resolved once the callee's instantiation is current
+                if (qore_resolve_explicit_type_param_instantiation(*inst, resolved)) {
+                    inst = &resolved;
+                    effective = &resolved;
+                }
                 old = runtime_set_type_param_instantiation(inst);
                 restore = true;
             }
@@ -16866,12 +16888,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             if (arg_cleanups) {
                 return qore_rt_call_function_direct_impl(target.func,
                         target.variant, target.pgm, args, arg_cleanups, nargs,
-                        xsink, target.explicit_type_param_instantiation);
+                        xsink, type_param_context.effective);
             }
             if (!qore_rt_user_fast_call_eligible(target.variant)) {
                 return qore_rt_call_function_direct_impl(target.func,
                         target.variant, target.pgm, args, nullptr, nargs, xsink,
-                        target.explicit_type_param_instantiation);
+                        type_param_context.effective);
             }
             return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
         }
@@ -19010,6 +19032,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_
 
 static const QoreTypeParamInstantiation* qore_rt_get_dot_eval_explicit_type_instantiation(
         QoreAOTContext* ctx, int32_t slot) {
+    // a direct dot-eval target has no expression node: its explicit type arguments are held by the target
+    if (const QoreTypeParamInstantiation* inst = ctx->call_targets[slot].explicit_type_param_instantiation) {
+        return inst;
+    }
     QoreValue expr = fromBits(ctx->exprs[slot]);
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
     if (!dot_eval) {

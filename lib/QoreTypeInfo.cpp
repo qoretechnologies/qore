@@ -1751,6 +1751,27 @@ const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti
         : ti;
 }
 
+bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
+        QoreTypeParamInstantiation& resolved) {
+    bool changed = false;
+    for (const QoreTypeInfo* type_arg : inst.type_args) {
+        if (qore_type_contains_type_parameter(type_arg)) {
+            changed = true;
+            break;
+        }
+    }
+    if (!changed) {
+        return false;
+    }
+    resolved.owner = inst.owner;
+    resolved.type_args.clear();
+    resolved.type_args.reserve(inst.type_args.size());
+    for (const QoreTypeInfo* type_arg : inst.type_args) {
+        resolved.type_args.push_back(qore_substitute_type_params_if_needed(type_arg));
+    }
+    return true;
+}
+
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
     return qore_type_contains_type_parameter(ti)

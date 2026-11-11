@@ -1050,8 +1050,124 @@ private:
     AOTSlotResolutionCache* previous;
 };
 
+std::string qore_aot_get_function_identity_name(const FunctionEntry* fe) {
+    assert(fe && fe->getNamespace());
+    std::string qualified;
+    fe->getNamespace()->getPath(qualified);
+    // a root function gets the leading "::" and no namespace
+    qualified += "::";
+    qualified += fe->getName();
+    return qualified;
+}
+
+static constexpr const char* aot_ref_type_arg_marker = "\ntypeargs:";
+
+// the name of the function of a call reference without the explicit type arguments
+static std::string getAOTFunctionRefBaseName(const LocalFunctionCallReferenceNode* fcr) {
+    const QoreFunction* f = fcr->getFunction();
+    // the bare name of a function of the root namespace would find the builtin of that name when the reference is
+    // loaded
+    const FunctionEntry* fe = fcr->getFunctionEntry();
+    if (fe && fe->getNamespace()) {
+        std::string path;
+        fe->getNamespace()->getPath(path);
+        if (path.empty()) {
+            return qore_aot_get_function_identity_name(fe);
+        }
+    }
+    return f->getName();
+}
+
+std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {
+    if (!fcr || !fcr->getFunction()) {
+        return std::string();
+    }
+    std::string name = getAOTFunctionRefBaseName(fcr);
+    // the explicit type arguments (\f<T>()) follow the name: "\ntypeargs:N\n<type path>..."
+    if (const QoreTypeParamInstantiation* inst = fcr->getExplicitTypeParamInstantiation()) {
+        name += aot_ref_type_arg_marker;
+        name += std::to_string(inst->type_args.size());
+        for (const QoreTypeInfo* type_arg : inst->type_args) {
+            name += "\n";
+            name += qore_get_aot_serializable_type_path(type_arg);
+        }
+    }
+    return name;
+}
+
+const FunctionEntry* qore_aot_resolve_function_ref(QoreProgram* pgm, const char* encoded,
+        const UserSignature* containing_signature, std::vector<const QoreTypeInfo*>& type_args) {
+    type_args.clear();
+    if (!pgm || !encoded || !*encoded) {
+        return nullptr;
+    }
+    const char* marker = strstr(encoded, aot_ref_type_arg_marker);
+    if (!marker) {
+        return qore_aot_resolve_function_entry_for_slot(pgm, encoded);
+    }
+    const std::string name(encoded, marker - encoded);
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, name.c_str());
+    if (!fe) {
+        return nullptr;
+    }
+    // a named string: count_tail points into it and is read after strtoul() returns
+    const std::string rest(marker + strlen(aot_ref_type_arg_marker));
+    const size_t count_end = rest.find('\n');
+    const std::string count_text = rest.substr(0, count_end);
+    char* count_tail = nullptr;
+    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
+    if (!count_tail || *count_tail || !count) {
+        return nullptr;
+    }
+    QoreAOTTypeResolver type_resolver(pgm);
+    size_t path_start = count_end;
+    std::vector<const QoreTypeInfo*> resolved;
+    for (unsigned long i = 0; i < count; ++i) {
+        if (path_start == std::string::npos) {
+            return nullptr;
+        }
+        ++path_start;
+        const size_t path_end = rest.find('\n', path_start);
+        const std::string path = rest.substr(path_start,
+            path_end == std::string::npos ? std::string::npos : path_end - path_start);
+        std::string type_error;
+        const QoreTypeInfo* type_arg = containing_signature
+            ? type_resolver.resolveForSignature(path.c_str(), type_error, containing_signature)
+            : type_resolver.resolve(path.c_str(), type_error);
+        if (!type_arg || !type_error.empty()) {
+            return nullptr;
+        }
+        resolved.push_back(type_arg);
+        path_start = path_end;
+    }
+    type_args = std::move(resolved);
+    return fe;
+}
+
+LocalFunctionCallReferenceNode* qore_aot_make_function_ref(QoreProgram* pgm, const char* encoded,
+        const UserSignature* containing_signature) {
+    std::vector<const QoreTypeInfo*> type_args;
+    const FunctionEntry* fe = qore_aot_resolve_function_ref(pgm, encoded, containing_signature, type_args);
+    QoreFunction* f = fe ? fe->getFunction() : nullptr;
+    if (!f) {
+        return nullptr;
+    }
+    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+    fcr->setFunctionEntry(fe);
+    fcr->setExplicitTypeArgs(std::move(type_args));
+    return fcr;
+}
+
 static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
     qore_program_private* pp = qore_program_private::get(*pgm);
+    // "::name": the function of the root namespace itself, never the builtin of the same name that the root function
+    // index would find first
+    if (name[0] == ':' && name[1] == ':' && name[2]) {
+        if (FunctionEntry* fe = qore_ns_private::get(*pp->RootNS)->func_list.findNode(name + 2)) {
+            return fe;
+        }
+        return nullptr;
+    }
     if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
         return fe;
     }
@@ -1127,6 +1243,10 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
         return QoreValue();
     }
 
+    // call_function() looks a name up by its scope: it does not take the "::" of a function of the root namespace
+    if (name[0] == ':' && name[1] == ':' && name[2]) {
+        name += 2;
+    }
     QoreParseListNode* dynamic_args = new QoreParseListNode(&loc_builtin);
     dynamic_args->add(new QoreStringNode(name), &loc_builtin);
     if (args) {
@@ -4082,7 +4202,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     std::string type_error;
                     QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    // a type parameter of the function (hash<string, T> in a generic function) is owned by its
+                    // signature
+                    const UserSignature* new_signature = uvb ? uvb->getUserSignature() : nullptr;
+                    const QoreTypeInfo* ti = new_signature
+                        ? type_resolver.resolveForSignature(ref1, type_error, new_signature)
+                        : type_resolver.resolve(ref1, type_error);
                     if (ti) {
                         // Convert call_args to QoreParseListNode for NewComplexHashNode
                         QoreParseListNode* pln = nullptr;
@@ -4139,7 +4264,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     std::string type_error;
                     QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    // see COMPLEX_HASH_NEW
+                    const UserSignature* new_signature = uvb ? uvb->getUserSignature() : nullptr;
+                    const QoreTypeInfo* ti = new_signature
+                        ? type_resolver.resolveForSignature(ref1, type_error, new_signature)
+                        : type_resolver.resolve(ref1, type_error);
                     if (ti) {
                         NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
                         ctx->exprs[i] = toBitsNB(QoreValue(ncl));
@@ -4266,8 +4395,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Dot-eval method target: resolve class/method from strings
                 // and populate call_targets directly — no AST node needed
                 ref1 = reader.readStringRef(ptr);    // class_path
-                // method_name[\nvariant_class\nvariant_signature]
-                AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
+                // method_name[\nvariant_class\nvariant_signature][\ntypeargs:N\npath...]
+                const std::string encoded_target = reader.readStringRef(ptr);
+                static constexpr const char* target_type_arg_marker = "\ntypeargs:";
+                const size_t target_type_arg_pos = encoded_target.find(target_type_arg_marker);
+                const std::string target_method_text = target_type_arg_pos == std::string::npos
+                    ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
+                AOTEncodedMethodRef method_ref(target_method_text.c_str());
                 uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
 
                 const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo != 0);
@@ -4282,6 +4416,51 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (method_ref.method_name && *method_ref.method_name) {
                     ctx->owned_call_target_strings.emplace_back(method_ref.method_name);
                     ctx->call_targets[i].method_name = ctx->owned_call_target_strings.back().c_str();
+                }
+                // the explicit type arguments of the call; the owner is not known before the call chooses its
+                // variant, and an instantiation without an owner applies to the variant that is called
+                if (target_type_arg_pos != std::string::npos) {
+                    const size_t count_start = target_type_arg_pos + strlen(target_type_arg_marker);
+                    size_t count_end = encoded_target.find('\n', count_start);
+                    // a named string: count_tail points into it and is read after strtoul() returns (a pointer into a
+                    // temporary is dangling then, which clang's stack reuse made fail on macOS)
+                    const std::string count_text = encoded_target.substr(count_start,
+                        count_end == std::string::npos ? std::string::npos : count_end - count_start);
+                    char* count_tail = nullptr;
+                    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
+                    auto inst = std::make_shared<QoreTypeParamInstantiation>();
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const UserSignature* target_signature = uvb ? uvb->getUserSignature() : nullptr;
+                    bool type_args_ok = count_tail && !*count_tail;
+                    size_t path_start = count_end;
+                    for (unsigned long a = 0; type_args_ok && a < count; ++a) {
+                        if (path_start == std::string::npos) {
+                            type_args_ok = false;
+                            break;
+                        }
+                        ++path_start;
+                        const size_t path_end = encoded_target.find('\n', path_start);
+                        const std::string path = encoded_target.substr(path_start,
+                            path_end == std::string::npos ? std::string::npos : path_end - path_start);
+                        std::string type_error;
+                        const QoreTypeInfo* type_arg = target_signature
+                            ? type_resolver.resolveForSignature(path.c_str(), type_error, target_signature)
+                            : type_resolver.resolve(path.c_str(), type_error);
+                        if (!type_arg || !type_error.empty()) {
+                            type_args_ok = false;
+                            break;
+                        }
+                        inst->type_args.push_back(type_arg);
+                        path_start = path_end;
+                    }
+                    if (!type_args_ok) {
+                        printd(0, "AOT v2: cannot resolve the explicit type arguments of method call '%s'\n",
+                            method_ref.method_name ? method_ref.method_name : "(null)");
+                        has_unsupported = true;
+                        continue;
+                    }
+                    ctx->owned_explicit_type_param_insts.push_back(inst);
+                    ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
                 }
                 if (variant) {
                     ctx->call_targets[i].variant = variant;
@@ -4306,14 +4485,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Function call reference: resolve function by name
                 ref1 = reader.readStringRef(ptr);   // function_name
                 if (ref1 && *ref1) {
-                    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
-                    if (fe) {
-                        QoreFunction* f = fe->getFunction();
-                        if (f) {
-                            ctx->exprs[i] = toBitsNB(QoreValue(
-                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
-                            continue;
-                        }
+                    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(pgm, ref1)) {
+                        ctx->exprs[i] = toBitsNB(QoreValue(fcr));
+                        continue;
                     }
                 }
                 printd(0, "AOT v2: cannot resolve function ref '%s'\n",

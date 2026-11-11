@@ -752,12 +752,28 @@ bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, 
     return vc && obj == vc->obj && method == vc->method;
 }
 
+int qore_resolve_call_reference_type_args(std::vector<QoreParseTypeInfo*>& parse_type_args,
+        const QoreProgramLocation* loc, std::vector<const QoreTypeInfo*>& type_args) {
+    int err = 0;
+    type_args.clear();
+    type_args.reserve(parse_type_args.size());
+    for (QoreParseTypeInfo* pti : parse_type_args) {
+        type_args.push_back(QoreParseTypeInfo::resolveAny(pti, loc, err));
+        delete pti;
+    }
+    parse_type_args.clear();
+    return err ? -1 : 0;
+}
+
 UnresolvedProgramCallReferenceNode::UnresolvedProgramCallReferenceNode(const QoreProgramLocation* loc, char* n_str)
         : AbstractUnresolvedCallReferenceNode(loc, false), str(n_str) {
 }
 
 UnresolvedProgramCallReferenceNode::~UnresolvedProgramCallReferenceNode() {
     free(str);
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        delete pti;
+    }
 }
 
 int UnresolvedProgramCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
@@ -782,6 +798,11 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
             if (m) {
+                if (!explicit_parse_type_args.empty()) {
+                    parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a "
+                        "method; call the method, or reference a function", str);
+                    return -1;
+                }
                 val = new ParseSelfMethodReferenceNode(loc, m);
                 delete this;
                 return 0;
@@ -792,6 +813,11 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         const QoreMethod* m = priv->parseFindStaticMethod(str, priv);
         if (m) {
             assert(m->isStatic());
+            if (!explicit_parse_type_args.empty()) {
+                parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a "
+                    "method; call the method, or reference a function", str);
+                return -1;
+            }
             // resolve to the same node as the qualified form (\Class::method()) so that both spellings
             // evaluate and lower identically
             val = new LocalStaticMethodCallReferenceNode(loc, m);
@@ -1018,6 +1044,9 @@ UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNod
     //printd(5, "UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNode() this: %p\n",
     //  this);
     delete scope;
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        delete pti;
+    }
 }
 
 int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
@@ -1082,11 +1111,27 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     }
 
     QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+    if (qc && !explicit_parse_type_args.empty()) {
+        // a call reference to a method does not take explicit type arguments (they would be ignored silently)
+        parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a method; "
+            "call the method, or reference a function", scope->ostr);
+        return -1;
+    }
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
-        const QoreFunction* f = qore_root_ns_private::parseResolveFunction(*scope);
-        if (f) {
-            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, f);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope);
+        if (fe) {
+            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, fe->getFunction());
+            fr->setFunctionEntry(fe);
+            // the explicit type arguments of \NS::f<T>() instantiate the function when the reference is called
+            if (!explicit_parse_type_args.empty()) {
+                std::vector<const QoreTypeInfo*> type_args;
+                if (qore_resolve_call_reference_type_args(explicit_parse_type_args, loc, type_args)) {
+                    fr->deref(nullptr);
+                    return -1;
+                }
+                fr->setExplicitTypeArgs(std::move(type_args));
+            }
             deref();
             val = fr;
             return parse_init_same_level(fr, val, parse_context);
@@ -1184,6 +1229,15 @@ LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgram
         const QoreFunction* n_uf) : ResolvedCallReferenceNodeIntern(loc, true), uf(n_uf) {
 }
 
+void LocalFunctionCallReferenceNode::setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args) {
+    if (type_args.empty()) {
+        explicit_inst.reset();
+        return;
+    }
+    explicit_inst = std::make_shared<QoreTypeParamInstantiation>();
+    explicit_inst->type_args = std::move(type_args);
+}
+
 QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -1192,13 +1246,28 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionS
 QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
-    return new FunctionCallReferenceNode(loc, uf, call_pgm);
+    FunctionCallReferenceNode* rv = new FunctionCallReferenceNode(loc, uf, call_pgm);
+    rv->explicit_inst = explicit_inst;
+    // an explicit type argument can be a type parameter of the generic code that creates the reference (\mk0<U>() in
+    // a generic function or a method of a generic class): it is bound here, to the instantiation that is running, as
+    // the reference can outlive that code and be called when no such instantiation exists
+    rv->bindExplicitTypeArgs();
+    return rv;
+}
+
+void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
+    if (explicit_inst) {
+        QoreTypeParamInstantiation resolved;
+        if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
+            explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
+        }
+    }
 }
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return uf->evalFunction(0, args, nullptr, rc, xsink);
+    return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get());
 }
 
 bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -1220,7 +1289,7 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return uf->evalFunction(0, args, pgm, rc, xsink);
+    return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
 }
 
 DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc,
