@@ -12,14 +12,17 @@ whose budgets then have to be reviewed).
 Every call of interpreted code (and every level of a recursion of it) puts one frame of each of these functions on
 the thread's stack, so each byte of growth costs as many bytes as the recursion is deep; deep recursion on Alpine
 (musl, 8 MB thread stacks) fails first.  Frame sizes depend on the compiler, its version and the optimization
-level, the other compiler flags and the C library's headers: the budgets are calibrated for the compiler and its
-major version, the build type and its flags, the other compiler flags (CMAKE_CXX_FLAGS) and the target (the
-compiler's -dumpmachine triple, which names the C library) named in the budget file, and are only checked for a
-build that matches them all (any other build is reported, not checked, unless --force is given).
+level, the other compiler flags, the hardening options that the compiler enables by default and the C library's
+headers: the budgets are calibrated for the compiler and its major version, the build type and its flags, the other
+compiler flags (CMAKE_CXX_FLAGS), the hardening macros that the compiler predefines with them, link-time optimization
+and the target (the compiler's -dumpmachine triple, which names the C library) named in the budget file, and are only
+checked for a build that matches them all (any other build, such as one made with a multi-config generator, is
+reported, not checked, unless --force is given).
 
 A function that GCC splits into a head and a ".part" clone (partial inlining) can have both frames on the stack, as
-the head calls the clone: its frame is counted as the largest head plus the largest ".part" clone; other clones
-(.constprop, .isra) are alternatives, of which the largest counts.
+the head calls the clone: GCC records the clone as "0(<params>)" at the head's own file:line:col, and the frame of the
+function is counted as the head's plus the clone's.  GCC records .constprop and .isra clones under the function's own
+name: they are alternatives, of which the largest counts.
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded
@@ -44,7 +47,7 @@ def parse_budgets(text, name="<budgets>"):
     """Parses a budget file.
 
     Returns (settings, budgets): settings are the "@key value" lines (compiler, build-type, target and the optional
-    compiler-version, build-type-flags and cxx-flags), budgets a list of
+    compiler-version, build-type-flags, cxx-flags, hardening and ipo), budgets a list of
     (function, bytes, line number) in file order.  Blank lines and lines starting with # are ignored.
     """
     settings = {}
@@ -89,18 +92,25 @@ def parse_config(text):
 
 
 def parse_su_line(line):
-    """Parses one line of a .su file: returns (signature, bytes) or None for a line that is not a frame record.
+    """Parses one line of a .su file: returns (signature, bytes, location) or None for a line that is not a frame
+    record; the location is the "file:line:col" of the function's definition.
 
     GCC writes "file:line:col:signature<TAB>bytes<TAB>qualifiers", Clang "file:line:col:name<TAB>bytes<TAB>qualifiers".
     """
     fields = line.rstrip("\n").split("\t")
     if len(fields) < 2 or not fields[1].strip().isdigit():
         return None
-    location = fields[0]
     # the signature follows the third colon of the location; a signature has colons of its own (A::f)
-    match = re.match(r"^.*?:\d+:\d+:(.*)$", location)
-    signature = match.group(1) if match else location
-    return signature, int(fields[1])
+    match = re.match(r"^(.*?:\d+:\d+):(.*)$", fields[0])
+    if match:
+        return match.group(2), int(fields[1]), match.group(1)
+    return fields[0], int(fields[1]), ""
+
+
+def is_part_clone(signature):
+    """True for the record of a ".part" clone made by partial inlining: GCC names it only by a number and its
+    parameters ("0(int)"), at the location of the function it was split from."""
+    return re.match(r"^\d+\(", signature) is not None
 
 
 def matches(func, signature):
@@ -131,7 +141,7 @@ def matches(func, signature):
 
 
 def collect_frames(build_dir):
-    """Returns a list of (signature, bytes, .su path) for every frame record under build_dir."""
+    """Returns a list of (signature, bytes, .su path, location) for every frame record under build_dir."""
     frames = []
     for path in sorted(Path(build_dir).rglob("*.su")):
         try:
@@ -141,33 +151,35 @@ def collect_frames(build_dir):
         for line in text.splitlines():
             rec = parse_su_line(line)
             if rec:
-                frames.append((rec[0], rec[1], path))
+                frames.append((rec[0], rec[1], path, rec[2]))
     return frames
 
 
 def check(budgets, frames):
     """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None).
 
-    The frame of a function is that of its largest head (the function or a .constprop/.isra clone of it) plus that of
-    its largest ".part" clone, which the head calls."""
+    frames are (signature, bytes, path, location) records.  A function's frame is the largest of its records (GCC
+    prints its .constprop and .isra clones under its own name) plus the ".part" clone recorded at the same location
+    (see is_part_clone()), which the function calls."""
+    parts = {}
+    for signature, size, path, location in frames:
+        if location and is_part_clone(signature):
+            key = (path, location)
+            if key not in parts or size > parts[key][0]:
+                parts[key] = (size, signature)
     results = []
     for func, budget, _ in budgets:
-        head = None
-        part = None
-        for signature, size, _ in frames:
+        worst = None
+        worst_sig = None
+        for signature, size, path, location in frames:
             if not matches(func, signature):
                 continue
-            if re.search(r"\[clone [^\]]*\.part\.", signature):
-                if part is None or size > part[0]:
-                    part = (size, signature)
-            elif head is None or size > head[0]:
-                head = (size, signature)
-        if head is None and part is None:
-            results.append((func, budget, None, None))
-            continue
-        worst = (head[0] if head else 0) + (part[0] if part else 0)
-        signature = " + ".join(p[1] for p in (head, part) if p)
-        results.append((func, budget, worst, signature))
+            part = parts.get((path, location))
+            total = size + (part[0] if part else 0)
+            if worst is None or total > worst:
+                worst = total
+                worst_sig = signature + (" + .part clone %s at %s" % (part[1], location) if part else "")
+        results.append((func, budget, worst, worst_sig))
     return results
 
 
@@ -192,9 +204,11 @@ def calibration_mismatch(settings, config):
     target = config.get("target", "?")
     if target != settings["target"]:
         return "target %s, budgets for %s" % (target, settings["target"])
-    for key in ("build-type-flags", "cxx-flags"):
+    for key in ("build-type-flags", "cxx-flags", "hardening"):
         if key in settings and not flags_match(settings[key], config.get(key, "")):
             return "%s %r, budgets for %r" % (key, config.get(key, ""), settings[key])
+    if "ipo" in settings and config.get("ipo", "") != settings["ipo"]:
+        return "link-time optimization (ipo) %r, budgets for %r" % (config.get("ipo", ""), settings["ipo"])
     return None
 
 

@@ -14,8 +14,8 @@
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload and
-# clone of the function (the largest frame counts, plus the largest ".part" clone, which the function calls), not the
-# lambdas and local classes inside it.
+# clone of the function (the largest frame counts, plus that of a ".part" clone, which GCC records as "0(...)" at the
+# function's location and which the function calls), not the lambdas and local classes inside it.
 
 @compiler GNU
 # the major version must match
@@ -23,6 +23,9 @@
 @build-type Release
 @build-type-flags -O3 -DNDEBUG
 @cxx-flags -fno-strict-aliasing -std=c++20
+# the hardening macros that Ubuntu's GCC predefines; no link-time optimization
+@hardening _FORTIFY_SOURCE=3 __CET__=3 __SSP_STRONG__=3
+@ipo 0
 # glibc (the Ubuntu image of the CI's release build); with musl (Alpine), QoreIRInterpreter::execute is 6016 bytes
 @target x86_64-linux-gnu
 

@@ -2732,6 +2732,28 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
+# tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
+# configuration at build time, so it has none here), the target triple, which names the C library
+# (x86_64-linux-gnu, x86_64-alpine-linux-musl), and link-time optimization
+get_property(_qore_lib_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (_qore_lib_multi_config)
+    set(QORE_LIB_BUILD_TYPE_VALUE "multi-config")
+    set(_qore_lib_build_type_flags "")
+else()
+    set(QORE_LIB_BUILD_TYPE_VALUE "${CMAKE_BUILD_TYPE}")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
+    set(_qore_lib_build_type_flags "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+endif()
+execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE QORE_LIB_TARGET_VALUE
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+get_target_property(_qore_lib_ipo libqore INTERPROCEDURAL_OPTIMIZATION)
+if (_qore_lib_ipo)
+    set(QORE_LIB_IPO_VALUE 1)
+else()
+    set(QORE_LIB_IPO_VALUE 0)
+endif()
+
 # The frame sizes of libqore's functions for tools/check-stack-usage.py, which checks the per-call path of interpreted
 # code against tools/stack-usage-budgets.txt (issue #5852): -fstack-usage writes a .su file next to each object and
 # does not change the generated code.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the
@@ -2742,18 +2764,27 @@ if (QORE_STACK_USAGE_REPORT)
             "${CMAKE_CXX_COMPILER_ID}")
     endif()
     target_compile_options(libqore PRIVATE -fstack-usage)
-    # the target triple names the C library (x86_64-linux-gnu, x86_64-alpine-linux-musl), whose headers change frames
-    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE _qore_stack_usage_target
-        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_stack_usage_build_type)
+    # the hardening macros that the compiler driver predefines with these flags (stack protector, fortification,
+    # control-flow protection, libstdc++ assertions): distributions' compilers enable different ones by default
+    separate_arguments(_qore_stack_usage_flags UNIX_COMMAND "${CMAKE_CXX_FLAGS} ${_qore_lib_build_type_flags}")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} ${_qore_stack_usage_flags} -dM -E -x c++ /dev/null
+        OUTPUT_VARIABLE _qore_stack_usage_macros ERROR_QUIET)
+    string(REGEX MATCHALL "#define (_FORTIFY_SOURCE|__SSP__|__SSP_STRONG__|__SSP_ALL__|__SSP_EXPLICIT__|__CET__|_GLIBCXX_ASSERTIONS) [^\n]*"
+        _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    list(SORT _qore_stack_usage_macros)
+    string(REPLACE "#define " "" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE " " "=" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE ";" " " _qore_stack_usage_macros "${_qore_stack_usage_macros}")
     file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
         "# written by CMake for tools/check-stack-usage.py\n"
         "compiler=${CMAKE_CXX_COMPILER_ID}\n"
         "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
-        "build-type=${CMAKE_BUILD_TYPE}\n"
-        "build-type-flags=${CMAKE_CXX_FLAGS_${_qore_stack_usage_build_type}}\n"
+        "build-type=${QORE_LIB_BUILD_TYPE_VALUE}\n"
+        "build-type-flags=${_qore_lib_build_type_flags}\n"
         "cxx-flags=${CMAKE_CXX_FLAGS}\n"
-        "target=${_qore_stack_usage_target}\n")
+        "hardening=${_qore_stack_usage_macros}\n"
+        "ipo=${QORE_LIB_IPO_VALUE}\n"
+        "target=${QORE_LIB_TARGET_VALUE}\n")
 endif()
 
 # prepare qore target
@@ -3266,8 +3297,7 @@ include(cmake/QoreRecordedCFlags.cmake)
 qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
 # the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
 # sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
-string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
-qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${_qore_lib_build_type_flags}")
 if (SINGLE_COMPILATION_UNIT)
     set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
 else()

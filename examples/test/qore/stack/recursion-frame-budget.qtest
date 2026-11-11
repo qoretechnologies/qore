@@ -45,8 +45,8 @@
     GCC on x86_64 Linux with glibc (Ubuntu) and with musl (Alpine), each with a release build (-O3) and a debug
     build (-Og, as CI builds Qore).  They are 5-7% over the measured values, but never more than 400 bytes, so that
     a frame of 528 bytes more at each level (an array in a frame of the IR interpreter, as 13281fbbd7 added) fails
-    here.  On any other compiler, CPU or C library the values are reported but not checked, as they are in sanitizer
-    builds, whose stack redzones make every frame larger.
+    here.  On any other compiler, CPU, C library or flag set (see getCalibrationMismatch()) the values are reported
+    but not checked, as they are in sanitizer builds, whose stack redzones make every frame larger.
 
     tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
     -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
@@ -103,6 +103,19 @@ int sub run(string f) {
         #! the only compiler flags (CFLAGS) besides those of the build type that the budgets are calibrated for
         const CalibratedCFlags = ("-fno-strict-aliasing", "-std=c++20");
 
+        #! the targets that the budgets are calibrated for: target triple -> C library and the hardening options that
+        #! the distribution's GCC enables by default (Ubuntu and Alpine, the images of CI)
+        const CalibratedTargets = {
+            "x86_64-linux-gnu": {
+                "libc": "glibc",
+                "hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 3, "glibcxx_assertions": False},
+            },
+            "x86_64-alpine-linux-musl": {
+                "libc": "musl",
+                "hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+            },
+        };
+
         #! the two stack sizes of the measurement
         const SmallStack = 4 * 1024 * 1024;
         const LargeStack = 8 * 1024 * 1024;
@@ -150,41 +163,32 @@ int sub run(string f) {
         }
     }
 
-    #! returns the build type of the budgets: "debug" for a library built with debugging, otherwise "release"
-    static string getBuildType() {
-        return Option::HAVE_LIBRARY_DEBUGGING ? "debug" : "release";
-    }
-
-    #! returns the C library of the process ("glibc" or "musl") or nothing if it is neither or cannot be determined
-    static *string getLibc() {
-        if (!is_readable("/proc/self/maps")) {
-            return;
-        }
-        string maps = File::readTextFile("/proc/self/maps");
-        if (maps =~ /\/ld-musl-[^\/]*\.so/) {
-            return "musl";
-        }
-        if (maps =~ /\/libc\.so\.6/) {
-            return "glibc";
-        }
+    #! returns the budgets of a library with the given build information: "<C library> <build type>"
+    static string getBudgetKey(hash<auto> info, bool library_debugging) {
+        return sprintf("%s %s", CalibratedTargets{info.Target}.libc ?? "unknown libc",
+            library_debugging ? "debug" : "release");
     }
 
     #! returns why the budgets do not apply to a library with the given build information, or nothing if they do
     /** @param info the build information of the library, as get_qore_library_info() returns it
         @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
 
-        The budgets are calibrated for one compiler and flag set: GCC 15 on x86_64 Linux, a single compilation unit,
-        no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags of Qore's CMake build;
-        frames differ with another GCC version, another optimization level (a distribution's -O2 build, a debug
-        build made without -Og), link-time optimization or hardening flags, so such a build is not checked
+        The budgets are calibrated for one compiler and flag set: GCC 15 on x86_64 Linux with glibc (Ubuntu) or musl
+        (Alpine) and the hardening options of the distribution's GCC, a single compilation unit, no link-time
+        optimization, no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags of Qore's
+        CMake build; frames differ with another GCC version or distribution, another optimization level (a
+        distribution's -O2 build, a debug build made without -Og), link-time optimization or other hardening flags, so
+        such a build is not checked
     */
     static *string getCalibrationMismatch(hash<auto> info, bool library_debugging) {
         if (info.Compiler != "GNU") {
             return sprintf("the budgets are for GCC, and this library was built with %y", info.Compiler);
         }
-        if (!exists info.CompilerVersion || !exists info.BuildType || !exists info.BuildTypeCFLAGS
-            || !exists info.SingleCompilationUnit) {
-            return "this library does not report its compiler version, build type and flags";
+        foreach string key in (("CompilerVersion", "BuildType", "BuildTypeCFLAGS", "SingleCompilationUnit", "Target",
+            "InterproceduralOptimization", "Hardening")) {
+            if (!exists info{key}) {
+                return sprintf("this library does not report how it was built (%y)", key);
+            }
         }
         if ((info.CompilerVersion =~ x/^([0-9]+)/)[0] != CalibratedGccMajor) {
             return sprintf("the budgets are for GCC %s, and this library was built with GCC %s", CalibratedGccMajor,
@@ -193,8 +197,20 @@ int sub run(string f) {
         if (info.PlatformCPU != "x86_64" || info.PlatformOS != "Linux") {
             return sprintf("the budgets are for x86_64 Linux, and this is %s %s", info.PlatformCPU, info.PlatformOS);
         }
+        *hash<auto> target = CalibratedTargets{info.Target};
+        if (!target) {
+            return sprintf("the budgets are for the targets %y, and this library was built for %y",
+                keys CalibratedTargets, info.Target);
+        }
+        if (info.Hardening != target.hardening) {
+            return sprintf("the budgets are for the hardening options %y of %s, and this library was built with %y",
+                target.hardening, info.Target, info.Hardening);
+        }
         if (!info.SingleCompilationUnit) {
             return "the budgets are for a library built as a single compilation unit, as CI builds it";
+        }
+        if (info.InterproceduralOptimization) {
+            return "the budgets are for a library built without link-time optimization";
         }
         string build_type = library_debugging ? "debug" : "release";
         if (info.BuildType.lwr() != build_type) {
@@ -213,21 +229,39 @@ int sub run(string f) {
         }
     }
 
-    #! returns why the budgets do not apply to this build, or nothing if they do
-    static *string getUncalibratedReason() {
-        *string reason = getCalibrationMismatch(get_qore_library_info(), Option::HAVE_LIBRARY_DEBUGGING);
+    #! returns why the budgets do not apply to the library, or nothing if they do
+    /** @param info the build information of the library, as get_qore_library_info() returns it
+        @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
+        @param maps the memory map of the process (/proc/self/maps), if it can be read
+    */
+    static *string getUncalibratedReason(hash<auto> info, bool library_debugging, *string maps) {
+        *string reason = getCalibrationMismatch(info, library_debugging);
         if (reason) {
             return reason;
         }
-        if (!getLibc()) {
-            return "the budgets are for glibc and musl, and the C library of this process is neither";
-        }
         # a sanitizer's runtime is loaded into a sanitizer build, whose frames have redzones
-        string maps = File::readTextFile("/proc/self/maps");
-        *list<string> sanitizer = (maps =~ x/(lib[a-z]*san)\b/);
+        *list<string> sanitizer = maps ? (maps =~ x/(lib[a-z]*san)\b/) : NOTHING;
         if (sanitizer) {
             return sprintf("a sanitizer runtime (%s) is loaded, and its stack redzones make frames larger",
                 sanitizer[0]);
+        }
+        return getMeasurementProblem(maps);
+    }
+
+    #! returns why the depth of a recursion does not measure the stack in this process, or nothing if it does
+    /** Valgrind manages the stacks of the threads itself and can give a new thread the stack of a thread that has
+        ended, of another size, so the depths that this test measures do not follow the stack size that it asks for
+    */
+    static *string getMeasurementProblem(*string maps) {
+        if (maps =~ /vgpreload_/) {
+            return "the process runs under valgrind, which can give a thread the stack of another thread";
+        }
+    }
+
+    #! returns the memory map of the process, or nothing if it cannot be read
+    static *string getMaps() {
+        if (is_readable("/proc/self/maps")) {
+            return File::readTextFile("/proc/self/maps");
         }
     }
 
@@ -270,8 +304,9 @@ int sub run(string f) {
     }
 
     testBytesPerLevel() {
-        *string reason = getUncalibratedReason();
-        string build_type = sprintf("%s %s", getLibc() ?? "unknown libc", getBuildType());
+        hash<auto> info = get_qore_library_info();
+        *string reason = getUncalibratedReason(info, Option::HAVE_LIBRARY_DEBUGGING, getMaps());
+        string build_type = getBudgetKey(info, Option::HAVE_LIBRARY_DEBUGGING);
         # every recursion is measured before the check, so that a failure reports all of them
         list<string> over = ();
         foreach hash<auto> m in (Modes.pairIterator()) {
@@ -307,10 +342,21 @@ int sub run(string f) {
             "BuildType": "Release",
             "BuildTypeCFLAGS": "-O3 -DNDEBUG",
             "CFLAGS": "-fno-strict-aliasing -std=c++20",
+            "Target": "x86_64-linux-gnu",
+            "InterproceduralOptimization": False,
+            "Hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 3, "glibcxx_assertions": False},
         };
         hash<auto> debug = release + {"BuildType": "debug", "BuildTypeCFLAGS": "-g -Og"};
+        hash<auto> musl = release + {
+            "Target": "x86_64-alpine-linux-musl",
+            "Hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+        };
         assertNothing(getCalibrationMismatch(release, False));
         assertNothing(getCalibrationMismatch(debug, True));
+        assertNothing(getCalibrationMismatch(musl, False));
+        assertEq("glibc release", getBudgetKey(release, False));
+        assertEq("glibc debug", getBudgetKey(debug, True));
+        assertEq("musl release", getBudgetKey(musl, False));
 
         # each difference from the calibrated builds: the build information -> library debugging -> the reason
         list<list<auto>> cases = (
@@ -332,16 +378,41 @@ int sub run(string f) {
             (release, True, "\"Release\""),
             (release + {"CFLAGS": "-fno-strict-aliasing -std=c++20 -flto"}, False, "also built with [\"-flto\"]"),
             (release + {"CFLAGS": "-O2 -fno-strict-aliasing -std=c++20"}, False, "also built with [\"-O2\"]"),
+            # a multi-config generator reports no build type: the configuration is chosen when the library is built
+            (release + {"BuildType": "multi-config", "BuildTypeCFLAGS": ""}, False, "\"multi-config\""),
+            (release + {"Target": "aarch64-linux-gnu"}, False, "built for \"aarch64-linux-gnu\""),
+            (release + {"InterproceduralOptimization": True}, False, "link-time optimization"),
+            # another distribution's GCC with other hardening defaults
+            (release + {"Hardening": release.Hardening + {"cet": 0}}, False, "hardening options"),
+            (release + {"Hardening": release.Hardening + {"glibcxx_assertions": True}}, False, "hardening options"),
+            (musl + {"Hardening": release.Hardening}, False, "hardening options"),
+            (release - "Hardening", False, "does not report how it was built (\"Hardening\")"),
         );
         foreach list<auto> c in (cases) {
             *string reason = getCalibrationMismatch(c[0], c[1]);
             assertEq(True, reason.typeCode() == NT_STRING && reason.find(c[2]) >= 0,
                 sprintf("case %d: %y contains %y", $#, reason, c[2]));
+            # the check that decides whether the budgets are enforced finds the same reason
+            assertEq(reason, getUncalibratedReason(c[0], c[1], ""), sprintf("case %d", $#));
         }
+
+        # a calibrated build is checked unless a sanitizer runtime is loaded or the process runs under valgrind
+        *string reason = getUncalibratedReason(release, False,
+            "4000-4001 r-xp 0 08:01 1 /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so\n");
+        assertEq(True, reason.typeCode() == NT_STRING && reason.find("valgrind") >= 0, reason);
+        assertNothing(getUncalibratedReason(release, False, "7f00-7f01 r-xp 0 08:01 1 /usr/lib/libc.so.6\n"));
+        assertNothing(getUncalibratedReason(release, False, NOTHING));
+        reason = getUncalibratedReason(release, False,
+            "7f00-7f01 r-xp 0 08:01 1 /usr/lib/x86_64-linux-gnu/libasan.so.8.0.0\n");
+        assertEq(True, reason.typeCode() == NT_STRING && reason.find("sanitizer runtime (libasan)") >= 0, reason);
     }
 
     #! the measurement itself: each recursion runs out of stack at a depth that grows with the stack
     testMeasurement() {
+        *string problem = getMeasurementProblem(getMaps());
+        if (problem) {
+            testSkip(problem);
+        }
         Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
         pgm.setExecMode(EM_IR);
         pgm.parse(Code, "recursion-frame-budget");
