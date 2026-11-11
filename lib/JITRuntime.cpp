@@ -8388,8 +8388,10 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
                 || !QoreTypeInfo::acceptsInputUnchecked(sig->getParamTypeInfo(i),
                     value.getTypeInfo())
                 // no-narrow container params must bind through the TLS paths so
-                // applyNoNarrowContainerType() gives them assignment semantics
-                || sig->lv[i]->isNoNarrowContainer()) {
+                // applyNoNarrowContainerType() gives them assignment semantics; the parameter's type tells it, as
+                // for isStaticallyFastCallEligible(): the local variables of the signature are freed with the code of
+                // the Program, which a closure stored in another Program outlives (qore#5822)
+                || QoreTypeInfo::isNoNarrowContainer(sig->getParamTypeInfo(i))) {
             return false;
         }
     }
@@ -8411,8 +8413,11 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE");
     const bool disabled = disabled_env.get();
+    // the leaf runs without entering the closure's Program: once that Program is being deleted, the call path refuses
+    // the call (qore#5822)
     if (disabled || !uvb || arg_cleanups
             || uvb->hasLazyAOTClosureIR()
+            || uvb->pgm_deleted.load(std::memory_order_acquire)
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
@@ -8489,7 +8494,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && !uvb->hasLazyAOTClosureIR()
+        // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
+        // whose types can be those of the Program's classes, is read (qore#5822)
+        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
@@ -8541,7 +8548,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && !uvb->hasLazyAOTClosureIR()
+        // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
+        // whose types can be those of the Program's classes, is read (qore#5822)
+        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
@@ -8601,7 +8610,9 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && !uvb->hasLazyAOTClosureIR()
+        // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
+        // whose types can be those of the Program's classes, is read (qore#5822)
+        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {

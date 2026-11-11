@@ -5713,6 +5713,77 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
         recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);
+    // the variant is in its Program's list of variants and keeps the Program allocated while it lives (see
+    // setProgram())
+    if (pgm) {
+        qore_program_private::get(*pgm)->registerUserVariant(this);
+        pgm->depRef();
+    }
+}
+
+void UserVariantBase::setProgram(QoreProgram* p) {
+    // the AOT runtime sets the Program that the variant was created in again
+    if (p == pgm) {
+        return;
+    }
+    // the variant leaves the old Program's registry first, so that it is never in two at once, where the deletion of
+    // the old Program could mark it; neither step can fail (the registry is an intrusive list)
+    if (pgm) {
+        qore_program_private::get(*pgm)->unregisterUserVariant(this);
+    }
+    if (p) {
+        // sets pgm_deleted if the deletion of the Program has started
+        qore_program_private::get(*p)->registerUserVariant(this);
+        p->depRef();
+    } else {
+        pgm_deleted.store(false, std::memory_order_relaxed);
+    }
+    if (pgm) {
+        // can delete the Program, whose memory the variant kept: no lock is held here
+        pgm->depDeref();
+    }
+    pgm = p;
+    pgm_id = p ? p->getProgramId() : 0;
+    pgm_module_lifetime.store(false, std::memory_order_relaxed);
+}
+
+void qore_program_private::registerUserVariant(const UserVariantBase* v) {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    assert(!v->uv_prev && !v->uv_next && user_variants != v);
+    v->uv_next = user_variants;
+    if (user_variants) {
+        user_variants->uv_prev = v;
+    }
+    user_variants = v;
+    // a variant registered while the Program is being deleted (an AOT closure deserialized lazily, for example) is
+    // marked as those that existed when the deletion started
+    v->pgm_deleted.store(user_variants_deleted, std::memory_order_release);
+}
+
+void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    // a variant that is not in the list leaves it unchanged
+    if (!v->uv_prev && user_variants != v) {
+        assert(false);
+        return;
+    }
+    if (v->uv_prev) {
+        v->uv_prev->uv_next = v->uv_next;
+    } else {
+        user_variants = v->uv_next;
+    }
+    if (v->uv_next) {
+        v->uv_next->uv_prev = v->uv_prev;
+    }
+    v->uv_prev = v->uv_next = nullptr;
+}
+
+void qore_program_private::markUserVariantsDeleted() {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    user_variants_deleted = true;
+    for (const UserVariantBase* v = user_variants; v; v = v->uv_next) {
+        v->pgm_deleted.store(true, std::memory_order_release);
+    }
 }
 
 //! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
@@ -5759,6 +5830,13 @@ UserVariantBase::~UserVariantBase() {
     delete gate;
     delete aot_entry_statement;
     delete statements;
+    if (pgm) {
+        qore_program_private::get(*pgm)->unregisterUserVariant(this);
+        // the last reference deletes the Program, whose memory the variant kept after its deletion: that happens in
+        // the thread that releases the last variant of a deleted Program (its last call reference, closure or
+        // imported function, or a background compile's reference), with no lock of the Program held
+        pgm->depDeref();
+    }
 }
 
 void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
@@ -6880,6 +6958,20 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
+//! Returns true if the code of \a variant can be compiled into a batch
+/** The code of a function whose Program's deletion has started (UserVariantBase::pgm_deleted, also set before the
+    tearing-down thread can run code of the Program) is not collected: its own calls refer to that Program's functions,
+    which are freed with its namespaces, and the function is called through the call path, which refuses the call
+    (qore#5822).  The variant and its Program stay allocated while code that calls it refers to it (see
+    UserVariantBase::setProgram()).  The functions of other live Programs (inherited from a parent, imported, or of a
+    module) are collected: a deletion that another thread starts while a batch is being collected is not excluded by
+    this check, a race that does not depend on this check and that is tracked separately.
+*/
+static bool qore_batch_callee_collectable(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    return !uvb || !uvb->pgm_deleted.load(std::memory_order_acquire);
+}
+
 // Collect direct and transitive callees from an IR function's direct calls and
 // eligible nonmethod closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
@@ -6908,6 +7000,9 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
                     variant = direct->variant;
+                    if (!qore_batch_callee_collectable(variant)) {
+                        continue;
+                    }
                     if (direct->func) {
                         callee_name = direct->func->getName();
                     }
@@ -6918,6 +7013,9 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                                 inv->expr.getInternalNode());
                         if (call) {
                             variant = call->getVariant();
+                            if (!qore_batch_callee_collectable(variant)) {
+                                continue;
+                            }
                             if (call->getFunction()) {
                                 callee_name = call->getFunction()->getName();
                             }

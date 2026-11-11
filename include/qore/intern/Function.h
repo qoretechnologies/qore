@@ -1249,13 +1249,22 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
+    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
+    //! the Program takes the call path then, which refuses the call (qore#5822)
+    mutable std::atomic<bool> pgm_deleted{false};
+    //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
+    //! qore_program_private::registerUserVariant())
+    mutable const UserVariantBase* uv_prev = nullptr;
+    //! the next variant in its Program's list of variants; protected by the Program's user_variant_lock
+    mutable const UserVariantBase* uv_next = nullptr;
 
-    //! sets the Program of the variant
-    DLLLOCAL void setProgram(QoreProgram* p) {
-        pgm = p;
-        pgm_id = p ? p->getProgramId() : 0;
-        pgm_module_lifetime.store(false, std::memory_order_relaxed);
-    }
+    //! sets the Program of the variant, which stays allocated while the variant lives
+    /** A variant can outlive its Program: another Program calls it through an imported function, a call reference,
+        a closure or an object, and the call is refused once the Program is deleted (PROGRAM-ERROR).  The checks made
+        before the call is refused read the Program (whether a debugger is attached to it, for example), so the
+        variant holds a dependency reference to it, which keeps its memory but not its data (qore#5822)
+    */
+    DLLLOCAL void setProgram(QoreProgram* p);
 
 protected:
     // flag to recheck params against committed after type resolution

@@ -444,6 +444,10 @@ qore_program_id_t qore_program_private::programIdCounter = 1;
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
+    // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
+    // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
+    // its locks protect, which fork() handles alike (see design/fork-handlers.md)
+    new (&user_variant_lock) std::mutex();
     // the thread counts keep only the forking thread
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
@@ -732,6 +736,8 @@ void qore_program_private::registerProgram() {
 }
 
 qore_program_private::~qore_program_private() {
+    // each user variant of the Program's code holds a dependency reference to it until it unregisters
+    assert(!user_variants);
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
@@ -1924,6 +1930,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+        // the fast paths that run the code of its variants without entering it take the call path from now on,
+        // which refuses the calls of other threads and of other Programs (qore#5822)
+        markUserVariantsDeleted();
 #ifdef DEBUG
         if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
             hook(pgm, DbgTeardownPoint::BeforeFinalWait);
