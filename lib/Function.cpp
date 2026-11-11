@@ -3870,7 +3870,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
         int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
-        const arg_value_vec_t* args_with_value) const {
+        const arg_value_vec_t* args_with_value,
+        const QoreTypeInfo** deferred_rt) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -4331,9 +4332,14 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         binding.variant = variant;
         // a variant is committed only when no other variant with the same parameter names could be resolved at run
         // time (see parseFindVariant())
-        if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied)) {
+        const QoreTypeInfo* union_rt = nullptr;
+        if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied,
+                deferred_rt ? &union_rt : nullptr)) {
             printd(5, "QoreFunction::parseFindVariantNamed() %s(): another variant could match at run time\n",
                 getName());
+            if (deferred_rt) {
+                *deferred_rt = union_rt;
+            }
             variant = nullptr;
             if (type_param_inst) {
                 type_param_inst->clear();
@@ -4659,9 +4665,40 @@ static bool qore_param_names_match_at(const AbstractFunctionSignature* a, const 
     return true;
 }
 
+//! Returns the type of a value of either type, or nullptr if there is none that is narrower than any value
+/** The types are the return types of the variants that a call can be resolved to at run time: equal types, or one
+    type and no value (\c nothing or the or-nothing type of the other: a variant for no value), give a type; any other
+    combination gives none
+*/
+static const QoreTypeInfo* qore_union_return_type(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    if (!QoreTypeInfo::hasType(a) || !QoreTypeInfo::hasType(b)) {
+        return nullptr;
+    }
+    if (QoreTypeInfo::equal(a, b)) {
+        return a;
+    }
+    if (b == nothingTypeInfo) {
+        return get_or_nothing_type_check(a);
+    }
+    if (a == nothingTypeInfo) {
+        return get_or_nothing_type_check(b);
+    }
+    if (QoreTypeInfo::equal(get_or_nothing_type_check(a), b)) {
+        return b;
+    }
+    if (QoreTypeInfo::equal(get_or_nothing_type_check(b), a)) {
+        return a;
+    }
+    return nullptr;
+}
+
 bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, QoreParseOptions po, const arg_value_vec_t* args_with_value,
-        const std::vector<bool>* named_positions) const {
+        const std::vector<bool>* named_positions, const QoreTypeInfo** union_rt) const {
+    if (union_rt) {
+        *union_rt = chosen->parseGetReturnTypeInfo();
+    }
+    bool found = false;
     unsigned num_args = argTypeInfo.size();
     AbstractFunctionSignature* chosen_sig = chosen->getSignature();
     // true if the chosen variant accepts no value for the given parameter
@@ -4696,8 +4733,11 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
             if (named_positions && !qore_param_names_match_at(chosen_sig, sig, *named_positions)) {
                 continue;
             }
-            // a variant with type parameters is taken as a possible match
+            // a variant with type parameters is taken as a possible match, with any return type
             if (sig->needsTypeParameterSubstitution()) {
+                if (union_rt) {
+                    *union_rt = nullptr;
+                }
                 return true;
             }
             if (sig->numParams() < num_args && !v->hasVarargs() && strict_args
@@ -4729,14 +4769,21 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
                 break;
             }
             if (may_match && takes_nothing_instead) {
-                return true;
+                if (!union_rt) {
+                    return true;
+                }
+                found = true;
+                *union_rt = qore_union_return_type(*union_rt, v->parseGetReturnTypeInfo());
+                if (!*union_rt) {
+                    return true;
+                }
             }
         }
         if (stop) {
             break;
         }
     }
-    return false;
+    return found;
 }
 
 const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
@@ -4887,7 +4934,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
-        const type_vec_t* explicit_type_args, const arg_value_vec_t* args_with_value) const {
+        const type_vec_t* explicit_type_args, const arg_value_vec_t* args_with_value,
+        const QoreTypeInfo** deferred_rt) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -5196,8 +5244,14 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     }
     // a variant is committed only when no other variant could be resolved at run time; an argument can have no
     // value then whatever its type (issue #5686)
-    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value)) {
+    const QoreTypeInfo* union_rt = nullptr;
+    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value,
+            nullptr, deferred_rt ? &union_rt : nullptr)) {
         printd(5, "QoreFunction::parseFindVariant() %s(): another variant could match at run time\n", getName());
+        // the call has the type of a value of any of the variants that could be resolved (issue #5686)
+        if (deferred_rt) {
+            *deferred_rt = union_rt;
+        }
         variant = nullptr;
         runtime_match = true;
         if (type_param_inst) {

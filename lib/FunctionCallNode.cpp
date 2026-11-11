@@ -706,13 +706,15 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // find variant
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
+        // the return type of a call whose variant is resolved at run time only because another variant could match
+        const QoreTypeInfo* deferred_rt = nullptr;
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
                 receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
-                &args_with_value)
+                &args_with_value, &deferred_rt)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
                 &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
-                &args_with_value);
+                &args_with_value, &deferred_rt);
 
         if (named_args) {
             // a call whose variant is resolved at run time keeps the binding of its arguments (see
@@ -795,7 +797,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         }
 
         parse_context.typeInfo = qore_substitute_type_params_if_needed(
-            variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
+            variant ? variant->parseGetReturnTypeInfo()
+                : (deferred_rt ? deferred_rt : func->parseGetUniqueReturnTypeInfo()),
             receiver_type_info, &type_param_instantiation);
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,

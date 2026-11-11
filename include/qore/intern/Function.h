@@ -2213,18 +2213,22 @@ public:
 
         @param args_with_value if given, true for each argument whose expression always has a value of its type (see
         parse_arg_always_has_value()); such an argument cannot select another variant by having no value
+        @param union_rt if given, set to the return type that covers the given variant and every other variant that
+        could be resolved at run time (qore_union_return_type()), or nullptr if there is no such type; all of the
+        variants are then checked
     */
     DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
             const qore_class_private* class_ctx, QoreParseOptions po,
             const arg_value_vec_t* args_with_value = nullptr,
-            const std::vector<bool>* named_positions = nullptr) const;
+            const std::vector<bool>* named_positions = nullptr, const QoreTypeInfo** union_rt = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
-            const arg_value_vec_t* args_with_value = nullptr) const;
+            const arg_value_vec_t* args_with_value = nullptr,
+            const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
@@ -2238,7 +2242,8 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
-            const arg_value_vec_t* args_with_value = nullptr) const;
+            const arg_value_vec_t* args_with_value = nullptr,
+            const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none
