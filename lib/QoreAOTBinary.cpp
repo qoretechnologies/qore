@@ -1753,7 +1753,7 @@ static bool checkAOTSerializedValueSkipCancel(uint32_t i, std::string& error,
 
 //! The maximum nesting of the containers and arguments of a serialized value: a deeper value is malformed and fails
 //! instead of overflowing the stack of the reader (qore#5848)
-static constexpr unsigned QORE_AOT_MAX_VALUE_DEPTH = 1024;
+static constexpr unsigned QORE_AOT_MAX_VALUE_DEPTH = 256;
 
 //! Counts the nesting of the value that the thread reads or skips; a reader can be used by several threads at once
 struct QoreAOTValueDepthHelper {
@@ -5127,7 +5127,11 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
             const uint8_t* ep = blob;
             QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
                 nullptr, 0, nullptr, 0);
-            if (error.empty() && ep != blob_end) {
+            if (!error.empty()) {
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            if (ep != blob_end) {
                 error = "native expr default did not consume its payload";
                 rv.discard(nullptr);
                 return QoreValue();
@@ -16351,8 +16355,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
         std::vector<PendingInstanceMember> instance_members;
         if (!class_already_existed) {
-            // a malformed count allocates no more than the data has (qore#5848)
-            instance_members.reserve(std::min<size_t>(num_members, end - ptr));
+            // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+            instance_members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
         }
         for (uint32_t j = 0; j < num_members; ++j) {
             const char* mname = reader.readStringRef(ptr);
@@ -17706,8 +17710,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Constant names are registered batch-wide before resolving defaults.
         std::vector<PendingHashdeclMember> members;
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
-        // a malformed count allocates no more than the data has (qore#5848)
-        members.reserve(std::min<size_t>(num_members, end - ptr));
+        // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+        members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
 
         for (uint32_t j = 0; j < num_members; ++j) {
             if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT hashdecl member deserialization")) {
@@ -17859,8 +17863,8 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         std::vector<EnumMemberInfo> members;
 
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
-        // a malformed count allocates no more than the data has (qore#5848)
-        members.reserve(std::min<size_t>(num_members, end - ptr));
+        // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+        members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
         for (uint32_t j = 0; j < num_members; ++j) {
             EnumMemberInfo emi;
             emi.name = makeDeferredStringRef(reader.readStringRef(ptr));

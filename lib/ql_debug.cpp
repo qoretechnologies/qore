@@ -17186,7 +17186,7 @@ static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
     // a value nested deeper than the reader allows: it fails without overflowing the stack
     {
         Bytes deep;
-        for (int i = 0; i < 2000; ++i) {
+        for (int i = 0; i < 300; ++i) {
             deep.tag(QoreAOTValueTag::VT_LIST).plain().u32(1);
         }
         deep.intv(1);
