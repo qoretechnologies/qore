@@ -258,7 +258,12 @@ and set the runtime one only when they delegate to the AST interpreter, which is
 they are lowered with a block of their own as their exception target, which restores the implicit argument and
 element if the code sets them and goes on to the handler, as the AST interpreter's helpers restore them when an
 exception unwinds the operator (`QoreIRLowering::ImplicitContextExceptionBlock`); the argument list holds a
-reference to the element, which was otherwise released after the handler.
+reference to the element, which was otherwise released after the handler.  Outside a fused pipeline, whose
+exception cleanup releases the statement's temporaries itself, the code's instructions record a temp scope that no
+mark opens while it is lowered, so that its exception edge releases nothing before the block has restored the
+context; the block then gives the exception to the handler from an instruction of the statement's scope, which
+releases them.  Code that turns out to set no context gets the statement's scope back, so that its exception edges
+release the temporaries as before.
 
 A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
 can hold an object, the `IteratorNext` instruction releases the previous element and then the values that the stages

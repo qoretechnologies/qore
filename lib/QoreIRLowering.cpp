@@ -16239,8 +16239,13 @@ public:
                 lowering.exception_stack.push_back(block);
                 if (unmarked_scope) {
                     saved_scope_id = lowering.builder.getExceptionTempScopeId();
-                    lowering.builder.setExceptionTempScopeId(lowering.builder.allocateUnmarkedTempScopeId());
+                    unmarked_scope_id = lowering.builder.allocateUnmarkedTempScopeId();
+                    lowering.builder.setExceptionTempScopeId(unmarked_scope_id);
                     scope_set = true;
+                    // the code lowered from here, to give it the statement's scope back if it sets no context
+                    region_block = lowering.builder.getBlock();
+                    region_start = region_block ? region_block->instructions.size() : 0;
+                    region_block_count = lowering.builder.getFunction()->blocks.size();
                 }
                 active = true;
             }
@@ -16267,6 +16272,13 @@ public:
             return;
         }
         QoreIRBuilder& builder = lowering.builder;
+        if (scope_set && !context_set) {
+            // the code sets no context, so its exception edges release the statement's temporaries as they did before:
+            // its instructions get the statement's scope back (the unmarked scope id is unique to this block), and
+            // the block is a branch to the handler
+            restoreRegionScope();
+            scope_set = false;
+        }
         QoreIRBasicBlock* after_block = builder.getBlock();
         builder.getFunction()->moveBlockToEnd(block);
         builder.setBlock(block);
@@ -16275,6 +16287,13 @@ public:
             // own
             builder.createPopImplicitArg(old_argv, loc);
             builder.createPopImplicitElement(old_element, loc);
+        }
+        if (scope_set) {
+            // the code's instructions released no temporary of the statement on their exception edge: the
+            // exception goes on to the handler from an instruction of the statement's scope, which releases them now,
+            // as the code's edge did before (a plain branch would release them only at the handler's landing pad)
+            auto* check_inst = builder.createCheckException(loc);
+            check_inst->exception_target = outer;
         }
         builder.createBranch(outer, loc);
         builder.setBlock(after_block);
@@ -16292,8 +16311,33 @@ private:
     QoreIRBasicBlock* outer;
     QoreIRBasicBlock* block = nullptr;
     uint32_t saved_scope_id = 0;
+    uint32_t unmarked_scope_id = 0;
+    QoreIRBasicBlock* region_block = nullptr;
+    size_t region_start = 0;
+    size_t region_block_count = 0;
     bool scope_set = false;
     bool active = false;
+
+    void restoreRegionScope() {
+        auto restore = [this](QoreIRBasicBlock* b, size_t start) {
+            for (size_t i = start; i < b->instructions.size(); ++i) {
+                QoreIRInstruction* inst = b->instructions[i].get();
+                if (inst->temp_scope_id == unmarked_scope_id) {
+                    inst->temp_scope_id = saved_scope_id;
+                }
+            }
+        };
+        if (region_block) {
+            restore(region_block, region_start);
+        }
+        // the blocks created since: the blocks that are moved to the end of the function keep an index after them
+        auto& blocks = lowering.builder.getFunction()->blocks;
+        for (size_t i = region_block_count; i < blocks.size(); ++i) {
+            if (blocks[i].get() != region_block) {
+                restore(blocks[i].get(), 0);
+            }
+        }
+    }
 
     void end() {
         if (active) {
@@ -17423,6 +17467,11 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         virtual_implicit.active = true;
 
         // Lower the map expression first - check if any AST delegation occurs
+        // the temp mark of an element of map in a statement is opened before the exception block's scope, so that its
+        // DiscardTemps, after the block, restores the statement's scope
+        if (!need_result) {
+            builder.createPushTempMark(map->loc);
+        }
         // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
         // before the handler runs (see ImplicitContextExceptionBlock)
         ImplicitContextExceptionBlock context_exception(*this, true);
@@ -17431,9 +17480,6 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             return QoreIRValue();
         }
         int saved_ast_count = ast_delegate_count;
-        if (!need_result) {
-            builder.createPushTempMark(map->loc);
-        }
         QoreIRValue expr_result = invariant_typed_scalar
             ? invariant_map_value : lowerExpression(map->getLeft(), error);
 
@@ -17663,6 +17709,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     virtual_implicit.active = true;
 
     // Lower the map expression first - check if any AST delegation occurs
+    // the temp mark of an element of map in a statement is opened before the exception block's scope (see above)
+    if (!need_result) {
+        builder.createPushTempMark(map->loc);
+    }
     // an exception that the code raises restores the implicit argument and element, if the lowering sets them,
     // before the handler runs (see ImplicitContextExceptionBlock)
     ImplicitContextExceptionBlock context_exception(*this, true);
@@ -17671,9 +17721,6 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
     int saved_ast_count = ast_delegate_count;
-    if (!need_result) {
-        builder.createPushTempMark(map->loc);
-    }
     QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
 
     // Restore virtual context
