@@ -1020,6 +1020,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
+            qore_aot_record_folded_constant_import(consumer_loc, i->second, ptr);
             return i->second->getParseValue();
         }
         constantTypeInfo = nothingTypeInfo;

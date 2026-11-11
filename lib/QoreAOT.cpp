@@ -619,6 +619,30 @@ void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
     qore_aot_note_referenced_decl(provider_loc, loc);
 }
 
+void qore_aot_record_folded_constant_import(const QoreProgramLocation* consumer_loc, const ConstantEntry* ce,
+        const ClassNs& ptr) {
+    if ((!aot_source_parse_active && !aot_resolved_source_import_recording_active) || !consumer_loc || !ce
+            || ce->isSystem() || ce->isExternalStub()) {
+        return;
+    }
+    QoreProgram* pgm = getProgram();
+    const char* consumer_file = consumer_loc->getFile();
+    const char* provider_file = ce->getLocation() ? ce->getLocation()->getFile() : nullptr;
+    if (!pgm || !consumer_file || !*consumer_file || *consumer_file == '<' || !provider_file || !*provider_file
+            || *provider_file == '<' || !strcmp(consumer_file, provider_file)) {
+        return;
+    }
+    // only a preloaded sibling object provides the constant to a link: one of an %include'd file is part of this
+    // object, and one of a loaded module is provided at run time, so importing either would make the link fail with
+    // an unresolved import (the parse labels cover the included files and the modules too, so they cannot tell)
+    const std::unordered_set<std::string> provider_files = {provider_file};
+    if (!qore_aot_source_provider_is_preloaded(provider_files)) {
+        return;
+    }
+    const std::string path = qore_aot_constant_symbol_path(ptr, ce->getName());
+    qore_program_private::recordSourceParseConstantImport(pgm, consumer_loc, path.c_str(), ce, !ptr.isNs());
+}
+
 void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
         const QoreProgramLocation* consumer_loc) {
     if ((!aot_dep_sink && !aot_dep_map) || !provider_loc) {

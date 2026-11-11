@@ -1029,6 +1029,21 @@ public:
 
     std::vector<source_parse_type_import_t> source_parse_type_imports;
 
+    //! a constant of another source file whose value the parse of this source folded (qore#5798)
+    /** the value and declaration hashes are computed when the symbol index is written, from the entry, which the
+        Program owns: they are then exactly the hashes that the provider publishes for the constant
+    */
+    struct source_parse_constant_import_t {
+        std::string source_file;
+        std::string qore_path;
+        const ConstantEntry* entry = nullptr;
+        bool class_constant = false;
+    };
+
+    std::vector<source_parse_constant_import_t> source_parse_constant_imports;
+    //! the (entry, consuming source file) pairs already recorded
+    std::set<std::pair<const ConstantEntry*, std::string>> source_parse_constant_import_keys;
+
     enum class source_parse_call_import_kind_t {
         Function,
         Method,
@@ -3433,6 +3448,26 @@ public:
         return source_parse_type_imports;
     }
 
+    DLLLOCAL void recordSourceParseConstantImport(const QoreProgramLocation* loc, const char* qore_path,
+            const ConstantEntry* entry, bool class_constant) {
+        if (!loc || !qore_path || !*qore_path || !entry) {
+            return;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return;
+        }
+        // one record per constant and consuming source file
+        if (!source_parse_constant_import_keys.insert({entry, file}).second) {
+            return;
+        }
+        source_parse_constant_imports.push_back({file, qore_path, entry, class_constant});
+    }
+
+    DLLLOCAL const std::vector<source_parse_constant_import_t>& getSourceParseConstantImportRecords() const {
+        return source_parse_constant_imports;
+    }
+
     DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
             source_parse_call_import_kind_t kind, const char* provider_source_file,
             source_parse_function_import_t& rec) {
@@ -4374,6 +4409,16 @@ public:
     DLLLOCAL static const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords(
             QoreProgram* pgm) {
         return pgm->priv->getSourceParseTypeImportRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseConstantImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path, const ConstantEntry* entry, bool class_constant) {
+        pgm->priv->recordSourceParseConstantImport(loc, qore_path, entry, class_constant);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_constant_import_t>& getSourceParseConstantImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseConstantImportRecords();
     }
 
     DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
