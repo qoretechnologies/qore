@@ -108,6 +108,50 @@ hash<auto> sub background_local() {
 }
 printf("background local: %y\n", background_local());
 
+# typed containers: the copy keeps the declared type
+hash<string, int> ti = map {$1: 1}, ("a",);
+hash<string, int> ti2 = ti;
+hash<string, int> tw := ti2;
+ti2.b = 2;
+printf("hash<string, int>: %y %y %y %s\n", ti, ti2, tw, tw.fullType());
+
+hashdecl WeakRefH {
+    int a;
+    int b = 0;
+}
+WeakRefH hd = <WeakRefH>{"a": 1};
+WeakRefH hd2 = hd;
+WeakRefH hw := hd2;
+hd2.b = 2;
+printf("hashdecl: %y %y %y\n", hd, hd2, hw);
+
+list<int> tl = map $1, (1, 2);
+list<int> tl2 = tl;
+list<int> tlw := tl2;
+tl2 += 3;
+printf("list<int>: %y %y %y %s\n", tl, tl2, tlw, tlw.fullType());
+
+# an optional type that holds a hash, and one that holds NOTHING
+*hash<auto> op = map {$1: 1}, ("u",);
+*hash<auto> op2 = op;
+*hash<auto> opw := op2;
+op2.v = 2;
+printf("optional with a hash: %y %y %y\n", op, op2, opw);
+*hash<auto> none;
+*hash<auto> nonew := none;
+printf("optional with NOTHING: %y\n", nonew);
+
+# a source that is a reference to a variable
+sub weak_of_reference(reference<hash<auto>> r) {
+    hash<auto> w := r;
+    r.added = 1;
+    printf("reference source: %y\n", w);
+}
+hash<auto> rsrc = map {$1: 1}, ("r",);
+hash<auto> rsrc2 = rsrc;
+weak_of_reference(\rsrc2);
+printf("reference source sharer: %y\n", rsrc);
+
 # a weak reference of a weak reference
 hash<auto> sub weak_of_weak() {
     hash<auto> a = {"a": 1};
