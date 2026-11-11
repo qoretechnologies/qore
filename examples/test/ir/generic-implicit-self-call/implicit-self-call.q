@@ -27,6 +27,13 @@ class IntBox inherits Box<int> {
     int plus(auto x) { return id(x) + 1; }
     int plusSelf(auto x) { return self.id(x) + 1; }
     int plusScoped(auto x) { return Box<int>::id(x) + 1; }
+    # an implicit static call from a static method: no object, the receiver is the class (serialized for AOT)
+    static int staticPlus(auto x) { return id(x) + 1; }
+    # an implicit call in a closure and through a call reference
+    int closurePlus(auto x) { code<int(auto)> c = int sub (auto y) { return id(y) + 1; }; return c(x); }
+    int refPlus(auto x) { code f = \id(); return f(x) + 1; }
+    # many calls: the specialization is promoted to the JIT tier in tiered mode
+    int sum(int n) { int rv; for (int i = 0; i < n; ++i) { auto v = i; rv += id(v); } return rv; }
 }
 # a generic subclass: the type of the call is its own type parameter
 class Wrap<U> inherits Box<U> {
@@ -52,9 +59,14 @@ sub main() {
         run("int arg", string sub () { return string((new IntBox(1)).plus(4)); });
         run("int arg self", string sub () { return string((new IntBox(1)).plusSelf(4)); });
         run("int arg scoped", string sub () { return string((new IntBox(1)).plusScoped(4)); });
+        run("static from static", string sub () { return string(IntBox::staticPlus(4)); });
+        run("closure", string sub () { return string((new IntBox(1)).closurePlus(4)); });
+        run("call reference", string sub () { return string((new IntBox(1)).refPlus(4)); });
+        run("hot", string sub () { return string((new IntBox(1)).sum(3000)); });
         # negative: a value of another type, known only at run time
         run("int wrong arg", string sub () { auto s = "x"; return string((new IntBox(1)).plus(s)); });
         run("int wrong arg self", string sub () { auto s = "x"; return string((new IntBox(1)).plusSelf(s)); });
+        run("static from static wrong arg", string sub () { auto s = "x"; return string(IntBox::staticPlus(s)); });
     }
 }
 main();
