@@ -71,6 +71,8 @@ f_closure: [\"CL@114\", \"CL@115\"]
 f_on_exit_throw: [\"C@119\", \"C2@118\"]
 f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
 f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=5
 ",
@@ -86,6 +88,8 @@ f_closure: [\"CL@114\", \"exit@114\", \"CL@115\", \"exit@114\"]
 f_on_exit_throw: [\"C@119\", \"C2@118\", \"exit@118\"]
 f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
 f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
 ",
@@ -108,6 +112,8 @@ f_closure: [\"CL@114\", \"CL@115\"]
 f_on_exit_throw: [\"C@119\", \"C2@118\"]
 f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
 f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=null
 ",
@@ -123,6 +129,8 @@ f_closure: [\"CL@114\", \"exit@114\", \"CL@115\", \"exit@114\"]
 f_on_exit_throw: [\"C@119\", \"C2@118\", \"exit@118\"]
 f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
 f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=null
 ",

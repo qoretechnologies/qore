@@ -67,7 +67,7 @@ our bool Step = ARGV[0] == "step";
 
 #! the first and the last line of the functions
 const FirstLine = 72;
-const LastLine = 148;
+const LastLine = 177;
 
 sub f_throw() {
     throw "B";
@@ -146,6 +146,36 @@ sub f_dtor(int x) {
     }
     return 5;
 }
+# an exception in a foreach in a function with an on_exit handler: the exception leaves the block through its cleanup
+# code, which runs the handler; the events of the foreach and the if come before it
+sub f_foreach_on_exit(int x) {
+    on_exit {
+        x = 2;
+    }
+    if (x) {
+        foreach int i in (1) {
+            throw "FO", i;
+        }
+    }
+}
+# the same with an on_exit handler that calls a closure that raises an exception
+sub f_on_exit_closure(int x) {
+    on_exit {
+        code c = sub () {
+            if (x) {
+                throw "OC";
+            }
+        };
+        if (x) {
+            c();
+        }
+    }
+    if (x) {
+        foreach int i in (1) {
+            throw "BODY", i;
+        }
+    }
+}
 
 ExceptionRecorder r();
 ProgramControl pc = ProgramControl::getProgram();
@@ -157,10 +187,11 @@ background sub () {
     # the functions are called through call_function(), so that each call is dispatched through the tiered entry of
     # the variant, as calls between separately compiled AOT objects are
     foreach string fn in (("f_throw", "f_nested", "f_builtin", "f_caught", "f_loop", "f_caller", "f_catch_rethrow",
-            "f_builtin_caught", "f_closure", "f_on_exit_throw", "f_on_error_rethrow_caught", "f_dtor")) {
+            "f_builtin_caught", "f_closure", "f_on_exit_throw", "f_on_error_rethrow_caught", "f_dtor", "f_foreach_on_exit",
+            "f_on_exit_closure")) {
         r.seen = ();
         try {
-            fn == "f_nested" || fn == "f_dtor" ? call_function(fn, 1) : call_function(fn);
+            fn =~ /^f_(nested|dtor|foreach_on_exit|on_exit_closure)$/ ? call_function(fn, 1) : call_function(fn);
         } catch (hash<ExceptionInfo> ex) {
         }
         printf("%s: %y\n", fn, r.seen);

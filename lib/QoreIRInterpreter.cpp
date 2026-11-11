@@ -14531,6 +14531,18 @@ load_local_done:
                 }
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
+                    // a scope closed on the path of an exception: the exception events of the statements in it come
+                    // before its handlers run, as the AST interpreter makes them as the exception leaves each statement
+                    // of a block before the block's handlers run (#5816); a dismissal ends the function
+                    if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                        dbgReportException();
+                        dbgReportEnclosing();
+                        if (dbg_state.exit_dismissed) {
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return exitAfterUnwind();
+                        }
+                    }
                     size_t scope_start = scope_stack.back().handler_start;
                     scope_stack.pop_back();
                     if (on_block_exit_handlers.size() <= scope_start) {
@@ -14591,6 +14603,15 @@ load_local_done:
                     if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
                         dbgHandlersRan();
+                        // the events of the statements that the closed scope was in (#5816)
+                        if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                            dbgReportEnclosing();
+                            if (dbg_state.exit_dismissed) {
+                                unwindForException();
+                                cleanupLocalCaches();
+                                return exitAfterUnwind();
+                            }
+                        }
                         // If handler execution raised an exception, route to the
                         // ScopeExit instruction's exception_target (try/catch landing pad)
                         if (xsink && *xsink && inst->exception_target) {
@@ -18346,7 +18367,16 @@ load_local_done:
                         qore_es_private::get(*xsink)->rethrow(ex);
                     }
                 }
-                if (debug_active && *xsink) {
+                if (debug_active && *xsink && rethrow_inst->synthetic) {
+                    // a synthetic rethrow (as of the cleanup of a foreach) propagates the exception of the statement
+                    // that raised it, which made its event: the statements that contain it follow (#5816)
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                } else if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
                     dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
