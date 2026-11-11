@@ -176,8 +176,9 @@ public namespace Schema {
 
         #! returns a callback option hash for a schema drop, which commits each statement on its own
         /** A schema drop in one transaction holds a lock on every object it drops until it commits; on PostgreSQL a
-            schema with partitioned tables exceeds the server's lock table that way.  Oracle and MySQL commit each DDL
-            statement anyway.
+            schema with partitioned tables exceeds the server's lock table that way.  The statements are committed on
+            every database: Oracle and MySQL commit each DDL statement anyway, and on databases with transactional DDL
+            (PostgreSQL, SQL Server, SQLite, Firebird) a failed drop leaves the objects dropped before it dropped.
         */
         hash<auto> getDropCallbacks(bool force = False) {
             return (

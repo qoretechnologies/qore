@@ -1019,6 +1019,8 @@ table.dropCommit();
     */
     dropCommit(*hash<auto> opt) {
         on_error ds.rollback();
+        # also when there is nothing to drop, the transaction is ended
+        on_success ds.commit();
         foreach string sql in (getDropSql(opt)) {
             ds.execRaw(sql);
             ds.commit();
