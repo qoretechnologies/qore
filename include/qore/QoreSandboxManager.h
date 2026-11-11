@@ -649,9 +649,11 @@ public:
 
         Uncontrolled APIs (for example the Java classes of the \c jni module and the Python objects of the
         \c python module) do I/O and run code that %Qore does not see, so neither the filesystem and network policy
-        nor the parse options of the sandbox apply to what they do.  The policy is the trust setting of the code
-        that the sandbox governs: code whose sandbox refuses them counts as restricted for the rules that keep
-        sandboxed code from such I/O (qore_sandbox_allows_uncontrolled_apis(), \c SandboxManager::isRestricted(),
+        nor the parse options of the sandbox apply to what they do.  A sandbox that refuses them (the default) refuses
+        the code that it governs every call of them at run time, as \c PO_NO_UNCONTROLLED_APIS does
+        (\c INVALID-FUNCTION-ACCESS); a system-policy capability of trusted code is not governed.  The policy is also
+        the trust setting of the code that the sandbox governs: code whose sandbox refuses them counts as restricted for
+        the rules that keep sandboxed code from such I/O (qore_sandbox_allows_uncontrolled_apis(), \c SandboxManager::isRestricted(),
         \c SandboxManager::isUncontrolledApiAllowed()), such as the \c external_io apps of the data provider
         catalog.  A host that uses a sandbox only for its resource limits, interrupts or I/O policy, and trusts the
         code to use uncontrolled APIs, allows them.  When more than one sandbox governs the code, the uncontrolled

@@ -725,6 +725,21 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     @subsection sandbox_uncontrolled_api Uncontrolled APIs and Trusted Code That a Sandbox Governs
 
+    Code that a sandbox governs is refused uncontrolled APIs at run time, as code restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" is: a call of a function, method or class of the
+    uncontrolled-API functional domain (for example a Java class of the \c jni module, a Python object of the
+    \c python module, @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or
+    the debug hooks) raises \c INVALID-FUNCTION-ACCESS, unless the sandbox allows uncontrolled APIs.  The check is
+    made when the call runs, also for a call resolved when it was parsed, in every execution mode and in code compiled
+    with \c qcc.  The sandbox is resolved as for a filesystem or network policy check: the Programs on the call stack,
+    the provenance of an object or callback created under a sandbox (also when trusted code calls it later), and the
+    sandbox that a thread inherits; a system-policy capability that trusted code created
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") is not governed,
+    and a policy barrier cannot be established by the sandboxed code itself.  Library module code that runs for
+    sandboxed code is refused as well: a module that makes such calls for its callers refuses them itself first with
+    an error of its own (for example the data provider apps that declare
+    @ref DataProvider::DataProviderAppInfo::external_io "external_io").
+
     A host may attach a @ref Qore::SandboxManager "SandboxManager" to code that it trusts, only for its resource
     limits, interrupts and force-termination, or its I/O policy.  Such code is not sandboxed in the sense of the rules
     above: it may use uncontrolled APIs (Java, Python, and other code that does I/O %Qore does not see), and the host

@@ -102,14 +102,29 @@ class SandboxProvenanceTest inherits QUnit::Test {
         Program program = sandbox(manager);
         object reader = program.callFunction("make", path);
         code tenant = \reader.read();
-        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.barrierRead());
+        # qore#5741: a method of the sandbox-created object runs under its provenance, so the default sandbox, which
+        # refuses uncontrolled APIs, refuses it the barrier itself at run time
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \reader.barrierRead());
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
             \SandboxManager::callWithSystemPolicy(), tenant);
         assertEq("provenance fixture\n", program.callFunction("call", capability));
         assertEq("provenance fixture\n", reader.call(capability));
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, run_callback, tenant);
-        assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING, \program.callFunction(),
+        # qore#5741: sandboxed code is refused the registration of a capability at run time by the default sandbox
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*createSystemPolicyCall", \program.callFunction(),
             ("capability", trusted_read));
+        {
+            # qore#5741: under a sandbox that allows uncontrolled APIs (and still denies the filesystem), the barrier
+            # is established but does not mask the object's provenance, and the registration is refused because a
+            # sandbox governs it
+            SandboxManager trusting();
+            trusting.setUncontrolledApiPolicy(True);
+            Program trusting_program = sandbox(trusting);
+            object trusting_reader = trusting_program.callFunction("make", path);
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \trusting_reader.barrierRead());
+            assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING, \trusting_program.callFunction(),
+                ("capability", trusted_read));
+        }
         code tagged = program.callFunction("function_ref");
         assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING,
             \SandboxManager::createSystemPolicyCall(), tagged);

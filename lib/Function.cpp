@@ -1167,6 +1167,32 @@ private:
 };
 }
 
+//! Refuses a call of an uncontrolled API to code that a sandbox governs, unless the sandbox allows them (qore#5741)
+/** Uncontrolled APIs (QDOM_UNCONTROLLED_API: the Java classes of the jni module, the Python objects of the python
+    module, ...) do I/O and run code that the sandbox does not see.  The sandbox is resolved as for a filesystem or
+    network policy check: the Programs on the call stack, the provenance of the object or callback being run, and a
+    sandbox inherited by the thread; a system-policy capability of trusted code is not governed.  Called once the
+    variant of the call is fixed, so that a variant found when the call was parsed is checked as well; the variants
+    of other functional domains do not resolve the sandbox.
+
+    @return 0 if the call may proceed, -1 if it is refused (INVALID-FUNCTION-ACCESS raised)
+*/
+static int check_sandbox_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        ExceptionSink* xsink) {
+    if (!(variant->getFunctionality() & QDOM_UNCONTROLLED_API)) {
+        return 0;
+    }
+    if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
+        return 0;
+    }
+    std::string class_path = func->classPath();
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "the sandbox that governs the calling code does not allow access "
+        "to uncontrolled API %s '%s%s%s(%s)' (see SandboxManager::setUncontrolledApiPolicy())",
+        !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
+        !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
+    return -1;
+}
+
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
     sandbox_provenance.set(self);
@@ -1329,6 +1355,11 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
             return;
         }
+    }
+
+    // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API (qore#5741)
+    if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
+        return;
     }
 
     // For a deliberate cross-Program callFunction() (defer_domain_po), the parse-options switch was

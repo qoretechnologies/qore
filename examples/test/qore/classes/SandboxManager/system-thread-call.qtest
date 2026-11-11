@@ -40,7 +40,10 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*sandbox provenance", refusals.provenance);
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.bound);
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.capability);
-        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed);
+        # qore#5741: the default sandbox refuses sandboxed code the uncontrolled API itself at run time
+        assertRegex("^INVALID-FUNCTION-ACCESS: .*uncontrolled API.*createSystemThreadCall", refusals.governed);
+        # a sandbox that allows uncontrolled APIs: the creation itself refuses code that a sandbox governs
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed_allowed);
     }
 
     outsideInitTest() {

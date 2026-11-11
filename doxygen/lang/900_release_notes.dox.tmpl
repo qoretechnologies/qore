@@ -49,6 +49,10 @@
       @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
       @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
       \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
+    - code that a sandbox governs is refused uncontrolled APIs (Java, Python, the debug hooks and the sandbox
+      methods that mask its policy) at run time with \c INVALID-FUNCTION-ACCESS, as code restricted with
+      \c PO_NO_UNCONTROLLED_APIS is, unless the sandbox allows them; a system-policy capability of trusted code is not
+      refused (see @ref sandbox_uncontrolled_api)
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a

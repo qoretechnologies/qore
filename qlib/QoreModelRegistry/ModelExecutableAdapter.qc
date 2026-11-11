@@ -450,6 +450,13 @@ public class ModelExecutableAdapter {
         the ONNX session resolves CPU vs device placement from the device-binding policy.
     */
     private bindTensorOutputsUnlocked(ML::OnnxIoBinding binding, *list<string> output_names) {
+        # binding outputs to a device uses uncontrolled APIs (OnnxIoBinding::bindOutputDevice() and
+        # bindOutputsDevice()), which a sandbox refuses unless it allows them (qore#5741): refuse it here, before any
+        # binding call, with an error of this module
+        if (device_binding_enabled && !SandboxManager::isUncontrolledApiAllowed()) {
+            throw "ML-REGISTRY-ERROR", "device binding is not available to code that a sandbox governs unless the sandbox allows "
+                "uncontrolled APIs (SandboxManager::setUncontrolledApiPolicy())";
+        }
         binding.clearOutputs();
         if (!exists output_names) {
             if (device_binding_enabled) {

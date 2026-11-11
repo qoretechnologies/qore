@@ -281,18 +281,27 @@ list<string> sub spin_threads_and_wait(int n) {
     return errs;
 }
 # runs two tasks one after the other on a one-thread pool: the first uses CPU time, the second starts after the first
-# has left the call; each reports the CPU time of the call as the watchdog measures it
-list<int> sub cpu_across_tasks(Qore::Thread::ThreadPool pool, int iterations) {
+# has left the call; each reports the CPU time of the call as the watchdog measures it with cpu_used, a capability of
+# the trusted test (the sandbox refuses its code the debug hook itself: qore#5741); a task that fails reports its error
+list<auto> sub cpu_across_tasks(Qore::Thread::ThreadPool pool, int iterations, code cpu_used) {
     Queue q();
     pool.submit(sub () {
-        int n = 0;
-        for (int i = 0; i < iterations; ++i) {
-            n += i;
+        try {
+            int n = 0;
+            for (int i = 0; i < iterations; ++i) {
+                n += i;
+            }
+            q.push(cpu_used());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err + \": \" + ex.desc);
         }
-        q.push(call_function(\"dbg_sandbox_cpu_used\"));
     });
     pool.submit(sub () {
-        q.push(call_function(\"dbg_sandbox_cpu_used\"));
+        try {
+            q.push(cpu_used());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err + \": \" + ex.desc);
+        }
     });
     return (q.get(), q.get());
 }
@@ -743,7 +752,14 @@ code sub get_closure() {
         Program p = sandboxed(cpuLimited(120000));
         Qore::Thread::ThreadPool pool(1);
         on_exit pool.stopWait();
-        list<int> used = p.callFunction("cpu_across_tasks", pool, 200000);
+        # qore#5741: the sandbox refuses the code that it governs the debug hook, an uncontrolled API: the tasks
+        # measure through a system-policy capability that the trusted test creates, which keeps the call's limits
+        code cpu_used = SandboxManager::createSystemPolicyCall(int sub () {
+            return call_function("dbg_sandbox_cpu_used");
+        });
+        list<auto> used = p.callFunction("cpu_across_tasks", pool, 200000, cpu_used);
+        assertEq(Type::Int, used[0].type(), sprintf("the first task's measurement: %y", used[0]));
+        assertEq(Type::Int, used[1].type(), sprintf("the second task's measurement: %y", used[1]));
         assertGt(0, used[0], "the first task used CPU time");
         assertGe(used[0], used[1], "the CPU time of the first task still counts after it has left the call");
     }
@@ -896,7 +912,11 @@ code sub get_closure() {
         # a thread that continues a call and cannot record its budget
         p = sandboxed(limited(120000));
         Queue result();
-        code arm = sub () { call_function("dbg_sandbox_fail_next_budgets", 1); };
+        # qore#5741: the sandboxed code arms the debug hook, an uncontrolled API, through a system-policy capability
+        # that the trusted test creates
+        code arm = SandboxManager::createSystemPolicyCall(sub () {
+            call_function("dbg_sandbox_fail_next_budgets", 1);
+        });
         p.callFunction("call_then_report_in_background", arm, result);
         ex = result.get();
         assertEq("SANDBOX-ERROR", ex.err, ex.desc);

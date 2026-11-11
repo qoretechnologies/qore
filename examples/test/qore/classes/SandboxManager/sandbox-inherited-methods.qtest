@@ -80,6 +80,10 @@ class SandboxInheritedMethodsTest inherits QUnit::Test {
         SandboxManager mgr();
         SandboxManager mgr2();
         Program p;
+        #! a sandbox that refuses uncontrolled APIs, as by default (qore#5741)
+        SandboxManager deny_mgr();
+        #! a Program that deny_mgr governs
+        Program p_deny;
     }
 
     constructor() : QUnit::Test("sandbox inherited methods", "1.0") {
@@ -90,13 +94,22 @@ class SandboxInheritedMethodsTest inherits QUnit::Test {
         TrustedBase::connector = SandboxManager::createSystemPolicyCall(\connect_port());
         TrustedBase::caller = SandboxManager::createSystemPolicyCall(\call_connect());
 
+        # qore#5741: code that a sandbox governs is refused uncontrolled APIs - callWithSystemPolicy(), isGoverned()
+        # and getGoverningPolicies() among them - at run time unless the sandbox allows them; these sandboxes allow
+        # them, so that the cases test what the calls answer and what a barrier masks, and deny_mgr asserts the
+        # refusals of the default
         mgr.setNetworkDefaultPolicy(True);
         mgr.blockPrivateNetworks();
         mgr.setMaxThreads(10);
+        mgr.setUncontrolledApiPolicy(True);
         mgr2.setNetworkDefaultPolicy(True);
         mgr2.blockLocalhost();
         mgr2.setMaxThreads(20);
+        mgr2.setUncontrolledApiPolicy(True);
         p = makeProgram(mgr);
+        deny_mgr.setNetworkDefaultPolicy(True);
+        deny_mgr.blockPrivateNetworks();
+        p_deny = makeProgram(deny_mgr);
 
         addTestCase("inherited method uses the network directly", \testDirect());
         addTestCase("policy barriers", \testBarrier());
@@ -122,7 +135,16 @@ bool sub is_governed() { return trusted_is_governed(); }
 list<hash<SandboxConfigInfo>> sub get_policies() { return trusted_get_policies(); }
 bool sub object_is_governed(object o) { return o.isGoverned(); }
 list<hash<SandboxConfigInfo>> sub object_policies(object o) { return o.getPolicies(); }
-int sub start_thread(Queue q) { return background q.push(trusted_is_governed()); }", "sandboxed");
+int sub start_thread(Queue q) {
+    # the thread passes on a refusal (qore#5741) instead of leaving the caller waiting
+    return background sub () {
+        try {
+            q.push(trusted_is_governed());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+}", "sandboxed");
         return pgm;
     }
 
@@ -140,6 +162,12 @@ int sub start_thread(Queue q) { return background q.push(trusted_is_governed());
         object o = p.callFunction("make");
         assertThrows("NETWORK-ACCESS-DENIED", \o.connectBarrier());
         assertThrows("NETWORK-ACCESS-DENIED", \SandboxManager::callWithSystemPolicy(), (sub () { o.connect(); },));
+
+        # qore#5741: the object's provenance is a sandbox that refuses uncontrolled APIs: the barrier inside the method
+        # is refused itself; around the call, trusted code establishes it, and the provenance still denies the network
+        object od = p_deny.callFunction("make");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \od.connectBarrier());
+        assertThrows("NETWORK-ACCESS-DENIED", \SandboxManager::callWithSystemPolicy(), (sub () { od.connect(); },));
     }
 
     #! a capability registered during trusted startup performs its fixed operation under the system policy
@@ -168,6 +196,16 @@ int sub start_thread(Queue q) { return background q.push(trusted_is_governed());
         # a capability masks provenance for its fixed operation
         code cap = SandboxManager::createSystemPolicyCall(\trusted_is_governed());
         assertFalse(cap());
+
+        # qore#5741: a sandbox that refuses uncontrolled APIs refuses isGoverned() to the code that it governs: called
+        # by sandboxed code, and in a method of an object that sandboxed code created
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*isGoverned", \p_deny.callFunction(),
+            ("is_governed",));
+        object od = p_deny.callFunction("make");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*isGoverned", \od.isGoverned());
+        # trusted code's barrier around the method does not mask the provenance
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*isGoverned",
+            \SandboxManager::callWithSystemPolicy(), (bool sub () { return od.isGoverned(); },));
     }
 
     #! a thread that sandboxed code starts inherits its sandbox
@@ -175,6 +213,11 @@ int sub start_thread(Queue q) { return background q.push(trusted_is_governed());
         Queue q();
         int tid = p.callFunction("start_thread", q);
         assertTrue(q.get());
+        thread_join(tid);
+
+        # qore#5741: and so it is refused isGoverned() by a sandbox that refuses uncontrolled APIs
+        tid = p_deny.callFunction("start_thread", q);
+        assertEq("INVALID-FUNCTION-ACCESS", q.get());
         thread_join(tid);
     }
 
@@ -194,6 +237,13 @@ int sub start_thread(Queue q) { return background q.push(trusted_is_governed());
         assertEq(2, l.size());
         assertEq((10, 20), sort(map $1.max_threads, l));
         assertTrue(p2.callFunction("object_is_governed", o));
+
+        # qore#5741: a sandbox that refuses uncontrolled APIs refuses getGoverningPolicies() to the code that it
+        # governs, also when it is one of the sandboxes that govern a method of an object of another sandbox
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*getGoverningPolicies", \p_deny.callFunction(),
+            ("get_policies",));
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*getGoverningPolicies", \p_deny.callFunction(),
+            ("object_policies", o));
     }
 
     #! code restricted with PO_NO_UNCONTROLLED_APIS cannot call the methods
