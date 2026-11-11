@@ -5,4 +5,5 @@ global closure: null "own"
 method: null null null "own" "own"
 operator: [2, 3] {X: null, Y: null}
 mapper: [2, 4, 6]
+blocks: exit:null success:null error:"E" exit:"own" 
 repeated: 2000

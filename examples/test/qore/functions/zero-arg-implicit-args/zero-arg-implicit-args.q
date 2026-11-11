@@ -49,6 +49,28 @@ list<auto> sub mapper(list<int> l) { return map $1 * 2, l; }
 string sub from_mapper(...) { return sprintf("%y", mapper((1, 2, 3))); }
 printf("mapper: %s\n", from_mapper("I"));
 
+# on_exit and on_success blocks run with the implicit arguments of the enclosing function; only on_error sets its own
+string obe;
+auto sub with_exit() { on_exit obe += sprintf("exit:%y ", $1); return 1; }
+auto sub with_success() { on_success obe += sprintf("success:%y ", $1); return 2; }
+auto sub with_error() {
+    try {
+        on_error obe += sprintf("error:%y ", $1.err);
+        throw "E", "d";
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    return 3;
+}
+string sub from_blocks(...) {
+    obe = "";
+    with_exit();
+    with_success();
+    with_error();
+    with_exit("own");
+    return obe;
+}
+printf("blocks: %s\n", from_blocks("A", "B"));
+
 # the same call repeated, so that the compiled tiers run their fast paths
 int sum = 0;
 for (int i = 0; i < 2000; ++i) {

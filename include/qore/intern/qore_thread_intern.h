@@ -1698,9 +1698,10 @@ private:
 // arguments for it
 class ParseImplicitArgTypeHelper {
 public:
-   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti) : ati(parse_set_implicit_arg_type_info(ti)),
-         depth(parse_set_implicit_arg_ctx_depth(0)) {
-      parse_set_implicit_arg_ctx_depth(depth + 1);
+   //! \a sets_implicit_args is false for a block whose code runs with the implicit arguments of the enclosing code
+   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti, bool sets_implicit_args = true)
+         : ati(parse_set_implicit_arg_type_info(ti)), depth(parse_set_implicit_arg_ctx_depth(0)) {
+      parse_set_implicit_arg_ctx_depth(depth + (sets_implicit_args ? 1 : 0));
    }
 
    DLLLOCAL ~ParseImplicitArgTypeHelper() {
