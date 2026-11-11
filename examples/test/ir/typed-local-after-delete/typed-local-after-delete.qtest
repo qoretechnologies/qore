@@ -49,7 +49,7 @@ class TypedLocalAfterDeleteTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(37, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^delete value list:\n  = \[\[null, 2\], null\]\n/, "the value of delete is NOTHING");
         assertTrue(out =~ /\nremove value list:\n  = \[\[\[0, 1, 2\], 2\], null\]\n/, "the value of remove");
         assertTrue(out =~ /\nstring eq:\n  = \[True, False, False, True\]\n/, "a deleted string equals \"\"");

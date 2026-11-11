@@ -6294,6 +6294,17 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
+                // a local that delete or remove leaves without a value (also through a reference to it) can be
+                // NOTHING at a read that the single forward parse saw as assigned, as the read before a delete later
+                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710)
+                if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
+                        && var->ref.id && var->ref.id->everDeleted()) {
+                    analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
+                    analysis.clearFlag(QoreParseAnalysis::NeverNothing);
+                    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+                        analysis.known_type = get_or_nothing_type_check(analysis.known_type);
+                    }
+                }
             }
             return true;
         }
@@ -8193,6 +8204,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
         QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
             left_value, nothing_val, op->loc)->result;
+        // the variable is read again at the merge for the operation: the reference of this read is released, so
+        // that the value is unique there and a string can be appended in place, as the AST interpreter does (the
+        // growth of a sandbox's string by the host is charged to the sandbox: qore#5665, qore#5710)
+        builder.createReleaseOwnedTemp(left_value, op->loc);
         builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
 
         // Nothing path: store the type's default value and branch to merge
@@ -8418,6 +8433,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
         QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
             left_value, nothing_val, op->loc)->result;
+        // the variable is read again at the merge for the operation: the reference of this read is released, so
+        // that the value is unique there and the operation can change it in place, as the AST interpreter does
+        // (see lowerPlusEquals())
+        builder.createReleaseOwnedTemp(left_value, op->loc);
         builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
 
         builder.setBlock(nothing_bb);

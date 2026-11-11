@@ -158,6 +158,68 @@ sub main() {
     # a function that is not a closure
     t("plain function", \plain_loop());
 
+    # the builtin functions and pseudo-methods with typed fast paths, read in a loop before a delete later in it
+    t("loop join", auto sub () {
+        list<string> l = ("a", "b");
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            try {
+                rv += join(",", l);
+            } catch (hash<ExceptionInfo> ex) {
+                rv += ex.err;
+            }
+            delete l;
+        }
+        return rv;
+    });
+    t("loop join method", auto sub () {
+        list<string> l = ("a", "b");
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            try {
+                rv += l.join(",");
+            } catch (hash<ExceptionInfo> ex) {
+                rv += ex.err;
+            }
+            delete l;
+        }
+        return rv;
+    });
+    t("loop pseudo method", auto sub () {
+        string s = "abc";
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            try {
+                rv += s.substr(1);
+            } catch (hash<ExceptionInfo> ex) {
+                rv += ex.err;
+            }
+            delete s;
+        }
+        return rv;
+    });
+    t("loop length", auto sub () {
+        string s = "abc";
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            rv += (length(s), strlen(s), substr(s, 1));
+            delete s;
+        }
+        return rv;
+    });
+    t("loop switch transform", auto sub () {
+        string s = "ABC";
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            switch (s.lwr()) {
+                case "abc": rv += "abc"; break;
+                default: rv += "other";
+            }
+            delete s;
+        }
+        return rv;
+    });
+
     # assigned again after the delete
     t("reassigned", auto sub () { string s = "ab"; delete s; s = "cd"; return (s == "cd", s + "e"); });
 }
