@@ -825,6 +825,18 @@ DLLLOCAL const AbstractStatement* get_runtime_statement();
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
+//! sets the number of operators that set the implicit arguments around the code that is parsed; returns the old number
+DLLLOCAL unsigned parse_set_implicit_arg_ctx_depth(unsigned depth);
+
+//! sets where the parse of a function or closure body notes that it reads the implicit arguments of its own call
+DLLLOCAL bool* parse_set_function_reads_implicit_args(bool* reads);
+
+//! notes that the code that is parsed reads the implicit arguments ($1, $$)
+/** if no operator that sets them is around the code, they are the implicit arguments of the call of the function or
+    closure that the code is the body of (qore#5805)
+*/
+DLLLOCAL void parse_note_implicit_arg_use();
+
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
@@ -1682,18 +1694,44 @@ private:
    void* operator new(size_t) = delete;
 };
 
-// allows for implicit argument types to be set at parse time
+// allows for implicit argument types to be set at parse time, for the code of an operator that sets the implicit
+// arguments for it
 class ParseImplicitArgTypeHelper {
 public:
-   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti) : ati(parse_set_implicit_arg_type_info(ti)) {
+   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti) : ati(parse_set_implicit_arg_type_info(ti)),
+         depth(parse_set_implicit_arg_ctx_depth(0)) {
+      parse_set_implicit_arg_ctx_depth(depth + 1);
    }
 
    DLLLOCAL ~ParseImplicitArgTypeHelper() {
       parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
    }
 
 private:
    const QoreTypeInfo* ati;
+   unsigned depth;
+};
+
+// parse of the body of a function or a closure: the implicit arguments are those of its own call, and a read of them
+// that is not inside an operator that sets them is noted in \a reads (qore#5805)
+class ParseFunctionBodyImplicitArgHelper {
+public:
+   DLLLOCAL ParseFunctionBodyImplicitArgHelper(bool& reads) : ati(parse_set_implicit_arg_type_info(nullptr)),
+         depth(parse_set_implicit_arg_ctx_depth(0)), old_reads(parse_set_function_reads_implicit_args(&reads)) {
+      reads = false;
+   }
+
+   DLLLOCAL ~ParseFunctionBodyImplicitArgHelper() {
+      parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
+      parse_set_function_reads_implicit_args(old_reads);
+   }
+
+private:
+   const QoreTypeInfo* ati;
+   unsigned depth;
+   bool* old_reads;
 };
 
 // acquires a TID and thread entry, returns -1 if not successful

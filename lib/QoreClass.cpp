@@ -7111,6 +7111,10 @@ int UserConstructorVariant::parseInit(QoreFunction* f) {
     // push return type on stack (no return value can be used)
     ParseCodeInfoHelper rtih("constructor", nothingTypeInfo);
 
+    // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+    // them is noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
+
     int err = 0;
 
     if (bcal && !parent_class.hasParentClass()) {
@@ -7207,6 +7211,10 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
 
     // push return type on stack (no return value can be used)
     ParseCodeInfoHelper rtih("copy", nothingTypeInfo);
+
+    // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+    // them is noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled methods, statements is null (pre-compiled code)
     if (statements) {

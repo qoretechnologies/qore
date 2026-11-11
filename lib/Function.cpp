@@ -8577,8 +8577,9 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
 
-    // set implicit argv arg type as unknown
-    ParseImplicitArgTypeHelper pia(nullptr);
+    // set implicit argv arg type as unknown; a read of the implicit arguments outside any operator that sets them is
+    // noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled functions, statements is null (pre-compiled code)
     int err = statements ? statements->parseInit(this) : 0;
@@ -8598,6 +8599,9 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
 
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
+
+    // the implicit arguments of the body are those of the call of the closure (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled closures, statements is null (pre-compiled code)
     if (statements) {

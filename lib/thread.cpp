@@ -784,6 +784,10 @@ public:
 
     // parse-time implicit argument type
     const QoreTypeInfo* implicit_arg_type_info = nullptr;
+    //! the number of operators that set the implicit arguments (map, select, foldl, ...) around the code that is parsed
+    unsigned implicit_arg_ctx_depth = 0;
+    //! set when the function or closure body that is parsed reads the implicit arguments of its own call (qore#5805)
+    bool* fn_reads_implicit_args = nullptr;
 
     // current implicit element offset
     int element = 0;
@@ -2773,6 +2777,27 @@ const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
 
 const QoreTypeInfo* parse_get_implicit_arg_type_info() {
     return thread_data.get()->implicit_arg_type_info;
+}
+
+unsigned parse_set_implicit_arg_ctx_depth(unsigned depth) {
+    ThreadData* td = thread_data.get();
+    unsigned rv = td->implicit_arg_ctx_depth;
+    td->implicit_arg_ctx_depth = depth;
+    return rv;
+}
+
+bool* parse_set_function_reads_implicit_args(bool* reads) {
+    ThreadData* td = thread_data.get();
+    bool* rv = td->fn_reads_implicit_args;
+    td->fn_reads_implicit_args = reads;
+    return rv;
+}
+
+void parse_note_implicit_arg_use() {
+    ThreadData* td = thread_data.get();
+    if (!td->implicit_arg_ctx_depth && td->fn_reads_implicit_args) {
+        *td->fn_reads_implicit_args = true;
+    }
 }
 
 void parse_set_try_reexport(bool tr) {
