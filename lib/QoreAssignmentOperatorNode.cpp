@@ -246,6 +246,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
     parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;
+    // a local variable that a weak reference is taken of must be changed in place (qore#5846)
+    if (mode == AssignmentMode::Weak && right.getType() == NT_VARREF) {
+        const VarRefNode* source = right.get<const VarRefNode>();
+        qore_var_t source_type = source->getType();
+        if ((source_type == VT_LOCAL || source_type == VT_CLOSURE || source_type == VT_LOCAL_TS) && source->ref.id) {
+            source->ref.id->parseWeakSource();
+        }
+    }
 
     // check for illegal assignment to $self
     if (parse_context.oflag && check_self_assignment(loc, left, parse_context.oflag) && !err) {
