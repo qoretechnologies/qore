@@ -370,7 +370,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
             "no second close of the connection ran beside the first");
 
         hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
-        assertTrue(exists result.ex, "the request fails in its poll operation");
+        # the error of a submit that the closing connection refused
+        assertEq("HTTPCLIENT-STATE-ERROR", result.ex.err, "the request fails in its poll operation");
         assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
     }
 
