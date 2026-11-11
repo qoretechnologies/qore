@@ -33,7 +33,12 @@
 
 #define _QORE_INTERN_FUNCTIONREFERENCENODE_H
 
+#include <memory>
 #include <string>
+#include <vector>
+
+class QoreParseTypeInfo;
+struct QoreTypeParamInstantiation;
 
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
@@ -66,10 +71,19 @@ public:
     }
 };
 
+//! resolves the parsed explicit type arguments of a call reference (\\f<T>()) to types, taking over the parse types
+/** @return 0 on success, -1 if a type cannot be resolved (a parse error was raised)
+*/
+DLLLOCAL int qore_resolve_call_reference_type_args(std::vector<QoreParseTypeInfo*>& parse_type_args,
+    const QoreProgramLocation* loc, std::vector<const QoreTypeInfo*>& type_args);
+
 //! an unresolved call reference, only present temporarily in the parse tree
 class UnresolvedProgramCallReferenceNode : public AbstractUnresolvedCallReferenceNode {
 public:
     char* str;
+    //! the explicit type arguments of \f<T>(), as parsed; they belong to the resolved reference (see
+    //! LocalFunctionCallReferenceNode::setExplicitTypeArgs())
+    std::vector<QoreParseTypeInfo*> explicit_parse_type_args;
 
     DLLLOCAL UnresolvedProgramCallReferenceNode(const QoreProgramLocation* loc, char* n_str);
 
@@ -275,8 +289,18 @@ public:
         return const_cast<QoreFunction*>(uf);
     }
 
+    //! sets the explicit type arguments of the reference (\f<T>()), which instantiate the function when it is called
+    DLLLOCAL void setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args);
+
+    //! returns the explicit type-parameter instantiation of the reference, or nullptr
+    DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
+        return explicit_inst.get();
+    }
+
 protected:
     const QoreFunction* uf;
+    //! the explicit type arguments of the reference, or null; shared with the copies that the evaluation makes
+    std::shared_ptr<QoreTypeParamInstantiation> explicit_inst;
 
     // constructor for subclasses
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
@@ -318,6 +342,9 @@ protected:
 //! an unresolved static method call reference, only present temporarily in the parse tree
 class UnresolvedStaticMethodCallReferenceNode : public AbstractUnresolvedCallReferenceNode {
 public:
+    //! the explicit type arguments of \\NS::f<T>(), as parsed; they belong to the resolved reference of a function
+    std::vector<QoreParseTypeInfo*> explicit_parse_type_args;
+
     DLLLOCAL UnresolvedStaticMethodCallReferenceNode(const QoreProgramLocation* loc, NamedScope* n_scope);
 
     DLLLOCAL virtual ~UnresolvedStaticMethodCallReferenceNode();
