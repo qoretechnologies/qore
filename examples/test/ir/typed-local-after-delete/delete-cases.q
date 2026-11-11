@@ -220,6 +220,57 @@ sub main() {
         return rv;
     });
 
+    # += and -= on a local deleted later in the loop: the NOTHING path stores the type's default first
+    t("loop plus equals string", auto sub () {
+        string s = "a";
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            rv += (s += "x");
+            delete s;
+        }
+        return rv;
+    });
+    t("loop plus equals list", auto sub () {
+        list<int> l = (1,);
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            l += 2;
+            rv += l.size();
+            delete l;
+        }
+        return rv;
+    });
+    t("loop plus equals hash", auto sub () {
+        hash<auto> h = {"a": 1};
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            h += {"b": 2};
+            rv += h.size();
+            delete h;
+        }
+        return rv;
+    });
+    t("loop minus equals int", auto sub () {
+        int v = 10;
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            rv += (v -= 3);
+            delete v;
+        }
+        return rv;
+    });
+    t("loop plus equals closure", auto sub () {
+        string s = "a";
+        code c = string sub () { return s; };
+        list<auto> rv = ();
+        for (int i = 0; i < 2; ++i) {
+            s += "y";
+            rv += c();
+            delete s;
+        }
+        return rv;
+    });
+
     # assigned again after the delete
     t("reassigned", auto sub () { string s = "ab"; delete s; s = "cd"; return (s == "cd", s + "e"); });
 }

@@ -49,7 +49,7 @@ class TypedLocalAfterDeleteTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(37, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(42, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^delete value list:\n  = \[\[null, 2\], null\]\n/, "the value of delete is NOTHING");
         assertTrue(out =~ /\nremove value list:\n  = \[\[\[0, 1, 2\], 2\], null\]\n/, "the value of remove");
         assertTrue(out =~ /\nstring eq:\n  = \[True, False, False, True\]\n/, "a deleted string equals \"\"");
@@ -63,6 +63,17 @@ class TypedLocalAfterDeleteTest inherits QUnit::Test {
         assertTrue(out =~ /\ndelete global destructor:\n  dtor X: global exists False\n  = False\n/, "destructor");
         assertTrue(out =~ /\ndelete system object:\n  ! SYSTEM-OBJECT-ERROR: /, "system object");
         assertTrue(out =~ /\nplain function:\n  = \[False, "x!", True, "!", True, "!"\]\n/, "plain function");
+        # the typed fast paths of builtin functions and pseudo-methods take the value that the AST interpreter does
+        assertTrue(out =~ /\nloop join:\n  = \["a,b", "RUNTIME-TYPE-ERROR"\]\n/, "join");
+        assertTrue(out =~ /\nloop join method:\n  = \["a,b", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "l.join()");
+        assertTrue(out =~ /\nloop pseudo method:\n  = \["bc", "PSEUDO-METHOD-DOES-NOT-EXIST"\]\n/, "s.substr()");
+        assertTrue(out =~ /\nloop switch transform:\n  ! PSEUDO-METHOD-DOES-NOT-EXIST: /, "switch on s.lwr()");
+        # += and -= on a deleted local start from the type's default
+        assertTrue(out =~ /\nloop plus equals string:\n  = \["ax", "x"\]\n/, "string +=");
+        assertTrue(out =~ /\nloop plus equals list:\n  = \[2, 1\]\n/, "list +=");
+        assertTrue(out =~ /\nloop plus equals hash:\n  = \[2, 1\]\n/, "hash +=");
+        assertTrue(out =~ /\nloop minus equals int:\n  = \[7, -3\]\n/, "int -=");
+        assertTrue(out =~ /\nloop plus equals closure:\n  = \["ay", "y"\]\n/, "closure-bound string +=");
     }
 
     #! runs the script in every execution mode and on the IR tier
