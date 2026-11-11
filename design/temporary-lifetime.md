@@ -271,7 +271,9 @@ value at run time (an optimization can make `$1 ?? $1` the element itself, so a 
 a value that became the element, and the element's slot holds nothing once it is released).  Unlike the other
 releases of `ReleaseOwnedTemp`, which also run on the path of an exception, this one runs on the normal path only:
 an exception that the input's destructor raises leaves the pipeline to the instruction's exception target, and only
-a release that ran checks for one.  The value of `first`
+a release that ran checks for one: in the body, the pipeline's exception cleanup; at the end of `first`, whose
+releases come after the pipeline's cleanup has closed, a block that releases the other values, the iterator and
+the source and then gives the exception to the enclosing handler or leaves the function.  The value of `first`
 replaces the code's previous value of the expression after the operator's iterator and source are released, as the
 AST interpreter returns it.  The value of a
 predicate that can hold an object is released when the element has been decided on

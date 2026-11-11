@@ -17847,9 +17847,11 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             builder.createPopImplicitElement(old_element, select->loc);
         }
 
-        // Convert predicate to bool
+        // Convert predicate to bool; the predicate's value is released when the element has been decided on, as
+        // in the AST interpreter (see releasePredicateValue())
         QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
             select->loc)->result;
+        releasePredicateValue(predicate_result, select->getRight(), element_val, select->loc);
 
         // Branch: if true append, else skip
         QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
@@ -21234,9 +21236,37 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // the value replaces the code's previous value of the expression (a receiver of the statement) after the
         // iterator: the element and the stage values are released before the iterator unless they are the value,
         // which gets its reference after the iterator, and they are released after it then
-        withExceptionTarget(builder.createReleaseStageInput(iter_element, result, loc));
+        // an exception that a destructor raises in these releases leaves the operator as in the AST interpreter:
+        // the other values are released, then the iterator and the source, and then the exception goes to the
+        // enclosing handler or leaves the function (the pipeline's exception cleanup has been closed already)
+        QoreIRBasicBlock* release_exception_block = createBlock("stream.first.release.exception");
+        if (!release_exception_block) {
+            error = "IR builder failed to create the exception block of first's releases";
+            return QoreIRValue();
+        }
+        builder.createReleaseStageInput(iter_element, result, loc)->exception_target = release_exception_block;
         for (const QoreIRValue& v : stage_values) {
-            withExceptionTarget(builder.createReleaseStageInput(v, result, loc));
+            builder.createReleaseStageInput(v, result, loc)->exception_target = release_exception_block;
+        }
+        {
+            QoreIRBasicBlock* normal_block = builder.getBlock();
+            QoreIRBasicBlock* outer_target = getCurrentExceptionTarget();
+            builder.setBlock(release_exception_block);
+            builder.createReleaseOwnedTemp(iter_element, loc);
+            for (const QoreIRValue& v : stage_values) {
+                builder.createReleaseOwnedTemp(v, loc);
+            }
+            builder.createIteratorRelease(iter_val, loc);
+            builder.createReleaseOwnedTemp(source, loc);
+            if (outer_target) {
+                auto* check_inst = builder.createCheckException(loc);
+                check_inst->exception_target = outer_target;
+                builder.createBranch(outer_target, loc);
+            } else {
+                auto* rethrow_inst = builder.createRethrow(nullptr, loc);
+                rethrow_inst->synthetic = true;
+            }
+            builder.setBlock(normal_block);
         }
         builder.createIteratorRelease(iter_val, loc);
         // the base source, which the operator's functional iterator held, is released with it, before the value

@@ -1433,9 +1433,8 @@ struct IRActiveIterator {
 //! Releases the iterators of the functional operators of the expressions that an exception leaves, last created first
 /** The AST interpreter releases an operator's functional iterator, which holds its source, while the exception unwinds
     the operator, before the statement's temporaries and before the handlers of the blocks left run (qore#5670); the
-    iterators of foreach statements are released at their places among the locals (see releaseActiveIteratorsFrom())
-*/
-/** Only an exception calls it, so it is kept out of the interpreter's loop (see restoreOpenImplicitContexts())
+    iterators of foreach statements are released at their places among the locals (see releaseActiveIteratorsFrom()).
+    Only an exception calls it, so it is kept out of the interpreter's loop (see restoreOpenImplicitContexts()).
 */
 static __attribute__((noinline, cold)) void releaseOperatorIterators(
         std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters) {
@@ -14213,11 +14212,7 @@ load_local_done:
                     // an exception that a destructor raises leaves the pipeline there, as it leaves the AST
                     // interpreter's functional map iterator
                     if (inst->operands.size() > 1 && xsink && *xsink) {
-                        if (inst->exception_target) {
-                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                            prev_block = block;
-                            block = inst->exception_target;
-                            ip = 0;
+                        if (branchToExceptionTarget(inst)) {
                             break;
                         }
                         unwindForException();
