@@ -4255,8 +4255,9 @@ public:
     /** A class imported into another Program (Program::importClass()) is a copy with its own QoreClass but the class ID
         of the original; the type parameters in the signatures of its methods are those of the original
         (QoreTypeParameterTypeInfo::getOwnerClass()), so the owner of a type parameter is matched with this test, not
-        by address (issue #5763).  Unlike equal(), injected classes and classes with the same name and hash are not the
-        same declaration.
+        by address (issue #5763).  An import copy made for injection is a copy of its source and so the same declaration as
+        the source; unlike equal(), the class that an injected class replaces and classes with the same name and hash are
+        not the same declaration.
     */
     DLLLOCAL static bool sameDeclaration(const QoreClass* a, const QoreClass* b) {
         return a == b || (a && b && a->priv->classID == b->priv->classID);
