@@ -35,6 +35,8 @@
 
 #include "qore/intern/QoreClassIntern.h"
 
+#include <algorithm>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <string>
@@ -548,8 +550,67 @@ protected:
 
     // Source generic type parameters and cached concrete instantiations.
     std::vector<QoreGenericTypeParam> type_params;
+    //! the key of a concrete declaration of this generic hashdecl: each type argument with its identity serial
+    /** A type argument can be a class, hashdecl or enum of another Program, which is freed with its Program while
+        this cache keeps the concrete declaration; a later type can be allocated at the same address, so the address
+        alone would match the declaration made for the destroyed type.  qore_get_type_identity_serial() makes the
+        key unique for the lifetime of the process.
+    */
+    typedef std::vector<std::pair<const QoreTypeInfo*, uint64_t>> parameterized_hashdecl_key_t;
+    //! orders the keys of the concrete declarations, and finds a key by the live type arguments without making one
+    /** A lookup passes the type arguments themselves (the caller's vector, read under the cache's lock), and their
+        identity serials are read as they are compared, so a cache hit allocates nothing; the owned key is made only
+        when a declaration is added.
+    */
+    struct parameterized_hashdecl_key_less_t {
+        typedef void is_transparent;
+
+        DLLLOCAL bool operator()(const parameterized_hashdecl_key_t& a, const parameterized_hashdecl_key_t& b) const {
+            return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), lessEntry);
+        }
+
+        DLLLOCAL bool operator()(const parameterized_hashdecl_key_t& a, const std::vector<const QoreTypeInfo*>& b)
+                const {
+            return compare(a, b) < 0;
+        }
+
+        DLLLOCAL bool operator()(const std::vector<const QoreTypeInfo*>& a, const parameterized_hashdecl_key_t& b)
+                const {
+            return compare(b, a) > 0;
+        }
+
+    private:
+        DLLLOCAL static bool lessEntry(const std::pair<const QoreTypeInfo*, uint64_t>& a,
+                const std::pair<const QoreTypeInfo*, uint64_t>& b) {
+            if (a.first != b.first) {
+                return std::less<const QoreTypeInfo*>()(a.first, b.first);
+            }
+            return a.second < b.second;
+        }
+
+        //! compares a key with live type arguments as the key made from them would compare: <0, 0 or >0
+        /** Every key of a generic hashdecl's cache and every lookup has one type argument per type parameter
+            (getParameterizedHashDecl() checks the number), so the sizes are not compared.
+        */
+        DLLLOCAL static int compare(const parameterized_hashdecl_key_t& a, const std::vector<const QoreTypeInfo*>& b) {
+            assert(a.size() == b.size());
+            const std::pair<const QoreTypeInfo*, uint64_t>* ai = a.data();
+            for (const QoreTypeInfo* bt : b) {
+                if (ai->first != bt) {
+                    return std::less<const QoreTypeInfo*>()(ai->first, bt) ? -1 : 1;
+                }
+                uint64_t bs = qore_get_type_identity_serial(bt);
+                if (ai->second != bs) {
+                    return ai->second < bs ? -1 : 1;
+                }
+                ++ai;
+            }
+            return 0;
+        }
+    };
     mutable std::mutex parameterized_hashdecl_cache_lock;
-    mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
+    mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*, parameterized_hashdecl_key_less_t>
+        parameterized_hashdecl_cache;
     const TypedHashDecl* parameterized_base = nullptr;
     std::vector<const QoreTypeInfo*> type_args;
 

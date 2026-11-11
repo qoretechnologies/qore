@@ -309,6 +309,8 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         return nullptr;
     }
 
+    // the type arguments are live, so their identities can be read; they are compared with the cached keys as they
+    // are, without making a key; see parameterized_hashdecl_key_t and parameterized_hashdecl_key_less_t
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
         auto i = parameterized_hashdecl_cache.lower_bound(args);
@@ -340,16 +342,29 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
     }
 
+    TypedHashDecl* existing = nullptr;
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
         auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
                 && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
-            typed_hash_decl_private::get(*priv->thd)->deref();
-            return i->second;
+            existing = i->second;
+        } else {
+            // only a new declaration makes the key that the cache owns
+            parameterized_hashdecl_key_t key;
+            key.reserve(args.size());
+            for (const QoreTypeInfo* arg : args) {
+                key.emplace_back(arg, qore_get_type_identity_serial(arg));
+            }
+            parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
+                priv->thd));
         }
-        parameterized_hashdecl_cache.insert(i,
-            std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*>::value_type(args, priv->thd));
+    }
+    if (existing) {
+        // another thread made the declaration first; the unpublished one is released outside the lock, as its
+        // destruction purges the derived types of its own type
+        typed_hash_decl_private::get(*priv->thd)->deref();
+        return existing;
     }
     return priv->thd;
 }
