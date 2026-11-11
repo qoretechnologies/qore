@@ -7697,20 +7697,6 @@ int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* vari
     return 0;
 }
 
-AbstractFunctionSignature* QoreFunction::parseGetUniqueSignature() const {
-    if (vlist.singular()) {
-        const UserVariantBase* uvb = first()->getUserVariantBase();
-        if (uvb) {
-            UserSignature* sig = uvb->getUserSignature();
-            sig->resolve();
-            return sig;
-        }
-        return first()->getSignature();
-    }
-
-    return nullptr;
-}
-
 namespace {
 //! sets the parse context of a plain function while its signature or body is parse-initialized
 /** No class context, the function's namespace context, and a new local variable frame, so that the code of the

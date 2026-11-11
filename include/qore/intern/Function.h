@@ -1826,8 +1826,6 @@ public:
         return nullptr;
     }
 
-    DLLLOCAL AbstractFunctionSignature* parseGetUniqueSignature() const;
-
     DLLLOCAL int64 parseGetUniqueFunctionality() const {
         if (parse_get_parse_options() & PO_REQUIRE_TYPES)
             return nn_unique_functionality;
@@ -1848,9 +1846,10 @@ public:
     //! parse-initializes the pending variants of a function or a method
     /** A method's body is parse-initialized in the class context that the caller sets.  A plain function's body is
         always parse-initialized with no class context, a new local variable frame and with \a ns (or the current
-        namespace if \a ns is nullptr) as the namespace context, whatever triggers it: a call to it may be the first reference to it, in the body of
-        a method, and its body must not get the class's access to its private members (issue #5749).  Closures, which
-        keep the class context of the code they are in, use UserClosureFunction::parseInitClosure() instead.
+        namespace if \a ns is nullptr) as the namespace context, whatever triggers it: a call to it may be the first
+        reference to it, in the body of a method, and its body must not get the class's access to its private
+        members (issue #5749).  Closures, which keep the class context of the code they are in, use
+        UserClosureFunction::parseInitClosure() instead.
     */
     DLLLOCAL int parseInit(qore_ns_private* ns);
     DLLLOCAL void parseCommit();
