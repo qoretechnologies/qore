@@ -74,3 +74,28 @@ string sub f5() {
     return cl();
 }
 printf("%s\n", f5());
+# closures in a static member, a hashdecl member and a constant initializer, which are read with the slot maps of
+# their initializers, and defaults that call a static method and a function of a namespace and use a class constant
+class E {
+    public {
+        static code sc = string sub (int z = h() + 200) { return sprintf("sc z=%d", z); };
+        const EC = 3;
+    }
+    static int sm() { return 8; }
+    string m() {
+        code cl = string sub (int z = E::sm() + E::EC + N2::nf()) { return sprintf("m z=%d", z); };
+        return cl();
+    }
+}
+hashdecl HE {
+    code c = string sub (int z = h() + 300) { return sprintf("hd z=%d", z); };
+}
+const KC = string sub (int z = h() + 400) { return sprintf("const z=%d", z); };
+namespace N2 {
+    int sub nf() { return 1000; }
+}
+printf("%s\n", E::sc());
+printf("%s\n", (new E()).m());
+hash<HE> he();
+printf("%s\n", he.c());
+printf("%s\n", KC());

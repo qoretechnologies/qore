@@ -1380,6 +1380,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     std::vector<std::string> param_names(closure_num_params);
     std::vector<const QoreTypeInfo*> param_types(closure_num_params);
     std::vector<QoreValue> defaults(closure_num_params);
+    // the error of a default that cannot be read; the record is read to its end before the error is returned, so that
+    // a reader that reads more expressions after this one stays at their start
+    std::string default_error;
     for (uint16_t p = 0; p < closure_num_params; ++p) {
         const char* pname = ctx.reader.readStringRef(ctx.ptr);
         param_names[p] = pname ? pname : "";
@@ -1390,13 +1393,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (has_default) {
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
-            if (!val_error.empty()) {
+            if (!val_error.empty() && default_error.empty()) {
                 // a closure without the default would run with another value
-                ctx.error = "closure parameter '" + param_names[p] + "' default: " + val_error;
-                for (QoreValue& v : defaults) {
-                    v.discard(nullptr);
-                }
-                return QoreValue();
+                default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
             }
         }
     }
@@ -1431,6 +1430,16 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
+    if (!default_error.empty()) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        if (ctx.ptr <= ctx.end && ir_size <= static_cast<size_t>(ctx.end - ctx.ptr)) {
+            ctx.ptr = ir_end_ptr;
+        }
+        ctx.error = std::move(default_error);
+        return QoreValue();
+    }
 
     // Resolve the class for the method context (in the closure's Program; see closure_program_context above)
     const QoreClass* closure_class = nullptr;

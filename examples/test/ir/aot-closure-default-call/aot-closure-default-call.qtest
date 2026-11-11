@@ -19,9 +19,10 @@
     argument that is an expression, such as a call of a function of the Program, is resolved in the Program that the
     value reader takes from the thread; the closure record set it only after the parameters, so the executable
     crashed at load.  AOTClosureDefaultCall.q has closures with such defaults in functions, nested closures, methods,
-    member and global variable initializers, a default argument and top-level code, calling functions declared
-    before and after them and using a constant, a class and a hashdecl of the Program; it gives the output of the
-    AST interpreter in every execution mode and compiled with qcc.
+    member, static member, hashdecl member, constant and global variable initializers, a default argument and top-level
+    code, calling functions, static methods and namespace functions declared before and after them and using constants,
+    a class and a hashdecl of the Program; it gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
 */
 class AOTClosureDefaultCallTest inherits QUnit::Test {
     public {
@@ -35,6 +36,10 @@ z=9
 z=4
 z=3
 z=41 v=5 a=6
+sc z=202
+m z=1011
+hd z=302
+const z=402
 ";
 
         #! the optimization levels of the AOT compiles
