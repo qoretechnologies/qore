@@ -1145,6 +1145,20 @@ if (accepted) {
     */
     DLLLOCAL int cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
+    //! Sets the limit of the data of an HTTP/2 stream that is buffered for sending; see Http2Session::setStreamSendLimit()
+    /** @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setHttp2StreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of an HTTP/3 streaming response that is staged for sending; see QuicSession::setStreamSendLimit()
+    /** @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setQuicStreamSendLimit(int64_t session_id, int64_t stream_id, int64_t limit, ExceptionSink* xsink);
+
     //! Aborts the read side of a pending HTTP/3 stream so that a blocked
     //! @ref readQuicStreamDataBlock() unblocks immediately with clean EOF
     /** Unlike @ref cancelQuicStream() (which sends RESET_STREAM /

@@ -116,6 +116,10 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
 
+//! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
+//! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
+DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference
 //! to it, but no lock of the operation), because it failed (\a failed true) or because a response ended the

@@ -406,6 +406,23 @@ public:
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
+        is buffered.  With a limit, a send that would make the buffered data exceed it returns 1 instead, unless
+        nothing is buffered, so that one send larger than the limit can still be made.  Data that the peer's
+        flow-control window has accepted is no longer buffered here.  The limit ends with the stream.
+
+        @param stream_id the stream
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c HTTP2-ERROR if the limit is not positive or the stream
+        is not open)
+    */
+    DLLLOCAL int setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink);
+
+    //! The default limit of the data of a stream that is buffered for sending
+    static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
         The data provider for this stream is configured to signal EOF without
@@ -1056,6 +1073,9 @@ private:
               end_stream(end_stream) {}
     };
     std::unordered_map<int32_t, BodyData> pending_body_data;
+
+    //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
+    std::unordered_map<int32_t, size_t> stream_send_limits;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that

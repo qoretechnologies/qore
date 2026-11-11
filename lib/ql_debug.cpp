@@ -19765,6 +19765,48 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 }
 
 namespace {
+//! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
+std::atomic<int64_t> dbg_quic_hold_session{0};
+std::atomic<int64_t> dbg_quic_hold_stream{-1};
+}
+
+bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
+    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
+        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
+//! flow-control credit
+/** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
+    stream's send buffer deterministically.  Only one stream is held at a time.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID of a streaming response
+*/
+static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || stream_id < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
+            "ID %lld", (long long)session_id, (long long)stream_id);
+        return QoreValue();
+    }
+    // the stream is set first, so that no other stream of the session matches meanwhile
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_session.store(session_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the Counter armed by dbg_http_submit_after_close(), with a reference
 std::mutex dbg_submit_after_close_m;
 Counter* dbg_submit_after_close = nullptr;
@@ -21014,6 +21056,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id");
+    qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

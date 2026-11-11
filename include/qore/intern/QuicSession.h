@@ -215,6 +215,8 @@ struct QuicStreamingBodyData {
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
+    //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
+    size_t send_limit = 0;
 };
 
 class qore_socket_private;
@@ -522,6 +524,20 @@ public:
     */
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
                        bool end_stream, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a
+        limit, a send that would make the staged data exceed it returns 1 instead, unless nothing is staged, so that
+        one send larger than the limit can still be made.  Data that has been handed to the transport within the
+        peer's flow-control credit is no longer staged.  The limit ends with the stream.
+
+        @param stream_id the stream of a streaming response
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c QUIC-HTTP3-ERROR if the limit is not positive or the
+        stream has no streaming response)
+    */
+    DLLLOCAL int setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionSink* xsink);
 
     //! Handles a send on a stream that is closed for sending without an error; see sendStreamData()
     /** Must be called with \c mtx_ held.

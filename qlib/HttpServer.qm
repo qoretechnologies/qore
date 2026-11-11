@@ -243,6 +243,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - every Server-Sent Events stream bounds the data held for its client (the \c sse_max_buffer_size listener
+      option, default 1 MiB): queueing an event never waits for a client that stops reading, on HTTP/1.x, HTTP/2 and
+      HTTP/3 alike, and a client whose data would exceed the bound is dropped, with a warning in the listener's log
+      and the end of its stream reported as for any other end (see @ref httpserverasyncio_sse_buffer)
     - an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441, RFC 9220) that a handler answers with an ordinary
       (non-streaming) 2xx response, such as a catch-all handler serving a page, is refused with @c 501 instead of
       being sent as a response that promises a tunnel and ends the stream at once (issue #5667); see
@@ -1783,6 +1787,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         if (!opts.cert || !opts.key) {
             throw "HTTP3-ERROR", "QUIC requires SSL certificate and private key for TLS 1.3";
         }
+        checkSseMaxBufferSize(opts);
 
         # Create a UDP socket and bind it
         Socket udp_sock();
@@ -1830,6 +1835,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "get_remote_certs": opts.get_remote_certs,
             "max_request_body_size": opts.max_request_body_size,
             "max_decoded_body_size": opts.max_decoded_body_size,
+            "sse_max_buffer_size": opts.sse_max_buffer_size,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -3723,6 +3729,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (!exists info.node && !exists info.service) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("missing both \"node\" and \"service\" from listener option hash: %y", info);
         }
+        checkSseMaxBufferSize(info);
 
         string sock = (exists info.service ? sprintf("%s:%s", info.node ?? "*", info.service) : info.node);
 
@@ -3834,6 +3841,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # the QUIC listener enforces the same body size limits as its TCP listener
                         "max_request_body_size": info.max_request_body_size,
                         "max_decoded_body_size": info.max_decoded_body_size,
+                        # and the same bound of the data held for the clients of SSE streams
+                        "sse_max_buffer_size": info.sse_max_buffer_size,
                     };
                     if (info.additional_info) {
                         quic_opts.additional_info = info.additional_info;
@@ -5562,6 +5571,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         #   submitQuicStreamData()
         bool sse_is_http2 = cx."header-info".http2 ?? False;
         bool sse_is_http3 = cx."header-info".http3 ?? False;
+        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
+        # connection (unless it has its own); applied below to a stream that its setup left without one
+        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
         # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
         # by the connection close anyway
         if (handler_close) {
@@ -5627,6 +5639,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http2SseStream(s, stream_id, wake_cb, True);
                     }
+                }
+                if (sse_conn) {
+                    configureSseStream(listener, cid, sse_conn);
                 }
                 # Deregister the connection when the peer goes away.  On
                 # HTTP/1.x the socket is the stream, so the SSE poll
@@ -5717,6 +5732,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket sse_sock = s;
                     poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
                 }
+                configureSseStream(listener, cid, poll_op);
                 # Tell the async controller to manage this socket as an SSE stream
                 async_response_out.code = rv."code";
                 async_response_out.hdr = rv.hdr;
@@ -5769,6 +5785,43 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             run.stopHere();
         }
         return run;
+    }
+
+    #! Raises an exception if the \c sse_max_buffer_size listener option is not positive
+    private static checkSseMaxBufferSize(hash<HttpListenerOptionInfo> info) {
+        if (info.sse_max_buffer_size <= 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"sse_max_buffer_size\" must be > 0; got "
+                "%d", info.sse_max_buffer_size);
+        }
+    }
+
+    #! Applies the listener's bound and warning log to an HTTP/2 or HTTP/3 SSE stream that its handler did not
+    #! configure
+    private static configureSseStream(HttpListener listener, string cid, HttpServerAsyncIo::AbstractSseConnection sse) {
+        if (!sse.hasMaxBufferSize()) {
+            sse.setMaxBufferSize(listener.getSseMaxBufferSize());
+        }
+        if (!sse.hasWarningCallback()) {
+            sse.setWarningCallback(getSseWarningCallback(listener, cid));
+        }
+    }
+
+    #! Applies the listener's bound and warning log to an HTTP/1.x SSE stream that its handler did not configure
+    private static configureSseStream(HttpListener listener, string cid,
+            HttpServerAsyncIo::HttpSseStreamPollOperation sse) {
+        if (!sse.hasMaxBufferSize()) {
+            sse.setMaxBufferSize(listener.getSseMaxBufferSize());
+        }
+        if (!sse.hasWarningCallback()) {
+            sse.setWarningCallback(getSseWarningCallback(listener, cid));
+        }
+    }
+
+    #! Returns the callback that logs the warning of an SSE stream whose client is dropped in the listener's log
+    private static code<nothing(string)> getSseWarningCallback(HttpListener listener, string cid) {
+        return sub (string msg) {
+            listener.logWarn("SSE connection %y: %s", cid, msg);
+        };
     }
 
     #! Returns the code that the async I/O controller calls when an SSE stream has ended
@@ -6541,6 +6594,42 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxRequestBodySize();
         }
         return rv;
+    }
+
+    #! Returns the bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
+    /** @see @ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"
+
+        @since HttpServer 1.7
+    */
+    int getSseMaxBufferSize() {
+        return opts.sse_max_buffer_size ?? HttpServerAsyncIo::DefaultSseMaxBufferSize;
+    }
+
+    #! Logs a warning in the listener's log
+    /** @since HttpServer 1.7
+    */
+    logWarn(string fmt, ...) {
+        softlist<auto> args = fmt;
+        if (argv) {
+            args += argv;
+        }
+        args[0] = sprintf("%y (%s): %s", name, socket_info.desc, args[0]);
+        if (logger) {
+            try {
+                logger.logArgs(LoggerLevel::WARN, "HTTP " + args[0], args[1..]);
+                return;
+            } catch (hash<ExceptionInfo> ex) {
+                # falls back to the server's error log
+            }
+        }
+        if (serv) {
+            args[0] = "WARNING: " + args[0];
+            try {
+                serv.logErrorArgs(args);
+            } catch () {
+                # ignore if server was deleted
+            }
+        }
     }
 
     #! Returns the effective maximum size in bytes of a decompressed request body for this listener
