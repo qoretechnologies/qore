@@ -13307,13 +13307,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             opcode = QoreIROpcode::DotEvalObject;
         }
     }
-    // the AST interpreter evaluates the method's arguments at run time: in the body of an operator that sets the
-    // element as the implicit argument list only virtually, it is set for the call (qore#5680; see
+    // the AST interpreter evaluates the method's arguments at run time: in the code of an operator that sets its
+    // implicit arguments only virtually (the element of map and the other per-element operators, the accumulator and
+    // the element of a fold), they are set for the call (qore#5680, qore#5691; see
     // qore_ir_body_needs_implicit_context())
-    if (virtual_implicit.active && !virtual_implicit.runtime && virtual_implicit.arg0.isValid()
-            && !virtual_implicit.arg1.isValid()) {
-        return finish_call(lowerWithImplicitContext(virtual_implicit.arg0, virtual_implicit.element, op->loc, nullptr,
-            error, [&]() { return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error); }));
+    if (virtual_implicit.active && !virtual_implicit.runtime && virtual_implicit.arg0.isValid()) {
+        return finish_call(lowerWithImplicitArgs(virtual_implicit.arg0, virtual_implicit.arg1,
+            virtual_implicit.element, op->loc, nullptr, error,
+            [&]() { return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error); }));
     }
     return finish_call(
         lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error));
