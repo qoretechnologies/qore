@@ -1247,11 +1247,14 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
     FunctionCallReferenceNode* rv = new FunctionCallReferenceNode(loc, uf, call_pgm);
-    rv->explicit_inst = explicit_inst;
-    // an explicit type argument can be a type parameter of the generic code that creates the reference (\mk0<U>() in
-    // a generic function or a method of a generic class): it is bound here, to the instantiation that is running, as
-    // the reference can outlive that code and be called when no such instantiation exists
-    rv->bindExplicitTypeArgs();
+    // a reference without explicit type arguments (the common case) pays nothing for them
+    if (explicit_inst) {
+        rv->explicit_inst = explicit_inst;
+        // an explicit type argument can be a type parameter of the generic code that creates the reference (\mk0<U>()
+        // in a generic function or a method of a generic class): it is bound here, to the instantiation that is
+        // running, as the reference can outlive that code and be called when no such instantiation exists
+        rv->bindExplicitTypeArgs();
+    }
     return rv;
 }
 
