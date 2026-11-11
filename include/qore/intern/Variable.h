@@ -53,6 +53,7 @@ enum qore_var_t {
 #include <cstring>
 #include <memory>
 #include <vector>
+#include <type_traits>
 #include <set>
 #include <string>
 
@@ -853,14 +854,16 @@ public:
     */
     struct PathKeyStore {
         static constexpr size_t BufSize = 8;
-        PathKey buf[BufSize];
+        //! the keys of a path of up to BufSize keys, constructed when they are written (the first count are valid)
+        alignas(PathKey) unsigned char buf[BufSize * sizeof(PathKey)];
         std::vector<PathKey> more;
         size_t count = 0;
 
         DLLLOCAL PathKey* data() {
-            return more.empty() ? buf : more.data();
+            return more.empty() ? reinterpret_cast<PathKey*>(buf) : more.data();
         }
     };
+    static_assert(std::is_trivially_destructible<PathKey>::value, "the keys are not destroyed in the buffer");
 
 private:
     //! the keys of the path being resolved, if they were evaluated first
@@ -873,7 +876,6 @@ private:
         }
         PathKey& key = path_keys->data()[--path_keys->count];
         holder.setValue(key.value, key.needs_deref);
-        key = PathKey();
         return true;
     }
 
@@ -884,6 +886,13 @@ private:
     //! resolved: at least two of them need an evaluation, so that their order can be observed; cached in \a cache,
     //! the cache of the last step of the path
     DLLLOCAL static const QoreLValuePathKeys* getPathKeys(QoreLValuePathKeyCache& cache, const QoreValue& n);
+
+    //! evaluates the keys of the path \a n, whose last step's key cache is \a cache, from the root out if it needs
+    //! it, and then resolves the step with \a step; returns -1 on error
+    /** Out of line, so that a path that does not need it costs nothing more than the test of its cache
+    */
+    template <typename Step>
+    DLLLOCAL int doStepWithPathKeys(const QoreValue& n, QoreLValuePathKeyCache& cache, Step step);
 
     //! the evaluation of the keys of the path at its outermost step, and the release of the keys left
     class PathKeyScope;
