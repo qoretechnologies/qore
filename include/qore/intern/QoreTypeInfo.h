@@ -766,9 +766,17 @@ public:
         values of the types it accepts: a date value must still be checked for a date<absolute> parameter.
     */
     DLLLOCAL static bool acceptsInputUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        // the same type, the common case, is decided where the function is called; the other cases are compared out
+        // of line, as the comparison of container value types recurses (issue #5782)
         if (target == source) {
             return true;
         }
+        return acceptsInputUncheckedDifferent(target, source);
+    }
+
+    //! Compares two different types for acceptsInputUnchecked() (issue #5782)
+    DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
+            const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
             return false;
         }
