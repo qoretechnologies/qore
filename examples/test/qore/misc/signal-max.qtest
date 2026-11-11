@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the platform's signal numbers (NSIG) and signal delivery on the signal thread
 
 /*  signal-max.qtest Copyright 2026 Qore Technologies, s.r.o.
 
@@ -42,23 +43,27 @@ class SignalMaxTest inherits QUnit::Test {
         if (!HAVE_SIGNAL_HANDLING) {
             testSkip("signal handling is disabled");
         }
-        # QORE_SIGNAL_MAX is NSIG + 1: 66 on Linux (glibc and musl), 33 on macOS
+        # QORE_SIGNAL_MAX is NSIG + 1: 66 on Linux (glibc and musl; not on MIPS, whose NSIG is 129), 33 on macOS
         int max;
         switch (Qore::PlatformOS) {
             case "Linux": max = 66; break;
             case "Darwin": max = 33; break;
             default: testSkip("NSIG is not known for " + Qore::PlatformOS);
         }
-        # QORE_SIGNAL_MAX is refused, as is anything beyond it and below 1
-        foreach int sig in ((max, max + 1, 0, -1)) {
+        if (Qore::PlatformCPU =~ /mips/i) {
+            testSkip("NSIG is 129 on MIPS");
+        }
+        # QORE_SIGNAL_MAX and NSIG (QORE_SIGNAL_MAX - 1, which the platform does not have) are refused, as is anything
+        # beyond them and below 1
+        foreach int sig in ((max, max - 1, max + 1, 0, -1)) {
             assertThrows("SET-SIGNAL-HANDLER-ERROR", sprintf("%d is not a valid signal", sig),
                 \set_signal_handler(), (sig, sub (int s) {}));
             assertThrows("REMOVE-SIGNAL-HANDLER-ERROR", sprintf("%d is not a valid signal", sig),
                 \remove_signal_handler(), sig);
         }
-        # the last entry of the table can be set and removed
-        set_signal_handler(max - 1, sub (int s) {});
-        remove_signal_handler(max - 1);
+        # the last signal of the platform (NSIG - 1) can be set and removed
+        set_signal_handler(max - 2, sub (int s) {});
+        remove_signal_handler(max - 2);
         # a real signal still works after the refusals
         Counter ran(1);
         set_signal_handler(SIGUSR1, sub (int s) { ran.dec(); });

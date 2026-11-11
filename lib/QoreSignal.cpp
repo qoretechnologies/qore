@@ -1012,8 +1012,22 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
     }
 }
 
+bool QoreSignalManager::isValidSignal(int sig) {
+    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG on
+    // Linux) can never be delivered
+    if (sig <= 0 || sig >= QORE_SIGNAL_MAX) {
+        return false;
+    }
+    sigset_t s;
+    sigemptyset(&s);
+    return !sigaddset(&s, sig);
+}
+
 QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, bool reuse_sys) {
-    assert(sig > 0);
+    if (!isValidSignal(sig)) {
+        return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+            name);
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
@@ -1056,6 +1070,12 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
 }
 
 QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, const char* name, bool reuse_sys) {
+    for (int sig : sig_vec) {
+        if (!isValidSignal(sig)) {
+            return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+                name);
+        }
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
