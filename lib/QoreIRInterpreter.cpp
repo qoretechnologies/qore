@@ -7310,10 +7310,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return slot_id < parent_slot_dirty.size() && parent_slot_dirty[slot_id];
     };
 
-    // Helper to fire on_block_exit handlers for all scopes from current depth down to target_depth.
-    // Used when the frame is left without a handler in it (unwindForException(), which releases the temps of the
-    // statements of each scope before its handlers run, and the scope exit guard) after the exception is raised on
-    // xsink, ensuring on_error handlers see the active exception.
     // true while a debugger is attached and the frame can be debugged; set below, once the debug context is known,
     // and checked again at every instruction (declared here for the handlers that fireScopeExits() runs)
     bool debug_active = false;
@@ -7327,6 +7323,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto dbgHandlerProgram = [&]() QORE_IR_LAMBDA_INLINE -> QoreProgram* {
         return debug_active ? pgm : nullptr;
     };
+    // Helper to fire on_block_exit handlers for all scopes from current depth down to target_depth.
+    // Used when the frame is left without a handler in it (unwindForException(), which releases the temps of the
+    // statements of each scope before its handlers run, and the scope exit guard) after the exception is raised on
+    // xsink, ensuring on_error handlers see the active exception.
     auto fireScopeExits = [&](size_t target_depth = 0) {
         while (scope_stack.size() > target_depth) {
             size_t scope_start = scope_stack.back().handler_start;
