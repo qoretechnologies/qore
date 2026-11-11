@@ -81,8 +81,10 @@ string sub eq_switch(string s) {
 }
 
 # constant cases in encodings that are not ASCII-compatible or whose bytes are other ASCII characters: UTF-7 "+" is
-# "+-", and SHIFT_JIS U+00A5 is the byte of "\\"
-const UTF7_PLUS = convert_encoding("+", "UTF-7");
+# "+-", and SHIFT_JIS U+00A5 is the byte of "\\"; the UTF-7 cases are given by their bytes, as the iconv of musl has
+# no UTF-7 (convert_encoding() raises ENCODING-CONVERSION-ERROR there); a comparison with them is then not possible,
+# and the switch takes no such case, in every mode
+const UTF7_PLUS = force_encoding("+-", "UTF-7");
 const SJIS_YEN = convert_encoding("\u00a5", "SHIFT_JIS");
 
 class SwitchConstants {
@@ -101,7 +103,8 @@ string sub const_switch(string s) {
 }
 
 # a constant declared after the function that uses it as a case
-const LATE_UTF7_A = convert_encoding("a+", "UTF-7");
+# "a+" in UTF-7, by its bytes (see UTF7_PLUS)
+const LATE_UTF7_A = force_encoding("a+-", "UTF-7");
 
 # cases folded at parse time to strings with a null byte or in another encoding: they are not constants of the program
 const FOLD_UTF16 = convert_encoding("a", "UTF-16LE");

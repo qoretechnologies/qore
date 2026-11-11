@@ -101,17 +101,31 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         # no exception (as QoreValue::isEqualHard() compares them); "case ==" raises the conversion error
         assertRegex("\n0 ISO-2022-JP !!binary GyRC/w==: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n",
             out, "invalid ISO-2022-JP");
-        assertRegex("\n0 UTF-7 !!binary K/8=: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n", out,
-            "invalid UTF-7");
-        # a constant case in another encoding is compared with its characters: UTF-7 "+" is "+-"
-        assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-8 +");
+        # the iconv of musl has no UTF-7: a UTF-7 value or case can then be compared with no case in another encoding
+        bool have_utf7;
+        try {
+            convert_encoding("+", "UTF-7");
+            have_utf7 = True;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        }
+        if (have_utf7) {
+            assertRegex("\n0 UTF-7 !!binary K/8=: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n", out,
+                "invalid UTF-7");
+            # a constant case in another encoding is compared with its characters: UTF-7 "+" is "+-"
+            assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-8 +");
+            assertRegex("\n0 UTF-7 !!binary Ky0=: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-7 +");
+        } else {
+            # the UTF-7 constant case cannot be converted for the comparison, so it is not taken
+            assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=default\n", out, "UTF-8 + without UTF-7");
+        }
         assertRegex("\n0 UTF-8 !!binary Ky0=: try=default eq=default const=default\n", out, "UTF-8 +-");
-        assertRegex("\n0 UTF-7 !!binary Ky0=: try=plus eq=eq-plus const=utf7-plus\n", out, "UTF-7 +");
         # the SHIFT_JIS constant is U+00A5, not "\\"
         assertRegex("\n0 UTF-8 !!binary XA==: try=bs eq=eq-bs const=default\n", out, "UTF-8 \\");
         # a UTF-16LE class constant and a UTF-7 constant declared after the function
         assertRegex("\n0 UTF-8 !!binary YWI=: try=default eq=default const=utf16-ab\n", out, "UTF-8 ab");
-        assertRegex("\n0 UTF-8 !!binary YSs=: try=default eq=default const=utf7-a\n", out, "UTF-8 a+");
+        assertRegex("\n0 UTF-8 !!binary YSs=: try=default eq=default const=" + (have_utf7 ? "utf7-a" : "default")
+            + "\n", out, "UTF-8 a+");
     }
 
     executionModes() {
