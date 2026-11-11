@@ -29,7 +29,7 @@ sub set_handler() {
     state = "valid";
     Captured c();
     # the closure holds the only reference to the object
-    set_signal_handler(SIGUSR1, sub (int sig) {
+    set_signal_handler(SIGTERM, sub (int sig) {
         c.touch();
     });
 }

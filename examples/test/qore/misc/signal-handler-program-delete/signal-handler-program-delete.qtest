@@ -25,6 +25,11 @@ class SignalHandlerProgramDeleteTest inherits QUnit::Test {
         const Expected = {
             "main": "main returns\ndestructor: global valid, static captured\n",
             "program": "deleting the Program\ndestructor: global valid, static captured\nthe Program is deleted\n",
+            # set_signal_handler() has no effect in the destructor: the closure is released when set_handler() returns
+            "teardown": "main returns\ndestructor: global valid, static captured\nthe destructor set the handler\n",
+            # the thread that deletes the Program releases the handler whose callback finished in the signal thread
+            "running": "deleting the Program while its callback finishes\ndestructor: global valid, static captured\n"
+                "the Program is deleted\n",
         };
     }
 
@@ -38,11 +43,24 @@ class SignalHandlerProgramDeleteTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("the main Program releases its signal handlers before it deletes its data", \mainTest());
         addTestCase("a deleted Program releases its signal handlers before it deletes its data", \programTest());
+        addTestCase("a handler set while the Program's data is destroyed is not set", \teardownTest());
+        addTestCase("a Program deleted while its signal callback finishes releases its handler", \runningTest());
         set_return_value(main());
     }
 
     mainTest() {
         checkModes("main");
+    }
+
+    teardownTest() {
+        checkModes("teardown");
+    }
+
+    runningTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the signal thread requires a debug build");
+        }
+        checkModes("running");
     }
 
     programTest() {
@@ -51,6 +69,10 @@ class SignalHandlerProgramDeleteTest inherits QUnit::Test {
 
     #! Runs the worker in each execution mode and on the IR tier, and compares the output of every run at once
     private checkModes(string worker_mode) {
+        # the worker runs in a child process, which has signal handling unless the platform has none
+        if (!Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
         hash<string, string> results;
         foreach string mode in (ExecModeHarness::ExecModes) {
             results{mode} = runWorker(worker_mode, mode, False);

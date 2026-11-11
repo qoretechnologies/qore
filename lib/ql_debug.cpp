@@ -17659,6 +17659,25 @@ static QoreValue f_dbg_signal_handler_set(const QoreListNode* params, RuntimeCon
 #endif
 }
 
+//! holds the signal thread after the next signal callback has left its Program, until a thread waits for the callback
+//! to finish in QoreSignalManager::removeProgramHandlers() (issue #5766)
+static QoreValue f_dbg_signal_hold_after_callback(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef HAVE_SIGNAL_HANDLING
+    QSM.dbgHoldAfterCallback();
+#endif
+    return QoreValue();
+}
+
+//! waits until the signal thread is held after a callback; returns False on timeout
+static QoreValue f_dbg_signal_wait_held_after_callback(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef HAVE_SIGNAL_HANDLING
+    return QSM.dbgWaitHeldAfterCallback(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+#else
+    return false;
+#endif
+}
+
 //! runs code in a native thread registered with Qore as a foreign thread, which is deregistered when the code returns
 /** The call returns once the thread has been deregistered, which deletes its thread data, and has ended.  Returns the
     error code of an exception raised by the code, or nothing
@@ -20597,6 +20616,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_signal_handler_set", f_dbg_signal_handler_set, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig");
+    qns.addBuiltinVariant("dbg_signal_hold_after_callback", f_dbg_signal_hold_after_callback, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_signal_wait_held_after_callback", f_dbg_signal_wait_held_after_callback, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,

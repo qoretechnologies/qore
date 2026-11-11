@@ -1855,13 +1855,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // is code that runs in the Program, and its closure can hold the last reference to an object (a server that
         // the handler stops, for example), whose destructor runs user code; released after the data below, the
         // object was destroyed in a Program whose data had been deleted, and its destructor raised PROGRAM-ERROR.
-        // The Program's threads have ended and no thread can enter it any more, so no handler runs here.
-        {
-            int_set_t ns = sigset;
-            for (int sig : ns) {
-                QSM.removeHandler(sig, xsink);
-            }
-        }
+        // The Program's threads have ended and no thread can enter it any more; a callback that is still finishing in
+        // the signal thread (it has left the Program, but its handler is in progress) is waited for, and its handler
+        // is handed over to this thread and released here, as the signal thread cannot enter the Program any more.
+        // The code that runs below sets no handler (see QoreSignalManager::setHandler()), so none is left when the
+        // Program is deleted.
+        QSM.removeProgramHandlers({pgm}, xsink);
 #endif
 
         // Discard the exec-class instance now that all threads have terminated.
