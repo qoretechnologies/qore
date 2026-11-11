@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT calls with explicit type arguments, chosen at run time or naming type parameters
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericForwardTypeParamTest
+
+#! Generic code can forward its type parameters as explicit type arguments in every mode (qore#5791)
+/** A generic function or method that calls another generic one with its own type parameter as the explicit type
+    argument (ex: <tt>X sub g<X>(X x) { return identity<X>(x); }</tt>) binds it to the type argument of its own call
+    (qore#5762); and qcc-compiled code could not load a call with explicit type arguments whose variant is chosen at
+    run time (its argument is not typed at parse time; AOT-CONTEXT-ERROR), nor check the argument of such a call
+    against its type arguments (qore#5791).  The probes (generic-forward-type-param/probes.q) run at the top level and
+    in a child Program, in each execution mode in a child process, with tiered execution promoted to native code, and
+    as qcc-compiled executables (-O0, -O3), against the expected output.
+*/
+class GenericForwardTypeParamTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "1 integer; \"s\" string; 2 integer; [1, 2] list<int>; 3 integer; RUNTIME-OVERLOAD-ERROR; "
+            "4 integer; \"m\" string; 5 integer; RUNTIME-OVERLOAD-ERROR; 6 integer; 7 integer; 8 integer; "
+            "\"9\" string; 10 integer; \"11\" string";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericForwardTypeParam", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-forward-type-param" + DirSep
+            + "probes.q");
+        for (int i = 0; i < 8; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("generic code forwards its type parameters as explicit type arguments in every mode",
+            \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-forward-type-param-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes());\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE);\np.parse(ReadOnlyFile::readTextFile(%y), "
+            "\"probes\");\nprint(p.callFunction(\"probes\"));\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

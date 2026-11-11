@@ -5439,7 +5439,7 @@ QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc,
 }
 
 QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
     // see evalFunction()
@@ -5455,8 +5455,9 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         return QoreValue();
     }
     ProgramCallContextHelper pcch(pgm);
+    // the explicit type arguments of the call select the variant, as for a parsed call (see evalFunction())
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        exec_pgm);
+        exec_pgm, nullptr, explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
     }

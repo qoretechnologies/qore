@@ -11223,7 +11223,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
 */
 static uint64_t qore_rt_call_function_dynamic_impl(const QoreFunction* func,
         QoreProgram* pgm, uint64_t* args, uint64_t** arg_cleanups, int nargs,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
     assert(func);
 
     // Build QoreListNode from the NaN-boxed args array
@@ -11248,7 +11248,7 @@ static uint64_t qore_rt_call_function_dynamic_impl(const QoreFunction* func,
 
     // Resolve the variant dynamically while preserving temporary argument
     // ownership, so setupCall() can transfer references into parameters.
-    QoreValue result = func->evalDynamicTmpArgs(*arg_list, pgm, rc, xsink);
+    QoreValue result = func->evalDynamicTmpArgs(*arg_list, pgm, rc, xsink, explicit_type_param_instantiation);
 
     return toBits(result);
 }
@@ -14444,10 +14444,10 @@ static uint64_t qore_rt_call_slot_dynamic_fallback(QoreAOTContext* ctx, int32_t 
     if (target.func) {
         if (target.variant) {
             return qore_rt_call_function_direct_impl(target.func, target.variant,
-                target.pgm, args, arg_cleanups, nargs, xsink);
+                target.pgm, args, arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
         }
         return qore_rt_call_function_dynamic_impl(target.func, target.pgm, args,
-            arg_cleanups, nargs, xsink);
+            arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
     }
     if (qore_rt_aot_strict_prelink()) {
         return qore_rt_raise_aot_prelink_error(ctx, slot, xsink, helper, target_kind,
@@ -16786,6 +16786,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, in
     }
     if (target.func) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot", "function", "use");
+        // a call with explicit type arguments passes them to the call (as qore_rt_call_direct_aot does)
+        if (target.explicit_type_param_instantiation) {
+            return target.variant
+                ? qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args, nullptr, nargs,
+                    xsink, target.explicit_type_param_instantiation)
+                : qore_rt_call_function_dynamic_impl(target.func, target.pgm, args, nullptr, nargs, xsink,
+                    target.explicit_type_param_instantiation);
+        }
         if (target.variant) {
             if (!qore_rt_user_fast_call_eligible(target.variant)) {
                 return qore_rt_call_function_direct(target.func, target.variant,
@@ -16833,10 +16841,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_consume_args(
             "function", "use");
         if (target.variant) {
             return qore_rt_call_function_direct_impl(target.func, target.variant,
-                target.pgm, args, arg_cleanups, nargs, xsink);
+                target.pgm, args, arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
         }
         return qore_rt_call_function_dynamic_impl(target.func, target.pgm, args,
-            arg_cleanups, nargs, xsink);
+            arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
     }
     if (qore_rt_is_implicit_self_copy_slot(ctx, slot)) {
         if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
@@ -17059,9 +17067,10 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             }
             return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
         }
-        // No variant resolved — use dynamic dispatch for proper overload resolution
+        // No variant resolved — use dynamic dispatch for proper overload resolution, with the explicit type
+        // arguments of the call (qore#5791)
         return qore_rt_call_function_dynamic_impl(target.func, target.pgm, args,
-                arg_cleanups, nargs, xsink);
+                arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
     }
 
     return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
@@ -20280,6 +20289,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
     if (target.func) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_direct_aot",
             "function", "use");
+        // a call with explicit type arguments passes them to the call (as qore_rt_call_direct_aot does)
+        if (target.explicit_type_param_instantiation) {
+            return target.variant
+                ? qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args, nullptr, nargs,
+                    xsink, target.explicit_type_param_instantiation)
+                : qore_rt_call_function_dynamic_impl(target.func, target.pgm, args, nullptr, nargs, xsink,
+                    target.explicit_type_param_instantiation);
+        }
         if (target.variant) {
             if (!qore_rt_user_fast_call_eligible(target.variant)) {
                 return qore_rt_call_function_direct(target.func, target.variant,
@@ -20319,10 +20336,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_consume_args
             "qore_rt_call_static_method_direct_aot_consume_args", "function", "use");
         if (target.variant) {
             return qore_rt_call_function_direct_impl(target.func, target.variant,
-                target.pgm, args, arg_cleanups, nargs, xsink);
+                target.pgm, args, arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
         }
         return qore_rt_call_function_dynamic_impl(target.func, target.pgm, args,
-            arg_cleanups, nargs, xsink);
+            arg_cleanups, nargs, xsink, target.explicit_type_param_instantiation);
     }
 
     return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
