@@ -44,11 +44,14 @@ const Programs = (
     ("top-level builtin", "int z = 0;\nint y = 1 / z;"),
     ("builtin in a function", "sub h() {\n    int z = 0;\n    int y = 1 / z;\n}\nh();"),
     ("top-level try", "try {\n    throw \"E\";\n} catch (hash<ExceptionInfo> ex) {\n}\nthrow \"F\";"),
-    ("caught from a function", "sub k() {\n    throw \"G\";\n}\ntry {\n    k();\n} catch (hash<ExceptionInfo> ex) {\n}"),
+    ("caught from a function",
+        "sub k() {\n    throw \"G\";\n}\ntry {\n    k();\n} catch (hash<ExceptionInfo> ex) {\n}"),
     ("top-level loop", "for (int i = 0; i < 1; ++i) {\n    throw \"H\";\n}"),
     ("method", "class C {\n    m() {\n        throw \"I\";\n    }\n}\nC c();\nc.m();"),
     ("rethrow in a catch block", "try {\n    throw \"J\";\n} catch (hash<ExceptionInfo> ex) {\n    throw \"K\";\n}"),
-    ("loop in a function", "sub l() {\n    foreach int i in (1, 2) {\n        if (i == 2) {\n            throw \"L\";\n        }\n    }\n}\nl();"),
+    ("loop in a function",
+        "sub l() {\n    foreach int i in (1, 2) {\n        if (i == 2) {\n            throw \"L\";\n        }\n"
+        "    }\n}\nl();"),
 );
 
 foreach list<string> p in (Programs) {

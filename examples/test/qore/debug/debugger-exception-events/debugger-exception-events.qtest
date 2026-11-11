@@ -119,6 +119,9 @@ f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=null
 ",
         };
 
+        #! the output of DebuggerEntryReturn.q in every execution mode and compiled ahead of time
+        const ExpectedEntryReturn = "returned=True rv=null\n";
+
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
     }
@@ -128,6 +131,7 @@ f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=null
         string libqore_dir;
         string script;
         string functions_script;
+        string entry_return_script;
         string qcc_bin;
     }
 
@@ -137,18 +141,21 @@ f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=null
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         script = get_script_dir() + "/DebuggerExceptionEvents.q";
         functions_script = get_script_dir() + "/DebuggerExceptionEventsFunctions.q";
+        entry_return_script = get_script_dir() + "/DebuggerEntryReturn.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": exception events", \eventsTest(), (mode,));
             foreach string arg in (ExpectedFunctions.keys()) {
                 addTestCase(sprintf("%s: exception events of functions (%s)", mode, arg), \functionEventsTest(),
                     (mode, arg));
             }
+            addTestCase(mode + ": a return at the start of a function", \entryReturnTest(), (mode,));
         }
         foreach int opt in (OptLevels) {
             foreach string arg in (ExpectedFunctions.keys()) {
                 addTestCase(sprintf("qcc -O%d: exception events of functions (%s)", opt, arg),
                     \aotFunctionEventsTest(), (opt, arg));
             }
+            addTestCase(sprintf("qcc -O%d: a return at the start of a function", opt), \aotEntryReturnTest(), (opt,));
         }
         set_return_value(main());
     }
@@ -164,6 +171,25 @@ f_dismiss: [\"DIVISION-BY-ZERO@125\", \"exit@124\"] rv=null
         string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
             libqore_dir, libqore_dir, qore_bin, mode, functions_script, arg), NativeCheck::Jit);
         assertEq(ExpectedFunctions{arg}, output, mode + ": the exception events of the AST interpreter");
+    }
+
+    #! a debugger's return at the start of a function ends it with no value; the debug IR of AOT code failed with
+    #! IR-EXECUTION-ERROR
+    entryReturnTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, entry_return_script), NativeCheck::Jit);
+        assertEq(ExpectedEntryReturn, output, mode + ": the function returned at its start");
+    }
+
+    aotEntryReturnTest(int opt) {
+        TmpDir tmp("qore-debugger-entry-return-");
+        string exe = tmp.path + DirSep + "entry-return";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            entry_return_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(ExpectedEntryReturn, output, sprintf("qcc -O%d: the function returned at its start", opt));
     }
 
     aotFunctionEventsTest(int opt, string arg) {
