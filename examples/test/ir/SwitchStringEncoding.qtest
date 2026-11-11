@@ -120,8 +120,11 @@ class SwitchStringEncodingTest inherits QUnit::Test {
             assertRegex("\n0 UTF-8 !!binary Kw==: try=plus eq=eq-plus const=default\n", out, "UTF-8 + without UTF-7");
         }
         assertRegex("\n0 UTF-8 !!binary Ky0=: try=default eq=default const=default\n", out, "UTF-8 +-");
-        # the SHIFT_JIS constant is U+00A5, not "\\"
-        assertRegex("\n0 UTF-8 !!binary XA==: try=bs eq=eq-bs const=default\n", out, "UTF-8 \\");
+        # the SHIFT_JIS constant is U+00A5, not "\\", where iconv's SHIFT_JIS has the yen sign at that byte (libiconv,
+        # glibc); in musl's, the byte is "\\"
+        bool sjis_backslash = convert_encoding(force_encoding("\\", "SHIFT_JIS"), "UTF-8") == "\\";
+        assertRegex("\n0 UTF-8 !!binary XA==: try=bs eq=eq-bs const=" + (sjis_backslash ? "sjis-yen" : "default")
+            + "\n", out, "UTF-8 \\");
         # a UTF-16LE class constant and a UTF-7 constant declared after the function
         assertRegex("\n0 UTF-8 !!binary YWI=: try=default eq=default const=utf16-ab\n", out, "UTF-8 ab");
         assertRegex("\n0 UTF-8 !!binary YSs=: try=default eq=default const=" + (have_utf7 ? "utf7-a" : "default")
