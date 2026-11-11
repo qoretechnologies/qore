@@ -704,7 +704,8 @@ public:
     DLLLOCAL void insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
             const std::function<void()>& insert_entry) {
         std::lock_guard<std::mutex> lock(m);
-        insert_entry();
+        // the types are registered first: if that fails, no entry is added (a type registered without an entry is
+        // only an index entry for nothing); if the entry is added, it is always registered
         std::unordered_set<const QoreTypeInfo*>& cache_types = by_cache[cache];
         for (const QoreTypeInfo* ti : types) {
             if (ti && cache_types.insert(ti).second) {
@@ -712,6 +713,7 @@ public:
             }
         }
         empty.store(by_type.empty(), std::memory_order_release);
+        insert_entry();
     }
 
     DLLLOCAL void unregister(QoreGenericTypeCache* cache) {
@@ -746,15 +748,28 @@ public:
             return;
         }
         std::lock_guard<std::mutex> lock(m);
+        // this runs in destructors: if memory cannot be allocated, the entries are left in the caches (their keys
+        // never match a later type), not released
         std::unordered_set<QoreGenericTypeCache*> caches;
+        try {
+            for (const QoreTypeInfo* ti : dead) {
+                auto t = by_type.find(ti);
+                if (t != by_type.end()) {
+                    caches.insert(t->second.begin(), t->second.end());
+                }
+            }
+        } catch (std::bad_alloc&) {
+            return;
+        }
         for (const QoreTypeInfo* ti : dead) {
             auto t = by_type.find(ti);
             if (t == by_type.end()) {
                 continue;
             }
             for (QoreGenericTypeCache* cache : t->second) {
-                caches.insert(cache);
-                by_cache[cache].erase(ti);
+                auto c = by_cache.find(cache);
+                assert(c != by_cache.end());
+                c->second.erase(ti);
             }
             by_type.erase(t);
         }

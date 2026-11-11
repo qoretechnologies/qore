@@ -4214,7 +4214,37 @@ DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti
     (qore_purge_derived_types()) and so runs a cache eviction itself: a specialization's IR or a concrete declaration
     of a generic hashdecl.  Each element releases its object when the list is cleared or destroyed.
 */
-typedef std::vector<std::shared_ptr<const void>> qore_generic_cache_release_list_t;
+class qore_generic_cache_release_list_t {
+public:
+    DLLLOCAL qore_generic_cache_release_list_t() = default;
+    qore_generic_cache_release_list_t(const qore_generic_cache_release_list_t&) = delete;
+    qore_generic_cache_release_list_t& operator=(const qore_generic_cache_release_list_t&) = delete;
+
+    //! Releases everything added, in the order added
+    DLLLOCAL ~qore_generic_cache_release_list_t() {
+        for (auto& i : entries) {
+            i.second(i.first);
+        }
+    }
+
+    //! Adds an object to release with \a release
+    /** Allocates no memory when it fails: the caller removes the entry from its cache only once this has succeeded,
+        so an allocation failure leaves the entry in the cache instead of releasing it under the caller's locks.
+
+        @return true if the object was added, false if no memory could be allocated
+    */
+    DLLLOCAL bool add(void* p, void (*release)(void*)) {
+        try {
+            entries.emplace_back(p, release);
+        } catch (std::bad_alloc&) {
+            return false;
+        }
+        return true;
+    }
+
+private:
+    std::vector<std::pair<void*, void (*)(void*)>> entries;
+};
 
 //! A cache whose keys name types that can be destroyed: the specializations of a generic variant, the concrete
 //! declarations of a generic hashdecl (issue #5765)

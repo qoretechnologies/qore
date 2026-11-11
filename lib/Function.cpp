@@ -5163,6 +5163,40 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
     //    synced);
 }
 
+//! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
+static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bi->helper_ir) {
+                    bi->helper_ir->specialization_owner = s;
+                    qore_mark_specialization_helpers(*bi->helper_ir, s);
+                }
+            } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obei->handler_ir) {
+                    qore_mark_specialization_helpers(*obei->handler_ir, s);
+                }
+            }
+        }
+    }
+}
+
+QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper_ir) {
+    QoreSpecializedIR* s = helper_ir ? helper_ir->specialization_owner : nullptr;
+    if (s) {
+        s->refs.fetch_add(1, std::memory_order_relaxed);
+    }
+    return QoreSpecializedIRRef(s);
+}
+
+void qore_free_specialized_ir(QoreSpecializedIR* s) {
+    qore_live_generic_specializations.fetch_sub(1, std::memory_order_relaxed);
+    delete s->ir;
+    delete s;
+}
+
 UserVariantBase::~UserVariantBase() {
     // issue #5765: no eviction may call the specialization cache once its destruction has started
     if (specialized_ir_registration) {
@@ -6630,11 +6664,11 @@ std::string qore_make_generic_specialization_dispatch_key(
     return key;
 }
 
-std::shared_ptr<const QoreIRFunction> UserVariantBase::getOrCreateSpecializedIR(const char* name,
+QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_instantiation,
         bool raise_on_failure) const {
     if (!statements || !qore_has_generic_specialization_context(receiver_type_info, type_param_instantiation)) {
-        return nullptr;
+        return QoreSpecializedIRRef();
     }
 
     // the call's types are live; the cache is searched with them as they are, without making a key
@@ -6654,7 +6688,7 @@ std::shared_ptr<const QoreIRFunction> UserVariantBase::getOrCreateSpecializedIR(
     std::unique_ptr<QoreIRFunction> ir(lowerIRFunction(name, unique_name, receiver_type_info,
         type_param_instantiation, false, raise_on_failure));
     if (!ir) {
-        return nullptr;
+        return QoreSpecializedIRRef();
     }
     QoreGenericSpecializationKey key(receiver_type_info, type_param_instantiation);
     std::vector<const QoreTypeInfo*> key_types;
@@ -6665,10 +6699,9 @@ std::shared_ptr<const QoreIRFunction> UserVariantBase::getOrCreateSpecializedIR(
     }
     // counted while it lives, for the debug checks of the cache eviction (issue #5765)
     qore_live_generic_specializations.fetch_add(1, std::memory_order_relaxed);
-    std::shared_ptr<const QoreIRFunction> rv(ir.release(), [] (const QoreIRFunction* f) {
-        qore_live_generic_specializations.fetch_sub(1, std::memory_order_relaxed);
-        delete f;
-    });
+    QoreSpecializedIRRef rv(new QoreSpecializedIR(ir.release()));
+    // a thread that runs a background helper of the specialization takes a reference to it
+    qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
     SpecializedIRCache* registration;
     {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
@@ -6677,12 +6710,17 @@ std::shared_ptr<const QoreIRFunction> UserVariantBase::getOrCreateSpecializedIR(
         }
         registration = specialized_ir_registration.get();
     }
+    // if another thread published the specialization first, its IR is kept and this one is freed after the locks are
+    // released
+    QoreSpecializedIRRef loser;
     // issue #5765: the entry is added with the registry locked, so it is removed when one of its types is destroyed
     qore_generic_cache_insert(registration, key_types, [&] () {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
-        // if another thread published the specialization first, its IR is kept and this one is freed
         auto it = specialized_ir_cache.emplace(std::move(key), rv).first;
-        rv = it->second;
+        if (it->second.get() != rv.get()) {
+            loser = std::move(rv);
+            rv = QoreSpecializedIRRef(it->second);
+        }
     });
     return rv;
 }
@@ -6697,7 +6735,13 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
         }
         if (is_dead) {
             // a running call holds its own reference; the IR is freed when the last one is released
-            release.push_back(std::move(i->second));
+            if (!release.add(i->second.getEntry(), [] (void* p) {
+                    qore_release_specialized_ir(static_cast<QoreSpecializedIR*>(p));
+                })) {
+                ++i;
+                continue;
+            }
+            i->second.release();
             i = v.specialized_ir_cache.erase(i);
         } else {
             ++i;
@@ -6885,8 +6929,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         if (qore_has_generic_specialization_context(specialization_receiver_type_info,
                 specialization_type_param_instantiation)) {
             // the call holds the specialization while it runs (issue #5765)
-            std::shared_ptr<const QoreIRFunction> specialized_ir = getOrCreateSpecializedIR(name,
-                specialization_receiver_type_info, specialization_type_param_instantiation, false);
+            QoreSpecializedIRRef specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
+                specialization_type_param_instantiation, false);
             if (specialized_ir) {
                 return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary);
             }

@@ -37,7 +37,7 @@ class GenericCacheReleaseTest inherits QUnit::Test {
             "2>&1", libdir, libdir, qore_bin, mode, get_script_dir()), \status);
         assertEq(0, status, out);
         list<string> lines = (map $1, out.split("\n"), $1 =~ /: /);
-        assertEq(8, lines.size(), out);
+        assertEq(11, lines.size(), out);
         foreach string line in (lines) {
             assertRegex(": ok$", line, line);
         }

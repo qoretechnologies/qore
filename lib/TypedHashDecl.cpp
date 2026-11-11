@@ -392,9 +392,12 @@ void typed_hash_decl_private::ParameterizedHashDeclCache::evictDeadTypes(const s
         if (is_dead) {
             // the cache's reference is released after the locks are released: hash values of the declaration hold
             // their own references, and the last release destroys it, which purges its types
-            release.emplace_back(i->second, [] (const void* p) {
-                typed_hash_decl_private::get(*static_cast<TypedHashDecl*>(const_cast<void*>(p)))->deref();
-            });
+            if (!release.add(i->second, [] (void* p) {
+                    typed_hash_decl_private::get(*static_cast<TypedHashDecl*>(p))->deref();
+                })) {
+                ++i;
+                continue;
+            }
             i = hd.parameterized_hashdecl_cache.erase(i);
         } else {
             ++i;
@@ -428,6 +431,10 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         parse_init_done(old.parse_init_done) {
     type_params = old.type_params;
     parameterized_base = old.parameterized_base;
+    // a copy of a concrete declaration is counted as the destructor uncounts it (issue #5765)
+    if (parameterized_base) {
+        qore_live_parameterized_hashdecls.fetch_add(1, std::memory_order_relaxed);
+    }
     type_args = old.type_args;
     parse_parent = old.parse_parent ? old.parse_parent->copy() : nullptr;
     // copy member list
