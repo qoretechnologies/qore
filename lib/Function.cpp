@@ -4804,6 +4804,18 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
             if (qore_param_names_match_at(bind_sig, sig, supplied)) {
                 continue;
             }
+            // a variant whose parameters at the positions of the arguments only accept no value (type nothing) is
+            // given no value by the call however they are named, so passing the arguments by position gives it the
+            // same arguments as binding them by name (ex: length(nothing str) for length(bin: b) with a *binary b)
+            bool nothing_only = true;
+            for (size_t p = 0, e = supplied.size(); nothing_only && p < e; ++p) {
+                if (supplied[p]) {
+                    nothing_only = p < sig->numParams() && sig->getParamTypeInfo(p) == nothingTypeInfo;
+                }
+            }
+            if (nothing_only) {
+                continue;
+            }
             // run-time resolution passes the arguments by position: can the variant accept them?
             if (sig->numParams() < num_args && !v->hasVarargs() && strict_args) {
                 bool extra = false;
