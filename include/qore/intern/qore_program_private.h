@@ -1799,6 +1799,14 @@ public:
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
+    //! Returns true once the destruction of the Program's data has started (see waitForTerminationAndClear())
+    /** Its threads have ended then, and only the code that runs in the thread that destroys its data can run in it
+    */
+    DLLLOCAL bool dataDestructionStarted() const {
+        AutoLocker al(plock);
+        return ptid != 0;
+    }
+
     //! Returns true if another thread has deleted the Program or is deleting it, so that no new thread can enter it
     /** A deleted Program stays allocated and registered while any thread holds a reference to it: a thread that
         calls one of its functions from another Program holds one until the call has left it (see

@@ -1556,6 +1556,9 @@
       (such as the argument of a @ref map "map" expression) as seconds instead of milliseconds with the \c + operator,
       unlike the \c - operator and the IR, JIT and AOT modes; a \c *timeout operand counts as milliseconds too, in every
       mode, with the \c + and \c - operators (a \c softint or \c int operand is still seconds)
+    - the signal handlers of a deleted @ref Qore::Program "Program" were released after its data, so an object whose
+      last reference a handler's closure held was destroyed without its Program's data, and its destructor could raise
+      \c PROGRAM-ERROR; they are now released first (see @ref signal_handler_program_lifetime)
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the

@@ -136,6 +136,9 @@ class QoreSignalHandler : public CodePgm {
 public:
    enum sh_status_e { SH_OK = 0, SH_InProgress = 1, SH_Delete = 2 };
    sh_status_e status;
+   //! the TID of a thread that waits for the callback of the removed handler to return and releases the handler, or
+   //! -1 (see QoreSignalManager::removeProgramHandlers())
+   int release_tid = -1;
 
    DLLLOCAL void init();
    //! runs the callback with the signal number; the caller holds a reference to the callback
@@ -170,6 +173,16 @@ private:
    bool handler_running = false;
    //! the number of threads waiting for handler_running to be reset; see removeProgramHandlers()
    int idle_waiting = 0;
+   //! handlers removed while their callbacks ran, which the signal thread hands over to the threads whose TIDs are
+   //! given, which wait in removeProgramHandlers() and release them
+   std::vector<std::pair<int, CodePgm>> released_handlers;
+#ifdef DEBUG
+   //! debug builds: the signal thread is held after the next callback has left its Program (see
+   //! dbgHoldAfterCallback())
+   bool dbg_hold_armed = false;
+   //! debug builds: the signal thread is held
+   bool dbg_held = false;
+#endif
 
    //! resets handler_running and wakes the threads waiting for it; the mutex must be held
    DLLLOCAL void setHandlerIdleUnlocked() {
@@ -243,6 +256,16 @@ public:
        of their code while it does
    */
    DLLLOCAL void removeProgramHandlers(const std::vector<QoreProgram*>& pgms, ExceptionSink* xsink);
+#ifdef DEBUG
+   //! debug builds: holds the signal thread after the next callback has left its Program, until a thread waits for
+   //! it in removeProgramHandlers() (the deletion of the callback's Program, for example), at most 30 seconds
+   /** For the tests of a handler whose callback finishes in the signal thread while its Program is deleted (issue
+       #5766)
+   */
+   DLLLOCAL void dbgHoldAfterCallback();
+   //! debug builds: waits until the signal thread is held by dbgHoldAfterCallback(); returns false on timeout
+   DLLLOCAL bool dbgWaitHeldAfterCallback(int timeout_ms);
+#endif
    DLLLOCAL const char* getSignalName(int sig);
    DLLLOCAL void signal_handler_thread();
    DLLLOCAL void lock_idle();
