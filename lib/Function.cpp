@@ -7711,11 +7711,48 @@ AbstractFunctionSignature* QoreFunction::parseGetUniqueSignature() const {
     return nullptr;
 }
 
-void QoreFunction::resolvePendingSignatures() {
+namespace {
+//! sets the parse context of a plain function while its signature or body is parse-initialized
+/** No class context, the function's namespace context, and a new local variable frame, so that the code of the
+    function (its default argument values and its body) sees neither the class nor the local variables of the code
+    that references it first (issue #5749)
+*/
+class QorePlainFunctionParseContextHelper {
+public:
+    explicit QorePlainFunctionParseContextHelper(qore_ns_private* ns) {
+        thread_set_class_and_ns(nullptr, ns ? ns : parse_get_ns(), old_cls, old_ns);
+    }
+
+    ~QorePlainFunctionParseContextHelper() {
+        thread_set_class_and_ns(old_cls, old_ns);
+    }
+
+private:
+    const qore_class_private* old_cls;
+    qore_ns_private* old_ns;
+    //! hides the local variables of the code that references the function (restored after)
+    LVarStackBreakHelper lsbh;
+    //! the local variable frame of the function's code, from which only the Program's top-level variables, which
+    //! have global scope, are visible, as for the function's body
+    VariableBlockHelper vbh;
+};
+}
+
+void QoreFunction::resolvePendingSignatures(qore_ns_private* ns) {
     if (!check_parse) {
         return;
     }
+    if (!getClass()) {
+        // issue #5749: a plain function's default argument values are resolved in its own context, not in that of
+        // the code that references it first (ex: a call in a method's body)
+        QorePlainFunctionParseContextHelper pch(ns);
+        resolvePendingSignaturesIntern();
+        return;
+    }
+    resolvePendingSignaturesIntern();
+}
 
+void QoreFunction::resolvePendingSignaturesIntern() {
     const QoreTypeInfo* ti = nullptr;
 
     for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
@@ -7803,24 +7840,6 @@ void QoreFunction::parseCommit() {
 
 void QoreFunction::parseRollback() {
     // noop: object will be destroyed
-}
-
-namespace {
-//! sets no class context and the namespace context of a plain function while its body is parse-initialized
-class QorePlainFunctionParseContextHelper {
-public:
-    explicit QorePlainFunctionParseContextHelper(qore_ns_private* ns) {
-        thread_set_class_and_ns(nullptr, ns ? ns : parse_get_ns(), old_cls, old_ns);
-    }
-
-    ~QorePlainFunctionParseContextHelper() {
-        thread_set_class_and_ns(old_cls, old_ns);
-    }
-
-private:
-    const qore_class_private* old_cls;
-    qore_ns_private* old_ns;
-};
 }
 
 int QoreFunction::parseInit(qore_ns_private* ns) {

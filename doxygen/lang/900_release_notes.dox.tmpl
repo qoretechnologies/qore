@@ -2194,9 +2194,10 @@
       the classes, constants, hashdecls, enums and namespaces that the failed parse had declared, so a new parse could
       not declare them again
     - a function first referenced in a method (a call, also in a member initializer, default argument or closure)
-      was parse-initialized in the method's class context, so its body could call the class's private methods or
-      use its private inheritance, and the function could then be called from anywhere; a function's body is now
-      always outside every class (see @ref private_methods)
+      was parse-initialized in the method's class context and local variables, so its body and its default argument
+      values could call the class's private methods, use its private inheritance or read the method's local
+      variables, and the function could then be called from anywhere; a function's code is now always outside every
+      class (see @ref private_methods)
 
     @section qore_2_2_1 Qore 2.2.1
 

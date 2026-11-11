@@ -96,6 +96,26 @@ class FunctionBodyClassContextTest inherits QUnit::Test {
                     "C::run();\n",
                 "err": Unresolved,
             ),
+            # the callee's own default argument: resolved in the function's context, not the caller's
+            "callee-default-argument": (
+                "src": "class C {\n"
+                    "    private static int psm() { return 2; }\n"
+                    "    static run() { printf(\"%y\\n\", fd()); }\n"
+                    "}\n"
+                    "int sub fd(int x = C::psm()) { return x; }\n"
+                    "C::run();\n"
+                    "printf(\"top %y\\n\", fd());\n",
+                "err": Unresolved,
+            ),
+            # the callee's default argument does not see the local variables of the method that calls it first
+            "callee-default-argument-local": (
+                "src": "class C {\n"
+                    "    static run() { string secret = \"s\"; printf(\"%y\\n\", fs()); }\n"
+                    "}\n"
+                    "string sub fs(string x = secret) { return x; }\n"
+                    "C::run();\n",
+                "err": "PARSE-EXCEPTION: cannot resolve bareword 'secret'",
+            ),
             # the first reference is in a closure in a method, which has the class context of the method
             "closure-in-method": (
                 "src": "class C {\n"
@@ -131,13 +151,14 @@ class FunctionBodyClassContextTest inherits QUnit::Test {
         #! a script that must run: what keeps its context
         const Working = "namespace N {\n"
             "    const K = 1;\n"
-            "    public int sub nf() { return K; }\n"
+            "    public int sub nf(int k = K) { return k; }\n"
             "}\n"
             "namespace M {\n"
             "    const K = 2;\n"
             "    class C {\n"
             "        private static int psm() { return 3; }\n"
-            # a function called first from a method is parse-initialized in its own namespace
+            # a function called first from a method is parse-initialized in its own namespace, also its default
+            # argument values
             "        static int runf() { return N::nf(); }\n"
             # a closure keeps the class context of the method that it is in
             "        static int runc() { code c = int sub () { return C::psm(); }; return c(); }\n"

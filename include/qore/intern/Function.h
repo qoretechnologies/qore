@@ -1802,7 +1802,12 @@ public:
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
-    DLLLOCAL void resolvePendingSignatures();
+    //! resolves the signatures of the pending variants
+    /** A plain function's signatures (their default argument values) are resolved with no class context, a new local
+        variable frame and \a ns (or the current namespace if \a ns is nullptr) as the namespace context, as its body
+        is (see parseInit(); issue #5749)
+    */
+    DLLLOCAL void resolvePendingSignatures(qore_ns_private* ns = nullptr);
 
     DLLLOCAL AbstractFunctionSignature* getUniqueSignature() const {
         return vlist.singular() ? first()->getSignature() : 0;
@@ -1842,8 +1847,8 @@ public:
 
     //! parse-initializes the pending variants of a function or a method
     /** A method's body is parse-initialized in the class context that the caller sets.  A plain function's body is
-        always parse-initialized with no class context and with \a ns (or the current namespace if \a ns is nullptr)
-        as the namespace context, whatever triggers it: a call to it may be the first reference to it, in the body of
+        always parse-initialized with no class context, a new local variable frame and with \a ns (or the current
+        namespace if \a ns is nullptr) as the namespace context, whatever triggers it: a call to it may be the first reference to it, in the body of
         a method, and its body must not get the class's access to its private members (issue #5749).  Closures, which
         keep the class context of the code they are in, use UserClosureFunction::parseInitClosure() instead.
     */
@@ -2024,6 +2029,9 @@ public:
 protected:
     //! parse-initializes the pending variants in the thread's current parse context; see parseInit()
     DLLLOCAL int parseInitIntern(qore_ns_private* ns);
+
+    //! resolves the signatures of the pending variants in the thread's current parse context
+    DLLLOCAL void resolvePendingSignaturesIntern();
 
     std::string name;
 

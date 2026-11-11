@@ -629,7 +629,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // resolves pending signatures unconditionally
     if (func) {
-        func->resolvePendingSignatures();
+        func->resolvePendingSignatures(func->getClass() ? nullptr : ns);
 
         // initialize function or class immediately for possible error messages later (also in case of constant
         // expressions for immediate evaluation)
