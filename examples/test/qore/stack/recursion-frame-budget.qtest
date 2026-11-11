@@ -1,0 +1,262 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RecursionFrameBudgetTest
+
+/*  The stack that one level of a recursion of interpreted code uses (issue #5852).
+
+    Each level of a recursion of a function or method puts the frames of the whole call path on the thread's stack
+    (for IR execution: the IR interpreter, the call helpers, the variant's evaluation); a deep recursion on Alpine
+    (musl, 8 MB thread stacks) runs out of stack first, and any growth of a frame on that path costs its size at every
+    level.  This test measures the bytes per level of a recursion of a function, a method and a static method in the
+    AST and IR execution modes, and fails when it exceeds the budget of the build.
+
+    The bytes per level are measured as a difference: the recursion runs until STACK-LIMIT-EXCEEDED in a thread with
+    a 4 MB stack and in one with an 8 MB stack, so (8 MB - 4 MB) / (depth8 - depth4) is the stack of one level, free
+    of the stack guard, of the thread's start and of the frames below the recursion.  What remains depends on the
+    compiler, its optimization level and the C library's headers (in a release build, the frame of the IR
+    interpreter is about 2.4 KB larger with musl than with glibc, with the same GCC version): the budgets are for
+    GCC on x86_64 Linux with glibc (Ubuntu) and with musl (Alpine), each with a release build (-O3) and a debug
+    build (-Og, as CI builds Qore).  They are 5-7% over the measured values, but never more than 400 bytes, so that
+    a frame of 528 bytes more at each level (an array in a frame of the IR interpreter, as 13281fbbd7 added) fails
+    here.  On any other compiler, CPU or C library the values are reported but not checked, as they are in sanitizer
+    builds, whose stack redzones make every frame larger.
+
+    tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
+    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
+*/
+
+public class RecursionFrameBudgetTest inherits QUnit::Test {
+    public {
+        #! the code of the recursions; each records its depth in maxdepth before it recurses
+        const Code = "%modern
+our int maxdepth;
+int sub frec(int n) { maxdepth = n; return frec(n + 1); }
+public class C {
+    public int m(int n) { maxdepth = n; return m(n + 1); }
+    public static int s(int n) { maxdepth = n; return C::s(n + 1); }
+}
+int sub method_rec(int n) { C c(); return c.m(n); }
+int sub static_rec(int n) { return C::s(n); }
+# returns the depth that the recursion reached when it ran out of stack
+int sub run(string f) {
+    maxdepth = 0;
+    try {
+        call_function(f, 0);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"STACK-LIMIT-EXCEEDED\") {
+            rethrow;
+        }
+    }
+    return maxdepth;
+}
+";
+
+        #! the recursions measured: the function that the recursion runs in the Program -> the label
+        const Recursions = {
+            "frec": "function",
+            "method_rec": "method",
+            "static_rec": "static method",
+        };
+
+        #! the execution modes measured
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+        };
+
+        #! the two stack sizes of the measurement
+        const SmallStack = 4 * 1024 * 1024;
+        const LargeStack = 8 * 1024 * 1024;
+
+        #! the budgets in bytes per level: C library and build type -> execution mode -> recursion
+        /** measured with GCC 15.2 on x86_64; see the comment at the top
+        */
+        const Budgets = {
+            # measured: ast 2783, 2590, 2641; ir 4355, 5489, 4396
+            "glibc release": {
+                "ast": {"function": 2980, "method": 2780, "static method": 2830},
+                "ir": {"function": 4650, "method": 5850, "static method": 4700},
+            },
+            # measured: ast 2766, 2702, 2624; ir 4369, 5857, 4369
+            "glibc debug": {
+                "ast": {"function": 2960, "method": 2890, "static method": 2810},
+                "ir": {"function": 4670, "method": 6250, "static method": 4670},
+            },
+            # measured: ast 2783, 2592, 2639; ir 6765, 7928, 6820
+            "musl release": {
+                "ast": {"function": 2980, "method": 2780, "static method": 2830},
+                "ir": {"function": 7165, "method": 8328, "static method": 7220},
+            },
+            # measured: ast 2766, 2704, 2623; ir 4369, 5857, 4369
+            "musl debug": {
+                "ast": {"function": 2960, "method": 2890, "static method": 2810},
+                "ir": {"function": 4670, "method": 6250, "static method": 4670},
+            },
+        };
+    }
+
+    constructor() : Test("RecursionFrameBudgetTest", "1.0") {
+        addTestCase("bytes per level of a recursion of interpreted code", \testBytesPerLevel());
+        addTestCase("measurement", \testMeasurement());
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        if (!Option::HAVE_MANAGE_STACK) {
+            testSkip("this platform cannot set the stack size of new threads");
+        }
+    }
+
+    #! returns the build type of the budgets: "debug" for a library built with debugging, otherwise "release"
+    static string getBuildType() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? "debug" : "release";
+    }
+
+    #! returns the C library of the process ("glibc" or "musl") or nothing if it is neither or cannot be determined
+    static *string getLibc() {
+        if (!is_readable("/proc/self/maps")) {
+            return;
+        }
+        string maps = File::readTextFile("/proc/self/maps");
+        if (maps =~ /\/ld-musl-[^\/]*\.so/) {
+            return "musl";
+        }
+        if (maps =~ /\/libc\.so\.6/) {
+            return "glibc";
+        }
+    }
+
+    #! returns why the budgets do not apply to this build, or nothing if they do
+    static *string getUncalibratedReason() {
+        if (Qore::Compiler != "GNU") {
+            return sprintf("the budgets are for GCC, and this library was built with %y", Qore::Compiler);
+        }
+        if (Qore::PlatformCPU != "x86_64" || Qore::PlatformOS != "Linux") {
+            return sprintf("the budgets are for x86_64 Linux, and this is %s %s", Qore::PlatformCPU,
+                Qore::PlatformOS);
+        }
+        if (!getLibc()) {
+            return "the budgets are for glibc and musl, and the C library of this process is neither";
+        }
+        # a sanitizer's runtime is loaded into a sanitizer build, whose frames have redzones
+        string maps = File::readTextFile("/proc/self/maps");
+        *list<string> sanitizer = (maps =~ x/(lib[a-z]*san)\b/);
+        if (sanitizer) {
+            return sprintf("a sanitizer runtime (%s) is loaded, and its stack redzones make frames larger",
+                sanitizer[0]);
+        }
+    }
+
+    #! returns the depth that a recursion reaches before it runs out of stack in a thread with the given stack size
+    int getDepth(Program pgm, string func, int stack_size) {
+        int old_size = get_default_thread_stack_size();
+        on_exit set_default_thread_stack_size(old_size);
+        set_default_thread_stack_size(stack_size);
+        Queue q();
+        background sub () {
+            try {
+                q.push(pgm.callFunction("run", func));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        auto rv = q.get();
+        if (rv instanceof hash<ExceptionInfo>) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    #! measures the recursions in an execution mode: recursion label -> {"small": depth, "large": depth, "bpl": bytes}
+    hash<string, hash<auto>> measure(ExecMode mode) {
+        Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+        pgm.setExecMode(mode);
+        pgm.parse(Code, "recursion-frame-budget");
+        pgm.run();
+        hash<string, hash<auto>> rv = {};
+        foreach hash<auto> i in (Recursions.pairIterator()) {
+            int small = getDepth(pgm, i.key, SmallStack);
+            int large = getDepth(pgm, i.key, LargeStack);
+            assertGt(small, large, sprintf("%s: depth with %d bytes > depth with %d bytes", i.value, LargeStack,
+                SmallStack));
+            int bpl = large > small ? (LargeStack - SmallStack) / (large - small) : 0;
+            rv{i.value} = {"small": small, "large": large, "bpl": bpl};
+        }
+        return rv;
+    }
+
+    testBytesPerLevel() {
+        *string reason = getUncalibratedReason();
+        string build_type = sprintf("%s %s", getLibc() ?? "unknown libc", getBuildType());
+        # every recursion is measured before the check, so that a failure reports all of them
+        list<string> over = ();
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            hash<string, hash<auto>> r = measure(m.value);
+            foreach hash<auto> i in (r.pairIterator()) {
+                int budget = Budgets{build_type}{m.key}{i.key} ?? 0;
+                string msg = sprintf("%s %s recursion, %s build: %d bytes per level (budget %d; depth %d with a "
+                    "%d MB stack)", m.key, i.key, build_type, i.value.bpl, budget, i.value.large,
+                    LargeStack / 1024 / 1024);
+                if (m_options.verbose || reason) {
+                    printf("%s\n", msg);
+                }
+                if (!reason && i.value.bpl > budget) {
+                    over += msg;
+                }
+            }
+        }
+        if (reason) {
+            testSkip("the bytes per level are reported, not checked: " + reason);
+        }
+        # a frame on the call path grew: see tools/stack-usage-budgets.txt for the frames and what to do
+        assertEq((), over, "recursions over their budget of bytes per level");
+    }
+
+    #! the measurement itself: each recursion runs out of stack at a depth that grows with the stack
+    testMeasurement() {
+        Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+        pgm.setExecMode(EM_IR);
+        pgm.parse(Code, "recursion-frame-budget");
+        pgm.run();
+        int d1 = getDepth(pgm, "frec", 1024 * 1024);
+        int d2 = getDepth(pgm, "frec", 2 * 1024 * 1024);
+        # a level uses at least a few hundred bytes and no more than 64 KB in any build
+        assertGt(16, d1);
+        assertLt(1024 * 1024 / 256, d1);
+        # twice the stack holds about twice the levels: the part below the recursion is a fraction of a megabyte
+        assertGt(d1 * 3 / 2, d2);
+        assertLt(d1 * 5 / 2, d2);
+        # an error other than running out of stack is not taken for the end of the recursion
+        assertThrows("NO-FUNCTION", \pgm.callFunction(), ("run", "frec_missing"));
+    }
+}

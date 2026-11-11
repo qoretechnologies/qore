@@ -93,6 +93,10 @@ option(QORE_BUILD_WITH_EXTERNAL_MODULES
        "Allow installed Qore modules to provide optional features in build outputs"
        ON)
 
+option(QORE_STACK_USAGE_REPORT
+       "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
+       OFF)
+
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
        OFF)
@@ -2726,6 +2730,27 @@ endif (APPLE)
 if (ADDRESS_SANITIZER)
     target_compile_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+# The frame sizes of libqore's functions for tools/check-stack-usage.py, which checks the per-call path of interpreted
+# code against tools/stack-usage-budgets.txt (issue #5852): -fstack-usage writes a .su file next to each object and
+# does not change the generated code.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the
+# AOT identity (qcc-format-config.txt).
+if (QORE_STACK_USAGE_REPORT)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "QORE_STACK_USAGE_REPORT needs a compiler with -fstack-usage (GCC or Clang), not "
+            "${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    target_compile_options(libqore PRIVATE -fstack-usage)
+    # the target triple names the C library (x86_64-linux-gnu, x86_64-alpine-linux-musl), whose headers change frames
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE _qore_stack_usage_target
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
+        "# written by CMake for tools/check-stack-usage.py\n"
+        "compiler=${CMAKE_CXX_COMPILER_ID}\n"
+        "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
+        "build-type=${CMAKE_BUILD_TYPE}\n"
+        "target=${_qore_stack_usage_target}\n")
 endif()
 
 # prepare qore target

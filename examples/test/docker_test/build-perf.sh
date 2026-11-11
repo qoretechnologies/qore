@@ -112,11 +112,16 @@ cd build
 # the qmod build cache, when the job has one (see qmod-cache.sh)
 . "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
 qore_qmod_cache_setup "${QORE_SRC_DIR}"
+# QORE_STACK_USAGE_REPORT: libqore's frame sizes for the stack usage check below (it does not change the code)
 cmake .. -DCMAKE_BUILD_TYPE=Release -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
+    -DQORE_STACK_USAGE_REPORT=ON ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 PERF_TARGETS=$(cd ${QORE_SRC_DIR} && python3 -I test/docker_test/perf-build-targets.py build ${PERF_TESTS})
 echo "-- targets: ${PERF_TARGETS} --"
 make -j${MAKE_JOBS} ${PERF_TARGETS}
+# the frames of the per-call path of interpreted code against their budgets: each byte more is a byte more at each
+# level of a recursion (issue #5852); this is the release build with the compiler the budgets are calibrated for
+echo && echo "-- checking the stack frames of the call path (tools/stack-usage-budgets.txt) --"
+python3 -I ${QORE_SRC_DIR}/tools/check-stack-usage.py ${QORE_SRC_DIR}/build
 # the guard checks the qmods this build made, which are only those of the targets above
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
