@@ -254,6 +254,71 @@ sub map_dtor_raises() {
     out("map dtor raises", log);
 }
 
+# a temporary of the expression of a map over an iterator, used as an expression, in a block with a local
+sub map_iterator_temp_local() {
+    Log log();
+    try {
+        {
+            Holder loc(log, "local");
+            list<int> r = map (new Holder(log, "t" + $1)).n.size() + 10 / idiv($1), new It(log);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    out("map iterator temp local", log);
+}
+
+# foldl and foldr whose code is delegated to the AST interpreter raise: $1 and $2 are restored before the handler, and
+# the elements are released before it
+sub foldl_raises() {
+    Log log();
+    try {
+        auto r = foldl (exists (fail_on($2, "h2") ?? NOTHING)) ? $1 : $2, holders(log, 3);
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldl raises", log);
+}
+
+sub foldr_raises() {
+    Log log();
+    try {
+        auto r = foldr (exists (fail_on($2, "h1") ?? NOTHING)) ? $1 : $2, holders(log, 3);
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldr raises", log);
+}
+
+# a hash map and a hash map-select over an iterator release the iterator before the handler
+sub hash_map_iterator() {
+    Log log();
+    try {
+        hash<auto> r = map {string($1): 10 / idiv($1)}, new It(log);
+        log.add("r " + r.size());
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("hash map iterator", log);
+}
+
+sub hash_map_select_iterator() {
+    Log log();
+    try {
+        hash<auto> r = map {string($1): 10 / idiv($1)}, new It(log), $1 > 0;
+        log.add("r " + r.size());
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("hash map select iterator", log);
+}
+
 sub main() {
     map_list();
     select_list();
@@ -265,6 +330,11 @@ sub main() {
     map_statement_iterator();
     map_statement_try();
     map_dtor_raises();
+    map_iterator_temp_local();
+    foldl_raises();
+    foldr_raises();
+    hash_map_iterator();
+    hash_map_select_iterator();
 }
 
 main();
