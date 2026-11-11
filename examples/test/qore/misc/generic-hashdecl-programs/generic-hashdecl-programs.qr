@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The fixture of generic-hashdecl-programs.qtest: a generic hashdecl of a library Program is instantiated at run time
+# for classes of a series of Programs, each destroyed after its calls; every instantiation must be the declaration for
+# its own Program's class, never the one made for a destroyed Program's class, whose type a later class can be given
+# the address of.  The type arguments are the Program's class, hashdecl and enum, their or-nothing types, and derived
+# types naming them, also nested in a concrete declaration; and threads of each Program make the same declarations
+# at the same time, so one thread's declaration is published and the others are released.  Prints one line per
+# execution mode.
+
+%modern
+%no-child-restrictions
+
+#! the number of Programs created and destroyed behind the library Program in each mode
+const Generations = 200;
+
+#! the number of the first Programs in each mode that also make the declarations of ExtendedSource
+/** Their compilation dominates the run time in the jit and tiered modes, so the later Programs have SimpleSource.
+*/
+const ExtendedGenerations = 12;
+
+#! the number of threads of each Program that make the same declarations at the same time
+const RaceThreads = 8;
+
+#! the library Program's generic hashdecl, instantiated at run time by its generic functions for the caller's types
+const LibrarySource = "%modern
+public hashdecl CachePair<T> {
+    T value;
+}
+
+public auto sub make_pair<T>(T v) {
+    hash<CachePair<T>> h((\"value\": v));
+    return h;
+}
+
+public auto sub make_nested<T>(T v) {
+    hash<CachePair<T>> i((\"value\": v));
+    hash<CachePair<hash<CachePair<T>>>> h((\"value\": i));
+    return h;
+}
+
+public auto sub make_list<T>(T v) {
+    hash<CachePair<list<T>>> h((\"value\": (v,)));
+    return h;
+}
+
+sub export_to(Program pgm) {
+    pgm.importFunction(\"make_pair\");
+    pgm.importFunction(\"make_nested\");
+    pgm.importFunction(\"make_list\");
+}
+";
+
+#! the source of the later Programs; @ID@ is replaced with the Program's number
+const SimpleSource = "%modern
+class Foo@ID@ {
+    public {
+        int value = @ID@;
+    }
+}
+
+list<string> sub run() {
+    auto h = make_pair<Foo@ID@>(new Foo@ID@());
+    return (sprintf(\"%s %d\", h.fullType(), h.value.value),);
+}
+";
+
+#! the source of the first Programs; @ID@ is replaced with the Program's number
+const ExtendedSource = "%modern
+class Foo@ID@ {
+    public {
+        int value = @ID@;
+    }
+}
+
+hashdecl H@ID@ {
+    int value = @ID@;
+}
+
+enum E@ID@ {
+    A@ID@ = @ID@
+}
+
+# the type of each declaration with the value of the Program's class, hashdecl or enum that it holds
+list<string> sub run() {
+    list<string> rv = ();
+    auto h = make_pair<Foo@ID@>(new Foo@ID@());
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value.value);
+    h = make_pair<*Foo@ID@>(new Foo@ID@());
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value.value);
+    h = make_pair<hash<H@ID@>>(hash<H@ID@>{});
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value.value);
+    h = make_pair<*hash<H@ID@>>(hash<H@ID@>{});
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value.value);
+    h = make_pair<E@ID@>(E@ID@::A@ID@);
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value);
+    h = make_nested<Foo@ID@>(new Foo@ID@());
+    push rv, sprintf(\"%s %s %d\", h.fullType(), h.value.fullType(), h.value.value.value);
+    h = make_list<Foo@ID@>(new Foo@ID@());
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value[0].value);
+    h = make_pair<list<hash<H@ID@>>>((hash<H@ID@>{},));
+    push rv, sprintf(\"%s %d\", h.fullType(), h.value[0].value);
+    return rv;
+}
+
+# the declarations made by threads at the same time, as each thread got them; also the thread's error, if any
+list<string> sub race() {
+    Counter start(1);
+    Counter done(@THREADS@);
+    Mutex lock();
+    list<string> rv = ();
+    for (int i = 0; i < @THREADS@; ++i) {
+        background sub () {
+            on_exit done.dec();
+            string result;
+            try {
+                start.waitForZero();
+                result = make_pair<Foo@ID@>(new Foo@ID@()).fullType() + \" \"
+                    + make_pair<hash<H@ID@>>(hash<H@ID@>{}).fullType() + \" \"
+                    + make_pair<E@ID@>(E@ID@::A@ID@).fullType() + \" \"
+                    + make_nested<Foo@ID@>(new Foo@ID@()).fullType();
+            } catch (hash<ExceptionInfo> ex) {
+                result = sprintf(\"%s: %s\", ex.err, ex.desc);
+            }
+            lock.lock();
+            on_exit lock.unlock();
+            push rv, result;
+        }();
+    }
+    start.dec();
+    done.waitForZero();
+    return rv;
+}
+";
+
+#! Returns the results that run() in the Program with the given number must return
+list<string> sub expected_run(int id) {
+    if (id >= ExtendedGenerations) {
+        return (sprintf("hash<CachePair<object<Foo%d>>> %d", id, id),);
+    }
+    return (
+        sprintf("hash<CachePair<object<Foo%d>>> %d", id, id),
+        sprintf("hash<CachePair<*object<Foo%d>>> %d", id, id),
+        sprintf("hash<CachePair<hash<H%d>>> %d", id, id),
+        sprintf("hash<CachePair<*hash<H%d>>> %d", id, id),
+        sprintf("hash<CachePair<enum<E%d>>> %d", id, id),
+        sprintf("hash<CachePair<hash<CachePair<object<Foo%d>>>>> hash<CachePair<object<Foo%d>>> %d", id, id, id),
+        sprintf("hash<CachePair<list<object<Foo%d>>>> %d", id, id),
+        sprintf("hash<CachePair<list<hash<H%d>>>> %d", id, id),
+    );
+}
+
+#! Returns the result that each thread of race() in the Program with the given number must return
+string sub expected_race(int id) {
+    return sprintf("hash<CachePair<object<Foo%d>>> hash<CachePair<hash<H%d>>> hash<CachePair<enum<E%d>>> "
+        "hash<CachePair<hash<CachePair<object<Foo%d>>>>>", id, id, id, id);
+}
+
+#! Runs the calls of the Programs in one execution mode and returns the errors
+list<string> sub run_mode(ExecMode mode) {
+    list<string> errors = ();
+    Program lib(PO_NO_CHILD_PO_RESTRICTIONS);
+    lib.setExecMode(mode);
+    lib.parse(LibrarySource, "generic-hashdecl-library");
+    for (int id = 0; id < Generations; ++id) {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.setExecMode(mode);
+        lib.callFunction("export_to", pgm);
+        # each Program's types have names of their own, so their declarations are named after them
+        bool extended = id < ExtendedGenerations;
+        pgm.parse(replace(replace(extended ? ExtendedSource : SimpleSource, "@ID@", string(id)), "@THREADS@",
+            string(RaceThreads)), sprintf("generic-hashdecl-user-%d", id));
+        try {
+            if (extended) {
+                # the threads make the declarations first, so they are not yet in the cache
+                list<string> race_results = pgm.callFunction("race");
+                list<string> race_expected = map expected_race(id), xrange(RaceThreads);
+                if (race_results != race_expected) {
+                    push errors, sprintf("Program %d race: %y; expected %y", id, race_results, race_expected);
+                }
+            }
+            list<string> actual = pgm.callFunction("run");
+            list<string> expected = expected_run(id);
+            if (actual != expected) {
+                push errors, sprintf("Program %d: %y; expected %y", id, actual, expected);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push errors, sprintf("Program %d: %s: %s", id, ex.err, ex.desc);
+        }
+        # the Program and its types are destroyed here; the library's generic hashdecl remains
+        delete pgm;
+    }
+    return errors;
+}
+
+foreach hash<auto> m in (("name": "ast", "mode": EM_AST), ("name": "ir", "mode": EM_IR), ("name": "jit", "mode": EM_JIT),
+        ("name": "tiered", "mode": EM_TIERED)) {
+    list<string> errors = run_mode(m.mode);
+    printf("%s: %s\n", m.name, errors ? sprintf("%d errors, first: %s", errors.size(), errors[0]) : "ok");
+}
