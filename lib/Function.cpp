@@ -3866,6 +3866,21 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant);
 }
 
+//! Returns the return type of the chosen variant of a call that is resolved at run time, for the union of the return
+//! types of the variants that it can be resolved to (QoreFunction::parseOtherVariantMayMatch())
+/** The type parameters of a generic variant are substituted with the instantiation of the call and its receiver,
+    which the deferred call does not keep; a return type with a type parameter that cannot be substituted gives no type
+*/
+static const QoreTypeInfo* qore_deferred_chosen_return_type(const AbstractQoreFunctionVariant* chosen,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    const QoreTypeInfo* rt = chosen->parseGetReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt)) {
+        return rt;
+    }
+    rt = qore_substitute_type_params_if_needed(rt, receiver_type_info, type_param_inst);
+    return qore_type_contains_type_parameter(rt) ? nullptr : rt;
+}
+
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
         int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info,
@@ -4332,7 +4347,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         binding.variant = variant;
         // a variant is committed only when no other variant with the same parameter names could be resolved at run
         // time (see parseFindVariant())
-        const QoreTypeInfo* union_rt = nullptr;
+        const QoreTypeInfo* union_rt = deferred_rt
+            ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
         if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied,
                 deferred_rt ? &union_rt : nullptr)) {
             printd(5, "QoreFunction::parseFindVariantNamed() %s(): another variant could match at run time\n",
@@ -4665,7 +4681,7 @@ static bool qore_param_names_match_at(const AbstractFunctionSignature* a, const 
     return true;
 }
 
-//! Returns the type of a value of either type, or nullptr if there is none that is narrower than any value
+//! Returns the type that covers a value of either type for the cases below, or nullptr for any other combination
 /** The types are the return types of the variants that a call can be resolved to at run time: equal types, or one
     type and no value (\c nothing or the or-nothing type of the other: a variant for no value), give a type; any other
     combination gives none
@@ -4695,9 +4711,7 @@ static const QoreTypeInfo* qore_union_return_type(const QoreTypeInfo* a, const Q
 bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, QoreParseOptions po, const arg_value_vec_t* args_with_value,
         const std::vector<bool>* named_positions, const QoreTypeInfo** union_rt) const {
-    if (union_rt) {
-        *union_rt = chosen->parseGetReturnTypeInfo();
-    }
+    // *union_rt starts as the return type of the chosen variant (qore_deferred_chosen_return_type())
     bool found = false;
     unsigned num_args = argTypeInfo.size();
     AbstractFunctionSignature* chosen_sig = chosen->getSignature();
@@ -5244,7 +5258,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     }
     // a variant is committed only when no other variant could be resolved at run time; an argument can have no
     // value then whatever its type (issue #5686)
-    const QoreTypeInfo* union_rt = nullptr;
+    const QoreTypeInfo* union_rt = deferred_rt && variant
+        ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
     if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value,
             nullptr, deferred_rt ? &union_rt : nullptr)) {
         printd(5, "QoreFunction::parseFindVariant() %s(): another variant could match at run time\n", getName());

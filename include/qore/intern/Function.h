@@ -2213,9 +2213,9 @@ public:
 
         @param args_with_value if given, true for each argument whose expression always has a value of its type (see
         parse_arg_always_has_value()); such an argument cannot select another variant by having no value
-        @param union_rt if given, set to the return type that covers the given variant and every other variant that
-        could be resolved at run time (qore_union_return_type()), or nullptr if there is no such type; all of the
-        variants are then checked
+        @param union_rt if given, it gives the return type of the given variant (nullptr if it has none that the call
+        can have), and is set to the return type that covers it and every other variant that could be resolved at run
+        time (qore_union_return_type()), or nullptr if there is no such type; all of the variants are then checked
     */
     DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
             const qore_class_private* class_ctx, QoreParseOptions po,
