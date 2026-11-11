@@ -105,7 +105,8 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         const QoreTypeInfo* implicitArgType =
             QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
 
-        ParseImplicitArgTypeHelper pia(implicitArgType);
+        // $2 is the next element (see evalImpl())
+        ParseImplicitArgTypeHelper pia(implicitArgType, implicitArgType);
         // a fold does not set $#, which is unset in its expression, also in the per-element code of an enclosing
         // operator or foreach statement (qore#5690)
         QoreParseContextFlagHelper element_flag(parse_context);

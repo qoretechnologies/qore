@@ -58,9 +58,17 @@ int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
 }
 
 const QoreTypeInfo* QoreImplicitArgumentNode::getTypeInfo() const {
-    // the implicit argument type is the type of the element that an operator gives its code as $1; $2 and the
-    // following arguments, and the $argv list, are not that element, so their type is not known at parse time
-    return offset ? nullptr : parse_get_implicit_arg_type_info();
+    // $1 has the type of the element that an operator gives its code, and $2 that of the next element that foldl and
+    // foldr give their code (ParseImplicitArgTypeHelper); the following arguments and the $argv list have no
+    // parse-time type
+    switch (offset) {
+        case 0:
+            return parse_get_implicit_arg_type_info();
+        case 1:
+            return parse_get_implicit_arg2_type_info();
+        default:
+            return nullptr;
+    }
 }
 
 const QoreValue QoreImplicitArgumentNode::get() const {
