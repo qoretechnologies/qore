@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: parent - the checks run in Programs created by the test, each set to the execution mode of its test case
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
