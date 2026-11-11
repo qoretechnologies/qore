@@ -1,0 +1,260 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 server writes to a non-blocking socket that a peer does not read
+
+/*  Http2SendBufferBound.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5819: the HTTP/2 server took all the output of nghttp2 into its send buffer whether or not the socket could
+    take it, so the data held for a peer that does not read was limited only by the flow-control window that the
+    peer grants.  The output is now taken only up to a high-water mark of unwritten data, and the rest stays in the
+    streams' pending data, where the per-stream limits apply.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+
+%exec-class Http2SendBufferBoundTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The size of each write
+const ChunkSize = 32768;
+
+#! The data written to the non-reading peer before its stream must report a full buffer (a hang guard: 256 MiB)
+const MaxBytes = 256 * 1024 * 1024;
+
+#! The body size of the large response
+const BigBody = 8 * 1024 * 1024;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Returns a serialized HTTP/2 frame
+binary sub h2_frame(int type, int flags, int sid, binary payload) {
+    return parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, sid)) + payload;
+}
+
+#! Returns one byte
+binary sub b1(int b) {
+    return parse_hex_string(sprintf("%02x", b));
+}
+
+#! Records the socket and stream of each HTTP/2 SSE stream so that the test can write to it directly
+class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    private {
+        Mutex rm();
+        Condition rc();
+        *hash<auto> last;
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        AutoLock al(rm);
+        last = {"sock": sock, "stream_id": stream_id};
+        rc.broadcast();
+        return rv;
+    }
+
+    #! Returns the socket and stream ID of the next HTTP/2 SSE stream
+    hash<auto> waitStream() {
+        date deadline = now_us() + HangGuard;
+        AutoLock al(rm);
+        while (!last) {
+            if (now_us() >= deadline) {
+                throw "TEST-ERROR", "the HTTP/2 SSE stream was not set up";
+            }
+            rc.wait(rm, deadline - now_us());
+        }
+        return remove last;
+    }
+}
+
+#! Answers with a body of the given size
+class BigHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, binary(strmul("b", BigBody)), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class Http2SendBufferBoundTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        RecordingHandler handler();
+        int h2c_port;
+        int tls_port;
+    }
+
+    constructor() : Test("Http2SendBufferBoundTest", "1.0") {
+        addTestCase("the output held for a peer that does not read is bounded whatever window it grants",
+            \testNonReadingPeer());
+        addTestCase("a response larger than the high-water mark reaches a reading client", \testLargeResponse());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("http2-send-buffer-bound", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setDefaultHandler("sse", handler);
+        server.setHandler("big", "^/?big", NOTHING, new BigHandler());
+        server.waitForAsyncIo();
+        h2c_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! The server writes to a peer that grants the largest window and never reads: the data that the stream can
+    #! take is bounded, and the stream reports a full buffer, before MaxBytes have been taken
+    testNonReadingPeer() {
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", h2c_port), HangGuard);
+        on_exit s.close();
+        # SETTINGS_INITIAL_WINDOW_SIZE (0x4) = 2^31-1, and the connection window raised to 2^31-1 as well
+        binary settings = h2_frame(4, 0, 0, <00047fffffff>);
+        binary conn_window = h2_frame(8, 0, 0, parse_hex_string(sprintf("%08x", 0x7fffffff - 65535)));
+        # GET / with accept: text/event-stream; no dynamic table and no Huffman coding
+        binary block = <8286> + <04> + b1(1) + binary("/") + <01> + b1(9) + binary("localhost")
+            + <00> + b1(6) + binary("accept") + b1(17) + binary("text/event-stream");
+        s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + conn_window + h2_frame(1, 0x5, 1, block));
+
+        hash<auto> st = handler.waitStream();
+        Socket sock = st.sock;
+        int stream_id = st.stream_id;
+        binary chunk = binary(strmul("x", ChunkSize));
+        int taken = 0;
+        *string err;
+        while (taken < MaxBytes) {
+            try {
+                sock.sendHttp2StreamData(stream_id, chunk, False);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+                break;
+            }
+            taken += ChunkSize;
+        }
+        assertEq("HTTP2-FLOW-CONTROL", err, sprintf("the stream reports a full buffer (after %d bytes)", taken));
+        assertLt(MaxBytes, taken, "the data held for the peer is bounded");
+        try {
+            sock.resetHttp2Stream(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! A response many times the high-water mark is written in rounds to a client that reads it
+    testLargeResponse() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d/", tls_port), "GET", "/big", NOTHING, NOTHING,
+            HangGuard, False);
+        assertEq(200, resp.status_code);
+        assertEq(BigBody, resp.body.size(), "the whole body arrives");
+    }
+}

@@ -228,6 +228,12 @@ public:
         O(remaining_data) but amortized: only fires after this many bytes consumed.
     */
     static constexpr size_t SEND_BUFFER_COMPACTION_THRESHOLD = 65536;
+    //! The unwritten output above which sendPendingData() takes no more output from nghttp2 until the socket takes it
+    /** Bounds the output held for a peer that does not read, whatever flow-control window it grants: the data of
+        the streams then stays in their pending data, where the per-stream limits apply (issue #5819).  The buffer can
+        exceed it by the last chunk that nghttp2 returned.
+    */
+    static constexpr size_t SEND_BUFFER_HIGH_WATER = 256 * 1024;
 
     //! Create a client-side HTTP/2 session
     /** @param sock Socket for the connection
