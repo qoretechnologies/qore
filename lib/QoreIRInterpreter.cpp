@@ -5446,10 +5446,9 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
             continue;
         }
         // a borrowed temporary (an lvalue load, a borrowed local load, an element read without a reference) holds no
-        // reference of its own: its bookkeeping releases its slot (see trackBorrowedTemp())
-        if (id < borrowed_temps.size() && borrowed_temps[id] > 0) {
-            continue;
-        }
+        // reference of its own, and the lowering never gives one to a use that consumes it: the IR optimizer picks
+        // the producers of borrowed temporaries only for read-only uses
+        assert(id >= borrowed_temps.size() || borrowed_temps[id] <= 0);
         removeAllCleanupEntries(cleanup, id);
         if (borrowed_slots && borrowed_slots->find(id) != borrowed_slots->end()) {
             slot = QoreValue();
