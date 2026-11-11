@@ -77,6 +77,12 @@ static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionS
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation (see
+    // qore_socket_raise_pending_cancel())
+    if (err.getType() == NT_STRING && QoreStringDataHelper(err) == "SOCKET-CLOSED"
+            && qore_socket_raise_pending_cancel("HTTP/2 socket operation", xsink)) {
+        return;
+    }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
     // the node value helper materializes such values so that a reference can be taken
     QoreStringNodeValueHelper err_str(err);
@@ -782,9 +788,11 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
     // Lock only for nghttp2 API calls and session state access
     std::lock_guard<std::recursive_mutex> lg(m);
 
+    // a definitive answer of the server (its SETTINGS), with an error code of its own: HTTP2-CONNECT-ERROR is also the
+    // code of failures to connect, which callers retry on a fresh connection (issue #5672)
     if (is_extended_connect && remote_settings_received
             && !remote_settings.enable_connect_protocol) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
+        xsink->raiseException("HTTP2-EXTENDED-CONNECT-UNSUPPORTED",
             "server does not support extended CONNECT protocol (RFC 8441); "
             "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
         return -1;

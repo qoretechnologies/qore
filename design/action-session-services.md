@@ -33,7 +33,7 @@ connection.
 | Class | Module | Actions |
 |---|---|---|
 | `DpqlActionSession` | `qlib/DataProvider/` | `dpql-set-context`, `dpql-parse`, `dpql-get-completions`, `dpql-get-tokens`, `dpql-format`, `dpql-validate`, `dpql-eval`, `dpql-serialize`, `dpql-get-signature-help` |
-| `QoreReplActionSession` | `qlib/QoreRepl/` | `repl-eval`, `repl-command`, `repl-interrupt`, `repl-complete`, `repl-close`; emits `repl-output`, `repl-result`, `repl-prompt`, `repl-completion`, `repl-error`, `repl-exit` |
+| `QoreReplActionSession` | `qlib/QoreRepl/` | `repl-eval`, `repl-command`, `repl-interrupt`, `repl-complete`, `repl-close`; returns `repl-result`, `repl-prompt`, `repl-completion`, `repl-error`, `repl-exit`; emits `repl-thread`, `repl-activity`, `repl-program-replaced` to `setEmitter()`, and has `close()` (see [program-thread-lifecycle-events.md](program-thread-lifecycle-events.md)) |
 | `OpenAiResponseActionSession` | `qlib/OpenAiDataProvider/` | `openai-response-create`, `openai-response-start`, `openai-response-stop`; emits `openai-response-event`. Inherits `DataProvider::Observer` and manages the response stream provider's lifecycle |
 
 `DpqlWebSocketConnection` (`qlib/DpqlWebSocket/`) is the reference adapter: it constructs a

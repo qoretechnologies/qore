@@ -354,6 +354,11 @@ public:
     //! Preset: Allows only HTTPS connections (port 443)
     DLLEXPORT void allowHTTPSOnly();
 
+    //! Returns true if a connection to the port with the protocol is allowed by the port rules
+    /** True also when no port rule is set, which allows every port
+    */
+    DLLLOCAL bool allowsPort(int port, int proto) const;
+
     //! Sets default policy for unlisted destinations
     /** @param allow If true, unlisted destinations are allowed; if false (default), denied
     */
@@ -1068,6 +1073,9 @@ private:
     QoreSandboxContext* context = nullptr;
     const QoreSandboxProvenanceHelper* previous = nullptr;
     void apply(QoreSandboxContext* captured);
+
+    // applies the sandbox of the caller of a parse or a module load in another Program
+    friend class QoreCallerSandboxHelper;
 };
 
 //! The sandbox that governs the current thread, captured so that it can govern work run on another thread
@@ -1100,6 +1108,17 @@ public:
     //! Captures the sandbox that governs the current thread
     DLLEXPORT QoreSandboxCapture();
 
+    //! Makes a capture of the same sandbox as another capture, without applying it
+    /** The copy captures exactly what @p other captured, independently of the sandbox that governs the current
+        thread, and it stays valid after @p other is destroyed.  A native bridge that derives a capture from one that
+        it holds (for example a policy object captured in a sandbox and used later on any thread) uses this instead of
+        applying @p other with QoreSandboxCaptureHelper and capturing again, which would capture the sandbox of the
+        current thread when that thread has a %Qore context of its own.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreSandboxCapture(const QoreSandboxCapture& other);
+
     //! Releases the captured sandbox
     DLLEXPORT ~QoreSandboxCapture();
 
@@ -1112,13 +1131,53 @@ public:
     */
     DLLEXPORT bool sameSandbox(const QoreSandboxCapture& other) const;
 
+    //! Returns the policy manager of the captured sandbox, referenced, or nullptr if no policy was captured
+    /** The manager is the one that QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy) resolves on a thread
+        with no %Qore context of its own while the capture is applied with QoreSandboxCaptureHelper: the captured
+        policy manager combined with the policy managers of the captured provenance.  It does not depend on the thread
+        that calls it.
+
+        Use it to check an operation against the captured policy explicitly, wherever the check runs, in addition to
+        the policy of the current thread (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)), so that the
+        stricter one wins and the capture never lowers the sandbox of the code that uses it.  Applying the capture with
+        QoreSandboxCaptureHelper is right for running code on behalf of the capturing code, but it governs the thread
+        only as its outermost caller: on a thread that runs a sandboxed Program of its own, that Program's sandbox
+        decides, and inside a system-policy call
+        (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") no sandbox
+        does, so a policy check made there would not apply the captured policy.  If the capture is also applied with
+        QoreSandboxCaptureHelper (for its call budgets and interrupts), resolve the policy of the thread before applying
+        it: the applied capture replaces the context that the thread inherited from the code that started it (an
+        unsandboxed capture clears it), so a thread that only an inherited sandbox governs would otherwise lose that
+        sandbox's policy.
+
+        @return the referenced policy manager (the caller owns the reference), or nullptr if no sandbox governed the
+        thread that captured the object, or if the object was captured in a system-policy call, which has the system
+        policy (isSandboxed() returns true for such a capture)
+
+        @par Example:
+        @code{.cpp}
+// a policy object captured when sandboxed code created it, used later on any thread
+ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+if (policy && !policy->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+    return;  // denied: the exception is raised in xsink
+}
+// the policy of the code that uses the object applies as well
+QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+    return;
+}
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreSandboxManager* getPolicyManagerRef() const;
+
 private:
     QoreSandboxContext* ctx;
 
     friend class QoreSandboxCaptureHelper;
 
-    // non-copyable
-    QoreSandboxCapture(const QoreSandboxCapture&) = delete;
+    // not assignable
     QoreSandboxCapture& operator=(const QoreSandboxCapture&) = delete;
 };
 

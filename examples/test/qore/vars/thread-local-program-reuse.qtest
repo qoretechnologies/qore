@@ -1,0 +1,500 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ThreadLocalProgramReuseTest
+
+#! Regression test: the values of a thread_local variable belong to the variable, not to its address
+/** Each thread keeps its value of a thread_local variable in a map of its own.  The map was keyed by the address of
+    the variable, and a variable's values were left in every thread but the one deleting it: a thread kept the values
+    of the variables of deleted Programs until it ended, and the code of a Program created after another one was
+    deleted read the value that the deleted Program had stored in the thread, with its type, when its variable had the
+    address of the deleted one.  In a shared worker thread, one Program read another Program's values, across
+    sandboxes; an \c int variable was given the value and type of a deleted \c string one in the deleting thread; and a
+    variable held an object of a deleted Program's class.
+
+    Each variable now has a serial that is never reused, which is the key of its values, and the values of every
+    thread are released when the variable is deleted, which is when its Program is deleted, or the last Program that
+    imports it (see design/program-teardown-lifetime.md).
+
+    The driver checks, with Programs created one after another, in the execution mode given:
+    - that a worker thread's value of a variable is released when the variable's Program is deleted, while the thread
+      runs on (this does not depend on the addresses of the variables);
+    - that a variable of a Program reads no value of a deleted Program's variable, neither in a worker thread nor in
+      the deleting thread (with values of another type), nor an object of a deleted Program's class;
+    - that the value of a thread is released when the thread ends, while the variable's Program lives, and that a
+      variable read by a destructor while a thread ends can still be assigned in another thread (the ending thread
+      made it read-only in every thread);
+    - that the values of a public thread_local variable that a child Program inherits are released when the last of the
+      Programs holding the variable is deleted;
+    - that the destructors run while a ThreadPool or AsyncIoController worker clears the values of its task cannot
+      assign a variable, as at the end of a thread (a destructor giving a variable a value whose destructor gave it
+      one again kept the worker clearing values for ever), and that the next task can;
+    - that the owner of an inherited variable that is deleted first releases the value of the deleting thread only,
+      and the Program importing it the values of the other threads, also of a thread that ended in between;
+    - that the values released by threads that end and by pool workers that clear their values while the variable's
+      Program is deleted in another thread are released while the Program can run their destructors: the threads
+      enter the Program to release them, or hand them over to its teardown (deterministic in its result; before,
+      PROGRAM-ERROR in the destructors of up to 4% of the values);
+    - that the deletion of a Program does not wait for the destructor of an object of another Program's class run by
+      a thread that ends, which takes a lock that the deleting thread holds (it waited for ever);
+    - that the cleanup of a thread resource between the tasks of a pool worker can assign a thread_local variable,
+      which the next task does not see.
+*/
+class ThreadLocalProgramReuseTest inherits QUnit::Test {
+    public {
+        #! the driver script; ARGV[0] is the execution mode of the Programs it creates
+        const Script = '%modern
+%no-child-restrictions
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+
+#! runs the closures it is given in a thread of its own
+class Worker {
+    private {
+        Queue req();
+        Queue resp();
+        int tid;
+    }
+
+    constructor() {
+        tid = background run();
+    }
+
+    private run() {
+        while (True) {
+            *code c = req.get();
+            if (!c) {
+                break;
+            }
+            try {
+                resp.push(c());
+            } catch (hash<ExceptionInfo> ex) {
+                resp.push(ex.err + ": " + ex.desc);
+            }
+        }
+    }
+
+    auto call(code c) {
+        req.push(c);
+        return resp.get();
+    }
+
+    #! ends the thread and waits until it is gone, which is after its thread-local values are released
+    stop() {
+        req.push(NOTHING);
+        thread_join(tid);
+    }
+}
+
+Program sub new_program(string code, string label) {
+    Program p();
+    p.setExecMode(mode);
+    p.parse(code, label);
+    return p;
+}
+
+const N = 40;
+
+#! signals that its destructor runs, which then waits for the lock given
+class Blocker {
+    private {
+        Mutex m;
+        Counter in_dtor;
+    }
+
+    constructor(Mutex m, Counter in_dtor) {
+        self.m = m;
+        self.in_dtor = in_dtor;
+    }
+
+    destructor() {
+        in_dtor.dec();
+        m.lock();
+        m.unlock();
+    }
+}
+
+#! a thread resource whose cleanup assigns a thread_local variable and reports the result
+thread_local *int tlr;
+class AssigningResource inherits AbstractThreadResource {
+    private {
+        code report;
+    }
+
+    constructor(code r) {
+        report = r;
+    }
+
+    cleanup() {
+        try {
+            tlr = 1;
+            report("assigned " + tlr);
+        } catch (hash<ExceptionInfo> ex) {
+            report(ex.err);
+        }
+    }
+}
+
+#! reports its destruction through the closure given; a class of this Program, which lives as long as the driver
+class Tracker {
+    private {
+        code report;
+    }
+
+    constructor(code r) {
+        report = r;
+    }
+
+    destructor() {
+        report();
+    }
+}
+
+# a class whose destructor reports through the closure given
+const DClass = "class D { private { code report; } constructor(code r) { report = r; } destructor() { report(); } }\n";
+
+# the value of a worker thread is released when its Program is deleted
+{
+    int destroyed = 0;
+    code report = sub () { ++destroyed; };
+    Worker w();
+    on_exit w.stop();
+    int released = 0;
+    for (int n = 0; n < N; ++n) {
+        Program p = new_program("%modern\n" + DClass + "thread_local *D tlx;\nsub set(code r) { tlx = new D(r); }\n",
+            "released-" + n);
+        w.call(auto sub () { p.callFunction("set", report); return True; });
+        int before = destroyed;
+        delete p;
+        if (destroyed == before + 1) {
+            ++released;
+        }
+    }
+    printf("worker values released with their Program: %d of %d; destroyed: %d\n", released, N, destroyed);
+}
+
+# a worker thread reads no value of a variable of a deleted Program
+{
+    Worker w();
+    on_exit w.stop();
+    int stale = 0;
+    for (int n = 0; n < N; ++n) {
+        Program p = new_program("%modern\nthread_local *int tlx;\n*int sub get() { return tlx; }\n"
+            "sub set(int v) { tlx = v; }\n", "stale-" + n);
+        if (exists w.call(auto sub () { return p.callFunction("get"); })) {
+            ++stale;
+        }
+        w.call(auto sub () { p.callFunction("set", n + 1000); return True; });
+        delete p;
+    }
+    printf("worker reads of deleted values: %d of %d\n", stale, N);
+}
+
+# a worker thread reads no object of a class of a deleted Program
+{
+    Worker w();
+    on_exit w.stop();
+    int stale = 0;
+    for (int n = 0; n < N; ++n) {
+        Program p = new_program(sprintf("%%modern\nclass C%d { int v() { return %d; } }\nthread_local auto tlx;\n"
+            "auto sub get() { return tlx; }\nsub set() { tlx = new C%d(); }\n", n, n, n), "object-" + n);
+        if (exists w.call(auto sub () { return p.callFunction("get"); })) {
+            ++stale;
+        }
+        w.call(auto sub () { p.callFunction("set"); return True; });
+        delete p;
+    }
+    printf("worker reads of deleted objects: %d of %d\n", stale, N);
+}
+
+# the deleting thread gives a variable no value or type of a deleted variable
+{
+    int wrong = 0;
+    for (int n = 0; n < N; ++n) {
+        bool str = boolean(n % 2);
+        Program p = new_program(str
+            ? "%modern\nthread_local string tlx;\nauto sub run() { auto b = tlx; tlx = \"abc\"; return (b, tlx); }\n"
+            : "%modern\nthread_local int tlx;\nauto sub run() { auto b = tlx; tlx = 42; return (b, tlx); }\n",
+            "type-" + n);
+        auto r;
+        try {
+            r = p.callFunction("run");
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        if (r !== (str ? (NOTHING, "abc") : (NOTHING, 42))) {
+            ++wrong;
+        }
+        delete p;
+    }
+    printf("values of another type: %d of %d\n", wrong, N);
+}
+
+# the values of a thread are released when the thread ends, while their Program lives; a variable that a destructor
+# reads while the thread ends can still be assigned in other threads
+{
+    int destroyed = 0;
+    code report = sub () { ++destroyed; };
+    Program p = new_program("%modern\nthread_local *int tly;\n"
+        "class D { private { code report; } constructor(code r) { report = r; } "
+        "destructor() { report(); auto v = tly; } }\n"
+        "thread_local *D tlx;\nsub set(code r) { tlx = new D(r); }\nauto sub assign() { tly = 1; return tly; }\n",
+        "thread-end");
+    Worker w();
+    w.call(auto sub () { p.callFunction("set", report); return True; });
+    w.stop();
+    auto assigned;
+    try {
+        assigned = p.callFunction("assign");
+    } catch (hash<ExceptionInfo> ex) {
+        assigned = ex.err;
+    }
+    printf("values released when their thread ends: %d of 1; assigned in another thread afterwards: %y\n",
+        destroyed, assigned);
+    delete p;
+}
+
+# the values of an inherited public variable are released with the last Program holding it
+{
+    int destroyed = 0;
+    code report = sub () { ++destroyed; };
+    Program parent = new_program("%modern\npublic " + DClass
+        + "public thread_local *D tlx;\nsub set(code r) { tlx = new D(r); }\n"
+        "object sub child(ExecMode m) { Program c(); c.setExecMode(m); "
+        "c.parse(\"%modern\\nsub set(code r) { tlx = new D(r); }\\n\", \"child\"); return c; }\n", "parent");
+    # the child Program inherits the public variable; the parent sets it in this thread and the child in a worker
+    Program child = parent.callFunction("child", mode);
+    parent.callFunction("set", report);
+    Worker w();
+    on_exit w.stop();
+    w.call(auto sub () { child.callFunction("set", report); return True; });
+    delete child;
+    int after_child = destroyed;
+    delete parent;
+    printf("inherited values released with the child: %d, with the parent: %d\n", after_child,
+        destroyed - after_child);
+}
+# the values that a worker clears between its tasks: the destructors run then cannot assign the variables of the
+# thread, as at the end of a thread, or a destructor giving a variable a value whose destructor gives it one again would keep
+# the clearing going for ever; the next task of the worker assigns them again
+const ClearCode = "%modern\nthread_local *string tly;\n"
+    "class D { private { code report; } constructor(code r) { report = r; } "
+    "destructor() { report(\"destroyed\"); try { tly = \"from the destructor\"; } "
+    "catch (hash<ExceptionInfo> ex) { report(ex.err); } } }\n"
+    "thread_local *D tlx;\nsub set(code r) { tlx = new D(r); }\n*string sub get() { return tly; }\n"
+    "string sub assign() { tly = \"assigned\"; return tly; }\n";
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    Program p = new_program(ClearCode, "pool-clear");
+    ThreadPool tp(1, 1, 1);
+    Counter c(1);
+    tp.submit(sub () { on_exit c.dec(); p.callFunction("set", report); });
+    c.waitForZero();
+    # the pool has one worker, which runs the next task once it has cleared the values of the first one
+    Queue q();
+    tp.submit(sub () { q.push((p.callFunction("get"), p.callFunction("assign"))); });
+    list<auto> next = q.get();
+    tp.stopWait();
+    printf("pool worker values cleared between tasks: %y; read by the next task: %y, assigned: %y\n", events,
+        next[0], next[1]);
+    delete p;
+}
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    Program p = new_program(ClearCode, "async-io-clear");
+    # one callback worker, which runs the next callback once it has cleared the values of the first one
+    AsyncIoController::setMaxCallbackWorkers(1);
+    Queue q();
+    AsyncIoController::addTimer(now_us(), sub () { on_exit q.push(gettid()); p.callFunction("set", report); });
+    int tid = q.get();
+    AsyncIoController::addTimer(now_us(), sub () { q.push((gettid(), p.callFunction("get"), p.callFunction("assign"))); });
+    list<auto> next = q.get();
+    printf("async I/O worker values cleared between callbacks: %y; read by the next callback in the same thread "
+        "(%y): %y, assigned: %y\n", events, tid == next[0], next[1], next[2]);
+    delete p;
+}
+# a public variable whose owner is deleted before the Program importing it: the deletion of the owner releases the
+# value of the deleting thread only, as the importing Program can still use the variable in the other threads; their
+# values are released when the importing Program is deleted, also the value of a thread that ended in between, which
+# the thread could not release in the deleted owner
+{
+    int destroyed = 0;
+    code report = sub () { ++destroyed; };
+    Program owner = new_program("%modern\npublic thread_local *object tlx;\nsub set(object o) { tlx = o; }\n"
+        "object sub child(ExecMode m) { Program c(); c.setExecMode(m); "
+        "c.parse(\"%modern\\nbool sub has() { return exists tlx; }\\n\", \"importer\"); return c; }\n", "owner");
+    Program importer = owner.callFunction("child", mode);
+    Worker w1();
+    on_exit w1.stop();
+    Worker w2();
+    w1.call(auto sub () { owner.callFunction("set", new Tracker(report)); return True; });
+    w2.call(auto sub () { owner.callFunction("set", new Tracker(report)); return True; });
+    owner.callFunction("set", new Tracker(report));
+    delete owner;
+    int with_owner = destroyed;
+    bool kept = w1.call(auto sub () { return importer.callFunction("has"); });
+    w2.stop();
+    int at_end = destroyed - with_owner;
+    delete importer;
+    printf("owner deleted first: released with the owner: %d; kept for the importer in a worker: %y; released when a "
+        "worker ends: %d; released with the importer: %d\n", with_owner, kept, at_end, destroyed - with_owner - at_end);
+}
+
+# a thread that ends releases a value of a variable of a Program that another thread deletes, whose destructor is code
+# of another Program: the teardown does not wait for it, as the deleting thread holds a lock that the destructor takes
+{
+    Mutex m();
+    Counter in_dtor(1);
+    Program p = new_program("%modern\nthread_local *object tlx;\nsub set(object o) { tlx = o; }\n", "teardown-wait");
+    m.lock();
+    # the thread sets the value of its own Blocker, whose destructor runs when the thread ends
+    code set = sub () { p.callFunction("set", new Blocker(m, in_dtor)); };
+    int tid = background set();
+    in_dtor.waitForZero();
+    delete p;
+    m.unlock();
+    thread_join(tid);
+    printf("the teardown does not wait for the destructor of a class of another Program run when a thread ends\n");
+}
+
+# the cleanup of a thread resource between the tasks of a pool worker can assign thread_local variables: the value is
+# released with the values of the task, and the next task reads none
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    ThreadPool tp(1, 1, 1);
+    Counter c(1);
+    AssigningResource res(report);
+    tp.submit(sub () { on_exit c.dec(); set_thread_resource(res); });
+    c.waitForZero();
+    Queue q();
+    tp.submit(sub () { q.push(tlr); });
+    auto next = q.get();
+    tp.stopWait();
+    printf("thread resource cleanup between tasks: %y; read by the next task: %y\n", events, next);
+}
+
+# the values that threads release when they end, and that pool workers clear between their tasks, while the Program of
+# the variables is deleted in another thread: every value is released while the Program can run its destructor, by
+# the thread, which the teardown waits for, or by the teardown, which the thread hands the value over to
+const StressN = 40;
+const StressThreads = 4;
+{
+    int destroyed = 0;
+    Mutex m();
+    code report = sub () { m.lock(); on_exit m.unlock(); ++destroyed; };
+    ThreadPool tp(StressThreads, StressThreads, StressThreads);
+    int created = 0;
+    for (int n = 0; n < StressN; ++n) {
+        Program p = new_program("%modern\n" + DClass + "thread_local *D tla;\nthread_local *D tlb;\n"
+            "sub set(code r) { tla = new D(r); tlb = new D(r); }\n", "stress-" + n);
+        # each task and thread sets its values; the pool workers clear them after their task, and the threads end
+        # when the Program is deleted, both at the same time as the deletion
+        Counter ready(2 * StressThreads);
+        Counter go(1);
+        list<int> tids = ();
+        for (int t = 0; t < StressThreads; ++t) {
+            tp.submit(sub () { on_exit ready.dec(); p.callFunction("set", report); });
+            tids += background sub () { { on_exit ready.dec(); p.callFunction("set", report); } go.waitForZero(); }();
+        }
+        ready.waitForZero();
+        go.dec();
+        delete p;
+        map thread_join($1), tids;
+        created += 4 * StressThreads;
+    }
+    tp.stopWait();
+    printf("values released by ending threads and pool workers while their Program is deleted: %d of %d\n",
+        destroyed, created);
+}
+printf("done\n");
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ThreadLocalProgramReuseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("thread_local variables of Programs created one after another in %s mode", mode),
+                getModeTest(mode));
+        }
+        addTestCase("thread_local variables of Programs created one after another on the IR tier", \runIrTier());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-thread-local-program-reuse-");
+        string path = writeScript(tmp);
+        assertEq(getExpected(), ExecModeHarness::run(getCommand(mode, path, mode)), mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-thread-local-program-reuse-");
+        string path = writeScript(tmp);
+        assertEq(getExpected(), ExecModeHarness::run_ir_tier(getCommand("tiered", path, "tiered")),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! returns the command running the driver
+    private string getCommand(string mode, string path, string arg) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, path, arg);
+    }
+
+    #! returns the output of the driver
+    private static string getExpected() {
+        return "worker values released with their Program: 40 of 40; destroyed: 40\n"
+            "worker reads of deleted values: 0 of 40\n"
+            "worker reads of deleted objects: 0 of 40\n"
+            "values of another type: 0 of 40\n"
+            "values released when their thread ends: 1 of 1; assigned in another thread afterwards: 1\n"
+            "inherited values released with the child: 0, with the parent: 2\n"
+            "pool worker values cleared between tasks: [\"destroyed\", \"DESTRUCTOR-ERROR\"]; read by the next "
+                "task: null, assigned: \"assigned\"\n"
+            "async I/O worker values cleared between callbacks: [\"destroyed\", \"DESTRUCTOR-ERROR\"]; read by the "
+                "next callback in the same thread (True): null, assigned: \"assigned\"\n"
+            "owner deleted first: released with the owner: 1; kept for the importer in a worker: True; released when "
+                "a worker ends: 0; released with the importer: 2\n"
+            "the teardown does not wait for the destructor of a class of another Program run when a thread ends\n"
+            "thread resource cleanup between tasks: [\"assigned 1\"]; read by the next task: null\n"
+            "values released by ending threads and pool workers while their Program is deleted: 640 of 640\n"
+            "done\n";
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "thread-local-program-reuse-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(Script);
+        return path;
+    }
+}

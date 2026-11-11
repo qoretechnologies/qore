@@ -41,6 +41,7 @@ class ExceptionSink;
 struct QoreProgramLocation;
 class QoreIRFunction;
 class AbstractStatement;
+class FunctionEntry;
 class QoreIRBackgroundInstruction;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
@@ -65,6 +66,13 @@ enum class QoreStringCaseConsumer : int32_t {
     Contains,
     Find,
     RFind,
+};
+
+//! The date kind check of a date<absolute>/date<relative> parameter (qore_rt_date_kind_matches()); 0: no check
+enum QoreDateKindGuardFlags : uint8_t {
+    QORE_DATE_KIND_GUARD_ABSOLUTE = 1, //!< the value must be an absolute date
+    QORE_DATE_KIND_GUARD_RELATIVE = 2, //!< the value must be a relative date
+    QORE_DATE_KIND_GUARD_OR_NOTHING = 4, //!< NOTHING is also accepted (*date<absolute>, *date<relative>)
 };
 
 // C ABI helpers called by JIT-generated code.
@@ -165,6 +173,10 @@ void qore_rt_incref(uint64_t val);
 
 //! Decrement reference count; may throw via xsink
 void qore_rt_decref(uint64_t val, ExceptionSink* xsink);
+//! Releases the reference that a read through a reference took, kept in the slot of its read site, if the slot holds
+//! the value (a call that took the value as an argument returns); the slot holds another value if the local held no
+//! reference at the read, whose value is the cached value of the local
+void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink);
 
 //! Decrement reference count; never throws (for landing pad cleanup)
 void qore_rt_decref_nothrow(uint64_t val);
@@ -1371,6 +1383,46 @@ void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* e
 */
 int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state, ExceptionSink* xsink);
 
+//! Checks for cancellation when \a count is a positive multiple of 100, with the label of the QoreIRCancelPoint
+//! \a point; with a positive drop \a limit, the count is the number skipped below the limit and the number after
+//! the skipped ones otherwise; returns 1 if an exception was raised.  See QoreIROpcode::CheckCancelEvery.
+int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, ExceptionSink* xsink);
+
+//! Raises RANGE-ERROR if \a bound_val, the QoreIRRangeBound \a which of a range operator, is NOTHING; returns 1 if
+//! an exception was raised.  See QoreIROpcode::CheckRangeBound.
+int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink);
+
+//! Applies the \a count selector values \a selector_vals of a step of a list of selectors with ranges to the
+//! sequence \a seq_val: with QoreIRListSelectorFlag::Begin it makes the result for the sequence and adds what they
+//! select to it, otherwise it adds what they select to \a result_val, which it changes in place; see
+//! QoreIROpcode::ListSelectorStep.  Returns the result of a Begin step, which the caller owns, and 0 otherwise.
+uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink);
+
+//! Creates the iterator of a list of selectors with ranges for the sequence \a seq_bits; see
+//! QoreIROpcode::IteratorCreateSelectors
+void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count, ExceptionSink* xsink);
+
+//! Returns the index of the selector that the iterator of a list of selectors needs next, or -1; see
+//! QoreIROpcode::SelectorIteratorPending
+int64_t qore_rt_selector_iterator_pending(void* iter_ptr);
+
+//! Gives the next value of the iterator of a list of selectors in \a out_value; returns 1 if it has none now, without
+//! deleting the iterator; see QoreIROpcode::IteratorNextSelectors
+int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink);
+
+//! Gives the iterator of a list of selectors the value of its next selector; returns 1 if an exception was raised.
+//! See QoreIROpcode::SelectorIteratorFeed.
+int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits, uint64_t second_bits,
+        ExceptionSink* xsink);
+
+//! Sets the exceptions of \a xsink aside and returns their handle; see QoreIROpcode::ExceptionSuspend
+void* qore_rt_exception_suspend(ExceptionSink* xsink);
+
+//! Raises again the exceptions set aside by qore_rt_exception_suspend() before those raised since, and frees the
+//! handle; see QoreIROpcode::ExceptionResume
+void qore_rt_exception_resume(void* handle, ExceptionSink* xsink);
+
 //! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
 int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
         ExceptionSink* xsink);
@@ -1684,6 +1736,9 @@ QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int
 //! Returns true when an assigned object is valid and needs no provenance guard.
 //! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.
 int qore_rt_object_is_valid(uint64_t value);
+//! Returns true when a value passes the date kind check @a flags (QoreDateKindGuardFlags) of a date<absolute> or
+//! date<relative> parameter; never raises.  Guards the native fast entry of a call with a date argument (#5730).
+int qore_rt_date_kind_matches(uint64_t value, int32_t flags);
 //! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
 void qore_rt_check_valid_object_call_receiver(uint64_t value,
         ExceptionSink* xsink);
@@ -2091,6 +2146,77 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 } // extern "C"
+
+//! The kinds of qore_rt_builtin_conversion_checked(): string(), int() and float()
+enum : int {
+    QORE_RT_BUILTIN_CONVERSION_STRING = 0,
+    QORE_RT_BUILTIN_CONVERSION_INT = 1,
+    QORE_RT_BUILTIN_CONVERSION_FLOAT = 2,
+};
+
+//! string(), int() or float() of a value that the builtin may not accept (QoreIROpcode::ToStringChecked etc.)
+/** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
+    call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
+
+    @return false if the value is not accepted and the error was raised
+*/
+DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Returns true if the builtin conversion of the given kind accepts a value of the given type
+/** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a
+    date, a char and NOTHING; int() also accepts NULL
+*/
+static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
+    switch (t) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+        case NT_DATE:
+        case NT_CHAR:
+        case NT_NOTHING:
+            return true;
+        case NT_NULL:
+            return kind == QORE_RT_BUILTIN_CONVERSION_INT;
+        default:
+            return false;
+    }
+}
+
+//! Calls the builtin conversion with a value that the checked conversion does not convert itself
+/** For a value that the builtin does not accept, the call raises its error (RUNTIME-OVERLOAD-ERROR); for any other,
+    the builtin's result is returned, so a type that a checked conversion does not handle costs speed, never
+    correctness
+
+    @return true with the result in \a rv, false if the builtin raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_conversion_call(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Calls the single-argument builtin function with the given qualified name (ex: \c "Qore::length") with a value
+/** The builtin resolves its variant with the value, as the AST interpreter does, so a value that no variant accepts
+    raises the error of the AST interpreter (RUNTIME-OVERLOAD-ERROR); the fast paths of the builtins in the compiled
+    modes call it for the values that they do not handle themselves
+
+    @return true with the result in \a rv, false if the call raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_function_call(const char* qualified_name, QoreValue val, QoreValue& rv,
+        ExceptionSink* xsink);
+
+//! Returns true if the function entry is a builtin function of the Qore namespace and has no user variants
+/** The compiled modes take the fast path of a builtin (ex: length()) only for a call that this function is called by;
+    a user or module function with the same name is called normally
+*/
+DLLLOCAL bool qore_rt_is_qore_builtin_function(const FunctionEntry* fe);
+
+extern "C" {
+DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+}
 
 //! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_size();

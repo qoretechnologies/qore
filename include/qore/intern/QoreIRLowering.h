@@ -64,6 +64,7 @@ class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
 class QoreStreamingOperatorNode;
+class QoreSquareBracketsOperatorNode;
 class QoreIROnBlockExitInstruction;
 class ForEachStatement;
 class QoreBackgroundOperatorNode;
@@ -133,15 +134,6 @@ public:
         StatementBlock* code;                               //!< handler code block
         const QoreProgramLocation* loc;                     //!< source location for error reporting
         QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
-    };
-
-    //! Captured variables needed by a handler for parent scope access
-    /** Phase 3b: Stores information about local and global variables referenced by a handler.
-     *  These are captured as parameters to the handler IR function so it can access parent scope.
-     */
-    struct HandlerVariableCapture {
-        std::vector<LocalVar*> referenced_locals;      //!< local vars referenced by handler
-        std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -244,6 +236,68 @@ public:
     QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);
+    //! Lowers a list of selectors with ranges that can have side effects as ListSelectorStep instructions
+    /** Each selector is evaluated only after the previous one has been applied, and none is evaluated for a
+        sequence that no selector applies to, as in the AST interpreter (qore#5665)
+    */
+    QoreIRValue lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
+        const std::vector<QoreValue>& selectors, std::string& error);
+    //! Returns true if the sequence of a list of selectors is always a list, a string or a binary object
+    bool listSelectorSeqAlwaysApplies(const QoreValue& expr) const;
+    //! Returns true if a bound of a range operator can evaluate to NOTHING
+    bool rangeBoundMayBeNothing(const QoreValue& expr) const;
+    //! A list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or streaming
+    //! operator iterates lazily, as the AST interpreter does (see QoreIROpcode::IteratorCreateSelectors)
+    struct LazySelectorSource {
+        const QoreSquareBracketsOperatorNode* op = nullptr;
+        std::vector<QoreValue> selectors;
+
+        explicit operator bool() const {
+            return op != nullptr;
+        }
+    };
+    //! Returns true and sets \a src if \a expr is a list of selectors with ranges whose lazy iteration can be
+    //! observed: a selector with side effects, or a range with negative offsets, which the AST interpreter iterates
+    //! index by index instead of as the range of the sequence that it selects
+    bool getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const;
+    //! Returns true if \a expr is a list of selectors with ranges that is iterated lazily (see getLazySelectorSource())
+    bool hasLazySelectorSource(const QoreValue& expr) const {
+        LazySelectorSource src;
+        return getLazySelectorSource(expr, src);
+    }
+    //! Lowers the source of an iterator: the sequence and IteratorCreateSelectors for a lazy list of selectors, or
+    //! the expression and IteratorCreate (or IteratorCreateIterate if \a iterate) otherwise
+    /** @param source set to the value iterated: the sequence for a lazy list of selectors
+        @param in_temp_scope true to lower the expression in a temp scope of its own
+
+        @return the iterator handle, or an invalid value on error
+    */
+    QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
+        bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
+    //! Emits the iteration of a lazy list of selectors in place of IteratorNext
+    /** Emits IteratorNextSelectors in the current block, which gives the next value to \a body_block; when the iterator
+        has no value, a block asks it which selector it needs (SelectorIteratorPending), evaluates it in a temp scope of
+        its own and gives it to the iterator (SelectorIteratorFeed), and returns to IteratorNextSelectors, or releases
+        the iterator and branches to \a exit_block when every value has been given.  An exception raised by a selector
+        or the iterator goes to \a exception_target, which must release the iterator; if it is null, to a block that
+        releases the iterator and branches to the handler in this frame, if any.
+
+        @return the IteratorNextSelectors instruction, whose result is the value, or nullptr on error
+    */
+    QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
+        QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
+        std::string& error);
+    //! Returns true if evaluating the selector \a selector (or the bounds of a range) can create a node temp
+    static bool selectorMayCreateTemp(const QoreValue& selector);
+    //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
+    static int64_t selectorIteratorFlags(const LazySelectorSource& src);
+    //! Fills the handler of a selector of a remove or delete expression with a list of selectors that raised an
+    //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
+    //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
+    //! (LValueRemoveHelper::doRemove()); see tryEmitLValuePathOp()
+    void emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
+        const std::vector<QoreIRValue>& dyn_vals, size_t selector_count, AssignmentMode mode,
+        const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
     QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
@@ -319,20 +373,6 @@ private:
     //! Returns true and sets the lowering error if the thread's stack has reached the lowering reserve
     bool stackReserveReached(std::string& error);
 
-    //! Phase 3b: Analyze handler code for variable references to enable parameter capture
-    /** Walks the handler AST to identify which parent scope variables are referenced.
-     *  These variables will be passed as parameters to the compiled handler IR function.
-     */
-    HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
-
-    //! Phase 3b: Compile handler code to IR function with captured variable parameters
-    /** Creates a QoreIRFunction for the handler with captured variables passed as parameters.
-     *  The handler body is lowered into the new function, which can be executed from any context.
-     *  Returns nullptr on compilation failure.
-     */
-    QoreIRFunction* compileHandlerToIR(const StatementBlock* handler_code,
-            const HandlerVariableCapture& capture, std::string& error);
-
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
     //! Native IR lowering for select operator with implicit argument context
@@ -400,6 +440,22 @@ private:
     //! Collects a supported lazy source chain into ordered stages and an innermost source expression.
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
+    //! Decides if the list of selectors \a source, which a consumer iterates, is iterated lazily, and records it
+    /** It is iterated lazily unless its selectors are stable and the consumer's code - the expressions of \a stages,
+        \a consumer_exprs, the lvalue \a written_lvalue and the statements of \a block - does not write the locals that
+        they read (qore#5675).  getLazySelectorSource() then gives the decision.
+
+        @return true if the list is iterated lazily
+    */
+    /** With \a pure_consumer_ok (a map, select, map/select or foldl operator without other stages), a list whose
+        selectors have side effects is also evaluated before the iteration when the operator's expressions only
+        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other
+    */
+    bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
+        const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,
+        const StatementBlock* block = nullptr, bool pure_consumer_ok = false);
+    //! The decisions of decideLazySelectorSource(), by list of selectors
+    std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
 
     //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
@@ -449,6 +505,18 @@ private:
     QoreIRBasicBlock* createBlock(const std::string& prefix);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
+    //! Gives the load of a variable that can hold a reference the exception target in effect, if any
+    /** A variable whose type allows a reference (no type or a reference type) can hold one, and its read reads the
+        referenced lvalue, which raises an exception if it no longer exists (OBJECT-ALREADY-DELETED for a member of a
+        deleted object, PROGRAM-ERROR for a variable of a deleted Program): the exception is handled by the enclosing
+        try or scope cleanup, as in the AST interpreter.  The read of any other variable cannot raise, and its load
+        gets no exception edge, which would constrain the optimization of the code around it.
+
+        @param load a LoadLocal, LoadClosure, LoadGlobal or LoadThreadLocal instruction, or an AddAssignLocalInt
+        instruction, which reads its source as a load does
+        @param type_info the declared type of the variable read
+    */
+    void setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
         const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, AssignmentMode mode = AssignmentMode::Normal,
         QoreIRValue* store_result = nullptr);
@@ -806,6 +874,10 @@ private:
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
+        //! the exception target in force when this flow target was created: a continue or break that branches to a
+        //! block that checks for cancellation raises it in the scope of the loop, as the loop's own branches do,
+        //! and not in a try block that the statement is in inside the loop
+        QoreIRBasicBlock* loop_exception_target = nullptr;
     };
     std::vector<FlowTarget> flow_stack;
     //! Push a block cleanup entry, recording the number of temp scopes open where it is pushed

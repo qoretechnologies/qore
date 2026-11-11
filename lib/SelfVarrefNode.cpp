@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/RuntimeConfig.h"
@@ -61,9 +62,24 @@ QoreValue SelfVarrefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) cons
 }
 
 QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref);
+    QoreValue v = evalValue(rc, xsink);
+    // the read gives the code a reference of its own: the value is a temporary of the statement, which holds it until
+    // it ends, as the other execution modes keep the result of LoadSelfMember (see VarRefNode::evalImpl())
+    if (!*xsink) {
+        QoreStatementTempScope::holdRead(this, v, xsink);
+    }
+    return v;
+}
+
+QoreValue SelfVarrefNode::evalCallArg(ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalValue(rc, xsink);
+}
+
+QoreValue SelfVarrefNode::evalValue(RuntimeConfig& rc, ExceptionSink* xsink) const {
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(obj);
-    assert(needs_deref);
     if (qore_closure_self_context(obj) && qore_object_private::get(*obj)->checkClosureSelfValid(xsink)) {
         return QoreValue();
     }

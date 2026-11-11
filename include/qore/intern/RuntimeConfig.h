@@ -87,6 +87,9 @@ public:
     //! Current closure environment
     const QoreClosureBase* closure_env = nullptr;
 
+    //! the thread's call site slot, for the thread's own RuntimeConfig (see QoreRcCallSiteHelper), otherwise nullptr
+    const QoreProgramLocation** call_site_ptr = nullptr;
+
     //! Check if this RuntimeConfig has valid thread-local program data
     bool hasThreadLocalData() const {
         return tlpd != nullptr;
@@ -149,6 +152,12 @@ DLLLOCAL RuntimeConfig& rc_get_current_ref();
 DLLLOCAL RuntimeConfig& rc_get_tls_ref();
 
 /**
+ * @brief Get the data of the thread-local RuntimeConfig (rc_get_tls_ref()), which stays in place for the life of the
+ * thread; for code that updates it on every switch of the thread's Program
+ */
+DLLLOCAL RuntimeConfig::Impl* rc_get_tls_impl();
+
+/**
  * @brief Sync runtime config changes back to thread-local storage.
  *
  * Call this when the RuntimeConfig has been modified and those changes
@@ -158,6 +167,60 @@ DLLLOCAL RuntimeConfig& rc_get_tls_ref();
  * @param rc The RuntimeConfig to sync to TLS
  */
 DLLLOCAL void rc_sync_to_thread(const RuntimeConfig& rc);
+
+//! Sets the thread's call site slot in the thread's RuntimeConfig, or clears it with nullptr
+/** Called on the thread when its thread data is created and before it is deleted; see QoreRcCallSiteHelper
+*/
+DLLLOCAL void rc_tls_set_call_site_ptr(const QoreProgramLocation** call_site_ptr);
+
+//! Sets the location of a call for the call stack frame of the called code for the helper's lifetime
+/** A call node sets it immediately before the code that creates the frame of the called code, after evaluating any
+    expression that it evaluates before the call, such as the object of a method call; the frame takes it (see
+    take_runtime_call_location()), so that each frame's location is the location of its call expression, and it is
+    cleared after the call, also when the call was not made, so that a call site never applies to another call.  No
+    code runs between a call site and the frame that takes it (the member initializers that run before the frame of
+    a constructor run with no call site: QoreHideCallSiteHelper), so the call site is clear when a call sets it,
+    unless the IR or native instruction of the same call has set it, as when it evaluates the call's node.
+
+    The slot is written through the RuntimeConfig that the call is evaluated with, which is the thread's own, without
+    a thread-local lookup, as every call of the AST interpreter sets it; a thread without thread data (a
+    RuntimeConfig without the slot) takes the thread-local path.
+*/
+class QoreRcCallSiteHelper {
+public:
+    DLLLOCAL QoreRcCallSiteHelper(RuntimeConfig& rc, const QoreProgramLocation* loc) {
+        // a call node without a source location, such as a node that AOT-compiled code restores from its image for an
+        // expression that it evaluates as an AST, leaves the call site as it is: the native code of the call may have
+        // set it, and the first frame that the expression creates takes it (for "getObj().m()", the frame of getObj():
+        // AOT locations have lines only, and the call nodes of such expressions get their lines with issue 5745)
+        if (!loc || loc == &loc_builtin) {
+            return;
+        }
+        slot = rc.impl ? rc.impl->call_site_ptr : nullptr;
+        if (slot) {
+            *slot = loc;
+        } else {
+            td = set_runtime_call_site(loc, prev);
+        }
+    }
+
+    //! clears the call site, which the frame of the called code has taken if the call was made
+    DLLLOCAL ~QoreRcCallSiteHelper() {
+        if (slot) {
+            *slot = nullptr;
+        } else if (td) {
+            restore_runtime_call_site(td, prev);
+        }
+    }
+
+    QoreRcCallSiteHelper(const QoreRcCallSiteHelper&) = delete;
+    QoreRcCallSiteHelper& operator=(const QoreRcCallSiteHelper&) = delete;
+
+private:
+    const QoreProgramLocation** slot = nullptr;
+    const QoreProgramLocation* prev = nullptr;
+    void* td = nullptr;
+};
 
 /**
  * @brief RAII helper to manage RuntimeConfig and sync on destruction.

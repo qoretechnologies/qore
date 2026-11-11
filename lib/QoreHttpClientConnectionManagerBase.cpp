@@ -603,10 +603,11 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 return nullptr;
             }
             reserved = conn_raw->tryReserveStream(streaming_send);
-            if (!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) {
+            // a connection whose close notification has been sent, which can happen after the reservation, gets
+            // no pool key: no notification would remove it from the pool (see setPoolKey())
+            if ((!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) || !conn_raw->setPoolKey(key)) {
                 closed = true;
             } else {
-                conn_raw->setPoolKey(key);
                 pool_[key].push_back(conn_raw);
                 // Record the observed protocol in the sticky bitmask — see
                 // hasEverObservedProtocol() docs for the race this guards
@@ -659,6 +660,10 @@ bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
     return false;
 }
 
+bool HttpClientConnectionManagerBase::isCancelPending() {
+    return qore_check_cancel(nullptr, "HTTP request");
+}
+
 bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
     QoreValue err = xsink.getExceptionErr();
     if (err.getType() != NT_STRING) {
@@ -667,6 +672,22 @@ bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsi
     const char* e = err.get<const QoreStringNode>()->c_str();
     return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
         || !strcmp(e, "SOCKET-CLOSED");
+}
+
+bool HttpClientConnectionManagerBase::replaceClosedErrorWithPendingCancel(ExceptionSink& xsink) {
+    // the HTTP/3 connections of the HTTPClient report a closed QUIC connection; this manager does not repeat requests
+    // on them, so isConnectionClosedError() does not include it
+    if (!isConnectionClosedError(xsink) && !(xsink.getExceptionErr().getType() == NT_STRING
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "HTTP3-CONNECTION-CLOSED")) {
+        return false;
+    }
+    ExceptionSink cancel_xsink;
+    if (!qore_socket_raise_pending_cancel("HTTP request", &cancel_xsink)) {
+        return false;
+    }
+    xsink.clear();
+    xsink.assimilate(cancel_xsink);
+    return true;
 }
 
 //! Returns the TLS configuration for a new connection from the manager's options
@@ -1060,25 +1081,42 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         return nullptr;
     }
 
+    // the negotiating connection did not keep the per-connection options
+    applyConnectionOptions(*concrete);
+
+    return swapNegotiatedConnection(neg, concrete.release(), reserve_stream, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnection(HttpClientConnectionBase* neg,
+        HttpClientConnectionBase* concrete_conn, bool reserve_stream, ExceptionSink* xsink) {
+    ReferenceHolder<HttpClientConnectionBase> concrete(concrete_conn, xsink);
     HttpClientConnectionBase* concrete_raw = *concrete;
     const std::string key = neg->getPoolKey();
-
-    // the negotiating connection did not keep the per-connection options
-    applyConnectionOptions(concrete_raw);
 
     // Swap the transitional entry for the concrete one under the write lock, so
     // a concurrent acquire never sees both or neither.
     bool swapped = false;
+    // true if the transitional connection was removed from the pool here, as the concrete one has closed already
+    bool neg_evicted = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
         auto it = pool_.find(key);
         if (it != pool_.end()) {
             for (auto cit = it->second.begin(); cit != it->second.end(); ++cit) {
                 if (*cit == neg) {
-                    concrete_raw->setPoolKey(key);
-                    *cit = concrete_raw;
-                    concrete.release();  // the pool takes this reference
-                    swapped = true;
+                    if (concrete_raw->setPoolKey(key)) {
+                        *cit = concrete_raw;
+                        concrete.release();  // the pool takes this reference
+                        swapped = true;
+                    } else {
+                        // the concrete connection's close notification has been sent: it cannot be pooled, as no
+                        // notification would remove it, and the transitional entry is defunct
+                        it->second.erase(cit);
+                        if (it->second.empty()) {
+                            pool_.erase(it);
+                        }
+                        neg_evicted = true;
+                    }
                     break;
                 }
             }
@@ -1099,6 +1137,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
     // drops itself) and, when it was still pooled, the pool's, dropped below.
     neg->releaseStreamReservation();
 
+    // The transitional connection left the pool here (swapped or neg_evicted): a close notification that it sends
+    // later must not reach the manager, as it would queue its pointer for a connection that is no longer pooled, and
+    // a connection made later at the same address and pooled under the same key would be removed by it
+    if (swapped || neg_evicted) {
+        neg->setManager(nullptr);
+    }
+
     if (swapped) {
         // The pool owns the reference given up by concrete.release() above; the
         // caller gets its own.  Drop the pool's reference to the transitional
@@ -1106,12 +1151,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         concrete_raw->ref();
         neg->deref(xsink);
     } else {
-        // The transitional connection was evicted while ALPN was in flight (a
-        // racing closeAll(), max-age eviction or closeAndEvict(), each of which
-        // already dropped the pool's reference).  The concrete connection is
-        // still usable by this caller; it just never enters the pool, so it is
-        // closed when the caller derefs it.  The holder's reference becomes the
-        // caller's.
+        // Either the transitional connection was evicted while ALPN was in flight (a racing closeAll(), max-age
+        // eviction or closeAndEvict(), each of which already dropped the pool's reference), or it was removed above
+        // because the concrete connection's close notification has been sent (neg_evicted), in which case the
+        // pool's reference is dropped here.  The concrete connection never enters the pool, so it is closed when the
+        // caller derefs it; one whose notification has been sent is closed already, and the caller's request on it
+        // fails with the connection's error.  The holder's reference becomes the caller's.
         if (reserve_stream) {
             // cannot fail: a freshly-adopted connection has no streams yet
             (void)concrete_raw->tryReserveStream(false);
@@ -1119,6 +1164,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         // the caller's connection can outlive this manager, so it must not send its close notification here
         concrete_raw->setManager(nullptr);
         concrete.release();
+        if (neg_evicted) {
+            // the reference of the pool to the transitional connection, removed above
+            neg->deref(xsink);
+        }
     }
     return concrete_raw;
 }
@@ -1455,11 +1504,13 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // The protocol poll operation publishes its closed error before its callback updates
         // the pooled connection state. A submit in that window must evict and retry too.
         if (conn->isClosed() || isConnectionClosedError(*xsink)) {
+            // a cancellation of this thread that closed the connection is reported as such, and not repeated
+            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink) || isCancelPending();
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed by the peer while it waited in the pool
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }
@@ -1497,12 +1548,19 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // pending and before the connection reference goes out of scope.
         abandonRequest(conn, stream_id);
         result.discard(xsink);
-        // a reused connection that was closed by the peer is not used again, and the request is repeated
-        if (retry && isConnectionClosedError(*xsink)) {
-            ExceptionSink evict_xsink;
-            closeAndEvict(conn, &evict_xsink);
-            evict_xsink.clear();
-            *retry = true;
+        if (isConnectionClosedError(*xsink)) {
+            // a cancellation of this thread that ended the request first (the code that it ends closes the
+            // transport) is reported as such, and the request is not repeated
+            bool cancelled = replaceClosedErrorWithPendingCancel(*xsink);
+            // a reused connection that was closed by the peer is not used again, and the request is repeated
+            if (retry) {
+                ExceptionSink evict_xsink;
+                closeAndEvict(conn, &evict_xsink);
+                evict_xsink.clear();
+                if (!cancelled) {
+                    *retry = true;
+                }
+            }
         }
         return nullptr;
     }
@@ -1639,11 +1697,13 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         // the eviction, the repeat of the request can be handed the same dead connection, fail the same way and
         // be reported as final.
         if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
+            // a cancellation of this thread that closed the connection is reported as such, and not repeated
+            bool cancelled = (*xsink && replaceClosedErrorWithPendingCancel(*xsink)) || isCancelPending();
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed while it waited in the pool, with or without an error of its own
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }

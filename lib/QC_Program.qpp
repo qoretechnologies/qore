@@ -38,6 +38,8 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_Expression.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_Queue.h"
+#include "qore/intern/ProgramThreadHub.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QC_SandboxManager.h"
@@ -251,6 +253,188 @@ hashdecl RuntimeDiagnosticInfo {
 
     //! the name of the section of the language reference about the trap, such as \c "pitfalls_declaration"
     *string doc;
+}
+
+/** @defgroup program_thread_event_constants Program Thread Lifecycle Event Constants
+
+    Bits of the \c events key of @ref Qore::ProgramThreadEventOptions "ProgramThreadEventOptions", selecting the
+    events that @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()" delivers; see
+    @ref Qore::ProgramThreadEvent "ProgramThreadEvent" for the events
+
+    @since %Qore 3.0
+*/
+///@{
+//! a background thread has started in the Program: \c "STARTED"
+const PTE_STARTED = QORE_PTE_STARTED;
+
+//! a cancellation request has been delivered to a background thread of the Program: \c "CANCEL_REQUESTED"
+const PTE_CANCEL_REQUESTED = QORE_PTE_CANCEL_REQUESTED;
+
+//! a background thread of the Program has ended: \c "FINISHED"
+const PTE_FINISHED = QORE_PTE_FINISHED;
+
+//! the Program has become idle or active: \c "ACTIVITY"; not delivered by default
+const PTE_ACTIVITY = QORE_PTE_ACTIVITY;
+
+//! the Program has been destroyed and its subscriptions have ended: \c "CLOSED"
+const PTE_CLOSED = QORE_PTE_CLOSED;
+
+//! every event
+const PTE_ALL = QORE_PTE_ALL;
+
+//! the events delivered by default: every event but \c "ACTIVITY"
+const PTE_DEFAULT = QORE_PTE_DEFAULT;
+///@}
+
+//! options for @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()"
+/** @since %Qore 3.0
+*/
+hashdecl ProgramThreadEventOptions {
+    //! the events to deliver: a combination of @ref program_thread_event_constants; @ref Qore::PTE_DEFAULT "PTE_DEFAULT" if not set
+    *int events;
+}
+
+//! a background thread of a Program, in the snapshot returned by @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()"
+/** @since %Qore 3.0
+*/
+hashdecl ProgramThreadInfo {
+    //! the thread's TID; TIDs are reused after threads end
+    int tid;
+
+    //! the thread's ID, which is unique in the process
+    int thread_id;
+
+    //! the TID of the thread that started it
+    int parent_tid;
+
+    //! the \c thread_id of the thread that started it, or 0 if that thread is not a background thread of the Program
+    int parent_thread_id;
+
+    //! the thread's name when it started
+    string name;
+
+    //! when the thread started
+    date start;
+
+    //! @ref True if a cancellation request has been delivered to the thread
+    bool cancel_requested;
+}
+
+//! the subscription returned by @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()"
+/** @since %Qore 3.0
+*/
+hashdecl ProgramThreadSubscription {
+    //! the subscription's ID, which is unique in the process; each event delivered for the subscription has it in its \c subscription_id key
+    int id;
+
+    //! the ID of the Program
+    int program_id;
+
+    //! the sequence number of the last event published before the subscription; every event delivered for the subscription has a greater one
+    int seq;
+
+    //! @ref True if the Program was idle when the subscription was made: no thread was running its code
+    bool idle;
+
+    //! the background threads of the Program running when the subscription was made, in the order they started
+    list<hash<ProgramThreadInfo>> threads;
+}
+
+//! a lifecycle event of a Program's background threads, delivered to the queue of a subscription made with @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()"
+/** Events:
+    - \c "STARTED": a thread has started in the Program, by the \c background operator; published by the thread
+      before its code runs (before the Program's @ref Qore::Program::setThreadEntryHandler() "entry handler" and
+      @ref Qore::Program::setThreadInit() "thread initialization code")
+    - \c "CANCEL_REQUESTED": a cancellation request has been delivered to the thread while its code runs (see
+      @ref Qore::cancel_thread() "cancel_thread()", @ref Qore::Program::cancelThread() "Program::cancelThread()" and
+      @ref Qore::Program::cancelThreads() "Program::cancelThreads()"); a request made while one is pending is not
+      published, and a request does not mean that the thread ends: \c "FINISHED" reports how it ended; a request
+      scoped to another Program (made with that Program's @ref Qore::Program::cancelThreads() "cancelThreads()" while
+      the thread runs its code) applies only to that code and is not published
+    - \c "FINISHED": the thread has ended: it has left the Program and its thread-local data has been destroyed;
+      published before its TID can be reused
+    - \c "ACTIVITY": the Program has become idle (no thread runs its code) or active; only delivered if requested
+      with @ref Qore::PTE_ACTIVITY "PTE_ACTIVITY"
+    - \c "CLOSED": the Program has been destroyed, and every background thread has published \c "FINISHED"; the
+      last event of the subscription
+
+    For each thread, \c "STARTED" comes first and \c "FINISHED" last, with any \c "CANCEL_REQUESTED" events
+    between them; all events of a Program are delivered in the order of their \c seq key.
+
+    The \c outcome of a \c "FINISHED" event is taken from the exception that ended the thread's code, not from
+    cancellation requests:
+    - \c "COMPLETED": the code returned without an exception, including a thread that caught a cancellation and
+      returned normally
+    - \c "EXCEPTION": an exception ended the code (other than the ones below)
+    - \c "CANCELLED": a \c THREAD-CANCELLED exception ended the code
+    - \c "INTERRUPTED": a \c PROGRAM-INTERRUPTED exception ended the code, or a sandbox ended it for reaching a
+      limit (\c SANDBOX-TIMEOUT or \c SANDBOX-MEMORY-LIMIT)
+    - \c "EXITED": the code called \c thread_exit
+    - \c "START_FAILED": the Program's @ref Qore::Program::setThreadEntryHandler() "entry handler" raised an
+      exception, so the code did not run
+
+    Events refer to no objects or code: the \c err, \c desc and \c arg keys of \c error and \c cleanup_error are
+    left empty if their value does, and they have no chained exceptions (\c next).
+
+    @since %Qore 3.0
+*/
+hashdecl ProgramThreadEvent {
+    //! the ID of the subscription the event was delivered for
+    int subscription_id;
+
+    //! the ID of the Program
+    int program_id;
+
+    //! the event's sequence number; it increases with each event of the Program
+    int seq;
+
+    //! the event: \c "STARTED", \c "CANCEL_REQUESTED", \c "FINISHED", \c "ACTIVITY" or \c "CLOSED"
+    string event;
+
+    //! the number of background threads of the Program that have started and not yet published \c "FINISHED", after the event; a thread leaves the Program before it publishes \c "FINISHED", so it can still be counted in the \c "ACTIVITY" event of the Program becoming idle
+    int running;
+
+    //! the thread's TID (thread events)
+    *int tid;
+
+    //! the thread's ID, which is unique in the process (thread events)
+    *int thread_id;
+
+    //! the TID of the thread that started it (thread events)
+    *int parent_tid;
+
+    //! the \c thread_id of the starting thread if it is a background thread of the Program, else 0 (thread events)
+    *int parent_thread_id;
+
+    //! the thread's name: its name when it started, and for \c "FINISHED" its name when it ended (thread events)
+    *string name;
+
+    //! when the thread started (thread events)
+    *date start;
+
+    //! when the thread ended (\c "FINISHED")
+    *date end;
+
+    //! the time the thread ran, in microseconds (\c "FINISHED")
+    *int duration_us;
+
+    //! how the thread ended: \c "COMPLETED", \c "EXCEPTION", \c "CANCELLED", \c "INTERRUPTED", \c "EXITED" or \c "START_FAILED" (\c "FINISHED")
+    *string outcome;
+
+    //! the first exception that ended the thread's code (\c "FINISHED")
+    *hash<ExceptionInfo> error;
+
+    //! the number of exceptions that ended the thread's code (\c "FINISHED")
+    *int exception_count;
+
+    //! the first exception raised when the thread released its resources after its code ended, for example by a destructor (\c "FINISHED"); it does not change the \c outcome
+    *hash<ExceptionInfo> cleanup_error;
+
+    //! the reason given with the cancellation request, if any (\c "CANCEL_REQUESTED")
+    *string cancel_reason;
+
+    //! @ref True if the Program became idle, @ref False if it became active (\c "ACTIVITY")
+    *bool idle;
 }
 
 /** @defgroup import_visibility_constants Import Visibility Constants
@@ -1414,6 +1598,8 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
+    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)
@@ -1442,6 +1628,8 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options->get());
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
+    // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)
@@ -1956,6 +2144,13 @@ pgm.importFunction("log");
     @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
+    @note The imported function runs in the Program that it is imported from, with that Program's options and
+    names, as a method of a class imported with importClass() does.  The restrictions of the calling Program do not
+    apply to it, also if the calling Program is sandboxed, unless it is module code (the Program it is imported from
+    has @ref Qore::PO_IN_MODULE "PO_IN_MODULE"), which also runs with the restrictions of a sandboxed caller (see
+    @ref sandbox_po_limitations); the @ref Qore::SandboxManager "SandboxManager" of a sandboxed calling Program governs
+    it in any case.  A call after the Program it is imported from has been deleted raises \c PROGRAM-ERROR
+
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
 nothing Program::importFunction(string function_name) [flags=NAMED_ARGS] {
@@ -1992,6 +2187,13 @@ pgm.importFunction("service_log", "log");
     @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the
     @ref default_encoding "default character encoding"
+
+    @note The imported function runs in the Program that it is imported from, with that Program's options and
+    names, as a method of a class imported with importClass() does.  The restrictions of the calling Program do not
+    apply to it, also if the calling Program is sandboxed, unless it is module code (the Program it is imported from
+    has @ref Qore::PO_IN_MODULE "PO_IN_MODULE"), which also runs with the restrictions of a sandboxed caller (see
+    @ref sandbox_po_limitations); the @ref Qore::SandboxManager "SandboxManager" of a sandboxed calling Program governs
+    it in any case.  A call after the Program it is imported from has been deleted raises \c PROGRAM-ERROR
 
     @since
     - %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
@@ -2602,9 +2804,24 @@ pgm.setSandboxManager(sm);
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
 
+    @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
+    cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
+    which only adds restrictions (since %Qore 3.0)
+
     @since Qore 3.0
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
+   // sandboxed or restricted code could otherwise loosen the sandbox of a Program that it can reach, its own included,
+   // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
+   // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
+   // longer be the one that its owner's limits, interrupt requests and configuration changes act on
+   if (qore_calling_code_is_untrusted()) {
+       QoreSandboxManagerHelper current(p);
+       if (current && current.get() != *sandbox_manager) {
+           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+               "are restricted, cannot replace the sandbox manager of a Program");
+       }
+   }
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
    p->setSandboxManager(*sandbox_manager);
 }
@@ -2651,6 +2868,9 @@ pgm.setExecMode(EM_JIT);
 
     @note IR, JIT, and tiered modes require @ref PO_MODERN "%modern" parse options.
 
+    @note A child Program created afterwards inherits the mode for as long as its own parse options support it; see
+    @ref exec_mode_child_programs
+
     @see Program::getExecMode()
 
     @since %Qore 3.0
@@ -2669,6 +2889,9 @@ if (mode == EM_JIT) {
     printf("Using JIT compilation\n");
 }
     @endcode
+
+    @note The mode of a child Program that inherited an explicitly requested mode depends on its current parse options;
+    see @ref exec_mode_child_programs
 
     @see Program::setExecMode()
 
@@ -3413,6 +3636,122 @@ bool Program::setThreadEntryHandler(*code on_enter, *code on_exit)
     return qore_program_private::setThreadEntryHandler(*p, on_enter, on_exit, xsink);
 }
 
+//! Subscribes a @ref Qore::Thread::Queue "Queue" to the lifecycle events of the background threads of this Program
+/** Code that embeds a Program (a REPL, an IDE, a supervisor) can follow the threads that the Program's code starts
+    with the \c background operator: when each starts, when cancellation is requested, and when and how it ended
+    (normally, by an exception, by cancellation), and when the Program becomes idle.  The runtime pushes a
+    @ref Qore::ProgramThreadEvent "ProgramThreadEvent" hash to the queue for each event; no code of the subscriber
+    runs in the Program's threads, and the queue can be read by one thread for any number of threads observed.
+
+    @param queue the queue to receive the events; it must have no maximum size, so that publishing an event never
+    blocks the thread that publishes it
+    @param opts options for the subscription; see @ref Qore::ProgramThreadEventOptions "ProgramThreadEventOptions"
+
+    @return the subscription: its ID, which each event delivered for it carries, and a snapshot of the Program's
+    running background threads; every event delivered for the subscription comes after the snapshot (its \c seq is
+    greater than the snapshot's), so a thread is either in the snapshot or its \c "STARTED" event is delivered, and
+    no event is missed or delivered twice
+
+    @par Example:
+    @code{.py}
+Program pgm(PO_NEW_STYLE);
+Queue events();
+hash<ProgramThreadSubscription> sub = pgm.subscribeThreadEvents(events);
+pgm.parse("background sub () { throw \"ERR\", \"error\"; }();", "example");
+pgm.run();
+while (True) {
+    hash<ProgramThreadEvent> ev = events.get();
+    if (ev.event == "FINISHED") {
+        printf("thread %d: %s (%s)\n", ev.tid, ev.outcome, ev.error.err ?? "-");
+        break;
+    }
+}
+pgm.unsubscribeThreadEvents(sub.id);
+    @endcode
+
+    @par Thread Lifetime
+    A background thread starts when it has been registered in the Program, before its code runs, and ends when it
+    has left the Program and its thread-local data has been destroyed; its \c "FINISHED" event is published before
+    its TID is released, so a thread that reuses the TID cannot publish \c "STARTED" before it.  TIDs are reused,
+    so events also carry a \c thread_id that is unique in the process, and the \c thread_id of the thread that
+    started the thread (\c parent_thread_id), from which the threads started by the Program's background threads
+    can be told apart.  A thread that could not be started (the \c background operator raised an exception) has no
+    events.  Threads that call the Program's code without being started by it with \c background (the thread that
+    runs it, the threads of @ref Qore::call_async() "call_async()" and of thread pools, which the
+    @ref Qore::Thread::Future "Future" or pool reports, I/O callbacks) are not background threads of the Program;
+    they make the Program active, which \c "ACTIVITY" events report.
+
+    @par Program Activity
+    With @ref Qore::PTE_ACTIVITY "PTE_ACTIVITY", an \c "ACTIVITY" event is published when the Program becomes idle
+    (no thread runs its code: @ref Qore::Program::getThreadCount() "getThreadCount()" is 0) and when it becomes
+    active again.  An idle Program can become active at any time, so code that waits for it to be idle before
+    parsing must check again when it parses.
+
+    @par Program Destruction
+    When the Program is destroyed, a \c "CLOSED" event is published once every background thread has published
+    \c "FINISHED", and the subscription ends.
+
+    @throw PROGRAM-THREAD-EVENT-ERROR the queue has a maximum size, the \c events option is invalid, the calling
+    code runs in this Program, or the Program is being destroyed
+
+    @note
+    - the Program keeps a reference to the queue's data until the subscription is removed with
+      @ref Qore::Program::unsubscribeThreadEvents() "unsubscribeThreadEvents()" or the Program is destroyed; remove
+      it when the events are no longer read, as they are added to the queue until then
+    - events refer to no objects or code, so they never keep the values of the Program's threads alive
+
+    @see @ref Qore::Program::unsubscribeThreadEvents() "unsubscribeThreadEvents()"
+
+    @since %Qore 3.0
+*/
+hash<ProgramThreadSubscription> Program::subscribeThreadEvents(Qore::Thread::Queue[Queue] queue,
+        *hash<ProgramThreadEventOptions> opts) [dom=THREAD_CONTROL,EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // code that has its own Program object must not observe or control the embedding of its own threads
+    if (getProgram() == p) {
+        return xsink->raiseException("PROGRAM-THREAD-EVENT-ERROR", "code cannot subscribe to the thread events of "
+            "the Program it runs in");
+    }
+    int64 events = QORE_PTE_DEFAULT;
+    if (opts) {
+        bool found;
+        QoreValue v = opts->getKeyValueExistence("events", found);
+        if (found && !v.isNothing()) {
+            events = v.getAsBigInt();
+            if (!events || (events & ~static_cast<int64>(QORE_PTE_ALL))) {
+                return xsink->raiseException("PROGRAM-THREAD-EVENT-ERROR", "invalid value " QLLD " for the "
+                    "'events' option; expecting a non-zero combination of the PTE_* constants", events);
+            }
+        }
+    }
+    // the hub takes the reference, also on error
+    return qore_program_private::subscribeThreadEvents(*p, queue.release(), events, xsink);
+}
+
+//! Removes a subscription made with @ref Qore::Program::subscribeThreadEvents() "subscribeThreadEvents()"
+/** Events already in the queue stay there; they can be told apart by their \c subscription_id key.
+
+    @param id the ID of the subscription
+
+    @return @ref True if the subscription was removed, @ref False if there is no such subscription (it was removed
+    already, or ended with the Program's \c "CLOSED" event)
+
+    @par Example:
+    @code{.py}
+pgm.unsubscribeThreadEvents(sub.id);
+    @endcode
+
+    @throw PROGRAM-THREAD-EVENT-ERROR the calling code runs in this Program
+
+    @since %Qore 3.0
+*/
+bool Program::unsubscribeThreadEvents(int id) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    if (getProgram() == p) {
+        return xsink->raiseException("PROGRAM-THREAD-EVENT-ERROR", "code cannot remove subscriptions to the thread "
+            "events of the Program it runs in");
+    }
+    return qore_program_private::unsubscribeThreadEvents(*p, id, xsink);
+}
+
 //! returns a hash of global variables
 /** @par Example:
     @code{.py}
@@ -3485,6 +3824,9 @@ list<int> l = pgm.getThreadList();
     @endcode
 
     @return a list of thread IDs active in this Program
+
+    @note the %Program of a user module does not list the threads that run its code for calls from other Programs;
+    those threads are listed by the Programs that called it (see @ref user_module_runtime_context)
 
     @since %Qore 0.8.13
 */
@@ -3594,7 +3936,7 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
 
     @since %Qore 0.9
 */
-nothing Program::issueModuleCmd(string module_name, string command) [flags=NAMED_ARGS] {
+nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES; flags=NAMED_ARGS] {
     TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();

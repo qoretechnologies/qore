@@ -77,6 +77,15 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashSetKeyValueFold: return "hash.set.key.value.fold";
         case QoreIROpcode::ListSetScannedType: return "list.set.scanned.type";
         case QoreIROpcode::ListAppendElement: return "list.append.element";
+        case QoreIROpcode::CheckCancelEvery: return "check.cancel.every";
+        case QoreIROpcode::CheckRangeBound: return "check.range.bound";
+        case QoreIROpcode::ListSelectorStep: return "list.selector.step";
+        case QoreIROpcode::IteratorCreateSelectors: return "iterator.create.selectors";
+        case QoreIROpcode::SelectorIteratorPending: return "selector.iterator.pending";
+        case QoreIROpcode::SelectorIteratorFeed: return "selector.iterator.feed";
+        case QoreIROpcode::ExceptionSuspend: return "exception.suspend";
+        case QoreIROpcode::ExceptionResume: return "exception.resume";
+        case QoreIROpcode::IteratorNextSelectors: return "iterator.next.selectors";
         case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
@@ -246,6 +255,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ToBool: return "to.bool";
         case QoreIROpcode::ToInt: return "to.int";
         case QoreIROpcode::ToFloat: return "to.float";
+        case QoreIROpcode::ToStringChecked: return "to.string.checked";
+        case QoreIROpcode::ToIntChecked: return "to.int.checked";
+        case QoreIROpcode::ToFloatChecked: return "to.float.checked";
         case QoreIROpcode::Not: return "not";
         case QoreIROpcode::IsNullOrNothing: return "is.null-or-nothing";
         case QoreIROpcode::Phi: return "phi";
@@ -832,7 +844,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " %" << ret->value.id;
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
-                    || inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateIterate
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterable.id;
@@ -841,6 +854,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::IteratorNextSelectors
                     || inst->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
                     || inst->opcode == QoreIROpcode::TypedForeachNextBool
@@ -848,7 +862,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterator.id;
-                    if (inst->opcode != QoreIROpcode::IteratorNext) {
+                    if (inst->opcode != QoreIROpcode::IteratorNext
+                            && inst->opcode != QoreIROpcode::IteratorNextSelectors) {
                         out << " index %" << iter->index.id << " limit %" << iter->limit.id;
                     }
                     if (iter->continue_target) {

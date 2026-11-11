@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <numeric>
 #include <atomic>
+#include <optional>
 
 // internal struct for call_async thread parameters
 struct CallAsyncParams {
@@ -186,17 +187,34 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
 }
 
 //! call stack hash description
-/** @since %Qore 0.8.13
+/** Each frame describes a call of the code named in \c function and is located where that code was called: at the
+    call expression in the calling code, such as <tt>g(2)</tt> in <tt>r = f(1) + g(2);</tt>, with its lines and
+    columns, in every @ref exec_mode_overview "execution mode"; the location of the innermost frame is where the
+    current code is.  A frame of code that is called without a call expression, such as a destructor or a
+    \c memberGate() method, is located where the code that runs it is: at its statement in the AST interpreter, and
+    at a location of its line in the other execution modes
+    (<a href="https://github.com/qoretechnologies/qore/issues/5746">issue 5746</a>).
+
+    @since %Qore 0.8.13
+
+    @since %Qore 3.0 a frame of a call is located at the call expression; before, at the statement that makes the call
+    in the AST interpreter, and at a location of its line in other execution modes
 */
 hashdecl CallStackInfo {
     //! function or method name
     string function;
 
-    //! starting line number
+    //! starting line number of the location
     int line;
 
-    //! ending line number
+    //! ending line number of the location
     int endline;
+
+    //! the 0-based column of the first character of the location in its start line, or -1 if unknown, as for AOT-compiled code; a column counts bytes (since %Qore 3.0)
+    int start_column = -1;
+
+    //! the 0-based column after the last character of the location in its end line, or -1 if unknown, as for AOT-compiled code (since %Qore 3.0)
+    int end_column = -1;
 
     //! The parse label of the code; this is normally the file name; this corresponds to the label parameter of the Program::parse() and Program::parsePending() methods and the Qore::parse() function, for example (if known, for user code only)
     string file;
@@ -560,7 +578,8 @@ hash<string, list<hash<CallStackInfo>>> get_all_thread_call_stacks() [dom=THREAD
     Because it is always from the same thread being read, no locking is applied as in
     @ref get_all_thread_call_stacks()
 
-    @return a list of @ref CallStackInfo hashes for the current TID (thread ID)
+    @return a list of @ref CallStackInfo hashes for the current TID (thread ID), from the innermost frame; each frame
+    of a call is located at the call expression that made it (see @ref CallStackInfo)
 
     @par Example:
     @code{.py}
@@ -1142,6 +1161,12 @@ bool active_exception() [dom=PROCESS;flags=CURRENT_THREAD_ONLY] {
     no blocking calls) will not be interrupted, but such code is inherently finite and
     will complete on its own.
 
+    @par Socket Calls
+    A synchronous @ref Qore::Socket "Socket" call that waits for its socket ends with \c THREAD-CANCELLED, and its
+    I/O ends with it, as at a timeout of the call: the socket can be used at once, unless the call had already
+    received part of its data, which is then lost, and the socket is closed; data that arrives after the call ended
+    is left for the next call.
+
     @par Which Threads Can Be Cancelled
     A request issued from an unrestricted @ref Qore::Program "Program" — one with no
     @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller
@@ -1334,6 +1359,11 @@ release() {
 
     The deferral is released when \a cleanup returns, including when it throws, and calls nest.
 
+    Sandboxed code is never deferred (see @ref cancel_security): called by code of a sandboxed %Program, this
+    function only calls \a cleanup; called by trusted code, the sandboxed code that \a cleanup calls (a callback, a
+    method of a sandboxed class, the destructor of an object of a sandboxed class) runs with cancellation, program
+    interrupts and sandbox limits not deferred.
+
     @param cleanup the @ref call_reference "call reference" or @ref closure "closure" to call with
     cancellation deferred
     @param ... any optional arguments to \a cleanup
@@ -1390,8 +1420,14 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     }
     // declared first so that it is destroyed last: the deferral covers the argument list's own
     // teardown, which can run destructors.  The helper's destructor releases it on every path,
-    // including when the call throws.
-    QoreCancelDeferralHelper cdh;
+    // including when the call throws.  Sandboxed code never runs with cancellation deferred (see
+    // "Sandboxed code never runs deferred" in design/cooperative-cancellation.md): called by a sandboxed
+    // Program, the function only calls the code; called by trusted code, the deferral is suspended again
+    // while sandboxed code that the cleanup calls runs (ProgramThreadCountContextHelper)
+    std::optional<QoreCancelDeferralHelper> cdh;
+    if (!qore_program_is_sandboxed(getProgram())) {
+        cdh.emplace();
+    }
     ReferenceHolder<QoreListNode> vargs(xsink);
     // if there are arguments to pass, create the argument list by copying the current list after
     // the callable

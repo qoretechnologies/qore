@@ -333,8 +333,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
+//! v23: a serialized IR function has, after its local slot table, the number of its handler-own local slots and
+//!      their slot ids (u32 each): the closure-bound locals that an on_block_exit handler declares itself, which the
+//!      lowering does not mark pre-instantiated in the handler (zero for a function that is not a handler).  A handler
+//!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
+//!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
+//!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 23;
+//! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
+constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
@@ -4172,7 +4180,7 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
     - Function header: name, max_value_id, max_local_slot_id, num_guards, return_type, block/local counts
     - Local variable slot table: name, type_path, slot_id for each local
     - Body locals list: name, type_path for each body local
-    - Blocks: for each block, name, is_loop_header, instructions
+    - Blocks: for each block, name, a flag byte (bit 0: is_loop_header, bits 1-3: loop_cancel), instructions
     - Instructions: opcode, group_tag, result, operands, exception_target, group-specific fields
 
     @param writer binary writer (uses string pool and buffer)

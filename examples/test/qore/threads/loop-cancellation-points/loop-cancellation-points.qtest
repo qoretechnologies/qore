@@ -1,0 +1,412 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of thread cancellation checks and their exception routing
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LoopCancellationPointsTest
+
+#! issue #5641: only the loop statements are cancellation points, in every execution mode and with AOT
+/** The AST interpreter checks for cancellation at the start of every iteration of a while, do-while, for and foreach
+    statement, with the label of the statement, and not in the loops of expressions such as map, select or foldl
+    (design/cooperative-cancellation.md, "Loop Statements").  The IR interpreter, native code and AOT checked at the
+    header of every loop that the IR lowering makes, with the label "IR loop", so a map in the on_exit block of a
+    cancelled thread raised THREAD-CANCELLED; a do-while statement checked only after its first iteration.
+*/
+class LoopCancellationPointsTest inherits QUnit::Test {
+    public {
+        #! the class that runs each kind of loop in the on_exit block of a cancelled thread
+        const RunnerClass = "class Runner {
+    static string run(string kind) {
+        hash<string, Queue> qs = {\"a\": new Queue(), \"b\": new Queue()};
+        Queue res(); Counter started(1); Counter block(1);
+        int tid = background sub () {
+            # declared outside the on_exit block: a referenced local declared in an on_exit block that runs while an
+            # exception unwinds is not instantiated with IR execution (a separate defect)
+            list<Queue> ql = qs.values();
+            on_exit {
+                try {
+                    switch (kind) {
+                        case \"map-list\": map $1.push(True), ql; break;
+                        case \"map-iterator\": map $1.push(True), qs.iterator(); break;
+                        case \"map-filter\": map $1.push(True), ql, True; break;
+                        case \"select\": auto s = select ql, $1.push(True) || True; break;
+                        case \"foldl\": auto f = foldl ($1.push(True), $2.push(True), $2), ql; break;
+                        case \"hmap\": hash<auto> hm = map {$1: qs{$1}.push(True)}, (\"a\", \"b\"); break;
+                        case \"while\": { int i = 0; while (i < 2) { ql[i].push(True); ++i; } } break;
+                        case \"do-while\": { int i = 0; do { ql[i].push(True); ++i; } while (i < 2); } break;
+                        case \"for\": for (int i = 0; i < 2; ++i) { ql[i].push(True); } break;
+                        case \"foreach\": foreach Queue q in (ql) { q.push(True); } break;
+                        case \"foreach-ref\": foreach Queue q in (\\ql) { q.push(True); } break;
+                        case \"foreach-range\": foreach int i in (xrange(2)) { ql[i].push(True); } break;
+                    }
+                    res.push(\"ok\");
+                } catch (hash<ExceptionInfo> ex) { res.push(ex.err + \": \" + ex.desc); }
+            }
+            started.dec();
+            block.waitForZero();
+        }();
+        started.waitForZero();
+        cancel_thread(tid, \"t\");
+        string r = res.get(60s);
+        thread_join(tid);
+        r =~ s/thread [0-9]+ //;
+        return sprintf(\"%s -> %s; queued=%y\", kind, r, (map $1.size(), qs.iterator()));
+    }
+}";
+
+        #! runs every kind of loop and prints the result of each
+        const Main = "map printf(\"%s\\n\", Runner::run($1)), (\"map-list\", \"map-iterator\", \"map-filter\", \"select\", \"foldl\", \"hmap\", \"while\",
+    \"do-while\", \"for\", \"foreach\", \"foreach-ref\", \"foreach-range\");\n";
+
+        #! the result of the AST interpreter, which every other execution mode and AOT must give
+        const Expected = "map-list -> ok; queued=[1, 1]
+map-iterator -> ok; queued=[1, 1]
+map-filter -> ok; queued=[1, 1]
+select -> ok; queued=[1, 1]
+foldl -> ok; queued=[1, 1]
+hmap -> ok; queued=[1, 1]
+while -> THREAD-CANCELLED: while loop: cancelled: t; queued=[0, 0]
+do-while -> THREAD-CANCELLED: do-while loop: cancelled: t; queued=[0, 0]
+for -> THREAD-CANCELLED: for loop: cancelled: t; queued=[0, 0]
+foreach -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+foreach-ref -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+foreach-range -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+";
+
+        #! continue statements in try blocks in loops, with a cancellation made pending in the first iteration: the
+        #! check on entering the next iteration raises it in the scope of the loop, not in the try block
+        const ContinueScript = "%modern
+#! makes a cancellation of the current thread pending: another thread cancels it while it waits with deferred
+#! cancellation, so that the next cancellation point raises it
+sub cancel_me() {
+    Counter go(1);
+    Counter cancelled(1);
+    int tid = gettid();
+    background sub () {
+        go.waitForZero();
+        cancel_thread(tid, \"t\");
+        cancelled.dec();
+    }();
+    defer_thread_cancel(sub () {
+        go.dec();
+        cancelled.waitForZero();
+    });
+}
+
+string sub run(string kind) {
+    Queue res();
+    background sub () {
+        int i = 0;
+        try {
+            switch (kind) {
+                case \"while\": while (i < 3) { ++i; try { if (i == 1) { cancel_me(); continue; } } catch (hash<ExceptionInfo> ex) { throw \"INNER-CATCH\", ex.err; } } break;
+                case \"do-while\": do { ++i; try { if (i == 1) { cancel_me(); continue; } } catch (hash<ExceptionInfo> ex) { throw \"INNER-CATCH\", ex.err; } } while (i < 3); break;
+                case \"for\": for (int j = 0; j < 3; ++j) { ++i; try { if (j == 0) { cancel_me(); continue; } } catch (hash<ExceptionInfo> ex) { throw \"INNER-CATCH\", ex.err; } } break;
+                case \"foreach\": foreach int j in ((1, 2, 3)) { i += j; try { if (j == 1) { cancel_me(); continue; } } catch (hash<ExceptionInfo> ex) { throw \"INNER-CATCH\", ex.err; } } break;
+                case \"nested\": foreach int j in ((1, 2)) { int k = 0; while (k < 2) { ++k; i += j; if (k == 1) { cancel_me(); continue; } } } break;
+            }
+            res.push(sprintf(\"%s: ok i=%d\", kind, i));
+        } catch (hash<ExceptionInfo> ex) {
+            # the cancellation stays pending; the rest of the thread must not be cancelled
+            clear_thread_cancel();
+            *list<*string> l = ex.desc =~ x/^([a-z-]+ loop)/;
+            res.push(sprintf(\"%s: %s: %s i=%d\", kind, ex.err, l ? l[0] : ex.desc, i));
+        }
+    }();
+    return res.get(60s);
+}
+map printf(\"%s\\n\", run($1)), (\"while\", \"do-while\", \"for\", \"foreach\", \"nested\");
+";
+
+        #! the result of ContinueScript with the AST interpreter
+        const ContinueExpected = "while: THREAD-CANCELLED: while loop i=1\ndo-while: THREAD-CANCELLED: do-while loop i=1\nfor: THREAD-CANCELLED: for loop i=1\nforeach: THREAD-CANCELLED: foreach loop i=1\nnested: THREAD-CANCELLED: while loop i=1\n";
+
+        #! a loop in a function that AOT outlines into a helper when the outlining thresholds are low; the helper
+        #! starts the loop's first iteration with no branch, so the check is made on the branch to its call
+        const OutlineScript = "%modern
+%disable-warning unreferenced-variable
+our Queue req(); our Queue ack();
+our int cnt = 0;
+sub cx() { defer_thread_cancel(sub () { req.push(gettid()); ack.get(); }); }
+sub f() {
+    int a = 0;
+    a += 1; a += 2; a += 3; a += 4; a += 5; a += 6; a += 7; a += 8;
+    cnt = 0;
+    while (cnt < 3) {
+        ++cnt; a += cnt; a *= 2; a -= 1; a += 3; a *= 2;
+    }
+    a += 9; a += 10; a += 11; a += 12;
+    for (int j = 0; j < 3; ++j) {
+        a += j; a *= 2; a -= 1;
+    }
+    a += 13; a += 14;
+}
+background sub () { while (True) { *int t = req.get(); if (!t) { break; } cancel_thread(t, \"x\"); ack.push(1); } }();
+Queue out();
+background sub () {
+    string r;
+    cx();
+    try { f(); r = \"ok\"; } catch (hash<ExceptionInfo> ex) { r = ex.desc; }
+    clear_thread_cancel();
+    out.push(sprintf(\"%s cnt=%d\", r, cnt));
+}();
+string s = out.get(60s);
+s =~ s/thread [0-9]+ //;
+printf(\"%s\\n\", s);
+req.push(NOTHING);
+";
+
+        #! the result of OutlineScript with the AST interpreter
+        const OutlineExpected = "while loop: cancelled: x cnt=0\n";
+
+        #! the scripts next to the test that every execution mode and AOT must run as the AST interpreter does: script
+        #! name -> the output of the AST interpreter
+        const ScriptResults = {
+            "expressions": (
+                "map-key -> ok 300",
+                "map-key-offset -> ok 300",
+                "hmap-two-keys -> ok 300",
+                "select-key -> ok 299",
+                "foldl-map-sum -> ok 89700",
+                "foldl-map-sq -> ok 8955050",
+                "foldl-map-offset -> ok 45750",
+                "map-mul -> ok 300",
+                "list-lit -> ok 300",
+                "hmap -> ok 300",
+                "map-select -> ok 289",
+                "foldr -> ok 44850",
+                "slice-remove -> ok 251",
+                "join -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-direct -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-100 -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-99 -> ok 286",
+                "join-take -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-drop -> THREAD-CANCELLED: string fold join: cancelled: t",
+            ),
+            "expression-try": (
+                "map: ok 300",
+                "hmap: caught HASH-KEY-ERROR",
+                "hmap-select: caught HASH-KEY-ERROR",
+                "selector: caught THREAD-CANCELLED",
+                "END",
+            ),
+            "foreach-cleanup": (
+                "iter 1",
+                "iterator released",
+                "catch: THREAD-CANCELLED: foreach loop",
+                "list iter",
+                "list element released",
+                "catch2: THREAD-CANCELLED",
+                "END",
+            ),
+            "streaming": (
+                "take -> THREAD-CANCELLED: take operator expression: cancelled: t",
+                "take-50 -> ok 50",
+                "drop -> THREAD-CANCELLED: drop operator expression: cancelled: t",
+                "drop-250 -> THREAD-CANCELLED: drop operator expression: cancelled: t",
+                "drop-all -> THREAD-CANCELLED: drop operator expression: cancelled: t",
+                "takewhile -> THREAD-CANCELLED: takewhile operator expression: cancelled: t",
+                "takeuntil -> THREAD-CANCELLED: takeuntil operator expression: cancelled: t",
+                "first -> THREAD-CANCELLED: first operator expression: cancelled: t",
+                "any -> THREAD-CANCELLED: any operator expression: cancelled: t",
+                "all -> THREAD-CANCELLED: all operator expression: cancelled: t",
+                "count -> THREAD-CANCELLED: count operator expression: cancelled: t",
+                "count-50 -> ok 39",
+                "fused-take -> THREAD-CANCELLED: take operator expression: cancelled: t",
+                "fused-count -> THREAD-CANCELLED: count operator expression: cancelled: t",
+                "fused-first -> THREAD-CANCELLED: first operator expression: cancelled: t",
+                "inner-drop -> THREAD-CANCELLED: drop operator expression: cancelled: t",
+                "inner-drop-50 -> ok 250",
+                "foreach-drop -> THREAD-CANCELLED: foreach loop: cancelled: t",
+                "fused-join -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "fused-join-99 -> ok 287",
+                "take-100 -> THREAD-CANCELLED: take operator expression: cancelled: t",
+                "take-99 -> ok 99",
+                "fused-join-all -> THREAD-CANCELLED: string fold join: cancelled: t",
+            ),
+            "pipeline-midcancel": (
+                "count -> THREAD-CANCELLED: count operator expression n=251",
+                "take -> THREAD-CANCELLED: take operator expression n=251",
+                "drop -> THREAD-CANCELLED: drop operator expression n=161",
+                "inner-drop -> THREAD-CANCELLED: drop operator expression n=100",
+                "join -> THREAD-CANCELLED: string fold join n=251",
+                "join-take -> THREAD-CANCELLED: string fold join n=251",
+                "foreach-select -> THREAD-CANCELLED: foreach loop n=202",
+                "foreach-map-select -> THREAD-CANCELLED: foreach loop n=202",
+                "foreach-drop -> THREAD-CANCELLED: drop operator expression n=100",
+            ),
+        };
+
+        #! the result lines of the scripts whose cancelled threads report unhandled exceptions
+        const ResultLine = "^[a-z0-9-]+ -> ";
+
+        #! qcc options that outline the loops of OutlineScript into helpers
+        const OutlineEnv = "QORE_AOT_OUTLINE_FN_MIN_INSTS=10 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=3 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=16";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("loop cancellation points", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("IR tier", \irTierTest());
+        addTestCase("AOT executable", \aotExecutableTest());
+        addTestCase("AOT module", \aotModuleTest());
+        addTestCase("continue in a try block", \continueTest());
+        addTestCase("AOT outlined loop", \aotOutlineTest());
+        addTestCase("expressions over more than 100 elements", sub () { scriptTest("expressions", ResultLine); });
+        addTestCase("an exception in an expression reaches its try block", sub () { scriptTest("expression-try"); });
+        addTestCase("foreach cleanup when the iteration check raises", sub () { scriptTest("foreach-cleanup"); });
+        addTestCase("streaming operators over more than 100 elements", sub () { scriptTest("streaming", ResultLine); });
+        addTestCase("a cancellation made pending in a pipeline",
+            sub () { scriptTest("pipeline-midcancel", ResultLine); });
+        set_return_value(main());
+    }
+
+    #! the results that the script prints on stdout, without the unhandled exceptions of the cancelled threads
+    private string results(string out, string pattern = "^[a-z-]+ -> ") {
+        list<string> l = select out.split("\n"), regex($1, pattern);
+        return l ? (foldl $1 + "\n" + $2, l) + "\n" : "";
+    }
+
+    private string writeFile(TmpDir dir, string name, string code) {
+        string path = dir.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    private string script() {
+        return "%modern\n" + RunnerClass + "\n" + Main;
+    }
+
+    modesTest() {
+        TmpDir dir("loop-cancellation-points-");
+        string path = writeFile(dir, "loops.q", script());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, results(ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                path), NativeCheck::Jit)), mode);
+        }
+    }
+
+    irTierTest() {
+        TmpDir dir("loop-cancellation-points-");
+        string path = writeFile(dir, "loops.q", script());
+        assertEq(Expected, results(ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            path))), ExecModeHarness::IRTierName);
+    }
+
+    aotExecutableTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string path = writeFile(dir, "loops.q", script());
+        string exe = dir.path + "/loops";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(Expected, results(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), "AOT executable");
+    }
+
+    #! the loops in an AOT module, as in the issue
+    aotModuleTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string mod_dir = dir.path + "/modules";
+        mkdir(mod_dir);
+        string module_code = "%modern\nmodule LoopCancelPoints { version = \"1.0\"; desc = \"loop cancellation points\"; "
+            "author = \"Qore Technologies, s.r.o.\"; license = \"MIT\"; }\n"
+            "public namespace LoopCancelPoints {\npublic " + RunnerClass + "\n}\n";
+        string src = writeFile(dir, "LoopCancelPoints.qm", module_code);
+        string qmod = mod_dir + "/LoopCancelPoints.qmod";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -m %s -o %s", env, qcc_bin, src, qmod));
+        assertTrue(is_file(qmod), "qcc compiles the module: " + out);
+        writeFile(dir, "modules/LoopCancelPoints.qm", module_code);
+        string main_code = Main;
+        main_code =~ s/Runner::run/LoopCancelPoints::Runner::run/;
+        string path = writeFile(dir, "loops.q", "%modern\n%requires LoopCancelPoints\n" + main_code);
+        assertEq(Expected, results(ExecModeHarness::run_any(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, mod_dir,
+            qore_bin, path))), "AOT module");
+    }
+
+    continueTest() {
+        TmpDir dir("loop-cancellation-points-");
+        string path = writeFile(dir, "continue.q", ContinueScript);
+        string pattern = "^[a-z-]+: ";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(ContinueExpected, results(ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin,
+                mode, path), NativeCheck::Jit), pattern), mode);
+        }
+        assertEq(ContinueExpected, results(ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env,
+            qore_bin, path)), pattern), ExecModeHarness::IRTierName);
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exe = dir.path + "/continue";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(ContinueExpected, results(ExecModeHarness::run_any(sprintf("%s %s", env, exe)), pattern), "AOT");
+    }
+
+    aotOutlineTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string path = writeFile(dir, "outline.q", OutlineScript);
+        assertEq(OutlineExpected, results(ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin,
+            path), NativeCheck::None), "cnt="), "AST");
+        string exe = dir.path + "/outline";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -O3 -o %s %s", env, OutlineEnv, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(OutlineExpected, results(ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "cnt="),
+            "AOT with outlined helpers");
+    }
+
+    #! runs a script next to the test in every execution mode, on the IR tier and as an AOT executable, and checks
+    #! that it gives the output of the AST interpreter
+    /** @param pattern if given, only the lines of the output that match it are compared: the cancelled threads of a
+        script report their unhandled exceptions on stderr, which follows the output
+    */
+    private scriptTest(string name, *string pattern) {
+        string path = get_script_dir() + "/" + name + ".q";
+        string expected = (foldl $1 + "\n" + $2, ScriptResults{name}) + "\n";
+        code filter = string sub (string out) { return pattern ? results(out, pattern) : out; };
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, filter(ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                path), NativeCheck::Jit)), name + ": " + mode);
+        }
+        assertEq(expected, filter(ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            path))), name + ": " + ExecModeHarness::IRTierName);
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string exe = dir.path + "/" + name;
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
+        assertEq(expected, filter(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), name + ": AOT");
+    }
+}

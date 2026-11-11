@@ -40,6 +40,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <pthread.h>
 #include <sys/types.h>
@@ -72,6 +73,23 @@ static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFE
 #endif
 
 class ThreadData;
+class ProgramThreadHub;
+
+//! a cancellation request to a background thread, claimed under thread_list.lck for its lifecycle event
+/** See QoreThreadList::cancelThread() and design/program-thread-lifecycle-events.md: the canceller publishes the
+    claim after it releases the lock, and the thread publishes all of its claims before it publishes FINISHED, so a
+    request is published even if the thread ends first; the hub publishes each claim once
+*/
+struct QoreLifecycleCancelClaim {
+    //! the claim's generation, unique for the thread
+    uint64_t gen = 0;
+    //! the reason given with the request
+    std::string reason;
+    //! true if a reason was given
+    bool has_reason = false;
+};
+
+typedef std::vector<QoreLifecycleCancelClaim> lifecycle_cancel_claims_t;
 class QoreSandboxBudgetStack;
 class QoreStringNode;
 class QoreCondition;
@@ -164,6 +182,13 @@ public:
     bool wake_queued = false;
     //! true while the condition waker is waking the entry's waiter; guarded by the wait registry lock
     bool wake_busy = false;
+    //! true if the registered condition wait can only be ended by a sandbox limit; guarded by the wait registry lock
+    /** Set when the wait is registered in the destructor of a trusted class, where a thread cancellation and a
+        program interrupt are deferred: waking it for them would deliver nothing and only end the wait spuriously
+        (restarting the timeout of a caller that waits again, or returning 0 from Condition::wait() unsignalled).
+        See "Destructors" in design/cooperative-cancellation.md.
+    */
+    bool waiting_limits_only = false;
 
     //! the thread's wakeup channel (wake_fd) while it is blocked in qore_cancellable_poll(), or -1
     /** Set by the thread itself before it blocks and cleared under thread_list.lck after it wakes;
@@ -172,6 +197,11 @@ public:
         design/cooperative-cancellation.md, "Wakeup descriptor").
     */
     std::atomic<int> waiting_fd{-1};
+    //! true if the descriptor wait registered in waiting_fd can only be ended by a sandbox limit
+    /** As waiting_limits_only; written by the thread before it stores waiting_fd (seq_cst), and read by a canceller
+        after it has loaded waiting_fd
+    */
+    std::atomic<bool> waiting_fd_limits_only{false};
 
     //! the thread's cancellation wakeup channel, or -1 if it has not been created
     /** Created on the thread's first qore_cancellable_poll() and closed when its TID is released or the thread
@@ -184,6 +214,24 @@ public:
     pid_t wake_pid = 0;
     //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
     int wake_reg_depth = 0;
+
+    //! the lifecycle event hub of the Program of a background thread while its code runs, or nullptr
+    /** Set and cleared by the thread itself under thread_list.lck (QoreThreadList::setLifecycleHub() and
+        clearLifecycleHub()); the thread holds a reference to the hub while it is set, so cancelThread() can reference
+        it under the lock to publish a cancellation request.  See design/program-thread-lifecycle-events.md.
+    */
+    ProgramThreadHub* lifecycle_hub = nullptr;
+    //! the process-unique ID of the background thread in lifecycle_hub
+    int64 lifecycle_thread_id = 0;
+    //! the ID of the Program of the background thread in lifecycle_hub
+    qore_program_id_t lifecycle_pgm_id = 0;
+    //! the generation of the last cancellation request claimed for the thread's lifecycle events
+    uint64_t lifecycle_cancel_gen = 0;
+    //! the cancellation requests claimed for the thread's lifecycle events that their canceller has not published yet
+    /** The canceller removes its claim once it has published it (QoreThreadList::releaseLifecycleCancelClaim()); the
+        thread takes those left when its code ends and publishes them before its FINISHED event
+    */
+    lifecycle_cancel_claims_t lifecycle_cancels;
 
 #ifdef DEBUG
     //! the number of times a cancellation request woke a wait that the thread had registered (debug builds)
@@ -247,6 +295,23 @@ public:
     //! Returns the thread entry array; for the condition waker thread, which accesses the wait registry fields only
     DLLLOCAL ThreadEntry* getEntryArray() {
         return entry;
+    }
+
+    //! Returns true if \a f returns true for the data of any thread that has data, whatever its status
+    /** Also the signal thread (TID 0) and threads that are being deregistered or that have ended but still have their
+        data are checked.  Called with the list's lock held, which keeps the data in place (it is taken out of the list
+        under the lock before it is deleted); \a f must take no lock
+    */
+    template <typename F>
+    DLLLOCAL bool anyThreadData(F f) {
+        AutoLocker al(lck);
+        for (int tid = 0; tid < MAX_QORE_THREADS; ++tid) {
+            ThreadData* td = entry[tid].thread_data;
+            if (td && f(td)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     DLLLOCAL ThreadData* getThreadData(int tid) {
@@ -471,7 +536,9 @@ public:
 
         @return 0 for success, -1 if the condition waker thread could not be started (errno is set)
     */
-    DLLLOCAL int registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m);
+    /** @param limits_only true if only a sandbox limit is to wake the wait (see ThreadEntry::waiting_limits_only)
+    */
+    DLLLOCAL int registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m, bool limits_only = false);
 
     //! Clears the current thread's registration after its wait has ended; the caller holds \a m
     /** If a wakeup for the thread is still with the condition waker thread, \a m is released while it completes and
@@ -484,7 +551,9 @@ public:
         between its check for the request and its wait, so a broadcast cannot be lost; otherwise the condition waker
         thread acquires the mutex (which the waiter releases when it blocks) and then broadcasts.  Never blocks.
     */
-    DLLLOCAL void wakeCondWaiter(int tid);
+    /** @param limit true for a sandbox limit, which also wakes a wait registered with \a limits_only
+    */
+    DLLLOCAL void wakeCondWaiter(int tid, bool limit = false);
 
     //! Wakes every thread blocked in a cancellable wait (condition or descriptor)
     /** Used by SandboxManager::requestInterrupt().  Spurious wakeups for threads in other programs are harmless
@@ -503,15 +572,19 @@ public:
     DLLLOCAL int getCancelWakeupFd(int tid);
 
     //! Signals the wakeup channel of a thread blocked in qore_cancellable_poll(), if any; lck must be held
-    DLLLOCAL void signalWaitingFd(int tid);
+    /** @param limit true for a sandbox limit, which also wakes a wait registered with \a limits_only
+    */
+    DLLLOCAL void signalWaitingFd(int tid, bool limit = false);
 
     //! Registers the current thread's wakeup channel before it blocks in a poll
     /** seq_cst pairs with the seq_cst store of the cancellation flag on the cancel side; the waiter must check
         for cancellation after this store and before it blocks.
     */
-    DLLLOCAL void setCurrentWaitingFd(int tid, int fd) {
+    DLLLOCAL void setCurrentWaitingFd(int tid, int fd, bool limits_only = false) {
         assert(tid >= 0 && tid < MAX_QORE_THREADS);
         assert(fd == entry[tid].wake_fd);
+        // published by the seq_cst store below
+        entry[tid].waiting_fd_limits_only.store(limits_only, std::memory_order_relaxed);
         entry[tid].waiting_fd.store(fd, std::memory_order_seq_cst);
 #ifdef DEBUG
         dbgNoteWait(tid, true);
@@ -590,6 +663,39 @@ public:
         @return 0 if the request was delivered, -1 if the thread is not active
     */
     DLLLOCAL int cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id);
+
+    //! Sets the lifecycle event hub of the calling background thread, so that cancellation requests are published
+    /** @param tid the calling thread's TID
+        @param hub the hub of the thread's Program; the thread holds a reference until it calls clearLifecycleHub()
+        @param thread_id the thread's process-unique ID
+        @param pgm_id the ID of the thread's Program
+        @param claims set to the claim of a request already pending: it was made before the hub was set, so its
+        canceller did not claim it, and the thread publishes it
+    */
+    DLLLOCAL void setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, qore_program_id_t pgm_id,
+            lifecycle_cancel_claims_t& claims);
+
+    //! Clears the lifecycle event hub of the calling background thread once its code has ended
+    /** @param tid the calling thread's TID
+        @param claims set to every cancellation request claimed for the thread, which it publishes before FINISHED
+    */
+    DLLLOCAL void clearLifecycleHub(int tid, lifecycle_cancel_claims_t& claims);
+
+    //! removes a published cancellation claim from the thread, if it still has it; returns true if it was removed
+    /** Called by the canceller after it has published the claim, so that the claims of a thread that is cancelled
+        many times (with cancellation deferred or cleared) do not accumulate
+
+        @param tid the thread's TID
+        @param thread_id the thread's lifecycle thread ID when the claim was made; a TID reused since then is left
+        alone
+        @param gen the generation of the claim
+    */
+    DLLLOCAL bool releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen);
+
+#ifdef DEBUG
+    //! returns the number of cancellation claims of the thread not published by their canceller yet (debug builds)
+    DLLLOCAL size_t getLifecycleCancelClaimCount(int tid);
+#endif
 
     //! Clear cancellation for the given thread; acquires lock internally
     DLLLOCAL void clearCancel(int tid);

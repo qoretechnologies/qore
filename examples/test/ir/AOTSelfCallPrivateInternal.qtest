@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTSelfCallPrivateInternalTest
+
+#! A compiled unqualified call to a private:internal method reaches it, not a base class method of the same name
+/** A private:internal method does not override a base class method of the same name: a call in its own class
+    reaches it, and a call in the base class reaches the base class's method.  A compiled program bound the call to
+    the base class's method: when the AOT loader resolved the recorded variant again in the class that declares it,
+    it looked the method up through the class hierarchy without a class context, which skips private:internal
+    methods, and the base class method's variant had the same signature text.  A method without parameters has an
+    empty signature text, which the loader binds since it binds recorded variants without parameters.
+
+    Each program is compiled with qcc and its output compared with the interpreter's.
+*/
+class AOTSelfCallPrivateInternalTest inherits QUnit::Test {
+    public {
+        #! Calls of a method that a derived class declares again with the given access, as "<call>: <class>" lines
+        const ProgramTemplate = "%%modern
+class B {
+    %s string setup() { return \"base\"; }
+    %s string setupWith(int i) { return sprintf(\"base %%d\", i); }
+    string callFromBase() { return setup() + \", \" + setupWith(1); }
+}
+class D inherits B {
+    %s string setup() { return \"derived\"; }
+    %s string setupWith(int i) { return sprintf(\"derived %%d\", i); }
+    string run() { return setup() + \", \" + setupWith(1); }
+    string runSelf() { return self.setup() + \", \" + self.setupWith(1); }
+}
+D d();
+printf(\"unqualified: %%s\\n\", d.run());
+printf(\"self: %%s\\n\", d.runSelf());
+printf(\"from base: %%s\\n\", d.callFromBase());
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTSelfCallPrivateInternalTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("an unqualified call reaches the class's own private:internal method",
+            \testInternalShadowsPrivate());
+        addTestCase("an unqualified call reaches the class's own private:internal method over a public one",
+            \testInternalShadowsPublic());
+        addTestCase("internal methods in both classes, and normal overrides, keep their dispatch",
+            \testOtherShapes());
+
+        set_return_value(main());
+    }
+
+    private testInternalShadowsPrivate() {
+        hash<auto> rv = compileAndRun("private", "private:internal");
+        assertEq("unqualified: derived, derived 1\nself: derived, derived 1\nfrom base: base, base 1\n", rv.aot,
+            "compiled");
+        assertEq(rv.interpreted, rv.aot, "as interpreted");
+    }
+
+    private testInternalShadowsPublic() {
+        hash<auto> rv = compileAndRun("public", "private:internal");
+        assertEq("unqualified: derived, derived 1\nself: derived, derived 1\nfrom base: base, base 1\n", rv.aot,
+            "compiled");
+        assertEq(rv.interpreted, rv.aot, "as interpreted");
+    }
+
+    private testOtherShapes() {
+        foreach list<string> access in ((("private:internal", "private:internal"), ("private", "private"),
+                ("public", "public"))) {
+            hash<auto> rv = compileAndRun(access[0], access[1]);
+            assertEq(rv.interpreted, rv.aot, sprintf("base %s, derived %s", access[0], access[1]));
+        }
+    }
+
+    #! Compiles the program for the given base and derived access, runs it, and runs its source interpreted
+    private hash<auto> compileAndRun(string base_access, string derived_access) {
+        TmpDir tmp("qore-aot-self-internal-");
+        string src = tmp.path + "/self-call.q";
+        string app = tmp.path + "/self-call";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf(ProgramTemplate, base_access, base_access, derived_access, derived_access));
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, app, src));
+        assertTrue(is_file(app), sprintf("compiled with base %s, derived %s: %s", base_access, derived_access,
+            out));
+        return {
+            "aot": backquote(sprintf("%s %s 2>&1", env, app)),
+            "interpreted": backquote(sprintf("%s %s %s 2>&1", env, qore_bin, src)),
+        };
+    }
+}

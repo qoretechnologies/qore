@@ -91,6 +91,8 @@ struct qore_counter_private {
         // counter hit zero, so even it it's bigger than zero by the time we are allowed to execute, it's ok
         // --- synchronization must be done externally
         int rc = 0;
+        // a wait that ends without the counter reaching zero waits again only for the rest of the timeout
+        QoreWaitDeadline deadline(timeout_ms);
         SafeLocker sl(&l);
         ++waiting;
         while (cnt && cnt != Cond_Deleted) {
@@ -103,7 +105,12 @@ struct qore_counter_private {
                 }
             } else {
                 // Use interruptible wait with timeout for sandbox support
-                rc = cond.waitWithInterrupt(&l, timeout_ms, xsink);
+                int64 wait_ms = timeout_ms;
+                if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+                    rc = QORE_COND_RESULT_TIMEOUT;
+                    break;
+                }
+                rc = cond.waitWithInterrupt(&l, wait_ms, xsink);
                 if (rc == QORE_COND_RESULT_INTERRUPTED) {
                     --waiting;
                     return -1;  // Exception already raised

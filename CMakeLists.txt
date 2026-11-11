@@ -872,7 +872,10 @@ pkg_check_modules(BROTLI_ENC QUIET libbrotlienc)
 pkg_check_modules(BROTLI_DEC QUIET libbrotlidec)
 if(BROTLI_ENC_FOUND AND BROTLI_DEC_FOUND)
     message(STATUS "Found Brotli: ${BROTLI_ENC_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARIES} ${BROTLI_DEC_LIBRARIES})
+    # link the full paths that pkg-config's library directories resolve to (as for zstd below): the bare names in
+    # BROTLI_*_LIBRARIES only resolve when the library is on the linker's default search path, which Homebrew's
+    # /opt/homebrew on Apple Silicon is not
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LINK_LIBRARIES} ${BROTLI_DEC_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_ENC_INCLUDE_DIRS})
 else()
     # Try to find Brotli without pkg-config
@@ -942,7 +945,8 @@ set(HAVE_ZSTD TRUE)
 pkg_check_modules(LZ4 QUIET liblz4)
 if(LZ4_FOUND)
     message(STATUS "Found LZ4: ${LZ4_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
+    # full paths, as for Brotli above
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
 else()
     # Try to find LZ4 without pkg-config
@@ -1745,6 +1749,7 @@ set(LIBQORE_CPP_SRC
     lib/WeakHashReferenceNode.cpp
     lib/QoreProgram.cpp
     lib/QoreProgramHelper.cpp
+    lib/ProgramThreadHub.cpp
     lib/QoreNamespace.cpp
     lib/QoreNet.cpp
     lib/QoreURL.cpp
@@ -2105,6 +2110,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadLocalVariableData.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgram.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgramHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ProgramThreadHub.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNamespace.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNet.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreURL.cpp\"
@@ -3009,6 +3015,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
+    # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/JITRuntime.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreCastOperatorNode.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
@@ -3568,6 +3576,15 @@ if (QORE_BUILD_WITH_EXTERNAL_MODULES)
     list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 endif()
 string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
+# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
+# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
+# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
+# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
+file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
+configure_file(
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
+    COPYONLY)
 set(QORE_BUILD_MODULE_DIRS_STR
     "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
 if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
@@ -3621,8 +3638,11 @@ if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     endforeach()
 elseif(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
+        # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
+        # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${_qore_exe} -l ${_pm} -ne
+            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+                ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc
             OUTPUT_VARIABLE _pm_api

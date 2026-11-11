@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -127,7 +128,7 @@ QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgram
     // the source Program has released the class (see qore_class_private::deleteClassData()): its namespace is
     // destroyed with it, possibly in another thread, so it is not used; the method runs in the caller's Program, as
     // it does once the namespace has been destroyed
-    if (c->released_spgm.load()) {
+    if (c->released_spgm_id.load()) {
         return nullptr;
     }
     // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
@@ -139,6 +140,87 @@ QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgram
     // interface.  Returning nullptr here matches the pre-AOT behavior (no Program switch).
     QoreProgram* nspgm = c->ns ? c->ns->getProgram() : nullptr;
     return (nspgm && nspgm != ::getProgram()) ? qore_check_pgm_context(nspgm) : nullptr;
+}
+
+void QoreSourceProgramHolder::setVariantSlow(const UserVariantBase* uvb) {
+    QoreProgram* p = uvb->pgm;
+    assert(p);
+    // a Program that this thread deletes, which runs its code while it deletes its data (destructors, for example)
+    // without a reference, as its last one can have been released, is allocated; the ID tells the variant's Program
+    // from a later one at the same address
+    if (qore_program_torn_down_by_current_thread(p) && p->getProgramId() == uvb->pgm_id) {
+        pgm = p;
+        return;
+    }
+    pgm = qore_program_private::getReferencedProgram(p, uvb->pgm_id);
+    if (!pgm) {
+        // the Program has been deleted, or its last reference has been released and another thread deletes it
+        deleted = true;
+        return;
+    }
+    referenced = true;
+    // the Program is allocated while the reference is held: if it has module lifetime, later calls need none
+    if (qore_program_has_module_lifetime(pgm)) {
+        uvb->pgm_module_lifetime.store(true, std::memory_order_release);
+    }
+#ifdef DEBUG
+    if (qore_class_private::dbg_source_program_taken_t hook = qore_class_private::dbg_source_program_taken.load()) {
+        hook(nullptr, pgm, referenced);
+    }
+#endif
+}
+
+void QoreSourceProgramHolder::release() {
+    assert(referenced && pgm);
+    // releasing the last reference deletes the Program, which needs a sink for its destructors
+    assert(xsink);
+    pgm->deref(xsink);
+}
+
+const UserVariantBase* QoreFunction::findProgramVariant() const {
+    if (!has_user) {
+        return nullptr;
+    }
+    QoreFunctionIterator i(*this);
+    while (i.next()) {
+        if (const UserVariantBase* uvb = i.getVariant()->getUserVariantBase()) {
+            program_uvb.store(uvb, std::memory_order_release);
+            return uvb;
+        }
+    }
+    return nullptr;
+}
+
+QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        QoreSourceProgramHolder& holder, QoreProgram* call_pgm) {
+    // the variant is resolved when the call is made if it is not known: all user variants of a function are defined
+    // by one Program
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : func->getProgramVariant();
+    if (!uvb) {
+        // builtin code has no Program of its own; it runs in the Program of the call
+        return call_pgm;
+    }
+    // the Program of the call is allocated while the call is made: it is the current Program, or the explicit Program
+    // of QoreProgram::callFunction(), whose caller holds a reference to it, so a function that it defines needs no
+    // reference to it
+    if (call_pgm) {
+        holder.setVariant(uvb, call_pgm);
+    } else {
+        holder.setVariant(uvb);
+    }
+    if (QoreProgram* pgm = holder.get()) {
+        return qore_check_pgm_context(pgm);
+    }
+    // the Program that defined the function is being deleted in another thread: its code cannot run, as when the
+    // call enters a Program whose teardown has started
+    if (holder.sourceDeleted()) {
+        if (ExceptionSink* xsink = holder.getExceptionSink()) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed at runtime");
+        }
+        return nullptr;
+    }
+    return call_pgm;
 }
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
@@ -1532,6 +1614,31 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
     CodeContextHelperBase cch("constructor", &o, this, xsink, false);
     SelfInstantiatorHelper sih(&selfid, &o);
 
+    // the call site of the call that creates the object is the location of the frame of the constructor, which is
+    // created after the member initializers have run: initializers that are evaluated run with no call site, so that
+    // only the calls that they make set one
+    int8_t evaluates = member_init_evaluates.load(std::memory_order_relaxed);
+    if (evaluates) {
+        if (evaluates < 0) {
+            evaluates = 0;
+            for (auto& i : member_init_list) {
+                const AbstractQoreNode* n = i.info->exp.getInternalNode();
+                if (n && n->needs_eval()) {
+                    evaluates = 1;
+                    break;
+                }
+            }
+            member_init_evaluates.store(evaluates, std::memory_order_relaxed);
+        }
+        if (evaluates) {
+            QoreHideCallSiteHelper hide_call_site(true);
+            return initMemberList(o, need_scan, xsink);
+        }
+    }
+    return initMemberList(o, need_scan, xsink);
+}
+
+int qore_class_private::initMemberList(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const {
     // issue #2970: initializes members once and save member info in the appropriate location in the object
     for (auto& i : member_init_list) {
         printd(5, "qore_class_private::initMembers() this: %p %s '%s::%s' ctx %p '%s' (access '%s') has parent " \
@@ -1558,7 +1665,9 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
-        ValueEvalOptimizedRefHolder val(info.exp, xsink);
+        // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
+        // temporary of the statement that creates the object (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(info.exp, true, xsink);
         if (*xsink) {
             return -1;
         }
@@ -1727,6 +1836,9 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
         if (!constructor && !variant) {
             if (scl) { // execute superconstructors if any
                 CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, this);
+                // the class has no constructor, so its call site is the location of no frame: the constructors of
+                // the base classes are located where their calls are given, as in a class with a constructor
+                QoreHideCallSiteHelper hide_call_site(true);
 
                 scl->execConstructors(self, *bceal, rc, xsink);
             }
@@ -3582,8 +3694,8 @@ int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, 
     if (pgm) {
         if (pgm == ::getProgram()) {
             // the code runs in the Program: its network and filesystem options are those of the code itself, which
-            // the effective runtime parse options hold and are checked below - those of a module whose function runs
-            // in its caller's Program are the module's own (see get_module_own_access_parse_options())
+            // the effective runtime parse options hold and are checked below - those of module code running for a
+            // sandboxed caller are the module's own (see get_module_own_access_parse_options())
             if (!qore_parse_options_allow_domain(pgm->getParseOptions() & ~get_module_own_access_parse_options(),
                     qc.priv->domain)) {
                 xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
@@ -4522,10 +4634,12 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         QoreProgram* source_pgm = source_pgm_holder.get();
         // once the source Program has released the class (see deleteClassData()), its namespace is destroyed with
         // it, possibly in another thread, so it is not used: the method can only be called by that Program itself
-        const QoreProgram* released = source_pgm ? nullptr : released_spgm.load();
+        const qore_program_id_t released = source_pgm ? 0 : released_spgm_id.load();
+        QoreProgram* current_pgm = released ? getProgram() : nullptr;
         // a source Program being deleted (see QoreSourceProgramHolder::sourceDeleted()) cannot run the method either
         if (source_pgm_holder.sourceDeleted()
-                || (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted))) {
+                || (released ? (!current_pgm || released != current_pgm->getProgramId())
+                    : (!source_pgm && !ns && ns_deleted))) {
             xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
                 "that owns class '%s' has already been deleted and therefore cannot be accessed at "
                 "runtime", name.c_str(), nme, name.c_str());
@@ -4765,6 +4879,25 @@ QoreObject* QoreClass::execSystemConstructor(int code, ...) const {
     return o;
 }
 
+bool qore_class_private::isSandboxedCode() const {
+    // builtin classes are trusted, also when a module created them while a sandboxed Program was current
+    if (sys) {
+        return false;
+    }
+    QoreProgram* p = spgm.load();
+    if (!p) {
+        return released_sandboxed.load();
+    }
+    // the current Program cannot be deleted while the thread runs in it
+    if (p == getProgram()) {
+        return qore_program_is_sandboxed(p);
+    }
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
+    AutoLocker al(gate.asl_lock);
+    p = spgm.load();
+    return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
+}
+
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(self);
     //printd(5, "qore_class_private::execDestructor() %s::destructor() o: %p scl: %p sml: %p, self: %p, "
@@ -4776,20 +4909,33 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
     ExceptionSink de;
 
     if (self->isSystemObject()) {
-        if (destructor) {
-            destructor->priv->evalSystemDestructor(self, rc, &de);
-        } else {
-            self->defaultSystemDestructor(classID, &de);
+        {
+            // the cancellation rule for destructors applies to each class in the hierarchy on its own; see
+            // QoreDestructorCancelHelper
+            QoreDestructorCancelHelper dch(isSandboxedCode());
+            if (!dch.skip()) {
+                if (destructor) {
+                    destructor->priv->evalSystemDestructor(self, rc, &de);
+                } else {
+                    self->defaultSystemDestructor(classID, &de);
+                }
+            }
         }
         // execute superclass destructors
         if (scl) {
             scl->sml.execSystemDestructors(self, rc, &de);
         }
     } else {
-        if (destructor) {
-            destructor->priv->evalDestructor(self, rc, &de);
-        } else if (sys) {
-            self->defaultSystemDestructor(classID, &de);
+        if (destructor || sys) {
+            // see above
+            QoreDestructorCancelHelper dch(isSandboxedCode());
+            if (!dch.skip()) {
+                if (destructor) {
+                    destructor->priv->evalDestructor(self, rc, &de);
+                } else {
+                    self->defaultSystemDestructor(classID, &de);
+                }
+            }
         }
         // execute superclass destructors
         if (scl) {
@@ -4809,10 +4955,17 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
     ExceptionSink de;
     //printd(5, "qore_class_private::execBaseClassDestructor() %s::destructor(), destructor: %p, sys: %d\n",
     //  name.c_str(), destructor, sys);
-    if (destructor)
-        destructor->priv->evalDestructor(self, rc, &de);
-    else if (sys)
-        self->defaultSystemDestructor(classID, &de);
+    if (destructor || sys) {
+        // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
+        QoreDestructorCancelHelper dch(isSandboxedCode());
+        if (!dch.skip()) {
+            if (destructor) {
+                destructor->priv->evalDestructor(self, rc, &de);
+            } else {
+                self->defaultSystemDestructor(classID, &de);
+            }
+        }
+    }
 
     assert(xsink || !de);
     if (xsink) {
@@ -4825,10 +4978,17 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
     // we use a new, blank exception sink to ensure all destructor code gets executed
     // in case there were already exceptions in the current exceptionsink
     ExceptionSink de;
-    if (destructor)
-        destructor->priv->evalSystemDestructor(self, rc, &de);
-    else if (sys)
-        self->defaultSystemDestructor(classID, &de);
+    if (destructor || sys) {
+        // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
+        QoreDestructorCancelHelper dch(isSandboxedCode());
+        if (!dch.skip()) {
+            if (destructor) {
+                destructor->priv->evalSystemDestructor(self, rc, &de);
+            } else {
+                self->defaultSystemDestructor(classID, &de);
+            }
+        }
+    }
 
     assert(xsink || !de);
     if (xsink) {
@@ -7056,9 +7216,11 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
     QoreSourceProgramHolder spgm_holder(xsink);
+    // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can
+    // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
         qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder));
+        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, false, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -7564,7 +7726,8 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
-        ValueEvalOptimizedRefHolder val(exp, &init_xsink);
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
+        QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {
             assignInitFiltered(name, val.takeReferencedValue(), &init_xsink);
         }

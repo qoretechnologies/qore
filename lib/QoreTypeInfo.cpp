@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include <qore/QoreRWLock.h>
+#include <optional>
 #include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -2959,12 +2960,22 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
 }
 
 qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bool& may_not_match) const {
+    // an expression whose type is a reference (a call returning a reference) gives a reference at run time, and a
+    // reference is not accepted for a target that is not a reference (a parameter, an lvalue), whose type is this
+    // one; reading a variable of a reference type gives the referenced value, whose type is the referenced type.
+    // So a match is possible at most, never guaranteed: a variant whose parameter is matched so is not committed at
+    // parse time (see QoreFunction::parseFindVariant()), and the call is resolved at run time (issue #5686)
     switch (t.typespec) {
         case QTS_TYPE: {
-            return t.u.t == NT_REFERENCE ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+            if (t.u.t == NT_REFERENCE) {
+                may_not_match = true;
+                return QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
         }
 
         case QTS_COMPLEXREF: {
+            may_not_match = true;
             // check if types match
             if (!t.u.ti || t.u.ti->return_vec.empty()) {
                 return QTI_AMBIGUOUS;
@@ -2979,9 +2990,6 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
                 if (res > rv) {
                     rv = res;
                 }
-            }
-            if (t.u.ti->return_vec.size() == 1) {
-                return rv;
             }
             if (rv > QTI_AMBIGUOUS) {
                 return QTI_AMBIGUOUS;
@@ -3312,6 +3320,24 @@ static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, c
     return false;
 }
 
+//! Returns true if a type's conversion left a value as it was: the same node, or the same type and bits
+/** A value compared with itself: a float NaN is unchanged, although it is not equal to itself
+*/
+static bool qore_value_unchanged_by_conversion(const QoreValue& orig, const QoreValue& conv) {
+    if (orig.hasNode() || conv.hasNode()) {
+        return orig.getInternalNode() == conv.getInternalNode();
+    }
+    if (orig.getType() != conv.getType()) {
+        return false;
+    }
+    if (orig.getType() == NT_FLOAT) {
+        double a = orig.getAsFloat();
+        double b = conv.getAsFloat();
+        return !memcmp(&a, &b, sizeof(double));
+    }
+    return orig.isEqualHard(conv);
+}
+
 bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
         LValueHelper* lvhelper) const {
@@ -3503,28 +3529,58 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 if (QoreTypeInfo::outputSuperSetOf(ti, u.ti)) {
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
-                    LValueHelper lvh(*r, xsink, true);
-                    //printd(5, "lvh: %d *xsink: %d\n", (bool)lvh, (bool)*xsink);
-                    if (lvh) {
+                    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
+                    // reference's type restriction (which can fold container value types); remember the node so
+                    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
+                    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
+                    // dereference to the helper's destructor, so this pointer is still backed by a live reference
+                    // at the comparison below and its address cannot have been reused
+                    auto assign_back = [target_ti = u.ti](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
-                        if (!val.isNothing()) {
-                            // the value read from the lvalue is assigned back to the same lvalue in order to apply
-                            // the reference's type restriction (which can fold container value types); remember the
-                            // node so that the recursive-reference scan can be skipped when nothing changed.  Every
-                            // path that replaces the value hands the old one to LValueHelper::saveTemp(), which
-                            // defers the dereference to the helper's destructor, so this pointer is still backed by
-                            // a live reference at the comparison below and its address cannot have been reused
-                            const AbstractQoreNode* orig = val.getInternalNode();
-                            lvh.setTypeInfo(u.ti);
-                            //printd(5, "ref assign '%s' to '%s'\n", QoreTypeInfo::getName(val.getTypeInfo()), QoreTypeInfo::getName(u.ti));
-                            if (!lvh.assign(val, "<reference>") && orig
-                                && lvh.getInternalNode() == orig) {
-                                // the identical node is still in place, so the set of objects reachable from the
-                                // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
-                                // entire reachable object graph on every reference argument binding
-                                lvh.suppressObjectScan();
+                        if (val.isNothing()) {
+                            return;
+                        }
+                        const AbstractQoreNode* orig = val.getInternalNode();
+                        lvh.setTypeInfo(target_ti);
+                        if (!lvh.assign(val, "<reference>") && orig && lvh.getInternalNode() == orig) {
+                            // the identical node is still in place, so the set of objects reachable from the
+                            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
+                            // entire reachable object graph on every reference argument binding
+                            lvh.suppressObjectScan();
+                        }
+                    };
+                    // the variable is resolved for reading first: one that the reference cannot write, such as a
+                    // read-only import, is left as it is when its value already has the reference's type
+                    // (qore#5664)
+                    std::optional<LValueHelper> lvh;
+                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
+                    if (*lvh && lvh->isWriteProtected()) {
+                        bool needs_write = false;
+                        {
+                            ValueHolder val(lvh->getReferencedValue(), xsink);
+                            // the variable's lock is released before the value is converted, as for an assignment
+                            lvh.reset();
+                            if (!val->isNothing()) {
+                                // the value is converted as the assignment below would convert it: a value that the
+                                // type rejects raises the same error as for a variable that can be written, and only
+                                // a value that the conversion changes has to be written back
+                                ValueHolder conv(val->refSelf(), xsink);
+                                QoreTypeInfo::acceptAssignment(u.ti, "<reference>", *conv, xsink);
+                                if (!*xsink) {
+                                    needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                                }
                             }
                         }
+                        if (needs_write && !*xsink) {
+                            // the value has to be changed: resolving the variable for writing raises the exception
+                            // that says why it cannot be, unless it has become writable in the meantime
+                            lvh.emplace(*r, xsink, true);
+                            if (*lvh) {
+                                assign_back(*lvh);
+                            }
+                        }
+                    } else if (*lvh) {
+                        assign_back(*lvh);
                     }
                     // the type of the reference has been accepted at this point, so this is never a type mismatch:
                     // an exception raised above, including one raised while resolving the lvalue, such as

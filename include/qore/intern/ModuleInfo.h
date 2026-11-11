@@ -523,6 +523,20 @@ class QoreUserModule;
 typedef std::set<std::string> strset_t;
 typedef std::map<std::string, strset_t> md_map_t;
 
+//! the dependency registration of a user module name at one point in time
+/** A module being loaded under a name that is already registered (reload_module() keeps the previous module
+    registered until the new one has loaded) must not drop the registration of the previous module when the load
+    fails (#5706)
+*/
+struct QoreUserModuleRegistration {
+    //! True if the name had registered requirements (rmd_map)
+    bool had_deps = false;
+    //! the registered requirements
+    strset_t deps;
+    //! True if the name had registered dependents (md_map)
+    bool had_dependents = false;
+};
+
 class ModMap {
 private:
     DLLLOCAL ModMap(const ModMap &);
@@ -913,6 +927,52 @@ public:
             umset.erase(ui);
             //printd(5, "QoreModuleManager::setUserModuleDependency('%s' -> '%s') REMOVED '%s' FROM UMMSET\n", name,
             //    dep, name);
+        }
+    }
+
+    //! Records the dependency registration of \a name, to restore it with rollbackUserModuleDependency()
+    DLLLOCAL void getUserModuleRegistration(const char* name, QoreUserModuleRegistration& reg) {
+        reg.deps.clear();
+        md_map_t::iterator i = rmd_map.find(name);
+        reg.had_deps = i != rmd_map.end();
+        if (reg.had_deps) {
+            reg.deps = i->second;
+        }
+        reg.had_dependents = md_map.find(name) != md_map.end();
+    }
+
+    //! Removes the dependencies that a failed load of \a name registered since \a saved was recorded
+    /** The registration that \a saved records belongs to a module that is still loaded under the name (a module being
+        reloaded) and is kept; when it records none, this removes every registration of the name, as
+        removeUserModuleDependency() does
+    */
+    DLLLOCAL void rollbackUserModuleDependency(const char* name, const QoreUserModuleRegistration& saved) {
+        md_map_t::iterator i = rmd_map.find(name);
+        if (i != rmd_map.end()) {
+            for (const std::string& req : i->second) {
+                if (saved.had_deps && saved.deps.find(req) != saved.deps.end()) {
+                    continue;
+                }
+                md_map_t::iterator di = md_map.find(req);
+                if (di == md_map.end()) {
+                    continue;
+                }
+                di->second.erase(name);
+                if (di->second.empty()) {
+                    umset.insert(req);
+                }
+            }
+            if (saved.had_deps) {
+                i->second = saved.deps;
+            } else {
+                rmd_map.erase(i);
+            }
+        }
+        if (!saved.had_dependents) {
+            md_map_t::iterator mi = md_map.find(name);
+            if (mi != md_map.end()) {
+                md_map.erase(mi);
+            }
         }
     }
 
@@ -1413,7 +1473,7 @@ public:
         set_module_context_path(old_path);
 
         if (xsink && !dup) {
-            QMM.removeUserModuleDependency(name);
+            QMM.rollbackUserModuleDependency(name, saved_reg);
         }
     }
 
@@ -1442,6 +1502,8 @@ protected:
 
     ExceptionSink& xsink;
     bool dup;
+    //! the registration of the module name when its load began: a module being reloaded is still registered
+    QoreUserModuleRegistration saved_reg;
 };
 
 //! marks a module as having its child modules attached in the current thread
