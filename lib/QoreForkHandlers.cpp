@@ -219,7 +219,8 @@ bool qore_fork_child_exits_quickly() {
 }
 
 void qore_fork_child_quick_exit(int rc) {
-    if (qore_fork_child_exits_quickly()) {
+    // a JIT compile left running in LLVM at exit would use LLVM's static objects while exit() destroys them
+    if (qore_fork_child_exits_quickly() || qore_jit_exit_quickly()) {
         // no atexit() handler and no static destructor runs; the buffered output of the standard I/O streams is
         // written, as exit() would
         fflush(nullptr);

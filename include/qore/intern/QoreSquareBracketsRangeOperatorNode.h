@@ -95,6 +95,10 @@ protected:
 
     //! gives a sequence borrowed from a variable a reference of its own if the indexes need evaluation
     DLLLOCAL void holdBorrowedSequence(ValueEvalRefHolder& seq) const;
+
+    //! Returns the value of the expression from its evaluated operands: the sequence, and the start and the end
+    DLLLOCAL QoreValue slice(const QoreValue& seq, const QoreValue& start_index, const QoreValue& stop_index,
+        bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const;
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

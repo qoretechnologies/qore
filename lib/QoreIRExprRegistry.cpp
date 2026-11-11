@@ -121,6 +121,7 @@
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/JITRuntime.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -163,9 +164,15 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
             && strcmp(func_name, "boolean"))) {
         return false;
     }
+    // only the Qore builtins, never a user or module function with the same name
+    if (!qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+        return false;
+    }
     const QoreListNode* args = call->getArgs();
     const QoreParseListNode* parse_args = call->getParseArgs();
     size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);
+    // the handler lowers a call whose argument may have values that the builtin does not accept as a normal builtin
+    // call: see QoreIRLowering::lowerBuiltinTypeConversion()
     return nargs == 1;
 }
 

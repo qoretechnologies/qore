@@ -39,6 +39,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
@@ -125,6 +126,7 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <system_error>
 #include <thread>
 
 static inline void strindent(QoreString* s, int indent) {
@@ -6256,19 +6258,23 @@ public:
         is started in the operation's first step, and its result is read in the second); the descriptor must still be
         open when the I/O thread removes it.
 
-        The attempt is checked right after connect() returns EINPROGRESS, which on the loopback interface finds the
-        refusal in the first step, before any registration: with @p immediate_check false, the check is skipped
+        The attempt is checked right after connect() returns EINPROGRESS, which can find the refusal in the first step,
+        before any registration: with @p immediate_check false, the check is skipped
         (qore_dbg_connect_no_immediate_check), so that the refusal is found after the registration; with it true, the
-        refused connection fails as before, and its descriptor is never registered.  The flag is process-wide: the C++
-        unit tests run one after the other, so no other connect sees it.
+        check finds the refusal, and the descriptor is never registered.  On Linux a loopback connection is refused
+        within connect(), but on macOS only after connect() has returned, so the check would find it in progress
+        there: the attempt is checked once it is writable (qore_dbg_connect_complete_before_immediate_check).  The
+        flags are process-wide: the C++ unit tests run one after the other, so no other connect sees them.
     */
     static void runConnectFailure(UnitTestCounters& c, bool immediate_check) {
         struct ImmediateCheckHelper {
             explicit ImmediateCheckHelper(bool skip) {
                 qore_dbg_connect_no_immediate_check.store(skip, std::memory_order_relaxed);
+                qore_dbg_connect_complete_before_immediate_check.store(!skip, std::memory_order_relaxed);
             }
             ~ImmediateCheckHelper() {
                 qore_dbg_connect_no_immediate_check.store(false, std::memory_order_relaxed);
+                qore_dbg_connect_complete_before_immediate_check.store(false, std::memory_order_relaxed);
             }
         } ich(!immediate_check);
         ExceptionSink xsink;
@@ -17650,6 +17656,112 @@ void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* p
 }
 }
 
+namespace {
+//! holds the thread that converts the end of a synchronous socket call's operation into an error
+/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close of the socket ends the call's operation, the
+    test cancels the held thread and lets it continue, so that the thread converts the end of its operation with a
+    pending cancellation, as when its cancellation and the close that the cancellation causes race
+*/
+struct SocketCancelConversionHold {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the next thread that converts is held
+    bool armed = false;
+    //! the TID of the thread to hold, or -1 for any thread
+    int tid = -1;
+    //! a thread is waiting in the hook
+    bool held = false;
+    //! the thread may continue
+    bool released = false;
+};
+
+SocketCancelConversionHold& socket_cancel_conversion_hold() {
+    // not destroyed, as sockets can be used while static objects are destroyed
+    static SocketCancelConversionHold* h = new SocketCancelConversionHold;
+    return *h;
+}
+}
+
+void qore_dbg_socket_cancel_conversion() {
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.armed || h.held || (h.tid != -1 && h.tid != q_gettid())) {
+        return;
+    }
+    h.armed = false;
+    h.held = true;
+    h.cond.notify_all();
+    h.cond.wait(l, [&h]() { return h.released; });
+    h.held = false;
+    h.released = false;
+    h.cond.notify_all();
+}
+
+//! arms a hold of the next thread that converts the end of a synchronous socket call's operation into an error
+/** @param tid the TID of the thread to hold; other threads that convert are not held; with no value, the next
+    thread is held
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed or a thread is held
+*/
+static QoreValue f_dbg_hold_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue tid_v = get_param_value(params, 0);
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.armed || h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a socket cancel conversion hold is already armed or holding");
+        return QoreValue();
+    }
+    h.armed = true;
+    h.tid = tid_v.isNothing() ? -1 : static_cast<int>(tid_v.getAsBigInt());
+    return QoreValue();
+}
+
+//! disarms the socket cancel conversion hold and lets a held thread continue; returns False if a held thread did not
+//! leave the hook within the timeout
+/** For the cleanup of a test that failed: never raises an exception
+*/
+static QoreValue f_dbg_reset_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    h.armed = false;
+    h.tid = -1;
+    if (!h.held) {
+        return true;
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
+//! waits for a thread to reach the armed socket cancel conversion hold; returns False if none did within the timeout
+static QoreValue f_dbg_wait_socket_cancel_conversion_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.held; });
+}
+
+//! lets the held thread continue and waits until it has left the hook; returns False on timeout
+/** @throw DBG-ARGUMENT-ERROR no thread is held
+*/
+static QoreValue f_dbg_continue_socket_cancel_conversion(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SocketCancelConversionHold& h = socket_cancel_conversion_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no thread is held for a socket cancel conversion");
+        return QoreValue();
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
 //! returns True if a handler is set for the signal
 static QoreValue f_dbg_signal_handler_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef HAVE_SIGNAL_HANDLING
@@ -17765,10 +17877,150 @@ static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* par
     return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
 }
 
-//! returns the number of background JIT compiles refused because a Program they refer to is being deleted
+//! runs the return analysis of a function's IR in a native thread without Qore thread data, as the background JIT
+//! compilation thread runs it, and returns its result (qore#5750)
+/** The analysis (qore_ir_function_returns_pass_through()) checks the types of the function's returned values against
+    its declared return type with the parse-time type checks, which a class's private parent classes make depend on
+    the class context; it must use the function's own class context, as no thread state gives one in that thread.
+
+    @param code a call reference to a user function, method or closure with one variant, which is lowered to IR if it
+    has not been (as a batch compilation lowers its callees)
+
+    @return True if the function's declared return type leaves every value that it returns unchanged
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function, method or closure with one variant
+    that can be lowered to IR
+*/
+static QoreValue f_dbg_ir_returns_pass_through_without_thread_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir && uvb) {
+        // a closure is lowered when it is first run; lower it here, as a batch compilation lowers its callees, without
+        // promoting it to the IR tier
+        uvb->forceIRLowering(qf->getName(), false, false);
+        ir = uvb->getCachedIR();
+    }
+    if (!ir) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ir_returns_pass_through_without_thread_data() requires a "
+            "call reference to a user function, method or closure with one variant that can be lowered to IR");
+        return QoreValue();
+    }
+    const QoreTypeInfo* return_type = variant->getReturnTypeInfo();
+    bool rv = false;
+    // a native thread that is not registered with Qore, as the background compilation thread; an exception in it is
+    // passed to this thread, as one that left the thread's function would end the process
+    std::string thread_error;
+    try {
+        std::thread th([ir, return_type, &rv, &thread_error]() {
+            try {
+                rv = qore_ir_function_returns_pass_through(*ir, return_type);
+            } catch (const std::exception& e) {
+                thread_error = e.what();
+            }
+        });
+        th.join();
+    } catch (const std::system_error& e) {
+        xsink->raiseException("DBG-THREAD-ERROR", "cannot start a native thread: %s", e.what());
+        return QoreValue();
+    }
+    if (!thread_error.empty()) {
+        xsink->raiseException("DBG-THREAD-ERROR", "the analysis failed: %s", thread_error.c_str());
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return (int64)QoreJIT::instance().bgCompileRefusedClosedCount();
+}
+
+//! returns the hold point of the background JIT compiler named by \a point
+/** @throw DBG-ARGUMENT-ERROR the name is unknown
+*/
+static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::BgCompileHoldPoint& rv,
+        ExceptionSink* xsink) {
+    if (!strcmp(point->c_str(), "lowering")) {
+        rv = QoreJIT::BgCompileHoldPoint::Lowering;
+    } else if (!strcmp(point->c_str(), "llvm")) {
+        rv = QoreJIT::BgCompileHoldPoint::Llvm;
+    } else if (!strcmp(point->c_str(), "commit")) {
+        rv = QoreJIT::BgCompileHoldPoint::Commit;
+    } else if (!strcmp(point->c_str(), "install")) {
+        rv = QoreJIT::BgCompileHoldPoint::Install;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown background compile hold point '%s'; expecting "
+            "\"lowering\", \"llvm\", \"commit\" or \"install\"", point->c_str());
+        return false;
+    }
+    return true;
+}
+
+//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
+/** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
+    function name is given, only the compile of that function (the root function of the batch) stops.
+
+    @throw DBG-ARGUMENT-ERROR the point is unknown, or a hold is armed there already
+*/
+static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::BgCompileHoldPoint point;
+    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+        return QoreValue();
+    }
+    const QoreStringNode* func = get_param_value(params, 1).get<const QoreStringNode>();
+    if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
+    }
+    return QoreValue();
+}
+
+//! waits until the background JIT compiler is stopped at the given point; returns False on timeout
+static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::BgCompileHoldPoint point;
+    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+        return QoreValue();
+    }
+    return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
+}
+
+//! returns True if the background JIT compiler is stopped at a hold point
+static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgBgCompileHeld();
+}
+
+//! lets the held background JIT compile continue and waits until it has left the hold point; False on timeout
+/** @throw DBG-ARGUMENT-ERROR no compile is held
+*/
+static QoreValue f_dbg_continue_bg_compile(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int rv = QoreJIT::instance().dbgContinueBgCompile(get_param_value(params, 0).getAsBigInt());
+    if (rv < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no background compile is held");
+        return QoreValue();
+    }
+    return rv > 0;
+}
+
+//! waits until a Program teardown waits for the in-progress background JIT compile; returns False on timeout
+static QoreValue f_dbg_wait_bg_compile_teardown_waiting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgWaitBgCompileTeardownWaiting(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until the background JIT compiler has no queued or in-progress work, detached work included
+static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::instance().waitForBgCompileQueue();
+    return QoreValue();
+}
+
+//! returns the number of detached background JIT compiles whose result was discarded
+static QoreValue f_dbg_get_bg_compile_discarded_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return (int64)QoreJIT::instance().bgCompileDiscardedCount();
 }
 
 //! returns True if the background JIT compiler sees the given Program with its ID plus \a id_offset
@@ -20605,10 +20857,35 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_source_program_call", f_dbg_continue_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_hold_socket_cancel_conversion", f_dbg_hold_socket_cancel_conversion, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_reset_socket_cancel_conversion", f_dbg_reset_socket_cancel_conversion,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_socket_cancel_conversion_held", f_dbg_wait_socket_cancel_conversion_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_socket_cancel_conversion", f_dbg_continue_socket_cancel_conversion,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_close_program_bg_compile", f_dbg_close_program_bg_compile, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "func");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_teardown_waiting", f_dbg_wait_bg_compile_teardown_waiting,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_bg_compile_idle", f_dbg_wait_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
+        f_dbg_ir_returns_pass_through_without_thread_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,

@@ -1097,7 +1097,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         }
 
         hash<string, bool> app_filter = map {$1: True}, apps.iterator();
-        list<hash<DataProviderAppInfo>> rv;
+        list<hash<DataProviderAppInfo>> rv = ();
         foreach hash<DataProviderAppInfo> app in (all_apps) {
             if (remove app_filter{app.name}) {
                 push rv, app;
