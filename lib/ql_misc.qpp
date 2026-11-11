@@ -743,6 +743,9 @@ const SignalToName = (
     @param signal The signal number to process, see @ref signal_constants for possible values
     @param handler The code to execute when the signal is caught; this should accept an integer argument giving the signal number
 
+    @note Called by the code of a @ref Qore::Program "Program" whose data is being destroyed (a destructor run when
+    the Program is deleted, for example), this function has no effect; see @ref signal_handler_program_lifetime
+
     @par Example:
     @code{.py}
 set_signal_handler(SIGINT, \signal_handler());

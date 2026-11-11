@@ -1,0 +1,51 @@
+name: foo
+again: foo
+static: foo
+typed: foo
+two levels: foo2
+int: 42
+generic subclass: foo/foo
+int arg: 5
+int arg self: 5
+int arg scoped: 5
+static from static: 5
+closure: 5
+call reference: 5
+hot: 4498500
+int wrong arg: RUNTIME-OVERLOAD-ERROR
+int wrong arg self: RUNTIME-OVERLOAD-ERROR
+static from static wrong arg: RUNTIME-OVERLOAD-ERROR
+name: foo
+again: foo
+static: foo
+typed: foo
+two levels: foo2
+int: 42
+generic subclass: foo/foo
+int arg: 5
+int arg self: 5
+int arg scoped: 5
+static from static: 5
+closure: 5
+call reference: 5
+hot: 4498500
+int wrong arg: RUNTIME-OVERLOAD-ERROR
+int wrong arg self: RUNTIME-OVERLOAD-ERROR
+static from static wrong arg: RUNTIME-OVERLOAD-ERROR
+name: foo
+again: foo
+static: foo
+typed: foo
+two levels: foo2
+int: 42
+generic subclass: foo/foo
+int arg: 5
+int arg self: 5
+int arg scoped: 5
+static from static: 5
+closure: 5
+call reference: 5
+hot: 4498500
+int wrong arg: RUNTIME-OVERLOAD-ERROR
+int wrong arg self: RUNTIME-OVERLOAD-ERROR
+static from static wrong arg: RUNTIME-OVERLOAD-ERROR

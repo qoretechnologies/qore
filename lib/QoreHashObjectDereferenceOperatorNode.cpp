@@ -319,7 +319,8 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
     }
     // a temporary read from lives until the end of the statement, so the rest of the chain can use it
     QoreStatementTempScope::holdReceiver(left, lh, xsink);
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the key is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 

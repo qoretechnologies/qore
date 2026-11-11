@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,11 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreRegexExtractOperatorNode::op_str("regex extract (=~ x//) operator expression");
 
 QoreValue QoreRegexExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
+    QoreOperandEvalHolder lh(exp, xsink);
     if (*xsink)
         return QoreValue();
 

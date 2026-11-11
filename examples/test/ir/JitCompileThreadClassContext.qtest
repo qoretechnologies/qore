@@ -27,10 +27,9 @@
       that return an object as their class's private parent class return it unchanged in their own class context; a
       closure created in a static method, which has no class recorded for it, keeps the runtime check, and so does a
       function whose return type converts its value; skipped without library debugging.
-    - The script of the issue, with f() called from top-level code, runs in every execution mode and as a qcc
-      executable, with the AST interpreter's output.  It parses only because of qore#5749: the body of f() is
-      parse-initialized from the method of C that refers to it, in that class's context; when qore#5749 is fixed, it
-      is a parse error in every mode, and the case must expect that error.
+    - The script of the issue, with f() called from top-level code, is a parse error in every execution mode and
+      for qcc: the body of f() is outside every class (qore#5749), so it cannot return an object<C> as its class's
+      private parent class Base, also though C::run() refers to it first.
 */
 class JitCompileThreadClassContextTest inherits QUnit::Test {
     public {
@@ -88,10 +87,8 @@ map printf("%s: %y\n", $1.key, $1.value), h.pairIterator();
         );
 
         #! the script of qore#5750, run in every execution mode
-        /** C::run() refers to f(), so that the call of C::run() parse-initializes f() in the class context of C
-            (qore#5749), but does not call it: f() is called from top-level code, whose class context native code has
-            as well (a function called natively from a method runs in the method's class context: see
-            fix/direct-call-context)
+        /** C::run() refers to f(), which used to parse-initialize f() in the class context of C; since qore#5749 the
+            body of f() is parsed outside every class, and its return statement is a parse error
         */
         const IssueScript = '%modern
 class Base {
@@ -139,7 +136,7 @@ for (int i = 0; i < 40; ++i) {
         }
         addTestCase("the return analysis of IR in a thread without thread data uses the function's class context",
             \hookTest());
-        addTestCase("the script of the issue gives the AST interpreter's output in every mode", \issueTest());
+        addTestCase("the script of the issue is a parse error in every mode and for qcc (qore#5749)", \issueTest());
         set_return_value(main());
     }
 
@@ -166,23 +163,21 @@ for (int i = 0; i < 40; ++i) {
         f.write(IssueScript);
         f.close();
         string run = sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, qore_bin);
-        string expected = ExecModeHarness::run(sprintf("%s --exec-mode=ast %s", run, path));
-        assertRegex("RUNTIME-TYPE-ERROR: <return statement> expects type 'object<Base>'", expected,
-            "the AST interpreter raises the return type error");
+        # the body of f() is parsed outside every class (qore#5749): returning an object<C> as its private parent
+        # class Base is a parse error in every execution mode
+        const string ParseError = "PARSE-TYPE-ERROR: return value for this block expects object<Base>, but value "
+            "given to the return statement is object<C>";
         foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
-            }
-            assertEq(expected, ExecModeHarness::run(sprintf("%s --exec-mode=%s %s", run, mode, path)), mode);
+            string out = ExecModeHarness::run(sprintf("%s --exec-mode=%s %s", run, mode, path),
+                ExecModeHarness::NativeCheck::None);
+            assertTrue(out.find(ParseError) >= 0, sprintf("%s: %s", mode, out));
         }
-        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s --exec-mode=tiered %s", run, path)),
-            ExecModeHarness::IRTierName);
         string exe = tmp.path + DirSep + "issue";
+        int rc;
         string compile = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1", libqore_dir, qcc_bin, exe,
-            path));
-        if (!is_file(exe)) {
-            fail(sprintf("qcc failed:\n%s", compile));
-        }
-        assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)), "qcc executable");
+            path), \rc);
+        assertNeq(0, rc, sprintf("qcc exit status: %s", compile));
+        assertTrue(compile.find(ParseError) >= 0, sprintf("qcc: %s", compile));
+        assertFalse(is_file(exe), "no executable");
     }
 }

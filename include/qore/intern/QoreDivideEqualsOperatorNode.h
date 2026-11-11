@@ -40,6 +40,11 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
+    //! copies the operator for a background expression as this operator, not as the one it derives from (issue #5723)
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
+        return copyBackgroundExplicit<QoreDivideEqualsOperatorNode>(xsink);
+    }
+
     DLLLOCAL QoreDivideEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue n_left, QoreValue n_right)
             : QoreMultiplyEqualsOperatorNode(loc, n_left, n_right) {
     }

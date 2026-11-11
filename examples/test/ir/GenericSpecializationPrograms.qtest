@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A generic function shared by several Programs is specialized for each Program's type arguments: classes and
+# hashdecls of the same name in two live Programs, or in a later Program after an earlier one was destroyed, are
+# different types, so a call never uses the specialization made for another Program's type
+# (GenericSpecializationPrograms.qr, whose Programs run in every execution mode, in a qore process in every execution
+# mode and in AOT executables)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class GenericSpecializationProgramsTest
+
+class GenericSpecializationProgramsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/GenericSpecializationPrograms.qr";
+        const Expected = "ast: ok\nir: ok\njit: ok\ntiered: ok\n";
+    }
+
+    constructor() : Test("generic specializations of several Programs", "1.0", \ARGV) {
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    executionModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                assertEq(Expected, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+            }
+        }
+    }
+
+    aot() {
+        TmpDir dir("qore-generic-spec-programs-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "-o", executable, source));
+            assertEq(Expected, run((executable,)), level);
+        }
+    }
+}

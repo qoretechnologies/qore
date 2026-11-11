@@ -195,9 +195,14 @@ protected:
 public:
     const QoreTypeInfo* typeInfo;
     QoreParseListNode* args;
+    //! true if the type has type parameters (generic code), which are substituted when the node is evaluated
+    /** decided once: a non-generic `new hash<string, int>()` pays nothing for the substitution
+    */
+    bool needs_substitution;
 
     DLLLOCAL NewComplexHashNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreParseListNode* a)
-            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
         assert(QoreTypeInfo::getUniqueReturnComplexHash(typeInfo));
     }
 
@@ -205,7 +210,7 @@ public:
     /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
     */
     DLLLOCAL NewComplexHashNode(const NewComplexHashNode& old, QoreParseListNode* a) : ParseNode(old),
-            typeInfo(old.typeInfo), args(a) {
+            typeInfo(old.typeInfo), args(a), needs_substitution(old.needs_substitution) {
     }
 
     DLLLOCAL virtual ~NewComplexHashNode() {
@@ -255,9 +260,12 @@ protected:
 public:
     const QoreTypeInfo* typeInfo;
     QoreValue args{};
+    //! true if the type has type parameters (generic code); see NewComplexHashNode::needs_substitution
+    bool needs_substitution;
 
     DLLLOCAL NewComplexListNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a)
-            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
         assert(QoreTypeInfo::getUniqueReturnComplexList(typeInfo));
     }
 
@@ -265,7 +273,7 @@ public:
     /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
     */
     DLLLOCAL NewComplexListNode(const NewComplexListNode& old, QoreValue a) : ParseNode(old),
-            typeInfo(old.typeInfo), args(a) {
+            typeInfo(old.typeInfo), args(a), needs_substitution(old.needs_substitution) {
     }
 
     DLLLOCAL virtual ~NewComplexListNode() {

@@ -170,6 +170,43 @@ private:
     DLLLOCAL QoreStatementTempScope& operator=(const QoreStatementTempScope&) = delete;
 };
 
+//! evaluates an operand of an operator and hands the value to the innermost scope of the thread
+/** A temporary - a value that an expression creates and that nothing else refers to - lives until the end of the
+    statement in every execution mode (design/temporary-lifetime.md, David: "all chains, whole statement"); the
+    operand of an operator is held by the scope as the receiver of a chain is (QoreStatementTempScope::holdReceiver())
+    instead of being released when the operator returns (qore#5712).  Only a value that the holder owns and that is a
+    node can be held, so an int costs no more than a test; a value borrowed from a variable and a value that cannot be
+    observed after the statement (a string, a number, a binary or a date) are not held.  The operator still uses the
+    value, which the scope keeps until the end of the statement; a value that it takes from the holder gets a
+    reference of its own.
+*/
+class QoreOperandEvalHolder : public ValueEvalOptimizedRefHolder {
+public:
+    //! evaluates \a exp and hands a temporary value to the innermost scope of the thread at once
+    /** The value is held when it is created, as the other execution modes register a temporary when the instruction
+        that creates it runs: the temporaries of a statement are released in the reverse order of their creation (the
+        right operand of an operator before the left one), and the value that the same operand created for an earlier
+        element of a functional operator is released when the operand is evaluated again.  If the scope cannot take
+        the value (bad_alloc), the holder still owns it and releases it.
+
+        @param exp the operand, which must outlive the holder (the operand of an operator node)
+        @param xs the exception sink of the evaluation; null when an operator is folded at parse time (keys), when
+        nothing is held
+    */
+    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+        evalOperand(exp);
+    }
+
+    QoreOperandEvalHolder(const QoreOperandEvalHolder&) = delete;
+    QoreOperandEvalHolder& operator=(const QoreOperandEvalHolder&) = delete;
+
+private:
+    //! evaluates the operand as ValueEvalOptimizedRefHolder::eval() does, and hands a temporary node to the
+    //! innermost scope of the thread (QoreStatementTempScope::holdReceiver()); one call, so that an operand that holds
+    //! no reference costs only a test of the value that it has at hand
+    DLLLOCAL void evalOperand(const QoreValue& exp);
+};
+
 //! returns true if the operand of a change to an lvalue is evaluated as a statement of its own
 /** The temporaries created by such an operand are released before the change, so that they cannot keep a
     container that the change makes shared and copy it; an assignment to a variable changes no container, nor does

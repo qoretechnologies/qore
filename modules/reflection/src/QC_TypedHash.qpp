@@ -49,6 +49,8 @@ QoreReflectionTypedHash::QoreReflectionTypedHash(ExceptionSink* xsink, const cha
         xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", path);
         return;
     }
+    // the handle keeps the hashdecl (see ~QoreReflectionTypedHash())
+    th->ref();
 }
 
 static QoreHashNode* TypedHash_serializer(const QoreObject& self, const QoreReflectionTypedHash& thd,
@@ -126,6 +128,10 @@ static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, Qo
     @ref hashdecl "typed hash", and deserialization resolves the path again in the deserializing
     @ref Qore::Program "Program".  If the typed hash is provided by a module, the module is recorded as a
     serialization dependency.
+
+    A TypedHash object keeps its typed hash (and a @ref Qore::Reflection::Type "Type" object the typed hashes,
+    classes and enums of its type), also after the last value of the type is gone and the
+    @ref Qore::Program "Program" that declared it has been deleted.
 
     @since
     - %Qore 0.9.0

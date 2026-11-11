@@ -1,0 +1,8 @@
+# a file parsed in %modern mode by its extension opts out with %old-style; then the compatibility options can be used
+%old-style
+%no-negative-offsets
+%broken-range
+my list $l = (1, 2, 3);
+printf("negative offset: %y\n", $l[-1]);
+printf("range: %y\n", range(1, 3));
+printf("modern: %y\n", (get_parse_options() & PO_MODERN) == PO_MODERN);

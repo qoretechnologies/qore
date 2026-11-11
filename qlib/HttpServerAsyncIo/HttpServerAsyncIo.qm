@@ -77,6 +77,8 @@ module HttpServerAsyncIo {
     regardless of the underlying HTTP protocol version (HTTP/1.x or HTTP/2):
 
     - @ref HttpServerAsyncIo::AbstractSseConnection "AbstractSseConnection" - Protocol-agnostic SSE interface
+    - @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" - Source of the events of an SSE response
+      that pushes them when they occur, so that open streams do not hold the threads of the handler pool
     - @ref HttpServerAsyncIo::AbstractWebSocketConnection "AbstractWebSocketConnection" - Protocol-agnostic WebSocket interface
     - @ref HttpServerAsyncIo::Http1SseConnection "Http1SseConnection" - HTTP/1.x SSE wrapper
     - @ref HttpServerAsyncIo::Http1WebSocketConnection "Http1WebSocketConnection" - HTTP/1.x WebSocket wrapper

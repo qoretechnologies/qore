@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreMultiplicationOperatorNode::multiplication_str("* operator expression");
 
@@ -51,10 +52,10 @@ static void set_binary_analysis_mul(QoreParseContext& parse_context,
 }
 
 QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 

@@ -34,6 +34,7 @@
 #define _QORE_QORETYPEINFO_H
 
 #include <map>
+#include <set>
 #include "qore/intern/qore_string_private.h"
 #include <vector>
 #include <utility>
@@ -204,6 +205,37 @@ public:
         return ti && hasType(ti) ? ti->parseReturns(t) : QTI_WILDCARD;
     }
 
+    //! Returns true if the type returns only scalar values and strings (int, float, number, bool, string, date,
+    //! binary, NOTHING, NULL), none of which is an object or a container that can hold one
+    /** The check of such a value against the type does not depend on the class context it runs in; false for a type
+        that is not given (\c auto) or that can return any other value
+    */
+    DLLLOCAL static bool returnsOnlyScalars(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getTypeSpec() != QTS_TYPE) {
+                return false;
+            }
+            switch (i.spec.getType()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_STRING:
+                case NT_DATE:
+                case NT_BINARY:
+                case NT_NOTHING:
+                case NT_NULL:
+                    break;
+                default:
+                    return false;
+            }
+        }
+        return true;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool isReference(const QoreTypeInfo* ti) {
         return ti && ti->return_vec[0].spec.getType() == NT_REFERENCE;
@@ -301,6 +333,55 @@ public:
             return !hasType(first) ? QTI_NEAR : QTI_AMBIGUOUS;
         }
         return QoreTypeInfo::hasType(first) ? first->runtimeTypeMatch(second) : QTI_AMBIGUOUS;
+    }
+
+    //! Returns the subtype of a date type: 1 for date<absolute>, 2 for date<relative> (with or without NOTHING), 0 for
+    //! any other type (issue #5722)
+    DLLLOCAL static int getDateSubtype(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateAbsoluteOrNothingTypeInfo) {
+            return 1;
+        }
+        if (ti == dateRelativeTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return 2;
+        }
+        return 0;
+    }
+
+    //! Returns the type of a value known at parse time, such as the value of a constant: a date has the type of its
+    //! subtype, as a date literal does (issue #5722)
+    DLLLOCAL static const QoreTypeInfo* getKnownValueType(const QoreValue& val) {
+        if (val.getType() == NT_DATE) {
+            return val.get<const DateTimeNode>()->isRelative() ? dateRelativeTypeInfo : dateAbsoluteTypeInfo;
+        }
+        return val.getTypeInfo();
+    }
+
+    //! Returns the type of the run-time values of a type: date<absolute> and date<relative> are date (issue #5722)
+    /** A date value has no subtype at run time, so a type that the parser keeps for code that follows, such as the
+        value type of a container built from a literal, the common type of a ternary or the narrowed type of a local,
+        is the plain date type, while the expression itself keeps its subtype for the checks of its own use.
+    */
+    DLLLOCAL static const QoreTypeInfo* getRuntimeValueType(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateRelativeTypeInfo) {
+            return dateTypeInfo;
+        }
+        if (ti == dateAbsoluteOrNothingTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return dateOrNothingTypeInfo;
+        }
+        return ti;
+    }
+
+    //! Returns true if one type is date<absolute> and the other date<relative>, with or without NOTHING (issue #5722)
+    /** Both accept and return dates, so only their subtypes tell them apart; a value of one is never a value of the
+        other.
+    */
+    DLLLOCAL static bool isDateSubtypeMismatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        int first_subtype = getDateSubtype(first);
+        if (!first_subtype) {
+            return false;
+        }
+        int second_subtype = getDateSubtype(second);
+        return second_subtype && second_subtype != first_subtype;
     }
 
     // static version of method, checking for null pointer
@@ -957,10 +1038,20 @@ public:
         container_nesting = n;
     }
 
+    //! Returns the identity serial of the type; see qore_get_type_identity_serial()
+    DLLLOCAL uint64_t getIdentitySerial() const {
+        return identity_serial;
+    }
+
 protected:
     QoreString tname;
     QoreString sname;
     unsigned container_nesting = 0;
+    //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
+    /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
+        qore_get_type_identity_serial()
+    */
+    uint64_t identity_serial = 0;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
@@ -1143,6 +1234,20 @@ protected:
 
     DLLLOCAL static void stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
 
+public:
+    //! Returns true for an AOT deferred placeholder type (QoreAOTDeferredTypeInfo in QoreTypeInfo.cpp)
+    /** Every type comparison asks it (see qore_type_info_aot_deferred_compare()), so it is a flag that the
+        placeholder's constructor sets, and not a dynamic_cast, which cost about 400 instructions per comparison of
+        two types that are not placeholders.
+    */
+    DLLLOCAL bool isAotDeferredPlaceholder() const {
+        return aot_deferred_placeholder;
+    }
+
+protected:
+    //! true for an AOT deferred placeholder type only
+    bool aot_deferred_placeholder = false;
+
 private:
     const q_accept_vec_t accept_vec;
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};
@@ -1190,10 +1295,19 @@ public:
 
 class QoreClassTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the type of a class
+    /** @param qc the class
+        @param name the class's name
+        @param path the class's path
+        @param serial the instance serial number of the class (qore_class_private::getInstanceSerial()), as the type
+        is freed with the class; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
         : QoreTypeInfo(q_accept_vec_t {{qc, nullptr, true}}, q_return_vec_t {{qc, true}},
             QoreStringMaker("object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "object<";
         pname.append(path);
         pname.append(">");
@@ -1222,13 +1336,16 @@ protected:
 
 class QoreClassOrNothingTypeInfo : public QoreClassTypeInfo {
 public:
-    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the or-nothing type of a class; see QoreClassTypeInfo::QoreClassTypeInfo()
+    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
             : QoreClassTypeInfo(q_accept_vec_t {
                 {qc, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{qc}, {NT_NOTHING}}, QoreStringMaker("*object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*object<";
         pname.append(path);
         pname.append(">");
@@ -1373,10 +1490,19 @@ protected:
 
 class QoreHashDeclTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the type of a hashdecl
+    /** @param hd the hashdecl
+        @param name the hashdecl's name
+        @param path the hashdecl's path
+        @param serial the instance serial number of the hashdecl (typed_hash_decl_private::getInstanceSerial()), as
+        the type is freed with the hashdecl; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path, uint64_t serial)
             : QoreTypeInfo(q_accept_vec_t {{hd, nullptr, true}}, q_return_vec_t {{hd, true}},
             QoreStringMaker("hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "hash<";
         pname.append(path);
         pname.append(">");
@@ -1411,13 +1537,17 @@ protected:
 
 class QoreHashDeclOrNothingTypeInfo : public QoreHashDeclTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the or-nothing type of a hashdecl; see QoreHashDeclTypeInfo::QoreHashDeclTypeInfo()
+    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path,
+            uint64_t serial)
             : QoreHashDeclTypeInfo(q_accept_vec_t {
                 {hd, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{hd}, {NT_NOTHING}}, QoreStringMaker("*hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*hash<";
         pname.append(path);
         pname.append(">");
@@ -1444,7 +1574,14 @@ protected:
 
 class QoreEnumTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the type of an enum
+    /** @param ed the enum
+        @param name the enum's name
+        @param path the enum's path
+        @param serial the instance serial number of the enum (qore_enum_decl_private::getInstanceSerial()), as the
+        type is freed with the enum; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
     //! Constructor with explicit accept/return vectors for or-nothing variant
     DLLLOCAL QoreEnumTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname,
@@ -1480,7 +1617,8 @@ protected:
 
 class QoreEnumOrNothingTypeInfo : public QoreEnumTypeInfo {
 public:
-    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the or-nothing type of an enum; see QoreEnumTypeInfo::QoreEnumTypeInfo()
+    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -4167,6 +4305,18 @@ struct QoreTypeParamInstantiation {
 //! Returns the current call-local generic type-parameter instantiation, if any
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 
+//! Resolves the type arguments of an explicit instantiation against the instantiation that is running
+/** An explicit type argument can be a type parameter of the generic code that makes the call (\c inner<T>() in a
+    generic function): the callee must be instantiated with the type that the running instantiation gives it.  Call it
+    before the callee's instantiation is made current.
+
+    @param inst the explicit instantiation of a call
+    @param resolved receives the instantiation with the type arguments substituted, if any of them changed
+    @return true if \a resolved was set (use it instead of \a inst), false if \a inst is used unchanged
+*/
+DLLLOCAL bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
+    QoreTypeParamInstantiation& resolved);
+
 // qore_get_union_type / qore_get_union_or_nothing_type are now declared DLLEXPORT in
 // include/qore/QoreType.h so module qpp signatures can use union<...> types.
 // type_vec_t is defined in include/qore/common.h.
@@ -4200,6 +4350,105 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
     @param ti2 a second type being destroyed (the or-nothing variant); may be nullptr
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
+
+//! What a generic cache removed, released after every lock is released
+/** A removed entry can hold the last reference to an object whose destruction purges types
+    (qore_purge_derived_types()) and so runs a cache eviction itself: a specialization's IR or a concrete declaration
+    of a generic hashdecl.  Each element releases its object when the list is cleared or destroyed.
+*/
+class qore_generic_cache_release_list_t {
+public:
+    DLLLOCAL qore_generic_cache_release_list_t() = default;
+    qore_generic_cache_release_list_t(const qore_generic_cache_release_list_t&) = delete;
+    qore_generic_cache_release_list_t& operator=(const qore_generic_cache_release_list_t&) = delete;
+
+    //! Releases everything added, in the order added
+    DLLLOCAL ~qore_generic_cache_release_list_t() {
+        for (auto& i : entries) {
+            i.second(i.first);
+        }
+    }
+
+    //! Adds an object to release with \a release
+    /** Allocates no memory when it fails: the caller removes the entry from its cache only once this has succeeded,
+        so an allocation failure leaves the entry in the cache instead of releasing it under the caller's locks.
+
+        @return true if the object was added, false if no memory could be allocated
+    */
+    DLLLOCAL bool add(void* p, void (*release)(void*)) {
+        try {
+            entries.emplace_back(p, release);
+        } catch (std::bad_alloc&) {
+            return false;
+        }
+        return true;
+    }
+
+private:
+    std::vector<std::pair<void*, void (*)(void*)>> entries;
+};
+
+//! A cache whose keys name types that can be destroyed: the specializations of a generic variant, the concrete
+//! declarations of a generic hashdecl (issue #5765)
+/** The cache registers the types of each key it adds (qore_generic_cache_insert()); when one of those types is
+    destroyed, qore_purge_derived_types() calls evictDeadTypes() of every cache that registered it, so the memory of a
+    specialization or declaration made for the types of a destroyed Program is freed.  A cache unregisters itself with
+    qore_generic_cache_unregister() before it is destroyed.
+*/
+class QoreGenericTypeCache {
+public:
+    DLLLOCAL virtual ~QoreGenericTypeCache() = default;
+
+    //! Removes the entries whose key names a type in \a dead
+    /** Called with the registry locked; takes the cache's own lock.  Nothing may be released here: each removed
+        entry is moved to \a release, which is cleared after every lock is released.
+    */
+    DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+            qore_generic_cache_release_list_t& release) = 0;
+};
+
+//! Adds an entry to a generic cache and registers the types of its key
+/** \a insert adds the entry under the cache's own lock; it runs with the registry locked, so an eviction of one of
+    \a types cannot run between the insertion and the registration.
+
+    @param cache the cache
+    @param types the types of the key of the entry (null pointers are ignored)
+    @param insert adds the entry to the cache
+*/
+DLLLOCAL void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert);
+
+//! The number of live specialized IR functions (generic function and method specializations), for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_generic_specializations;
+//! The number of live concrete declarations of generic hashdecls, for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_parameterized_hashdecls;
+//! Returns the number of types registered by generic caches (qore_generic_cache_insert()), for debug checks
+DLLLOCAL size_t qore_generic_cache_registered_type_count();
+
+//! Unregisters a generic cache that is about to be destroyed
+/** Waits for an eviction that is running on the cache: no eviction calls the cache after this returns. */
+DLLLOCAL void qore_generic_cache_unregister(QoreGenericTypeCache* cache);
+
+//! Returns the never-reused identity of a type that is freed with its class, hashdecl or enum, or 0 for any other type
+/** The type of a class, hashdecl or enum (and its or-nothing type) is freed with its owner, and a later owner's type
+    can be allocated at the same address, while classes, hashdecls and enums of different Programs can have the same
+    path.  A cache keyed by a type that can outlive the type, or that is shared by Programs, therefore also keys it by
+    this value: with the type's address, it identifies the type for the lifetime of the process.
+
+    A type that can be freed has exactly one owner, whose instance serial number (never 0 and never reused; see
+    qore_get_next_class_instance_serial()) the type stores when the owner makes it.  Every other type returns 0: the
+    builtin types, and the derived types (complex types, parameterized class types and unions, the only types that
+    can name more than one class, hashdecl or enum), which are never freed while the library is initialized (see
+    qore_purge_derived_types()), so their addresses are never reused.
+
+    @param ti a live type; may be nullptr
+
+    @return the instance serial number of the class, hashdecl or enum that owns the type, or 0 if the type is never
+    freed while the library is initialized
+*/
+DLLLOCAL inline uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti) {
+    return ti ? ti->getIdentitySerial() : 0;
+}
 
 //! Returns the unbounded generic wildcard type argument
 DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();

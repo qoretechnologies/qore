@@ -53,6 +53,19 @@ public:
     //! returns the type info object for the hashdecl
     DLLEXPORT const QoreTypeInfo* getTypeInfo(bool or_nothing = false) const;
 
+    //! Takes a reference to the hashdecl, which keeps it, with its members and types, until deref() releases it
+    /** A hashdecl is released with the last reference, also after the Program that declared it has been deleted,
+        as when a hash of its type or a reflection handle keeps it
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void ref() const;
+
+    //! Releases a reference taken with ref(); the hashdecl is deleted with its last reference
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT void deref() const;
+
     //! returns the type info object for a parameterized form of this hashdecl
     /** @param type_args the concrete type arguments for the hashdecl
         @param or_nothing if true, the type also accepts NOTHING

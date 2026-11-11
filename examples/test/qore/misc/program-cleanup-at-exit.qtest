@@ -45,6 +45,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         string qore_exe;
         #! environment the children need to pick up the same build as the parent
         string env_prefix = "";
+        #! 1 if the test module "staticpgm" can be loaded, 0 if not, -1 if it was not checked yet
+        int staticpgm_available = -1;
     }
 
     constructor() : Test("ProgramCleanupAtExitTest", "1.0") {
@@ -62,6 +64,10 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         addTestCase("a Program owned at static scope survives exit()", \staticProgramExitTest());
         addTestCase("a Program owned at static scope preserves the exit status",
             \staticProgramExitStatusTest());
+        addTestCase("a Program owned at static scope survives the end of a script that does not call exit()",
+            \staticProgramNormalEndTest());
+        addTestCase("Qore code run by a static Program's objects at exit() uses live thread-local data",
+            \staticProgramCodeExitTest());
         set_return_value(main());
     }
 
@@ -71,7 +77,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         teardown exception reaches std::terminate(), or by the JVM's crash handler) rather than as
         any status the script could have set itself
     */
-    private int runChild(string statement, int expected, string module = "jni") {
+    private int runChild(string statement, int expected, string module = "jni", string options = "") {
         # the statement is embedded in single quotes below, so it must not contain any;
         # String::find() returns -1 when the substring is absent
         @assert(statement.find("'") == -1);
@@ -81,7 +87,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # Discarding it left a CI failure with nothing to act on.
         string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
         on_exit unlink(out_file);
-        int rc = system(sprintf("%s%s -l %s -e '%s' >%s 2>&1", env_prefix, qore_exe, module,
+        int rc = system(sprintf("%s%s %s -l %s -e '%s' >%s 2>&1", env_prefix, qore_exe, options, module,
             statement, out_file));
         if (rc != expected) {
             printf("--- child (-l %s, %s) exited with status %d, expected %d; output follows ---\n",
@@ -94,6 +100,25 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             printf("--- end child output ---\n");
         }
         return rc;
+    }
+
+    #! checks that the test module "staticpgm" is in the module path, and fails the test case with the reason if not
+    /** "staticpgm" is a test module of the build tree (target "staticpgm"), put in the module path by run_tests.sh
+        when it exists.  A build tree that was not built completely lacks it, and the children then die with a
+        module load error that says nothing about the build: say what is missing and how to build it instead.
+
+        @return true if the module can be loaded
+    */
+    private bool requireStaticPgm() {
+        if (staticpgm_available < 0) {
+            staticpgm_available = system(sprintf("%s%s -l staticpgm -e 'exit(0);' >/dev/null 2>&1", env_prefix,
+                qore_exe)) == 0 ? 1 : 0;
+        }
+        assertTrue(staticpgm_available == 1, "the test module 'staticpgm' cannot be loaded: it is not in the module "
+            "path (QORE_MODULE_DIR) because the build tree does not have it; build it with: cmake --build "
+            "<build directory> --target staticpgm (run_tests.sh puts the modules of the build tree in the module "
+            "path)");
+        return staticpgm_available == 1;
     }
 
     #! a child that returns normally, to show the harness reports a clean run as 0
@@ -133,11 +158,54 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         singleton's std::mutex after ~QoreJIT() had already destroyed it
     */
     private staticProgramExitTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(0, runChild("exit(0);", 0, "staticpgm"),
             "exit(0) tears the process down without crashing");
     }
 
+    #! a script that ends normally, with no call of exit(): the teardown of the static Program runs from the exit
+    #! handlers of the process after the thread-local data of the main thread was destroyed
+    /** the teardown scopes of the Programs that a thread deletes were a thread_local std::vector, which the main
+        thread destroyed when exit() started; the Program of "staticpgm" is deleted afterwards by a static
+        destructor, which pushed onto the destroyed vector: a heap use-after-free that aborted the process
+        ("corrupted double-linked list", status 134)
+    */
+    private staticProgramNormalEndTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
+        assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgm"),
+            "a script that ends normally tears the process down without crashing");
+    }
+
+    #! the static Program of the module "staticpgmcode" runs Qore code (closures, recursion, exceptions, containers) from
+    #! the destructor of its global object, which runs from a static destructor after the main thread's thread-local
+    #! objects were destroyed (qore#5778)
+    /** the IR call-frame pool and the IR expression-handler cache were thread_local objects with destructors, which the
+        main thread destroys when exit() starts: the Qore code that ran afterwards used them (a heap use-after-free; the
+        child crashed with a segmentation fault in ast, ir and jit mode)
+    */
+    private staticProgramCodeExitTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes: it is not in the module "
+                "path (QORE_MODULE_DIR) because the build tree does not have it; build it with: cmake --build "
+                "<build directory> --target staticpgmcode (run_tests.sh puts the modules of the build tree in the "
+                "module path)");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options), "exit(0): " + mode);
+            assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options), "exit(7): " + mode);
+        }
+    }
+
     private staticProgramExitStatusTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(7, runChild("exit(7);", 7, "staticpgm"),
             "the exit status set by the script survives teardown");
     }

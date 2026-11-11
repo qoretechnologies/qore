@@ -621,7 +621,8 @@ QoreValue QoreScalarCastOperatorNode::castValue(QoreValue inner, ExceptionSink* 
 }
 
 QoreValue QoreScalarCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    // the operand is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

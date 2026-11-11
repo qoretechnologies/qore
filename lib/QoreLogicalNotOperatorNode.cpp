@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalNotOperatorNode::LogicalNot_str("logical not operator expression");
 
@@ -57,7 +58,7 @@ int QoreLogicalNotOperatorNode::getAsString(QoreString& str, int foff, Exception
 
 QoreValue QoreLogicalNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(exp);
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     return !v->getAsBool();
 }
 

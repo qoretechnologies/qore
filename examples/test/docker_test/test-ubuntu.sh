@@ -320,8 +320,20 @@ gosu qore:qore env \
 qore_ci_resource_report "after the tests"
 # the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
 # database servers; a server that cannot be reached is reported, and the cleanup never fails the job
+# the script needs modules that the build makes (yaml, json and reflection, through Util and the isolation modules):
+# its module path is the one that run_tests.sh gives the tests, with the build's qmods and binary module directories
+# before QORE_MODULE_DIR
+LEFTOVERS_MODULE_DIR="${QORE_MODULE_DIR}"
+for moddir in "${QORE_SRC_DIR}"/build/modules/*/; do
+    if [ -d "${moddir}" ]; then
+        LEFTOVERS_MODULE_DIR="${moddir%/}:${LEFTOVERS_MODULE_DIR}"
+    fi
+done
+if [ -d "${QORE_SRC_DIR}/build/qlib-qmod" ]; then
+    LEFTOVERS_MODULE_DIR="${QORE_SRC_DIR}/build/qlib-qmod:${LEFTOVERS_MODULE_DIR}"
+fi
 gosu qore:qore env \
-    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_MODULE_DIR="${LEFTOVERS_MODULE_DIR}" \
     QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     "${QORE_DEBUG_BINARY}" examples/test/docker_test/drop-test-run-leftovers.q || true

@@ -43,9 +43,18 @@ public:
     DLLLOCAL QoreReflectionTypedHash(ExceptionSink* xsink, const char* path, QoreProgram* pgm = getProgram());
 
     DLLLOCAL QoreReflectionTypedHash(QoreProgram* pgm, const TypedHashDecl* th, const QoreNamespace* ns) : AbstractReflectionObject(pgm), th(th), ns(ns) {
+        th->ref();
     }
 
     DLLLOCAL QoreReflectionTypedHash(QoreProgram* pgm, const TypedHashDecl* th) : AbstractReflectionObject(pgm), th(th), ns(th->getNamespace()) {
+        th->ref();
+    }
+
+    //! releases the reference to the hashdecl: the handle keeps it, as its values do (qore#5781)
+    DLLLOCAL ~QoreReflectionTypedHash() {
+        if (th) {
+            th->deref();
+        }
     }
 };
 

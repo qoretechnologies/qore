@@ -79,7 +79,8 @@ public class AbstractSseConnection {
                 return;
             }
             peer_close_fired = True;
-            cb = peer_close_callback;
+            # the callback runs once, and is not kept: it can refer to objects that refer to this stream
+            cb = remove peer_close_callback;
         }
         # close the stream first so any concurrent send fails fast instead of
         # writing into a dead transport

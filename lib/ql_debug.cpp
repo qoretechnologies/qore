@@ -36,6 +36,7 @@
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
@@ -313,6 +314,16 @@ QoreValue f_dbg_node_info(const QoreListNode* params, RuntimeConfig& rc, Excepti
 // returns a hash of all namespace information
 static QoreValue f_dbg_get_ns_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return getRootNS()->getInfo();
+}
+
+//! Returns the live generic specializations, concrete generic hashdecl declarations and the types registered by
+//! the generic caches (issue #5765)
+static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("specializations", qore_live_generic_specializations.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("hashdecls", qore_live_parameterized_hashdecls.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("registered_types", static_cast<int64>(qore_generic_cache_registered_type_count()), xsink);
+    return h.release();
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -15713,6 +15724,70 @@ static QoreValue f_dbg_socket_check_idle_data(const QoreListNode* params, Runtim
     return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rv));
 }
 
+//! the lock and the thread whose next wait on the lock dbg_lock_wait_wait() waits for; see dbg_lock_wait_arm()
+static std::atomic<const AbstractSmartLock*> dbg_lock_wait_lock{nullptr};
+static int dbg_lock_wait_tid = 0;
+static bool dbg_lock_wait_seen = false;
+static QoreThreadLock dbg_lock_wait_lck;
+static QoreCondition dbg_lock_wait_cond;
+
+void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid) {
+    // a single atomic load for every other lock wait
+    if (dbg_lock_wait_lock.load(std::memory_order_acquire) != asl) {
+        return;
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    if (dbg_lock_wait_lock.load(std::memory_order_relaxed) == asl && dbg_lock_wait_tid == tid) {
+        dbg_lock_wait_seen = true;
+        dbg_lock_wait_cond.broadcast();
+    }
+}
+
+//! Debug-only: arms dbg_lock_wait_wait() for the next wait of a thread on a lock
+/** An ordering control for tests: the wait is recorded when the thread starts waiting on the lock (VLock::waitOn()),
+    before the wait checks for a cancellation, so it is recorded also when the wait ends at once
+ */
+static QoreValue f_dbg_lock_wait_arm(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<AbstractSmartLock> asl(
+        static_cast<AbstractSmartLock*>(obj->getReferencedPrivateData(CID_ABSTRACTSMARTLOCK, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    dbg_lock_wait_tid = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    dbg_lock_wait_seen = false;
+    dbg_lock_wait_lock.store(*asl, std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: waits until the thread armed with dbg_lock_wait_arm() has waited on its lock, and disarms it
+/** @param timeout_ms the time to wait at most: a test fails with \c DBG-LOCK-WAIT-TIMEOUT instead of hanging when the
+    thread does not wait on the lock
+
+    @throw DBG-LOCK-WAIT-TIMEOUT the thread did not wait on the lock in the time given
+ */
+static QoreValue f_dbg_lock_wait_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    if (timeout_ms <= 0) {
+        return xsink->raiseException("DBG-LOCK-WAIT-ERROR", "the timeout must be positive; got %lld", timeout_ms);
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    QoreWaitDeadline deadline(timeout_ms);
+    while (!dbg_lock_wait_seen) {
+        int64 wait_ms = deadline.remainingMs();
+        if (!wait_ms) {
+            dbg_lock_wait_lock.store(nullptr, std::memory_order_release);
+            return xsink->raiseException("DBG-LOCK-WAIT-TIMEOUT", "thread %d did not wait on the lock in %lld ms",
+                dbg_lock_wait_tid, timeout_ms);
+        }
+        dbg_lock_wait_cond.wait(&dbg_lock_wait_lck, wait_ms);
+    }
+    dbg_lock_wait_lock.store(nullptr, std::memory_order_release);
+    dbg_lock_wait_seen = false;
+    return QoreValue();
+}
+
 //! Debug-only: returns whether the descriptor of a socket is non-blocking
 /** Tests use this to check that a socket stays non-blocking whatever thread uses it (see
     qore_socket_cloexec_nonblock()).
@@ -15762,6 +15837,22 @@ static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* p
 static QoreValue f_dbg_async_io_hold_releases(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(get_param_value(params, 0).getAsBool(), xsink);
     return QoreValue();
+}
+
+//! Debug-only: waits until at least @a count references are held by dbg_async_io_hold_releases(), stops holding,
+//! and releases them on a callback worker of the global controller, as an I/O thread does without the hold
+/** Returns when the releases have run, with the number of references released, or -1 if the wait timed out.  Unlike
+    dbg_async_io_hold_releases(False), which releases on the calling thread, the references are released by the
+    controller's callback dispatcher, as in production.
+ */
+static QoreValue f_dbg_async_io_dispatch_held_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    if (count < 0) {
+        count = 0;
+    }
+    return AsyncIoControllerPriv::dbgDispatchHeldOffIoThreadReleases((size_t)count,
+        get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
 //! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
@@ -17658,9 +17749,9 @@ void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* p
 
 namespace {
 //! holds the thread that converts the end of a synchronous socket call's operation into an error
-/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close of the socket ends the call's operation, the
-    test cancels the held thread and lets it continue, so that the thread converts the end of its operation with a
-    pending cancellation, as when its cancellation and the close that the cancellation causes race
+/** See qore_dbg_socket_cancel_conversion(): a test arms the hold, a close or a reset of the connection ends the call's
+    operation, the test cancels the held thread and lets it continue, so that the thread converts the end of its
+    operation with a pending cancellation, as when its cancellation and the close that the cancellation causes race
 */
 struct SocketCancelConversionHold {
     std::mutex m;
@@ -17766,6 +17857,25 @@ static QoreValue f_dbg_continue_socket_cancel_conversion(const QoreListNode* par
 static QoreValue f_dbg_signal_handler_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef HAVE_SIGNAL_HANDLING
     return QSM.hasHandler(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+#else
+    return false;
+#endif
+}
+
+//! holds the signal thread after the next signal callback has left its Program, until a thread waits for the callback
+//! to finish in QoreSignalManager::removeProgramHandlers() (issue #5766)
+static QoreValue f_dbg_signal_hold_after_callback(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef HAVE_SIGNAL_HANDLING
+    QSM.dbgHoldAfterCallback();
+#endif
+    return QoreValue();
+}
+
+//! waits until the signal thread is held after a callback; returns False on timeout
+static QoreValue f_dbg_signal_wait_held_after_callback(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef HAVE_SIGNAL_HANDLING
+    return QSM.dbgWaitHeldAfterCallback(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
 #else
     return false;
 #endif
@@ -20690,6 +20800,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringTypeInfo, 2,
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_generic_cache_counts", f_dbg_generic_cache_counts, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
@@ -20735,6 +20847,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_hold_releases", f_dbg_async_io_hold_releases,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_dispatch_held_releases", f_dbg_async_io_dispatch_held_releases,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
@@ -20794,6 +20910,10 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits",
         hashTypeInfo, QORE_PARAM_NO_ARG, "extra");
+    qns.addBuiltinVariant("dbg_lock_wait_arm", f_dbg_lock_wait_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        QC_ABSTRACTSMARTLOCK->getTypeInfo(), QORE_PARAM_NO_ARG, "lock", bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_lock_wait_wait", f_dbg_lock_wait_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
@@ -20849,6 +20969,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_signal_handler_set", f_dbg_signal_handler_set, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig");
+    qns.addBuiltinVariant("dbg_signal_hold_after_callback", f_dbg_signal_hold_after_callback, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_signal_wait_held_after_callback", f_dbg_signal_wait_held_after_callback, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,

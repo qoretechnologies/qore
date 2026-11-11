@@ -415,6 +415,14 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
         if (ntype == NT_VARREF) {
             VarRefNode* vr = n.get<VarRefNode>();
             vr->setThreadSafe();
+            // a reference to the variable itself can delete or remove its value (delete r), so the variable can be
+            // NOTHING when it is read, as if it were the operand of delete itself (qore#5710)
+            if (direct_var_ref) {
+                qore_var_t vt = vr->getType();
+                if ((vt == VT_LOCAL || vt == VT_LOCAL_TS || vt == VT_CLOSURE) && vr->ref.id) {
+                    vr->ref.id->parseDeleted();
+                }
+            }
             // if the type was narrowed and this is a direct variable reference (not a complex
             // lvalue like \hash.key), use the declared type for the reference type because
             // references allow write-back and narrowed types are too restrictive

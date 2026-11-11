@@ -24,7 +24,8 @@ Relevant code:
 - `lib/QoreSignal.cpp` — `QoreSignalManager::removeProgramHandlers()`; `lib/ModuleManager.cpp` —
   `QoreModuleManager::delUser()`
 - `lib/QoreSandboxManager.cpp` — `qore_program_set_module_lifetime()`, `qore_release_module_program_pins()`
-- `include/qore/intern/ThreadPool.h` — `ThreadTask`; `lib/QC_ThreadPool.qpp` — `ThreadPoolThread::worker()`
+- `include/qore/intern/ThreadPool.h` — `ThreadTask`; `lib/QC_ThreadPool.qpp` — `ThreadPoolThread::worker()`;
+  `lib/AsyncIoControllerPriv.cpp` — `capture_async_io_sandbox_context()`, `QoreCallDispatcher::workerLoop()`
 - `examples/test/ir/module-code-program-barrier.qtest`, `examples/test/ir/module-code-cleanup.qtest` and the tests
   named in them
 
@@ -191,6 +192,16 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   created
 - a background thread that the cleanup thread starts (`BGThreadParams`), for its whole life up to the deletion of its
   data
+- a timer or an asynchronous I/O operation that the cleanup thread adds to the asynchronous I/O controller: the
+  context captured for it (`QoreSandboxContext::module_cleanup_delegate`, kept by
+  `capture_async_io_sandbox_context()` also without a sandbox) makes `QoreCallDispatcher::workerLoop()` apply the
+  delegation around each of its callbacks and the release of the work item's own references.  The controller's own
+  references to the work (a timer's callback, an operation's objects, Queues and data) are released later, off the
+  I/O thread (`releaseOffIoThread()`), by a `DT_RELEASE` item, a synchronous caller or the thread that ends a debug
+  hold: the flag is copied into those references (`AsyncIoDeferredRelease::module_cleanup_delegate`, taken from the
+  context before it is moved or released), and `AsyncIoDeferredRelease::release()` applies the delegation wherever it
+  runs, so the destructor of an object of a module class that only the controller still references runs.  A
+  ThreadPool task records the flag in the same context (`ThreadTask::sandbox_context`)
 - in turn, such work of a thread that runs such work
 
 The destructors that the cleanup runs (of the objects in the module Programs' data in Phase 1, and of the objects in

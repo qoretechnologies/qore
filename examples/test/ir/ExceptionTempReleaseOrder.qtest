@@ -17,9 +17,10 @@
 #! Regression test: an exception raised while an expression is evaluated releases its temporaries as the AST interpreter
 /** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of a call (and the
     elements of a list or a hash) evaluated before the exception are released with their argument list, first argument
-    first, the innermost call's first, and an operand held by an operator as it is unwound; the receivers that the
-    statement holds (the object of a method call, the container of [] and {}, the value of a cast) are released when
-    the statement ends, last held first.  The compiled modes released the statement's temporaries last registered first:
+    first, the innermost call's first; the receivers and operands that the statement holds (the object of a method
+    call, the container of [] and {}, the value of a cast, the operand of an arithmetic, comparison or other operator,
+    qore#5712) are released when the statement ends, last held first, so in <tt>f(new T("a"), new T("b") + thr(), 1)</tt>
+    a is destroyed before b.  The compiled modes released the statement's temporaries last registered first:
     <tt>f(new T("a"), new T("b"), thr())</tt> destroyed b before a.  They are now released in the AST interpreter's
     order (qore_ir_order_exception_release()).  The script raises exceptions in the arguments of function and method
     calls, constructor calls, call references, list and hash literals and operands of operators, nested, with
@@ -164,8 +165,8 @@ for (int i = 0; i < 2; ++i) {
             "dtor a",
             "dtor b",
             "caught 19",
-            "dtor b",
             "dtor a",
+            "dtor b",
             "caught 20",
             "dtor a",
             "dtor b",
@@ -260,8 +261,8 @@ for (int i = 0; i < 2; ++i) {
             "dtor a",
             "dtor b",
             "caught 19",
-            "dtor b",
             "dtor a",
+            "dtor b",
             "caught 20",
             "dtor a",
             "dtor b",
