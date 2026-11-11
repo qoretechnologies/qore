@@ -4435,12 +4435,52 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
+    const uint8_t* start = ptr;
+    QoreValue rv = readValueIntern(ptr, end, error);
+    if (error.empty()) {
+        return rv;
+    }
+    // a value that cannot be read can stop inside itself (in an element of a list or a hash, or in an argument of a
+    // constructor): the value is skipped as a whole, so that a reader that reads on after the error reads the data that
+    // follows it, or the read pointer is at the end of the data if the value is malformed (qore#5848)
+    rv.discard(nullptr);
+    ptr = start;
+    std::string skip_error;
+    if (ptr >= end || !skipAOTSerializedValue(*this, ptr, end, skip_error)) {
+        ptr = end;
+    }
+    return QoreValue();
+}
+
+QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_t* end,
+        std::string& error) const {
     if (ptr >= end) {
         error = "unexpected end of data reading value tag";
         return QoreValue();
     }
 
     QoreAOTValueTag tag = static_cast<QoreAOTValueTag>(readU8(ptr));
+    // the values that are resolved in the current Program: a reader that reads them without one fails (qore#5827)
+    switch (tag) {
+        case QoreAOTValueTag::VT_ENUM:
+        case QoreAOTValueTag::VT_NEW_OBJECT:
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT:
+        case QoreAOTValueTag::VT_CONST_REF:
+        case QoreAOTValueTag::VT_EXPR_TREE:
+            if (!getProgram()) {
+                error = "no current Program to resolve value tag " + std::to_string(static_cast<int>(tag));
+                return QoreValue();
+            }
+            break;
+        case QoreAOTValueTag::VT_EXPR_NATIVE:
+            if (!expr_native_capture && !getProgram()) {
+                error = "no current Program to resolve value tag " + std::to_string(static_cast<int>(tag));
+                return QoreValue();
+            }
+            break;
+        default:
+            break;
+    }
     switch (tag) {
         case QoreAOTValueTag::VT_NOTHING:
             return QoreValue();

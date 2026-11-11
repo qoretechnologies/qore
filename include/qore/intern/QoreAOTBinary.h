@@ -1500,6 +1500,9 @@ public:
         @param error receives error message on failure
         @return the deserialized value, or NOTHING on failure
     */
+    /** After an error, the read pointer is past the value, or at \a end if the value is malformed: a reader that reads
+        on after the error must check it against \a end
+    */
     QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 
     //! Check if a data pointer range is valid
@@ -1507,6 +1510,10 @@ public:
         return ptr && data_area && ptr >= data_area
             && (ptr + needed) <= (data_area + data_area_size);
     }
+
+private:
+    //! Reads a value for readValue(), which places the read pointer after an error
+    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 };
 
 //! Serializes a source line number in the current wire format.

@@ -17047,6 +17047,231 @@ static QoreValue f_dbg_get_program_thread_cancel_generation_count(const QoreList
 }
 #endif
 
+//! Crafted AOT value payloads: a value that cannot be read leaves the read pointer past the value, or at the end of
+//! the data if it is malformed, and no reader reads past the end (qore#5848)
+/** The payloads are read from buffers of their exact size, so a read past the end is seen by valgrind and ASan.
+*/
+namespace {
+struct AotCraft {
+    QoreAOTBinaryWriter w;
+    std::vector<uint8_t> image;
+    QoreAOTBinaryReader r;
+    std::string error;
+
+    AotCraft() {
+        w.feature_flags = QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS;
+    }
+
+    //! makes the image; the payloads use the string pool of the writer
+    bool finish() {
+        uint32_t sec = w.beginSection(QoreAOTSectionType::TYPEDEFS);
+        w.endSection(sec);
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.feature_flags = w.feature_flags;
+        return w.finalize(hdr, image) && r.open(image.data(), static_cast<uint32_t>(image.size()), error);
+    }
+
+    //! a string ref: the offset of the string in the pool, written to a scratch writer
+    uint32_t ref(const char* str) {
+        QoreAOTBinaryWriter& wr = w;
+        uint32_t pos = wr.position();
+        wr.writeStringRef(str);
+        const uint8_t* p = wr.getBuffer().data() + pos;
+        uint32_t off = QoreAOTBinaryReader::readU32(p);
+        wr.truncate(pos);
+        return off;
+    }
+};
+
+struct Bytes {
+    std::vector<uint8_t> b;
+    Bytes& u8(uint8_t v) { b.push_back(v); return *this; }
+    Bytes& u16(uint16_t v) { uint8_t t[2]; memcpy(t, &v, 2); b.insert(b.end(), t, t + 2); return *this; }
+    Bytes& u32(uint32_t v) { uint8_t t[4]; memcpy(t, &v, 4); b.insert(b.end(), t, t + 4); return *this; }
+    Bytes& i64(int64_t v) { uint8_t t[8]; memcpy(t, &v, 8); b.insert(b.end(), t, t + 8); return *this; }
+    Bytes& tag(QoreAOTValueTag t) { return u8(static_cast<uint8_t>(t)); }
+    Bytes& add(const Bytes& o) { b.insert(b.end(), o.b.begin(), o.b.end()); return *this; }
+    //! an int value
+    Bytes& intv(int64_t v) { return tag(QoreAOTValueTag::VT_INT64).i64(v); }
+    //! a plain container kind (typed value containers are enabled)
+    Bytes& plain() { return u8(static_cast<uint8_t>(QoreAOTContainerValueType::Plain)); }
+};
+
+//! reads a value from an exactly-sized copy of the payload; returns the offset of the read pointer after it
+static size_t ut_aot_read(AotCraft& a, const std::vector<uint8_t>& payload, std::string& error, QoreValue* out = nullptr,
+        size_t start = 0) {
+    std::unique_ptr<uint8_t[]> buf(new uint8_t[payload.size()]);
+    memcpy(buf.get(), payload.data(), payload.size());
+    const uint8_t* p = buf.get() + start;
+    QoreValue v = a.r.readValue(p, buf.get() + payload.size(), error);
+    size_t rv = p - buf.get();
+    if (out) {
+        *out = v;
+    } else {
+        v.discard(nullptr);
+    }
+    return rv;
+}
+}
+
+static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
+    AotCraft a;
+    uint32_t key = a.ref("k");
+    uint32_t str = a.ref("abc");
+    uint32_t enum_path = a.ref("NoSuchEnum5848");
+    uint32_t enum_member = a.ref("X");
+    uint32_t class_path = a.ref("NoSuchClass5848");
+    if (!a.finish()) {
+        UT_ASSERT(c, false, ("AOT value reader: image: " + a.error).c_str());
+        return;
+    }
+    const uint32_t bad_offset = 0xfffffff0u;
+
+    // a list whose second element has an invalid string offset, followed by an int
+    {
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(3).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset).intv(3);
+        Bytes all = Bytes().add(list).intv(7);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a list element with an invalid string offset fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is past the list after an element error");
+        std::string err2;
+        QoreValue v;
+        ut_aot_read(a, all.b, err2, &v, pos);
+        UT_ASSERT(c, err2.empty() && v.getType() == NT_INT && v.getAsBigInt() == 7,
+            "AOT value reader: the value after a list that failed is read");
+        v.discard(nullptr);
+    }
+    // a hash with an enum that does not resolve, followed by an int
+    {
+        Bytes hash;
+        hash.tag(QoreAOTValueTag::VT_HASH).plain().u32(2).u32(key).tag(QoreAOTValueTag::VT_ENUM)
+            .u32(14).u32(enum_path).u32(1).u32(enum_member).u32(key).intv(2);
+        Bytes all = Bytes().add(hash).intv(8);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a hash value with an unknown enum fails");
+        UT_ASSERT_EQ(c, hash.b.size(), pos, "AOT value reader: the pointer is past the hash after a value error");
+    }
+    // a constructor default whose second argument fails, followed by an int
+    {
+        Bytes obj;
+        obj.tag(QoreAOTValueTag::VT_NEW_OBJECT).u32(15).u32(class_path).u32(2).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset);
+        Bytes all = Bytes().add(obj).intv(9);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a constructor argument with an invalid string offset fails");
+        UT_ASSERT_EQ(c, obj.b.size(), pos, "AOT value reader: the pointer is past the constructor default after an "
+            "argument error");
+    }
+    // a plugin value with a non-zero reserved field
+    {
+        Bytes pl;
+        pl.tag(QoreAOTValueTag::VT_PLUGIN_INSTANCE).u16(0).u16(0).u16(0).u16(1).u32(3).u8(1).u8(2).u8(3);
+        Bytes all = Bytes().add(pl).intv(10);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a plugin value with a reserved field fails");
+        UT_ASSERT_EQ(c, pl.b.size(), pos, "AOT value reader: the pointer is past the plugin value after an error");
+    }
+    // malformed values: the pointer is at the end of the data
+    {
+        // a list that claims more elements than the data has
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(0xffffffffu).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3);
+        std::string err;
+        size_t pos = ut_aot_read(a, list.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a truncated list fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is at the end after a truncated list");
+        // every prefix of a valid hash with a nested list
+        Bytes nested;
+        nested.tag(QoreAOTValueTag::VT_HASH).plain().u32(1).u32(key).tag(QoreAOTValueTag::VT_LIST).plain().u32(2)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(str).intv(4);
+        bool all_ok = true;
+        for (size_t n = 0; n < nested.b.size(); ++n) {
+            std::vector<uint8_t> prefix(nested.b.begin(), nested.b.begin() + n);
+            std::string perr;
+            size_t ppos = prefix.empty() ? 0 : ut_aot_read(a, prefix, perr);
+            if (!prefix.empty() && (perr.empty() || ppos != prefix.size())) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a nested value fails at the end of the data");
+        std::string err2;
+        QoreValue v;
+        size_t pos2 = ut_aot_read(a, nested.b, err2, &v);
+        UT_ASSERT(c, err2.empty() && pos2 == nested.b.size() && v.getType() == NT_HASH,
+            "AOT value reader: the complete nested value is read");
+        v.discard(nullptr);
+    }
+    // a closure record read as an expression (read_expr_closure_create()): truncated after each field, and with a
+    // default that fails, after which the next expression is read
+    {
+        auto closure = [&](bool bad_default) {
+            Bytes e;
+            e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str).u32(str).u16(1)
+                .u32(str).u32(str).u8(1);
+            if (bad_default) {
+                e.tag(QoreAOTValueTag::VT_LIST).plain().u32(2).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3)
+                    .u32(bad_offset);
+            } else {
+                e.intv(5);
+            }
+            // varargs flag (old form), no captures, IR of 4 bytes
+            e.u8(0).u16(0).u8(1).u32(4).u32(0);
+            return e;
+        };
+        Bytes full = closure(true);
+        bool all_ok = true;
+        for (size_t n = 1; n < full.b.size(); ++n) {
+            std::unique_ptr<uint8_t[]> buf(new uint8_t[n]);
+            memcpy(buf.get(), full.b.data(), n);
+            const uint8_t* p = buf.get();
+            std::string err;
+            QoreValue v = readOneExpr(a.r, p, buf.get() + n, err, getProgram(), nullptr, 0, nullptr, 0);
+            v.discard(nullptr);
+            if (err.empty() || p > buf.get() + n) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a closure record fails within the data");
+        Bytes all = Bytes().add(full).u8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE)).intv(11);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[all.b.size()]);
+        memcpy(buf.get(), all.b.data(), all.b.size());
+        const uint8_t* p = buf.get();
+        const uint8_t* end = buf.get() + all.b.size();
+        std::string err;
+        QoreValue v = readOneExpr(a.r, p, end, err, getProgram(), nullptr, 0, nullptr, 0);
+        v.discard(nullptr);
+        UT_ASSERT(c, err.find("default") != std::string::npos,
+            ("AOT value reader: a closure default that fails is the error: " + err).c_str());
+        UT_ASSERT_EQ(c, full.b.size(), static_cast<size_t>(p - buf.get()),
+            "AOT value reader: the pointer is past the closure record after a default error");
+        std::string err2;
+        QoreValue v2 = readOneExpr(a.r, p, end, err2, getProgram(), nullptr, 0, nullptr, 0);
+        UT_ASSERT(c, err2.empty() && v2.getType() == NT_INT && v2.getAsBigInt() == 11,
+            "AOT value reader: the expression after a closure record that failed is read");
+        v2.discard(nullptr);
+    }
+}
+
+//! Debug-only: runs the unit tests of the AOT value reader with crafted payloads (qore#5848)
+static QoreValue f_dbg_run_aot_value_reader_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_aot_value_reader_bounds(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -20818,6 +21043,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_aot_value_reader_tests", f_dbg_run_aot_value_reader_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,

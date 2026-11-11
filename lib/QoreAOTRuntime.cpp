@@ -3533,6 +3533,14 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     };
     for (int i = 0; i < num_exprs; ++i) {
+        // a slot whose value could not be read leaves the read pointer at the end of the data if the value was
+        // malformed (QoreAOTBinaryReader::readValue()): the entry has no more slots to read (qore#5848)
+        if (ptr >= (entry_end ? entry_end : end)) {
+            setBuildError("slot map entry ends before expression slot " + std::to_string(i) + " of "
+                + std::to_string(num_exprs));
+            delete ctx;
+            return nullptr;
+        }
         const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
@@ -5444,9 +5452,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::vector<std::string> param_names(closure_num_params);
                 std::vector<const QoreTypeInfo*> param_types(closure_num_params);
                 std::vector<QoreValue> defaults(closure_num_params);
-                // true if a default cannot be read: the record is read to its end, and the function is not
-                // registered
-                bool default_failed = false;
                 for (uint16_t p = 0; p < closure_num_params; ++p) {
                     const char* pname = reader.readStringRef(ptr);
                     param_names[p] = pname ? pname : "";
@@ -5459,11 +5464,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                         defaults[p] = reader.readValue(ptr, end, val_error);
                         if (!val_error.empty()) {
                             // a closure without the default would run with another value: the function is not
-                            // registered
-                            setClosureIRError("closure expression slot " + std::to_string(i) + " parameter '"
+                            // registered; the record is not read further, as the read pointer can be at the end of
+                            // the data after a malformed value (qore#5848)
+                            for (QoreValue& v : defaults) {
+                                v.discard(nullptr);
+                            }
+                            setBuildError("closure expression slot " + std::to_string(i) + " parameter '"
                                 + param_names[p] + "' default: " + val_error);
-                            closure_ir_missing = true;
-                            default_failed = true;
+                            delete ctx;
+                            return nullptr;
                         }
                     }
                 }
@@ -5522,14 +5531,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     continue;
                 }
                 const uint8_t* ir_end_ptr = ptr + ir_size;
-                if (default_failed) {
-                    // the closure is not built: the function fails (closure_ir_missing)
-                    for (QoreValue& v : defaults) {
-                        v.discard(nullptr);
-                    }
-                    ptr = ir_end_ptr;
-                    continue;
-                }
 
                 // Resolve class for method context (in the closure's Program; see closure_pch above)
                 const QoreClass* closure_class = nullptr;
