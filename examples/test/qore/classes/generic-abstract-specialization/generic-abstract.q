@@ -35,6 +35,23 @@ class Impl {
     int g(int x, int n) { return x + n; }
 }
 class Multi inherits Impl, Box<int> {}
+# a const abstract method and a list<T> parameter, implemented two levels below
+class CBox<T> {
+    abstract string cc() const;
+    abstract string pp2(list<T> l);
+}
+class CMid inherits CBox<int> {
+    string cc() const { return "cc"; }
+    string pp2(list<int> l) { return sprintf("%y", l); }
+}
+class CLeaf inherits CMid {}
+# a generic interface with two type parameters
+class I2<K, V> { abstract V get(K k); }
+class M2 inherits I2<string, int> { int get(string k) { return k.size(); } }
+# a parameterized parent of a parameterized parent
+class B2<T> { abstract T ab(); }
+class Md<U> inherits B2<list<U>> { }
+class L2 inherits Md<int> { list<int> ab() { return (1, 2); } }
 Leaf l();
 printf("leaf: %y %y %y\n", l.ab(), l.f(3), l.g(3, 4));
 SBox s();
@@ -43,6 +60,14 @@ IntWrap w();
 printf("wrap: %y %y %y\n", w.ab(), w.f(5), w.g(6, 1));
 Multi m();
 printf("multi: %y %y %y\n", m.ab(), m.f(3), m.g(3, 4));
+CLeaf cl();
+printf("const: %y %y\n", cl.cc(), cl.pp2((1, 2)));
+CBox<int> cb = cl;
+printf("through the base: %y\n", cb.cc());
+M2 m2();
+printf("two params: %y\n", m2.get("abc"));
+L2 l2();
+printf("nested: %y\n", l2.ab());
 
 # negative: an implementation whose types are not those of the specialization does not implement the abstract method
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
@@ -53,4 +78,15 @@ try {
     printf("negative: no error\n");
 } catch (hash<ExceptionInfo> ex) {
     printf("negative: %s: %d unimplemented\n", ex.err, (ex.desc =~ x/(\* abstract)/g).size());
+}
+
+# negative: or-nothing types are not the type argument
+Program p2(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+try {
+    p2.parse("class Box3<T> { abstract T ab(); abstract string f(T x); }\n"
+        "class Bad3 inherits Box3<int> { *int ab() { return 1; } string f(*int x) { return \"\"; } }\n"
+        "Bad3 b();\n", "neg2");
+    printf("negative or-nothing: no error\n");
+} catch (hash<ExceptionInfo> ex) {
+    printf("negative or-nothing: %s: %d unimplemented\n", ex.err, (ex.desc =~ x/(\* abstract)/g).size());
 }

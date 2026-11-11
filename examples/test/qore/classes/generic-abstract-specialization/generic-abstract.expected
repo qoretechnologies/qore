@@ -2,4 +2,9 @@ leaf: 1 "f3" 12
 sbox: "s" "fx" "abab"
 wrap: 7 "w5" 6
 multi: 2 "i3" 7
+const: "cc" "[1, 2]"
+through the base: "cc"
+two params: 3
+nested: [1, 2]
 negative: ABSTRACT-CLASS-ERROR: 2 unimplemented
+negative or-nothing: ABSTRACT-CLASS-ERROR: 2 unimplemented
