@@ -1132,6 +1132,14 @@ void TypedHashDecl::addMember(const char* name, const QoreTypeInfo* memberTypeIn
     priv->addMember(name, memberTypeInfo, init_val);
 }
 
+void TypedHashDecl::ref() const {
+    priv->ref();
+}
+
+void TypedHashDecl::deref() const {
+    const_cast<typed_hash_decl_private*>(priv)->deref();
+}
+
 const QoreTypeInfo* TypedHashDecl::getTypeInfo(bool or_nothing) const {
     return priv->getTypeInfo(or_nothing);
 }

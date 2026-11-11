@@ -118,6 +118,28 @@ private:
     DLLLOCAL QoreExternalMethodVariant();
 };
 
+//! Keeps the declarations that a type refers to: the hashdecls, classes and enums in it and in its element types
+/** The type info of a hashdecl or class type (and of a type derived from one, such as \c list<hash<H>>) is freed
+    with the declaration, which the Program that declared it releases when it is deleted; a holder of the type that
+    can outlive the values of that type, such as a reflection handle, keeps the declarations with this object.
+
+    @since %Qore 3.0
+*/
+class QoreExternalTypeDeclRefs {
+public:
+    //! References the declarations that \a ti refers to
+    DLLEXPORT QoreExternalTypeDeclRefs(const QoreTypeInfo* ti);
+
+    //! Releases the references
+    DLLEXPORT ~QoreExternalTypeDeclRefs();
+
+    DLLLOCAL QoreExternalTypeDeclRefs(const QoreExternalTypeDeclRefs&) = delete;
+    DLLLOCAL QoreExternalTypeDeclRefs& operator=(const QoreExternalTypeDeclRefs&) = delete;
+
+private:
+    class qore_type_decl_refs_private* priv = nullptr;
+};
+
 //! external wrapper base class for class and hashdecl members
 /** @since %Qore 0.9
 */

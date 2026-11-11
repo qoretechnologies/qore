@@ -61,13 +61,16 @@ public:
     //! Whether the ref is strong (true) or weak (false)
     bool strong_ref;
 
+    //! Keeps the hashdecls and classes that the type refers to, whose type info the type is (qore#5781)
+    QoreExternalTypeDeclRefs decl_refs;
+
     //! Constructor - does NOT acquire ref yet (call setContainer after wrapping in QoreObject)
     /** @param typeInfo the type info pointer
         @param source_pgm the program that owns the type (nullptr for built-in types)
     */
     DLLLOCAL QoreType(const QoreTypeInfo* typeInfo, QoreProgram* source_pgm = nullptr)
             : typeInfo(typeInfo), source_pgm(source_pgm), container(nullptr),
-              ref_held(false), strong_ref(false) {
+              ref_held(false), strong_ref(false), decl_refs(typeInfo) {
     }
 
     //! Sets the container QoreObject and acquires the appropriate ref
