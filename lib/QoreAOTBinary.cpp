@@ -7991,6 +7991,55 @@ static bool aotAppendStaticMemberImportRecords(const std::vector<AOTCompiledFunc
     return true;
 }
 
+//! The declaration hash that the symbol index publishes for a constant
+/** the provider and a consumer that folded the constant compute it here, so they cannot differ
+*/
+static std::string aotConstantDeclarationHash(const char* kind_label, const std::string& qore_path,
+        const std::string& visibility, const ConstantEntry* ce) {
+    return aotHashParts({
+        kind_label,
+        qore_path,
+        visibility,
+        aotTypePathString(ce->typeInfo),
+        ce->hasInitExpr() ? "pending" : "literal",
+    });
+}
+
+//! Imports the constants of other source files whose values the parse of this source folded (qore#5798)
+/** the record carries the value and declaration hashes of the constant as the parse saw it, so that linking the
+    object with a provider whose value has since changed is refused as stale (qo-link compares an import's non-empty
+    hashes with the provider's)
+*/
+static bool aotAppendConstantImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
+        const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!pgm) {
+        return true;
+    }
+    const std::vector<qore_program_private::source_parse_constant_import_t>& constant_imports =
+        qore_program_private::getSourceParseConstantImportRecords(pgm);
+    for (size_t i = 0; i < constant_imports.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index source constant-import collection")) {
+            return false;
+        }
+        const qore_program_private::source_parse_constant_import_t& rec = constant_imports[i];
+        if (shouldSkipByCompileFile(rec.source_file.c_str(), compile_file, compile_files)) {
+            continue;
+        }
+        const ConstantEntry* ce = rec.entry;
+        QoreAOTSymbolIndexRecord ir;
+        ir.kind = QoreAOTSymbolKind::CONSTANT;
+        ir.dependency_class = ce->hasInitExpr()
+            ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
+        ir.qore_path = rec.qore_path;
+        ir.consumer_source_file = rec.source_file;
+        ir.value_hash = aotValueHashForConstant(ce);
+        ir.declaration_hash = aotConstantDeclarationHash(rec.class_constant ? "class_constant" : "constant",
+            rec.qore_path, aotVisibility(ce->getAccess()), ce);
+        imported.push_back(std::move(ir));
+    }
+    return true;
+}
+
 static bool aotAppendTypeImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
         const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
     if (!pgm) {
@@ -8202,13 +8251,7 @@ static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
         rec.value_hash = aotValueHashForConstant(ce);
-        rec.declaration_hash = aotHashParts({
-            "class_constant",
-            rec.qore_path,
-            rec.visibility,
-            aotTypePathString(ce->typeInfo),
-            ce->hasInitExpr() ? "pending" : "literal",
-        });
+        rec.declaration_hash = aotConstantDeclarationHash("class_constant", rec.qore_path, rec.visibility, ce);
         defined.push_back(std::move(rec));
     }
     return true;
@@ -8522,6 +8565,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         if (!aotAppendTypeImportRecords(pgm, imported, compile_file, compile_files, error)) {
             return false;
         }
+        if (!aotAppendConstantImportRecords(pgm, imported, compile_file, compile_files, error)) {
+            return false;
+        }
         if (!aotAppendFunctionImportRecords(pgm, imported, compile_file, compile_files, error)) {
             return false;
         }
@@ -8715,13 +8761,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
         rec.value_hash = aotValueHashForConstant(ce);
-        rec.declaration_hash = aotHashParts({
-            "constant",
-            rec.qore_path,
-            rec.visibility,
-            aotTypePathString(ce->typeInfo),
-            ce->hasInitExpr() ? "pending" : "literal",
-        });
+        rec.declaration_hash = aotConstantDeclarationHash("constant", rec.qore_path, rec.visibility, ce);
         defined.push_back(std::move(rec));
     }
 
@@ -21087,4 +21127,11 @@ bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
         return false;
     }
     return true;
+}
+
+std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name) {
+    if (ptr.isNs()) {
+        return getNamespaceConstantPath(ptr.getNs(), name);
+    }
+    return getClassConstantPath(ptr.getClass(), name);
 }

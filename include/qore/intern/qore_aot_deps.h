@@ -172,6 +172,28 @@ DLLLOCAL void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
 DLLLOCAL void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
         const QoreProgramLocation* loc, const QoreClass* resolved_class);
 
+struct ClassNs;
+class ConstantEntry;
+
+//! Returns the path that the symbol index publishes for a constant of a namespace or class
+/** @param ptr the namespace or class that holds the constant
+    @param name the name of the constant
+*/
+DLLLOCAL std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name);
+
+//! Records that the AOT source parse of \a consumer_loc folded the value of a constant of another source file
+/** The symbol index of the compiled object then imports the constant with the hashes it had, so linking it with a
+    provider whose value has changed is refused as stale, as it is for a changed function or class (qore#5798).
+    No-op unless an AOT source parse is active, or if the constant is a system constant or is declared in the same
+    source file.
+
+    @param consumer_loc the location of the reference
+    @param ce the constant
+    @param ptr the namespace or class that holds the constant
+*/
+DLLLOCAL void qore_aot_record_folded_constant_import(const QoreProgramLocation* consumer_loc,
+        const ConstantEntry* ce, const ClassNs& ptr);
+
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */
