@@ -2869,6 +2869,26 @@ public:
         }
     }
 
+    //! Returns true if a Content-Type value has the media type text/event-stream
+    /** The media type is compared case-insensitively and its parameters are ignored (RFC 9110 section 8.3.1);
+        nothing is allocated, as this runs for every response without a message body.
+    */
+    DLLLOCAL static bool is_event_stream_media_type(const char* ct) {
+        static constexpr const char event_stream[] = "text/event-stream";
+        static constexpr size_t event_stream_len = sizeof(event_stream) - 1;
+        while (*ct == ' ' || *ct == '\t') {
+            ++ct;
+        }
+        if (strncasecmp(ct, event_stream, event_stream_len)) {
+            return false;
+        }
+        ct += event_stream_len;
+        while (*ct == ' ' || *ct == '\t') {
+            ++ct;
+        }
+        return !*ct || *ct == ';';
+    }
+
     // issue #3879: must add Content-Length in responses if not present, even if there is no message body
     /** see https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
     */
@@ -2889,7 +2909,10 @@ public:
                     } else if (!strcasecmp(key, "content-type")
                         && (v.getType() == NT_STRING)) {
                         QoreStringValueHelper str(v);
-                        if (!strcmp(str->c_str(), "text/event-stream")) {
+                        // an event stream is delimited by the end of the connection; the media type is compared
+                        // case-insensitively and without its parameters (RFC 9110 section 8.3.1), so that
+                        // "text/event-stream;charset=utf-8" does not get a Content-Length of 0 (qore#5758)
+                        if (is_event_stream_media_type(str->c_str())) {
                             addsize = false;
                         }
                     }

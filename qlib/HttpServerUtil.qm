@@ -134,6 +134,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added \c sse_source to @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
+      @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" for Server-Sent Events responses whose
+      events are pushed when they occur, so that open streams do not hold the threads of the handler pool
     - added @ref HttpServer::http_parse_content_length() "http_parse_content_length()", a strict parser of the
       \c Content-Length header (RFC 9110 section 8.6)
     - fixed logging sensitive data: @ref HttpServer::http_mask_data() "http_mask_data()" masked only the first
@@ -576,6 +579,23 @@ public hashdecl HttpResponseInfo {
     */
     *timeout send_timeout;
 
+    #! the source of the events of a Server-Sent Events response, which pushes them when they occur
+    /** An @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" object; with an event stream
+        \c Content-Type (\c text/event-stream), the HTTP server sets up the stream on the async I/O controller for
+        every HTTP version, from any request handler, and the source queues each event on it when it occurs.  No
+        thread waits for the events of the stream, so open streams do not hold the threads of the server's handler
+        pool, whose size \c max_handler_threads limits.  A \c send_callback given as well is not called then; it is
+        used only by a server that cannot set up such a stream.
+
+        Declared as @ref object "object" as this module does not depend on the async I/O modules; other objects
+        are an error (\c SSE-HANDLER-ERROR).
+
+        @since HttpServerUtil 1.6
+
+        @see @ref ServerSentEventHandler::sseObservableResponse() "sseObservableResponse()"
+    */
+    *object sse_source;
+
     #! a callback called exactly once after the response has been completely sent, or has failed to be sent
     /** Lets a handler run code that must happen after the client has been sent the response, for example a
         WS-Addressing server that answers a request with an empty \c 202 response and then sends the reply as a
@@ -707,6 +727,23 @@ public hashdecl HttpHandlerResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! the source of the events of a Server-Sent Events response, which pushes them when they occur
+    /** An @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" object; with an event stream
+        \c Content-Type (\c text/event-stream), the HTTP server sets up the stream on the async I/O controller for
+        every HTTP version, from any request handler, and the source queues each event on it when it occurs.  No
+        thread waits for the events of the stream, so open streams do not hold the threads of the server's handler
+        pool, whose size \c max_handler_threads limits.  A \c send_callback given as well is not called then; it is
+        used only by a server that cannot set up such a stream.
+
+        Declared as @ref object "object" as this module does not depend on the async I/O modules; other objects
+        are an error (\c SSE-HANDLER-ERROR).
+
+        @since HttpServerUtil 1.6
+
+        @see @ref ServerSentEventHandler::sseObservableResponse() "sseObservableResponse()"
+    */
+    *object sse_source;
 
     #! a callback called exactly once after the response has been completely sent, or has failed to be sent
     /** Lets a handler run code that must happen after the client has been sent the response, for example a
