@@ -26,9 +26,6 @@
 %requires qore >= 2.0
 # assume local scope for variables, do not use "$" signs
 %modern
-# require type definitions everywhere
-# strict argument handling
-# enable all warnings
 
 %requires(reexport) DataProvider
 %requires(reexport) ConvertApiRestClient
@@ -327,7 +324,7 @@ module ConvertApiDataProvider {
 
     @tableofcontents
 
-    @section convertapidataproviderintro ConvertApiDataProvider Introduction
+    @section convertapidataproviderintro ConvertApiDataProvider Module Introduction
 
     The %ConvertApiDataProvider module provides a data provider API for the
     <a href="https://www.convertapi.com">ConvertAPI</a> file conversion platform.
@@ -383,6 +380,7 @@ module ConvertApiDataProvider {
     @code{.py}
 #!/usr/bin/env qore
 
+%modern
 %requires ConvertApiDataProvider
 
 ConvertApiDataProvider convertapi({"convertapirestclient_options": {"apikey": ENV.CONVERTAPI_TOKEN}});
@@ -392,7 +390,9 @@ hash<auto> result = convertapi.getChildProviderEx("convert-file").doRequest({
     "url": "https://cdn.convertapi.com/public/files/demo.docx",
     "PageRange": "1-2",
 });
-File::writeBinaryFile("demo.pdf", result.Files[0].FileData);
+File f();
+f.open2("demo.pdf", O_CREAT | O_WRONLY | O_TRUNC);
+f.write(result.Files[0].FileData);
     @endcode
 
     @section convertapidataproviderrelnotes Release Notes

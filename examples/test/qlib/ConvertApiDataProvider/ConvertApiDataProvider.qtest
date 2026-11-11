@@ -43,6 +43,32 @@
 
 %exec-class ConvertApiDataProviderTest
 
+#! Captures the messages logged by a data provider
+class ConvertApiLogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+
+    #! Returns the messages logged
+    list<string> getMessages() {
+        AutoLock al(mtx);
+        return messages;
+    }
+}
+
 #! A local ConvertAPI server that records requests
 class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
     public {
@@ -834,12 +860,36 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq("Files", handler.requests[0].body.Parameters[0].Name);
         assertEq(2, handler.requests[0].body.Parameters[0].FileValues.size());
 
-        # a rate-limited request is retried after the time given by the server
+        # a URL without a scheme in a "urls" list is refused before a conversion is requested
         handler.requests = ();
-        handler.rate_limited = 1;
-        provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
-        assertEq(2, handler.requests.size());
-        assertEq(("convert/pdf/to/compress", "convert/pdf/to/compress"), (map $1.path, handler.requests));
+        list<string> bad_urls = ("https://example.com/a.pdf", "www.example.com/b.pdf");
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
+            provider.getChildProviderEx("merge-pdf").doRequest({"urls": bad_urls});
+        });
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
+            provider.getChildProviderEx("convert-file").doRequest({"from": "pdf", "to": "merge", "urls": bad_urls});
+        });
+        assertEq(0, (select handler.requests, $1.method == "POST").size());
+
+        # a rate-limited request is retried after the time given by the server, in units of the transport retry
+        # delay, which is shortened here so that the test does not wait the 30 seconds that the server asks for
+        {
+            handler.requests = ();
+            handler.rate_limited = 1;
+            handler.retry_after = "30";
+            date unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+            DataProviderRetryUtil::setTransportRetryDelayUnit(1ms);
+            on_exit {
+                DataProviderRetryUtil::setTransportRetryDelayUnit(unit);
+                handler.rate_limited = 0;
+                handler.retry_after = "1";
+            }
+            date start = now_us();
+            provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
+            assertTrue(now_us() - start < 15s);
+            assertEq(2, handler.requests.size());
+            assertEq(("convert/pdf/to/compress", "convert/pdf/to/compress"), (map $1.path, handler.requests));
+        }
 
         # an error response is raised as a ConvertAPI error with the response
         try {
@@ -910,6 +960,38 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             assertEq(1, handler.requests.size());
         }
 
+        # when the converters cannot be read, no formats or typed converter parameters are offered, and the error is
+        # logged, so that the missing values can be diagnosed; a Retry-After delay longer than the supported wait
+        # makes the info requests fail at once
+        {
+            # another base URL, so that the converter list cached for the server is not used
+            ConvertApiDataProvider::ConvertApiDataProvider failing_provider({
+                "convertapirestclient_options": {"url": url + "/failing", "apikey": "test-key"},
+            });
+            AbstractDataProvider failing_convert = failing_provider.getChildProviderEx("convert-file");
+            ConvertApiLogCapture log();
+            Logger logger("convertapi-reference-data-test", LoggerLevel::LevelAll);
+            logger.addAppender(log);
+            failing_convert.setLogger(logger);
+            handler.requests = ();
+            handler.rate_limited = 3;
+            handler.retry_after = "3600";
+            on_exit {
+                handler.rate_limited = 0;
+                handler.retry_after = "1";
+            }
+            assertEq(0, elements failing_convert.getReferenceData("source_formats"));
+            assertEq(0, elements failing_convert.getReferenceData("destination_formats", {"from": "docx"}));
+            assertEq("ConvertApiConvertRequest",
+                failing_convert.getRequestTypeWithOptions({"from": "docx", "to": "pdf"}).getName());
+            assertEq(3, handler.requests.size());
+            list<string> errors = (select log.getMessages(), $1 =~ /cannot be read/) ?? ();
+            assertEq(3, errors.size());
+            assertRegex("no source formats are offered: CONVERTAPI-API-ERROR", errors[0]);
+            assertRegex("no destination formats are offered: CONVERTAPI-API-ERROR", errors[1]);
+            assertRegex("not offered as typed options: CONVERTAPI-API-ERROR", errors[2]);
+        }
+
         # a conversion without an input is rejected before a request is made
         handler.requests = ();
         assertThrows("CONVERTAPI-ERROR", sub () {
@@ -974,6 +1056,24 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             # this rejection is intentional: ConvertAPI cannot download a scheme-less value
             assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
                 url_type.acceptsValue("www.example.com");
+            }, NOTHING, i.key);
+        }
+        # each URL of a "urls" list must carry a scheme as well
+        hash<string, AbstractDataProviderType> list_types = {
+            "convert-file": ConvertApiDataProvider::ConvertApiConvertDataProvider::RequestType.getFields().urls
+                .getType(),
+            "merge-pdf": ConvertApiDataProvider::ConvertApiMergePdfDataProvider::RequestType.getFields().urls
+                .getType(),
+        };
+        foreach hash<auto> i in (list_types.pairIterator()) {
+            AbstractDataProviderType urls_type = i.value;
+            list<string> urls = ("https://example.com/a.pdf", "https://example.com/b.pdf");
+            assertEq(urls, urls_type.acceptsValue(urls), i.key);
+            # a single URL is taken as a list with one element
+            assertEq(("https://example.com/a.pdf",), urls_type.acceptsValue("https://example.com/a.pdf"), i.key);
+            # this rejection is intentional: ConvertAPI cannot download a scheme-less value
+            assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
+                urls_type.acceptsValue(("https://example.com/a.pdf", "www.example.com/b.pdf"));
             }, NOTHING, i.key);
         }
         # the download URL of a stored output file is a URI as well

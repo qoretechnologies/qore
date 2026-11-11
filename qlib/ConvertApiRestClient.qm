@@ -50,7 +50,7 @@ module ConvertApiRestClient {
 
     @tableofcontents
 
-    @section convertapirestclientintro ConvertApiRestClient Introduction
+    @section convertapirestclientintro ConvertApiRestClient Module Introduction
 
     The %ConvertApiRestClient module provides an API for calling the
     <a href="https://www.convertapi.com">ConvertAPI</a> file conversion REST API.
@@ -81,6 +81,7 @@ module ConvertApiRestClient {
     @code{.py}
 #!/usr/bin/env qore
 
+%modern
 %requires ConvertApiRestClient
 
 ConvertApiRestClient convertapi({"apikey": ENV.CONVERTAPI_TOKEN});

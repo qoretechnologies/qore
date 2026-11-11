@@ -105,9 +105,13 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         return conn;
     }
 
-    #! Sets the logger for the data provider
+    #! Sets the logger for the data provider and its REST client
+    /** The data provider logs the errors that it handles itself, such as a converter list or description that cannot
+        be read, and the REST client logs its requests
+    */
     setLogger(*LoggerInterface logger) {
         rest.setLogger(logger);
+        LoggerWrapper::setLogger(logger);
     }
 
     #! Returns the supported reference data types for this provider
@@ -289,7 +293,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
-            # silently ignore errors when fetching reference data
+            # no source formats are offered; the error is logged, so that the empty list can be diagnosed
+            logCaughtError("%s (%s): the converters cannot be read, so no source formats are offered: %s: %s",
+                getName(), self.className(), ex.err, ex.desc);
         }
         return rv;
     }
@@ -316,7 +322,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            # silently ignore errors when fetching reference data
+            # no destination formats are offered; the error is logged, so that the empty list can be diagnosed
+            logCaughtError("%s (%s): the converters of the selected source format cannot be read, so no destination "
+                "formats are offered: %s: %s", getName(), self.className(), ex.err, ex.desc);
         }
         return rv;
     }
@@ -663,7 +671,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
 
     #! Checks if a request should be retried
     /** Requests are retried after the transport errors of @ref isRetriableTransportError() and after an HTTP 429
-        response, after the delay that the server asks for (see @ref getRetryAfterWait())
+        response, after the delay that the server asks for (see @ref getRetryAfterWait()).  Both waits are made with
+        \c DataProviderRetryUtil::waitTransportRetry(), whose unit is one second unless a process shortens it with
+        \c DataProviderRetryUtil::setTransportRetryDelayUnit(), for example to test a retry without waiting
     */
     private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries, string method) {
         if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
@@ -681,7 +691,7 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                 return False;
             }
             ++retries;
-            sleep(wait_secs * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(wait_secs);
             return True;
         }
         return False;

@@ -115,7 +115,7 @@ public namespace ConvertApiDataProvider {
             },
         },
         "urls": {
-            "type": new SoftListDataType("ConvertApiUrlList", SoftStringType, True),
+            "type": new SoftListDataType("ConvertApiUrlList", UriType, True),
             "display_name": "Source URLs",
             "short_desc": "URLs of the files for converters that take several files",
             "desc": "The URLs of the files to convert for converters that take several input files, such as "
