@@ -271,7 +271,10 @@ exception cleanup releases the statement's temporaries itself, the code's instru
 mark opens while it is lowered, so that its exception edge releases nothing before the block has restored the
 context; the block then gives the exception to the handler from an instruction of the statement's scope, which
 releases them.  Code that turns out to set no context gets the statement's scope back, so that its exception edges
-release the temporaries as before.
+release the temporaries as before.  The body of an operator with an exception cleanup (see below) records a temp
+scope that no mark opens itself (`UnmarkedExceptionTempScope`), so the scope it gets back is that one, and the
+statement's temporaries, the body's among them, are released after the operator's values; the body of a map over an
+iterator had the statement's scope, which released its temporary before the iterator (qore#5830).
 
 A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
 can hold an object, the `IteratorNext` instruction releases the previous element and then the values that the stages

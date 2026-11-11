@@ -17706,6 +17706,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // Body block: set up context, evaluate expression, append result
     builder.setBlock(body_block);
     size_t body_block_count = builder.getFunction()->blocks.size();
+    // the body releases nothing on an exception before the loop's cleanup does, as over a list (see
+    // UnmarkedExceptionTempScope): the statement's temporaries, the body's among them, are released after the iterator
+    UnmarkedExceptionTempScope body_scope(builder, loop_cleanup.get() != nullptr);
 
     // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -17810,6 +17813,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         type_state_phi->operands.push_back(next_type_state);
     }
 
+    body_scope.end();
     loop_cleanup.finish(iter_val, input_list, element_val, result_list, map->loc,
         {qore_ir_observable_release(expr_result, map->getMapExpType())});
     qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count,
