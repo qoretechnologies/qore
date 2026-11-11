@@ -8772,12 +8772,23 @@ next_instruction:
                         result->concat(*s, xsink);
                         if (xsink && *xsink) {
                             result->deref();
-                            unwindForException();
-                            cleanupLocalCaches();
-                            return false;
+                            break;
                         }
                     }
                     // NOTHING values are skipped (treated as empty string)
+                }
+                if (xsink && *xsink) {
+                    // an encoding conversion error goes to the instruction's handler in this frame, if any
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
                 }
                 setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(result), xsink);
                 ++ip;
@@ -8974,6 +8985,12 @@ next_instruction:
                     cleanupLocalCaches();
                 }
                 if (xsink && *xsink) {
+                    // a value that the operation gave although it raised (an operator that evaluates its operands
+                    // after the error) is owned and is not used
+                    if (!preserve_hash_key_weak_result) {
+                        res.discard(xsink);
+                        res = QoreValue();
+                    }
                     if (ir_trace_exceptions_env.get()) {
                         fprintf(stderr, "[ir-exception] func='%s' invoke-op=%d loc=%s:%d ex-target=%p\n",
                             func.name.c_str(), static_cast<int>(inv->invoke_opcode),
@@ -13408,7 +13425,11 @@ load_local_done:
                     }
                 } else if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
-                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
+                        // a value that is the kept value (a second operand, see
+                        // QoreIRBuilder::createReleaseStageInput()) stays in its slot
+                        && (inst->operands.size() < 2
+                            || toBits(values[id]) != toBits(getIRValue(values, inst->operands[1])))) {
                     // a value that is not a node has no reference to release: its entry stays for the slot's next
                     // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
                     // each element, see QoreIRLowering::lowerLazyPipelineFused())

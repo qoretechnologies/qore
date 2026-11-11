@@ -3620,6 +3620,74 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
 }
 
 // documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitAnyDivModFastPath(bool modulo, const QoreIRInstruction* inst, llvm::Value* lhs,
+        llvm::Value* rhs, llvm::Function* llvm_func, llvm::Module& module) {
+    llvm::BasicBlock* int_check_bb = llvm::BasicBlock::Create(ctx, "divmod_int_check", llvm_func);
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "divmod_fast_int", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "divmod_check_float", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "divmod_slow", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "divmod_merge", llvm_func);
+    llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+
+    llvm::Value* both_int = builder->CreateAnd(emitIsBoxedInt48(lhs), emitIsBoxedInt48(rhs));
+    builder->CreateCondBr(both_int, int_check_bb, check_float_bb);
+
+    // two integers (48-bit, so that neither the quotient nor INT64_MIN / -1 overflows) and a divisor that is not
+    // zero: the AST interpreter's integer division and modulo (qore_int_div(), qore_int_mod())
+    builder->SetInsertPoint(int_check_bb);
+    llvm::Value* l_int = unboxInt(lhs);
+    llvm::Value* r_int = unboxInt(rhs);
+    builder->CreateCondBr(builder->CreateICmpNE(r_int, zero), fast_int_bb, slow_bb);
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* int_result = modulo ? builder->CreateSRem(l_int, r_int) : builder->CreateSDiv(l_int, r_int);
+    llvm::Value* int_boxed = boxIntInline(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // two floats and a divisor that is not zero (a division only: the modulo of floats is the modulo of their
+    // integer values, which the helper computes)
+    builder->SetInsertPoint(check_float_bb);
+    llvm::Value* float_boxed = nullptr;
+    llvm::BasicBlock* fast_float_end = nullptr;
+    if (!modulo) {
+        llvm::BasicBlock* float_check_bb = llvm::BasicBlock::Create(ctx, "divmod_float_check", llvm_func);
+        llvm::BasicBlock* fast_float_bb = llvm::BasicBlock::Create(ctx, "divmod_fast_float", llvm_func);
+        llvm::Value* both_float = builder->CreateAnd(emitIsBoxedFloat(lhs), emitIsBoxedFloat(rhs));
+        builder->CreateCondBr(both_float, float_check_bb, slow_bb);
+        builder->SetInsertPoint(float_check_bb);
+        llvm::Value* l_float = unboxFloat(lhs);
+        llvm::Value* r_float = unboxFloat(rhs);
+        builder->CreateCondBr(builder->CreateFCmpUNE(r_float, llvm::ConstantFP::get(double_type, 0.0)),
+            fast_float_bb, slow_bb);
+        builder->SetInsertPoint(fast_float_bb);
+        float_boxed = boxFloat(builder->CreateFDiv(l_float, r_float));
+        builder->CreateBr(merge_bb);
+        fast_float_end = builder->GetInsertBlock();
+    } else {
+        builder->CreateBr(slow_bb);
+    }
+
+    // the helper, which raises a division by zero and returns NOTHING then; the exception raises where it happens
+    // (see emitExceptionCheckIfNothing())
+    builder->SetInsertPoint(slow_bb);
+    auto helper = module.getOrInsertFunction(modulo ? "qore_rt_mod_any" : "qore_rt_div_any",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+    emitExceptionCheckIfNothing(module, llvm_func, inst, slow_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, fast_float_end ? 3 : 2);
+    phi->addIncoming(int_boxed, fast_int_end);
+    if (fast_float_end) {
+        phi->addIncoming(float_boxed, fast_float_end);
+    }
+    phi->addIncoming(slow_result, slow_end);
+    return phi;
+}
+
+// documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitExceptionCheckIfNothing(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, llvm::Value* result) {
     // the result comes from a plain call: a skip flag left by another call's invoke would drop this check
@@ -14638,16 +14706,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            const char* helper_name = (inst->opcode == QoreIROpcode::DivAny)
-                ? "qore_rt_div_any" : "qore_rt_mod_any";
-            auto helper = module.getOrInsertFunction(helper_name,
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            // two integers with a divisor that is not zero (and two floats for a division) are divided inline; the
+            // other operands go to the helper, whose exception raises where it happens (see emitAnyDivModFastPath())
+            llvm::Value* result = emitAnyDivModFastPath(inst->opcode == QoreIROpcode::ModAny, inst, lhs_boxed,
+                rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
-            // a division by zero raises where it happens (see emitExceptionCheckIfNothing())
-            emitExceptionCheckIfNothing(module, llvm_func, inst, result);
             return true;
         }
 
@@ -32417,11 +32482,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            // the value that the release keeps (a second operand: the value of a fused pipeline's map stage, which
+            // the stage's input is released for, see QoreIRBuilder::createReleaseStageInput()): its own slot holds it
+            llvm::Value* kept = nullptr;
+            if (inst->operands.size() > 1) {
+                llvm::Value* kept_val = getVal(inst->operands[1].id, error);
+                if (!kept_val) {
+                    return false;
+                }
+                kept = boxValue(kept_val, inst->operands[1].id);
+            }
             llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
             // only a value that holds a reference is released (QoreValue::needsRef(): a pointer, an opaque reference
             // or an enum value), so that the release of a scalar, as of a fused pipeline's stage value for each
-            // element, costs no call
+            // element, costs no call; a value that is the kept value stays in its slot
             {
                 llvm::Value* tag16 = builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 48));
                 llvm::Value* is_pointer = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFA));
@@ -32430,10 +32504,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 52)),
                     llvm::ConstantInt::get(i64_type, 0xFFD));
                 llvm::Value* needs_ref = builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
+                if (kept) {
+                    needs_ref = builder->CreateAnd(needs_ref, builder->CreateICmpNE(old_val, kept));
+                }
                 llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp", llvm_func);
                 llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp_cont", llvm_func);
                 builder->CreateCondBr(needs_ref, release_bb, cont_bb);
                 builder->SetInsertPoint(release_bb);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
                 builder->CreateBr(cont_bb);
                 builder->SetInsertPoint(cont_bb);
@@ -32829,6 +32907,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             llvm::Value* old_iter_val = builder->CreateLoad(i64_type, out_val_ptr, "old_iter_val");
+            // the slot holds no reference once it is released, so that no other release of it (a release value that
+            // an optimization made the element, see finalizeIteratorReleases(), or the frame's exit) releases it again
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
             llvm::CallInst* element_release = builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
             // the values that the loop derived from the previous element follow it (see finalizeIteratorReleases())
             if (!iter_inst->release_values.empty()) {
@@ -34088,6 +34169,12 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     auto ca_helper_throwing = module.getOrInsertFunction(ca_throwing_name, ca_ft);
     llvm::Value* slow_result_val = emitMaybeInvoke(ca_helper, ca_helper_throwing,
             {lhs, rhs, xsink_arg}, module, llvm_func, inst);
+    // as in emitAnyArithFastPath(): the exception raises here, and an invoke's skip flag stays with this call
+    if (llvm::isa<llvm::InvokeInst>(slow_result_val)) {
+        skip_next_exception_check = false;
+    } else if (inst) {
+        emitExceptionCheckIfNothing(module, llvm_func, inst, slow_result_val);
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 

@@ -9717,9 +9717,10 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
                 ir_operands.push_back(lowered);
             }
 
-            // Create StringConcat instruction using createBinaryOp for first two operands
-            QoreIRInstruction* inst = builder.createBinaryOp(
-                    QoreIROpcode::StringConcat, ir_operands[0], ir_operands[1], plus->loc);
+            // Create StringConcat instruction using createBinaryOp for first two operands; an encoding conversion
+            // error goes to the enclosing handler, as for AddString
+            QoreIRInstruction* inst = withExceptionTarget(builder.createBinaryOp(
+                    QoreIROpcode::StringConcat, ir_operands[0], ir_operands[1], plus->loc));
             // Add remaining operands
             for (size_t i = 2; i < ir_operands.size(); ++i) {
                 inst->operands.push_back(ir_operands[i]);
@@ -14879,6 +14880,27 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
     return result;
 }
 
+//! Moves the blocks that follow a functional operator's loop after the blocks that its body created, if it created any
+/** The blocks that the body creates (a ternary, a short-circuit operator, the implicit context's exception cleanup)
+    come after the loop's own, which are created before it, and would be laid out before them: the code runs them
+    after the body, and the LLVM code generator assigns the body's temporaries to the statement's temp scope, and
+    orders their release on an exception edge, in the order of the blocks.  A body that created none keeps its layout
+    (qore#5680).
+
+    @param body_block_count the number of blocks of the function when the body's lowering started
+*/
+static void qore_ir_move_loop_exit_blocks(QoreIRFunction* func, size_t body_block_count,
+        std::initializer_list<QoreIRBasicBlock*> blocks) {
+    if (func->blocks.size() <= body_block_count) {
+        return;
+    }
+    for (QoreIRBasicBlock* block : blocks) {
+        if (block) {
+            func->moveBlockToEnd(block);
+        }
+    }
+}
+
 //! Gives the instructions lowered while it is active a temp scope that no mark opens
 /** An exception that they raise releases nothing before the branch to their handler, the exception cleanup of a
     functional operator's loop, which releases the loop's values in the AST interpreter's order before the statement's
@@ -19521,6 +19543,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     iter_element = next_inst->result;
 
     builder.setBlock(body_block);
+    size_t body_block_count = builder.getFunction()->blocks.size();
     // the code of the stages and of the root releases nothing on an exception before the pipeline's cleanup does (see
     // UnmarkedExceptionTempScope)
     UnmarkedExceptionTempScope body_scope(builder, pipeline_cleanup.get() != nullptr);
@@ -19538,6 +19561,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             }
         }
         stage_values.push_back(v);
+    };
+    // the AST interpreter's functional map iterator releases its input (the element, or the value of the stage
+    // before it) once it has evaluated the stage's value, before the stages after it and the consumer run
+    // (QoreFunctionalMapOperator::getNextImpl()): the input is released then, if it can hold an object, unless it is
+    // the stage's value itself (see QoreIRBuilder::createReleaseStageInput())
+    auto release_stage_input = [&](QoreIRValue input, QoreIRValue stage_result, const QoreTypeInfo* input_type,
+            const QoreProgramLocation* release_loc) {
+        if (input.id != stage_result.id && qore_ir_type_may_hold_object(input_type)) {
+            builder.createReleaseStageInput(input, stage_result, release_loc);
+        }
     };
     FusedLoopState state{
         stage_indices, root_index, count_value, fold_accum, fold_has_accum, fold_join_started,
@@ -19665,6 +19698,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                     return QoreIRValue();
                 }
                 stage_value(map_result, *stage.primary);
+                release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
@@ -19702,6 +19736,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                     return QoreIRValue();
                 }
                 stage_value(map_result, *stage.primary);
+                release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
                 state = updated;
@@ -19999,6 +20034,12 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
     }
 
+    // the blocks that the stages created (a ternary, a short-circuit operator, a nested pipeline) come before the
+    // blocks after the loop, as the code runs: the LLVM code generator assigns the temporaries of the stages to the
+    // temp scope of the statement, and orders their release on an exception edge, in the order of the blocks
+    // (qore#5680)
+    qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
+
     builder.setBlock(null_block);
     QoreIRValue null_result;
     if (!root_streaming) {
@@ -20144,7 +20185,26 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // are released after it, before the iterator (see stage_values)
     QoreIRValue result = result_phi->result;
     if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First) {
-        result = builder.createRefSelf(result, loc)->result;
+        // the AST interpreter's first operator returns its value when its functional iterators are released, so
+        // the value replaces the code's previous value of the expression (a receiver of the statement) after the
+        // iterator: the element and the stage values are released before the iterator unless they are the value,
+        // which gets its reference after the iterator, and they are released after it then
+        builder.createReleaseStageInput(iter_element, result, loc);
+        for (const QoreIRValue& v : stage_values) {
+            builder.createReleaseStageInput(v, result, loc);
+        }
+        builder.createIteratorRelease(iter_val, loc);
+        // the base source, which the operator's functional iterator held, is released with it, before the value
+        // replaces the previous one (the source's temporary is released again after the operator, see
+        // lowerWithSourceRelease(), which finds nothing then); the element and the stage values hold the value's
+        // reference until it gets its own
+        builder.createReleaseOwnedTemp(source, loc);
+        QoreIRValue owned = builder.createRefSelf(result, loc)->result;
+        builder.createReleaseOwnedTemp(iter_element, loc);
+        for (const QoreIRValue& v : stage_values) {
+            builder.createReleaseOwnedTemp(v, loc);
+        }
+        return owned;
     }
     if (!root_accumulator) {
         builder.createReleaseOwnedTemp(iter_element, loc);
@@ -20500,6 +20560,16 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         foreach_exception_cleanup_block);
 
     builder.setBlock(body_block);
+    // the AST interpreter's functional map iterator releases its input (the element, or the value of the stage
+    // before it) once it has evaluated the stage's value, before the stages after it and the loop's body run
+    // (QoreFunctionalMapOperator::getNextImpl()); see QoreIRBuilder::createReleaseStageInput()
+    const QoreTypeInfo* foreach_input_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(base_source));
+    auto release_foreach_stage_input = [&](QoreIRValue input, QoreIRValue stage_result,
+            const QoreProgramLocation* release_loc) {
+        if (input.id != stage_result.id && qore_ir_type_may_hold_object(foreach_input_type)) {
+            builder.createReleaseStageInput(input, stage_result, release_loc);
+        }
+    };
     FusedForeachState state{stage_indices, foreach_index};
     QoreIRValue one = builder.createConstInt(1, loc)->result;
 
@@ -20602,6 +20672,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
                 if (!map_result.isValid()) {
                     return false;
                 }
+                release_foreach_stage_input(element_val, map_result, stage.loc);
+                foreach_input_type = getExprTypeInfo(*stage.primary);
                 element_val = map_result;
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
                     one, stage.loc)->result;
@@ -20637,6 +20709,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
                 if (!map_result.isValid()) {
                     return false;
                 }
+                release_foreach_stage_input(element_val, map_result, stage.loc);
+                foreach_input_type = getExprTypeInfo(*stage.primary);
                 element_val = map_result;
                 state = updated;
                 break;

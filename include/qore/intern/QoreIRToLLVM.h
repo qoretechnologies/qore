@@ -641,6 +641,13 @@ private:
     //! own (qore#5670)
     void emitExceptionCheckIfNothing(llvm::Module& module, llvm::Function* llvm_func, const QoreIRInstruction* inst,
             llvm::Value* result);
+
+    //! Emits an untyped division or modulo (DivAny, ModAny) of \a lhs by \a rhs: two integers with a divisor that is
+    //! not zero, and two floats with a divisor that is not zero for a division, inline; any other operands by the
+    //! helper (qore_rt_div_any(), qore_rt_mod_any()), whose exception raises where it happens
+    //! (emitExceptionCheckIfNothing()); returns the NaN-boxed result
+    llvm::Value* emitAnyDivModFastPath(bool modulo, const QoreIRInstruction* inst, llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows

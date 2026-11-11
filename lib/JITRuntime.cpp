@@ -821,21 +821,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t rig
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::AddAssignAny, lv, rv, xsink);
-    return toBits(result);
+    return qore_rt_result_or_nothing(result, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::SubAssignAny, lv, rv, xsink);
-    return toBits(result);
+    return qore_rt_result_or_nothing(result, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::MulAssignAny, lv, rv, xsink);
-    return toBits(result);
+    return qore_rt_result_or_nothing(result, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_div_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
