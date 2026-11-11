@@ -280,7 +280,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
 
     @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
 
-    @note Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" when maintaining legacy code that depends on negative list, binary, or buffer indexes not addressing from the end.
+    @note Legacy code that depends on negative list, binary, or buffer indexes not addressing from the end uses @ref no-negative-offsets "%no-negative-offsets" without @ref modern "%modern" (in a <tt>.q</tt> file, or after @ref old-style "%old-style"); the directive cannot be used while @ref modern "%modern" is in effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13 this operator accepts list expressions inside the square brackets
 

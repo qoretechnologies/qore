@@ -426,6 +426,11 @@
     directives such as @ref old-style "%old-style", or be run with the \c QORE_OLD_STYLE_DEFAULT environment variable
     set; see @ref modern "%modern".
 
+    @par Compatibility Parse Options Refused Under \%modern
+    Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
+    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect; legacy code that needs them is
+    parsed without @ref modern "%modern" (see @ref modern_option_consistency).
+
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
     files parsed in @ref modern "%modern" mode; rewrite it as a @ref context "context" loop or use

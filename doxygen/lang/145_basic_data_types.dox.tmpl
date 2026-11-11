@@ -159,7 +159,7 @@ string 3: "olleh"
     @endcode \n
 
     A single integer string index returns a @ref char value or @ref nothing when the index is out of range.  Range and list indexes still return strings.  The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index behavior, returning \c *string instead of \c *char for compatibility with older code.
-    With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative string indexes and explicit negative range endpoints are resolved from the end of the string by character offset.  Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" to preserve legacy negative range behavior.
+    With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative string indexes and explicit negative range endpoints are resolved from the end of the string by character offset.  Legacy code uses @ref no-negative-offsets "%no-negative-offsets" without @ref modern "%modern" to preserve legacy negative range behavior (see @ref modern_option_consistency).
 
     When making a substring with a list of character offsets and referring to a character offset that does not exist,
     no characters are added to the output string; these references are ignored.
