@@ -1597,7 +1597,10 @@ struct IRCallFramePool {
     }
 };
 
-static thread_local IRCallFramePool tl_frame_pool;
+// not a thread_local object with a destructor (qore#5778): the main thread destroys those when exit() starts, and IR
+// code that a static object runs afterwards (a module's Program that deletes its objects) used the destroyed pool
+struct IRCallFramePoolTag {};
+typedef QoreThreadLocalObject<IRCallFramePool, IRCallFramePoolTag> TlFramePool;
 
 // Points at the innermost running execute() frame's temp cleanup vector on this thread (null when no IR frame is
 // running).  Set and restored by execute() around its dispatch loop; a builtin called from IR code (such as the
@@ -6943,17 +6946,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t reserve_size = func.max_value_id > 0 ? func.max_value_id + 1 : 128;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
+    IRCallFramePool& tl_frame_pool = TlFramePool::get();
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
     // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
         IRCallFrame& frame;
+        IRCallFramePool& pool;
         ~FrameGuard() {
             // Pooled frames outlive the call.  Never let a dormant frame retain
             // refs from IR-only local caches or missed cleanup paths.
             frame.releaseReferences(nullptr);
-            tl_frame_pool.pop();
+            pool.pop();
         }
-    } frame_guard{frame};
+    } frame_guard{frame, tl_frame_pool};
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;

@@ -39,6 +39,7 @@ class RuntimeConfig;
 #include <atomic>
 #include <functional>
 #include <vector>
+#include <utility>
 #include <set>
 #include <map>
 #include <memory>
@@ -2485,6 +2486,16 @@ DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid)
 //! records in the thread's data that it deletes a Program's data, which qore_reference_program_needs_entry() reads
 /** @return false if the thread has no data (it is not recorded then)
 */
+//! registers a function that releases an object of the calling thread when the Qore thread's data is deleted
+/** The function runs on the thread that registered it, when the thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread data), before the thread's thread-local destructors.  Returns false (and
+    registers nothing) if the thread has no thread data, as after qore_cleanup(); the caller then does not release the
+    object.
+
+    @see QoreThreadLocalObject
+*/
+DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
+
 DLLLOCAL bool qore_thread_program_teardown_enter();
 //! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
 //! returned true
@@ -3074,5 +3085,54 @@ DLLLOCAL int q_get_thread_name(int tid, QoreString& str);
 
 //! checkpoints stack usage for debugging purposes
 DLLLOCAL void checkpoint_stack_pos(const char*);
+
+//! an object of class T of each thread that uses it, that is not destroyed by a thread-local destructor
+/** A thread_local object with a destructor (a std::vector, a std::unordered_map, a pool) is destroyed by the thread's
+    thread-local destructors, which the main thread runs when exit() starts, before the destructors of static objects
+    and before any exit handler runs.  Qore code that a static object runs then (a Program that a module keeps at
+    static scope deletes its global objects, and their Qore destructors run) used the destroyed object: a heap
+    use-after-free and a crash (qore#5778).
+
+    The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
+    created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object that is never released.
+
+    @tparam T the class of the object, default constructible
+    @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
+*/
+template <typename T, typename Tag>
+class QoreThreadLocalObject {
+public:
+    //! returns the calling thread's object, creating it if the thread has none
+    DLLLOCAL static T& get() {
+        T* p = ptr;
+        if (__builtin_expect(!p, 0)) {
+            p = create();
+        }
+        return *p;
+    }
+
+private:
+    DLLLOCAL static T* create() {
+        T* p = new T;
+        ptr = p;
+        qore_thread_add_exit_cleanup(release, nullptr);
+        return p;
+    }
+
+    //! releases the calling thread's object
+    DLLLOCAL static void release(void*) {
+        T* p = ptr;
+        // cleared first: the destructor of T must not find the object it is destroying
+        ptr = nullptr;
+        delete p;
+    }
+
+    static thread_local T* ptr;
+};
+
+template <typename T, typename Tag>
+thread_local T* QoreThreadLocalObject<T, Tag>::ptr = nullptr;
 
 #endif
