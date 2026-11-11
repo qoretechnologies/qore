@@ -1258,15 +1258,6 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     return rv;
 }
 
-void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
-    if (explicit_inst) {
-        QoreTypeParamInstantiation resolved;
-        if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
-            explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
-        }
-    }
-}
-
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();

@@ -294,7 +294,14 @@ public:
     DLLLOCAL void setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args);
 
     //! binds a type parameter of the code that creates the reference, in the explicit type arguments, to the instantiation that is running
-    DLLLOCAL void bindExplicitTypeArgs();
+    DLLLOCAL void bindExplicitTypeArgs() {
+        if (explicit_inst) {
+            QoreTypeParamInstantiation resolved;
+            if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
+                explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
+            }
+        }
+    }
 
     //! returns the explicit type-parameter instantiation of the reference, or nullptr
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
