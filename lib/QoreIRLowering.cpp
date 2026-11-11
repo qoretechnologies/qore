@@ -4106,8 +4106,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // statement.
         //
         // The instruction records the nesting of the statement, for the debugger's exception events of each statement
-        // that an exception leaves (#5816), and the debug IR of AOT code marks the end of each statement, where a frame
-        // continues when a debugger dismisses an exception of the statement.
+        // that an exception leaves (#5816), and the debug IR of AOT code marks the end of each statement, after which the
+        // frame is in the statement that contains it.
         const uint16_t statement_depth = debug_nest_depth;
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
             auto* dbg = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugStatement(*it));

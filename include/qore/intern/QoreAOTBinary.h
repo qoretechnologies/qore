@@ -354,8 +354,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (QoreAOTBinaryWriter::omit_source_locations).  A DebugStatement or DebugBlock instruction of the debug IR has
 //!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
 //!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
-//!      of the statements that contain the one that raised an exception, and the continuation after a statement
-//!      whose exception a debugger dismissed, are those of the AST interpreter (#5816).
+//!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
 //! First format version with source locations of calls, members and default arguments (see v25 above).

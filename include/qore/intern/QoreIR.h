@@ -1388,8 +1388,9 @@ constexpr uint8_t QORE_IR_DEBUG_NEST_VALID = 0x01;
 constexpr uint8_t QORE_IR_DEBUG_NEST_TRY = 0x02;
 //! QoreIRDebugStatementInstruction::nest_flags: the statement is a statement of the catch block of a try statement
 constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
-//! QoreIRDebugStatementInstruction::nest_flags: the instruction marks the end of a statement at its depth, where a
-//! frame continues when a debugger dismisses an exception of the statement; it makes no event
+//! QoreIRDebugStatementInstruction::nest_flags: the instruction marks the end of a statement at its depth, after which
+//! the frame is in the statement that contains it, which an exception raised after it, as in the condition of a loop,
+//! is reported for; it makes no event
 constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
 
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
