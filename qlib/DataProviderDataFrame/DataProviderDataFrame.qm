@@ -29,6 +29,8 @@
 %requires(reexport) dataframe
 
 module DataProviderDataFrame {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0.0";
     desc = "user module providing DataProvider integration for the DataFrame module";
     author = "Qore Technologies, s.r.o.";

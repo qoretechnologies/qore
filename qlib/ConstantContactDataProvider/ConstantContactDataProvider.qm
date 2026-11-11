@@ -35,6 +35,8 @@
 %requires RestClientIo
 
 module ConstantContactDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "User module providing a data provider API for Constant Contact email marketing";
     author = "Qore Technologies <info@qoretechnologies.com>";

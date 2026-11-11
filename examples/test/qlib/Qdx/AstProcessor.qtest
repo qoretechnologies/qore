@@ -38,6 +38,7 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Class with inheritance", \testClassInheritance());
         addTestCase("Hashdecl processing", \testHashdeclBasic());
         addTestCase("Function processing", \testFunctionBasic());
+        addTestCase("Functional-domain restrictions", \testFunctionDomains());
         addTestCase("Constant processing", \testConstantBasic());
         addTestCase("Global variable processing", \testGlobalVariables());
         addTestCase("Doc comment conversion", \testDocCommentConversion());
@@ -125,6 +126,34 @@ public class AstProcessorTests inherits QUnit::Test {
         string output = processCode(code);
 
         assertTrue(output =~ /myFunc\(\);/, "function declaration");
+    }
+
+    testFunctionDomains() {
+        # the functional domains declared on code are documented as qpp documents them for builtin code (#5803)
+        string code = "#! a tagged function
+/** registers something
+*/
+sub tagged() [dom=PROCESS,NETWORK] { }
+
+#! no long comment
+sub tagged2() [dom=INJECTION] { }
+
+#! no domain
+sub plain() { }
+
+class C {
+    #! a tagged method
+    /** does something
+    */
+    static s() [dom=FILESYSTEM] { }
+}";
+        string output = processCode(code);
+        assertTrue(output =~ /@par Restrictions:\s*@ref Qore::PO_NO_PROCESS_CONTROL, @ref Qore::PO_NO_NETWORK/,
+            "function restrictions: " + output);
+        assertTrue(output =~ /@par Restrictions:\s*MUST HAVE: @ref Qore::PO_ALLOW_INJECTION/,
+            "permissive domain: " + output);
+        assertTrue(output =~ /@par Restrictions:\s*@ref Qore::PO_NO_FILESYSTEM/, "method restrictions: " + output);
+        assertEq(3, (output =~ x/(@par Restrictions:)/g).size(), "only the tagged code has restrictions: " + output);
     }
 
     testGlobalVariables() {

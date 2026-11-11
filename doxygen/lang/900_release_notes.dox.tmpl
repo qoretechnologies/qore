@@ -79,6 +79,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional-Domain Attribute Lists
+    <tt>[dom=</tt> after a parameter list starts a @ref function_domains "functional-domain attribute list", so an
+    index expression that assigns to a variable named \c dom (<tt>x[dom = y]</tt>) must be written
+    <tt>x[(dom = y)]</tt>; the process-wide registration and setter APIs of the @ref dataproviderintro "DataProvider"
+    module declare \c PROCESS, so a Program with @ref Qore::PO_NO_PROCESS_CONTROL cannot call them, and the
+    \c INVALID-FUNCTION-ACCESS and parse errors for code a Program may not use name the restricted functional domain.
+
 
     @par Plain Function Bodies No Longer Inherit a Caller's Class Context
     A plain function's body could be parse-initialized in the class context of the method that first called it, which
@@ -608,6 +615,13 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Functional-Domain Declarations on Functions and Methods
+    Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
+    attribute list (<tt>sub f() [dom=PROCESS]</tt>), which a restricted Program cannot reference or call, and a user
+    module declares the domains its own code uses with the \c domains key of its
+    @ref user_module_declarations "module declaration"
+    (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>).
+
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
@@ -1037,6 +1051,8 @@
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
+      - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool

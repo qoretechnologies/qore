@@ -279,6 +279,9 @@ int qore_method_private::parseInit() {
             if (func->checkConstOverrides() && !err) {
                 err = -1;
             }
+            if (func->checkDomainOverrides() && !err) {
+                err = -1;
+            }
         }
     }
 
@@ -6826,6 +6829,56 @@ int MethodFunctionBase::checkConstOverrides() const {
     }
 
     return 0;
+}
+
+int MethodFunctionBase::checkDomainOverrides() const {
+    if (vlist.empty()) {
+        return 0;
+    }
+
+    int rc = 0;
+    ilist_t::const_iterator i = ilist.begin(), e = ilist.end();
+    ++i;
+    for (; i != e; ++i) {
+        const MethodFunctionBase* m = METHFB_const((*i).func);
+        for (vlist_t::const_iterator vi = m->vlist.begin(), ve = m->vlist.end(); vi != ve; ++vi) {
+            const MethodVariantBase* base_variant = METHVB_const(*vi);
+            // only the functional domains declared on user methods in Qore source must be repeated in an override
+            if (!base_variant->isUser()) {
+                continue;
+            }
+            int64 base_dom = base_variant->getUserVariantBase()->getDeclaredDomain();
+            if (!base_dom) {
+                continue;
+            }
+
+            const AbstractFunctionSignature* child_sig = nullptr;
+            if (parseCompareResolvedSignature(vlist, base_variant->getSignature(), child_sig) == QTI_NOT_EQUAL) {
+                continue;
+            }
+
+            const MethodVariantBase* child_variant = find_method_variant_by_signature(vlist, child_sig);
+            if (!child_variant || !child_variant->isUser()) {
+                continue;
+            }
+            int64 missing = base_dom & ~child_variant->getUserVariantBase()->getDeclaredDomain();
+            if (!missing) {
+                continue;
+            }
+
+            const UserSignature* usig = dynamic_cast<const UserSignature*>(child_variant->getSignature());
+            const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
+            parseException(*loc, "DOMAIN-METHOD-ERROR",
+                "child class method %s::%s(%s) overrides parent class method %s::%s(%s) [dom=%s] without declaring "
+                "functional domain %s; an override must declare every functional domain of the method it overrides",
+                qc->getName(), getName(), child_variant->getSignature()->getSignatureText(), m->qc->getName(),
+                getName(), base_variant->getSignature()->getSignatureText(),
+                qore_get_source_domain_names(base_dom).c_str(), qore_get_source_domain_names(missing).c_str());
+            rc = -1;
+        }
+    }
+
+    return rc;
 }
 
 void MethodFunctionBase::addBuiltinMethodVariant(MethodVariantBase* variant) {

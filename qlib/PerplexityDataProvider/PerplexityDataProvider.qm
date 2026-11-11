@@ -36,6 +36,8 @@
 %requires json
 
 module PerplexityDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "user module providing a data provider API for Perplexity AI services";
     author = "David Nichols <david@qore.org>";

@@ -35,6 +35,8 @@
 %requires json
 
 module Cin7CoreDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "User module providing a data provider API for Cin7Core (DEAR Inventory) services";
     author = "Qore Technologies <info@qoretechnologies.com>";

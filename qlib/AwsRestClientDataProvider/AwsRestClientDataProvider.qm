@@ -36,6 +36,8 @@
 %requires FileLocationHandler
 
 module AwsRestClientDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.1";
     desc = "user module providing a data provider API for AWS REST servers";
     author = "David Nichols <david@qore.org>";

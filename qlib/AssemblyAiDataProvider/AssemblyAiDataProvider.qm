@@ -31,6 +31,8 @@
 %requires OpenApi3
 
 module AssemblyAiDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "typed AssemblyAI transcription, language model, and voice agent actions";
     author = "David Nichols <david@qore.org>";

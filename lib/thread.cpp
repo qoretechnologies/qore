@@ -5882,6 +5882,40 @@ QoreParseOptions runtime_take_call_caller_parse_options() {
     return runtime_get_effective_program_parse_options();
 }
 
+thread_local QoreCallReferenceMarker qore_call_ref_marker;
+
+QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(const QoreListNode* args,
+        const QoreParseOptions* creator_po) {
+    if (!creator_po) {
+        return;
+    }
+    old = qore_call_ref_marker;
+    qore_call_ref_marker = {creator_po, args};
+    set = true;
+}
+
+QoreCallReferenceCallHelper::~QoreCallReferenceCallHelper() {
+    if (set) {
+        qore_call_ref_marker = old;
+    }
+}
+
+QoreCallReferenceArgEvalHelper::QoreCallReferenceArgEvalHelper(const QoreListNode* args)
+        : saved(qore_call_ref_marker), args(args) {
+    qore_call_ref_marker = {};
+}
+
+QoreCallReferenceArgEvalHelper::~QoreCallReferenceArgEvalHelper() {
+    qore_call_ref_marker = saved;
+}
+
+void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_args) {
+    // the call is made with the evaluated arguments
+    if (saved.po && saved.args == args) {
+        saved.args = evaluated_args;
+    }
+}
+
 QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
     ThreadData* td = thread_data.get();
     old_caller_pgm = td->callback_caller_pgm;

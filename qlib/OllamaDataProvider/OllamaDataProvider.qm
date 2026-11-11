@@ -30,6 +30,8 @@
 %requires RestClientIo
 
 module OllamaDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "user module providing a data provider API for Ollama local-first LLM runtimes";
     author = "David Nichols <david@qore.org>";

@@ -493,7 +493,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static setGlobalLogger(*LoggerInterface logger) {
+    static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
         DataProvider::logger = logger;
@@ -515,7 +515,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static addOptions(int options) {
+    static addOptions(int options) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -529,7 +529,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static removeOptions(int options) {
+    static removeOptions(int options) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -552,7 +552,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static setOptions(int options) {
+    static setOptions(int options) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -581,7 +581,7 @@ public class DataProvider {
         @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the factory is sandboxed
         (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
-    static registerFactory(AbstractDataProviderFactory factory) {
+    static registerFactory(AbstractDataProviderFactory factory) [dom=PROCESS] {
         # a factory name taken by sandboxed code would be denied to the module that owns it
         DataProviderSandboxState::checkRegistration("data provider factory", factory.getName());
         # Resolve object-backed metadata before taking the shared registry Gate. AOT module
@@ -987,7 +987,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @note types are stored based on the path provided which may differ from their type names (which may be generic
         and therefore not suitable for indexing)
     */
-    static registerType(string path, AbstractDataProviderType type) {
+    static registerType(string path, AbstractDataProviderType type) [dom=PROCESS] {
         # a type path taken by sandboxed code would be denied to the module that owns it
         DataProviderSandboxState::checkRegistration("data provider type", path);
         try {
@@ -1047,7 +1047,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     #! Locks all types
     /** @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
     */
-    static lockAllTypes() {
+    static lockAllTypes() [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("lock all types");
         type_cache.lockAll();
@@ -1554,7 +1554,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
             code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
-            *code<auto(string, string, *hash<auto>)> list_values) {
+            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the template callbacks");
         return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
@@ -1567,7 +1567,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 
         @since DataProvider 3.3
     */
-    static clearTemplateCallbacks() {
+    static clearTemplateCallbacks() [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("clear the template callbacks");
         AbstractDataProvider::clearTemplateCallbacks();
@@ -1879,7 +1879,7 @@ if (action.data_provider_info) {
 
         @throw DATA-PROVIDER-ERROR cannot call this method after requests for types or factories are made
     */
-    static setAutoConfig() {
+    static setAutoConfig() [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("allow automatic configuration");
         if (env_config_locked) {
@@ -1916,7 +1916,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static registerStaticInitializer(code init) {
+    static registerStaticInitializer(code init) [dom=PROCESS] {
         if (SandboxManager::isSandboxed()) {
             init();
             return;
@@ -1936,7 +1936,7 @@ if (action.data_provider_info) {
     #! Defers static initialization until restoreStaticInitialization() is called
     /** @since DataProvider 3.0
     */
-    static deferStaticInitialization() {
+    static deferStaticInitialization() [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("defer static initialization");
         push ilist_save, remove ilist;
@@ -1945,7 +1945,7 @@ if (action.data_provider_info) {
     #! Restores static initialization deferred by deferStaticInitialization()
     /** @since DataProvider 3.0
     */
-    static restoreStaticInitialization() {
+    static restoreStaticInitialization() [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("restore static initialization");
         if (*list<code> l = pop ilist_save) {
@@ -1991,7 +1991,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static registerShutdownHandler(string key, code handler) {
+    static registerShutdownHandler(string key, code handler) [dom=PROCESS] {
         # the handler would run later, on the thread that shuts the module down
         DataProvider::checkNotSandboxed("register a shutdown handler");
         if (smap{key}) {
@@ -2008,7 +2008,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static bool deregisterShutdownHandler(string key) {
+    static bool deregisterShutdownHandler(string key) [dom=PROCESS] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("deregister a shutdown handler");
         return exists (remove smap{key});

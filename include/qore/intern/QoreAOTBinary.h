@@ -344,8 +344,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v24: a string value that is not in UTF-8 is serialized with its encoding (QoreAOTValueTag::VT_STRING_ENC), and a
 //!      string constant in an expression that is not in UTF-8 or that has a null byte is a CONST_VALUE and not a
 //!      CONST_STRING, whose text ends at the first null byte and which is rebuilt in the default encoding.
+//! v25: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
+//!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v24
+//!      variant declares none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
+//! First format version whose user variant signatures can carry declared functional domains (see v25 above).
+constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -485,6 +490,7 @@ enum class QoreAOTSectionType : uint16_t {
     SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
+    MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1898,6 +1904,13 @@ void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptio
 
 //! Read the functional domains recorded in the FUNCTIONAL_DOMAIN section; empty if there is no such section
 bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error);
+
+//! Serialize the functional domains that a user module declares in its module header (\c domains) into the
+//! MODULE_DOMAINS section; nothing is written if \a dom is QDOM_DEFAULT
+void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom);
+
+//! Read the functional domains recorded in the MODULE_DOMAINS section; QDOM_DEFAULT if there is no such section
+bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).

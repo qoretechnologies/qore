@@ -43,6 +43,8 @@
 %try-child-module SalesforcePubSubDataProvider
 
 module SalesforceRestDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "2.1";
     desc = "user module providing a data provider API for Salesforce instances through the REST API";
     author = "David Nichols <david@qore.org>";

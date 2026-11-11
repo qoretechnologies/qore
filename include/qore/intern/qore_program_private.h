@@ -912,6 +912,13 @@ public:
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
     */
     QoreParseOptions aot_used_dom;
+    //! the functional domains that a user module declares in its module header (\c domains), which its Program does
+    //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
+    int64 module_own_dom = QDOM_DEFAULT;
+    //! the restrictions that a user module header adds to the module's Program while its header is parsed
+    //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
+    //! qore_program_private::parseDeniedDomains())
+    int64 mod_header_dom = QDOM_DEFAULT;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
@@ -1482,6 +1489,9 @@ protected:
     DLLLOCAL void newProgram();
 
     DLLLOCAL void setDefines();
+
+    //! see setModuleOwnDomains()
+    DLLLOCAL int64 setModuleOwnDomainsIntern(int64 dom, bool apply);
 };
 
 class PreParseHelper {
@@ -4590,6 +4600,41 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the functional domains that a user module declares in its module header (\c domains)
+    /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
+        longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse
+        defines, so the module's own code may use them; the code calling the module is still checked against its own
+        restrictions.
+
+        @return the restrictions that were removed
+    */
+    DLLLOCAL static int64 setModuleOwnDomains(QoreProgram& pgm, int64 dom, bool apply) {
+        return pgm.priv->setModuleOwnDomainsIntern(dom, apply);
+    }
+
+    //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
+    /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
+        declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
+        declares a domain, which the code loading the module is checked for when it calls the module
+    */
+    DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
+        QoreParseOptions denied = parseAddDomain(pgm, dom);
+        if (denied && user_declared && pgm->priv->mod_header_dom) {
+            denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
+        }
+        return denied;
+    }
+
+    //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed
+    DLLLOCAL static void setModuleHeaderDomains(QoreProgram& pgm, int64 dom) {
+        pgm.priv->mod_header_dom = dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header (\c domains)
+    DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_own_dom;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

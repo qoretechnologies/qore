@@ -39,6 +39,8 @@
 %modern
 
 module Hl7v2Util {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "user module for parsing and writing HL7 v2 messages";
     author = "Qore Technologies, s.r.o.";

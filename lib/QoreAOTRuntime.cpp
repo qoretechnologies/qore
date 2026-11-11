@@ -16087,6 +16087,27 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         }
     }
 
+    // The functional domains that the module declares in its header (domains): library code does not inherit their
+    // restrictions from the loading Program, as when its source is parsed (see QoreModuleDefContext::setDomains())
+    {
+        int64 own_dom;
+        std::string dom_error;
+        if (!readModuleDomains(metadata_reader, own_dom, dom_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+        if (own_dom) {
+            int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,
+                qore_module_load_is_trusted());
+            if (removed) {
+                inherited_po &= ~QoreParseOptions(removed);
+                qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
+            }
+        }
+    }
+
     // Parsing the module's source refuses code that uses functionality the restrictions inherited from the loading
     // Program do not allow; the image records the functional domains its code uses, so the same code is refused
     // here (#5556)

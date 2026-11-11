@@ -35,6 +35,8 @@
 %requires json
 
 module PdfCoDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "User module providing a data provider API for PDF.co document processing";
     author = "Qore Technologies <info@qoretechnologies.com>";

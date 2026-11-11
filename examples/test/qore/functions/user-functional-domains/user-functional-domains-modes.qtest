@@ -1,0 +1,444 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes whose restricted child Programs set their own execution modes
+# test-platform: macos - AOT module code generation and loading, module trust by module path, and JIT execution of the domain checks
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UserFunctionalDomainsModesTest
+
+#! Tests functional-domain declarations on module code in every execution mode, with source and AOT modules (#5803)
+/** A module declares the functional domains of its code with \c [dom=...] attribute lists, and the domains that its
+    own code uses in its module header (\c domains).  A Program restricted with \c PO_NO_PROCESS_CONTROL that loads the
+    module is refused direct references at parse time and indirect calls at run time; the module's own code, called
+    from that Program, may use the domains it declares, if the module is library code (found under a process-wide
+    module directory).  A call reference runs with the permissions of the context that created it.
+
+    Each case runs the same script with the source module and with the module AOT-compiled with \c -O0 and \c -O3, in
+    every execution mode and on the IR tier, and expects the output of the source module with the AST interpreter,
+    which is the reference.
+*/
+class UserFunctionalDomainsModesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+        string qcc_bin;
+
+        #! holds the modules and scripts
+        TmpDir tmp("qore-user-functional-domains-");
+
+        #! the directory with the source module
+        string src_dir;
+        #! the directories with the AOT modules, by optimization level
+        hash<string, string> qmod_dirs;
+        #! a directory that is not in the module path, for the explicit path cases
+        string path_dir;
+
+        #! the output of the run-time case
+        const ExpectedRuntimeOutput = "own: 1
+own_dyn: 3,3,3
+closure: 1
+init: registered
+dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+dyn_plain: 4
+cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS
+com: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+create: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS
+sub_implicit: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS
+ref_module: 1
+ref_module_method: 3
+ref_runtime: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+ref_runtime_loop: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+ifdef: False
+ref_module_args: 2
+ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS
+override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS
+";
+
+        #! the output of the parse-time case
+        const ExpectedParseOutput = "direct function: refused: function 'tagged()'; functional domain: PROCESS
+static method: refused: method 'Api::s()'; functional domain: PROCESS
+typed method: refused: method 'Api::m()'; functional domain: PROCESS
+constructor: refused: method 'Guarded::constructor()'; functional domain: PROCESS
+function reference: refused: function 'tagged'; functional domain: PROCESS
+static method reference: refused: method 'Api::s()'; functional domain: PROCESS
+typed method reference: refused: method 'Api::m()'; functional domain: PROCESS
+plain method: ok
+";
+
+        #! the output of the case where the module is loaded by its path
+        const ExpectedPathOutput = "load: refused: PROCESS
+";
+    }
+
+    constructor() : QUnit::Test("UserFunctionalDomainsModesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+            : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        src_dir = tmp.path + "/src";
+        path_dir = tmp.path + "/path";
+        mkdir(src_dir);
+        mkdir(path_dir);
+        foreach string opt in ("O0", "O3") {
+            qmod_dirs{opt} = tmp.path + "/qmod-" + opt;
+            mkdir(qmod_dirs{opt});
+        }
+        writeFile(src_dir + "/DomMod.qm", moduleCode());
+        writeFile(path_dir + "/DomMod.qm", moduleCode());
+
+        addTestCase("indirect calls are checked at run time; module code uses its declared domains", \testRuntime());
+        addTestCase("direct references are refused at parse time", \testParse());
+        addTestCase("a module loaded by its path does not get its declared domains", \testPath());
+
+        set_return_value(main());
+    }
+
+    #! the module: tagged APIs, code that uses them itself and a header that declares the domain
+    private string moduleCode() {
+        return "%modern
+
+module DomMod {
+    version = \"1.0\";
+    desc = \"user functional domain test module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    domains = \"PROCESS\";
+    # the init closure uses the declared domain
+    init = sub () { DomMod::Api::register(\"registered\"); };
+}
+
+%ifdef PO_NO_PROCESS_CONTROL
+const PoNoProcessControl = True;
+%else
+const PoNoProcessControl = False;
+%endif
+
+public namespace DomMod {
+public int sub tagged() [dom=PROCESS] {
+    return 1;
+}
+
+public class Api {
+    private {
+        static string reg = \"\";
+    }
+
+    static int s() [dom=PROCESS] {
+        return 2;
+    }
+
+    static register(string v) [dom=PROCESS] {
+        reg = v;
+    }
+
+    static string registered() {
+        return reg;
+    }
+
+    int m() [dom=PROCESS] {
+        return 3;
+    }
+
+    int plain() {
+        return 4;
+    }
+}
+
+public class Guarded {
+    constructor() [dom=PROCESS] {
+    }
+}
+
+public auto sub get_api() {
+    return new Api();
+}
+
+public code sub get_ref() {
+    return \\tagged();
+}
+
+# the object of the reference is kept by the module
+class Holder {
+    public {
+        static Api api();
+    }
+}
+
+public code sub get_method_ref() {
+    Api a = Holder::api;
+    return \\a.m();
+}
+
+public auto sub call_own() {
+    return tagged();
+}
+
+# untyped calls made by module code, repeated so that the call sites cache the variant
+public string sub call_own_dyn() {
+    auto a = get_api();
+    list<int> l = ();
+    for (int i = 0; i < 3; ++i) {
+        l += a.m();
+    }
+    return l.join(\",\");
+}
+
+public code sub get_closure() {
+    return auto sub () { return tagged(); };
+}
+
+public bool sub po_no_process_control() {
+    return PoNoProcessControl;
+}
+
+public int sub tagged_args(int x) [dom=PROCESS] {
+    return x;
+}
+
+public code sub get_ref_args() {
+    return \\tagged_args();
+}
+
+public int sub one() {
+    return 1;
+}
+
+# calls a reference that the caller created
+public auto sub call_it(code c) {
+    return c();
+}
+
+# an override that declares a domain that the method it overrides does not
+public class Base2 {
+    int m() {
+        return 1;
+    }
+}
+
+public class Over inherits Base2 {
+    int m() [dom=PROCESS] {
+        return 2;
+    }
+}
+
+public Base2 sub get_over() {
+    return new Over();
+}
+}
+";
+    }
+
+    #! the script run in the restricted Program for the run-time case
+    private string runtimeCode() {
+        return "%requires DomMod
+class Sub inherits DomMod::Guarded {
+}
+
+auto sub own() { return call_own(); }
+auto sub own_dyn() { return call_own_dyn(); }
+auto sub closure() { code c = get_closure(); return c(); }
+auto sub init() { return DomMod::Api::registered(); }
+auto sub dyn() { auto a = get_api(); return a.m(); }
+auto sub dyn_plain() { auto a = get_api(); return a.plain(); }
+auto sub cf() { return call_function(\"DomMod::tagged\"); }
+auto sub com() { auto a = get_api(); return call_object_method(a, \"m\"); }
+auto sub create() { return create_object(\"DomMod::Guarded\"); }
+auto sub sub_implicit() { return new Sub(); }
+auto sub ref_module() { code r = get_ref(); return r(); }
+auto sub ref_module_method() { code r = get_method_ref(); return r(); }
+auto sub ref_runtime() { auto a = get_api(); code r = \\a.m(); return r(); }
+auto sub ref_runtime_loop() {
+    auto a = get_api();
+    auto rv;
+    for (int i = 0; i < 3; ++i) {
+        code r = \\a.m();
+        rv = r();
+    }
+    return rv;
+}
+auto sub ifdef() { return po_no_process_control(); }
+# a reference created by the module, called with arguments evaluated in the caller's context
+auto sub ref_module_args() { code r = get_ref_args(); return r(one() + one()); }
+# a reference created by the caller and called by the module runs with the caller's permissions
+auto sub ref_static_by_name() { code c = get_call_reference(\"DomMod::Api::s\"); return call_it(c); }
+# a call through a base class type that dispatches to an override with a domain
+int sub base_call(Base2 b) { return b.m(); }
+auto sub override_dispatch() { return base_call(get_over()); }
+";
+    }
+
+    #! the driver: runs the cases in a restricted Program with the execution mode given as the first argument
+    private string driverScript(string code_name) {
+        return sprintf("%%modern
+
+hash<string, ExecMode> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED};
+string mode = ARGV[0] ?? \"ast\";
+string code = ReadOnlyFile::readTextFile(get_script_dir() + \"/%s\");
+
+# returns a short form of an exception for the output
+string sub ex_str(hash<ExceptionInfo> ex) {
+    string desc = ex.desc;
+    desc =~ s/^parse options do not allow (access to |a call reference to )//;
+    desc =~ s/ \\(restricted by [A-Z_]+\\).*$//;
+    return ex.err + \": \" + desc;
+}
+
+Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+p.setExecMode(modes{mode} ?? EM_AST);
+try {
+    p.parse(code, \"cases\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"parse: %%s\\n\", ex_str(ex));
+    exit(1);
+}
+foreach string f in (ARGV[1..]) {
+    try {
+        auto v = p.callFunction(f);
+        printf(\"%%s: %%s\\n\", f, v.typeCode() == NT_OBJECT ? v.className()
+            : (v.typeCode() == NT_BOOLEAN ? (v ? \"True\" : \"False\") : v));
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%%s: %%s\\n\", f, ex_str(ex));
+    }
+}
+", code_name);
+    }
+
+    #! the driver for the parse-time case
+    private string parseScript() {
+        return "%modern
+
+hash<string, ExecMode> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED};
+string mode = ARGV[0] ?? \"ast\";
+
+list<list<string>> cases = (
+    (\"direct function\", \"auto sub t() { return tagged(); }\"),
+    (\"static method\", \"auto sub t() { return Api::s(); }\"),
+    (\"typed method\", \"auto sub t(Api a) { return a.m(); }\"),
+    (\"constructor\", \"auto sub t() { return new Guarded(); }\"),
+    (\"function reference\", \"auto sub t() { return \\\\tagged(); }\"),
+    (\"static method reference\", \"auto sub t() { return \\\\Api::s(); }\"),
+    (\"typed method reference\", \"auto sub t(Api a) { return \\\\a.m(); }\"),
+    (\"plain method\", \"auto sub t(Api a) { return a.plain(); }\"),
+);
+foreach list<string> c in (cases) {
+    Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+    p.setExecMode(modes{mode} ?? EM_AST);
+    try {
+        p.parse(\"%requires DomMod\\n\" + c[1], \"case\");
+        printf(\"%s: ok\\n\", c[0]);
+    } catch (hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        desc =~ s/^parse options do not allow (access to |a call reference to )//;
+        desc =~ s/ \\(restricted by [A-Z_]+\\).*$//;
+        printf(\"%s: refused: %s\\n\", c[0], desc);
+    }
+}
+";
+    }
+
+    #! the driver for the explicit path case
+    private string pathScript() {
+        return sprintf("%%modern
+
+Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+try {
+    p.parse(\"%%requires %s\\nauto sub t() { return call_own(); }\", \"path\");
+    printf(\"load: ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"load: refused: %%s\\n\", (ex.desc =~ /functional domain: ([A-Z_]+)/) ? (ex.desc =~ x/functional domain: ([A-Z_]+)/)[0]
+        : ex.err + \": \" + ex.desc);
+}
+", path_dir + "/DomMod.qm");
+    }
+
+    private string writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        f.close();
+        return path;
+    }
+
+    #! returns the module path for running scripts against the module in \a dir
+    private string modulePath(string dir) {
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        return env_dir ? dir + ":" + qlib_dir + ":" + env_dir : dir + ":" + qlib_dir;
+    }
+
+    #! AOT-compiles the module with the given optimization level
+    private compileModule(string opt) {
+        string qmod = qmod_dirs{opt} + "/DomMod.qmod";
+        if (is_file(qmod)) {
+            return;
+        }
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module -%s --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, modulePath(src_dir),
+            qcc_bin, opt, qmod, src_dir + "/DomMod.qm"));
+        assertTrue(is_file(qmod), sprintf("compiled DomMod.qmod -%s: %s", opt, out));
+    }
+
+    #! the command running \a script in \a mode with the modules in \a dir
+    private string command(string dir, string script, string mode, softlist<string> args = ()) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --enable-debug "
+            "--exec-mode=%s %s %s", libqore_dir, libqore_dir, libqore_dir, modulePath(dir), qore_bin, mode, script,
+            ((mode,) + args).join(" "));
+    }
+
+    #! runs \a script with the source module and the AOT modules in every mode and checks the output
+    private checkAllModes(string script, string expected, softlist<string> args = ()) {
+        compileModule("O0");
+        compileModule("O3");
+        hash<ExecModeHarness::ModeRunResult> ref = ExecModeHarness::run_command(command(src_dir, script, "ast",
+            args));
+        string reference = ref.out;
+        assertEq(expected, reference, sprintf("%s: source module, ast (stderr: %s)", basename(script), ref.stderr));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(reference, ExecModeHarness::run_any(command(src_dir, script, mode, args),
+                ExecModeHarness::NativeCheck::None), sprintf("%s: source module, %s", basename(script), mode));
+            foreach hash<auto> i in (qmod_dirs.pairIterator()) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(i.value, script, mode,
+                    args));
+                assertEq(reference, r.out, sprintf("%s: AOT module -%s, %s", basename(script), i.key, mode));
+                assertEq((), r.loader_warnings, sprintf("%s: AOT module -%s, %s: loader warnings", basename(script),
+                    i.key, mode));
+            }
+        }
+        # tiered execution on the IR tier
+        string tiered = command(src_dir, script, "tiered", args);
+        assertEq(reference, ExecModeHarness::run_ir_tier(tiered), basename(script) + ": source module, IR tier");
+    }
+
+    testRuntime() {
+        writeFile(tmp.path + "/runtime-cases.q", runtimeCode());
+        string script = writeFile(tmp.path + "/runtime.q", driverScript("runtime-cases.q"));
+        list<string> cases = map ($1 =~ x/^([a-z_]+):/)[0], ExpectedRuntimeOutput.split("\n"), $1.val();
+        checkAllModes(script, ExpectedRuntimeOutput, cases);
+    }
+
+    testParse() {
+        string script = writeFile(tmp.path + "/parse.q", parseScript());
+        checkAllModes(script, ExpectedParseOutput);
+    }
+
+    testPath() {
+        string script = writeFile(tmp.path + "/path.q", pathScript());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(ExpectedPathOutput, ExecModeHarness::run_any(command(src_dir, script, mode),
+                ExecModeHarness::NativeCheck::None), "explicit path: " + mode);
+        }
+    }
+}

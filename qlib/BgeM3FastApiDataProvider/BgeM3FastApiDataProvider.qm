@@ -32,6 +32,8 @@
 %requires RestClientIo
 
 module BgeM3FastApiDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "user module providing a data provider API for BGE-M3 FastAPI sidecar services";
     author = "David Nichols <david@qore.org>";

@@ -20,6 +20,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("parse directives", \testParseDirectives());
         addTestCase("class formatting", \testClassFormatting());
         addTestCase("generic declarations", \testGenericDeclarations());
+        addTestCase("functional-domain attribute lists", \testDomainAttributes());
         addTestCase("function formatting", \testFunctionFormatting());
         addTestCase("read-only const bindings", \testReadOnlyConstBindings());
         addTestCase("const method formatting", \testConstMethodFormatting());
@@ -194,6 +195,28 @@ sub test(Box<? extends int> source, Box<? super int> sink, Box<?> any) {
         assertRegex("generic function declaration", "T sub identity<T>\\(T value\\)", result);
         assertRegex("generic method declaration", "T echo<T>\\(T value\\)", result);
         assertEq(result, fmt.format(result), "generic declaration formatting is idempotent");
+    }
+
+    testDomainAttributes() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # functional-domain attribute lists are kept (issue #5803)
+        string src = "%modern
+public int sub tagged(int x) [dom=PROCESS,NETWORK] { return x; }
+class C inherits B {
+    static int s() [dom=PROCESS] { return 2; }
+    int k() const [dom=PROCESS] { return 3; }
+    abstract int a() [dom=PROCESS];
+    constructor(int x) [dom=PROCESS] : B(x) {}
+}
+";
+        string result = fmt.format(src);
+        assertRegex("function attribute list", "int sub tagged\\(int x\\) \\[dom=PROCESS,NETWORK\\] \\{", result);
+        assertRegex("static method attribute list", "static int s\\(\\) \\[dom=PROCESS\\] \\{", result);
+        assertRegex("const method attribute list", "int k\\(\\) const \\[dom=PROCESS\\] \\{", result);
+        assertRegex("abstract method attribute list", "abstract int a\\(\\) \\[dom=PROCESS\\];", result);
+        assertRegex("constructor attribute list", "constructor\\(int x\\) \\[dom=PROCESS\\] : B\\(x\\)", result);
+        assertEq(result, fmt.format(result), "attribute list formatting is idempotent");
     }
 
     testFunctionFormatting() {

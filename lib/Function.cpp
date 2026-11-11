@@ -987,6 +987,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     setCallName(func);
+    // taken before the arguments are evaluated, so that a call in an argument expression does not take it
+    call_ref_po = runtime_take_call_reference_call(args);
     tmp.assignEval(args);
     if (*xsink) {
         return;
@@ -1016,6 +1018,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     setCallName(func);
+    // taken before the arguments are evaluated, so that a call in an argument expression does not take it
+    call_ref_po = runtime_take_call_reference_call(args);
     tmp.assignEval(args);
     if (*xsink) {
         return;
@@ -1389,8 +1393,11 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
+    // the domains declared on a user variant are checked against the caller's restrictions, or for a call through a
+    // call reference, against the context that created the reference
     variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
+        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent,
+        call_ref_po ? call_ref_po : &caller_runtime_po);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -3224,12 +3231,9 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         }
 
         // check functionality flags to see if the variant is accessible
-        int64 vfflags = (*i)->getFunctionality();
-        if ((vfflags & po & ~PO_POSITIVE_OPTIONS)
-            || ((vfflags & PO_POSITIVE_OPTIONS)
-                && (((vfflags & PO_POSITIVE_OPTIONS) & po) != (vfflags & PO_POSITIVE_OPTIONS)))) {
-            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, vfflags: 0x%llx\n",
-                this, (unsigned long long)vfflags);
+        if (int64 denied = qore_get_variant_denied_domains(*i, ppo)) {
+            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, denied: 0x%llx\n",
+                this, (unsigned long long)denied);
             continue;
         }
 
@@ -3263,10 +3267,56 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 }
 
 // finds a variant at runtime
+// returns the domain bits of \a dom that the parse options \a po do not allow (QDOM_DEFAULT if all are allowed)
+static int64 qore_denied_domains(int64 dom, const QoreParseOptions& po) {
+    int64 opts = po.getLo();
+    // restrictive (PO_NO_*) domains are denied when the option is set; permissive (PO_ALLOW_*) when it is not
+    int64 neg = dom & ~PO_POSITIVE_OPTIONS;
+    int64 pos = dom & PO_POSITIVE_OPTIONS;
+    return (neg & opts) | (pos & ~opts);
+}
+
+int64 qore_get_variant_denied_domains(const AbstractQoreFunctionVariant* variant, const QoreParseOptions& ppo,
+        const QoreParseOptions* user_dom_po) {
+    int64 vflags = variant->getFunctionality();
+    if (!vflags) {
+        return QDOM_DEFAULT;
+    }
+    int64 rv = QDOM_DEFAULT;
+    // the domains declared on a user variant in Qore source are checked against the restrictions of the caller (or,
+    // for a call through a call reference, of the context that created the reference), not against the options of
+    // the Program that defines the variant
+    if (variant->isUser()) {
+        int64 declared = variant->getUserVariantBase()->getDeclaredDomain();
+        if (declared) {
+            rv = qore_denied_domains(declared, user_dom_po ? *user_dom_po : ppo);
+            vflags &= ~declared;
+            if (!vflags) {
+                return rv;
+            }
+        }
+    }
+    // get runtime parse options; a variant that changes only the state of the Program running it is checked without
+    // the restrictions that module code inherits from its caller
+    QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)
+        ? runtime_get_own_program_state_parse_options(ppo) : ppo);
+    return rv | qore_denied_domains(vflags, po);
+}
+
+//! raises INVALID-FUNCTION-ACCESS for a variant whose functional domains are not allowed
+static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, int64 denied) {
+    std::string class_path = func->classPath();
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to %s%s '%s%s%s(%s)'; "
+        "functional domain: %s", variant->isUser() ? "" : "builtin ", !class_path.empty() ? "method" : "function",
+        !class_path.empty() ? class_path.c_str() : "", !class_path.empty() ? "::" : "", func->getName(),
+        variant->getSignature()->getSignatureText(), qore_describe_source_domains(denied).c_str());
+}
+
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
-        bool* content_dependent) const {
+        bool* content_dependent, const QoreParseOptions* user_dom_po) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3526,30 +3576,16 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
         // pgm could be zero if called from a foreign thread with no current Program
         if (pgm) {
-            // get runtime parse options; a variant that changes only the state of the Program running it is checked
-            // without the restrictions that module code inherits from its caller
-            QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)
-                ? runtime_get_own_program_state_parse_options(ppo) : ppo);
-
-            // check parse options
-            int64 vflags = variant->getFunctionality();
-            // check restrictive flags
-            //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s() returning %p %s(%s) vflags: " QLLD " po: " QLLD
-            //    " neg: " QLLD "\n", this, getName(), variant, getName(),
-            //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
-            if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS) && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
-                //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(), variant->getFunctionality());
+            // check the functional domains of the variant
+            if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po)) {
                 if (!only_user) {
-                    std::string class_path = classPath();
-                    xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to builtin " \
-                        "%s '%s%s%s(%s)'", !class_path.empty() ? "method" : "function",
-                        !class_path.empty() ? class_path.c_str() : "", !class_path.empty() ? "::" : "", getName(),
-                        variant->getSignature()->getSignatureText());
+                    raise_invalid_function_access(xsink, this, variant, denied);
                 }
                 return 0;
             }
 
-            assert(!(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS)) || !(variant->getFlags() & QCF_RUNTIME_NOOP));
+            assert(!(variant->getParseOptions(ppo) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS))
+                || !(variant->getFlags() & QCF_RUNTIME_NOOP));
         }
     }
 
@@ -3694,32 +3730,14 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
 DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
         const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const {
-    // get runtime parse options; a variant that changes only the state of the Program running it is checked without
-    // the restrictions that module code inherits from its caller
-    QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)
-        ? runtime_get_own_program_state_parse_options(ppo) : ppo);
-
-    // check parse options
-    int64 vflags = variant->getFunctionality();
-    // check restrictive flags
-    //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s() returning %p %s(%s) vflags: " QLLD " po: "
-    //    QLLD " neg: " QLLD "\n", this, getName(), variant, getName(),
-    //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
-    if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS)
-        && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
-        //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p "
-        //    "getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(),
-        //    variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(),
-        //    variant->getFunctionality());
-        std::string class_path = classPath();
-        xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to %s " \
-            "'%s%s%s(%s)'", !class_path.empty() ? "method" : "function",
-            !class_path.empty() ? class_path.c_str() : "", !class_path.empty() ? "::" : "", getName(),
-            variant->getSignature()->getSignatureText());
+    // check the functional domains of the variant
+    if (int64 denied = qore_get_variant_denied_domains(variant, ppo)) {
+        raise_invalid_function_access(xsink, this, variant, denied);
         return nullptr;
     }
 
-    assert(!(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS)) || !(variant->getFlags() & QCF_RUNTIME_NOOP));
+    assert(!(variant->getParseOptions(ppo) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS))
+        || !(variant->getFlags() & QCF_RUNTIME_NOOP));
     return variant;
 }
 
@@ -5396,11 +5414,15 @@ public:
             const QoreListNode* args = nullptr) : eval_args(xsink) {
         if (call_pgm && exec_pgm && call_pgm != exec_pgm && call_pgm != ::getProgram()) {
             if (args && args->needs_eval()) {
+                // calls made while the arguments are evaluated are not the call of a call reference that makes
+                // this call; the call is then made with the evaluated arguments
+                QoreCallReferenceArgEvalHelper ref_arg_eval(args);
                 eval_args.assignEval(args);
                 if (*xsink) {
                     return;
                 }
                 evaluated = true;
+                ref_arg_eval.evaluated(*eval_args);
             }
             ptcch.emplace(xsink, call_pgm, true);
         }

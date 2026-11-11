@@ -1398,11 +1398,13 @@ public class CodeFormatter {
         }
 
         string methodQualifier = exists node.isConstMethod && node.isConstMethod ? " const" : "";
+        # the attribute list after the parameters and the const qualifier (ex: [dom=PROCESS])
+        string attrStr = exists node.callableAttributes ? " " + node.callableAttributes : "";
         string returnsStr = "";
         if (exists node.returnsType) {
             returnsStr = " returns " + emitExpressionStr(node.returnsType);
         }
-        string declSuffix = methodQualifier + initStr + returnsStr;
+        string declSuffix = methodQualifier + attrStr + initStr + returnsStr;
 
         # Check for abstract (no body)
         if (!exists node.body) {

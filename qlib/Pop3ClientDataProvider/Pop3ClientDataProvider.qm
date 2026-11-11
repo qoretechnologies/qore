@@ -32,6 +32,8 @@
 %modern
 
 module Pop3ClientDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "2.1";
     desc = "POP3 client data provider module";
     author = "David Nichols <david@qore.org>";

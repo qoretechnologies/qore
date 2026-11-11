@@ -38,6 +38,8 @@
 %requires json
 
 module SquareDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "User module providing a data provider API for Square payments and commerce";
     author = "Qore Technologies <info@qoretechnologies.com>";

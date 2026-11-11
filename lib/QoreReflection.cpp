@@ -474,10 +474,12 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // Check the fixed variant's domain, or the domains common to all variants before dynamic resolution.
     // Keep domain errors ahead of the Program-access error for a builtin that the caller already cannot use.
     bool caller_refused = false;
-    if (!caller.allowsDomain(variant ? variant->getDomain() : getDomain(), pgm, &caller_refused)) {
-        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
-            caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
-            variant ? variant->getSignatureText() : "...");
+    int64 dom = variant ? variant->getDomain() : getDomain();
+    if (!caller.allowsDomain(dom, pgm, &caller_refused)) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'; "
+            "functional domain: %s", caller_refused ? "parse options" : "the parse options of the Program it was "
+            "found in", getName(), variant ? variant->getSignatureText() : "...",
+            qore_describe_source_domains(dom).c_str());
         return QoreValue();
     }
     // Builtins can enter user code or construct Programs as well (for example create_object()), so every call

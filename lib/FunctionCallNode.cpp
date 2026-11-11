@@ -486,11 +486,12 @@ const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
     return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
-static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
-   // func will always be non-zero with builtin functions
-   const char* class_name = func->className();
-   parse_error(*loc, "parse options do not allow access to builtin %s '%s%s%s()'", class_name ? "method" : "function",
-        class_name ? class_name : "", class_name ? "::" : "", func->getName());
+static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func, const QoreParseOptions& denied,
+        bool user) {
+    const char* class_name = func->className();
+    parse_error(*loc, "parse options do not allow access to %s%s '%s%s%s()'; functional domain: %s",
+        user ? "" : "builtin ", class_name ? "method" : "function", class_name ? class_name : "",
+        class_name ? "::" : "", func->getName(), qore_describe_source_domains(denied.getLo()).c_str());
 }
 
 static void warn_retval_ignored(const QoreProgramLocation* loc, QoreFunction* func, bool is_bg_call = false) {
@@ -771,10 +772,13 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 //printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s variant: %p dflags: " QLLD
                 //    " fdflags: " QLLD "\n", this, func->className() ? func->className() : "", func->getName(),
                 //    variant, dflags, func->parseGetUniqueFunctionality());
-                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                    invalid_access(loc, func);
-                    if (!err) {
-                        err = -1;
+                if (dflags) {
+                    if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                            variant->isUser() ? variant->getUserVariantBase()->getDeclaredDomain() : QDOM_DEFAULT)) {
+                        invalid_access(loc, func, denied, variant->isUser());
+                        if (!err) {
+                            err = -1;
+                        }
                     }
                 }
                 int64 flags = variant->getFlags();
@@ -787,10 +791,13 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             //    func->parseGetUniqueFlags() & QCF_RET_VALUE_ONLY);
 
             int64 dflags = func->parseGetUniqueFunctionality();
-            if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                invalid_access(loc, func);
-                if (!err) {
-                    err = -1;
+            if (dflags) {
+                if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                        func->parseGetUniqueDeclaredDomain())) {
+                    invalid_access(loc, func, denied, !func->hasBuiltin());
+                    if (!err) {
+                        err = -1;
+                    }
                 }
             }
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);

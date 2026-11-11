@@ -37,6 +37,8 @@
 %requires json
 
 module StripeDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "1.0";
     desc = "user module providing a data provider API for Stripe";
     author = "Qore Technologies <info@qoretechnologies.com>";

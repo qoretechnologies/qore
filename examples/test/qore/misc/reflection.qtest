@@ -13,6 +13,17 @@
 
 %exec-class ReflectionTest
 
+# code that declares functional domains (issue #5803)
+int sub reflect_tagged() [dom=PROCESS,NETWORK] {
+    return 1;
+}
+
+class ReflectTagged {
+    int m() [dom=PROCESS] {
+        return 2;
+    }
+}
+
 class Base {
     public {
         int bi = 1;
@@ -245,6 +256,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
         addTestCase("program tests", \programTests());
         addTestCase("static variant tests", \staticVariantTests());
+        addTestCase("user functional domain tests", \userDomainTests());
         addTestCase("method enumeration tests", \methodEnumerationTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         addTestCase("typed hash serialization", \typedHashSerializationTest());
@@ -3672,6 +3684,30 @@ class ReflectionTest inherits QUnit::Test {
             assertTrue(all.getValue);
         }
 
+    }
+
+    userDomainTests() {
+        # the functional domains declared on user code are reported (issue #5803)
+        AbstractReflectionFunction f = Function::forName("reflect_tagged");
+        assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getDomain());
+        assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getVariants()[0].getDomain());
+        assertEq(2, f.getDomainStringList().size());
+        AbstractMethod m = Class::forName("ReflectTagged").getNormalMethod("m");
+        assertEq(DOM_PROCESS_CONTROL, m.getVariants()[0].getDomain());
+
+        # a restricted Program is refused calls through reflection
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.parse("%requires reflection
+int sub tagged() [dom=PROCESS] { return 1; }
+class T { int m() [dom=PROCESS] { return 2; } }
+auto sub fcall() { return Function::forName(\"tagged\").call(); }
+auto sub vcall() { return Function::forName(\"tagged\").getVariants()[0].call(); }
+auto sub mcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").call(t); }
+auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").getVariants()[0].call(t); }
+", "reflect");
+        foreach string fn in ("fcall", "vcall", "mcall", "mvcall") {
+            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to", \p.callFunction(), fn, fn);
+        }
     }
 
     staticVariantTests() {

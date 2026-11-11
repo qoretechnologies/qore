@@ -1593,6 +1593,8 @@ int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, Q
             del_c = val.refSelf();
             del_loc = loc;
         }
+    } else if (!strcmp(key, "domains")) {
+        err = setDomains(loc, val);
     } else if (vset.find(key) == vset.end()) {
         parse_error(*loc, "module key '%s' is invalid", key);
         err = -1;
@@ -1608,6 +1610,71 @@ int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, Q
     }
 
     return err;
+}
+
+int QoreModuleDefContext::setDomains(const QoreProgramLocation* loc, QoreValue val) {
+    if (vmap.find("domains") != vmap.end()) {
+        parse_error(*loc, "module key 'domains' was given multiple times");
+        return -1;
+    }
+    if (val.getType() != NT_STRING) {
+        parse_error(*loc, "module key 'domains' assigned type '%s' (expecting 'string')", val.getTypeName());
+        return -1;
+    }
+    QoreStringValueHelper str(val);
+    vmap["domains"] = str->c_str();
+
+    // only restrictions can be declared: not the options that allow functionality (PO_ALLOW_*) nor PO_IN_MODULE,
+    // which every module has
+    static constexpr int64 not_declarable = QDOM_INJECTION | QDOM_DEBUGGER | QDOM_IN_MODULE;
+    int64 dom = QDOM_DEFAULT;
+    int err = 0;
+    const char* p = str->c_str();
+    while (true) {
+        const char* e = strchr(p, ',');
+        std::string name = e ? std::string(p, e - p) : std::string(p);
+        // trim spaces
+        size_t b = name.find_first_not_of(" \t");
+        size_t l = name.find_last_not_of(" \t");
+        name = b == std::string::npos ? std::string() : name.substr(b, l - b + 1);
+        int64 d = name.empty() ? -1 : qore_get_source_domain(name.c_str());
+        if (d <= 0 || (d & not_declarable)) {
+            parse_error(*loc, "module key 'domains': '%s' is not a functional domain that a module can declare; give "
+                "restricted domains without the QDOM_ prefix, separated by commas (ex: \"PROCESS,THREAD_CONTROL\")",
+                name.c_str());
+            err = -1;
+        } else {
+            dom |= d;
+        }
+        if (!e) {
+            break;
+        }
+        p = e + 1;
+    }
+    if (err) {
+        return err;
+    }
+
+    // a module from the process-wide module path (library code) does not inherit these restrictions from the
+    // Program loading it; the declaration is recorded in any case so that an AOT image of the module has it
+    dom_removed |= applyDomains(dom);
+    return 0;
+}
+
+int64 QoreModuleDefContext::applyDomains(int64 dom) {
+    return qore_program_private::setModuleOwnDomains(*getProgram(), dom, qore_module_load_is_trusted());
+}
+
+int64 QoreUserModuleDefContextHelper::applyDomains(int64 dom) {
+    // the restrictions inherited from the Program loading the module are removed only for library code
+    int64 removed = qore_program_private::setModuleOwnDomains(*pgm->pgm, dom, qore_module_load_is_trusted());
+    // the module header's own restrictions (MOD_HEADER_PO), which the module sets for its header code, do not
+    // restrict the declared domains: the header's init and del closures may use them, unless they are inherited
+    int64 header_only = dom & static_cast<int64>(MOD_HEADER_PO) & ~po.getLo();
+    if (header_only) {
+        pgm->pwo.parse_options &= ~QoreParseOptions(header_only);
+    }
+    return removed;
 }
 
 // called only during parsing
@@ -1744,10 +1811,16 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 
     po = pgm->pwo.parse_options;
     pgm->pwo.parse_options |= MOD_HEADER_PO;
+    // the header's own restrictions do not apply to the functional domains declared on user code
+    qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
 }
 
 void QoreUserModuleDefContextHelper::close() {
-    pgm->pwo.parse_options = po;
+    // the options in effect before the module header, without the restrictions that the header removed (domains)
+    pgm->pwo.parse_options = po & ~QoreParseOptions(dom_removed);
+    // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
+    // were in effect when they were parsed, which include the header's restrictions; no other code has them unless
+    // the module sets them itself
 }
 
 void UniqueDirectoryList::addDirList(const char* str) {
@@ -1936,6 +2009,10 @@ public:
 private:
     QoreModuleLoadFrame frame;
 };
+}
+
+bool qore_module_load_is_trusted() {
+    return module_load_frame && module_load_frame->trusted;
 }
 
 void QoreModuleManager::addModule(QoreAbstractModule* m) {

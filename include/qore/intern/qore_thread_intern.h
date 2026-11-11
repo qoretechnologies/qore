@@ -205,7 +205,7 @@ public:
     DLLLOCAL QoreModuleDefContext() {
     }
 
-    DLLLOCAL ~QoreModuleDefContext() {
+    DLLLOCAL virtual ~QoreModuleDefContext() {
         init_c.discard(nullptr);
         del_c.discard(nullptr);
     }
@@ -217,6 +217,20 @@ public:
     strmap_t vmap;
 
     DLLLOCAL int set(const QoreProgramLocation* loc, const char* key, QoreValue val);
+
+    //! sets the \c domains key: the functional domains that the module declares (see
+    //! qore_program_private::setModuleOwnDomains())
+    DLLLOCAL int setDomains(const QoreProgramLocation* loc, QoreValue val);
+
+    //! applies the functional domains that the module declares (\c domains) to its Program; returns the inherited
+    //! restrictions that were removed
+    DLLLOCAL virtual int64 applyDomains(int64 dom);
+
+protected:
+    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
+    int64 dom_removed = QDOM_DEFAULT;
+
+public:
 
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
@@ -879,6 +893,82 @@ private:
     bool old_sandboxed;
     const QoreProgram* old_override_pgm;
 };
+
+//! Makes the next call on the current thread a call made through a call reference
+/** A call reference runs with the permissions of the context that created it, like a closure: the functional domains
+    declared on a user function or method in Qore source (\c [dom=...]) are checked against the effective parse
+    options of the context that created the reference value, not against the code that calls the reference.  The call
+    with the reference's arguments takes the marker (runtime_take_call_reference_call()); a call with other arguments,
+    such as one in an argument expression, does not.  A path that passes other arguments to the reference's call
+    leaves the marker, and the call is then checked against its caller, the stricter check.  The helper restores the
+    previous state when the reference's call returns.
+*/
+//! the pending call of a call reference on the current thread (see QoreCallReferenceCallHelper)
+struct QoreCallReferenceMarker {
+    //! the effective parse options of the context that created the reference, or nullptr if no call is pending
+    const QoreParseOptions* po = nullptr;
+    //! the arguments of the reference's call
+    const QoreListNode* args = nullptr;
+};
+
+//! the pending call of a call reference on the current thread
+DLLLOCAL extern thread_local QoreCallReferenceMarker qore_call_ref_marker;
+
+class QoreCallReferenceCallHelper {
+public:
+    //! marks the next call with the given arguments as the call of a call reference created with \a creator_po
+    /** if \a creator_po is nullptr (a reference that its own code calls in place), nothing is marked
+    */
+    DLLLOCAL QoreCallReferenceCallHelper(const QoreListNode* args, const QoreParseOptions* creator_po);
+    DLLLOCAL ~QoreCallReferenceCallHelper();
+
+    QoreCallReferenceCallHelper(const QoreCallReferenceCallHelper&) = delete;
+    QoreCallReferenceCallHelper& operator=(const QoreCallReferenceCallHelper&) = delete;
+
+private:
+    QoreCallReferenceMarker old;
+    bool set = false;
+};
+
+//! Hides the pending call of a call reference while the arguments of that call are evaluated
+/** Calls made while the arguments are evaluated are not the reference's call; afterwards the pending call is for the
+    evaluated arguments (see evaluated())
+*/
+class QoreCallReferenceArgEvalHelper {
+public:
+    //! hides the pending call while \a args are evaluated
+    DLLLOCAL QoreCallReferenceArgEvalHelper(const QoreListNode* args);
+    //! restores the pending call
+    DLLLOCAL ~QoreCallReferenceArgEvalHelper();
+
+    //! the call is made with \a evaluated_args instead of the arguments given to the constructor
+    DLLLOCAL void evaluated(const QoreListNode* evaluated_args);
+
+    QoreCallReferenceArgEvalHelper(const QoreCallReferenceArgEvalHelper&) = delete;
+    QoreCallReferenceArgEvalHelper& operator=(const QoreCallReferenceArgEvalHelper&) = delete;
+
+private:
+    QoreCallReferenceMarker saved;
+    const QoreListNode* args;
+};
+
+//! Takes the pending call of a call reference on the current thread, if any
+/** The first call set up takes it, whatever its arguments, so that it never applies to a later call; the effective
+    parse options of the context that created the reference are returned only if the call is made with the arguments
+    of the reference's call, otherwise the call is checked against its caller, the stricter check
+
+    @return the effective parse options of the context that created the call reference, or nullptr if the call is not
+    the reference's call
+*/
+DLLLOCAL inline const QoreParseOptions* runtime_take_call_reference_call(const QoreListNode* args) {
+    const QoreParseOptions* po = qore_call_ref_marker.po;
+    if (!po) {
+        return nullptr;
+    }
+    const QoreListNode* marked_args = qore_call_ref_marker.args;
+    qore_call_ref_marker = {};
+    return marked_args == args ? po : nullptr;
+}
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
 /** For a callback that the runtime makes for a Program from a thread running the code of another Program, such as

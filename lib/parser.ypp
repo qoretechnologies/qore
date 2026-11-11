@@ -1213,6 +1213,68 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
         returnTypeInfo, mod & OFM_SYNCED, flags, mod & OFM_ABSTRACT, const_method);
 }
 
+// keys of a function or method attribute list
+#define CAK_DOM (1 << 0)
+
+//! parses one "key=values" element of a function or method attribute list; takes ownership of key and values
+static CallableQualifier parse_callable_attr(const QoreProgramLocation* loc, char* key, QoreStringNode* values) {
+    std::unique_ptr<char, decltype(&free)> key_holder(key, free);
+    SimpleRefHolder<QoreStringNode> values_holder(values);
+    CallableQualifier rv = {0, QDOM_DEFAULT};
+    if (strcmp(key, "dom")) {
+        parseException(*loc, "PARSE-EXCEPTION", "unknown attribute key '%s' in function or method attribute list; "
+            "expected 'dom'", key);
+        return rv;
+    }
+    rv.mod = CAK_DOM;
+    const char* p = values->c_str();
+    while (true) {
+        const char* e = strchr(p, ',');
+        std::string name = e ? std::string(p, e - p) : std::string(p);
+        int64 dom = qore_get_source_domain(name.c_str());
+        if (dom < 0) {
+            parseException(*loc, "PARSE-EXCEPTION", "unknown functional domain '%s' in 'dom' attribute; domains are "
+                "given without the QDOM_ prefix, separated by commas", name.c_str());
+        } else {
+            if (dom && (rv.dom & dom)) {
+                parseException(*loc, "PARSE-EXCEPTION", "functional domain '%s' given twice in 'dom' attribute",
+                    name.c_str());
+            }
+            rv.dom |= dom;
+        }
+        if (!e) {
+            break;
+        }
+        p = e + 1;
+    }
+    return rv;
+}
+
+//! sets the functional domains declared on a user function variant; returns the variant
+static UserFunctionVariant* set_function_dom(UserFunctionVariant* v, int64 dom) {
+    if (dom) {
+        v->setDeclaredDomain(dom);
+    }
+    return v;
+}
+
+//! sets the functional domains declared on a user method variant; returns the variant
+/** special methods that run implicitly cannot declare functional domains
+*/
+static MethodVariantBase* set_method_dom(const QoreProgramLocation* loc, const char* name, MethodVariantBase* mv,
+        int64 dom) {
+    if (!dom || !mv) {
+        return mv;
+    }
+    if (!strcmp(name, "destructor") || !strcmp(name, "copy") || !strcmp(name, "memberGate")
+        || !strcmp(name, "methodGate") || !strcmp(name, "memberNotification")) {
+        parseException(*loc, "PARSE-EXCEPTION", "%s() methods cannot declare functional domains", name);
+        return mv;
+    }
+    mv->getUserVariantBase()->setDeclaredDomain(dom);
+    return mv;
+}
+
 struct MethodDef {
     const QoreProgramLocation* loc;
     MethodVariantBase* m;
@@ -1220,7 +1282,7 @@ struct MethodDef {
     NamedScope name;
     bool static_flag;
 
-    DLLLOCAL MethodDef(const QoreProgramLocation* loc, int mod, char* n, int n_sig_first_line, int n_sig_last_line, QoreValue params, BCAList* bcal, RetTypeInfo* returnTypeInfo, StatementBlock *b) : loc(loc), m(0), name(parse_generic_callable_decl_name(loc, n, type_params, "method")), static_flag(mod & OFM_STATIC) {
+    DLLLOCAL MethodDef(const QoreProgramLocation* loc, int64 dom, int mod, char* n, int n_sig_first_line, int n_sig_last_line, QoreValue params, BCAList* bcal, RetTypeInfo* returnTypeInfo, StatementBlock *b) : loc(loc), m(0), name(parse_generic_callable_decl_name(loc, n, type_params, "method")), static_flag(mod & OFM_STATIC) {
         if (check_method(loc, name.getIdentifier(), bcal, returnTypeInfo)) {
             params.discard(nullptr);
             delete bcal;
@@ -1229,8 +1291,11 @@ struct MethodDef {
             return;
         }
 
-        m = new_method_variant(loc, name.getIdentifier(), mod, n_sig_first_line, n_sig_last_line, params, bcal, returnTypeInfo, b);
-        apply_callable_type_params(m->getUserVariantBase(), type_params);
+        m = set_method_dom(loc, name.getIdentifier(), new_method_variant(loc, name.getIdentifier(), mod,
+            n_sig_first_line, n_sig_last_line, params, bcal, returnTypeInfo, b), dom);
+        if (m) {
+            apply_callable_type_params(m->getUserVariantBase(), type_params);
+        }
     }
 
     DLLLOCAL ~MethodDef() {
@@ -2602,6 +2667,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     QoreNumberNode* num;
     TryModuleError* trymod;
     struct MethodDef* methoddef;
+    CallableQualifier cq;
 }
 
 // Clean up heap-allocated parser values discarded during error recovery.
@@ -2800,6 +2866,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token <integer> INTEGER "integer value"
 %token <decimal> QFLOAT "floating-point value"
 %token <num> NUMBER "arbitrary-precision number"
+%token TOK_ATTR_OPEN "attribute list"
 %token <string> IDENTIFIER "identifier"
 %token <string> HASHDECL_IDENTIFIER_OPENCURLY "typed hash identifier"
 %token <string> ANGLE_IDENTIFIER "complex type identifier"
@@ -2916,7 +2983,9 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <typedefnode>    scoped_typedef_decl
 %type <i4>             method_modifiers
 %type <i4>             method_modifier
-%type <i4>             method_qualifier
+%type <cq>             method_qualifier callable_attr_list callable_attr
+%type <integer>        callable_attrs callable_attrs_opt
+%type <String>         callable_attr_values
 %type <i4>             nsc_modifiers
 %type <i4>             class_compat_attrs
 %type <i4>             class_compat_attr
@@ -2947,7 +3016,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef callable_return_type classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::derefClass(*$$, true, false, true); } class_attributes
 %destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING CLASS_GENERIC_STRING optname identifier ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
-%destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER DOT_HARD_KEYWORD hashdecl_attrs list list_n call_args named_call_args named_arg_list
+%destructor { if ($$) $$->deref(); } callable_attr_values namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER DOT_HARD_KEYWORD hashdecl_attrs list list_n call_args named_call_args named_arg_list
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
 
@@ -4741,7 +4810,7 @@ ident_openparen:
 
 inline_methoddef:
     nsc_modifiers ident_openparen myexp ')' method_qualifier base_constructor_list return_value block {
-        int mod = $1 | $5;
+        int mod = $1 | $5.mod;
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (mod & OFM_ABSTRACT) {
@@ -4754,11 +4823,14 @@ inline_methoddef:
         char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
         check_method(loc, name, $6, $7);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @3.first_line, @3.last_line, $3, $6, $7, $8);
-        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        mv = set_method_dom(loc, name, mv, $5.dom);
+        if (mv) {
+            apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        }
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
     }
     | nsc_modifiers callable_return_type ident_openparen myexp ')' method_qualifier base_constructor_list block {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (mod & OFM_ABSTRACT) {
@@ -4775,11 +4847,14 @@ inline_methoddef:
         check_method(loc, name, $7, rt);
 
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @4.first_line, @4.last_line, $4, $7, rt, $8);
-        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        mv = set_method_dom(loc, name, mv, $6.dom);
+        if (mv) {
+            apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        }
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
     }
     | nsc_modifiers ident_openparen myexp ')' method_qualifier base_constructor_list return_value ';' {
-        int mod = $1 | $5;
+        int mod = $1 | $5.mod;
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (!(mod & OFM_ABSTRACT))
@@ -4788,11 +4863,14 @@ inline_methoddef:
         char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
         check_method(loc, name, $6, $7);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @3.first_line, @3.last_line, $3, $6, $7, 0);
-        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        mv = set_method_dom(loc, name, mv, $5.dom);
+        if (mv) {
+            apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        }
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
     }
     | nsc_modifiers callable_return_type ident_openparen myexp ')' method_qualifier base_constructor_list ';' {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (!(mod & OFM_ABSTRACT))
@@ -4805,7 +4883,10 @@ inline_methoddef:
         check_method(loc, name, $7, rt);
 
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @4.first_line, @4.last_line, $4, $7, rt, 0);
-        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        mv = set_method_dom(loc, name, mv, $6.dom);
+        if (mv) {
+            apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        }
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
     }
     ;
@@ -4818,7 +4899,7 @@ inline_methoddef:
 // reduce/reduce conflicts on every token that can begin call_args (including "quoted string").
 outofline_methoddef:
     method_modifiers SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value block {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
@@ -4829,10 +4910,10 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
+        $$ = new MethodDef(loc, $6.dom, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
@@ -4843,10 +4924,10 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
+        $$ = new MethodDef(loc, $6.dom, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list block {
-        int mod = $1 | $7;
+        int mod = $1 | $7.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
@@ -4859,10 +4940,10 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
+        $$ = new MethodDef(loc, $7.dom, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list block {
-        int mod = $1 | $7;
+        int mod = $1 | $7.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
@@ -4875,30 +4956,30 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
+        $$ = new MethodDef(loc, $7.dom, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
     }
     | method_modifiers SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
+        $$ = new MethodDef(loc, $6.dom, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
-        int mod = $1 | $6;
+        int mod = $1 | $6.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
+        $$ = new MethodDef(loc, $6.dom, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list ';' {
-        int mod = $1 | $7;
+        int mod = $1 | $7.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
@@ -4907,10 +4988,10 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
+        $$ = new MethodDef(loc, $7.dom, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list ';' {
-        int mod = $1 | $7;
+        int mod = $1 | $7.mod;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
@@ -4919,21 +5000,21 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
+        $$ = new MethodDef(loc, $7.dom, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
     }
     | SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, $5, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
+        $$ = new MethodDef(loc, $5.dom, $5.mod, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
     }
     | ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, $5, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
+        $$ = new MethodDef(loc, $5.dom, $5.mod, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
     }
     | uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list block {
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
@@ -4943,7 +5024,7 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, $6, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
+        $$ = new MethodDef(loc, $6.dom, $6.mod, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
     }
     | uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list block {
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
@@ -4953,7 +5034,7 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
-        $$ = new MethodDef(loc, $6, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
+        $$ = new MethodDef(loc, $6.dom, $6.mod, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
     }
     ;
 
@@ -4998,9 +5079,76 @@ nsc_modifiers:
 
 method_qualifier:
     // nothing
-    { $$ = 0; }
+    { $$.mod = 0; $$.dom = QDOM_DEFAULT; }
     | TOK_CONST {
-        $$ = OFM_CONST;
+        $$.mod = OFM_CONST;
+        $$.dom = QDOM_DEFAULT;
+    }
+    | callable_attrs {
+        $$.mod = 0;
+        $$.dom = $1;
+    }
+    | TOK_CONST callable_attrs {
+        $$.mod = OFM_CONST;
+        $$.dom = $2;
+    }
+    ;
+
+// the attribute list of a function or method after its parameter list: [key=value,...;key=value...]
+// the scanner returns TOK_ATTR_OPEN for a '[' followed by a known key and '=', so the list does not conflict with
+// an index expression after a call (ex: Cls::m(x)[i])
+callable_attrs_opt:
+    // nothing
+    { $$ = QDOM_DEFAULT; }
+    | callable_attrs {
+        $$ = $1;
+    }
+    ;
+
+callable_attrs:
+    TOK_ATTR_OPEN callable_attr_list ']' {
+        $$ = $2.dom;
+    }
+    // a trailing ';' is accepted as in qpp
+    | TOK_ATTR_OPEN callable_attr_list ';' ']' {
+        $$ = $2.dom;
+    }
+    ;
+
+// "mod" holds the keys seen (CAK_*), "dom" the declared domains
+callable_attr_list:
+    callable_attr {
+        $$ = $1;
+    }
+    | callable_attr_list ';' callable_attr {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
+        if ($1.mod & $3.mod) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@3.first_line, @3.last_line, @3.first_col, @3.last_col);
+            parseException(*loc, "PARSE-EXCEPTION", "attribute key given twice in the attribute list");
+        }
+        $$.mod = $1.mod | $3.mod;
+        $$.dom = $1.dom | $3.dom;
+    }
+    ;
+
+callable_attr:
+    IDENTIFIER '=' callable_attr_values {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
+        $$ = parse_callable_attr(loc, $1, $3);
+    }
+    ;
+
+callable_attr_values:
+    IDENTIFIER {
+        $$ = new QoreStringNode($1);
+        free($1);
+    }
+    | callable_attr_values ',' IDENTIFIER {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
+        $1->concat(',');
+        $1->concat($3);
+        free($3);
+        $$ = $1;
     }
     ;
 
@@ -5052,36 +5200,36 @@ return_value:
     ;
 
 sub_def:
-    TOK_SUB ident_openparen myexp ')' return_value block {
+    TOK_SUB ident_openparen myexp ')' callable_attrs_opt return_value block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
-        $$ = new ParseUserFunction(loc, $2, new UserFunctionVariant($6, @3.first_line, @3.last_line, $3, $5, false, flags));
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
+        $$ = new ParseUserFunction(loc, $2, set_function_dom(new UserFunctionVariant($7, @3.first_line, @3.last_line, $3, $6, false, flags), $5));
     }
-    | uncqtypedef TOK_SUB ident_openparen myexp ')' block {
+    | uncqtypedef TOK_SUB ident_openparen myexp ')' callable_attrs_opt block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
 
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
-        $$ = new ParseUserFunction(loc, $3, new UserFunctionVariant($6, @4.first_line, @4.last_line, $4, rt, false, flags));
-    }
-    | method_modifiers TOK_SUB ident_openparen myexp ')' return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
+        $$ = new ParseUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, rt, false, flags), $6));
+    }
+    | method_modifiers TOK_SUB ident_openparen myexp ')' callable_attrs_opt return_value block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
 
-        $$ = new ParseUserFunction(loc, $3, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, $1 & OFM_SYNCED, flags));
+        $$ = new ParseUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($8, @4.first_line, @4.last_line, $4, $7, $1 & OFM_SYNCED, flags), $6));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
-    | method_modifiers uncqtypedef TOK_SUB ident_openparen myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
+    | method_modifiers uncqtypedef TOK_SUB ident_openparen myexp ')' callable_attrs_opt block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -5091,7 +5239,7 @@ sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        $$ = new ParseUserFunction(loc, $4, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags));
+        $$ = new ParseUserFunction(loc, $4, set_function_dom(new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags), $7));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -5102,36 +5250,36 @@ sub_def:
 // sub_def via ident_openparen (which already accepts ANGLE_IDENTIFIER '(').  Accepting ANGLE_IDENTIFIER
 // here too — as the old scoped_method_openparen did — duplicated that path and produced conflicts on "sub".
 scoped_sub_def:
-    TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
+    TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt return_value block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
-        $$ = new ParseScopedUserFunction(loc, $2, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, false, flags));
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
+        $$ = new ParseScopedUserFunction(loc, $2, set_function_dom(new UserFunctionVariant($8, @4.first_line, @4.last_line, $4, $7, false, flags), $6));
     }
-    | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
+    | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
 
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
-        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, false, flags));
-    }
-    | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
+        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, rt, false, flags), $7));
+    }
+    | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt return_value block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
 
-        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, $7, $1 & OFM_SYNCED, flags));
+        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($9, @5.first_line, @5.last_line, $5, $8, $1 & OFM_SYNCED, flags), $7));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
-    | method_modifiers uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
+    | method_modifiers uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -5141,7 +5289,7 @@ scoped_sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        $$ = new ParseScopedUserFunction(loc, $4, new UserFunctionVariant($8, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags));
+        $$ = new ParseScopedUserFunction(loc, $4, set_function_dom(new UserFunctionVariant($9, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags), $8));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }

@@ -43,6 +43,8 @@
 %requires(reexport) ConnectionProvider
 
 module DbDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS";
     version = "2.5";
     desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
