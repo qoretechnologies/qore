@@ -98,6 +98,22 @@ public:
     */
     DLLEXPORT void clear(ExceptionSink* xsink);
 
+    //! releases everything the namespace holds and leaves it empty
+    /** Releases the constants (including class constants), global variables, the data of its classes, its functions,
+        classes, hashdecls, enums, typedefs, key-value properties and subnamespaces.  Calling it again, or destroying
+        the namespace afterwards, releases nothing more.
+
+        A binary module that keeps its namespace in a variable with static storage duration registers it with
+        QoreModuleInfo::ns, and the namespace is purged when the module is deleted during qore_cleanup(), before the
+        types are freed, rather than by its C++ static destructor, which runs after qore_cleanup() (or not at all
+        when the process ends with \c _exit()).  See @ref qore_module_teardown.
+
+        @param xsink for Qore-language exceptions raised by destructors
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void purge(ExceptionSink* xsink);
+
     //! adds a constant definition to the namespace
     /** use addConstant(const char* name, QoreValue value, const QoreTypeInfo* typeInfo) when adding
         constants of externally-defined base (non-class) types; all other types (and all objects) can have

@@ -670,6 +670,15 @@
     \c q_get_module_cpp_api(), which raises a %Qore exception on a version mismatch, so an optional C++ dependency
     between modules is possible; see "Sharing a C++ API Between Modules" in the C++ API documentation.
 
+    @par Module State Released Before the Library Shuts Down
+    A binary module registers the namespace it keeps in a static variable with \c QoreModuleInfo::ns (feature macro
+    \c QORE_HAS_MODULE_NS_PURGE), and the library releases the namespace with everything in it when it deletes the
+    module, before it frees the types, instead of leaving it to the C++ static destructor, which runs after the
+    library has shut down or not at all when the process ends with \c _exit().  All modules bundled with %Qore
+    register their namespaces, so a process that exits while a background JIT compile is still running no longer
+    leaves their constants and objects allocated, which valgrind reported as lost memory; see "Releasing Module
+    State at Shutdown" in the module development guide of the C++ API documentation.
+
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see

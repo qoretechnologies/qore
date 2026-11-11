@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - module teardown at process exit with a background JIT compile left running
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BgCompileExitTeardownTest
+
+#! Module-owned Qore state is released by module teardown in qore_cleanup(), not by C++ static destructors
+/** A process that exits while a detached background compile is still in LLVM ends with \c _exit() after
+    qore_cleanup(), so no C++ static destructor runs (see QoreJIT::exitQuickly()).  The namespaces of binary modules
+    with static storage duration are registered with QoreModuleInfo::ns and purged when the modules are deleted in
+    qore_cleanup(), before the types are freed, so nothing of them is left to a static destructor.
+
+    The debug build counts the module namespaces that still hold Qore values when qore_cleanup() frees the types
+    (QORE_TEARDOWN_REPORT prints the count); the count must be 0.  If QORE_TEST_VALGRIND is set and valgrind is
+    installed, the same child also runs under valgrind, which must report no definitely or indirectly lost memory.
+
+    A script that calls exit() is not covered: qore_exit_process() ends the process without qore_cleanup().
+*/
+class BgCompileExitTeardownTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for the compile to stop at its hold point
+        const StepTimeout = 60000;
+
+        #! seconds a child can run before it is killed
+        const ChildTimeout = 120;
+
+        #! seconds a child can run under valgrind before it is killed
+        const ValgrindTimeout = 1500;
+
+        #! the modules whose namespaces have static storage duration
+        const Modules = "%requires reflection
+%requires yaml
+%requires json
+";
+
+        #! a child Program whose function's compile is stopped in LLVM and detached when the Program is deleted
+        const DetachedCompile = "Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setExecMode(EM_TIERED);
+p.parse(\"int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }\", \"p\");
+call_function(\"dbg_hold_bg_compile\", \"llvm\");
+int sum = p.callFunction(\"f\", 10);
+bool held = call_function(\"dbg_wait_bg_compile_held\", \"llvm\", T);
+delete p;
+# the module values are used, so that they are certainly created
+printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection::Type(\"int\")).getName(),
+    parse_yaml(make_yaml(1)), make_json(1));
+";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("BgCompileExitTeardownTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("normal exit releases module namespaces in qore_cleanup()", \normalExit());
+        addTestCase("exit with a detached compile releases module namespaces", \detachedExit());
+        addTestCase("valgrind: no module state is lost at exit with a detached compile", \valgrindDetachedExit());
+        set_return_value(main());
+    }
+
+    #! a process that ends normally releases the module namespaces before the types are freed
+    normalExit() {
+        checkDebug();
+        hash<auto> r = runChild(header() + "printf(\"type=%s yaml=%s json=%s\\n\", (new Reflection::Type(\"int\")).getName(),
+    parse_yaml(make_yaml(1)), make_json(1));
+");
+        assertEq(0, r.rc, r.output);
+        assertRegex("type=int yaml=1 json=1", r.output);
+        checkReleased(r.output);
+    }
+
+    #! a process that ends with _exit() because a detached compile is still in LLVM has released the module state
+    detachedExit() {
+        checkDebug();
+        hash<auto> r = runChild(header() + DetachedCompile);
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=45 held=True type=int yaml=1 json=1", r.output);
+        assertRegex("\\[BG-JIT\\] detached an in-progress compile from a Program being deleted", r.output);
+        checkReleased(r.output);
+    }
+
+    #! valgrind finds no definitely or indirectly lost memory in a process that ends with a detached compile
+    valgrindDetachedExit() {
+        checkDebug();
+        if (!ENV.QORE_TEST_VALGRIND) {
+            testSkip("set QORE_TEST_VALGRIND to run the child under valgrind");
+        }
+        if (trim(backquote("command -v valgrind 2>/dev/null")) == "") {
+            testSkip("valgrind is not installed");
+        }
+        # -b: valgrind needs signal handling disabled
+        hash<auto> r = runChild(header() + DetachedCompile, sprintf("timeout -s KILL %d valgrind --leak-check=full "
+            "--show-leak-kinds=definite,indirect --errors-for-leak-kinds=definite,indirect --error-exitcode=99",
+            ValgrindTimeout));
+        assertEq(0, r.rc, r.output);
+        assertRegex("sum=45 held=True", r.output);
+        assertRegex("definitely lost: 0 bytes in 0 blocks|All heap blocks were freed|no leaks are possible",
+            r.output);
+        assertNRegex("indirectly lost: [1-9]", r.output);
+        checkReleased(r.output);
+    }
+
+    #! the debug count of module namespaces left to C++ static destructors is 0
+    private checkReleased(string output) {
+        assertRegex("\\[TEARDOWN\\] module namespaces released after qore_cleanup\\(\\): 0\n", output,
+            "no module namespace is left to its C++ static destructor");
+        assertNRegex("is not registered with QoreModuleInfo::ns", output);
+    }
+
+    private static string header() {
+        return "%modern
+%no-child-restrictions
+" + Modules + "const T = " + StepTimeout + ";
+";
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the background compile hold and the teardown count require a debug build");
+        }
+    }
+
+    #! runs a child script and returns its exit status and output
+    /** @param code the script
+        @param wrapper a command that runs the child (valgrind), if any
+
+        Every function is submitted for native compilation at its first call; the child's own Program runs in the
+        AST tier, so only the child Program's function is compiled in the background
+    */
+    private hash<auto> runChild(string code, *string wrapper) {
+        TmpDir tmp("qore-bg-compile-exit-teardown-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        hash<string, string> env = {
+            "QORE_JIT_THRESHOLD": "1",
+            "QORE_JIT_TIMING": "1",
+            "QORE_TEARDOWN_REPORT": "1",
+        };
+        string cmd = sprintf("%s %s %s -b --enable-debug --exec-mode=ast %s 2>&1; echo \"rc=$?\"",
+            (map sprintf("%s=%s", $1.key, $1.value), env.pairIterator()).join(" "),
+            wrapper ?? sprintf("timeout -s KILL %d", ChildTimeout), shellQuote(qore_bin), shellQuote(script));
+        string output = backquote(cmd);
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertTrue(exists rc, "the child's status is known: " + output);
+        return {"rc": rc[0].toInt(), "output": output};
+    }
+}

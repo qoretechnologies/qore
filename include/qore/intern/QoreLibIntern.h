@@ -1230,6 +1230,14 @@ public:
 DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+//! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
+DLLLOCAL extern std::atomic<bool> qore_types_deleted;
+
+//! returns the number of module namespaces with static storage duration that still hold Qore values and are not
+//! registered with QoreModuleInfo::ns: they are released by their C++ static destructors, after qore_cleanup()
+/** Counted in debug builds only; always 0 otherwise.  If \a report is true, each one is named on stderr.
+*/
+DLLLOCAL unsigned qore_count_late_module_namespaces(bool report);
 
 #ifdef DEBUG
 //! Asserts that a hash, list or object being freed is not registered as the target of an opaque reference
