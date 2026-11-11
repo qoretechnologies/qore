@@ -206,6 +206,38 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+// ============================================================================
+// SOURCE_LOCATION (122): the location of the call expression that follows (#5745)
+// ============================================================================
+
+//! not written through the registry: classifyAndWriteExpr() writes the location before a call
+static bool write_expr_source_location(AOTExprWriteCtx& ctx) {
+    return false;
+}
+
+//! Gives a call node read from an AOT image the location of the call
+static void qore_aot_set_call_location(AbstractQoreNode* node, const QoreProgramLocation* loc) {
+    if (auto* pn = dynamic_cast<ParseNode*>(node)) {
+        pn->loc = loc;
+    }
+    // the frame of a method call through the dot operator is located at its method call node
+    if (auto* dot = dynamic_cast<QoreDotEvalOperatorNode*>(node)) {
+        if (MethodCallNode* m = dot->getMethodCall()) {
+            m->loc = loc;
+        }
+    }
+}
+
+static QoreValue read_expr_source_location(AOTExprReadCtx& ctx) {
+    const QoreProgramLocation* loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    QoreValue v = readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (loc && ctx.error.empty() && v.hasNode()) {
+        qore_aot_set_call_location(v.getInternalNode(), loc);
+    }
+    return v;
+}
+
 static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     const char* func_name = ctx.reader.readStringRef(ctx.ptr);
     const char* sig_ref = nullptr;

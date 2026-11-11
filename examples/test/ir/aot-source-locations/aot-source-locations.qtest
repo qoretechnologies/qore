@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the expressions that the image restores as AST trees
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AOTSourceLocationsTest
+
+#! The calls of member initializers and default arguments have their lines in AOT-compiled code (#5745)
+/** AOT-compiled code evaluates member initializers and default arguments as AST trees that it restores from its
+    image; the call nodes of these trees had no location, and members none either, so the frame of a call in a member
+    initializer and an exception in one had no line, and the frame of a call in a default argument had the line of
+    the caller.  The image records the locations of the calls (format version 25), and AOTSourceLocations.q gives the
+    output of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class AOTSourceLocationsTest inherits QUnit::Test {
+    public {
+        #! the output of AOTSourceLocations.q with the AST interpreter
+        const Expected = "function call default: 50-50
+static method call default: 50-50
+expression default: 50-50
+method call on a constant default: 50-50
+member initializer: 56-56
+member initializer exception: DIVISION-BY-ZERO 62-62
+r=8
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOTSourceLocationsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AOTSourceLocations.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the lines of calls in member initializers and default arguments", \modeTest(),
+                (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the lines of calls in member initializers and default arguments", opt),
+                \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the lines of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-source-locations-");
+        string exe = tmp.path + DirSep + "source-locations";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the lines of the AST interpreter", opt));
+    }
+}

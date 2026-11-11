@@ -705,6 +705,11 @@ static bool write_slot_XOR_EQ(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_SHL_EQ(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftLeftEqualsOperatorNode>(ctx);
 }
+//! a source location is never a slot expression; it precedes inline call expressions only (classifyAndWriteExpr())
+static bool write_slot_SOURCE_LOCATION(AOTExprSlotWriteCtx& ctx) {
+    return false;
+}
+
 static bool write_slot_SHR_EQ(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftRightEqualsOperatorNode>(ctx);
 }

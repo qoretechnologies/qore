@@ -2611,10 +2611,35 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
 }
 
 //! Advance pointer past one AOTExprKind-encoded expression without allocating objects
+const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        QoreProgram* pgm) {
+    int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+    const char* file = reader.readStringRef(ptr);
+    const char* source = reader.readStringRef(ptr);
+    if (start_line <= 0 || !file || !*file || !pgm) {
+        return nullptr;
+    }
+    // interned in the Program, as the locations of parsed code; the Program's runtime metadata lock protects its
+    // strings and locations, so that this can run when code is deserialized lazily
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const char* interned_file = pp->addString(file);
+    const char* interned_source = source && *source ? pp->addString(source) : nullptr;
+    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, static_cast<int>(offset));
+    return pp->getLocation(tmp, start_line, end_line);
+}
+
 static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
     if (p >= e) { return; }
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
+
+    if (ek == AOTExprKind::SOURCE_LOCATION) {
+        qore_aot_read_source_location(rdr, p, nullptr);
+        skipOneExpr(rdr, p, e);
+        return;
+    }
 
     if (ek == AOTExprKind::HASH_DEREF) {
         skipOneExpr(rdr, p, e);  // left (base expression)

@@ -2513,6 +2513,13 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
 static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end);
 
+//! skips a source location written by qore_aot_write_source_location() (format version 25)
+static bool dump_skip_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& p, const uint8_t* end) {
+    return dump_skip_bytes(p, end, 2 * qore_aot_line_size(reader) + 8)
+        && dump_skip_string_ref(reader, p, end)
+        && dump_skip_string_ref(reader, p, end);
+}
+
 static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
         AOTSlotMapDumpSummary& summary, const std::string& func_name,
@@ -2525,6 +2532,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
     };
 
     switch (static_cast<AOTExprKind>(kind)) {
+        case AOTExprKind::SOURCE_LOCATION:
+            return dump_skip_source_location(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, ctx);
+
         case AOTExprKind::FUNC_CALL:
             if (!dump_skip_string_ref(reader, p, end)) {
                 return false;
@@ -3551,6 +3562,11 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                     error, true, "instance member", owner, dump_owner_name(mname, nullptr))) {
                 return false;
             }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                error = "truncated class member location";
+                return false;
+            }
         }
 
         uint32_t num_static = 0;
@@ -3569,6 +3585,11 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
             uint8_t has_default = *(p - 1);
             if (has_default && !dump_skip_serialized_value(reader, p, end, summary,
                     error, true, "static member", owner, dump_owner_name(mname, nullptr))) {
+                return false;
+            }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                error = "truncated static member location";
                 return false;
             }
         }

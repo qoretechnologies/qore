@@ -9973,6 +9973,8 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         ? getNamespaceSymbolPath(dfe->getNamespace(), dfe->getName())
                         : std::string(fcn->getName());
                     writer.writeStringRef(default_fname.c_str());
+                    // the location of the call (see v25), for the frame of the call
+                    qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr : fcn->loc);
                     continue;
                 }
 
@@ -10008,6 +10010,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                             writer.writeU8(4);  // expression default: const.method()
                             writer.writeStringRef(fqn.c_str());
                             writer.writeStringRef(mc->getName());
+                            qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr : de->loc);
                             continue;
                         }
                     }
@@ -10058,6 +10061,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         std::string class_ref = qore_aot_encode_class_ref(qc);
                         writer.writeStringRef(class_ref.c_str());
                         writer.writeStringRef(mname);
+                        qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr : smcn->loc);
                         continue;
                     }
                 }
@@ -10494,6 +10498,8 @@ static bool aotRecordAggregateDeclarationDigest(QoreAOTBinaryWriter& writer, con
         return true;
     }
     QoreAOTBinaryWriter digest_writer;
+    // a digest does not depend on the lines of the code or the path of its file (see v25 in QoreAOTBinary.h)
+    digest_writer.omit_source_locations = true;
     digest_writer.const_reverse_map = writer.const_reverse_map;
     digest_writer.feature_flags = writer.feature_flags;
     digest_writer.emit_parse_constant_values = writer.emit_parse_constant_values;
@@ -10697,6 +10703,8 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             } else {
                 writer.writeU8(0);
             }
+            // the location of the member's declaration (see v25), the runtime location of its initialization
+            qore_aot_write_source_location(writer, mi.second->loc);
         }
 
         // static members
@@ -10728,6 +10736,8 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             } else {
                 writer.writeU8(0);
             }
+            // the location of the static variable's declaration (see v25)
+            qore_aot_write_source_location(writer, vi.second->loc);
         }
 
         // class constants
@@ -12070,12 +12080,86 @@ void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSigna
 }
 
 
+void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const QoreProgramLocation* loc) {
+    const bool valid = loc && loc->start_line > 0;
+    qore_aot_write_line(writer, valid ? loc->start_line : 0);
+    qore_aot_write_line(writer, valid ? loc->end_line : 0);
+    writer.writeI64(valid ? loc->offset : 0);
+    writer.writeSourcePath(valid && loc->getFile() ? loc->getFile() : "");
+    writer.writeSourcePath(valid && loc->getSource() ? loc->getSource() : "");
+}
+
+bool qore_aot_has_source_location(const QoreProgramLocation* loc) {
+    return loc && loc->start_line > 0 && loc->getFile() && *loc->getFile();
+}
+
+//! Classify and write a QoreValue expression in AOTExprKind format, without the source location of a call
+/** See classifyAndWriteExpr()
+*/
+static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const std::vector<AOTGlobalSlotId>& parent_globals,
+        const AOTConstantReverseMap* const_reverse_map);
+
+//! Returns the source location of a call expression, which AOT serializes before the call (#5745)
+/** The call nodes read from an AOT image get it, so that the frames of the calls and the exceptions in them have the
+    lines of the calls, as when the code is parsed; other nodes are not located
+*/
+static const QoreProgramLocation* qore_aot_call_expr_location(const AbstractQoreNode* node) {
+    if (!node) {
+        return nullptr;
+    }
+    if (auto* fcn = dynamic_cast<const AbstractFunctionCallNode*>(node)) {
+        return fcn->loc;
+    }
+    if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        return crcn->loc;
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        return dot->loc;
+    }
+    if (auto* vrno = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        return vrno->loc;
+    }
+    return nullptr;
+}
+
 //! Classify and write a QoreValue expression in AOTExprKind format
 /** Used by handler IR serialization to classify expression nodes inline.
     Handles function calls, method calls, variable refs, constants, and enums.
     Returns true on success, false if the expression cannot be classified.
+
+    A call with a source location is preceded by AOTExprKind::SOURCE_LOCATION and its location (format version 25),
+    unless the payload is written for a digest (QoreAOTBinaryWriter::omit_source_locations) or the call is written
+    as GENERIC_EVAL, which its readers recognize as the first byte of an expression.
 */
 bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const std::vector<AOTGlobalSlotId>& parent_globals,
+        const AOTConstantReverseMap* const_reverse_map) {
+    const QoreProgramLocation* loc = !writer.omit_source_locations && expr.hasNode()
+        ? qore_aot_call_expr_location(expr.getInternalNode()) : nullptr;
+    if (!qore_aot_has_source_location(loc)) {
+        return classifyAndWriteExprIntern(writer, expr, parent_locals, parent_globals, const_reverse_map);
+    }
+    uint32_t start = writer.position();
+    writer.writeU8(static_cast<uint8_t>(AOTExprKind::SOURCE_LOCATION));
+    qore_aot_write_source_location(writer, loc);
+    uint32_t expr_start = writer.position();
+    if (!classifyAndWriteExprIntern(writer, expr, parent_locals, parent_globals, const_reverse_map)
+            || writer.position() == expr_start) {
+        writer.truncate(start);
+        return false;
+    }
+    if (writer.getBuffer()[expr_start] == static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL)) {
+        std::vector<uint8_t> expr_bytes(writer.getBuffer().begin() + expr_start, writer.getBuffer().end());
+        writer.truncate(start);
+        writer.writeBytes(expr_bytes.data(), static_cast<uint32_t>(expr_bytes.size()));
+    }
+    return true;
+}
+
+static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTLocalSlotId>& parent_locals,
         const std::vector<AOTGlobalSlotId>& parent_globals,
         const AOTConstantReverseMap* const_reverse_map) {
@@ -15779,7 +15863,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
             arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
             if (pd.param_index < defaults.size()) {
                 defaults[pd.param_index].discard(nullptr);
-                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(pd.loc ? pd.loc : &loc_builtin, m, (QoreParseListNode*)nullptr);
                 defaults[pd.param_index] = QoreValue(smcn);
                 qore_aot_bind_default_static_method_call_variant(smcn, m);
             }
@@ -15843,7 +15927,7 @@ bool QoreAOTBinaryDeserializer::resolveFunctionCallDefaults(std::string& error) 
         arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
         if (pd.param_index < defaults.size()) {
             defaults[pd.param_index].discard(nullptr);
-            FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+            FunctionCallNode* fcn = new FunctionCallNode(pd.loc ? pd.loc : &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
             defaults[pd.param_index] = QoreValue(fcn);
             qore_aot_bind_default_function_call_variant(fcn, fe);
         }
@@ -16301,6 +16385,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
             pim.default_val = default_val;
+            // the location of the member's declaration (see v25)
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                pim.loc = qore_aot_read_source_location(reader, ptr, class_already_existed ? nullptr : pgm);
+            }
 
             if (!class_already_existed && mname && *mname) {
                 instance_members.push_back(std::move(pim));
@@ -16340,6 +16428,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
             psm.default_val = default_val;
+            // the location of the static variable's declaration (see v25)
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                psm.loc = qore_aot_read_source_location(reader, ptr, class_already_existed ? nullptr : pgm);
+            }
             if (!class_already_existed && sm_name && *sm_name) {
                 static_members.push_back(std::move(psm));
             } else {
@@ -16733,7 +16825,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             QoreValue default_val = pim.default_val;
             pim.default_val = QoreValue();  // Clear to prevent double-deref
             priv->addMember(pim.name.c_str(), static_cast<ClassAccess>(pim.access), ti,
-                default_val);
+                default_val, pim.loc);
             QoreMemberInfo* new_mi = priv->members.find(pim.name.c_str());
             assert(new_mi);
             if (new_mi) {
@@ -16934,7 +17026,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             // whose init expression `needs_eval()`, an svar init function
             // was generated at compile time and will overwrite this value
             // at load time (see compileInitExpr / executeInitFunctions).
-            QoreVarInfo* vi = new QoreVarInfo(&loc_builtin, ti, nullptr, QoreValue(),
+            QoreVarInfo* vi = new QoreVarInfo(psm.loc ? psm.loc : &loc_builtin, ti, nullptr, QoreValue(),
                 static_cast<ClassAccess>(psm.access));
 
             // Run parseInit() first so the QoreMemberInfoBaseAccess::init
@@ -18241,6 +18333,12 @@ static bool skipAOTVariantDefaultPayload(const QoreAOTBinaryReader& reader,
             return skipAOTSerializedValue(reader, ptr, end, error);
 
         case 2:
+            reader.readStringRef(ptr);
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                qore_aot_read_source_location(reader, ptr, nullptr);
+            }
+            return true;
+
         case 3:
             reader.readStringRef(ptr);
             return true;
@@ -18249,6 +18347,9 @@ static bool skipAOTVariantDefaultPayload(const QoreAOTBinaryReader& reader,
         case 6:
             reader.readStringRef(ptr);
             reader.readStringRef(ptr);
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                qore_aot_read_source_location(reader, ptr, nullptr);
+            }
             return true;
 
         case 5: {
@@ -18554,12 +18655,20 @@ static bool readAndSetupVariantSignature(
             // The name is namespace-qualified; qore_aot_resolve_function_entry_for_slot()
             // handles the qualified, still-pending and legacy bare-identifier forms.
             const char* fname = reader.readStringRef(ptr);
+            // the location of the call (see v25)
+            const QoreProgramLocation* call_loc = nullptr;
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                call_loc = qore_aot_read_source_location(reader, ptr, pgm);
+            }
+            if (!call_loc) {
+                call_loc = &loc_builtin;
+            }
             const FunctionEntry* fe = (fname && *fname)
                 ? qore_aot_resolve_function_entry_for_slot(pgm, fname)
                 : nullptr;
             if (fe) {
                 FunctionCallNode* fcn = new FunctionCallNode(
-                    &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+                    call_loc, fe, static_cast<QoreParseListNode*>(nullptr));
                 param_defaults[j] = QoreValue(fcn);
                 qore_aot_bind_default_function_call_variant(fcn, fe);
             } else if (fname && *fname && g_aot_pending_function_defaults) {
@@ -18570,6 +18679,7 @@ static bool readAndSetupVariantSignature(
                 pd.func_name = fname;
                 pd.uvb = uvb;
                 pd.param_index = j;
+                pd.loc = call_loc;
                 g_aot_pending_function_defaults->push_back(std::move(pd));
                 // Non-NOTHING placeholder so hasDefaultArg(j) reports true and
                 // min_param_types counts this param as optional; the fixup pass
@@ -18613,13 +18723,21 @@ static bool readAndSetupVariantSignature(
             // path in AbstractMethodCallNode::exec handles this case.
             const char* cfqn = reader.readStringRef(ptr);
             const char* mname = reader.readStringRef(ptr);
+            // the location of the call (see v25)
+            const QoreProgramLocation* call_loc = nullptr;
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                call_loc = qore_aot_read_source_location(reader, ptr, pgm);
+            }
+            if (!call_loc) {
+                call_loc = &loc_builtin;
+            }
             ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, cfqn);
             if (ce && mname && *mname) {
                 auto* rcr = new RuntimeConstantRefNode(&loc_builtin, ce,
                     /*aot_deferred=*/true);
-                auto* mc = new MethodCallNode(&loc_builtin, strdup(mname),
+                auto* mc = new MethodCallNode(call_loc, strdup(mname),
                     (QoreParseListNode*)nullptr);
-                auto* de = new QoreDotEvalOperatorNode(&loc_builtin, QoreValue(rcr), mc);
+                auto* de = new QoreDotEvalOperatorNode(call_loc, QoreValue(rcr), mc);
                 param_defaults[j] = QoreValue(de);
             } else {
                 printd(0, "AOT deser: cannot resolve default dot-eval const '%s'.%s()\n",
@@ -18634,6 +18752,14 @@ static bool readAndSetupVariantSignature(
             // through the normal AbstractFunctionCallNode dispatch.
             const char* class_path = reader.readStringRef(ptr);
             const char* mname = reader.readStringRef(ptr);
+            // the location of the call (see v25)
+            const QoreProgramLocation* call_loc = nullptr;
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                call_loc = qore_aot_read_source_location(reader, ptr, pgm);
+            }
+            if (!call_loc) {
+                call_loc = &loc_builtin;
+            }
             const QoreClass* qc = (class_path && *class_path)
                 ? qoreAOTResolveClassRefForDeserialization(pgm, class_path)
                 : nullptr;
@@ -18647,7 +18773,7 @@ static bool readAndSetupVariantSignature(
                 }
             }
             if (m) {
-                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(call_loc, m, (QoreParseListNode*)nullptr);
                 param_defaults[j] = QoreValue(smcn);
                 qore_aot_bind_default_static_method_call_variant(smcn, m);
             } else {
@@ -18661,6 +18787,7 @@ static bool readAndSetupVariantSignature(
                     pd.method_name = mname ? mname : "";
                     pd.uvb = uvb;
                     pd.param_index = j;
+                    pd.loc = call_loc;
                     g_aot_pending_static_method_defaults->push_back(pd);
                     // Use a non-NOTHING placeholder so hasDefaultArg(j)
                     // reports true and min_param_types counts this param as
