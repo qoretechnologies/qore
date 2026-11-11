@@ -252,9 +252,13 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
 
     When the target has a single variant, an argument whose type is only known at runtime (for example an \c auto
     value, or a <tt>*string</tt> value for an \c auto parameter) is bound by name at parse time and type-checked at
-    runtime exactly as the same positional argument would be. When the target is overloaded and the variant would
-    depend on such an argument's runtime type, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional
-    arguments or give the argument an explicit type.
+    runtime exactly as the same positional argument would be. When the target is overloaded, the arguments are bound
+    to the parameter names of a variant at parse time; when the variant depends on an argument's runtime type (or
+    value, as for an argument that can have no value, see @ref overloading), it is resolved at runtime among the
+    variants that have the same parameter names at the positions of the arguments, so the arguments are never passed
+    to a variant by position.  If another variant that the runtime resolution could select has other parameter names
+    at those positions, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give the
+    argument an explicit type that has a value.
 
     @note Parameter names are part of the public calling interface for named callers. Renaming a public parameter can
     break callers that use named arguments even when positional callers are unaffected.

@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - native AOT code generation and linking of qcc executables
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/.."
+%requires QUnit
+%requires FsUtil
+%requires ExecModeHarness
+
+%exec-class TimeoutDateUntypedOperandTest
+
+#! A timeout or *timeout operand of date arithmetic counts milliseconds in every mode, also when the other has no type (qore#5735)
+/** A @ref timeout_type "timeout" is an integer of milliseconds, and an integer added to a date is a number of seconds,
+    so <tt>date + timeout</tt> and <tt>date - timeout</tt> treat a timeout variable used directly in the operation as
+    milliseconds.  The AST interpreter set that up at parse time only when the type of the other operand was known; the
+    argument of a @ref map "map" expression (`$1`) has no type there, so <tt>map $1 + t, (2s,)</tt> added the timeout
+    as seconds (7s), while the IR, JIT and tiered modes and qcc added 5 milliseconds (2s5ms), as the subtraction
+    operator did in the AST interpreter.
+
+    The program runs in every execution mode and as qcc executables at -O0 and -O3; the output of every run is
+    compared with the literal output below, which has the timeout as milliseconds and the plain integers as seconds.
+*/
+class TimeoutDateUntypedOperandTest inherits QUnit::Test {
+    public {
+        const Program = "%modern\n"
+            + "timeout t = 5;\n"
+            + "int i = 5;\n"
+            + "date d = 2s;\n"
+            + "auto a = d;\n"
+            + "hash<string, date> hd = {\"d\": d};\n"
+            + "hash<auto> ha = {\"d\": d};\n"
+            + "printf(\"01 direct plus:             %y\\n\", d + t);\n"
+            + "printf(\"02 direct minus:            %y\\n\", d - t);\n"
+            + "printf(\"03 timeout plus date:       %y\\n\", t + d);\n"
+            + "printf(\"04 map plus:                %y\\n\", (map $1 + t, (d,))[0]);\n"
+            + "printf(\"05 map timeout-left plus:   %y\\n\", (map t + $1, (d,))[0]);\n"
+            + "printf(\"06 map minus:               %y\\n\", (map $1 - t, (d,))[0]);\n"
+            + "printf(\"07 map timeout minus date:  %y\\n\", (map t - $1, (d,))[0]);\n"
+            + "printf(\"08 auto variable:           %y\\n\", a + t);\n"
+            + "printf(\"09 auto parameter:          %y\\n\", (auto sub (auto x) { return x + t; })(d));\n"
+            + "printf(\"10 typed hash member:       %y\\n\", hd.d + t);\n"
+            + "printf(\"11 auto hash member:        %y\\n\", ha.d + t);\n"
+            + "printf(\"12 int variable in map:     %y\\n\", (map $1 + i, (d,))[0]);\n"
+            + "printf(\"13 int literal in map:      %y\\n\", (map $1 + 5, (d,))[0]);\n"
+            + "printf(\"14 map over ints:           %y\\n\", (map $1 + t, (1, 2)));\n"
+            + "printf(\"15 map over mixed:          %y\\n\", (map $1 + t, (d, 3, 4s)));\n"
+            + "printf(\"16 map select:              %y\\n\", (map $1 + t, (d, 3s), $1 > 2s));\n"
+            + "printf(\"17 map index expression:    %y\\n\", (map $1 + t, (d, 3s))[1]);\n"
+            + "list<auto> l = (1, 2);\n"
+            + "string s = \"x\";\n"
+            + "float fl = 1.5;\n"
+            + "printf(\"18 map over strings:        %y\\n\", (map $1 + t, (s, \"y\")));\n"
+            + "printf(\"19 map over floats:         %y\\n\", (map $1 + t, (fl, 2.5)));\n"
+            + "printf(\"20 untyped list plus:       %y\\n\", (map $1 + t, (l,)));\n"
+            + "printf(\"21 date plus timeout twice: %y\\n\", d + t + t);\n"
+            + "\n"
+            + "*timeout ot = 5;\n"
+            + "*timeout none;\n"
+            + "softint si = 5;\n"
+            + "printf(\"22 date plus *timeout:        %y\\n\", d + ot);\n"
+            + "printf(\"23 *timeout plus date:        %y\\n\", ot + d);\n"
+            + "printf(\"24 date minus *timeout:       %y\\n\", d - ot);\n"
+            + "printf(\"25 *timeout minus date:       %y\\n\", ot - d);\n"
+            + "printf(\"26 map plus *timeout:         %y\\n\", (map $1 + ot, (d,))[0]);\n"
+            + "printf(\"27 map minus *timeout:        %y\\n\", (map $1 - ot, (d,))[0]);\n"
+            + "printf(\"28 date plus NOTHING:         %y\\n\", d + none);\n"
+            + "printf(\"29 date minus NOTHING:        %y\\n\", d - none);\n"
+            + "printf(\"31 auto *timeout:             %y\\n\", (auto sub (auto x, *timeout y) { return x + y; })(d, ot));\n"
+            + "printf(\"32 softint stays seconds:     %y\\n\", d + si);\n"
+            + "printf(\"33 int stays seconds:         %y\\n\", d + i);\n"
+            + "";
+
+        const Expected = "01 direct plus:             <time: 2 seconds 5 milliseconds>\n"
+            + "02 direct minus:            <time: 1 second 995 milliseconds>\n"
+            + "03 timeout plus date:       <time: 2 seconds 5 milliseconds>\n"
+            + "04 map plus:                <time: 2 seconds 5 milliseconds>\n"
+            + "05 map timeout-left plus:   <time: 2 seconds 5 milliseconds>\n"
+            + "06 map minus:               <time: 1 second 995 milliseconds>\n"
+            + "07 map timeout minus date:  <time: -1 seconds -995 milliseconds>\n"
+            + "08 auto variable:           <time: 2 seconds 5 milliseconds>\n"
+            + "09 auto parameter:          <time: 2 seconds 5 milliseconds>\n"
+            + "10 typed hash member:       <time: 2 seconds 5 milliseconds>\n"
+            + "11 auto hash member:        <time: 2 seconds 5 milliseconds>\n"
+            + "12 int variable in map:     <time: 7 seconds>\n"
+            + "13 int literal in map:      <time: 7 seconds>\n"
+            + "14 map over ints:           [6, 7]\n"
+            + "15 map over mixed:          [<time: 2 seconds 5 milliseconds>, 8, <time: 4 seconds 5 milliseconds>]\n"
+            + "16 map select:              [<time: 3 seconds 5 milliseconds>]\n"
+            + "17 map index expression:    <time: 3 seconds 5 milliseconds>\n"
+            + "18 map over strings:        [\"x5\", \"y5\"]\n"
+            + "19 map over floats:         [6.5, 7.5]\n"
+            + "20 untyped list plus:       [[1, 2, 5]]\n"
+            + "21 date plus timeout twice: <time: 2 seconds 10 milliseconds>\n"
+            + "22 date plus *timeout:        <time: 2 seconds 5 milliseconds>\n"
+            + "23 *timeout plus date:        <time: 2 seconds 5 milliseconds>\n"
+            + "24 date minus *timeout:       <time: 1 second 995 milliseconds>\n"
+            + "25 *timeout minus date:       <time: -1 seconds -995 milliseconds>\n"
+            + "26 map plus *timeout:         <time: 2 seconds 5 milliseconds>\n"
+            + "27 map minus *timeout:        <time: 1 second 995 milliseconds>\n"
+            + "28 date plus NOTHING:         <time: 2 seconds>\n"
+            + "29 date minus NOTHING:        <time: 2 seconds>\n"
+            + "31 auto *timeout:             <time: 2 seconds 5 milliseconds>\n"
+            + "32 softint stays seconds:     <time: 7 seconds>\n"
+            + "33 int stays seconds:         <time: 7 seconds>\n"
+            + "";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-timeout-date-untyped-");
+        string src;
+    }
+
+    constructor() : QUnit::Test("TimeoutDateUntypedOperandTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        src = tmp.path + "/program.qr";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Program);
+        f.close();
+
+        addTestCase("every execution mode adds a timeout as milliseconds", \testModes());
+        addTestCase("qcc executables add a timeout as milliseconds", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir,
+                libqore_dir, libqore_dir, qore_bin, mode, src), True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq(Expected, r.stdout, sprintf("%s: output", mode));
+        }
+    }
+
+    #! compiles the program with qcc at the given optimization level, returns the executable
+    private string compile(string opt, reference<string> out) {
+        string exe = sprintf("%s/program.O%s", tmp.path, opt);
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, src));
+        return exe;
+    }
+
+    testCompiled() {
+        # a build without qcc has nothing to compile; a failure at a later level is a failure
+        string first_out;
+        if (!is_file(compile("0", \first_out))) {
+            testSkip("qcc is not available or cannot compile the program: " + first_out);
+        }
+        foreach string opt in (("0", "3")) {
+            string out;
+            string exe = compile(opt, \out);
+            assertTrue(is_file(exe), sprintf("qcc -O%s compiled an executable: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe), True);
+            assertEq(0, r.rc, sprintf("qcc -O%s: exit status: %s", opt, r.out));
+            assertEq(Expected, r.stdout, sprintf("qcc -O%s: output", opt));
+        }
+    }
+}

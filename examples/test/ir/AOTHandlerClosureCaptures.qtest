@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - native AOT code generation and linking of qcc executables, closure variable stacks
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/.."
+%requires QUnit
+%requires FsUtil
+%requires ExecModeHarness
+
+%exec-class AOTHandlerClosureCapturesTest
+
+#! A closure in an on_block_exit handler that captures a variable the handler declares and a local of the function
+/** The handler's own variables (a catch variable, a foreach variable) are closure-bound when a closure captures them.
+    Native code instantiated them at the entry of the function that owns the handler, in the order of the function's
+    slots, and so below the function's own closure-bound locals; the end of their scope pops the top of the closure
+    variable stack, which popped one of the function's locals instead.  A later read of that local raised a chained
+    LVALUE-ERROR (the output of the handler was lost), or, in a named function, read it as NOTHING (qore#5707).
+
+    Every case runs in the AST, IR, JIT and tiered modes and as a native executable of qcc at -O0 and -O3, and must
+    print what the AST interpreter prints, which each case also states.
+*/
+class AOTHandlerClosureCapturesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-aot-handler-closure-captures-");
+
+        #! name, source and the output of the AST interpreter of each case
+        const Cases = (
+            # the case of the issue: a closure that captures the catch variable of a handler and a local of the closure
+            {"name": "catch-var-and-local", "out": "e=6\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { try { throw \"INNER\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "foreach-var-and-local", "out": "e=4\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { foreach int i in (1, 2) { code f = sub () { e += i; }; f(); } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            # a named function read the local as NOTHING
+            {"name": "named-function-catch-var", "out": "e=6\nSV\n", "src": "%modern
+sub c(bool fail) { int e = 1; on_error { try { throw \"INNER\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; }
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "on-exit-foreach-var", "out": "e=17\n", "src": "%modern
+code c = sub () { int e = 1; on_exit { foreach int i in (1, 2, 3) { code f = sub () { e += i; }; f(); } printf(\"e=%d\\n\", e); } e += 10; };
+c();
+"},
+            {"name": "on-success-catch-var", "out": "e=14\n", "src": "%modern
+code c = sub () { int e = 1; on_success { try { throw \"ABC\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"e=%d\\n\", e); } e += 10; };
+c();
+"},
+            # a variable that the handler declares in the scope of the handler itself keeps working
+            {"name": "handler-own-local", "out": "e=11\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { int k = 10; code f = sub () { e += k; }; f(); printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "catch-and-foreach-vars", "out": "e=8\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { try { throw \"AB\"; } catch (hash<ExceptionInfo> ex) { foreach int i in (1, 2) { code f = sub () { e += i + ex.err.size(); }; f(); } } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "two-outer-locals", "out": "a=4 b=5\nSV\n", "src": "%modern
+code c = sub (bool fail) { int a = 1; int b = 5; on_error { foreach int i in (1, 2) { code f = sub () { a += i; }; f(); } printf(\"a=%d b=%d\\n\", a, b); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "nested-handlers", "out": "e=31\ninner e=34\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { on_exit { foreach int j in (1, 2) { code g = sub () { e += j; }; g(); } printf(\"inner e=%d\\n\", e); } foreach int i in (10, 20) { code f = sub () { e += i; }; f(); } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            {"name": "handler-in-loop", "out": "e=18\n", "src": "%modern
+code c = sub () { int e = 0; for (int n = 0; n < 3; ++n) { on_exit { foreach int i in (1, 2) { code f = sub () { e += i * (n + 1); }; f(); } } } printf(\"e=%d\\n\", e); };
+c();
+"},
+            # leaving the loop of the handler early pops its variable at the break
+            {"name": "break-out-of-handler-foreach", "out": "e=4\nSV\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { foreach int i in (1, 2, 3) { code f = sub () { e += i; }; f(); if (i == 2) break; } printf(\"e=%d\\n\", e); } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            # each recursive frame has its own variables on the closure variable stack
+            {"name": "recursion-with-rethrow", "out": "n=0 e=2\ncaught 1 e=1\nn=1 e=3\ncaught 2 e=2\nn=2 e=4\nSV\n", "src": "%modern
+sub c(int n, bool fail) { int e = n; on_error { try { throw \"IN\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"n=%d e=%d\\n\", n, e); } if (n > 0) { try { c(n-1, fail); } catch (hash<ExceptionInfo> x) { printf(\"caught %d e=%d\\n\", n, e); throw x.err; } } else if (fail) throw \"SV\"; }
+try { c(2, True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+"},
+            # locals that the function declares after the handler
+            {"name": "locals-declared-after-the-handler", "out": "e=4\nSV\nlate=6\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; code g = sub() { e++; }; g(); on_error { try { throw \"IN\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); } printf(\"e=%d\\n\", e); } int late = 5; code h = sub() { late++; }; h(); if (fail) throw \"SV\"; printf(\"late=%d\\n\", late); };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+c(False);
+"},
+            # a handler that raises its own exception after its closure ran
+            {"name": "handler-throws", "out": "SV \"R\"\n", "src": "%modern
+code c = sub (bool fail) { int e = 1; on_error { try { throw \"INNER\"; } catch (hash<ExceptionInfo> ex) { code f = sub () { e += ex.err.size(); }; f(); throw \"R\"; } } if (fail) throw \"SV\"; };
+try { c(True); } catch (hash<ExceptionInfo> ex) { printf(\"%s %y\\n\", ex.err, ex.next.err); }
+"},
+        );
+    }
+
+    constructor() : QUnit::Test("AOTHandlerClosureCapturesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("closures in handlers capture the handler's variables and the function's locals",
+            \testHandlerCaptures());
+
+        set_return_value(main());
+    }
+
+    private string write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+        return path;
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runMode(string path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b "
+            "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir, qore_bin, mode, path), True);
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runExe(string path) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, path), True);
+    }
+
+    #! compiles a trivial program with qcc and returns True if it produced an executable
+    private bool qccAvailable() {
+        string src = write(tmp.path + "/probe.qr", "%modern\nprintf(\"ok\\n\");\n");
+        string exe = tmp.path + "/probe";
+        backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1", libqore_dir,
+            libqore_dir, libqore_dir, qcc_bin, exe, src));
+        return is_file(exe);
+    }
+
+    testHandlerCaptures() {
+        # a build without qcc has nothing to compile; a compile failure of any case below is a failure
+        if (!qccAvailable()) {
+            testSkip("qcc is not available or cannot compile a trivial program");
+        }
+        foreach hash<auto> c in (Cases) {
+            string src = write(tmp.path + "/" + c.name + ".qr", c.src);
+            # the AST interpreter is the reference
+            hash<ExecModeHarness::ModeRunResult> ref = runMode(src, "ast");
+            assertEq(0, ref.rc, sprintf("%s: ast exit status: %s", c.name, ref.out));
+            assertEq(c.out, ref.stdout, sprintf("%s: ast output", c.name));
+            foreach string mode in (("ir", "jit", "tiered")) {
+                hash<ExecModeHarness::ModeRunResult> r = runMode(src, mode);
+                assertEq(0, r.rc, sprintf("%s: %s exit status: %s", c.name, mode, r.out));
+                assertEq(c.out, r.stdout, sprintf("%s: %s output", c.name, mode));
+            }
+            foreach string opt in (("0", "3")) {
+                string exe = tmp.path + "/" + c.name + ".O" + opt;
+                string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%s -o %s %s 2>&1",
+                    libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, src));
+                assertTrue(is_file(exe), sprintf("%s: qcc -O%s compiled an executable: %s", c.name, opt, out));
+                hash<ExecModeHarness::ModeRunResult> r = runExe(exe);
+                assertEq(0, r.rc, sprintf("%s: qcc -O%s exit status: %s", c.name, opt, r.out));
+                assertEq(c.out, r.stdout, sprintf("%s: qcc -O%s output", c.name, opt));
+            }
+        }
+    }
+}

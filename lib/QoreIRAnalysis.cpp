@@ -3651,7 +3651,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     func.specializeType(facts->type_info));
                 if (!QoreTypeInfo::hasType(member_type)
                         || !QoreTypeInfo::hasType(value_type)
-                        || !QoreTypeInfo::isInputIdentical(
+                        || !QoreTypeInfo::acceptsInputUnchecked(
                             member_type, value_type)) {
                     exact_values = false;
                     break;
@@ -10031,7 +10031,7 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         const QoreTypeInfo* value_type =
             qore_get_value_type(func.specializeType(facts->type_info));
         if (!QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(
+                || !QoreTypeInfo::acceptsInputUnchecked(
                     target_value_type, value_type)) {
             return false;
         }
@@ -10110,7 +10110,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
         }
         if (!QoreTypeInfo::hasType(member_type)
                 || !QoreTypeInfo::hasType(value_type)
-                || !QoreTypeInfo::isInputIdentical(member_type, value_type)) {
+                || !QoreTypeInfo::acceptsInputUnchecked(member_type, value_type)) {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: hashdecl literal value mismatch for '%s': "
@@ -10526,6 +10526,30 @@ private:
     }
 };
 
+const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func) {
+    const QoreFunction* qf = func.source_qf;
+    if (!qf) {
+        // a method that qcc lowers without its function has its variant
+        const MethodVariantBase* mv = dynamic_cast<const MethodVariantBase*>(func.source_variant);
+        return mv ? mv->getClassPriv() : nullptr;
+    }
+    const QoreClass* qc = qf->getClass();
+    if (!qc) {
+        // a closure: the class of the method in which it was parsed, if recorded
+        const UserClosureFunction* ucf = dynamic_cast<const UserClosureFunction*>(qf);
+        qc = ucf ? QoreTypeInfo::getUniqueReturnClass(ucf->getClassType()) : nullptr;
+    }
+    return qc ? qore_class_private::get(*qc) : nullptr;
+}
+
+// a function without code of its own (neither source_qf nor source_variant: the IR function of a try or catch block,
+// or of a background expression, lowered as part of the function that contains the code) keeps the class context of
+// that function, as its code runs in it; top-level code, lowered on its own, has none
+QoreIRClassContextHelper::QoreIRClassContextHelper(const QoreIRFunction& func)
+        : QoreIRClassContextHelper(!func.source_qf && !func.source_variant && isSet() ? parse_get_class_priv()
+            : qore_ir_function_class_context(func)) {
+}
+
 //! Removes the checks of return values that the function proves unnecessary
 /** The declared return type accepts such a value as it is (see qore_ir_return_needs_coercion() and
     QoreIRReturnValueProof): it has a value, or the type accepts no value, and its type is accepted without a
@@ -10536,6 +10560,8 @@ private:
     @return the number of checks removed
 */
 static size_t qore_ir_elide_proven_return_checks(QoreIRFunction& func, size_t& check_count) {
+    // the type checks of the proof are made in the class context of the function's code (qore#5750)
+    QoreIRClassContextHelper class_ctx(func);
     size_t elided = 0;
     QoreIRReturnValueProof proof(func, check_count);
     const QoreTypeInfo* return_type = func.specializeType(func.return_type_info);
@@ -14150,6 +14176,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     return projections.size() + virtualized.size()
         + virtualized_phis.size();
 }
+//! Returns true if every type of the given type is accepted by the builtin conversion string(), int()
+//! (\a int_conversion) or float(); see qore_ir_conversion_accepts_type() in QoreIRLowering.cpp
+static bool qore_ir_analysis_conversion_accepts_type(bool int_conversion, const QoreTypeInfo* type) {
+    if (!type || !QoreTypeInfo::hasType(type) || type->return_vec.empty()) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        switch (ret.spec.getType()) {
+            case NT_NOTHING:
+            case NT_STRING:
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_BOOLEAN:
+            case NT_DATE:
+            case NT_CHAR:
+                break;
+            case NT_NULL:
+                if (int_conversion) {
+                    break;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+    return true;
+}
+
 
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         size_t* exception_edges_elided) {
@@ -14261,6 +14316,22 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             QoreIRValueFacts* specialized_facts = nullptr,
             bool commit = true) {
         if (!inst || !inst->result.isValid()) {
+            return;
+        }
+        // a checked builtin conversion of a value whose type has only types that the builtin accepts is the unchecked
+        // conversion (issue #5660): e.g. "auto i = 7; string(i)"
+        if (inst->operands.size() == 1
+                && (inst->opcode == QoreIROpcode::ToStringChecked || inst->opcode == QoreIROpcode::ToIntChecked
+                    || inst->opcode == QoreIROpcode::ToFloatChecked)) {
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+            if (facts && (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat
+                    || facts->representation == QoreIRValueRepresentation::NativeBool
+                    || qore_ir_analysis_conversion_accepts_type(inst->opcode == QoreIROpcode::ToIntChecked,
+                        facts->type_info))) {
+                inst->opcode = inst->opcode == QoreIROpcode::ToStringChecked ? QoreIROpcode::ToString
+                    : (inst->opcode == QoreIROpcode::ToIntChecked ? QoreIROpcode::ToInt : QoreIROpcode::ToFloat);
+            }
             return;
         }
         if (inst->operands.size() == 1

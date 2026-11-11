@@ -162,9 +162,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         self.assertGreater(harness_tests, 200)
         self.assertGreater(kinds["children"], kinds["parent"])
         self.assertGreater(kinds["parent"], 0)
-        # the tests that run their checks in default-mode child processes without the harness
-        self.assertEqual(["examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest"],
-                         non_harness_children)
+        # the tests that run their checks in default-mode child processes without the harness:
+        # - RestSchemaModuleLazyTypes: the modules are loaded and compared in child processes
+        # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
+        #   WebSocket client in the test's own process only drives it
+        self.assertEqual(sorted(["examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
+                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
+                         sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
         for test in all_tests():

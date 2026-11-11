@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - HTTP/1.1 connection closes on the async I/O controller's thread, and thread cancellation
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientCancelCloseRaceTest
+
+#! A cancellation of the thread that waits for an HTTPClient request is reported as the cancellation, also when a close
+#! of the request's connection ended the request first
+/** The code that a cancellation ends can close the client's transport, and the close ends the request that the thread
+    waits for; the wait can then return the connection-closed error before it sees the thread's cancellation, and the
+    request reported the close instead of THREAD-CANCELLED.  The debug-build hook dbg_hold_socket_cancel_conversion()
+    holds the requesting thread where it converts the connection-closed error, after the peer's close has ended the
+    request, so that the test cancels it in that window; skipped without library debugging.
+*/
+class HttpClientCancelCloseRaceTest inherits QUnit::Test {
+    private {
+        #! Upper bound for any wait that a regression turns into a hang
+        const HangTimeout = 30s;
+
+        #! the same, in milliseconds, for the debug hooks
+        const HangTimeoutMs = 30000;
+    }
+
+    constructor() : Test("HttpClientCancelCloseRaceTest", "1.0") {
+        addTestCase("a request ended by a close while the thread is cancelled raises THREAD-CANCELLED",
+            \cancelAfterCloseTest());
+        addTestCase("a request ended by a close without a cancellation reports the closed connection",
+            \closeWithoutCancelTest());
+        addTestCase("a request with a receive callback ended by a close while the thread is cancelled raises "
+            "THREAD-CANCELLED", \recvCallbackCancelAfterCloseTest());
+        addTestCase("a request with a send callback ended by a close while the thread is cancelled raises "
+            "THREAD-CANCELLED", \sendCallbackCancelAfterCloseTest());
+        set_return_value(main());
+    }
+
+    #! Runs one request whose peer reads the request and closes the connection with the hold armed for the requesting
+    #! thread; returns the request's error
+    /** @param cancel if the requesting thread is cancelled while it is held
+        @param request makes the request to path \c /race with the client given
+        @param chunked if the request has a chunked body, which the peer reads to its end before it closes, so that
+        the close is a FIN and not a reset for unread data
+    */
+    private hash<auto> runRequest(bool cancel, code request = sub (HTTPClient client) { client.get("/race"); },
+            bool chunked = False) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        Queue result();
+        int tid = background sub () {
+            try {
+                HTTPClient client({"url": sprintf("http://127.0.0.1:%d", port), "timeout": HangTimeout});
+                request(client);
+                result.push({"err": "NO-ERROR"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation is sticky: clear it, so that this thread can report the error
+                clear_thread_cancel();
+                result.push({"err": ex.err, "desc": ex.desc, "next": ex.next.err});
+            }
+        }();
+
+        Socket peer = listener.accept(HangTimeout);
+        on_exit peer.close();
+        # once the peer has read the request, the requesting thread waits for the response
+        hash<auto> hdr = peer.readHTTPHeader(HangTimeout);
+        assertEq("/race", hdr.path, "the peer read the request");
+        if (chunked) {
+            # the body ends with the last chunk; the trailer section is empty
+            string body;
+            while (body !~ /0\r\n\r\n$/) {
+                body += peer.recv(-1, HangTimeout);
+            }
+        }
+
+        call_function("dbg_hold_socket_cancel_conversion", tid);
+        on_exit {
+            # never leave the hold armed or a thread held
+            call_function("dbg_reset_socket_cancel_conversion", HangTimeoutMs);
+        }
+        # the close ends the request that the thread waits for
+        peer.close();
+        assertTrue(call_function("dbg_wait_socket_cancel_conversion_held", HangTimeoutMs),
+            "the requesting thread converts the closed connection's error");
+        assertEq(0, result.size(), "the requesting thread has not reported its error yet");
+        if (cancel) {
+            assertTrue(cancel_thread(tid, "test cancellation"), "the requesting thread is cancelled");
+        }
+        assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),
+            "the requesting thread leaves the hold");
+        return result.get(HangTimeout);
+    }
+
+    cancelAfterCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runRequest(True);
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the close that ended the "
+            "request first; " + row.desc);
+        assertNothing(row.next, "no other error is raised after the cancellation");
+        assertRegex("test cancellation", row.desc, "the cancellation's reason");
+    }
+
+    recvCallbackCancelAfterCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runRequest(True, sub (HTTPClient client) {
+            client.sendWithRecvCallback(sub (hash<auto> msg) {}, "", "GET", "/race");
+        });
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the close that ended the "
+            "request first; " + row.desc);
+        assertNothing(row.next, "no other error is raised after the cancellation");
+    }
+
+    sendCallbackCancelAfterCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runRequest(True, sub (HTTPClient client) {
+            bool sent;
+            client.sendWithSendCallback(*data sub () {
+                if (sent) {
+                    return;
+                }
+                sent = True;
+                return "body";
+            }, "POST", "/race");
+        }, True);
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the close that ended the "
+            "request first; " + row.desc);
+        assertNothing(row.next, "no other error is raised after the cancellation");
+    }
+
+    closeWithoutCancelTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        hash<auto> row = runRequest(False);
+        assertTrue(row.err == "HTTP1-CONNECTION-CLOSED" || row.err == "SOCKET-CLOSED",
+            "a close by the peer is reported as a closed connection; " + row.err + ": " + row.desc);
+    }
+}
