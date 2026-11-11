@@ -170,11 +170,19 @@ public class MysqlRunDatabase {
         Datasource ds;
         try {
             ds = new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module
+            # API): the test finds it so when it connects, and reports or skips it; any other error, such as a
+            # datasource string that cannot be parsed, is raised
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                return connstr;
+            }
+            rethrow;
+        }
+        try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            # a driver whose module cannot be loaded (LOAD-MODULE-ERROR: it is not installed, or it was built for
-            # another module API), or a server that cannot be reached: the test finds it so when it connects, and
-            # reports or skips it
+            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
             return connstr;
         }
         MysqlRunDatabase::dropLeftoversIntern(ds);

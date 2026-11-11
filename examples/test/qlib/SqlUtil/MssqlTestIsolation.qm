@@ -166,14 +166,21 @@ public class MssqlRunDatabase {
         Datasource ds;
         try {
             ds = new Datasource(connstr);
-            # "create database" and "drop database" cannot run in a transaction (see
-            # MssqlRunDatabase::outsideTransaction())
-            ds.setAutoCommit(True);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module
+            # API): the test finds it so when it connects, and reports or skips it; any other error, such as a
+            # datasource string that cannot be parsed, is raised
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                return connstr;
+            }
+            rethrow;
+        }
+        # "create database" and "drop database" cannot run in a transaction (see MssqlRunDatabase::outsideTransaction())
+        ds.setAutoCommit(True);
+        try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            # a driver whose module cannot be loaded (LOAD-MODULE-ERROR: it is not installed, or it was built for
-            # another module API), or a server that cannot be reached: the test finds it so when it connects, and
-            # reports or skips it
+            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
             return connstr;
         }
         string version = ds.selectRow("select @@version as v").v;

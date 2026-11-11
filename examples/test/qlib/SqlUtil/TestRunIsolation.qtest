@@ -32,6 +32,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         addTestCase("the lock file is named without the password", \lockName());
         addTestCase("the CI cleanup prints no password", \cleanupOutput());
         addTestCase("a database whose driver module cannot be loaded gets no run object", \driverUnavailable());
+        addTestCase("an administrator's datasource string that cannot be parsed is an error", \adminConnstrError());
         set_return_value(main());
     }
 
@@ -202,34 +203,16 @@ class TestRunIsolationTest inherits QUnit::Test {
         driver before any connection was tried, so the error ended the test where it skips without the driver (CI
         pipeline 64230, whose images had the DBI drivers only for module API 2.0).  The setups run in a process
         whose module path has no driver module, and in one whose module path has the driver modules for a module
-        API that no Qore loads.
+        API that no Qore loads; their module path is a directory of the modules that the isolation modules need
+        only, so that the case runs on any host.
     */
     private driverUnavailable() {
         if (PlatformOS == "Windows") {
             testSkip("no POSIX shell");
         }
-        # the directories of the modules that the isolation modules need (Util and its modules), which hold no
-        # driver module
-        list<string> dirs = ();
-        foreach hash<auto> i in (get_module_hash().pairIterator()) {
-            if (!inlist(i.key, ("Util", "yaml", "json", "reflection")) || !i.value.filename) {
-                continue;
-            }
-            string dir = dirname(i.value.filename);
-            if (inlist(dir, dirs)) {
-                continue;
-            }
-            if (is_dir(dir)) {
-                Dir d();
-                d.chdir(dir);
-                if (d.listFiles("^(pgsql|mysql|freetds|oracle|jni)(-api-[0-9.]+)?\\.qmod$")) {
-                    testSkip(sprintf("the module directory %y has driver modules", dir));
-                }
-            }
-            dirs += dir;
-        }
         string tmp = make_tmp_dir();
         on_exit remove_tree(tmp);
+        string farm = TestRunIsolationTest::makeModuleFarm(tmp);
         # driver modules for a module API that no Qore loads
         string old_api = tmp + DirSep + "old-api";
         mkdir(old_api);
@@ -273,7 +256,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         sf.close();
 
         foreach hash<auto> i in ({"not installed": empty, "built for another module API": old_api}.pairIterator()) {
-            string module_path = (dirs + i.value).join(":");
+            string module_path = farm + ":" + i.value;
             string out = backquote(sprintf("env -u PGOPTIONS QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
                 "QORE_DB_CONNSTR_ORACLE_SYS='oracle:system/p@db%%localhost:1' %s %s 2>&1",
                 TestRunIsolationTest::shellQuote(module_path),
@@ -303,6 +286,61 @@ class TestRunIsolationTest inherits QUnit::Test {
             assertEq("jdbc:u/p@db{url=sqlserver://localhost:1}", h.mssql_jdbc, i.key);
             assertEq("oracle:u/p@db%localhost:1", h.oracle, i.key);
         }
+    }
+
+    #! An administrator's datasource string that cannot be parsed is an error, and not a driver that cannot be loaded
+    /** Only LOAD-MODULE-ERROR from making the datasource means that the driver cannot be loaded; the string of the
+        administrator's connection (\c QORE_DB_CONNSTR_ORACLE_SYS) is not parsed before, so its error is raised
+        by OracleRunSchema::getConnectionString(), with the password masked
+    */
+    private adminConnstrError() {
+        if (PlatformOS == "Windows") {
+            testSkip("no POSIX shell");
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string farm = TestRunIsolationTest::makeModuleFarm(tmp);
+        string script = tmp + DirSep + "admin.q";
+        File sf();
+        sf.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        sf.write(sprintf("%%modern\n"
+            "%%requires %s/OracleTestIsolation.qm\n"
+            "try {\n"
+            "    printf(\"%%y\\n\", OracleRunSchema::getConnectionString(\"oracle:u/p@db%%localhost:1\", \"x\"));\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n"
+            "}\n", normalize_dir(get_script_dir())));
+        sf.close();
+        string pw = "Secret-pw-9";
+        # with and without the oracle module: the string is parsed before the driver is loaded
+        foreach string module_path in (farm, farm + ":" + (ENV.QORE_MODULE_DIR ?? "")) {
+            string out = trim(backquote(sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
+                "QORE_DB_CONNSTR_ORACLE_SYS='oracle:system/%s@db%%host:12x' %s %s 2>&1",
+                TestRunIsolationTest::shellQuote(module_path), pw,
+                TestRunIsolationTest::shellQuote(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore"),
+                TestRunIsolationTest::shellQuote(script))));
+            assertRegex("^DATASOURCE-PARSE-ERROR: ", out, module_path);
+            assertEq(-1, out.find(pw), out);
+        }
+    }
+
+    #! Makes a module directory with only the modules that the isolation modules need, and returns it
+    /** The modules are linked from where this test loaded them, so a process given only this directory has no
+        driver module, whatever the directories of this host hold
+    */
+    private static string makeModuleFarm(string tmp) {
+        string farm = tmp + DirSep + "modules";
+        mkdir(farm);
+        list<string> needed = ("Util", "yaml", "json", "reflection");
+        hash<auto> modules = get_module_hash();
+        foreach string name in (needed) {
+            *string path = modules{name}.filename;
+            if (!path) {
+                throw "TEST-SETUP-ERROR", sprintf("module %y was not loaded from a file", name);
+            }
+            symlink(path, farm + DirSep + basename(path));
+        }
+        return farm;
     }
 
     #! Returns the string quoted for a POSIX shell

@@ -66,8 +66,15 @@ class DropSqlIfExistsTest inherits QUnit::Test {
     private dropSql(hash<DbTestConnection> conn) {
         Datasource ds;
         try {
-            # a driver whose module cannot be loaded (LOAD-MODULE-ERROR) cannot connect either
             ds = new Datasource(conn.connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module API)
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                testSkip(sprintf("cannot connect: %s: %s", ex.err, ex.desc));
+            }
+            rethrow;
+        }
+        try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("cannot connect: %s: %s", ex.err, ex.desc));
