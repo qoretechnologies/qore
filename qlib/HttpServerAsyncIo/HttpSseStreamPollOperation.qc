@@ -462,6 +462,17 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             overflowed = True;
             cb = warning_callback;
         }
+        # a stream that has already ended (the client went away, or it was aborted or closed) is not dropped for its
+        # bound: it is closed
+        bool ended;
+        try {
+            ended = getState() != STATE_STREAMING;
+        } catch (hash<ExceptionInfo> ex) {
+            # the state lock could not be taken: the stream is dropped below
+        }
+        if (ended) {
+            throw "SSE-CLOSED", "SSE stream is closed";
+        }
         string msg = sprintf("http1 SSE stream: queueing %d bytes would take the data queued for the client over its "
             "bound of %d bytes; dropping the client", len, limit);
         if (cb) {
@@ -471,8 +482,16 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                 # logging must not change the outcome
             }
         }
-        # the controller ends the operation and runs the close callback, which reports the end of the stream
-        abort();
+        # the controller ends the operation and runs the close callback, which reports the end of the stream; the
+        # socket is closed even if the state lock cannot be taken, so that the client is dropped in any case
+        try {
+            abort();
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                sock.close();
+            } catch () {
+            }
+        }
         throw SseClientOverflowErr, msg;
     }
 

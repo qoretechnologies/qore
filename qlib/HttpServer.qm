@@ -9397,6 +9397,26 @@ class SseEventSourceStream inherits HttpServerAsyncIo::AbstractSseConnection {
         conn.setHeartbeat(interval_ms, msg);
     }
 
+    setMaxBufferSize(int size) {
+        conn.setMaxBufferSize(size);
+    }
+
+    int getMaxBufferSize() {
+        return conn.getMaxBufferSize();
+    }
+
+    bool hasMaxBufferSize() {
+        return conn.hasMaxBufferSize();
+    }
+
+    setWarningCallback(*code<nothing(string)> cb) {
+        conn.setWarningCallback(cb);
+    }
+
+    bool hasWarningCallback() {
+        return conn.hasWarningCallback();
+    }
+
     bool isOpen() {
         return conn.isOpen();
     }

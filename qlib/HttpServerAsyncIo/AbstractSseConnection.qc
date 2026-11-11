@@ -40,6 +40,9 @@ public class AbstractSseConnection {
         #! Callback run once when the transport reports that the peer is gone
         *code<nothing()> peer_close_callback;
 
+        #! Set once the client has been dropped for exceeding the bound (the warning is logged once)
+        bool overflow_dropped = False;
+
         #! Set when @ref notifyPeerClosed() has already run the callback
         bool peer_close_fired = False;
 
@@ -65,11 +68,24 @@ public class AbstractSseConnection {
         this callback to deregister the connection from its handler, mirroring
         @ref HttpSseStreamPollOperation::setCloseCallback() on the HTTP/1.x path.
 
-        @param cb the callback; called at most once, from a worker thread
+        @param cb the callback; called at most once; if the stream has already ended (for example when its client
+        was dropped while the connection was being set up), it is called at once on this thread
+
+        @note the callback runs on the thread that reports the end of the stream: a worker thread for an end that
+        the transport reports, or the thread that queued the event for a client dropped for exceeding its bound
     */
     setPeerCloseCallback(*code<nothing()> cb) {
-        AutoLock al(peer_close_mutex);
-        peer_close_callback = cb;
+        {
+            AutoLock al(peer_close_mutex);
+            if (!peer_close_fired) {
+                peer_close_callback = cb;
+                return;
+            }
+        }
+        # the end reported before the callback was set is delivered now
+        if (cb) {
+            cb();
+        }
     }
 
     #! Marks the stream closed and runs the peer-close callback exactly once
@@ -230,7 +246,16 @@ public class AbstractSseConnection {
     private dropOverflowingClient(int len) {
         string msg = sprintf("%s SSE stream: queueing %d bytes would take the data held for the client over its "
             "bound of %d bytes; dropping the client", getProtocol(), len, getMaxBufferSize());
-        warn(msg);
+        bool first;
+        {
+            AutoLock al(peer_close_mutex);
+            first = !overflow_dropped;
+            overflow_dropped = True;
+        }
+        # concurrent producers can all find the stream over its bound; the drop is logged once
+        if (first) {
+            warn(msg);
+        }
         try {
             abort();
         } catch (hash<ExceptionInfo> ex) {

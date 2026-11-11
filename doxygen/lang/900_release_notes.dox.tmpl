@@ -545,7 +545,7 @@
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
     @par Slow Server-Sent Events Clients Are Dropped
-    Every SSE stream bounds the data held for its client (the \c sse_max_buffer_size listener and
+    Every SSE stream bounds the data queued for its client (the \c sse_max_buffer_size listener and
     \c ServerSentEventHandler options, default 1 MiB): queueing an event never waits for the client, a client whose
     data would exceed the bound is dropped, and a send to that stream alone raises \c SSE-CLIENT-OVERFLOW, while a
     send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer

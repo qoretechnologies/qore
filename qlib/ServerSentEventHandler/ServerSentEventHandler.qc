@@ -65,6 +65,13 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             "sse_max_buffer_size",
         );
 
+        #! The errors in a message itself, which a send to all connections raises (see sendAll())
+        const MessageErrors = {
+            "SSE-EVENT-ERROR": True,
+            "ASYNCAPI-VALIDATION-ERROR": True,
+            "SCHEMA-VALIDATION-ERROR": True,
+        };
+
         #! Response header to SSE requests
         const SseResponseHeader = {
             "Cache-Control": "no-cache",
@@ -575,8 +582,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         No exception is raised for the state of one connection: a client whose data would exceed its bound is
         dropped (see @ref setSseMaxBufferSize()), a connection whose stream has ended is deregistered, and the message
-        is sent to the other connections.  An error in the message itself (for example \c SSE-EVENT-ERROR or an
-        AsyncAPI validation error) is still raised.
+        is sent to the other connections.  An error in the message itself (\c SSE-EVENT-ERROR or an AsyncAPI
+        validation error) is still raised.  The close hooks of a connection dropped here
+        (@ref ServerSentEventConnection::connectionClosed() "connectionClosed()", @ref deregisterConnectionImpl())
+        run on the calling thread.
     */
     sendAll(hash<SseMessageInfo> msg) {
         bool debug = isEnabledFor(LoggerLevel::DEBUG);
@@ -596,15 +605,16 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         # push the data on all connection channels, dropping any client whose outbound queue is over the limit; the
         # state of one connection never stops the send to the others
         foreach ServerSentEventConnection conn in (conns) {
-            if (dropIfOverflowing(conn)) {
-                continue;
-            }
             try {
+                if (dropIfOverflowing(conn)) {
+                    continue;
+                }
                 conn.send(msg);
             } catch (hash<ExceptionInfo> ex) {
-                # a message error is raised before anything is queued, and leaves the stream open; anything else is
-                # the state of this connection's stream
-                if (ex.err != HttpServerAsyncIo::SseClientOverflowErr && conn.isStreamOpen()) {
+                # an error in the message itself is raised for every connection; anything else that leaves the stream
+                # closed is the state of this connection's stream
+                if (MessageErrors{ex.err} || (ex.err != HttpServerAsyncIo::SseClientOverflowErr
+                        && ex.err != "SSE-STREAM-LOCK-TIMEOUT" && isStreamOpenSafe(conn))) {
                     rethrow;
                 }
                 logDebug("SSE connection %y dropped from a send to all connections: %s: %s", conn.cid, ex.err,
@@ -616,6 +626,15 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         }
         if (debug) {
             logDebug("SSE sent to connections: %y", ids);
+        }
+    }
+
+    #! Returns @ref True if the stream of the connection is open; @ref False if it is closed or its state cannot be read
+    private static bool isStreamOpenSafe(ServerSentEventConnection conn) {
+        try {
+            return conn.isStreamOpen();
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
         }
     }
 
@@ -654,7 +673,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         @throw SERVERSENTEVENT-CONNECTION-ERROR the connection does not exist
         @throw SSE-CLIENT-OVERFLOW the message would take the data held for the client over its bound (see
-        @ref setSseMaxBufferSize()); the message is not sent, and the client has been dropped
+        @ref setSseMaxBufferSize()); the message is not sent, and the client has been dropped and deregistered (its
+        close hooks run on the calling thread)
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
         ServerSentEventConnection conn;

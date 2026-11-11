@@ -153,7 +153,8 @@ public class ServerSentEventConnection {
     /** Never waits for the client.
 
         @throw SSE-CLIENT-OVERFLOW the message would take the data held for the client over its bound; the message
-        is not sent, and the client has been dropped (see
+        is not sent, and the client has been dropped and deregistered: its close hooks (@ref connectionClosed())
+        run on the calling thread (see
         @ref ServerSentEventHandler::ServerSentEventHandler::setSseMaxBufferSize() "ServerSentEventHandler::setSseMaxBufferSize()")
     */
     sendEncoded(string msg) {

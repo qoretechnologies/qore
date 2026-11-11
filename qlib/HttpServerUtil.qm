@@ -941,7 +941,8 @@ public hashdecl HttpListenerOptionInfo {
 
     #! The bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
     /** The data held for a client is the data queued but not yet written to the socket (HTTP/1.x), or buffered for
-        the stream beyond what the client's flow-control window has accepted (HTTP/2 and HTTP/3).  Queueing an event
+        the stream beyond what the client's flow-control window has accepted (HTTP/2 and HTTP/3; the data within the
+        window is held by the transport, up to the window that the client grants).  Queueing an event
         never waits for the client; an event that would take the data held over the bound, when it is not the only
         data held, drops the client (see @ref httpserverasyncio_sse_buffer).  Must be > 0; the default is 1 MiB
         (@ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize").  A \c ServerSentEventHandler

@@ -419,6 +419,36 @@ class ObsHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! An event source that records the bound of its stream
+class BoundSource inherits HttpServerAsyncIo::AbstractSseEventSource {
+    public {
+        #! the bound of the stream, set by start()
+        int bound;
+        #! decremented by start()
+        Counter started(1);
+    }
+
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        bound = conn.getMaxBufferSize();
+        started.dec();
+        conn.close();
+    }
+
+    stop() {
+    }
+}
+
+#! Returns an event source that records the bound of its stream
+class SourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        BoundSource src();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {"code": 200, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": src};
+    }
+}
+
 #! The result of a publisher thread
 hashdecl PublishResult {
     #! True if the publisher ended within the hang guard
@@ -435,6 +465,7 @@ class SseBufferBoundTest inherits QUnit::Test {
         RecordingHandler handler();
         RecordingHandler override_handler({"sse_max_buffer_size": 12345});
         ObsHandler obs_handler();
+        SourceHandler source_handler();
 
         int h1_small;
         int h1_large;
@@ -476,6 +507,7 @@ class SseBufferBoundTest inherits QUnit::Test {
         server.setDefaultHandler("sse", handler);
         server.setHandler("override", "^/?override", NOTHING, override_handler);
         server.setHandler("obs", "^/?obs", NOTHING, obs_handler);
+        server.setHandler("source", "^/?source", NOTHING, source_handler);
         server.waitForAsyncIo();
 
         h1_small = server.addListener(<HttpListenerOptionInfo>{
@@ -562,6 +594,22 @@ class SseBufferBoundTest inherits QUnit::Test {
             assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
         }
         {
+            # a stream that has already ended is closed, not dropped for its bound
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            op.abort();
+            assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
+        }
+        {
+            # the end of a stream reported before its peer-close callback is set is delivered when it is set
+            HttpServerAsyncIo::Http2SseStream h2(new Socket(), 1);
+            h2.notifyPeerClosed();
+            int calls = 0;
+            h2.setPeerCloseCallback(sub () { ++calls; });
+            assertEq(1, calls, "a callback set after the end of the stream is called at once");
+        }
+        {
             HttpServerAsyncIo::Http2SseStream h2(new Socket(), 1);
             assertThrows("SSE-OPTION-ERROR", \h2.setMaxBufferSize(), 0);
             assertFalse(h2.hasMaxBufferSize());
@@ -587,6 +635,15 @@ class SseBufferBoundTest inherits QUnit::Test {
         assertEq(12345, override_handler.waitConn("override").getAsyncPollOp().getMaxBufferSize());
         assertEq(LargeBound, handler.waitConn("read2").getAsyncSseConnection().getMaxBufferSize());
         assertEq(SmallBound, handler.waitConn("read3").getAsyncSseConnection().getMaxBufferSize());
+
+        # an error in the message itself is raised by a send to all connections
+        assertThrows("SSE-EVENT-ERROR", \handler.sendAll(), <SseMessageInfo>{"event": "a\nb", "data": "x"});
+
+        # an event source gets a stream with the listener's bound
+        Reader src_reader("h1", h1_small, "source");
+        on_exit src_reader.close();
+        assertEq(0, source_handler.src.started.waitForZero(HangGuard));
+        assertEq(SmallBound, source_handler.src.bound, "the event source's stream has the listener's bound");
     }
 
     testBroadcast(string proto) {
@@ -734,6 +791,10 @@ class SseBufferBoundTest inherits QUnit::Test {
     }
 
     private StalledClient getStalled(string proto, string path) {
+        # the HTTP/3 client is stalled by a hook of debug builds
+        if (proto == "h3" && !Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the data of an HTTP/3 stream is only in debug builds");
+        }
         switch (proto) {
             case "h1": return new StalledH1(h1_small, path);
             case "h2": return new StalledH2(h2c_small, path);

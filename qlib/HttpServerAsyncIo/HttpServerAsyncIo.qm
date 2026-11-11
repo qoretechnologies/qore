@@ -87,7 +87,8 @@ module HttpServerAsyncIo {
 
     Every SSE stream bounds the data that it holds for its client: the events queued but not yet written to the
     socket (HTTP/1.x), or buffered for the stream beyond what the client's flow-control window has accepted (HTTP/2
-    and HTTP/3).  The bound is set with
+    and HTTP/3).  The data that the client's flow-control window has accepted is not counted: the transport holds it
+    until the socket takes it, up to the window that the client grants.  The bound is set with
     @ref HttpServerAsyncIo::AbstractSseConnection::setMaxBufferSize() "AbstractSseConnection::setMaxBufferSize()"; the
     HTTP server sets it from the \c sse_max_buffer_size listener option (or the option of the same name of a
     \c ServerSentEventHandler), and it is @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize"
