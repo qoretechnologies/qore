@@ -12125,6 +12125,20 @@ static bool qore_ir_background_args_are_start_values(const QoreParseListNode* pa
     return true;
 }
 
+//! Returns true if the call of a background expression has explicit type arguments
+/** Such a call is made by a helper (lowerBackgroundHelper()) instead of being decomposed: the call of a helper keeps
+    its explicit type arguments in compiled code, whereas a decomposed call is made by name (a call of a method of an
+    object or of a static method of an unresolved class) or from the expression (qore#5732)
+*/
+static bool qore_ir_background_call_has_explicit_type_args(const AbstractQoreNode* inner) {
+    if (const auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
+        const MethodCallNode* m = devn->getMethodCall();
+        return m && m->hasExplicitTypeArgs();
+    }
+    const auto* call = dynamic_cast<const FunctionCallBase*>(inner);
+    return call && call->hasExplicitTypeArgs();
+}
+
 QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreBackgroundOperatorNode*>(node);
@@ -12144,7 +12158,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
     //   QoreDotEvalOperatorNode    → [receiver, arg...]  (always ≥ 1 operand)
     //   CallReferenceCallNode      → [callref, arg...]   (always ≥ 1 operand)
     QoreValue inner_expr = op->getExp();
-    if (inner_expr.hasNode()) {
+    if (inner_expr.hasNode() && !qore_ir_background_call_has_explicit_type_args(inner_expr.getInternalNode())) {
         const AbstractQoreNode* inner = inner_expr.getInternalNode();
 
         // background self.method(args)
