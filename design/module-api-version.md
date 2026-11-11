@@ -46,6 +46,8 @@ Adding new exported functions, or new types that old modules do not use, needs n
   - 64-bit program IDs and the `pgm_id` layout (8004006ee2);
   - the `ExceptionSink` count semantics (9fb539f3da);
   - the `QoreStackLocation` ABI (86ee672a22).
+  - `QoreModuleInfo::ns`, through which a module registers the namespace that module teardown purges, with
+    `QoreNamespace::purge()` (module namespace teardown, merged with this bump).
 
 ## Guard
 

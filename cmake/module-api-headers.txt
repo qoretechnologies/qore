@@ -2,4 +2,4 @@
 # was recorded for: tools/qore-module-api-headers.py checks them (design/module-api-version.md); after a
 # decision about a header change, record them with: tools/qore-module-api-headers.py --update
 api 2.1
-sha256 fcb34eb5fa0a3dff09058cb17fb4274f838445f8d58158e0ce9bbadf402fb393
+sha256 ebcb54db81cc16e996cac5ae4ac21b289df301cf9601ca87d6776855b78f8036
