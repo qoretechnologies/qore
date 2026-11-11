@@ -643,6 +643,9 @@ protected:
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    //! the root of the lvalue of a background expression, or an error for another value that is not an lvalue
+    //! (issue #5723); out of line, so that doLValue() stays as small as before for the lvalues of other expressions
+    DLLLOCAL __attribute__((noinline, cold)) int doBackgroundRootLValue(const QoreValue& n);
 
     DLLLOCAL int makeIntQv(const char* desc);
 
@@ -698,8 +701,10 @@ private:
     // suppressObjectScan())
     bool no_object_scan = false;
 
-    //! the value of the root of the lvalue of a background expression, which the lvalue refers to (issue #5723)
-    QoreValue bg_root_value;
+    //! the value of the root of the lvalue of a background expression, which the lvalue refers to (issue #5723);
+    //! allocated only for such an lvalue and owned by the helper, so that the helper of any other lvalue checks only
+    //! a pointer (a raw pointer: the destructor releases and deletes it under one check)
+    QoreValue* bg_root_value = nullptr;
 
     //! set when the lvalue was changed other than by the removal; see disableRemovalScanSkip()
     bool removal_no_skip = false;

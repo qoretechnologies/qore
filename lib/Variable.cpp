@@ -790,7 +790,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        ocvec(std::move(o.ocvec)), before(o.before), bg_root_value(o.bg_root_value),
+        removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
@@ -801,6 +802,7 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
+    o.bg_root_value = nullptr;
     // the entries created to reach the target belong to the new helper, which removes them if its operation fails
     o.vivified.clear();
     o.buffer_lvalue = nullptr;
@@ -985,9 +987,10 @@ LValueHelper::~LValueHelper() {
     }
 
     // the value of the root of a background lvalue, which nothing refers to any more (issue #5723); only the lvalues
-    // of background expressions have one, so the others do not call discard()
-    if (bg_root_value.hasNode()) {
-        bg_root_value.discard(vl.xsink);
+    // of background expressions have one
+    if (bg_root_value) {
+        bg_root_value->discard(vl.xsink);
+        delete bg_root_value;
     }
 }
 
@@ -1589,6 +1592,26 @@ static void qore_raise_background_value_lvalue_error(ExceptionSink* xsink, const
     xsink->raiseException("BACKGROUND-LVALUE-ERROR", "a value of type '%s' is not an lvalue", v.getFullTypeName());
 }
 
+int LValueHelper::doBackgroundRootLValue(const QoreValue& n) {
+    if (n.getType() != BackgroundLValueRootNode::getNodeType()) {
+        qore_raise_background_value_lvalue_error(vl.xsink, n);
+        clearPtr();
+        return -1;
+    }
+    // the root of the lvalue of a background expression: the value that the thread took for a variable or a member,
+    // as a temporary lvalue of the variable's declared type, so that a path through an object modifies the object,
+    // which the thread shares, as in the other execution modes (issue #5723)
+    const BackgroundLValueRootNode* root = n.get<const BackgroundLValueRootNode>();
+    if (bg_root_value) {
+        bg_root_value->discard(vl.xsink);
+    } else {
+        bg_root_value = new QoreValue;
+    }
+    *bg_root_value = root->getValue().refSelf();
+    setValue(*bg_root_value, root->getValueTypeInfo());
+    return 0;
+}
+
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes
@@ -1803,18 +1826,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             return -1;
         }
     } else if (ntype != NT_OPERATOR) {
-        if (ntype != BackgroundLValueRootNode::getNodeType()) {
-            qore_raise_background_value_lvalue_error(vl.xsink, n);
-            clearPtr();
+        if (doBackgroundRootLValue(n)) {
             return -1;
         }
-        // the root of the lvalue of a background expression: the value that the thread took for a variable or a
-        // member, as a temporary lvalue of the variable's declared type, so that a path through an object modifies
-        // the object, which the thread shares, as in the other execution modes (issue #5723)
-        const BackgroundLValueRootNode* root = n.get<const BackgroundLValueRootNode>();
-        bg_root_value.discard(vl.xsink);
-        bg_root_value = root->getValue().refSelf();
-        setValue(bg_root_value, root->getValueTypeInfo());
     } else {
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
@@ -1932,18 +1946,9 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             return -1;
         }
     } else if (ntype != NT_OPERATOR) {
-        if (ntype != BackgroundLValueRootNode::getNodeType()) {
-            qore_raise_background_value_lvalue_error(vl.xsink, n);
-            clearPtr();
+        if (doBackgroundRootLValue(n)) {
             return -1;
         }
-        // the root of the lvalue of a background expression: the value that the thread took for a variable or a
-        // member, as a temporary lvalue of the variable's declared type, so that a path through an object modifies
-        // the object, which the thread shares, as in the other execution modes (issue #5723)
-        const BackgroundLValueRootNode* root = n.get<const BackgroundLValueRootNode>();
-        bg_root_value.discard(vl.xsink);
-        bg_root_value = root->getValue().refSelf();
-        setValue(bg_root_value, root->getValueTypeInfo());
     } else {
         // resolving an element or member can change the variable that holds it (see read_access)
         if (read_access == RA_VAR) {
