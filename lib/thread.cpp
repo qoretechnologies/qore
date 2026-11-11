@@ -827,8 +827,18 @@ public:
     // active exception counter
     unsigned active_exceptions = 0;
 
+    //! the number of cancellations and interrupts raised in the thread by qore_check_cancel(); written and read by the
+    //! thread only (see qore_get_cancel_raise_count())
+    unsigned cancel_raise_count = 0;
+
+    //! true if the thread is a foreign thread
+    /** Read by other threads (ThreadProgramData::canRunDebugCallbacks(), when a debugger attaches to or detaches from a
+        Program that the thread runs in), so it is not a bit-field: the thread writes its bit-fields (finalizing, for
+        example), which writes the memory location of each bit-field of the group
+    */
+    const bool foreign;
+
     bool
-        foreign : 1, // true if the thread is a foreign thread
         try_reexport : 1,
         finalizing : 1,
         //! true while a pool worker releases the thread_local values of its task between tasks
