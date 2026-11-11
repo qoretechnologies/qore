@@ -95,6 +95,14 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     bool vcommon = false;
 
     const QoreTypeInfo* expected_hash_type = parse_context.expected_type_info;
+    // the value type of the hash that this literal is stored in, if it is the value stored (issue #5782)
+    const QoreTypeInfo* target_value_type = nullptr;
+    if (parse_context.target_value == this) {
+        target_value_type = QoreTypeInfo::getUniqueReturnComplexHash(parse_context.target_type);
+        if (!target_value_type) {
+            target_value_type = QoreTypeInfo::getReturnComplexHashOrNothing(parse_context.target_type);
+        }
+    }
     const QoreTypeInfo* expected_hash_value_type = expected_hash_type
         ? QoreTypeInfo::getUniqueReturnComplexHash(expected_hash_type)
         : nullptr;
@@ -157,16 +165,20 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
         parse_context.typeInfo = nullptr;
         parse_context.expected_type_info = expected_value_type;
-        if (parse_init_value(values[i], parse_context) && !err) {
-            err = -1;
+        {
+            // the value is the value stored in the hash that this literal is stored in, if any (issue #5782)
+            QoreParseTargetHelper target(parse_context, values[i], target_value_type);
+            if (parse_init_value(values[i], parse_context) && !err) {
+                err = -1;
+            }
         }
         vtypes[i] = parse_context.typeInfo;
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
-        // a date of the other subtype than the value type of the hash that the literal is given for is a parse
+        // a date of the other subtype than the value type of the hash that the literal is stored in is a parse
         // error, as for an assignment (issue #5782)
-        if (QoreTypeInfo::isDateSubtypeMismatch(expected_value_type, vtypes[i])) {
+        if (QoreTypeInfo::isDateSubtypeMismatch(target_value_type, vtypes[i])) {
             QoreStringNode* desc = new QoreStringNode("the value of ");
             std::string key;
             if (keys[i].isValue() && !QoreHashKeyHelper::getConstKey(keys[i], key)) {
@@ -175,7 +187,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
                 desc->sprintf("key number %zu (starting from 0)", i);
             }
             desc->sprintf(" in the hash is type '%s', but the hash expects '%s'", QoreTypeInfo::getName(vtypes[i]),
-                QoreTypeInfo::getName(expected_value_type));
+                QoreTypeInfo::getName(target_value_type));
             parseException(*lvec[i], "PARSE-TYPE-ERROR", desc);
             if (!err) {
                 err = -1;

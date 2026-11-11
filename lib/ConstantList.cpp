@@ -536,7 +536,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
         parse_context.expected_type_info = declaredTypeInfo;
-        err = parse_init_value(val, parse_context);
+        {
+            // the initializer is the value of the constant of the declared type (issue #5782)
+            QoreParseTargetHelper target(parse_context, val, declaredTypeInfo);
+            err = parse_init_value(val, parse_context);
+        }
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);

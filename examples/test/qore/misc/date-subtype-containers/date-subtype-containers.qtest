@@ -36,6 +36,8 @@ class DateSubtypeContainersTest inherits QUnit::Test {
             "softlist<date<absolute>> l = (1s,);",
             "list<date<absolute>> l = (2026-01-01, 1s);",
             "hash<string, date<relative>> h; h = {\"a\": 1s, \"b\": 2026-01-01};",
+            "list<list<date<absolute>>> l = ((P1D,),);",
+            "const list<date<absolute>> L = (1s,);",
         );
 
         #! function bodies with container literals that stay valid, with the full type of the container returned
@@ -45,6 +47,20 @@ class DateSubtypeContainersTest inherits QUnit::Test {
             "list<date<relative>> l = (1s, 2s); return l.fullType();": "list<date<relative>>",
             "hash<string, date> h = {\"a\": 1s, \"b\": 2026-01-01}; return h.fullType();": "hash<string, date>",
             "auto l = (1s, 2026-01-01); return l.fullType();": "list<date>",
+            # a literal that is an operand of the value stored is not checked against the type it is stored in
+            "list<date<absolute>> l = map 2026-01-01 + $1, (P1D, P2D); return l.fullType();": "list<date<absolute>>",
+            "list<date<absolute>> l; l = map 2026-01-01 + $1, (P1D,); return l.fullType();": "list<date<absolute>>",
+            "list<date<absolute>> l = select (2026-01-01, P1D), $1.absolute(); return l.fullType();":
+                "list<date<absolute>>",
+            "list<date<absolute>> l = (2026-01-01 + (P1D, P2D)[1],); return l.fullType();": "list<date<absolute>>",
+            "list<date<absolute>> l = (2026-01-01,) + map 2026-01-01 + $1, (P1D,); return l.fullType();":
+                "list<date<absolute>>",
+            "hash<string, list<date<absolute>>> h = {\"a\": map 2026-01-01 + $1, (P1D,)}; return h.fullType();":
+                "hash<string, list<date<absolute>>>",
+            "hash<string, date<absolute>> h = {\"a\": P1D, \"b\": 2026-01-01}{(\"b\",)}; return h.fullType();":
+                "hash<string, date<absolute>>",
+            "hash<string, date<absolute>> h = ({\"a\": P1D}, {\"a\": 2026-01-01})[1]; return h.fullType();":
+                "hash<string, date<absolute>>",
         };
     }
 
