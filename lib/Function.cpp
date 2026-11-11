@@ -7583,6 +7583,12 @@ static void qore_trace_ast_tier(const char* name) {
     }
 }
 
+//! Returns true if QORE_IR_TEST_PROMOTE_IN_CALL is set: see the AST tier of UserVariantBase::evalTiered()
+static bool qore_ir_test_promote_in_call() {
+    static constinit QoreEnvFlag promote_in_call("QORE_IR_TEST_PROMOTE_IN_CALL");
+    return promote_in_call.get();
+}
+
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
@@ -7595,7 +7601,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // assert(statements);
     QoreParseOptions po = getParseOptions(pgm->getParseOptions());
 
-    ExecutionTier tier = current_tier.load(std::memory_order_acquire);
+    // the tier that this call found: a call that found the function on the AST tier promotes it (see below)
+    const ExecutionTier entry_tier = current_tier.load(std::memory_order_acquire);
+    ExecutionTier tier = entry_tier;
 
     // Native JIT/AOT code has no Qore DebugProgram hooks.  Keep the native tier
     // for programs that merely allow debugger attachment, and switch to AST/IR
@@ -7979,10 +7987,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
 
-    // Check for IR promotion
-    // whether this call promotes the function from the AST tier: it then runs on the IR tier itself (below)
-    const bool promotable = current_tier.load(std::memory_order_acquire) == TIER_AST;
-    if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
+    // promotes the function to the IR tier
+    auto promote_to_ir = [this, name]() {
         // Re-read rather than reuse the entry-time value: another thread may have
         // published a body since this call started, and that body must promote the tier.
         if (getCachedIR()) {
@@ -7995,13 +8001,31 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 attemptIRLowering(name);
             });
         }
+    };
+
+    // test hook: promote the function to the IR tier here, whatever the IR threshold, after this call found it on the
+    // AST tier and before it decides whether it is promotable, as another thread running a call of the function at
+    // the same time can, so that a test can run that interleaving deterministically in one thread
+    if (entry_tier == TIER_AST && !ir_lower_failed && qore_ir_test_promote_in_call()) {
+        promote_to_ir();
     }
-    // the call that promotes the function to the IR tier runs on it, as the following calls do: a function that is
-    // not lowered when its Program is committed (ex: a closure) would otherwise run its first call on the AST tier
-    // with an IR threshold of 1; the call is counted once.  A call that runs on the AST tier for another reason (an
-    // attached debugger, a generic specialization that is not available) finds the function promoted already and
-    // stays here
-    if (promotable && current_tier.load(std::memory_order_acquire) == TIER_IR) {
+
+    // Check for IR promotion
+    // A call that found the function on the AST tier on entry promotes it and then runs on the IR tier itself, as the
+    // following calls do: a function that is not lowered when its Program is committed (ex: a closure) would
+    // otherwise run its first call on the AST tier with an IR threshold of 1; the call is counted once.  Whether the
+    // call is promotable is the tier that it found on entry, not a new load: another thread can promote the function
+    // between the entry load and here (ex: the first calls of a closure run concurrently in several threads), and the
+    // call must then still run on the tier that the function has now.  A call that found the function above the AST
+    // tier and runs here for another reason (an attached debugger, a generic specialization that is not available)
+    // is not promotable and stays here
+    const bool promotable = entry_tier == TIER_AST;
+    if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
+        promote_to_ir();
+    }
+    // the tier never returns to the AST tier, and the function can be on the JIT tier already when another thread
+    // promoted it further in the meantime: the call then runs on the tier that the function has
+    if (promotable && current_tier.load(std::memory_order_acquire) != TIER_AST) {
         exec_count.fetch_sub(1, std::memory_order_relaxed);
         return evalTiered(name, argv, self, xsink, caller_has_frame_boundary);
     }
