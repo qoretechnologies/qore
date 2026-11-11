@@ -3736,7 +3736,10 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     }
 
     if (ti && QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
-        QoreValue result = QoreScalarCastOperatorNode::castValueToType(ti, or_nothing != 0, inner, xsink);
+        // the cast type of an or-nothing cast is the or-nothing type, as in the AST node (QoreScalarCastOperatorNode),
+        // which names it in the cast error (e.g. '*int', not 'int'; issue #5717)
+        QoreValue result = QoreScalarCastOperatorNode::castValueToType(or_nothing ? get_or_nothing_type_check(ti) : ti,
+            or_nothing != 0, inner, xsink);
         return toBits(result);
     }
 
