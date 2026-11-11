@@ -2055,6 +2055,10 @@ enum class LVCompoundOp : uint8_t {
 enum class LVUnaryOp : uint8_t {
     PreInc = 0, PreDec, PostInc, PostDec,
     Remove, Delete, Shift, Pop, Trim, Chomp,
+    //! makes the container of the lvalue unique (copy on write if it is shared) and changes nothing else; emitted
+    //! before the weak assignment of a variable, so that the weak reference designates the owner's own container
+    //! (qore#5756); appended last so that the values of the other operations do not change
+    EnsureUnique,
 };
 
 //! Sub-operation type for LValuePathBinaryMut

@@ -616,6 +616,23 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
         for the variable assignment - however it does need to be
         copied/referenced for the return value
     */
+    // a weak reference to a variable designates the variable's own container: a container that the variable shares
+    // with another owner (a literal of the program, another variable) is made unique first, so that the owner's later
+    // writes are seen through the weak reference (qore#5756)
+    if (mode == AssignmentMode::Weak) {
+        const VarRefNode* source_var = dynamic_cast<const VarRefNode*>(right.getInternalNode());
+        if (source_var && source_var->getType() != VT_IMMEDIATE) {
+            LValueHelper source(right, xsink, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            // a weak reference held by the variable and a value of another type are left as they are
+            if (source && (source.getType() == NT_HASH || source.getType() == NT_LIST)) {
+                source.ensureUnique();
+            }
+        }
+    }
+
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder new_value(left, right, true, xsink);
     if (*xsink)

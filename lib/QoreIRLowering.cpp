@@ -7937,6 +7937,26 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     QoreValue right_expr(assign->getRight());
+    // a weak reference to a variable designates the variable's own container: a container that the variable shares
+    // with another owner (a literal, another variable) is made unique first, as the AST interpreter does, so that the
+    // owner's later writes are seen through the weak reference (qore#5756)
+    if (assign_mode == AssignmentMode::Weak) {
+        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
+        // a variable of an enclosing scope that the function reaches through its closure environment (a top-level
+        // variable read in a function, a variable captured by a closure) is left out: a weak reference to such a
+        // variable is not correct in a qcc executable whatever the container holds (a separate defect), and making
+        // its container unique first would turn that into a crash
+        if (source_var && source_var->getType() != VT_IMMEDIATE && source_var->getType() != VT_LOCAL_TS) {
+            QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
+                error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
+            if (!unique.isValid()) {
+                if (error.empty()) {
+                    error = "unsupported variable for weak assignment IR lowering";
+                }
+                return QoreIRValue();
+            }
+        }
+    }
     QoreIRValue right = lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
     if (!right.isValid()) {
         return QoreIRValue();

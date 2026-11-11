@@ -1,0 +1,13 @@
+remove: {a: 1, b: 2}
+new hash: {a: 1, b: 2}
+owner write: {a: 1, b: 2}
+unshared: {a: 1, b: 2}
+shared variable: {a: 1} {a: 1, b: 2} {a: 1, b: 2}
+list literal: [1, 2, 3]
+list shared variable: [1, 2] [1, 2, 3] [1, 2, 3]
+function: {v: 1, y: 2}
+list function: [9, 2, 3]
+global: {og: 1, x: 2}
+weak of weak: {a: 1, q: 1}
+int: [6, 5]
+repeated: 2000
