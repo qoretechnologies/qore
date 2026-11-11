@@ -36,6 +36,7 @@
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
@@ -15707,6 +15708,70 @@ static QoreValue f_dbg_socket_check_idle_data(const QoreListNode* params, Runtim
     return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rv));
 }
 
+//! the lock and the thread whose next wait on the lock dbg_lock_wait_wait() waits for; see dbg_lock_wait_arm()
+static std::atomic<const AbstractSmartLock*> dbg_lock_wait_lock{nullptr};
+static int dbg_lock_wait_tid = 0;
+static bool dbg_lock_wait_seen = false;
+static QoreThreadLock dbg_lock_wait_lck;
+static QoreCondition dbg_lock_wait_cond;
+
+void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid) {
+    // a single atomic load for every other lock wait
+    if (dbg_lock_wait_lock.load(std::memory_order_acquire) != asl) {
+        return;
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    if (dbg_lock_wait_lock.load(std::memory_order_relaxed) == asl && dbg_lock_wait_tid == tid) {
+        dbg_lock_wait_seen = true;
+        dbg_lock_wait_cond.broadcast();
+    }
+}
+
+//! Debug-only: arms dbg_lock_wait_wait() for the next wait of a thread on a lock
+/** An ordering control for tests: the wait is recorded when the thread starts waiting on the lock (VLock::waitOn()),
+    before the wait checks for a cancellation, so it is recorded also when the wait ends at once
+ */
+static QoreValue f_dbg_lock_wait_arm(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<AbstractSmartLock> asl(
+        static_cast<AbstractSmartLock*>(obj->getReferencedPrivateData(CID_ABSTRACTSMARTLOCK, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    dbg_lock_wait_tid = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    dbg_lock_wait_seen = false;
+    dbg_lock_wait_lock.store(*asl, std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: waits until the thread armed with dbg_lock_wait_arm() has waited on its lock, and disarms it
+/** @param timeout_ms the time to wait at most: a test fails with \c DBG-LOCK-WAIT-TIMEOUT instead of hanging when the
+    thread does not wait on the lock
+
+    @throw DBG-LOCK-WAIT-TIMEOUT the thread did not wait on the lock in the time given
+ */
+static QoreValue f_dbg_lock_wait_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    if (timeout_ms <= 0) {
+        return xsink->raiseException("DBG-LOCK-WAIT-ERROR", "the timeout must be positive; got %lld", timeout_ms);
+    }
+    AutoLocker al(dbg_lock_wait_lck);
+    QoreWaitDeadline deadline(timeout_ms);
+    while (!dbg_lock_wait_seen) {
+        int64 wait_ms = deadline.remainingMs();
+        if (!wait_ms) {
+            dbg_lock_wait_lock.store(nullptr, std::memory_order_release);
+            return xsink->raiseException("DBG-LOCK-WAIT-TIMEOUT", "thread %d did not wait on the lock in %lld ms",
+                dbg_lock_wait_tid, timeout_ms);
+        }
+        dbg_lock_wait_cond.wait(&dbg_lock_wait_lck, wait_ms);
+    }
+    dbg_lock_wait_lock.store(nullptr, std::memory_order_release);
+    dbg_lock_wait_seen = false;
+    return QoreValue();
+}
+
 //! Debug-only: returns whether the descriptor of a socket is non-blocking
 /** Tests use this to check that a socket stays non-blocking whatever thread uses it (see
     qore_socket_cloexec_nonblock()).
@@ -20542,6 +20607,10 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits",
         hashTypeInfo, QORE_PARAM_NO_ARG, "extra");
+    qns.addBuiltinVariant("dbg_lock_wait_arm", f_dbg_lock_wait_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        QC_ABSTRACTSMARTLOCK->getTypeInfo(), QORE_PARAM_NO_ARG, "lock", bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_lock_wait_wait", f_dbg_lock_wait_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

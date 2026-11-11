@@ -8721,11 +8721,8 @@ int64 q_get_cancel_check_count() {
 }
 #endif
 
-bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
-#ifdef DEBUG
-    ++cancel_check_count;
-#endif
-    ThreadData* td = thread_data.get();
+// the check of qore_check_cancel() for the thread's data
+static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
     // after the deferral scope ends raises it with the original reason and scope
@@ -8792,6 +8789,26 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     }
 
     return false;
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+#ifdef DEBUG
+    ++cancel_check_count;
+#endif
+    ThreadData* td = thread_data.get();
+    if (!qore_check_cancel_intern(td, xsink, operation)) {
+        return false;
+    }
+    // a cancellation or an interrupt raised in the thread is counted: see qore_get_cancel_raise_count()
+    if (xsink && td) {
+        ++td->cancel_raise_count;
+    }
+    return true;
+}
+
+unsigned qore_get_cancel_raise_count() {
+    ThreadData* td = thread_data.get();
+    return td ? td->cancel_raise_count : 0;
 }
 
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {

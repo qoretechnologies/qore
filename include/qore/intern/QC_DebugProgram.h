@@ -66,6 +66,8 @@ private:
       ReferenceArgumentHelper rtsah(sid, &xsink2);
       args->push(rtsah.getArg(), nullptr); // caller owns ref
       printd(5, "QoreDebugProgramWithCoreObject::callMethod(%s) this: %p, pgm: %p, param#: %d, rs: %d, rts: %d, xsink2: %d\n", name, this, pgm, paramCount, rs, sid, xsink2.isEvent());
+      // the cancellations that the code of the debugger raises; see below
+      unsigned cancel_raise_count = qore_get_cancel_raise_count();
       {
          // a debugger callback is not a call made by the debugged code that runs on the thread, which does not
          // allow debugging: it is made on behalf of the debugger, with the options of the debugger object's Program
@@ -93,11 +95,21 @@ private:
       // a debugger ends the thread, as when it ends the program, with THREAD-CANCELLED, which the thread raises at the
       // statement, function or event that the callback was made for; the other exceptions of the code of the
       // debugger do not change the program
-      if (xsink && xsink2.isException()) {
+      // a thread that raises an exception already, such as the cancellation that the callback was made for, raises
+      // nothing more
+      if (xsink && !*xsink && xsink2.isException()) {
          QoreValue err = xsink2.getExceptionErr();
          if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
             xsink->assimilate(xsink2);
          }
+      }
+      // a cancellation (or an interrupt) that the code of the debugger raised and did not give to the debugged code
+      // (it handled the exception) is raised for the debugged code here, at the statement, function or event that the
+      // callback was made for, if it is still pending, so that it is not lost; the callback is no cancellation point
+      // otherwise, as the debugged code behaves as without a debugger.  A thread that raises an exception already,
+      // such as the cancellation that the callback was made for, raises nothing more
+      if (xsink && !*xsink && qore_get_cancel_raise_count() != cancel_raise_count) {
+         qore_check_cancel(xsink, "debugger callback");
       }
    }
 

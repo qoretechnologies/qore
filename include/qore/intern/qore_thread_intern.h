@@ -327,6 +327,12 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+
+//! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
+/** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
+    code raised a cancellation, which it may have handled (see QoreDebugProgramWithQoreObject)
+*/
+DLLLOCAL unsigned qore_get_cancel_raise_count();
 //! Pushes a fully constructed location on the current thread's call stack
 /** @param stack_loc the location; other threads can read it from now on, so it must not change afterwards
     @param current_stmt receives the thread's current statement, before the location is pushed
