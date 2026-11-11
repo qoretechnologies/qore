@@ -562,6 +562,21 @@ static QoreValue evalAndRef(AbstractQoreNode* node, ExceptionSink* xsink) {
     return result;
 }
 
+// Stack call clones own evaluated arguments. Release them through the executing frame's sink before
+// testing the result: the node destructor has no caller sink and would report a temporary's destructor
+// exception as unhandled. A successful call result must also be released if argument cleanup raises.
+static QoreValue evalTmpCallAndRef(AbstractFunctionCallNode* node, ExceptionSink* xsink) {
+    QoreValue result = evalAndRef(node, xsink);
+    if (QoreListNode* args = node->takeArgs()) {
+        args->deref(xsink);
+    }
+    if (xsink && *xsink) {
+        result.discard(xsink);
+        return QoreValue();
+    }
+    return result;
+}
+
 // Overload for QoreValue (used with ValueHolder::operator->())
 static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     if (!val.hasNode()) {
@@ -3426,7 +3441,6 @@ static bool qore_ir_opcode_is_call(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Call:
         case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
@@ -6083,7 +6097,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         // Call-type opcodes: use pre-evaluated operands to avoid double-evaluation
         case QoreIROpcode::Call:
         case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::CallStaticDirect: {
@@ -6127,113 +6140,60 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreValue();
                 }
             }
-            if (op != QoreIROpcode::CallIndirect) {
-                if ((op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect)
-                        && inv->operands.size() == 1
-                        && qore_ir_interpreter_is_type_name_builtin_call(inv->expr)) {
-                    QoreValue arg = getIRValue(values, inv->operands[0]);
-                    return fromBits(qore_rt_pseudo_type(toBits(arg)));
-                }
-                const ParseNode* parse_node = nullptr;
-                if (inv->expr.hasNode()) {
-                    parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
-                }
-                const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
-                QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 0,
-                    inv->operands.size(), values);
-                if (xsink && *xsink) {
-                    if (arg_list) {
-                        arg_list->deref(xsink);
-                    }
-                    return QoreValue();
-                }
-                bool used_operands = false;
-                QoreValue res;
-                if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
-                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
-                            inv->expr.getInternalNode())) {
-                        // Direct evalImpl() — avoids evalExprNode() overhead
-                        FunctionCallNode clone(*call, arg_list);
-                        res = evalAndRef(&clone, xsink);
-                        used_operands = true;
-                    }
-                } else if (op == QoreIROpcode::CallMethod) {
-                    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
-                            inv->expr.getInternalNode())) {
-                        // Direct evalImpl() — avoids evalExprNode() overhead
-                        SelfFunctionCallNode clone(*call, arg_list);
-                        res = evalAndRef(&clone, xsink);
-                        used_operands = true;
-                    }
-                } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
-                    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
-                            inv->expr.getInternalNode())) {
-                        // Direct evalImpl() — avoids evalExprNode() overhead
-                        StaticMethodCallNode clone(*call, arg_list);
-                        res = evalAndRef(&clone, xsink);
-                        used_operands = true;
-                    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
-                            inv->expr.getInternalNode())) {
-                        // Scoped self call (Class::method(args)) lowered through a CallStatic slot
-                        // but keeping its SelfFunctionCallNode expr — dispatch with the IR operand
-                        // args (the AST node carries none).
-                        SelfFunctionCallNode clone(*call, arg_list);
-                        res = evalAndRef(&clone, xsink);
-                        used_operands = true;
-                    }
-                } else {
-                    // CallIndirect
-                    if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
-                            inv->expr.getInternalNode())) {
-                        QoreValue exp = call->getExp();
-                        if (exp.needsRef()) {
-                            exp = exp.refSelf();
-                        }
-                        // Direct evalImpl() — avoids evalExprNode() overhead
-                        CallReferenceCallNode clone(loc, exp, arg_list);
-                        res = evalAndRef(&clone, xsink);
-                        used_operands = true;
-                    }
-                }
-                if (!used_operands && arg_list) {
+            if ((op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect)
+                    && inv->operands.size() == 1
+                    && qore_ir_interpreter_is_type_name_builtin_call(inv->expr)) {
+                QoreValue arg = getIRValue(values, inv->operands[0]);
+                return fromBits(qore_rt_pseudo_type(toBits(arg)));
+            }
+            QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 0,
+                inv->operands.size(), values);
+            if (xsink && *xsink) {
+                if (arg_list) {
                     arg_list->deref(xsink);
                 }
-                if (used_operands) {
-                    return res;
-                }
-            } else if (!inv->operands.empty()) {
-                const ParseNode* parse_node = nullptr;
-                if (inv->expr.hasNode()) {
-                    parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
-                }
-                const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
-                QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 1,
-                    inv->operands.size(), values);
-                if (xsink && *xsink) {
-                    if (arg_list) {
-                        arg_list->deref(xsink);
-                    }
-                    return QoreValue();
-                }
-                bool used_operands = false;
-                QoreValue res;
-                if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
+                return QoreValue();
+            }
+            bool used_operands = false;
+            QoreValue res;
+            if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
+                if (auto* call = dynamic_cast<const FunctionCallNode*>(
                         inv->expr.getInternalNode())) {
-                    QoreValue exp = call->getExp();
-                    if (exp.needsRef()) {
-                        exp = exp.refSelf();
-                    }
                     // Direct evalImpl() — avoids evalExprNode() overhead
-                    CallReferenceCallNode clone(loc, exp, arg_list);
-                    res = evalAndRef(&clone, xsink);
+                    FunctionCallNode clone(*call, arg_list);
+                    res = evalTmpCallAndRef(&clone, xsink);
                     used_operands = true;
                 }
-                if (!used_operands && arg_list) {
-                    arg_list->deref(xsink);
+            } else if (op == QoreIROpcode::CallMethod) {
+                if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    // Direct evalImpl() — avoids evalExprNode() overhead
+                    SelfFunctionCallNode clone(*call, arg_list);
+                    res = evalTmpCallAndRef(&clone, xsink);
+                    used_operands = true;
                 }
-                if (used_operands) {
-                    return res;
+            } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
+                if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    // Direct evalImpl() — avoids evalExprNode() overhead
+                    StaticMethodCallNode clone(*call, arg_list);
+                    res = evalTmpCallAndRef(&clone, xsink);
+                    used_operands = true;
+                } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    // Scoped self call (Class::method(args)) lowered through a CallStatic slot
+                    // but keeping its SelfFunctionCallNode expr — dispatch with the IR operand
+                    // args (the AST node carries none).
+                    SelfFunctionCallNode clone(*call, arg_list);
+                    res = evalTmpCallAndRef(&clone, xsink);
+                    used_operands = true;
                 }
+            }
+            if (!used_operands && arg_list) {
+                arg_list->deref(xsink);
+            }
+            if (used_operands) {
+                return res;
             }
             // Fall through: no operands or native call metadata failed — report
             // unsupported lowering instead of evaluating the original AST.
@@ -8310,13 +8270,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
     };
 
-    auto returnAfterUnhandledException = [&]() -> bool {
+    auto returnAfterUnhandledException = [&](const QoreIRInstruction* raising = nullptr) -> bool {
         if (ir_trace_exceptions_env.get()) {
             fprintf(stderr, "[ir-exception] func='%s' return-unhandled xsink=%d\n",
                 func.name.c_str(), xsink && *xsink ? 1 : 0);
             fflush(stderr);
         }
         if (debug_active) {
+            if (raising && xsink && xsink->isException()) {
+                tlpd->dbgException(get_exception_statement(raising), xsink);
+                invalidateExternalCaches();
+            }
             tlpd->dbgFunctionExit(statements, return_value, xsink);
         }
         unwindForException();
@@ -9336,7 +9300,7 @@ next_instruction:
                 releaseConsumedCallArgs(inst);
                 if (xsink && *xsink) {
                     result.discard(xsink);
-                    return returnAfterUnhandledException();
+                    return returnAfterUnhandledException(inst);
                 }
                 if (resultValueIsNeeded(inst->result)) {
                     setValueSlot(values, inst->result.id, result, xsink);
@@ -9573,7 +9537,6 @@ next_instruction:
                     switch (inv->invoke_opcode) {
                         case QoreIROpcode::Call:
                         case QoreIROpcode::CallDirect:
-                        case QoreIROpcode::CallIndirect:
                         case QoreIROpcode::CallMethod:
                         case QoreIROpcode::CallStatic:
                         case QoreIROpcode::CallStaticDirect:
@@ -14035,6 +13998,14 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
+                if (!raised && xsink && xsink->isException() && debug_active) {
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
+                    invalidateExternalCaches();
+                    if (!*xsink) {
+                        // Dismissal ends the function with no value (#5825 tracks AST continuation parity).
+                        return returnAfterUnhandledException();
+                    }
+                }
                 if (!raised && xsink && *xsink) {
                     // a temporary's destructor raised an exception, which the statement raises, as in the AST
                     // interpreter (QoreStatementTempScope): the statement's temps and its mark are gone, so the
@@ -16588,9 +16559,9 @@ load_local_done:
                             return returnAfterUnhandledException();
                         }
                         StaticMethodCallNode clone(*static_call_expr, arg_list);
-                        QoreValue res = evalAndRef(&clone, xsink);
+                        QoreValue res = evalTmpCallAndRef(&clone, xsink);
                         if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
+                            return returnAfterUnhandledException(inst);
                         }
                         if (static_inst->has_ref_args) {
                             cleanupLocalCaches();
@@ -16601,7 +16572,7 @@ load_local_done:
                         releaseConsumedCallArgs(inst);
                         if (xsink && *xsink) {
                             res.discard(xsink);
-                            return returnAfterUnhandledException();
+                            return returnAfterUnhandledException(inst);
                         }
                         setValueSlot(values, inst->result.id, res, xsink);
                         if (res.needsRef()) {
@@ -16666,7 +16637,6 @@ load_local_done:
             }
             // fallthrough
             case QoreIROpcode::Call:
-            case QoreIROpcode::CallIndirect:
             case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
                 // the call stack frame of the called code is located at the call
@@ -16732,13 +16702,7 @@ load_local_done:
                     }
                 }
                 if (!inst->operands.empty() && !used_operands) {
-                    const ParseNode* parse_node = nullptr;
-                    if (call_expr.hasNode()) {
-                        parse_node = dynamic_cast<const ParseNode*>(call_expr.getInternalNode());
-                    }
-                    const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
-                    // For CallIndirect, operand[0] is the callee — skip it when building args
-                    size_t arg_start = (effective_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
+                    size_t arg_start = 0;
                     QoreListNode* arg_list = buildArgList(values, inst->operands, arg_start, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
@@ -16758,21 +16722,21 @@ load_local_done:
                         if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             FunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
                         if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             SelfFunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallStatic) {
                         if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
                         } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
                                 call_expr.getInternalNode())) {
@@ -16782,26 +16746,14 @@ load_local_done:
                             // call receives its arguments (the AST node itself carries none — the
                             // args live in inv->operands).
                             SelfFunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
                         } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
                                 call_expr.getInternalNode())) {
                             // AOT can load parser-equivalent namespace function fallbacks
                             // from Class::name() syntax through CallStatic slots.
                             FunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
-                            used_operands = true;
-                        }
-                    } else {
-                        if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
-                            call_expr.getInternalNode())) {
-                            QoreValue exp = call->getExp();
-                            if (exp.needsRef()) {
-                                exp = exp.refSelf();
-                            }
-                            // Direct evalImpl() — avoids evalExprNode() overhead
-                            CallReferenceCallNode clone(loc, exp, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
                         }
                     }
@@ -16848,7 +16800,8 @@ load_local_done:
                     }
                 }
                 if (xsink && *xsink) {
-                    return returnAfterUnhandledException();
+                    res.discard(xsink);
+                    return returnAfterUnhandledException(inst);
                 }
                 // Function call runs in its own frame and cannot modify caller's locals
                 invalidateExternalCaches();

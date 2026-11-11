@@ -2758,6 +2758,11 @@ add_executable(qore-declaration-owner-test examples/test/qore/misc/declaration_o
 target_include_directories(qore-declaration-owner-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-declaration-owner-test PRIVATE libqore)
+# Exercise the production AOT IR decoder with crafted serialized instructions.
+add_executable(qore-aot-ir-opcode-test examples/test/ir/aot_ir_opcode_validation.cpp)
+target_include_directories(qore-aot-ir-opcode-test PRIVATE
+    ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-opcode-test PRIVATE libqore)
 # the module cleanup test uses POSIX APIs (mkdtemp(), alarm())
 if (UNIX)
     add_executable(qore-module-cleanup-unlocked-test examples/test/qore/misc/module_cleanup_unlocked.cpp)

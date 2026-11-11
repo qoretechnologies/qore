@@ -486,7 +486,7 @@ enum class QoreIROpcode : uint16_t {
     // Function/method calls (295-306)
     Call                = 295,
     CallDirect          = 296,  // Direct function call - resolved at parse time
-    CallIndirect        = 297,
+    CallIndirect        = 297,  //!< Reserved: never emitted; call references use CallClosureDirect
     CallMethod          = 298,
     CallMethodDirect    = 299,  // Direct method call - no dispatch needed
     InvokeMethodDirect  = 300,  // Direct method call with exception handling
