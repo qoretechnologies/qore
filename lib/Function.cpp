@@ -988,7 +988,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
 
     setCallName(func);
     // taken before the arguments are evaluated, so that a call in an argument expression does not take it
-    call_ref_po = runtime_take_call_reference_call(args);
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
     tmp.assignEval(args);
     if (*xsink) {
         return;
@@ -1019,7 +1019,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
 
     setCallName(func);
     // taken before the arguments are evaluated, so that a call in an argument expression does not take it
-    call_ref_po = runtime_take_call_reference_call(args);
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
     tmp.assignEval(args);
     if (*xsink) {
         return;
@@ -3276,12 +3276,9 @@ static int64 qore_denied_domains(int64 dom, const QoreParseOptions& po) {
     return (neg & opts) | (pos & ~opts);
 }
 
-int64 qore_get_variant_denied_domains(const AbstractQoreFunctionVariant* variant, const QoreParseOptions& ppo,
-        const QoreParseOptions* user_dom_po) {
-    int64 vflags = variant->getFunctionality();
-    if (!vflags) {
-        return QDOM_DEFAULT;
-    }
+int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* variant, int64 vflags,
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po) {
+    assert(vflags);
     int64 rv = QDOM_DEFAULT;
     // the domains declared on a user variant in Qore source are checked against the restrictions of the caller (or,
     // for a call through a call reference, of the context that created the reference), not against the options of
@@ -5410,13 +5407,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 */
 class QoreCallProgramEntryHelper {
 public:
-    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, QoreProgram* call_pgm, QoreProgram* exec_pgm,
-            const QoreListNode* args = nullptr) : eval_args(xsink) {
+    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, RuntimeConfig& rc, QoreProgram* call_pgm,
+            QoreProgram* exec_pgm, const QoreListNode* args = nullptr) : eval_args(xsink) {
         if (call_pgm && exec_pgm && call_pgm != exec_pgm && call_pgm != ::getProgram()) {
             if (args && args->needs_eval()) {
                 // calls made while the arguments are evaluated are not the call of a call reference that makes
                 // this call; the call is then made with the evaluated arguments
-                QoreCallReferenceArgEvalHelper ref_arg_eval(args);
+                QoreCallReferenceArgEvalHelper ref_arg_eval(rc, args);
                 eval_args.assignEval(args);
                 if (*xsink) {
                     return;
@@ -5479,7 +5476,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     }
     // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
     // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
-    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm, args);
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, rc, pgm, exec_pgm, args);
     if (*xsink) {
         return QoreValue();
     }
@@ -5508,7 +5505,7 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
     }
     // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
     // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
-    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, rc, pgm, exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -5553,7 +5550,7 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
     }
     // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
     // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
-    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, rc, pgm, exec_pgm);
     if (*xsink) {
         return QoreValue();
     }

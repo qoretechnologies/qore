@@ -1610,7 +1610,10 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - \c init and \c del closures are parsed with restricted capabilities; they are parsed with
       @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" permissions except that
       @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set, and that the domains given with \c domains are not
-      restricted (unless the module inherits their restrictions from the %Program that loads it)
+      restricted (unless the module inherits their restrictions from the %Program that loads it); calls of functions
+      and methods that declare @ref function_domains "functional domains" in %Qore source (such as the registration
+      APIs of the @ref dataproviderintro "DataProvider" module) are not restricted by these permissions either, only
+      by the restrictions that the module inherits from the %Program that loads it
 
     @anchor user_module_exit_hooks
     A module's \c del closure runs after the library has waited for every background thread of the process to end, so a

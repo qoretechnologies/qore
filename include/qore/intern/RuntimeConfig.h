@@ -66,6 +66,12 @@ public:
     //! Thread-local program data (may be nullptr during initialization)
     ThreadLocalProgramData* tlpd = nullptr;
 
+    //! the effective parse options of the context that created a call reference whose call is pending on the
+    //! thread, or nullptr (see QoreCallReferenceCallHelper)
+    const QoreParseOptions* call_ref_po = nullptr;
+    //! the arguments of the pending call of a call reference
+    const QoreListNode* call_ref_args = nullptr;
+
     //! Current object context (if in method)
     QoreObject* obj = nullptr;
 
@@ -150,6 +156,35 @@ DLLLOCAL RuntimeConfig& rc_get_current_ref();
  * @return Reference to the thread-local RuntimeConfig
  */
 DLLLOCAL RuntimeConfig& rc_get_tls_ref();
+
+//! Gives the call-reference code direct access to the data of a RuntimeConfig, so that the pending call of a call
+//! reference is checked with a plain load on every call (see QoreCallReferenceCallHelper)
+class RuntimeConfigCallRefAccess {
+public:
+    DLLLOCAL static RuntimeConfig::Impl& impl(RuntimeConfig& rc) {
+        return *rc.impl;
+    }
+};
+
+//! Takes the pending call of a call reference on the thread of \a rc, if any
+/** The first call set up takes it, whatever its arguments, so that it never applies to a later call; the effective
+    parse options of the context that created the reference are returned only if the call is made with the arguments
+    of the reference's call, otherwise the call is checked against its caller, the stricter check
+
+    @return the effective parse options of the context that created the call reference, or nullptr if the call is not
+    the reference's call
+*/
+DLLLOCAL inline const QoreParseOptions* rc_take_call_reference_call(RuntimeConfig& rc, const QoreListNode* args) {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    const QoreParseOptions* po = i.call_ref_po;
+    if (!po) {
+        return nullptr;
+    }
+    const QoreListNode* marked_args = i.call_ref_args;
+    i.call_ref_po = nullptr;
+    i.call_ref_args = nullptr;
+    return marked_args == args ? po : nullptr;
+}
 
 /**
  * @brief Get the data of the thread-local RuntimeConfig (rc_get_tls_ref()), which stays in place for the life of the

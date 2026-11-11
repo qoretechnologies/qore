@@ -931,14 +931,6 @@ protected:
 class UserVariantBase;
 class AbstractQoreFunctionVariant;
 
-//! Returns the functional domain bits of \a variant that are not allowed (QDOM_DEFAULT if the call is allowed)
-/** @param ppo the runtime parse options of the call
-    @param user_dom_po the options that the domains declared on a user variant are checked against; if nullptr,
-    \a ppo is used
-*/
-DLLLOCAL int64 qore_get_variant_denied_domains(const AbstractQoreFunctionVariant* variant,
-        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po = nullptr);
-
 // describes the details of the function variant
 //! Returns the thread-local source location currently pushed by
 //! QoreBuiltinSrcLocHelper, or nullptr if none is active.  Used by
@@ -1123,6 +1115,23 @@ private:
     DLLLOCAL AbstractQoreFunctionVariant(const AbstractQoreFunctionVariant& old) = delete;
     DLLLOCAL AbstractQoreFunctionVariant& operator=(AbstractQoreFunctionVariant& orig) = delete;
 };
+
+//! see qore_get_variant_denied_domains(); \a vflags is the variant's functionality, which is not QDOM_DEFAULT
+DLLLOCAL int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* variant, int64 vflags,
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po);
+
+//! Returns the functional domain bits of \a variant that are not allowed (QDOM_DEFAULT if the call is allowed)
+/** @param ppo the runtime parse options of the call
+    @param user_dom_po the options that the domains declared on a user variant are checked against; if nullptr,
+    \a ppo is used
+
+    Code without functional domains (nearly all) costs one virtual call and a test
+*/
+DLLLOCAL inline int64 qore_get_variant_denied_domains(const AbstractQoreFunctionVariant* variant,
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po = nullptr) {
+    int64 vflags = variant->getFunctionality();
+    return vflags ? qore_get_variant_denied_domains_intern(variant, vflags, ppo, user_dom_po) : QDOM_DEFAULT;
+}
 
 class VRMutex;
 //! returns the runtime parse options that code from another Program is restricted with in the Program it runs in

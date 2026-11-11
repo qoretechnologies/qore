@@ -5882,37 +5882,46 @@ QoreParseOptions runtime_take_call_caller_parse_options() {
     return runtime_get_effective_program_parse_options();
 }
 
-thread_local QoreCallReferenceMarker qore_call_ref_marker;
-
-QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(const QoreListNode* args,
+QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(RuntimeConfig& n_rc, const QoreListNode* args,
         const QoreParseOptions* creator_po) {
     if (!creator_po) {
         return;
     }
-    old = qore_call_ref_marker;
-    qore_call_ref_marker = {creator_po, args};
-    set = true;
+    rc = &n_rc;
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(n_rc);
+    old_po = i.call_ref_po;
+    old_args = i.call_ref_args;
+    i.call_ref_po = creator_po;
+    i.call_ref_args = args;
 }
 
 QoreCallReferenceCallHelper::~QoreCallReferenceCallHelper() {
-    if (set) {
-        qore_call_ref_marker = old;
+    if (rc) {
+        RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(*rc);
+        i.call_ref_po = old_po;
+        i.call_ref_args = old_args;
     }
 }
 
-QoreCallReferenceArgEvalHelper::QoreCallReferenceArgEvalHelper(const QoreListNode* args)
-        : saved(qore_call_ref_marker), args(args) {
-    qore_call_ref_marker = {};
+QoreCallReferenceArgEvalHelper::QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args)
+        : rc(rc), args(args) {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    saved_po = i.call_ref_po;
+    saved_args = i.call_ref_args;
+    i.call_ref_po = nullptr;
+    i.call_ref_args = nullptr;
 }
 
 QoreCallReferenceArgEvalHelper::~QoreCallReferenceArgEvalHelper() {
-    qore_call_ref_marker = saved;
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    i.call_ref_po = saved_po;
+    i.call_ref_args = saved_args;
 }
 
 void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_args) {
     // the call is made with the evaluated arguments
-    if (saved.po && saved.args == args) {
-        saved.args = evaluated_args;
+    if (saved_po && saved_args == args) {
+        saved_args = evaluated_args;
     }
 }
 

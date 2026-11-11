@@ -60,12 +60,17 @@ rest (class domain, builtins) is checked as before.
   includes the restrictions module code inherits from a sandboxed caller).
 - **Call references run with the permissions of their creator** (David, 2026-11-11): the value reference types
   (`FunctionCallReferenceNode`, `StaticMethodCallReferenceNode`, `MethodCallReferenceNode`, the run-time method
-  references) capture `runtime_get_parse_options()` when created (`ResolvedCallReferenceNodeIntern::
-  captureCreatorParseOptions()`); `execValue()` marks the call with `QoreCallReferenceCallHelper(args, creator_po)`;
-  the `CodeEvaluationHelper` with the **same `args` pointer** takes the marker before evaluating arguments
-  (`runtime_take_call_reference_call()`), so a call in an argument expression is not mistaken for the reference's
-  call.  A path that rewraps the arguments leaves the marker untaken: the call is then checked against the caller,
-  the stricter check.  In-place references (parse-tree `Local*`/`Deferred*` nodes) record nothing.
+  references, and the static reference `get_call_reference()` returns) capture
+  `runtime_get_effective_program_parse_options()` when created (`ResolvedCallReferenceNodeIntern::
+  captureCreatorParseOptions()`); `execValue()` marks the call with `QoreCallReferenceCallHelper(rc, args,
+  creator_po)`, a marker in the thread's `RuntimeConfig::Impl` (a plain load on every call; a `thread_local` cost a
+  `__tls_get_addr` per call, as libqore is `dlopen()`ed and cannot use initial-exec TLS).  The first
+  `CodeEvaluationHelper` set up takes the marker, before it evaluates arguments (`rc_take_call_reference_call()`):
+  it is always cleared, so it never applies to a later call, and the creator's options apply only if the helper's
+  argument list is the marked one; otherwise the call is checked against its caller, the stricter check.  A
+  cross-Program call that evaluates the arguments first (`QoreCallProgramEntryHelper`) hides the marker while they
+  are evaluated and re-targets it to the evaluated list (`QoreCallReferenceArgEvalHelper`).  In-place references
+  (parse-tree `Local*`/`Deferred*` nodes) record nothing.
 - Variants bound at parse time are not checked again (as builtins); module-internal calls are therefore free.
 - Implicit base class constructors are resolved at run time and checked against the code running `new`.
 - No-domain fast path: `qore_get_variant_denied_domains()` returns at once for functionality 0.
@@ -96,6 +101,13 @@ domain) cannot be loaded by a restricted Program.  `module X { ...; domains = "P
   the pre-header options;
 - the header's own lockdown (`MOD_HEADER_PO`, applied to the `init`/`del` closures) does not restrict the declared
   domains, unless they are inherited (`QoreUserModuleDefContextHelper::applyDomains()`);
+- the header's own lockdown does not restrict the domains declared **on user code** either, whatever the module
+  declares: an `init` closure that registers a factory (`DataProvider::registerFactory()`) is the common pattern, and
+  modules outside qlib must keep loading.  The bits that `MOD_HEADER_PO` adds to the module's options are recorded
+  (`qore_program_private_base::mod_header_dom`) and subtracted from the parse-time denial of user-declared domains
+  (`qore_program_private::parseDeniedDomains()`); header closures are parse-initialized after the header with the
+  options saved when they were parsed, so the record stays for the module's parse.  Inherited restrictions are not
+  in it and still apply;
 - each module declares its own (no propagation to its dependencies).
 
 AOT: the loader reads `MODULE_DOMAINS` and, for a trusted qmod, removes the domains from the module Program and from
@@ -118,3 +130,26 @@ stay (a sandbox does not imply `PO_NO_PROCESS_CONTROL`).  The 150 modules that c
 
 Follow-up (per module, needs approval): modules with `%ifdef PO_NO_PROCESS_CONTROL` / `PO_NO_THREAD_CONTROL`
 workarounds (e.g. `WebSocketClient`) can declare the domains instead.
+
+## Performance
+
+Release callgrind, `calls.q` (20000 iterations of direct, typed and untyped method, static, call reference, method
+reference and `call_function()` calls, plus `map` with a call), develop c160ce9369 vs this branch, min of 3/5
+alternating runs:
+
+| mode | develop | branch | delta |
+|---|---|---|---|
+| ast | 2,425,272,617 | 2,426,583,019 | +0.054% |
+| ir | 2,234,907,734 | 2,217,315,791 | -0.79% |
+
+The AST delta is `__strcmp_avx2` (+1.27M at identical call counts and callers: string/code layout); the changed code
+nets ~0 (`CodeEvaluationHelper` marker +2.1M, `execValue()` +0.76M, `findVariant()` +0.5M against
+`runtimeFindVariant()` -1.8M, `getParseOptions()` -1.6M).
+
+## Review findings (independent review, 2026-11-11)
+
+Fixed: marker leak to later calls (take always clears; argument evaluation hides it), `get_call_reference()` static
+reference without creator, creator capture now uses the effective options, the per-call TLS cost.  Open decisions:
+the qlib modules with `%ifdef PO_NO_PROCESS_CONTROL` workarounds that now declare `domains` (their workarounds are
+inactive when loaded from the module path), and run-time-resolved calls of a trusted module's own declared code for a
+sandboxed caller (refused: sandbox restrictions are composed into module code at run time).

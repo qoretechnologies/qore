@@ -633,8 +633,9 @@ RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
 
 QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // run the reference in the Program where it was originally created
@@ -644,7 +645,6 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
             "deleted");
         return QoreValue();
     }
-    RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm);
 }
 
@@ -678,15 +678,15 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     if (obj && !obj->isValid()) {
         qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
             "deleted");
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
-    RuntimeConfig& rc = rc_get_current_ref();
     return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);
 }
 
@@ -893,9 +893,9 @@ QoreValue LocalStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& 
 
 QoreValue LocalStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, nullptr, args);
 }
 
@@ -925,9 +925,9 @@ QoreValue LocalMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
 
 QoreValue LocalMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
 }
 
@@ -964,11 +964,11 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
@@ -1054,9 +1054,9 @@ QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, boo
 
 QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     ResolvedCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
@@ -1087,9 +1087,9 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 
 QoreValue MethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, obj, args);
 }
 
@@ -1337,9 +1337,9 @@ void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get());
 }
 
@@ -1361,9 +1361,9 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
 }
 
@@ -1417,9 +1417,9 @@ QoreValue DeferredFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& n
 
 QoreValue DeferredFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    // the call runs with the permissions of the context that created the reference
-    QoreCallReferenceCallHelper call_ref_call(args, getCreatorParseOptions());
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     FunctionCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
