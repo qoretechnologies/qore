@@ -176,6 +176,30 @@ sub nh_stradd_select_inner(Log log) { list r = select new It(log, 3), (latin1() 
 sub nh_stradd_select(Log log) { try { nh_stradd_select_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 # a fused map stage in a closure (whose IR an AOT executable can carry: the stage values are released by next())
 sub fpm_closure(Log log) { code c = sub (Log l) { int n = (count $1.n != "zz", (map new Holder(l, "p" + $1.n[2]), new It(l, 3))); l.add("c " + n); }; c(log); log.add("after"); }
+# a map stage whose value an optimization makes the element itself ($1 ?? $1, a conditional of $1), released once
+sub fpm_same_elem(Log log) { int c = (count True, (map ($1 ?? $1), new It(log, 3))); log.add("c " + c); log.add("after"); }
+sub fpm_cond_elem(Log log) { int c = (count True, (map ($1.n == "zz" ? $1 : $1), new It(log, 3))); log.add("c " + c); log.add("after"); }
+bool sub log_true(Log log, Holder h) { log.add("pred " + h.n); return True; }
+# the input of a map stage is released when the stage has given its value, before the consumer and the loop's body
+sub fpm_pred_log(Log log) { int c = (count log_true(log, $1), (map new Holder(log, "p" + $1.n[2]), new It(log, 2))); log.add("c " + c); log.add("after"); }
+sub fpm_foreach_body(Log log) { foreach Holder v in ((map new Holder(log, "p" + $1.n[2]), new It(log, 2))) { log.add("body " + v.n); } log.add("after"); }
+sub fpm_foreach_two_maps(Log log) { foreach Holder v in ((map new Holder(log, "q" + $1.n[1]), (map new Holder(log, "p" + $1.n[2]), new It(log, 2)))) { log.add("body " + v.n); } log.add("after"); }
+# a pipeline in an outer map stage releases its stage values when it returns
+sub fpm_nested(Log log) { int c = (count log_true(log, $1), (map new Holder(log, "o" + (first True, (map new Holder(log, "i" + $1.n[2]), new It(log, 1, "in"))).n[1]), new It(log, 2, "out"))); log.add("c " + c); log.add("after"); }
+# an encoding conversion error of a concatenation of three strings is caught by the enclosing try block
+sub strcat_try(Log log) { try { string a = latin1(); string b = "\u20ac"; string c = a + "-" + b + "-"; log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+# a division, a modulo and a number division whose result no checking operation consumes, and a raise through the
+# helper of an untyped addition
+sub nh_divany_nocheck_inner(Log log) { list r = select new It(log, 3), exists ((10 / div_by($1)) ?? NOTHING) || True; log.add("r " + r.size()); }
+sub nh_divany_nocheck(Log log) { try { nh_divany_nocheck_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_modany_nocheck_inner(Log log) { list r = select new It(log, 3), exists ((10 % div_by($1)) ?? NOTHING) || True; log.add("r " + r.size()); }
+sub nh_modany_nocheck(Log log) { try { nh_modany_nocheck_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub nh_divnum_nocheck_inner(Log log) { list r = select new It(log, 3), exists ((10n / num_div_by($1)) ?? NOTHING) || True; log.add("r " + r.size()); }
+sub nh_divnum_nocheck(Log log) { try { nh_divnum_nocheck_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+auto sub latin1_auto() { return latin1(); }
+auto sub euro_auto(Holder h) { return euro_if(h); }
+sub nh_addany_inner(Log log) { list r = select new It(log, 3), exists ((latin1_auto() + euro_auto($1)) ?? NOTHING) || True; log.add("r " + r.size()); }
+sub nh_addany(Log log) { try { nh_addany_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -188,7 +212,9 @@ const Cases = (
     "nh_rethrow", "nh_throw", "nh_div_select", "nh_div_takewhile", "ap_msel_list", "ap_msel_it", "ap_sel_it",
     "ap_sel_list", "ap_count_it", "ap_fused", "ap_msel_normal", "next_raises_count_nh", "next_raises_any",
     "next_raises_fused_count", "next_raises_fused_count_nh", "nh_divany_select", "nh_divany_takewhile",
-    "nh_modany_select", "nh_divnum_select", "nh_stradd_select", "fpm_closure",
+    "nh_modany_select", "nh_divnum_select", "nh_stradd_select", "fpm_closure", "fpm_same_elem", "fpm_cond_elem",
+    "fpm_pred_log", "fpm_foreach_body", "fpm_foreach_two_maps", "fpm_nested", "strcat_try", "nh_divany_nocheck",
+    "nh_modany_nocheck", "nh_divnum_nocheck", "nh_addany",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

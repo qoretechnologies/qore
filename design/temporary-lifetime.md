@@ -103,7 +103,14 @@ releases them before the iterator and the source: the AST interpreter's function
 when it has evaluated the value, and its consumer releases the value before it takes the next one.  The values are not
 operands, as the body defines them after the instruction: it releases what their slots hold, as `ReleaseOwnedTemp`
 does (native code emits the releases once the function is lowered, `QoreIRToLLVM::finalizeIteratorReleases()`), so
-the loop dispatches no instruction of its own for them.  A stage whose value holds no object adds nothing.  The value of a
+the loop dispatches no instruction of its own for them.  A stage whose value holds no object adds nothing.  A map
+stage's input (the element, or the value of the stage before it) is released once the stage has given its value,
+before the stages after it, the consumer and a `foreach` body run, as the AST interpreter's functional map iterator
+releases it: a `ReleaseOwnedTemp` with the stage's value as a second operand, which keeps a value that is the stage's
+value at run time (an optimization can make `$1 ?? $1` the element itself, so a release list of `IteratorNext` drops
+a value that became the element, and the element's slot holds nothing once it is released).  The value of `first`
+replaces the code's previous value of the expression after the operator's iterator and source are released, as the
+AST interpreter returns it.  The value of a
 predicate that can hold an object is released when the element has been decided on
 (`QoreIRLowering::releasePredicateValue()`), as the AST interpreter's holder of the predicate's value releases it:
 as a statement temporary it outlived the element, and an exception released it after the operator's list.

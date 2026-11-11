@@ -35,7 +35,11 @@
     stage's value one element late), that a throw or an operator cleanup's rethrow with no handler in the function did
     not restore the implicit argument of an enclosing operator in native code, that a division by zero in a
     predicate was taken by native code for an exception of the iterator's next(), and that a predicate whose value is
-    an object kept it until the next element's or the statement's end.
+    an object kept it until the next element's or the statement's end.  The third round found a double release
+    when an optimization made a map stage's value the element ($1 ?? $1), a concatenation of three strings whose
+    exception skipped the enclosing catch in native code, a map stage's input released after the consumer and a
+    foreach body instead of before them, and a nested first operator whose value replaced the previous one before
+    its source was released.
 
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
@@ -92,6 +96,16 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "ap_msel_normal: released it1; released it2; released it3; itdone it; r 3; after",
             "nh_modany_select: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",
             "nh_stradd_select: released it2; released it1; itdone it; catch ENCODING-CONVERSION-ERROR; after",
+            "fpm_same_elem: released it1; released it2; released it3; itdone it; c 3; after",
+            "fpm_pred_log: released it1; pred p1; released p1; released it2; pred p2; released p2; itdone it; c 2; "
+                "after",
+            "fpm_foreach_body: released it1; body p1; released it2; released p1; body p2; itdone it; released p2; "
+                "after",
+            "fpm_nested: released in1; itdone in; released out1; pred o1; released o1; released in1; itdone in; "
+                "released i1; released out2; pred o1; released o1; itdone out; released i1; c 2; after",
+            "strcat_try: catch ENCODING-CONVERSION-ERROR; after",
+            "nh_addany: released it2; released it1; itdone it; catch ENCODING-CONVERSION-ERROR; after",
+            "nh_divany_nocheck: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",
         );
     }
 
