@@ -19795,15 +19795,41 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
     return QoreValue();
 }
 
+//! returns true if += and -= give an lvalue of the given type with no value the default value of the type
+/** An or-nothing union (<tt>*union<...></tt>) reports NOTHING as its default value
+    (QoreUnionTypeInfo::hasDefaultValueImpl()), which is no value to operate on: its lvalue takes the value of the
+    operand (negated for -=), as the plain union type, which has no default value, gives it (qore#5739).
+*/
+static bool has_compound_default_value(const QoreTypeInfo* ti) {
+    if (!QoreTypeInfo::hasDefaultValue(ti)) {
+        return false;
+    }
+    const QoreUnionTypeInfo* union_ti = QoreTypeInfo::getUnionType(ti);
+    return !union_ti || !union_ti->isOrNothing();
+}
+
+//! returns true if += and -= treat an lvalue of the given type with no value as a list or a hash lvalue
+/** A union is neither, even if a member of it is a list or a hash: QoreTypeInfo::isListType() and isHashType() look
+    at the first member of a union only, so <tt>union<hash<auto>, int></tt> was a hash lvalue and
+    <tt>union<int, hash<auto>></tt> was not; the lvalue of a union with no default value takes the value of the
+    operand (qore#5739).
+*/
+static bool is_compound_container_type(const QoreTypeInfo* ti, qore_type_t t) {
+    if (QoreTypeInfo::getUnionType(ti)) {
+        return false;
+    }
+    return t == NT_LIST ? QoreTypeInfo::isListType(ti) : QoreTypeInfo::isHashType(ti);
+}
+
 //! returns the type whose default value += and -= give an lvalue of the given type with no value
 /** an or-nothing type (*T) gives T, so that the lvalue gives the result of T for an operand with a value
 */
 static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
-    if (QoreTypeInfo::hasDefaultValue(ti)) {
+    if (has_compound_default_value(ti)) {
         return ti;
     }
     const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
-    return plain != ti && QoreTypeInfo::hasDefaultValue(plain) ? plain : ti;
+    return plain != ti && has_compound_default_value(plain) ? plain : ti;
 }
 
 bool qore_is_int_lvalue_type(const QoreTypeInfo* ti) {
@@ -19840,12 +19866,12 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
         // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
         const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
-        if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
+        if (has_compound_default_value(typeInfo)) {
             if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             vtype = v.getType();
-        } else if (QoreTypeInfo::isListType(typeInfo)) {
+        } else if (is_compound_container_type(typeInfo, NT_LIST)) {
             if (v.assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
                 return QoreValue();
@@ -19858,7 +19884,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
                 return QoreValue();
             }
             vtype = v.getType();
-        } else if (QoreTypeInfo::isHashType(typeInfo)) {
+        } else if (is_compound_container_type(typeInfo, NT_HASH)) {
             if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
                 return QoreValue();
@@ -19963,9 +19989,9 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
         // an or-nothing lvalue (*T) takes the default value of T
         const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
-        if (QoreTypeInfo::isHashType(typeInfo)) {
+        if (is_compound_container_type(typeInfo, NT_HASH)) {
             return QoreValue();
-        } else if (QoreTypeInfo::hasDefaultValue(default_ti)) {
+        } else if (has_compound_default_value(default_ti)) {
             if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
                 return QoreValue();
             }
