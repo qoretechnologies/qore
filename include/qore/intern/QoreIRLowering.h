@@ -134,8 +134,12 @@ public:
         StatementBlock* code;                               //!< handler code block
         const QoreProgramLocation* loc;                     //!< source location for error reporting
         QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
-        //! the debugger's nesting depth of the statements of the handler, as where it is declared (#5816)
+        //! the debugger's nesting depth of the statement that declares the handler, whose place its statements take
+        //! (#5816)
         uint16_t debug_nest_depth = 0;
+        //! the depth of the statements of the catch block that the handler is declared in, or -1 (see
+        //! QoreIRLowering::debug_catch_child_depth)
+        int debug_catch_child_depth = -1;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,

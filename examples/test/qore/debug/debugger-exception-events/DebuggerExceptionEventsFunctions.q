@@ -67,7 +67,7 @@ our bool Step = ARGV[0] == "step";
 
 #! the first and the last line of the functions
 const FirstLine = 72;
-const LastLine = 290;
+const LastLine = 330;
 
 sub f_throw() {
     throw "B";
@@ -282,6 +282,48 @@ sub f_return_try(int x) {
         }
     }
 }
+# inline handlers in a catch block, in a scope of the frame, and lowered at an exit inside an inner catch block
+sub f_catch_inline(int x) {
+    if (x) {
+        try {
+            throw "C0";
+        } catch () {
+            on_exit { throw "CI"; }
+            x = 2;
+        }
+    }
+}
+sub f_outer_scope_try(int x) {
+    on_exit { x = 1; }
+    try {
+        if (x) {
+            if (x) {
+                on_exit { throw "G"; }
+                x = 2;
+            }
+        }
+    } catch () {
+    }
+    if (x) {
+        throw "G2";
+    }
+}
+sub f_catch_inner_return(int x) {
+    if (x) {
+        try {
+            throw "C0";
+        } catch () {
+            on_exit { throw "KR"; }
+            try {
+                throw "C1";
+            } catch () {
+                if (x) {
+                    return;
+                }
+            }
+        }
+    }
+}
 
 ExceptionRecorder r();
 ProgramControl pc = ProgramControl::getProgram();
@@ -295,10 +337,11 @@ background sub () {
     foreach string fn in (("f_throw", "f_nested", "f_builtin", "f_caught", "f_loop", "f_caller", "f_catch_rethrow",
             "f_builtin_caught", "f_closure", "f_on_exit_throw", "f_on_error_rethrow_caught", "f_dtor", "f_foreach_on_exit",
             "f_on_exit_closure", "f_obe_normal", "f_obe_normal_try", "f_obe_normal_catch", "f_dtor_order",
-            "f_empty", "f_catch_direct", "f_break", "f_break_try", "f_return_try")) {
+            "f_empty", "f_catch_direct", "f_break", "f_break_try", "f_return_try",
+            "f_catch_inline", "f_outer_scope_try", "f_catch_inner_return")) {
         r.seen = ();
         try {
-            fn =~ /^f_(nested|dtor|foreach_on_exit|on_exit_closure|obe_normal|obe_normal_try|obe_normal_catch|dtor_order|empty|catch_direct|break|break_try|return_try)$/ ? call_function(fn, 1) : call_function(fn);
+            fn =~ /^f_(nested|dtor|foreach_on_exit|on_exit_closure|obe_normal|obe_normal_try|obe_normal_catch|dtor_order|empty|catch_direct|break|break_try|return_try|catch_inline|outer_scope_try|catch_inner_return)$/ ? call_function(fn, 1) : call_function(fn);
         } catch (hash<ExceptionInfo> ex) {
         }
         printf("%s: %y\n", fn, r.seen);

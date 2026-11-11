@@ -2965,7 +2965,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 handler_code,
                 stmt->loc,
                 obe_inst,  // enable compileAllHandlerIRs() to compile this handler
-                debug_nest_depth
+                // the statement is being lowered, one level deeper than its own depth
+                static_cast<uint16_t>(debug_nest_depth ? debug_nest_depth - 1 : 0),
+                debug_catch_child_depth
             });
         }
 
@@ -4907,22 +4909,30 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     // Lower the handler code block inline using the current parse context
     // This gives the handler natural access to parent block's scope
     bool ok;
-    // the statements of the handler have the debugger's nesting of where it is declared, not of the exit where it is
-    // lowered, as with the AST interpreter, which runs it in the block that declares it (#5816)
+    // the statements of the handler have the debugger's nesting of the statement that declares it, in its place, not
+    // of the exit where it is lowered, as with the AST interpreter, which runs it in the block that declares it and
+    // makes no event for the statement (#5816)
     struct DebugNestDepthRestore {
         uint16_t& depth;
+        int& catch_child_depth;
         uint16_t saved;
-        DebugNestDepthRestore(uint16_t& d, uint16_t new_depth) : depth(d), saved(d) {
+        int saved_catch_child_depth;
+        DebugNestDepthRestore(uint16_t& d, int& ccd, uint16_t new_depth, int new_ccd) : depth(d),
+                catch_child_depth(ccd), saved(d), saved_catch_child_depth(ccd) {
             depth = new_depth;
+            catch_child_depth = new_ccd;
         }
         ~DebugNestDepthRestore() {
             depth = saved;
+            catch_child_depth = saved_catch_child_depth;
         }
-    } debug_nest_depth_restore(debug_nest_depth, handler.debug_nest_depth);
+    } debug_nest_depth_restore(debug_nest_depth, debug_catch_child_depth, handler.debug_nest_depth,
+        handler.debug_catch_child_depth);
     // a handler lowered at a break, a continue or a return runs after the statements that the exit leaves, down to the
-    // level of the statement that declares it, which have no end markers on that path
-    if (builder.getFunction()->emit_debug_statements && handler.debug_nest_depth) {
-        builder.createDebugStatementEnd(handler.debug_nest_depth - 1, handler.loc);
+    // level of the statement that declares it, which have no end markers on that path; the marker has no location, so
+    // that native code updates no runtime location for it
+    if (builder.getFunction()->emit_debug_statements) {
+        builder.createDebugStatementEnd(handler.debug_nest_depth, nullptr);
     }
     if (set_exception_target) {
         // An exception raised by the handler goes to the exception target of the body of the handler's block

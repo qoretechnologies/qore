@@ -82,6 +82,9 @@ f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\"]
 f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\"]
 f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=5
 ",
@@ -108,6 +111,9 @@ f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\", \"exit@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\", \"exit@250\"]
 f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\", \"exit@261\"]
 f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\", \"exit@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\", \"exit@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\", \"exit@297\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\", \"exit@312\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=2
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
 ",
@@ -143,6 +149,9 @@ f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\"]
 f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\"]
 f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=null
 ",
@@ -169,6 +178,9 @@ f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\", \"exit@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\", \"exit@250\"]
 f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\", \"exit@261\"]
 f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\", \"exit@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\", \"exit@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\", \"exit@297\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\", \"exit@312\"]
 f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=null
 f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=null
 ",
