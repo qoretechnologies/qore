@@ -35770,6 +35770,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     id.ref2.append(sig->getSignatureText());
                 }
             }
+            // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
+            if (const QoreTypeParamInstantiation* inst = mc->getExplicitTypeParamInstantiation()) {
+                id.ref2 += "\ntypeargs:";
+                id.ref2 += std::to_string(inst->type_args.size());
+                for (const QoreTypeInfo* type_arg : inst->type_args) {
+                    id.ref2 += "\n";
+                    id.ref2 += qore_get_aot_serializable_type_path(type_arg);
+                }
+            }
             id.flags = is_pseudo ? 1 : 0;
             return id;
         }

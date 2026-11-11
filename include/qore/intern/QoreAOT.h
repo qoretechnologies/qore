@@ -358,6 +358,10 @@ struct QoreAOTContext {
     //! Uses std::list so that element pointers remain stable across insertions.
     std::list<std::string> owned_call_target_strings;
 
+    //! Owned explicit type-parameter instantiations of dot-eval call targets (obj.method<T>()), which have no
+    //! expression node to hold them; call_targets[].explicit_type_param_instantiation points to them.
+    std::list<std::shared_ptr<const QoreTypeParamInstantiation>> owned_explicit_type_param_insts;
+
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;
 

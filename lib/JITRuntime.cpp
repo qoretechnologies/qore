@@ -18790,6 +18790,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_
 
 static const QoreTypeParamInstantiation* qore_rt_get_dot_eval_explicit_type_instantiation(
         QoreAOTContext* ctx, int32_t slot) {
+    // a direct dot-eval target has no expression node: its explicit type arguments are held by the target
+    if (const QoreTypeParamInstantiation* inst = ctx->call_targets[slot].explicit_type_param_instantiation) {
+        return inst;
+    }
     QoreValue expr = fromBits(ctx->exprs[slot]);
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
     if (!dot_eval) {
