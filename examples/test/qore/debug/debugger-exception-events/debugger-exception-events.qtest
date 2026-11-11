@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
 %exec-class DebuggerExceptionEventsTest
@@ -23,6 +24,14 @@
     interpreter and native code made no event for most of these statements, and top-level code with JIT execution made
     none at all.  The tiered run of ExecModeHarness::run_ir_tier() is not used: it requires that no call runs on the
     AST tier.
+
+    The script DebuggerExceptionEventsFunctions.q does the same for the functions of the script itself, which are
+    also compiled ahead of time with qcc: with a debugger attached, AOT functions run their debug IR, whose IR
+    interpreter makes the event of the current statement wherever an exception leaves a frame or reaches a handler in
+    it; before, a builtin's exception made no event, and a caller none for its statement.  The debug IR of AOT code
+    has no nesting of statements, so the statements that contain the one that raised the exception get no event, and
+    a debugger that dismisses an exception where the IR cannot continue after the statement ends the function, which
+    returns no value (see @ref debugger_aot_exception_events "the debugger's exception events in AOT code").
 */
 class DebuggerExceptionEventsTest inherits QUnit::Test {
     public {
@@ -39,20 +48,59 @@ method: [\"I@4\", \"I@8\"]
 rethrow in a catch block: [\"J@3\", \"K@5\", \"K@2\"]
 loop in a function: [\"L@5\", \"L@4\", \"L@3\", \"L@9\"]
 ";
+
+        #! the output of DebuggerExceptionEventsFunctions.q with the AST interpreter
+        const ExpectedFunctions = "f_throw: [\"B@53\"]
+f_nested: [\"C@57\", \"C@56\"]
+f_builtin: [\"DIVISION-BY-ZERO@62\"]
+f_caught: [\"E@66\", \"F@69\"]
+f_loop: [\"H@73\", \"H@72\"]
+f_caller: [\"B@53\", \"B@77\"]
+f_catch_rethrow: [\"J@81\", \"K@83\", \"K@80\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@89\"]
+f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=2
+";
+
+        #! the output of DebuggerExceptionEventsFunctions.q compiled ahead of time
+        /** it differs from that of the AST interpreter only where the debug IR of AOT code has no nesting of its
+            statements: the if, for and try statements that contain the statement that raised an exception get no
+            event, and the dismissal in f_dismiss() ends the function, which returns no value
+        */
+        const ExpectedFunctionsAot = "f_throw: [\"B@53\"]
+f_nested: [\"C@57\"]
+f_builtin: [\"DIVISION-BY-ZERO@62\"]
+f_caught: [\"E@66\", \"F@69\"]
+f_loop: [\"H@73\"]
+f_caller: [\"B@53\", \"B@77\"]
+f_catch_rethrow: [\"J@81\", \"K@83\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@89\"]
+f_dismiss: [\"DIVISION-BY-ZERO@95\"] rv=null
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
     }
 
     private {
         string qore_bin;
         string libqore_dir;
         string script;
+        string functions_script;
+        string qcc_bin;
     }
 
     constructor() : QUnit::Test("DebuggerExceptionEventsTest", "1.0") {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         script = get_script_dir() + "/DebuggerExceptionEvents.q";
+        functions_script = get_script_dir() + "/DebuggerExceptionEventsFunctions.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": exception events", \eventsTest(), (mode,));
+            addTestCase(mode + ": exception events of functions", \functionEventsTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: exception events of functions", opt), \aotFunctionEventsTest(), (opt,));
         }
         set_return_value(main());
     }
@@ -62,5 +110,22 @@ loop in a function: [\"L@5\", \"L@4\", \"L@3\", \"L@9\"]
         string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
             libqore_dir, libqore_dir, qore_bin, mode, script), NativeCheck::Jit);
         assertEq(Expected, output, mode + ": the exception events of the AST interpreter");
+    }
+
+    functionEventsTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, functions_script), NativeCheck::Jit);
+        assertEq(ExpectedFunctions, output, mode + ": the exception events of the AST interpreter");
+    }
+
+    aotFunctionEventsTest(int opt) {
+        TmpDir tmp("qore-debugger-exception-events-");
+        string exe = tmp.path + DirSep + "functions";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            functions_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(ExpectedFunctionsAot, output, sprintf("qcc -O%d: the exception events of the debug IR", opt));
     }
 }

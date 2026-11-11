@@ -72,6 +72,21 @@
     exceptions), and exceptions with given codes, such as \c FILE-OPEN-ERROR.  A client without filters stops at all exceptions; an exception that no client stops at
     does not stop the thread.
 
+    The debugger is told of an exception (@ref Qore::DebugProgram::onException() "DebugProgram::onException()") for
+    each statement that the exception leaves: the statement that raised it, each statement that contains that one,
+    and the statement of each caller, until a try statement catches it; it can dismiss the exception there, and the
+    code then continues after that statement.  The events are the same in every execution mode: code with a parse
+    tree runs on the AST interpreter while a debugger is attached, its top-level code too.
+
+    @anchor debugger_aot_exception_events
+    These events differ in two kinds of code:
+    - an AOT-compiled function, which runs its debug IR while a debugger is attached: only the statement that raised
+      the exception and the statements of its callers get an event, not the statements that contain them (an if,
+      loop or try statement of the function), and a debugger that dismisses an exception where the debug IR cannot
+      continue after the statement, as with an exception of an operator, ends the function, which returns no value
+    - a function that was already running when the debugger attached keeps running as it did, and its statements get
+      no event until it returns
+
     An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
     but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg
     and \c qdbg-remote when the thread stops at it, and by the debug adapter in the details of the exception (see
