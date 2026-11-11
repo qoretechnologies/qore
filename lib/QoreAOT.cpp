@@ -25388,26 +25388,50 @@ static std::string fileBasenameKeepExt(const std::string& path) {
     Applied per compile unit; a batch keeps legacy semantics if ANY of its sources is a \c .q file,
     since a batch shares one Program and cannot parse half its sources each way.
 
+    %%modern cannot be in effect with a compatibility option that it does not allow (issue #5682), also when it is
+    given with the options (qcc -M): the compile fails with a \c PARSE-OPTION-ERROR in \a error.
+
     @param po the parse options to extend
-    @param files the compile unit's target sources */
-static void applyAOTModernSourceDefault(QoreParseOptions& po,
-        const std::vector<std::string>& files) {
-    if (files.empty()) {
-        return;
-    }
+    @param files the compile unit's target sources
+    @param error the error message if the options are refused
+
+    @return false if the options are refused, true if not */
+static bool applyAOTModernSourceDefault(QoreParseOptions& po,
+        const std::vector<std::string>& files, std::string& error) {
+    bool by_extension = !files.empty();
     size_t i = 0;
     for (const std::string& f : files) {
         // A cancelled scan leaves the default unset; the caller aborts the compile on its own
         // cancellation check immediately afterwards, so the parse options are never used.
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT modern-source default scan")) {
-            return;
+            return true;
         }
         ++i;
         if (!qore_program_private::should_auto_enable_modern(f.c_str())) {
-            return;
+            by_extension = false;
+            break;
         }
     }
+    if (!by_extension && !qore_program_private::isModern(po)) {
+        return true;
+    }
+    QoreParseOptions conflict = po & qore_program_private::modernIncompatibleOptions();
+    if (conflict) {
+        QoreString desc("PARSE-OPTION-ERROR: ");
+        if (qore_program_private::isModern(po)) {
+            desc.concat("%modern cannot be set while ");
+        } else {
+            desc.sprintf("'%s' is parsed in %%modern mode by its extension, which cannot be used while ",
+                files[0].c_str());
+        }
+        qore_program_private::describeParseOptions(conflict, desc);
+        desc.concat(" is in effect: the option changes the meaning of code, and %modern guarantees a consistent set "
+            "of parse options");
+        error = desc.c_str();
+        return false;
+    }
     po |= QoreParseOptions(PO_MODERN);
+    return true;
 }
 
 //! Source identity for script-context batch `.qo` artifacts.
@@ -26369,7 +26393,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {label});
+    if (!applyAOTModernSourceDefault(mod_po, {label}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -26799,7 +26825,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -28509,10 +28537,16 @@ struct AOTBatchParseOptionGuard {
     source's extension implies it.  Called inside an AOTBatchParseOptionGuard, so the default does not carry over to
     the next source.
 */
-static void applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& canon) {
-    if (qore_program_private::should_auto_enable_modern(canon.c_str())) {
-        qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& canon, ExceptionSink* xsink) {
+    if (!qore_program_private::should_auto_enable_modern(canon.c_str())) {
+        return 0;
     }
+    // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
+    if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
+        return -1;
+    }
+    qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+    return 0;
 }
 
 bool QoreAOT::compileScriptFilesBatch(
@@ -28654,7 +28688,9 @@ bool QoreAOT::compileScriptFilesBatch(
     batch_memory.beginParse(batch_source_bytes);
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
-    applyAOTModernSourceDefault(po, target_files);
+    if (!applyAOTModernSourceDefault(po, target_files, error)) {
+        return false;
+    }
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
     // before QoreProgram construction so method-domain checks
     // (e.g. PO_ALLOW_INJECTION-gated `Program::loadApplyTo*`)
@@ -28793,9 +28829,10 @@ bool QoreAOT::compileScriptFilesBatch(
             AOTPreloadedSourceGuard preloaded_source_guard(
                 &sibling_preload.source_labels);
             AOTParseSourceGuard parse_source_guard(&batch_target_set);
-            applyAOTSourceModernDefault(**qpgm, e.canon);
-            qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-                &xsink, &wsink, QP_WARN_DEFAULT);
+            if (!applyAOTSourceModernDefault(**qpgm, e.canon, &xsink)) {
+                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                    &xsink, &wsink, QP_WARN_DEFAULT);
+            }
             // each source's parse options are restored when the guard goes out of scope, so they are checked here
             file_po = qpgm->getParseOptions();
         }
@@ -29503,9 +29540,10 @@ bool QoreAOT::compileScriptAggregate(
             {
                 // parse directives are a property of the source that wrote them (see AOTBatchParseOptionGuard)
                 AOTBatchParseOptionGuard parse_option_guard(*qpgm);
-                applyAOTSourceModernDefault(*qpgm, e.canon);
-                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                if (!applyAOTSourceModernDefault(*qpgm, e.canon, &xsink)) {
+                    qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                        &xsink, &wsink, QP_WARN_DEFAULT);
+                }
                 file_po = qpgm->getParseOptions();
             }
             if (xsink.isException()) {
@@ -29970,7 +30008,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     QoreParseOptions po = parse_options;
-    applyAOTModernSourceDefault(po, {target_canon});
+    if (!applyAOTModernSourceDefault(po, {target_canon}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -30647,7 +30687,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -31214,7 +31256,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -31765,7 +31809,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;

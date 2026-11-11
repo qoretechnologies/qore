@@ -73,6 +73,9 @@ static cl_mod_list_t cl_mod_list;
 
 // global parse_option
 static QoreParseOptions parse_options = PO_DEFAULT;
+// -M: %modern is set after the Program is created with the other options, so that a compatibility option that it does
+// not allow, given with -p, is refused (issue #5682)
+static bool cmd_modern = false;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
 static qore_exec_mode_t exec_mode = QEM_AST;
@@ -612,7 +615,7 @@ static void new_style(const char* arg) {
 }
 
 static void do_modern(const char* arg) {
-   parse_options |= PO_MODERN;
+   cmd_modern = true;
 }
 
 static void do_enable_debug(const char* arg) {
@@ -1627,6 +1630,10 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
       qpgm->setExecMode(exec_mode, user_requested_exec_mode);
+      if (cmd_modern) {
+         // raises a parse exception if an option given with -p is a compatibility option that %modern does not allow
+         qpgm->parseSetParseOptions(PO_MODERN);
+      }
       if (ir_dump) {
           qpgm->setIRDump(true);
       }
@@ -1888,10 +1895,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          }
 
          std::string error;
+         // the options given on the command line, with %modern if -M was given
+         QoreParseOptions cmd_po = cmd_modern ? parse_options | QoreParseOptions(PO_MODERN) : parse_options;
          if (is_split_module) {
             // Compile split module directory (use resolved dir when auto-detected from .qm path)
             const char* split_dir = split_module_dir.empty() ? program_file_name : split_module_dir.c_str();
-            if (!QoreAOT::compileSeparatedModule(split_dir, output_path, parse_options, error,
+            if (!QoreAOT::compileSeparatedModule(split_dir, output_path, cmd_po, error,
                      aot_opt_level, aot_target, aot_include_source)) {
                fprintf(stderr, "qcc: split module compilation failed: %s\n", error.c_str());
                rc = 1;
@@ -1903,7 +1912,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          } else if (compile_module_mode) {
             if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
-                     source_label.c_str(), output_path, parse_options, error,
+                     source_label.c_str(), output_path, cmd_po, error,
                      aot_opt_level, aot_target, aot_include_source)) {
                fprintf(stderr, "qcc: module compilation failed: %s\n", error.c_str());
                rc = 1;
@@ -1916,7 +1925,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          } else {
             // Use the program's parse options (includes %modern, %new-style, etc.)
             // merged with command-line options, not just command-line options alone
-            QoreParseOptions aot_po = qpgm->getParseOptions() | parse_options;
+            QoreParseOptions aot_po = qpgm->getParseOptions() | cmd_po;
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, aot_po, error,
                      aot_opt_level, aot_target, aot_static, aot_include_source)) {
