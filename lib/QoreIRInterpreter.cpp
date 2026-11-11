@@ -3508,7 +3508,7 @@ static std::string qore_ir_method_call_name(const QoreMethod* method) {
 }
 
 static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
-        QoreProgram* caller_pgm, int nargs) {
+        QoreProgram* caller_pgm, int nargs, const QoreIRFunction* caller_ir) {
     auto reject = [&]() -> int8_t {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return QORE_IR_INLINE_INELIGIBLE;
@@ -3569,6 +3569,10 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     inst->cached_callee_ir = callee_ir;
     inst->cached_uvb = uvb;
     inst->cached_return_type = sig->getReturnTypeInfo();
+    // the callee runs in the caller's context when the caller is a plain function, which runs without an object and
+    // a class, and when the callee's body does not observe it
+    inst->cached_switches_context = !(caller_ir && qore_ir_function_runs_without_context(*caller_ir))
+        && !qore_ir_body_is_context_free(inst->variant, *callee_ir);
     int8_t eligible_state = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(sig->numParams())
         && qore_ir_callee_single_variant(inst->func)
@@ -4866,10 +4870,15 @@ private:
     QoreProgramLocationHelper loc_helper;
 };
 
+//! Runs a plain function inline in the interpreter, if it can
+/** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
+    class context (CalleeContextHelper)
+    @param caller_ir the IR of the caller, whose context the callee's body keeps when it is a plain function
+*/
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
-    int8_t inline_state = ensureInterpreterInlineIRFunctionState(inst, caller_pgm, nargs);
+        void* thread_data, const QoreIRFunction* caller_ir, bool* may_invalidate_external_caches = nullptr) {
+    int8_t inline_state = ensureInterpreterInlineIRFunctionState(inst, caller_pgm, nargs, caller_ir);
     if (inline_state <= 0) {
         return false;
     }
@@ -4944,9 +4953,22 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
-    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+    bool ok;
+    {
+        // the parameters are bound in the caller's object and class context; the body of a plain function runs
+        // without an object and a class, as a call of the function does (UserVariantBase::eval()), and so is the
+        // check of its return value, before the parameters are released
+        std::optional<CalleeContextHelper> callee_context;
+        if (inst->cached_switches_context) {
+            callee_context.emplace(thread_data);
+        }
+        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+            nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        if (ok && !(xsink && *xsink)) {
+            acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -4956,9 +4978,6 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         return false;
     }
 
-    if (!(xsink && *xsink)) {
-        acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
-    }
     if (xsink && *xsink) {
         ir_return_value.discard(xsink);
         result = QoreValue();
@@ -5255,9 +5274,13 @@ bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstr
 }
 #endif
 
+//! Runs a static method inline in the interpreter, if it can
+/** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
+    class context (CalleeContextHelper)
+*/
 static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
+        void* thread_data, bool* may_invalidate_external_caches = nullptr) {
     int8_t inline_state = caller_pgm
         ? ensureInterpreterResolvedInlineIRCallState(inst, inst->method, inst->variant, caller_pgm, nargs, false) : -1;
     if (inline_state <= 0) {
@@ -5301,7 +5324,6 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         return true;
     }
     unsigned num_params = sig->numParams();
-    ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params) {
         int bind_rc = instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr);
@@ -5327,9 +5349,20 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
-    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+    bool ok;
+    {
+        // the parameters are bound in the caller's object and class context; the body of a static method runs
+        // without an object in the class of its variant, as a call of the method does (UserVariantBase::eval()), and
+        // so is the check of its return value, before the parameters are released
+        CalleeContextHelper method_context(thread_data,
+            METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv());
+        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+            nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        if (ok && !(xsink && *xsink)) {
+            acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -5339,9 +5372,6 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         return false;
     }
 
-    if (!(xsink && *xsink)) {
-        acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
-    }
     if (xsink && *xsink) {
         ir_return_value.discard(xsink);
         result = QoreValue();
@@ -5533,10 +5563,14 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         closure_self_ctx.emplace(self);
         object_ctx.emplace(self, cb->getClassCtx());
     }
-    // A closure created in a static method has no captured object, but it keeps the lexical class context of the
-    // method, which gives it access to the class's private members (such as a private constructor), as with AST and
-    // JIT execution (see execClosureDirect() in JITRuntime.cpp)
-    OptionalClassOnlySubstitutionHelper class_ctx(self ? nullptr : cb->getClassCtx());
+    // A closure without a captured object runs without an object in the class context it was created in, as with AST
+    // and JIT execution (see execClosureDirect() in JITRuntime.cpp): a closure created in a static method keeps the
+    // lexical class context of the method, which gives it access to the class's private members (such as a private
+    // constructor), and one created outside a class has no class context, whatever its caller's
+    std::optional<CalleeContextHelper> closure_context;
+    if (!self) {
+        closure_context.emplace(get_thread_data_for_native_calls(), cb->getClassCtx());
+    }
 
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
@@ -16299,7 +16333,7 @@ load_local_done:
                         direct_inst->operands, 0, value_use_counts);
                     bool prefer_inline_ir = has_last_use_args
                         && !explicit_inst
-                        && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0;
+                        && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0;
                     if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
                         ReferenceHolder<QoreListNode> arg_list(
                             buildArgList(values, direct_inst->operands, 0, xsink), xsink);
@@ -16370,7 +16404,7 @@ load_local_done:
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;
                     } else if (!debug_active
-                            && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
+                            && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0
                             && !direct_inst->cached_uvb->hasCachedFunction()
                             // a call into another Program enters it (see tryExecuteInterpreterInlineIRFunction())
                             && direct_inst->cached_uvb->pgm == pgm
@@ -16382,7 +16416,7 @@ load_local_done:
                         used_inline_ir = true;
                     } else {
                         used_inline_ir = tryExecuteInterpreterInlineIRFunction(direct_inst, pgm, nanboxed_args,
-                            nargs, res, xsink, &inline_may_invalidate_external_caches);
+                            nargs, res, xsink, rl_cache.thread_data, &func, &inline_may_invalidate_external_caches);
                     }
                     if (!used_inline_ir) {
                         qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
@@ -16487,7 +16521,7 @@ load_local_done:
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir = !receiver_type_info && !explicit_inst
                         && tryExecuteInterpreterInlineIRStaticMethod(static_inst, pgm,
-                            nanboxed_args, nargs, res, xsink,
+                            nanboxed_args, nargs, res, xsink, rl_cache.thread_data,
                             &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         res = fromBits(receiver_type_info || explicit_inst

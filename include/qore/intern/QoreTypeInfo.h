@@ -204,6 +204,37 @@ public:
         return ti && hasType(ti) ? ti->parseReturns(t) : QTI_WILDCARD;
     }
 
+    //! Returns true if the type returns only scalar values and strings (int, float, number, bool, string, date,
+    //! binary, NOTHING, NULL), none of which is an object or a container that can hold one
+    /** The check of such a value against the type does not depend on the class context it runs in; false for a type
+        that is not given (\c auto) or that can return any other value
+    */
+    DLLLOCAL static bool returnsOnlyScalars(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getTypeSpec() != QTS_TYPE) {
+                return false;
+            }
+            switch (i.spec.getType()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_STRING:
+                case NT_DATE:
+                case NT_BINARY:
+                case NT_NOTHING:
+                case NT_NULL:
+                    break;
+                default:
+                    return false;
+            }
+        }
+        return true;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool isReference(const QoreTypeInfo* ti) {
         return ti && ti->return_vec[0].spec.getType() == NT_REFERENCE;

@@ -3761,6 +3761,57 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     sync_runtime_config_program(td);
 }
 
+CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
+        : td(static_cast<ThreadData*>(thread_data_ptr)) {
+    assert(td && td == thread_data.get());
+    switchContext(cls);
+}
+
+CalleeContextHelper::CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls)
+        : td(thread_data.get()), old_argv(td->current_implicit_arg), argv_xsink(xsink) {
+    assert(xsink);
+    td->current_implicit_arg = argv;
+    switchContext(cls);
+}
+
+void CalleeContextHelper::switchContext(const qore_class_private* cls) {
+    // the data of the thread's RuntimeConfig, which stays in place for the life of the thread, is looked up once
+    if (!td->rc) {
+        td->rc = rc_get_tls_impl();
+    }
+    RuntimeConfig::Impl* rc = td->rc;
+    // nothing to switch: the thread has the callee's context, as a plain function called from a plain function or
+    // from top-level code
+    if (!td->current_obj && td->current_class == cls && !rc->obj && rc->cls == cls) {
+        return;
+    }
+    switched = true;
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    old_rc_obj = rc->obj;
+    old_rc_class = rc->cls;
+    td->current_obj = nullptr;
+    td->current_class = cls;
+    rc->obj = nullptr;
+    rc->cls = cls;
+}
+
+void CalleeContextHelper::restoreContext() {
+    assert(switched && td->rc);
+    td->current_obj = old_obj;
+    td->current_class = old_class;
+    td->rc->obj = old_rc_obj;
+    td->rc->cls = old_rc_class;
+}
+
+void CalleeContextHelper::restoreArgv() {
+    // as ~ArgvContextHelper()
+    if (td->current_implicit_arg) {
+        td->current_implicit_arg->deref(argv_xsink);
+    }
+    td->current_implicit_arg = old_argv;
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
     ThreadData* td  = thread_data.get();
     old_obj = td->current_obj;

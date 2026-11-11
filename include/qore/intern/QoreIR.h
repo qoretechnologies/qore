@@ -2891,6 +2891,10 @@ public:
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
+    //! True if the inlined callee's body runs in a context other than the caller's: the caller can run with an object
+    //! or a class (it is not a plain function) and the callee's body can observe it (see
+    //! qore_ir_body_is_context_free())
+    mutable bool cached_switches_context = true;
 
     // Cached native leaf-call state. The release/acquire state publishes the
     // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.

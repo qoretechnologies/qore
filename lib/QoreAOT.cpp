@@ -6245,17 +6245,23 @@ static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
     return call && call->getAOTDeferredSourceFunction();
 }
 
+//! The flag of a batch callee that records the result of qore_aot_fast_entry_is_context_independent()
+/** BatchCalleeInfo::context_independent_fast_entry for AOT compilation, BatchCalleeInfo::context_free_body for JIT
+    compilation (see qore_ir_resolve_context_free_fast_entries())
+*/
+using QoreContextIndependenceFlag = bool BatchCalleeInfo::*;
+
 static bool qore_aot_fast_entry_call_is_context_independent(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, bool has_ref_args,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        int arg_start = 0) {
+        int arg_start = 0, QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
     if (!variant || has_ref_args) {
         return false;
     }
     auto it = batch_callees.find(variant);
     if (it == batch_callees.end() || !it->second.approach_b_eligible
-            || !it->second.context_independent_fast_entry) {
+            || !(it->second.*flag)) {
         return false;
     }
     int total_operands = static_cast<int>(operands.size());
@@ -6270,10 +6276,18 @@ static bool qore_aot_fast_entry_call_is_context_independent(
 static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctionVariant* variant,
         const QoreIRFunction& ir_func,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        const std::unordered_set<const LocalVar*>* explicit_captures = nullptr) {
+        const std::unordered_set<const LocalVar*>* explicit_captures = nullptr,
+        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     if (!sig) {
+        return false;
+    }
+    // the check of the return value runs in the context the entry runs in, which decides whether an object is
+    // accepted as a class that the caller's class inherits privately: a function that can return an object or a
+    // container (one read from a hash, for example) needs its own context; the return type of a generic function is
+    // the one of the specialization the IR is lowered for
+    if (!QoreTypeInfo::returnsOnlyScalars(ir_func.specializeType(sig->getReturnTypeInfo()))) {
         return false;
     }
     const bool allow_body_locals =
@@ -6511,7 +6525,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     int arg_start = qore_aot_is_deferred_source_function_call(call->expr) ? 1 : 0;
                     if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
-                            call->operands, call->has_ref_args, batch_callees, arg_start)) {
+                            call->operands, call->has_ref_args, batch_callees, arg_start, flag)) {
                         return false;
                     }
                     break;
@@ -6519,7 +6533,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::CallStaticDirect: {
                     const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
                     if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
-                            call->operands, call->has_ref_args, batch_callees)) {
+                            call->operands, call->has_ref_args, batch_callees, 0, flag)) {
                         return false;
                     }
                     break;
@@ -6536,6 +6550,49 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         }
     }
     return true;
+}
+
+bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func) {
+    // no batch callees: a body that makes a call is not proven free of the context
+    static const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> no_callees;
+    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees);
+}
+
+bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func) {
+    const AbstractQoreFunctionVariant* variant = ir_func.source_variant;
+    return variant && variant->getUserVariantBase() && !dynamic_cast<const UserClosureVariant*>(variant)
+        && !dynamic_cast<const MethodVariantBase*>(variant);
+}
+
+void qore_ir_resolve_context_free_fast_entries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    // a fixed point, as the body of a callee calling a context-free callee is context-free only once the callee is
+    bool changed = true;
+    size_t pass = 0;
+    while (changed) {
+        if (pass++ && qore_check_cancel(nullptr, "JIT batch context-free fast-entry fixed-point")) {
+            return;
+        }
+        changed = false;
+        size_t function_i = 0;
+        for (const auto& [variant, ir_func] : functions) {
+            if (function_i++ && !(function_i % 100)
+                    && qore_check_cancel(nullptr, "JIT batch context-free fast-entry fixed-point scan")) {
+                return;
+            }
+            auto it = batch_callees.find(variant);
+            if (!ir_func || it == batch_callees.end() || !it->second.approach_b_eligible
+                    || it->second.context_free_body) {
+                continue;
+            }
+            if (qore_aot_fast_entry_is_context_independent(variant, *ir_func, batch_callees, nullptr,
+                    &BatchCalleeInfo::context_free_body)) {
+                it->second.context_free_body = true;
+                changed = true;
+            }
+        }
+    }
 }
 
 static void resolveAOTBatchContextIndependentFastEntries(
