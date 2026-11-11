@@ -42,6 +42,19 @@ r = r > 0 ? r : g(3);
 our string output = sprintf(\"%d\\n\", r);
 ";
 
+#! a program whose statements call g() after a call of g() in an operand that is not evaluated; the line numbers are
+#! referenced by the tests
+const StepIntoSkippedScript = "%modern
+int sub g(int x) { return x * 10; }
+int sub h(int x) { return x + 1; }
+int x = 0;
+int r = (x ? g(1) : 0) + g(2);
+bool b = x && g(3) || g(4);
+r = (x ? g(5) : h(1)) +
+    g(6);
+our string output = sprintf(\"%d %y\\n\", r, b);
+";
+
 #! a program whose thread waits forever while the initial thread stops at line 6
 const BlockedThreadScript = "%modern
 Counter forever(1);
@@ -431,6 +444,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("statements of a line with more than one statement", \columnTest());
         addTestCase("stepping into a chosen call", \stepInTargetTest());
         addTestCase("stepping into calls known only at runtime and repeated calls", \stepIntoTest());
+        addTestCase("stepping into a call after a call in an operand that is not evaluated", \stepIntoSkippedTest());
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         addTestCase("the stop at the start of a program", \attachStopTest());
@@ -1311,6 +1325,49 @@ try {
         hash<auto> e = dpc.getInterrupt(p.pgmId);
         assertEq(9, e.line);
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! steps into a call of a line of StepIntoSkippedScript and returns the interrupt with the argument of g() or h()
+    /** @param line the line to break at
+        @param target the index of the call in the step-in targets of its statement
+        @param names the names of the step-in targets of the statement
+    */
+    private hash<auto> stepIntoSkipped(int line, int target, list<string> names) {
+        DebuggedProgram p(dpc, StepIntoSkippedScript);
+        on_exit p.cleanup();
+        p.breakAt(line);
+        hash<auto> e = p.runToStop();
+        list<hash<auto>> targets = dpc.command(sprintf("program/%d/statement/stepintargets", p.pgmId),
+            {"value": {"id": e.statementid}});
+        assertEq(names, (map $1.name, targets), "targets of line " + line);
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": target}});
+        e = dpc.getInterrupt(p.pgmId);
+        hash<auto> rv = {"func": e.func, "line": e.line};
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        if (stack[1].function != "<top level>" && e.line < 4) {
+            rv.x = AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/x/get").value);
+            # the frame of the called code is located at its call, with its columns
+            rv.call = stack[1]{"line", "endline", "column", "endcolumn"};
+        }
+        assertEq({"rc": NOTHING}, p.finish());
+        return rv;
+    }
+
+    stepIntoSkippedTest() {
+        # "int r = (x ? g(1) : 0) + g(2);" with x false: g(1) is not called, so stepping into it runs g(2) to its
+        # return and stops at the next statement, and stepping into g(2) stops in g(2)
+        assertEq({"func": "step", "line": 6}, stepIntoSkipped(5, 0, ("g", "g")));
+        assertEq({"func": "step", "line": 2, "x": 2, "call": {"line": 5, "endline": 5, "column": 25,
+            "endcolumn": 29}}, stepIntoSkipped(5, 1, ("g", "g")));
+        # "bool b = x && g(3) || g(4);": the operand of && is not evaluated
+        assertEq({"func": "step", "line": 7}, stepIntoSkipped(6, 0, ("g", "g")));
+        assertEq({"func": "step", "line": 2, "x": 4, "call": {"line": 6, "endline": 6, "column": 22,
+            "endcolumn": 26}}, stepIntoSkipped(6, 1, ("g", "g")));
+        # a statement of two lines: h(1) is called in place of g(5), and g(6) on the second line is stepped into
+        assertEq({"func": "step", "line": 2, "x": 6, "call": {"line": 8, "endline": 8, "column": 4,
+            "endcolumn": 8}}, stepIntoSkipped(7, 2, ("g", "h", "g")));
+        assertEq({"func": "step", "line": 3, "x": 1, "call": {"line": 7, "endline": 7, "column": 16,
+            "endcolumn": 20}}, stepIntoSkipped(7, 1, ("g", "h", "g")));
     }
 
     #! runs UncaughtScript with the given exception filters of the client and returns the exceptions that stop it

@@ -86,12 +86,12 @@ module DebugProgramControl {
     - the \c program/&lt;id&gt;/statement/stepintargets command gives the calls of a statement that can be stepped into
       (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"), and
       \c thread/go/stepinto with the index of a call in them as \c target in its value steps into the call: the
-      thread matches the functions that its statement calls with the call, also a method of a subclass and the code
-      of a call reference, and runs the others to their return
+      thread matches the code that its statement calls with the call by the location of the call, also a method of a
+      subclass and the code of a call reference, and runs the others to their return
     - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
       with more than one statement; the \c program/&lt;id&gt;/statement/list command gives the statements of a line with
-      their columns, and interrupt events and the frames of call stacks give the columns of their statements in
-      \c column and \c endcolumn where they are known
+      their columns, and interrupt events and the frames of call stacks give the columns of their statements, or the
+      columns of their calls for frames of called code, in \c column and \c endcolumn where they are known
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
     - the interrupt event of a thread that attaches gives \c programstart: @ref True for the first thread of a
@@ -1459,8 +1459,31 @@ public namespace DebugProgramControl {
                     "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
                     "depth": depth,
                     "counts": {},
+                    # the location of the call, which the frame of the called code has
+                    "loc": targets[target]{"start_line", "end_line", "start_column", "end_column"},
                 };
             });
+        }
+
+        #! Returns True if the frame of called code is the frame of the call that a thread steps into
+        /** The frame of called code is located at its call: with the columns of the call, it is matched by its
+            location, so that a call of a function that a statement makes more than once is found also when an
+            earlier call of it is not made, such as in an operand of <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt> that is
+            not evaluated; without them, as in AOT-compiled code, it is matched as the nth call of the statement
+            with the key of the call
+
+            @param si the step into the call (see startStepInto())
+            @param frame the frame of the called code
+            @param key the key of the called code of the frame (see getStepIntoFrameKey())
+            @param n the number of calls with the key that the statement has made, with this one
+        */
+        private static bool isStepIntoCall(hash<auto> si, hash<auto> frame, string key, int n) {
+            if (exists si.loc.start_column && si.loc.start_column >= 0 && exists frame.start_column
+                && frame.start_column >= 0) {
+                return frame.line == si.loc.start_line && frame.start_column == si.loc.start_column
+                    && frame.endline == si.loc.end_line && frame.end_column == si.loc.end_column;
+            }
+            return key == si.key && n == si.ordinal;
         }
 
         #! Checks an interrupt of a thread that steps into a call of its statement; runs in the thread
@@ -1484,10 +1507,11 @@ public namespace DebugProgramControl {
             if ((select stack, $1.type == "user").size() == si.depth + 1) {
                 if (func == "funcEnter") {
                     # the frame of the called code, after this method, handleInterrupt() and the debugger's callback
-                    string key = DebugProgramControl::getStepIntoFrameKey(stack[2 + frameOffset].function, si.keys);
+                    hash<auto> frame = stack[2 + frameOffset];
+                    string key = DebugProgramControl::getStepIntoFrameKey(frame.function, si.keys);
                     int n;
                     n = DebugProgramControl::withLock(stepIntoLock, int sub () { return ++stepIntos{tid}.counts{key}; });
-                    if (key != si.key || n != si.ordinal) {
+                    if (!DebugProgramControl::isStepIntoCall(si, frame, key, n)) {
                         runState = DebugUntilReturn;
                         return True;
                     }
@@ -2015,23 +2039,50 @@ public namespace DebugProgramControl {
                     stack[0].statementid = ctx.intrInfo.statementid;
                 }
             }
-            # the columns of the statement of each frame, where they are known
+            # the columns of each frame, where they are known: a frame of called code is located at its call, whose
+            # columns it gives (CallStackInfo), if the call is in the statement of the frame; otherwise, and for the
+            # frame of the debugged statement, which is located at the statement, the columns of the statement where
+            # the frame has its lines
             foreach hash<auto> frame in (\stack) {
-                if (!frame.statementid || !frame.programid) {
-                    continue;
+                bool debugged = !$# && ctx && ctx.intrInfo.statementid;
+                if (debugged) {
+                    # the location of the frame is the debugged statement's
+                    remove frame.start_column;
+                    remove frame.end_column;
                 }
-                try {
-                    hash<StatementInfo> info = ProgramControl::resolveProgramId(frame.programid)
-                        .getStatementIdInfo(frame.statementid);
-                    if (info.start_column >= 0) {
-                        frame.column = info.start_column;
-                        frame.endcolumn = info.end_column;
+                *hash<StatementInfo> info;
+                if (frame.statementid && frame.programid) {
+                    try {
+                        info = ProgramControl::resolveProgramId(frame.programid).getStatementIdInfo(frame.statementid);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the Program of the frame cannot be debugged or no longer exists: no columns
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    # the Program of the frame cannot be debugged or no longer exists: no columns
+                }
+                if (exists frame.start_column && frame.start_column >= 0
+                    && (!info || DebugProgramControl::isInStatement(frame, info))) {
+                    frame.column = frame.start_column;
+                    frame.endcolumn = frame.end_column;
+                } else if (info && info.start_column >= 0
+                    && (debugged || (frame.line == info.start_line && frame.endline == info.end_line))) {
+                    frame.column = info.start_column;
+                    frame.endcolumn = info.end_column;
                 }
             }
             return stack;
+        }
+
+        #! Returns True if the location of a frame, with its columns, is in the location of its statement
+        /** A frame of code called without a call expression, such as a destructor, is located where the code that
+            runs it is, which is not always in its statement in every execution mode
+        */
+        private static bool isInStatement(hash<auto> frame, hash<StatementInfo> info) {
+            if (info.start_column < 0) {
+                return frame.line >= info.start_line && frame.endline <= info.end_line;
+            }
+            return (frame.line > info.start_line || (frame.line == info.start_line
+                    && frame.start_column >= info.start_column))
+                && (frame.endline < info.end_line || (frame.endline == info.end_line
+                    && frame.end_column <= info.end_column));
         }
 
         #! Returns the value of the root of a variable path of a stopped thread
