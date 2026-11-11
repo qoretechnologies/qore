@@ -200,6 +200,11 @@ auto sub latin1_auto() { return latin1(); }
 auto sub euro_auto(Holder h) { return euro_if(h); }
 sub nh_addany_inner(Log log) { list r = select new It(log, 3), exists ((latin1_auto() + euro_auto($1)) ?? NOTHING) || True; log.add("r " + r.size()); }
 sub nh_addany(Log log) { try { nh_addany_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+# the input of a map stage whose destructor raises when the stage releases it leaves the pipeline to the enclosing
+# handler: a list, a fused foreach and a count over two map stages
+sub sr_list(Log log) { try { list l = (map $1.n, (map new Holder(log, "x" + $1.n[2]), new It(log, 3))); log.add("l " + l.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+sub sr_foreach(Log log) { try { foreach string v in ((map $1.n, (map new Holder(log, "x" + $1.n[2]), new It(log, 3)))) { log.add("body " + v); } } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+sub sr_count(Log log) { try { int c = (count log_true(log, $1), (map new Holder(log, "q" + $1.n[1]), (map new Holder(log, "x" + $1.n[2]), new It(log, 3)))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -214,7 +219,7 @@ const Cases = (
     "next_raises_fused_count", "next_raises_fused_count_nh", "nh_divany_select", "nh_divany_takewhile",
     "nh_modany_select", "nh_divnum_select", "nh_stradd_select", "fpm_closure", "fpm_same_elem", "fpm_cond_elem",
     "fpm_pred_log", "fpm_foreach_body", "fpm_foreach_two_maps", "fpm_nested", "strcat_try", "nh_divany_nocheck",
-    "nh_modany_nocheck", "nh_divnum_nocheck", "nh_addany",
+    "nh_modany_nocheck", "nh_divnum_nocheck", "nh_addany", "sr_list", "sr_foreach", "sr_count",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

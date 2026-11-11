@@ -39,7 +39,8 @@
     when an optimization made a map stage's value the element ($1 ?? $1), a concatenation of three strings whose
     exception skipped the enclosing catch in native code, a map stage's input released after the consumer and a
     foreach body instead of before them, and a nested first operator whose value replaced the previous one before
-    its source was released.
+    its source was released; the release of a map stage's input whose destructor raises must then leave the pipeline
+    to the enclosing handler, which the IR interpreter skipped.
 
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
@@ -106,6 +107,9 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "strcat_try: catch ENCODING-CONVERSION-ERROR; after",
             "nh_addany: released it2; released it1; itdone it; catch ENCODING-CONVERSION-ERROR; after",
             "nh_divany_nocheck: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",
+            "sr_list: released it1; released x1; itdone it; catch DTOR/x1; after",
+            "sr_foreach: released it1; released x1; itdone it; catch DTOR/x1; after",
+            "sr_count: released it1; released x1; released q1; itdone it; catch DTOR/x1; after",
         );
     }
 
