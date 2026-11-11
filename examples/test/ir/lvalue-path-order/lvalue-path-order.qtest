@@ -34,7 +34,7 @@ class LvaluePathOrderTest inherits QUnit::Test {
         string env;
     }
 
-    constructor() : QUnit::Test("remove and delete selectors before the lvalue lock", "1.0", \ARGV) {
+    constructor() : QUnit::Test("the keys of an lvalue path from the root out", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -51,7 +51,7 @@ class LvaluePathOrderTest inherits QUnit::Test {
     private astTest() {
         string out = astOutput();
         list<string> lines = out.split("\n");
-        assertEq(29, (select lines, $1 =~ /^[a-z][a-z ]*:/).size(), "every case ran");
+        assertEq(35, (select lines, $1 =~ /^[a-z][a-z ]*:/).size(), "every case ran");
         # the path from the root out, then the index of the last step; the value of an assignment comes first
         assertTrue(out =~ /^assign: vr ka kb i0 = \[1, 9, 3\]\n/, "assign");
         assertTrue(out =~ /\npreinc: ka kb i0 = /, "++");
@@ -66,8 +66,15 @@ class LvaluePathOrderTest inherits QUnit::Test {
             assertTrue(regex(out, "\\n" + root + ": vr ka kb i0 = \\[1, (9|7), 3\\]\\n"), root);
         }
         # a key that raises: the later keys are not evaluated and nothing is changed
-        assertTrue(out =~ /\nraise: vr ka throwb ! KEY-ERROR\n/, "raise");
-        assertTrue(out =~ /\nraise remove: ka throwb ! KEY-ERROR\n/, "raise in remove");
+        assertTrue(out =~ /\nraise: vr ka throwb ! KEY-ERROR unchanged\n/, "raise");
+        assertTrue(out =~ /\nraise remove: ka throwb ! KEY-ERROR unchanged\n/, "raise in remove");
+        assertTrue(out =~ /\nraise remove key path: ka throwb ! KEY-ERROR unchanged\n/, "raise in the path of remove of a key");
+        assertTrue(out =~ /\nraise remove key: ka throwc ! KEY-ERROR unchanged\n/, "raise in the key of remove");
+        # a cast in the path, a reference parameter, a hash key of a member and a list of keys
+        assertTrue(out =~ /\ncast: vr ka ko kx i0 = /, "cast in the path");
+        assertTrue(out =~ /\nreference parameter: ka kb i0 set = \[1, 6, 3\]\n/, "reference parameter");
+        assertTrue(out =~ /\nremove member key: ka kc = /, "remove of a member's key");
+        assertTrue(out =~ /\nremove keys: ka kb = /, "remove of a list of keys");
         assertTrue(out =~ /\nlong path: k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17 k18 = 1\n/, "long path");
         assertEq((), (select lines, $1 =~ / ! / && $1 !~ /^raise/), "no other case raised an exception");
     }

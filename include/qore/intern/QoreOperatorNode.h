@@ -32,6 +32,9 @@
 #ifndef _QORE_QOREOPERATORNODE_H
 #define _QORE_QOREOPERATORNODE_H
 
+
+#include <atomic>
+#include <vector>
 #include <cstdarg>
 #include <type_traits>
 #include <utility>
@@ -185,6 +188,30 @@ public:
         }
         return 0;
     }
+};
+
+//! the keys and indices of an lvalue path, the one nearest the root first, cached in the path's last step
+/** Created once for a path whose keys LValueHelper evaluates before it resolves the path, as at least two of them
+    need an evaluation (qore#5753)
+*/
+struct QoreLValuePathKeys {
+    std::vector<QoreValue> keys;
+};
+
+//! the cached keys of an lvalue path (see QoreLValuePathKeys), owned by the last step of the path
+class QoreLValuePathKeyCache {
+public:
+    DLLLOCAL QoreLValuePathKeyCache() = default;
+    DLLLOCAL ~QoreLValuePathKeyCache() {
+        delete keys.load(std::memory_order_relaxed);
+    }
+    QoreLValuePathKeyCache(const QoreLValuePathKeyCache&) = delete;
+    QoreLValuePathKeyCache& operator=(const QoreLValuePathKeyCache&) = delete;
+
+    //! -1 if not known yet, 0 if the keys are not evaluated first, 1 if they are (keys is then set)
+    std::atomic<int8_t> state{-1};
+    //! the keys, set before state is 1
+    std::atomic<const QoreLValuePathKeys*> keys{nullptr};
 };
 
 template <class T = QoreOperatorNode>

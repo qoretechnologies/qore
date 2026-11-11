@@ -32,9 +32,15 @@
 #ifndef _QORE_QORESQUAREBRACKETSOPERATORNODE_H
 #define _QORE_QORESQUAREBRACKETSOPERATORNODE_H
 
+
+#include <atomic>
 class QoreSquareBracketsOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
 OP_COMMON
 public:
+    //! the keys of the lvalue path that ends with this step, if they are evaluated before it is resolved
+    /** computed from the path the first time that it is resolved (LValueHelper::evalPathKeys(), qore#5753) */
+    mutable QoreLValuePathKeyCache lvalue_path_keys;
+
     DLLLOCAL QoreSquareBracketsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreBinaryOperatorNode<>(loc, left, right) {
     }

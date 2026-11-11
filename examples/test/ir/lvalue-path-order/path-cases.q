@@ -50,7 +50,13 @@ hash<auto> sub mk() {
     return {"a": {"b": (1, 2, 3), "c": 1}};
 }
 
-#! runs a case and prints the evaluations and the result or the exception
+#! sets the value that a reference refers to
+sub setref(reference<auto> r, auto x) {
+    print(" set");
+    r = x;
+}
+
+#! runs a case and prints the evaluations and the result, or the exception and whether the global is unchanged
 sub t(string name, code<auto()> c) {
     gh = mk();
     printf("%s:", name);
@@ -58,7 +64,7 @@ sub t(string name, code<auto()> c) {
         auto r = c();
         printf(" = %y", r);
     } catch (hash<ExceptionInfo> ex) {
-        printf(" ! %s", ex.err);
+        printf(" ! %s %s", ex.err, gh == mk() ? "unchanged" : sprintf("changed: %y", gh));
     }
     print("\n");
 }
@@ -115,6 +121,21 @@ sub main() {
     # a key that raises an exception: the later keys are not evaluated and nothing is changed
     t("raise", auto sub () { gh.(k("a")).(thr("b")).(k("c")) = v("r", 1); return gh; });
     t("raise remove", auto sub () { remove gh.(k("a")).(thr("b"))[i("0", 0)]; return gh; });
+    t("raise remove key path", auto sub () { remove gh.(k("a")).(thr("b")).(k("c")); return gh; });
+    t("raise remove key", auto sub () { remove gh.(k("a")).(thr("c")); return gh; });
+    # a cast in the path, a reference parameter, a hash key of a member and a list of keys
+    t("cast", auto sub () {
+        gh.a.o = new C();
+        cast<C>(gh.(k("a")).(k("o"))).m.(k("x"))[i("0", 0)] = v("r", 9);
+        return gh.a.o.m;
+    });
+    t("reference parameter", auto sub () { setref(\gh.(k("a")).(k("b"))[i("0", 1)], 6); return gh.a.b; });
+    t("remove member key", auto sub () { o.m = mk(); auto r = remove o.m.(k("a")).(k("c")); return (r, o.m.a); });
+    t("remove keys", auto sub () {
+        gh.a.d = 2;
+        auto r = remove gh.(k("a")){k("b"), "c"};
+        return (r, gh.a);
+    });
     # a long path
     t("long path", auto sub () {
         hash<auto> h;
