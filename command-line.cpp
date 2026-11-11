@@ -1630,14 +1630,18 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    // created, with one message that says how to run the code without %modern
    {
       bool cl_source_modern = (eval_arg || cl_pgm || !program_file_name) && !old_style_default_enabled();
+      // %modern given with -p (its parts, or "modern")
+      bool po_modern = (parse_options & QoreParseOptions(PO_MODERN)) == QoreParseOptions(PO_MODERN);
       std::string po_error;
-      if ((cmd_modern || cl_source_modern)
+      if ((po_modern || cmd_modern || cl_source_modern)
             && !qore_check_modern_parse_options(parse_options | QoreParseOptions(PO_MODERN), po_error)) {
-         fprintf(stderr, "%s: %s; %s\n", pn, po_error.c_str(), cmd_modern
-            ? "remove the option, or -M (a file is also parsed in %modern mode by its extension unless it is a .q "
-              "file)"
-            : "code given on the command line or read from stdin is parsed in %modern mode; remove the option, or "
-              "set QORE_OLD_STYLE_DEFAULT=1 to parse it without %modern");
+         fprintf(stderr, "%s: %s; %s\n", pn, po_error.c_str(), po_modern
+            ? "remove the option, or the %modern options given with -p"
+            : (cmd_modern
+               ? "remove the option, or -M (a file is also parsed in %modern mode by its extension unless it is a .q "
+                 "file)"
+               : "code given on the command line or read from stdin is parsed in %modern mode; remove the option, "
+                 "or set QORE_OLD_STYLE_DEFAULT=1 to parse it without %modern"));
          qore_cleanup();
          qore_fork_child_quick_exit(2);
          return 2;

@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: parent - checks the parse options of Programs that the test creates, and runs scripts in child processes in every mode
+# test-platform: macos - C++ hosts linked against libqore with rpaths, AOT executables and modules built from the command line
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -246,6 +247,26 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         p.parse(sprintf("%%requires %s/ModernCompatMod.qm\nauto sub r() { return (mod_range(), range(1, 2)); }\n",
             tmp.path), "modules");
         assertEq(((1,), (1, 2)), p.callFunction("r"), "the module is %modern, the loading Program is not");
+
+        # a parse option mask cannot complete %modern on a loaded legacy module with a compatibility option; the module
+        # is legacy code without the parts of %modern that the mask can add (strong-encapsulation, no-summarize), so it
+        # is loaded with QORE_OLD_STYLE_DEFAULT=1 (a .qm file is otherwise %modern by its extension) in a child process
+        f.open2(tmp.path + "/LegacyCompatMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%broken-range\n%new-style\n%require-types\n%strict-args\nmodule LegacyCompatMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic list<int> sub legacy_range() { return range(1, 2); }\n");
+        f.close();
+        f.open2(tmp.path + "/mask.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyCompatMod.qm\";\nload_module(mod);\n"
+            "try {\n    load_module_masked(mod, new ParseOptions(), new ParseOptions((\"strong-encapsulation\", "
+            "\"no-summarize\")));\n    printf(\"MASK-APPLIED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+        f.close();
+        string out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s/mask.q", env, qore_bin,
+            tmp.path));
+        assertRegex("MODULE-PARSE-OPTION-MASK-ERROR: module 'LegacyCompatMod': the parse option mask cannot be "
+            "applied: %modern \\(which the options set complete\\) cannot be set while %broken-range is in effect",
+            out);
     }
 
     #! an option given on the command line: a file in %modern mode, by its extension or -M, is refused; a .q file is
@@ -260,6 +281,12 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             "or -M",
             out, "-M");
         assertEq(1, (out =~ x/(PARSE-OPTION-ERROR)/g).size(), "-M: one error: " + out);
+        # %modern given with -p
+        out = ExecModeHarness::run_any(sprintf("%s %s -pmodern -pbroken-range %s/legacy-script.q", env, qore_bin,
+            dir));
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; remove the option, "
+            "or the %modern options given with -p", out, "-p modern");
+        assertEq(1, (out =~ x/(PARSE-OPTION-ERROR)/g).size(), "-p modern: one error: " + out);
         # code given on the command line is parsed in %modern mode by default
         out = ExecModeHarness::run_any(sprintf("%s %s -pbroken-range -e 1", env, qore_bin));
         assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*code given on the "
@@ -362,8 +389,24 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         assertRegex("STALE-REFUSED: PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; "
             "rebuild the "
             "program with this version of Qore", out);
-        assertRegex("HELPER-REFUSED: OPTION-ERROR: %modern and %broken-range cannot be set together", out);
+        assertRegex("HELPER-REFUSED: OPTION-ERROR: QoreProgramHelper: %modern and %broken-range cannot be set "
+            "together", out);
+
         assertRegex("MODERN-CREATED", out);
+
+        # the entry points of an AOT executable
+        string run_exe = tmp.path + "/run-host";
+        string run_out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/stale-run-host.cpp -L%s "
+            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, target ? target[0] : "",
+            run_exe));
+        assertTrue(is_file(run_exe), "compile run host: " + run_out);
+        foreach string entry in (("v1", "v3")) {
+            run_out = ExecModeHarness::run_any(sprintf("%s %s %s", env, run_exe, entry));
+            assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; rebuild the "
+                "program with this version of Qore", run_out, entry);
+            assertRegex("rc=2", run_out, entry);
+            assertFalse(run_out =~ /STALE-CODE-RAN/, entry);
+        }
     }
 
 }

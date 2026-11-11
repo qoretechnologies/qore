@@ -36,8 +36,8 @@
 
 //! Creates a Program with the given options, or raises OPTION-ERROR if they have %modern and a compatibility option
 //! that it does not allow (issue #5682)
-/** The caller checks the exception right after creating the QoreProgramHelper; the Program created then, which it
-    only releases, has none of the conflicting options
+/** The caller checks the exception before it parses or runs any code in the Program; the Program created then has
+    none of the conflicting options
 */
 static QoreProgram* qore_new_checked_program(const QoreParseOptions& parse_options, ExceptionSink& xsink) {
     std::string error;
@@ -47,7 +47,7 @@ static QoreProgram* qore_new_checked_program(const QoreParseOptions& parse_optio
         if (!error.compare(0, sizeof(prefix) - 1, prefix)) {
             desc += sizeof(prefix) - 1;
         }
-        xsink.raiseException("OPTION-ERROR", "%s", desc);
+        xsink.raiseException("OPTION-ERROR", "QoreProgramHelper: %s", desc);
         return new QoreProgram(parse_options & ~qore_program_private_base::modernIncompatibleOptions());
     }
     return new QoreProgram(parse_options);
