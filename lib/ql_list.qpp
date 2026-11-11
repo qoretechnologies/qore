@@ -138,7 +138,7 @@ QoreListNode* range_intern(int64 start, int64 stop, int64 step, ExceptionSink* x
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     no value)
  */
-nothing sort(nothing[doc] values) [flags=CONSTANT] {
+nothing sort(nothing[doc] values) [flags=CONSTANT,NAMED_ARGS] {
 }
 
 //! This function variant does nothing at all
@@ -353,7 +353,7 @@ list<auto> sortDescending(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     no value)
  */
-nothing sort_descending(nothing[doc] values) [flags=CONSTANT] {
+nothing sort_descending(nothing[doc] values) [flags=CONSTANT,NAMED_ARGS] {
 }
 
 //! This function variant does nothing at all
@@ -567,7 +567,7 @@ list<auto> sortStable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     no value)
  */
-nothing sort_stable(nothing[doc] values) [flags=CONSTANT] {
+nothing sort_stable(nothing[doc] values) [flags=CONSTANT,NAMED_ARGS] {
 }
 
 //! This function variant does nothing at all
@@ -779,7 +779,7 @@ list<auto> sortDescendingStable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPR
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     no value)
  */
-nothing sort_descending_stable(nothing[doc] values) [flags=CONSTANT] {
+nothing sort_descending_stable(nothing[doc] values) [flags=CONSTANT,NAMED_ARGS] {
 }
 
 //! This function variant does nothing at all

@@ -293,6 +293,8 @@ class SortTest inherits QUnit::Test {
         # a named argument matches the regular variant for no value, which has the list variants' parameter name
         assertNothing(sort(values: nv.l));
         assertNothing(sort_stable(values: keys nv.h));
+        assertNothing(sort_descending(values: nv.l));
+        assertNothing(sort_descending_stable(values: keys nv.h));
         assertEq((1, 2), sort(values: (2, 1)));
         # only the one-argument call has a variant for no value: with a comparator the call raises the error
         assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { sort(nv.l, "compare"); });
