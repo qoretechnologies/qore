@@ -1460,9 +1460,11 @@ struct QoreIRDebugNestEntry {
     //! the block and index of its DebugStatement instruction
     QoreIRBasicBlock* block = nullptr;
     size_t ip = 0;
-    //! the number of scopes of the frame (scope_stack) and of temp marks (temp_cleanup_marks) at its start
+    //! the number of scopes of the frame (scope_stack), of temp marks (temp_cleanup_marks) and of exceptions caught
+    //! (catch_exception_stack) at its start
     size_t scope_depth = 0;
     size_t temp_marks = 0;
+    size_t catch_depth = 0;
     //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
     uint16_t depth = 0;
     uint8_t flags = 0;
@@ -7011,7 +7013,7 @@ struct QoreIRDebugFrameState {
 //! Records the statement of a DebugStatement instruction in the statements that the frame is in
 static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st, QoreIRDebugNest& storage,
         const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, QoreIRBasicBlock* block, size_t ip,
-        size_t scope_depth, size_t temp_marks) {
+        size_t scope_depth, size_t temp_marks, size_t catch_depth) {
     if (!st.nest) {
         storage.reset();
         st.nest = &storage;
@@ -7024,8 +7026,18 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     e.ip = ip;
     e.scope_depth = scope_depth;
     e.temp_marks = temp_marks;
+    e.catch_depth = catch_depth;
     e.depth = inst->nest_depth;
     e.flags = inst->nest_flags;
+}
+
+static bool qore_ir_dbg_set_resume(QoreIRDebugNest& n, size_t idx);
+
+//! Sets where the frame continues after the given statement whose exception a debugger dismissed at the statement;
+//! false if it cannot continue (see qore_ir_dbg_set_resume())
+static bool qore_ir_dbg_resume_after(QoreIRDebugFrameState& st, const AbstractStatement* stmt) {
+    return st.nest && !st.nest->entries.empty() && st.nest->entries.back().stmt == stmt
+        && qore_ir_dbg_set_resume(*st.nest, st.nest->entries.size() - 1);
 }
 
 //! Starts the events of the statements that contain the given statement, whose exception event was made
@@ -7039,10 +7051,11 @@ static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractSta
 
 //! Finds where the frame continues after the statement of the given entry: the end of the statement (a DebugStatement
 //! instruction with QORE_IR_DEBUG_NEST_END at its depth), from its start on the paths of its code
-/** A path that reaches another statement at the same or a lower depth has left the statement, and is not followed.
-    Only the debug IR of AOT code has the ends of its statements.
+/** The paths include the exception edges, as the code after a try statement whose try block raises is reached
+    through its catch block.  A path that reaches another statement at the same or a lower depth has left the
+    statement, and is not followed.  Only the debug IR of AOT code has the ends of its statements.
 */
-static QORE_INTERN_NOINLINE bool qore_ir_dbg_set_resume(QoreIRDebugNest& n, size_t idx) {
+static QORE_INTERN_NOINLINE bool qore_ir_dbg_find_end(QoreIRDebugNest& n, size_t idx) {
     const QoreIRDebugNestEntry& e = n.entries[idx];
     if (!e.block) {
         return false;
@@ -7059,11 +7072,15 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_set_resume(QoreIRDebugNest& n, size
         bool left = false;
         for (size_t i = start; i < b->instructions.size(); ++i) {
             const QoreIRInstruction* c = b->instructions[i].get();
-            if (c->opcode != QoreIROpcode::DebugStatement) {
-                continue;
-            }
-            auto* d = static_cast<const QoreIRDebugStatementInstruction*>(c);
-            if (!(d->nest_flags & QORE_IR_DEBUG_NEST_VALID) || d->nest_depth > e.depth) {
+            const QoreIRDebugStatementInstruction* d = c->opcode == QoreIROpcode::DebugStatement
+                ? static_cast<const QoreIRDebugStatementInstruction*>(c) : nullptr;
+            if (!d || !(d->nest_flags & QORE_IR_DEBUG_NEST_VALID) || d->nest_depth > e.depth) {
+                // the code of a try statement whose try block raises reaches the code after it through its catch
+                // block only: the handler of the instructions, as of the statements in the statement (the target of
+                // their DebugStatement instructions), is followed too
+                if (c->exception_target) {
+                    stack.emplace_back(c->exception_target, 0);
+                }
                 continue;
             }
             if (d->nest_depth == e.depth && (d->nest_flags & QORE_IR_DEBUG_NEST_END)) {
@@ -7083,6 +7100,28 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_set_resume(QoreIRDebugNest& n, size
         qore_ir_visit_successors(*b->instructions.back(), [&stack](QoreIRBasicBlock* succ) {
             stack.emplace_back(succ, 0);
         });
+    }
+    return false;
+}
+
+//! Sets where the frame continues after the statement of the given entry whose exception a debugger dismissed
+/** A statement that ends its block (a throw, a rethrow or a return) has no end, as the code after it is not compiled:
+    the frame continues after the innermost statement that contains it and that has an end, whose block it ended, as
+    the code after the statement in the block does not run (see qore_ir_dbg_find_end())
+*/
+static bool qore_ir_dbg_set_resume(QoreIRDebugNest& n, size_t idx) {
+    for (size_t i = idx + 1; i-- > 0;) {
+        bool found = n.entries[i].stmt && qore_ir_dbg_find_end(n, i);
+        if (ir_trace_debug_env.get()) {
+            fprintf(stderr, "[ir-debug] resume: entry %zu of %zu (depth %d, line %d): %s\n", i, n.entries.size(),
+                static_cast<int>(n.entries[i].depth),
+                n.entries[i].stmt && n.entries[i].stmt->loc ? n.entries[i].stmt->loc->start_line : -1,
+                found ? "end found" : "no end");
+            fflush(stderr);
+        }
+        if (found) {
+            return true;
+        }
     }
     return false;
 }
@@ -8650,11 +8689,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             fflush(stderr);
         }
         unwindForException();
-        cleanupLocalCaches(false);
-        // the frame continues after a statement whose exception a debugger dismissed (QORE_IR_RETURN_UNHANDLED)
+        // the frame continues after a statement whose exception a debugger dismissed (QORE_IR_RETURN_UNHANDLED), with
+        // its locals
         if (dbgResumePending()) {
             return false;
         }
+        cleanupLocalCaches(false);
         if (!xsink || !*xsink) {
             return_value = QoreValue();
             return true;
@@ -8665,9 +8705,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the frame continues at the end of the statement whose exception a debugger dismissed (see
     // qore_ir_dbg_set_resume()): the temporaries of the statement are released, except for its own temp mark, which
     // the DiscardTemps after its end releases, and the statements in it are left
+    //
+    // The scopes that the statement opened and that are still open (the statements in it that ended their blocks, see
+    // qore_ir_dbg_set_resume()) are closed as at their ends, and the exceptions caught in it are released, as the
+    // CatchCleanup instructions after the catch blocks would.
     auto dbgResume = [&]() {
         QoreIRDebugNest& n = *dbg_state.nest;
-        const QoreIRDebugNestEntry& e = n.entries[n.resume_entry];
+        const QoreIRDebugNestEntry e = n.entries[n.resume_entry];
+        while (scope_stack.size() > e.scope_depth) {
+            releaseScopeTemps(scope_stack.back());
+            fireScopeExits(scope_stack.size() - 1);
+        }
+        while (catch_exception_stack.size() > e.catch_depth) {
+            auto entry = catch_exception_stack.back();
+            catch_exception_stack.pop_back();
+            if (entry.caught) {
+                catch_swap_exception(entry.saved);
+                entry.caught->del(xsink);
+            }
+        }
         if (temp_cleanup_marks.size() > e.temp_marks) {
             cleanupToTempMark(e.temp_marks, true, n.resume_own_mark);
         }
@@ -9985,6 +10041,10 @@ next_instruction:
                         // statement that raised and then continues at statement cleanup; it
                         // does not resume the failed expression's normal continuation.
                         if (!*xsink) {
+                            // the frame continues after the statement (#5816), or at the cleanup of the statement
+                            if (qore_ir_dbg_resume_after(dbg_state, get_exception_statement(inst))) {
+                                goto dbg_resume_frame;
+                            }
                             QoreIRBasicBlock* dismiss_block = nullptr;
                             size_t dismiss_ip = 0;
                             prev_block = block;
@@ -14318,6 +14378,14 @@ load_local_done:
                     auto* dbg_inst = static_cast<QoreIRDebugStatementInstruction*>(inst);
                     // the end of a statement makes no event (see qore_ir_dbg_set_resume())
                     if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_END) {
+                        // the statement ended: the frame is in the statement that contains it, which an exception
+                        // raised after it, as in a loop's condition, is reported for
+                        if (dbg_state.nest && dbg_state.nest->entries.size() > dbg_inst->nest_depth) {
+                            dbg_state.nest->entries.resize(dbg_inst->nest_depth);
+                            dbg_state.frame_stmt = dbg_state.nest->entries.empty()
+                                ? nullptr : dbg_state.nest->entries.back().stmt;
+                            *rl_cache.stmt_ptr = dbg_state.frame_stmt;
+                        }
                         ++ip;
                         break;
                     }
@@ -14339,7 +14407,7 @@ load_local_done:
                         // the statements that the frame is in, for the exception events (#5816)
                         if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
                             qore_ir_dbg_nest_statement(dbg_state, frame.dbg_nest, dbg_inst, dbg_stmt, block, ip,
-                                scope_stack.size(), temp_cleanup_marks.size());
+                                scope_stack.size(), temp_cleanup_marks.size(), catch_exception_stack.size());
                         }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
@@ -18355,11 +18423,21 @@ load_local_done:
                 if (debug_active && xsink && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
                     dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
-                    if (*xsink) {
-                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
-                    }
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
+                    if (*xsink) {
+                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                    } else {
+                        // dismissed: the frame continues after the statement if it can, and the function ends
+                        // otherwise, with no value
+                        if (qore_ir_dbg_resume_after(dbg_state, get_exception_statement(inst))) {
+                            goto dbg_resume_frame;
+                        }
+                        dbg_state.exit_dismissed = true;
+                        unwindForException();
+                        cleanupLocalCaches();
+                        QORE_IR_RETURN_AFTER_UNWIND;
+                    }
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -18420,11 +18498,21 @@ load_local_done:
                 if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
                     dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
-                    if (*xsink) {
-                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
-                    }
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
+                    if (*xsink) {
+                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                    } else {
+                        // dismissed: the frame continues after the statement if it can, and the function ends
+                        // otherwise, with no value
+                        if (qore_ir_dbg_resume_after(dbg_state, get_exception_statement(inst))) {
+                            goto dbg_resume_frame;
+                        }
+                        dbg_state.exit_dismissed = true;
+                        unwindForException();
+                        cleanupLocalCaches();
+                        QORE_IR_RETURN_AFTER_UNWIND;
+                    }
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
@@ -18592,6 +18680,12 @@ load_local_done:
         if (false) {
 dbg_resume_frame:
             dbgResume();
+            // a handler of a scope that the resume closed raised an exception
+            if (xsink && *xsink) {
+                unwindForException();
+                cleanupLocalCaches();
+                QORE_IR_RETURN_AFTER_UNWIND;
+            }
         }
         } // end of current_block scope
 

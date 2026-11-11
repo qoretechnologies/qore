@@ -88,6 +88,44 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
 ",
         };
 
+        #! the output of DebuggerDismissals.q with the AST interpreter, which every execution mode and AOT-compiled code
+        #! give (#5816)
+        const ExpectedDismissals = "a_t_local/1: [\"A@56\"] rv=\"kept\"
+a_t_local/2: [\"A@56\", \"A@55\"] rv=\"kept\"
+a_t_loop/1: [\"B@64\"] rv=\"123\"
+a_t_loop/2: [\"B@64\", \"B@63\"] rv=\"123\"
+a_t_loop/3: [\"B@64\", \"B@63\", \"B@62\"] rv=\"1\"
+a_t_try/1: [\"C@74\"] rv=\"kt\"
+a_t_try/2: [\"C@74\", \"C@73\"] rv=\"kt\"
+a_t_onerr/1: [\"D@88\"] rv=\"knX|\"
+a_t_onerr/2: [\"D@88\", \"D@87\"] rv=\"knX|\"
+a_t_onerr/3: [\"D@88\", \"D@87\", \"D@85\"] rv=\"kXE|\"
+a_t_while/1: [\"W@100\"] rv=\"123\"
+a_t_while/2: [\"W@100\", \"W@100\"] rv=\"123\"
+a_t_while/3: [\"W@100\", \"W@100\", \"W@97\"] rv=\"12\"
+b_t_local/1: [\"DIVISION-BY-ZERO@107\"] rv=\"kept\"
+b_t_local/2: [\"DIVISION-BY-ZERO@107\", \"DIVISION-BY-ZERO@106\"] rv=\"kept\"
+b_t_loop/1: [\"DIVISION-BY-ZERO@115\"] rv=\"123\"
+b_t_loop/2: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\"] rv=\"123\"
+b_t_loop/3: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\", \"DIVISION-BY-ZERO@113\"] rv=\"1\"
+b_t_rec/1: [\"DIVISION-BY-ZERO@126\"] rv=\"r2r1r0\"
+b_t_rec/2: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\"] rv=\"r2r1r0\"
+b_t_rec/3: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\"] rv=\"r2r1\"
+b_t_rec/4: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\", \"DIVISION-BY-ZERO@123\"] rv=\"r2r1\"
+b_t_nested/1: [\"N@134\"] rv=\"k\"
+b_t_nested/2: [\"N@134\", \"N@137\"] rv=\"k1\"
+b_t_nested/3: [\"N@134\", \"N@137\", \"N@133\"] rv=\"k1\"
+b_t_nested/4: [\"N@134\", \"N@137\", \"N@133\"] rv=\"k12\"
+b_t_cl/1: [\"DIVISION-BY-ZERO@146\"] rv=\"kab\"
+b_t_cl/2: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] rv=\"ka\"
+b_t_cl/3: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] EXC DIVISION-BY-ZERO
+b_t_sw/1: [\"DIVISION-BY-ZERO@153\"] rv=\"k1x2\"
+b_t_sw/2: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] rv=\"k1\"
+b_t_sw/3: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] EXC DIVISION-BY-ZERO
+c_t_fe/1: [\"RUNTIME-TYPE-ERROR@161\"] rv=\"1|\"
+c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=\"12|\"
+";
+
         #! the output of DebuggerEntryReturn.q in every execution mode and compiled ahead of time
         const ExpectedEntryReturn = "returned=True rv=null\n";
 
@@ -101,6 +139,7 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
         string script;
         string functions_script;
         string entry_return_script;
+        string dismissals_script;
         string qcc_bin;
     }
 
@@ -111,6 +150,7 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
         script = get_script_dir() + "/DebuggerExceptionEvents.q";
         functions_script = get_script_dir() + "/DebuggerExceptionEventsFunctions.q";
         entry_return_script = get_script_dir() + "/DebuggerEntryReturn.q";
+        dismissals_script = get_script_dir() + "/DebuggerDismissals.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": exception events", \eventsTest(), (mode,));
             foreach string arg in (ExpectedFunctions.keys()) {
@@ -118,6 +158,7 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
                     (mode, arg));
             }
             addTestCase(mode + ": a return at the start of a function", \entryReturnTest(), (mode,));
+            addTestCase(mode + ": dismissed exceptions", \dismissalsTest(), (mode,));
         }
         foreach int opt in (OptLevels) {
             foreach string arg in (ExpectedFunctions.keys()) {
@@ -125,6 +166,7 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
                     \aotFunctionEventsTest(), (opt, arg));
             }
             addTestCase(sprintf("qcc -O%d: a return at the start of a function", opt), \aotEntryReturnTest(), (opt,));
+            addTestCase(sprintf("qcc -O%d: dismissed exceptions", opt), \aotDismissalsTest(), (opt,));
         }
         set_return_value(main());
     }
@@ -148,6 +190,25 @@ f_dismiss_enclosing: [\"DE@135\", \"DE@134\", \"exit@134\"] rv=5
         string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
             libqore_dir, libqore_dir, qore_bin, mode, entry_return_script), NativeCheck::Jit);
         assertEq(ExpectedEntryReturn, output, mode + ": the function returned at its start");
+    }
+
+    #! a debugger dismisses exceptions at the statements that raise them and at the statements that contain them; the
+    #! functions continue after the statements, with their locals, as with the AST interpreter
+    dismissalsTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, dismissals_script), NativeCheck::Jit);
+        assertEq(ExpectedDismissals, output, mode + ": the dismissals of the AST interpreter");
+    }
+
+    aotDismissalsTest(int opt) {
+        TmpDir tmp("qore-debugger-dismissals-");
+        string exe = tmp.path + DirSep + "dismissals";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            dismissals_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(ExpectedDismissals, output, sprintf("qcc -O%d: the dismissals of the AST interpreter", opt));
     }
 
     aotEntryReturnTest(int opt) {

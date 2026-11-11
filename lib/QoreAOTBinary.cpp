@@ -11783,6 +11783,10 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     builder.setBlock(entry);
 
     QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
+    // the IR of a closure runs in the IR interpreter once a debugger is attached, so in a Program that can be debugged
+    // it has the debugger's events of its statements, as the debug IR of a function (#5816); without a debugger, the
+    // closure runs its native code
+    ir->emit_debug_statements = pgm && qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     std::string error;
