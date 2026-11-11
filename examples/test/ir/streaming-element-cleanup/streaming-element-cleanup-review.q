@@ -205,6 +205,15 @@ sub nh_addany(Log log) { try { nh_addany_inner(log); } catch (hash<ExceptionInfo
 sub sr_list(Log log) { try { list l = (map $1.n, (map new Holder(log, "x" + $1.n[2]), new It(log, 3))); log.add("l " + l.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
 sub sr_foreach(Log log) { try { foreach string v in ((map $1.n, (map new Holder(log, "x" + $1.n[2]), new It(log, 3)))) { log.add("body " + v); } } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
 sub sr_count(Log log) { try { int c = (count log_true(log, $1), (map new Holder(log, "q" + $1.n[1]), (map new Holder(log, "x" + $1.n[2]), new It(log, 3)))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+# the release of first's element or stage value at its end, whose destructor raises, releases the iterator and the
+# source before the handler runs; with and without a handler in the function
+sub fr_take(Log log) { try { auto x = (first $1.n == "zz", (take 1, new It(log, 3, "x"))); log.add("first " + exists x); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+sub fr_stage(Log log) { try { auto x = (first $1.n == "zz", (take 1, (map new Holder(log, "x" + $1.n[2]), new It(log, 3)))); log.add("first " + exists x); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+sub fr_list(Log log) { try { auto x = (first $1.n == "zz", (take 1, (map new Holder(log, "x" + $1.n[1]), holders(log, 3)))); log.add("first " + exists x); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+sub fr_take_nh_inner(Log log) { auto x = (first $1.n == "zz", (take 1, new It(log, 3, "x"))); log.add("first " + exists x); }
+sub fr_take_nh(Log log) { try { fr_take_nh_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err + "/" + ex.desc); } log.add("after"); }
+# the value of select's predicate over a list is released when its element has been decided on
+sub sel_list_pred_obj(Log log) { list r = select holders(log, 3, "s"), new Holder(log, "p" + $1.n[1]); log.add("r " + r.size()); log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -220,6 +229,7 @@ const Cases = (
     "nh_modany_select", "nh_divnum_select", "nh_stradd_select", "fpm_closure", "fpm_same_elem", "fpm_cond_elem",
     "fpm_pred_log", "fpm_foreach_body", "fpm_foreach_two_maps", "fpm_nested", "strcat_try", "nh_divany_nocheck",
     "nh_modany_nocheck", "nh_divnum_nocheck", "nh_addany", "sr_list", "sr_foreach", "sr_count",
+    "fr_take", "fr_stage", "fr_list", "fr_take_nh", "sel_list_pred_obj",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

@@ -40,7 +40,10 @@
     exception skipped the enclosing catch in native code, a map stage's input released after the consumer and a
     foreach body instead of before them, and a nested first operator whose value replaced the previous one before
     its source was released; the release of a map stage's input whose destructor raises must then leave the pipeline
-    to the enclosing handler, which the IR interpreter skipped.
+    to the enclosing handler, which the IR interpreter skipped, and the release of first's element or stage value at
+    its end must release the iterator and the source before the handler runs.  The value of select's predicate over
+    a list is released when its element has been decided on, which the order of an exception's releases (qore#5712)
+    made visible.
 
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
@@ -110,6 +113,12 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "sr_list: released it1; released x1; itdone it; catch DTOR/x1; after",
             "sr_foreach: released it1; released x1; itdone it; catch DTOR/x1; after",
             "sr_count: released it1; released x1; released q1; itdone it; catch DTOR/x1; after",
+            "fr_take: released x1; itdone x; catch DTOR/x1; after",
+            "fr_stage: released it1; released x1; itdone it; catch DTOR/x1; after",
+            "fr_list: released x1; released h1; released h2; catch DTOR/x1; after",
+            "fr_take_nh: released x1; itdone x; catch DTOR/x1; after",
+            "ap_sel_list: released h1; released h2; catch STAGE/h2; after",
+            "sel_list_pred_obj: released p1; released p2; r 2; after; released s1; released s2",
         );
     }
 
