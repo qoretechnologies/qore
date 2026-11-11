@@ -758,13 +758,14 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "named argument evaluation")) {
                 return nullptr;
             }
-            ValueHolder v(qore_list_eval_entry(entry[i], xsink), xsink);
+            // qore_list_eval_entry() returns nothing when it raises an exception
+            QoreValue v = qore_list_eval_entry(entry[i], xsink);
             if (*xsink) {
                 return nullptr;
             }
             size_t pos = (*eval_pos_map)[i];
             assert(pos < eval_result_size);
-            nl->setEntry(pos, v.release(), xsink);
+            nl->setEntry(pos, v, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -772,12 +773,13 @@ QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
         return nl.release();
     }
     for (size_t i = 0; i < length; ++i) {
-        ValueHolder v(qore_list_eval_entry(entry[i], xsink), xsink);
+        // qore_list_eval_entry() returns nothing when it raises an exception
+        QoreValue v = qore_list_eval_entry(entry[i], xsink);
         if (*xsink) {
             return nullptr;
         }
         //printd(5, "qore_list_private::eval() %d: '%s'\n", i, v->getFullTypeName());
-        nl->push(v.release(), xsink);
+        nl->push(v, xsink);
         assert(!*xsink);
     }
     return nl.release();
