@@ -8202,25 +8202,48 @@ int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* vari
     return 0;
 }
 
-AbstractFunctionSignature* QoreFunction::parseGetUniqueSignature() const {
-    if (vlist.singular()) {
-        const UserVariantBase* uvb = first()->getUserVariantBase();
-        if (uvb) {
-            UserSignature* sig = uvb->getUserSignature();
-            sig->resolve();
-            return sig;
-        }
-        return first()->getSignature();
+namespace {
+//! sets the parse context of a plain function while its signature or body is parse-initialized
+/** No class context, the function's namespace context, and a new local variable frame, so that the code of the
+    function (its default argument values and its body) sees neither the class nor the local variables of the code
+    that references it first (issue #5749)
+*/
+class QorePlainFunctionParseContextHelper {
+public:
+    explicit QorePlainFunctionParseContextHelper(qore_ns_private* ns) {
+        thread_set_class_and_ns(nullptr, ns ? ns : parse_get_ns(), old_cls, old_ns);
     }
 
-    return nullptr;
+    ~QorePlainFunctionParseContextHelper() {
+        thread_set_class_and_ns(old_cls, old_ns);
+    }
+
+private:
+    const qore_class_private* old_cls;
+    qore_ns_private* old_ns;
+    //! hides the local variables of the code that references the function (restored after)
+    LVarStackBreakHelper lsbh;
+    //! the local variable frame of the function's code, from which only the Program's top-level variables, which
+    //! have global scope, are visible, as for the function's body
+    VariableBlockHelper vbh;
+};
 }
 
-void QoreFunction::resolvePendingSignatures() {
+void QoreFunction::resolvePendingSignatures(qore_ns_private* ns) {
     if (!check_parse) {
         return;
     }
+    if (!getClass()) {
+        // issue #5749: a plain function's default argument values are resolved in its own context, not in that of
+        // the code that references it first (ex: a call in a method's body)
+        QorePlainFunctionParseContextHelper pch(ns);
+        resolvePendingSignaturesIntern();
+        return;
+    }
+    resolvePendingSignaturesIntern();
+}
 
+void QoreFunction::resolvePendingSignaturesIntern() {
     const QoreTypeInfo* ti = nullptr;
 
     for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
@@ -8311,6 +8334,20 @@ void QoreFunction::parseRollback() {
 }
 
 int QoreFunction::parseInit(qore_ns_private* ns) {
+    if (parse_init_done || parse_init_in_progress) {
+        return 0;
+    }
+    if (getClass()) {
+        // a method: the caller has set the class context
+        return parseInitIntern(ns);
+    }
+    // issue #5749: a plain function's body is parse-initialized without the class context of the code that
+    // references it first (ex: a call in a method's body), or it would get the class's access to private members
+    QorePlainFunctionParseContextHelper pch(ns);
+    return parseInitIntern(ns);
+}
+
+int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     if (parse_init_done || parse_init_in_progress) {
         return 0;
     }
