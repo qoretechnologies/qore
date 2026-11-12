@@ -406,6 +406,9 @@ private:
     //! Insert runtime $1/$2 setup before an AST-delegated fold body.
     QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
         QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
+    //! Restores the implicit arguments that insertFoldImplicitArgvSetup() replaced (\a old_argv), and releases the
+    //! reference to them that the IR interpreter's slot keeps
+    void createFoldPopImplicitArg(QoreIRValue old_argv, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator

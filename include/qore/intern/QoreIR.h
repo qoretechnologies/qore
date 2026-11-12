@@ -1345,6 +1345,9 @@ public:
     // restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
     // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
     bool restore_on_exception_exit = false;
+    // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
+    // ended (see qore_ir_is_exception_only_release())
+    bool exception_cleanup_release = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;

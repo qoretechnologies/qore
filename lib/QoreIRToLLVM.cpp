@@ -4026,7 +4026,7 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
         if (val_it == values.end() || !val_it->second) {
             continue;
         }
-        if (push->opcode == QoreIROpcode::PushImplicitArg) {
+        if (push->opcode == QoreIROpcode::PushImplicitArg || push->opcode == QoreIROpcode::SetImplicitArgv) {
             auto pop_fn = module.getOrInsertFunction("qore_rt_pop_implicit_arg",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(pop_fn, {boxValue(val_it->second, push->result.id), xsink_arg});
@@ -13314,11 +13314,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 invoke_continuations.emplace(last->result.id, normal_target);
             }
         }
+        // the releases of a functional operator's exception cleanup do not keep a Phi from taking its incoming
+        // values over (see qore_ir_is_exception_only_release()): with the releases of a fold's accumulator and
+        // element counted, the accumulator's Phi lost its cleanup slot, and the next IteratorNext released the
+        // element that it borrowed (qore#5830)
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 bool phi_inst = inst_ptr->opcode == QoreIROpcode::Phi;
                 if (phi_inst && inst_ptr->result.isValid()) {
                     phis.push_back(static_cast<const QoreIRPhiInstruction*>(inst_ptr.get()));
+                }
+                if (qore_ir_is_exception_only_release(*inst_ptr)) {
+                    continue;
                 }
                 qore_ir_visit_value_operands(*inst_ptr, [&](QoreIRValue operand) {
                     if (phi_inst) {
@@ -14314,6 +14321,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     + "', which is not a predecessor";
                 return false;
             }
+            // a Phi that takes its incoming values over does so on its own edge: a predecessor with other successors
+            // (the header of a loop, whose exit block has the Phi of the loop's value) gets a block of its own on the
+            // edge, or the reference moved on every edge, and the loop's accumulator left its slot for the exit Phi's
+            // at each element, which released it after the exception cleanup of the loop (qore#5830)
+            if (phi_temp_cleanup) {
+                llvm::Instruction* pred_term = qoreGetTerminator(bb);
+                if (pred_term && pred_term->getNumSuccessors() > 1) {
+                    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "phi_takeover_edge", llvm_func);
+                    llvm::IRBuilder<> eb(edge);
+                    eb.CreateBr(phi_bb);
+                    pred_term->replaceSuccessorWith(phi_bb, edge);
+                    for (llvm::PHINode& pn : phi_bb->phis()) {
+                        pn.replaceIncomingBlockWith(bb, edge);
+                    }
+                    edge_block_map[{inc.block, phi_ir_block}] = edge;
+                    bb = edge;
+                }
+            }
             // Match incoming values to the PHI representation. QoreValue PHIs
             // need boxed i64 operands; native scalar PHIs keep values out of
             // the QoreValue/reference domain.
@@ -14389,12 +14414,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // of its statement left in the slot is released first
                 llvm::Value* owned;
                 auto alloca_it = invoke_alloca_map.find(inc.value.id);
+                // the element that an iterator gives owns its output slot, which the Phi takes over too: the first
+                // element of a fold over an iterator, its initial accumulator, is then released when the accumulator
+                // is replaced, as the AST interpreter's fold releases it, and not when the frame ends (qore#5830)
+                auto element_it = iterator_element_allocas.find(inc.value.id);
                 if (alloca_it != invoke_alloca_map.end() && alloca_it->second
                         && llvm::isa<llvm::AllocaInst>(alloca_it->second)
                         && nanboxed_values.count(inc.value.id) && !weak_load_result_ids.count(inc.value.id)) {
                     llvm::Value* inc_cleanup = alloca_it->second;
                     owned = builder->CreateLoad(i64_type, inc_cleanup);
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), inc_cleanup);
+                } else if (element_it != iterator_element_allocas.end() && element_it->second) {
+                    owned = builder->CreateLoad(i64_type, element_it->second);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), element_it->second);
                 } else if (nanboxed_values.count(inc.value.id)) {
                     owned = emitHelperRef(module, val);
                 } else {

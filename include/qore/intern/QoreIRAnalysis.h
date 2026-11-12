@@ -37,6 +37,15 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns true for a release that only runs once a functional operator's loop has ended on an exception
+/** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
+    a value that it releases and that a Phi or a container took over is released there through its new owner, so the
+    release is not a use that keeps the value from being taken over (qore#5830)
+*/
+static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& inst) {
+    return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
+}
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
