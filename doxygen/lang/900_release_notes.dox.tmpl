@@ -42,6 +42,28 @@
     <i>Sandboxing and execution control:</i>
     - @ref sandboxing "sandboxing" with @ref Qore::SandboxManager "SandboxManager": filesystem, network
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
+    - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
+      @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
+      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
+      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
+      @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
+      @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
+      \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
+    - code that a sandbox governs is refused uncontrolled APIs (Java, Python, the debug hooks and the sandbox
+      methods that mask its policy) at run time with \c INVALID-FUNCTION-ACCESS, as code restricted with
+      \c PO_NO_UNCONTROLLED_APIS is, unless the sandbox allows them; a system-policy capability of trusted code is not
+      refused, a refused call evaluates none of its default arguments, and the %Qore methods of a class that inherits
+      a builtin class of the domain are not refused (only the builtin methods are); the sandbox introspection and
+      barrier methods (\c isGoverned(), \c getGoverningPolicies(), \c callWithSystemPolicy()) are judged by the
+      %Program of the code that calls them, so trusted code calls them for its sandboxed callers (see
+      @ref sandbox_uncontrolled_api)
+    - a DBI driver judges a datasource option by the code that set it, not by the code that opens the connection:
+      trusted code cannot be made to apply an option that sandboxed code set, and a trusted
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" that grows on a sandboxed caller's thread keeps its own
+      configuration (see @ref sandbox_datasource_options)
+    - a sandboxed %Program loads a compiled (\c qcc) module whose source has a \c %module-cmd directive as it loads
+      the module's source: the replayed command is the module's own, not a command that the loader issues to another
+      %Program
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a
@@ -120,6 +142,12 @@
     Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
+    @par Restricted Code Cannot Issue Commands to Modules That Do Not Declare Support
+    A module command (\c %module-cmd, @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()") issued by
+    sandboxed code, or by code with a parse option that restricts a functional domain, is refused with
+    \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
+    (see @ref qore_modules); unrestricted code is not affected.
 
     @par The Implicit Index Is Unset Outside the Code of Its Operator
     An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
@@ -226,11 +254,12 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.1
-    Every external binary module must be rebuilt for module API 2.1, which registers its metadata with a
-    \c {name}_qore_module_desc() function, reports initialization errors as exceptions and covers all public ABI
-    changes of %Qore 3.0; a module built for another module API is not found by its feature name, and the
-    \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.2
+    Every external binary module must be rebuilt for module API 2.2, which registers its metadata with a
+    \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI
+    changes of %Qore 3.0 and lets a module command handler judge the code that issues a command
+    (\c QoreModuleCommandContext); a module built for another module API (such as 2.0 or 2.1) is not found by its
+    feature name, and the \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
@@ -639,6 +668,11 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Module Commands Know the Restrictions of the Code That Issues Them
+    A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
+    %Program, from the new \c QoreModuleCommandContext (module API 2.2; see @ref qore_modules), also for
+    \c %module-cmd and for commands that a compiled program replays when it is loaded.
+
     @par Debugger Exception IDs
     The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
     \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
@@ -919,6 +953,12 @@
     cleanly: @ref Qore::SQL::Datasource::close() "Datasource::close()" raises the error, or reports it as a warning
     event when the close cleans up after another error.  See @ref Qore::SQL::Datasource::close() "Datasource::close()"
     and the DBI driver page of the C++ API documentation.
+
+    @par C++ API: DBI Drivers Judge an Option by the Code That Set It
+    A datasource records the restrictions and the filesystem policy of the code that sets each option, which a driver
+    reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
+    whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
+    (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's

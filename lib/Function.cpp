@@ -1190,6 +1190,78 @@ private:
 };
 }
 
+//! Returns true if the variant is one of the uncontrolled APIs that are judged by the Program that calls them
+/** SandboxManager::isGoverned(), SandboxManager::getGoverningPolicies() and SandboxManager::callWithSystemPolicy()
+    exist for trusted infrastructure acting for sandboxed code: they report the sandbox of the code that called the
+    infrastructure, or lift its policy for the infrastructure's own I/O.  A call of one of them is therefore refused
+    only if the Program of the code that makes it (the Program running when the call is made: for a call reference or
+    a closure, the Program that created it) is sandboxed (qore_program_is_sandboxed(): it has a sandbox, or sandboxed
+    code created it or loaded it by a path that it chose), and then by every sandbox that governs the call, so
+    sandboxed code cannot establish a barrier of its own, nor can a Program that it creates.  Code of a Program that
+    is not sandboxed may call them for a sandboxed caller further down the call stack, for the provenance of the
+    object or callback that it runs, and in a thread that sandboxed code started.
+
+    Only reached when a governing sandbox refuses the call, so the comparisons do not cost the calls that are
+    allowed.
+*/
+static bool is_caller_judged_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant) {
+    const QoreClass* cls = variant->getClass();
+    if (!cls || cls->getID() != CID_SANDBOXMANAGER) {
+        return false;
+    }
+    const char* name = func->getName();
+    return !strcmp(name, "isGoverned") || !strcmp(name, "getGoverningPolicies")
+        || !strcmp(name, "callWithSystemPolicy");
+}
+
+//! Refuses a call of an uncontrolled API to code that a sandbox governs, unless the sandbox allows them (qore#5741)
+/** Uncontrolled APIs (QDOM_UNCONTROLLED_API: the Java classes of the jni module, the Python objects of the python
+    module, ...) do I/O and run code that the sandbox does not see.  The sandbox is resolved as for a filesystem or
+    network policy check: the Programs on the call stack, the provenance of the object or callback being run, and a
+    sandbox inherited by the thread; a system-policy capability of trusted code is not governed.  Called once the
+    variant of the call is fixed and before any default argument is evaluated, so that a variant found when the call
+    was parsed is checked as well and a refused call runs no code; the variants of other functional domains do not
+    resolve the sandbox.
+
+    Only builtin variants are checked: the functionality of a user variant includes the domain of its class, so a
+    user class that inherits a builtin class of the domain (a Qore class that extends a Java class, for example) has
+    the domain on each of its methods, but its user code runs in %Qore, which the sandbox controls; the builtin
+    methods that the user code calls are checked when they are called.  The destructor of a builtin class is not
+    checked either: it releases what the object holds, and the object is destroyed whatever the sandbox decides.
+
+    The sandbox introspection and barrier APIs (SandboxManager::isGoverned(), SandboxManager::getGoverningPolicies()
+    and SandboxManager::callWithSystemPolicy(); see is_caller_judged_uncontrolled_api()) are judged by the Program of
+    the code that makes the call only: trusted code calls them for the sandboxed code that calls it.
+
+    @return 0 if the call may proceed, -1 if it is refused (INVALID-FUNCTION-ACCESS raised)
+*/
+static int check_sandbox_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        ExceptionSink* xsink) {
+    assert(variant);
+    if (variant->isUser() || !(variant->getFunctionality() & QDOM_UNCONTROLLED_API)) {
+        return 0;
+    }
+    if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
+        return 0;
+    }
+    // the destructor of a builtin class is not refused: it only releases what the object holds, and the object is
+    // destroyed in any case (when its last reference is released, also at the end of a scope); refusing it would only
+    // leave its resources unreleased
+    if (dynamic_cast<const DestructorMethodFunction*>(func)) {
+        return 0;
+    }
+    // the sandbox introspection and barrier APIs: trusted code calls them for its sandboxed callers
+    if (is_caller_judged_uncontrolled_api(func, variant) && !qore_program_is_sandboxed(::getProgram())) {
+        return 0;
+    }
+    std::string class_path = func->classPath();
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "the sandbox that governs the calling code does not allow access "
+        "to uncontrolled API %s '%s%s%s(%s)' (see SandboxManager::setUncontrolledApiPolicy())",
+        !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
+        !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
+    return -1;
+}
+
 #ifdef DEBUG
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
@@ -1338,14 +1410,26 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             if (setup_type_param_instantiation()) {
                 return;
             }
+            // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API before any default
+            // argument is evaluated (qore#5741)
+            if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
+                return;
+            }
             // prepare all args
             if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
                 return;
             }
-        } else if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF)) {
-            // the variant is fixed here; an exception evaluating or type-checking a default argument must go to
-            // the caller, otherwise the call would proceed with the ill-typed value
-            return;
+        } else {
+            // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API before any default
+            // argument is evaluated (qore#5741)
+            if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
+                return;
+            }
+            if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF)) {
+                // an exception evaluating or type-checking a default argument must go to the caller, otherwise the
+                // call would proceed with the ill-typed value
+                return;
+            }
         }
         if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
             return;
@@ -1366,6 +1450,11 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         };
 
         if (setup_type_param_instantiation()) {
+            return;
+        }
+        // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API before any default
+        // argument is evaluated (qore#5741)
+        if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
             return;
         }
         // prepare all args

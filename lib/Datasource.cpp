@@ -38,6 +38,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/QC_SQLStatement.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/xxhash.h"
 
@@ -48,6 +49,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -519,6 +521,298 @@ const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_
 
     typed_result_hashdecl_cache[signature] = hd_holder.release();
     return hd;
+}
+
+qore_ds_option_setter::qore_ds_option_setter()
+        : restrictions(QoreModuleCommandRestrictions::getCallerRestrictions()),
+        policy(qore_find_thread_sandbox_policy_manager_ref()) {
+}
+
+qore_ds_option_setter::~qore_ds_option_setter() {
+    if (policy) {
+        policy->deref(nullptr);
+    }
+}
+
+QoreSandboxManager* qore_ds_option_setter::getPolicyManagerRef() const {
+    if (policy) {
+        policy->ref();
+    }
+    return policy;
+}
+
+qore_ds_option_snapshot::~qore_ds_option_snapshot() {
+    if (opt) {
+        ExceptionSink xsink;
+        opt->deref(&xsink);
+    }
+}
+
+namespace {
+//! makes the code that sets an option visible to the driver of an open connection while it is given the value
+/** The driver judges the value by the code that sets it (Datasource::getOptionRestrictions()), but the value is not
+    kept, and so the setter is not recorded with the kept values, until the driver accepts it (qore#5741)
+*/
+class PendingOptionSetterHelper {
+public:
+    PendingOptionSetterHelper(qore_ds_private& ds, const char* name,
+            const std::shared_ptr<const qore_ds_option_setter>& setter) : ds(ds) {
+        assert(setter);
+        AutoLocker al(ds.m);
+        // an option is set by one thread at a time
+        assert(!ds.pending_opt_setter);
+        // the name is assigned first: if it cannot be, nothing is pending
+        ds.pending_opt_name = name;
+        ds.pending_opt_setter = setter;
+    }
+
+    //! clears the slot if the value was not kept: commitOption() clears it when it keeps the value
+    ~PendingOptionSetterHelper() {
+        // the reference is released after the lock: the caller holds another, but the lock is a leaf lock
+        std::shared_ptr<const qore_ds_option_setter> setter;
+        AutoLocker al(ds.m);
+        setter.swap(ds.pending_opt_setter);
+    }
+
+    PendingOptionSetterHelper(const PendingOptionSetterHelper&) = delete;
+    PendingOptionSetterHelper& operator=(const PendingOptionSetterHelper&) = delete;
+
+private:
+    qore_ds_private& ds;
+};
+}
+
+#ifdef DEBUG
+namespace {
+//! the hook that setOption() calls after the driver accepted a value, for the calling thread
+thread_local qore_ds_private::dbg_option_commit_hook_t dbg_option_commit_hook = nullptr;
+thread_local void* dbg_option_commit_hook_arg = nullptr;
+}
+
+void qore_ds_private::setDbgOptionCommitHook(dbg_option_commit_hook_t hook, void* arg) {
+    dbg_option_commit_hook = hook;
+    dbg_option_commit_hook_arg = arg;
+}
+#endif
+
+namespace {
+//! undoes qore_ds_private::prepareOption() unless the value was kept
+class OptionCommitHelper {
+public:
+    OptionCommitHelper(qore_ds_private& ds, const char* name,
+            const std::shared_ptr<const qore_ds_option_setter>& setter) : ds(ds), name(name) {
+        ds.prepareOption(name, setter, prep);
+    }
+
+    ~OptionCommitHelper() {
+        if (!committed) {
+            ds.cancelOption(name, prep);
+        }
+    }
+
+    //! keeps the value; cannot fail
+    void commit(QoreValue val, const std::shared_ptr<const qore_ds_option_setter>& setter, ExceptionSink* xsink) {
+        assert(!committed);
+        committed = true;
+        ds.commitOption(name, val, setter, prep, xsink);
+    }
+
+    OptionCommitHelper(const OptionCommitHelper&) = delete;
+    OptionCommitHelper& operator=(const OptionCommitHelper&) = delete;
+
+private:
+    qore_ds_private& ds;
+    const char* name;
+    qore_ds_private::OptionCommitPrep prep;
+    bool committed = false;
+};
+}
+
+int qore_ds_private::setOption(const char* name, const QoreValue val,
+        const std::shared_ptr<const qore_ds_option_setter>& setter, ExceptionSink* xsink) {
+    assert(setter);
+    // the errors of this call are collected in a sink of its own, as the caller's can already hold an exception
+    ExceptionSink opt_xsink;
+    // issue #3243: validate options before sending them to the driver
+    OptInputHelper opt_helper(&opt_xsink, *qore_dbi_private::get(*dsl), name, true, val);
+    if (opt_xsink) {
+        xsink->assimilate(opt_xsink);
+        return -1;
+    }
+    // a connection opened by the parent of a child process created with fork() is given up: the option is set on
+    // the next connection
+    if (isInherited()) {
+        abandonInherited();
+    }
+    // everything that keeping the value needs is allocated before the driver is given the value: once the driver
+    // accepted it, the connection has it, and keeping it with its setter cannot fail
+    OptionCommitHelper commit(*this, name, setter);
+    // with an open connection, the driver must accept the value as well; it judges the value by the code that sets
+    // it (Datasource::getOptionRestrictions()), which it sees as the setter of the option while it is called
+    //
+    // The setter stays in the pending slot until commitOption() keeps the value and clears the slot in the same
+    // critical section: the connection has the new value from the moment the driver accepts it, so a copy made by
+    // another thread in the meantime must see either the pending setter (and not copy the value) or the kept value
+    // with its setter, never the driver's value without a setter (getOptionSnapshot())
+    int rc = 0;
+    std::optional<PendingOptionSetterHelper> pending;
+    if (private_data) {
+        pending.emplace(*this, name, setter);
+        rc = qore_dbi_private::get(*dsl)->opt_set_validated(ds, name, opt_helper.val, &opt_xsink);
+    }
+    if (opt_xsink) {
+        // a value that was refused is not kept: it never becomes current, also not on the next connection, and the
+        // previous setter of the option stays recorded; the pending slot is cleared when the helper is destroyed
+        xsink->assimilate(opt_xsink);
+        return -1;
+    }
+#ifdef DEBUG
+    if (dbg_option_commit_hook) {
+        dbg_option_commit_hook(*this, name, dbg_option_commit_hook_arg);
+    }
+#endif
+    // the copy of the option that is set on every new connection, kept with the code that set it (qore#5741); this
+    // also clears the pending slot, if any
+    commit.commit(opt_helper.val.refSelf(), setter, xsink);
+    return rc;
+}
+
+void qore_ds_private::prepareOption(const char* name, const std::shared_ptr<const qore_ds_option_setter>& setter,
+        OptionCommitPrep& prep) {
+    assert(name);
+    assert(setter);
+    assert(!prep.member);
+    // the record of the setter of a new option
+    {
+        qore_ds_option_setter_map_t tmp;
+        tmp.emplace(name, setter);
+        prep.node = tmp.extract(tmp.begin());
+    }
+    AutoLocker al(m);
+    // an option is set by one thread at a time, and a driver does not set options from its own option-setting function
+    assert(!placeholder_opt);
+    // assigned first, so that nothing is changed if it cannot be
+    placeholder_opt_name = name;
+    // the member of the option; a new member has no value, so it does not count as set until the value is kept
+    prep.member = qore_hash_private::get(*opt)->findCreateMember(name, prep.created_member);
+    assert(prep.member);
+    placeholder_opt = prep.created_member;
+}
+
+QoreDsApplyStoredOptionsHelper::QoreDsApplyStoredOptionsHelper(const Datasource& ds) : ds(ds) {
+    qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
+    AutoLocker al(priv->m);
+    ++priv->applying_stored_options;
+}
+
+QoreDsApplyStoredOptionsHelper::~QoreDsApplyStoredOptionsHelper() {
+    qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
+    AutoLocker al(priv->m);
+    assert(priv->applying_stored_options > 0);
+    --priv->applying_stored_options;
+}
+
+bool qore_ds_is_option_placeholder(const Datasource& ds, const char* name) {
+    return qore_ds_private::get(const_cast<Datasource&>(ds))->isOptionPlaceholder(name);
+}
+
+void qore_ds_private::cancelOption(const char* name, OptionCommitPrep& prep) noexcept {
+    if (!prep.member || !prep.created_member) {
+        return;
+    }
+    AutoLocker al(m);
+    placeholder_opt = false;
+    // the member created for the value, which still has no value: the option is set by one thread at a time
+    assert(prep.member->val.isNothing());
+    QoreValue v = qore_hash_private::get(*opt)->takeKeyValueIntern(name);
+    assert(v.isNothing());
+    (void)v;
+    prep.member = nullptr;
+}
+
+void qore_ds_private::commitOption(const char* name, QoreValue val,
+        const std::shared_ptr<const qore_ds_option_setter>& setter, OptionCommitPrep& prep, ExceptionSink* xsink) {
+    assert(name);
+    assert(setter);
+    assert(prep.member);
+    // declared before the lock is taken, so that they are released after it: the old value can be an object, and the
+    // old setter can hold the last reference to a policy manager
+    ValueHolder new_val(val, xsink);
+    ValueHolder old_val(xsink);
+    std::shared_ptr<const qore_ds_option_setter> old_setter;
+    // the pending setter of the option (see setOption()), released after the lock as well
+    std::shared_ptr<const qore_ds_option_setter> old_pending;
+
+    AutoLocker al(m);
+    // nothing below allocates or fails: the member and the record of the setter were allocated by prepareOption()
+    hash_assignment_priv ha(*qore_hash_private::get(*opt), prep.member, prep.created_member);
+    old_val = ha.swap(new_val.release());
+    prep.member = nullptr;
+    placeholder_opt = false;
+    qore_ds_option_setter_map_t::iterator i = opt_setters.find(name);
+    if (i != opt_setters.end()) {
+        old_setter = std::move(i->second);
+        i->second = setter;
+    } else {
+        assert(!prep.node.empty());
+        opt_setters.insert(std::move(prep.node));
+    }
+    // the value is kept: the setter that setOption() made visible to the driver is no longer pending; cleared in the
+    // same critical section, so that there is no moment in which the connection's value has no setter
+    if (pending_opt_setter) {
+        assert(pending_opt_name == name);
+        old_pending.swap(pending_opt_setter);
+    }
+}
+
+qore_ds_option_snapshot qore_ds_private::getOptionSnapshot() const {
+    // the values that the driver of an open connection reports, including its defaults; read first and without the
+    // lock, as the driver is not called with it held.  Without a connection, the kept values below are the options
+    ReferenceHolder<QoreHashNode> vals(private_data ? getCurrentOptionHash(true) : new QoreHashNode(autoTypeInfo),
+        nullptr);
+    // the values that the datasource keeps and their setters, read together with the lock held as commitOption()
+    // changes them; they are newer than any value that the driver reported above
+    ReferenceHolder<QoreHashNode> kept(new QoreHashNode(autoTypeInfo), nullptr);
+    qore_ds_option_setter_map_t setters;
+    std::string pending;
+    {
+        AutoLocker al(m);
+        ConstHashIterator hi(opt);
+        while (hi.next()) {
+            qore_hash_private::get(**kept)->setKeyValueIntern(hi.getKey(), hi.get().refSelf());
+        }
+        setters = opt_setters;
+        if (pending_opt_setter) {
+            pending = pending_opt_name;
+        }
+    }
+
+    ExceptionSink xsink;
+    // a value that the driver is being given and that the datasource does not keep yet is not copied: it has no
+    // setter that it could be judged by
+    if (!pending.empty() && !kept->existsKey(pending.c_str())) {
+        vals->removeKey(pending.c_str(), &xsink);
+    }
+    // each kept value replaces the value that the driver reported, so that it is paired with the code that set it;
+    // values that are not current are not copied, as getCurrentOptionHash() does not copy them
+    ConstHashIterator hi(*kept);
+    while (hi.next()) {
+        QoreValue v = hi.get();
+        if (v.isNothing() || (v.getType() == NT_BOOLEAN && !v.getAsBool())) {
+            vals->removeKey(hi.getKey(), &xsink);
+        } else {
+            vals->setKeyValue(hi.getKey(), v.refSelf(), &xsink);
+        }
+    }
+    // the setters of the options that are copied
+    for (qore_ds_option_setter_map_t::iterator i = setters.begin(); i != setters.end();) {
+        if (vals->existsKey(i->first.c_str())) {
+            ++i;
+        } else {
+            i = setters.erase(i);
+        }
+    }
+    return qore_ds_option_snapshot(vals.release(), std::move(setters));
 }
 
 QoreHashNode* qore_ds_private::getCurrentOptionHash(bool ensure_hash) const {
@@ -1828,32 +2122,28 @@ QoreHashNode* Datasource::getOptionHash() const {
 }
 
 int Datasource::setOption(const char* opt, const QoreValue val, ExceptionSink* xsink) {
-    // the errors of this call are collected in a sink of its own, as the caller's can already hold an exception
-    ExceptionSink opt_xsink;
-    // issue #3243: validate options before sending them to the driver
-    OptInputHelper opt_helper(&opt_xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
-    // a connection opened by the parent of a child process created with fork() is given up: the option is set on
-    // the next connection
-    if (priv->isInherited()) {
-        priv->abandonInherited();
-    }
-    // with an open connection, the driver must accept the value as well
-    int rc = 0;
-    if (!opt_xsink && priv->private_data) {
-        rc = qore_dbi_private::get(*priv->dsl)->opt_set_validated(this, opt, opt_helper.val, &opt_xsink);
-    }
-    if (opt_xsink) {
-        // a value that was refused is not kept: it never becomes current, also not on the next connection
-        xsink->assimilate(opt_xsink);
-        return -1;
-    }
-    // the copy of the option that is set on every new connection
-    priv->setOption(opt, opt_helper.val, xsink);
-    return rc;
+    // the calling code is the code that sets the option (qore#5741)
+    return priv->setOption(opt, val, qore_ds_option_setter::getCaller(), xsink);
 }
 
 const QoreHashNode* Datasource::getConnectOptions() const {
     return priv->opt;
+}
+
+bool Datasource::getOptionRestrictions(const char* opt, QoreModuleCommandRestrictions& restrictions) const {
+    assert(opt);
+    std::shared_ptr<const qore_ds_option_setter> setter = priv->getOptionSetter(opt);
+    if (!setter) {
+        return false;
+    }
+    restrictions = setter->getRestrictions();
+    return true;
+}
+
+QoreSandboxManager* Datasource::getOptionPolicyManagerRef(const char* opt) const {
+    assert(opt);
+    std::shared_ptr<const qore_ds_option_setter> setter = priv->getOptionSetter(opt);
+    return setter ? setter->getPolicyManagerRef() : nullptr;
 }
 
 QoreValue Datasource::getOption(const char* opt, ExceptionSink* xsink) {

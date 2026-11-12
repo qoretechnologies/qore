@@ -4198,13 +4198,15 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         sandbox does not govern.
 
         @param app the app's registered info; its \c name and \c display_name name it in the error
-        @param sandboxed whether the caller is sandboxed; if not given, the caller is sandboxed if a sandbox governs
-        the current thread's code (Qore::SandboxManager::isSandboxed()), also through a policy barrier or a
+        @param sandboxed whether the caller is sandboxed; if not given, the caller is sandboxed if a sandbox that
+        refuses uncontrolled APIs governs the current thread's code (Qore::SandboxManager::isRestricted()), also
+        through a policy barrier or a
         system-policy capability, so that the check fails closed: trusted code that uses the app on purpose in a
         capability called by sandboxed code passes @ref False.  Consumers that serve a sandboxed caller from a
         thread that no sandbox governs (for example a server thread that runs a request for a tenant) pass
         @ref True.  A consumer decides this value from what it knows about the caller, and never forwards a value
-        that the caller supplied.  Qore::SandboxManager::isSandboxed() is used because it is not restricted, so the
+        that the caller supplied.  Qore::SandboxManager::isRestricted() is used because it is not itself restricted to
+        @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", so the
         module can be loaded first by a Program restricted with
         @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"
 
@@ -4224,7 +4226,7 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         if (DataProviderActionCatalog::isSandboxAllowed(app)) {
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("application %y (%s) does network or filesystem I/O that the "
@@ -4256,7 +4258,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             DataProviderActionCatalog::checkSandboxAccess(info, sandboxed);
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("application %y is not registered, so whether sandboxed code may "
@@ -4306,7 +4308,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         if (!module_name || !exists external_io_module_apps{module_name}) {
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         throw "APP-SANDBOX-ACCESS-DENIED", sprintf("%s %y belongs to module %y, which registers application(s) %y "
@@ -4827,7 +4829,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         # the provider reaches the app's I/O: a sandboxed caller is refused an app whose external I/O its sandbox does
         # not control (see @ref dataprovider_external_io); checked after the module is loaded, which can register the
         # app; an app that is not registered is refused to sandboxed callers too
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             DataProviderActionCatalog::checkActionSandboxAccess(action);
         }
         hash<auto> constructor_opts;

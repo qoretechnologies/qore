@@ -3948,9 +3948,18 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @param command the command string to execute to be parsed by the module
 
     @throw PARSE-COMMAND-ERROR the module does not support commands
+    @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
+    restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
+    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
+    another Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
+
+    @note the module decides what the command may do from the restrictions of the code that issues it (its effective
+    parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
+    module whose commands execute code, change a class path or a search path, or touch the filesystem or the network
+    can refuse the command with an exception of its own
 
     @since %Qore 0.9
 */
@@ -4112,9 +4121,18 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
     @param command the command string to execute to be parsed by the module
 
     @throw PARSE-COMMAND-ERROR the module does not support commands
+    @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
+    restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
+    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
+    another Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
+
+    @note the module decides what the command may do from the restrictions of the code that issues it (its effective
+    parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
+    module whose commands execute code, change a class path or a search path, or touch the filesystem or the network
+    can refuse the command with an exception of its own
 
     @since %Qore 2.0
 */

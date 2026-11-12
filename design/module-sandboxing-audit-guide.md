@@ -263,7 +263,18 @@ becoming a general bypass, and all three are asserted in
   the no-arg form for anything else. When auditing a call site, ask which of the two it is:
   a site that uses the manager's *presence* to drive cancellation behavior (process-group
   setup, for example) is **not** a policy site and must keep the no-arg form.
-- It is restricted to `PO_NO_UNCONTROLLED_APIS`, so sandboxed code cannot establish one.
+- It is restricted to `PO_NO_UNCONTROLLED_APIS`, so sandboxed code cannot establish one: at parse time with the
+  parse option, and at run time by the refusal of uncontrolled APIs to code that a sandbox governs (qore#5741).
+  `callWithSystemPolicy()`, `isGoverned()` and `getGoverningPolicies()` are judged at run time by the Program of
+  the code that calls them, not by the whole call stack (`is_caller_judged_uncontrolled_api()` in
+  `lib/Function.cpp`): the code of a Program that is not sandboxed (`qore_program_is_sandboxed()`: the host's code,
+  a library module, a closure that such code created) calls them for a sandboxed caller further down the stack, for
+  an object or callback with sandbox provenance, and in a thread that sandboxed code started; the code of a
+  sandboxed Program (one with a sandbox, or one that sandboxed code created or loaded by a path of its own) is
+  refused them unless every governing sandbox allows uncontrolled APIs. A closure or a call reference runs in the
+  Program that created it, so one created by sandboxed code is refused also when trusted code calls it. Every
+  other uncontrolled API (`createSystemPolicyCall()`, `createSystemThreadCall()`, the debug hooks, Java and Python)
+  is judged by every governing sandbox.
 
 The barrier cannot lift object or callback provenance. Trusted resource operations register a fixed callback with
 `SandboxManager::createSystemPolicyCall()` during trusted startup, before any sandbox governs execution. The
@@ -384,17 +395,130 @@ the access, as copies; more than one governs when, for example, sandboxed code c
 another sandbox created, and an access is then allowed only if each allows it. A combination of managers
 (`QoreSandboxComposition`) has no policy of its own, so its members are returned.
 
-Both are restricted to `PO_NO_UNCONTROLLED_APIS`, like the other APIs that expose or mask policy. Inside a policy
+Both are restricted to `PO_NO_UNCONTROLLED_APIS`, like the other APIs that expose or mask policy, and are judged at
+run time by the Program of the code that calls them, as the barrier is (see above). Inside a policy
 barrier or a capability, the caller's sandbox no longer governs the access, so `isGoverned()` returns `False` there
 unless a sandbox governs the code entered inside it: ask in the code that acts on behalf of the caller, before
 entering the barrier. `examples/test/qore/classes/SandboxManager/sandbox-inherited-methods.qtest` covers each
 resolution path.
+
+### Destructors of Builtin Classes in the Uncontrolled-API Domain
+
+A sandbox that refuses uncontrolled APIs refuses, at run time, every builtin variant in the `QDOM_UNCONTROLLED_API`
+domain that the code it governs calls (`check_sandbox_uncontrolled_api()` in `lib/Function.cpp`), with two
+exceptions: the sandbox introspection and barrier methods `SandboxManager::isGoverned()`,
+`SandboxManager::getGoverningPolicies()` and `SandboxManager::callWithSystemPolicy()`, which are judged by the code
+that calls them (`is_caller_judged_uncontrolled_api()`), and the destructor of a builtin class: the object is
+destroyed whenever its last reference goes (end of scope, `delete`,
+deletion of its Program), and refusing the destructor would only leak what it holds. The exemption covers that
+destructor only; what a Qore destructor calls is judged as any other call. Consequently:
+
+- a builtin destructor runs for sandboxed code: it must only release what the object holds (memory, handles,
+  references to foreign objects) and must not do I/O, open connections or run code on behalf of the caller
+- work that a destructor would otherwise do (flushing to a server, committing, notifying) belongs in a method, which
+  the sandbox judges
+- releasing a foreign object can run the foreign runtime's cleanup (a Python `__del__()`, a Java cleaner); that
+  happens at release in any case, and the code that created the foreign object chose it
+
+Audit item: a builtin class in the domain whose destructor does more than release its resources.
 
 ### Key Principle: Sandbox Manager May Be Absent
 
 When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:
 - Check for this and use fast paths when no sandbox is present
 - Never fail or behave incorrectly when sandboxing is disabled
+
+### Module Commands: Decide From the Issuer, Not the Target
+
+A binary module can handle module commands (`%module-cmd(mod) cmd`, `Program::issueModuleCmd()`,
+`QoreProgram::issueModuleCmd()`, `ModuleManager::issueRuntimeCmd()`, and the commands that a compiled program records
+and replays when it is loaded; the handler is `QoreModuleInfo::parse_cmd`). A command that executes code (Python or Java
+code, an import that runs initializers, a class defined from bytecode, a script engine), changes a class path or a search
+path, touches the filesystem or the network, or changes state that every Program shares (a JVM system property) is as
+sensitive as any API the module exposes to Qore code, and it is issued by Qore code that can be restricted.
+
+The handler runs in the Program that the command applies to: `getProgram()` is the target of the command, and its
+parse options describe the target, never the code that issued the command. A handler that checks
+`getProgram()->getParseOptions()` therefore checks the wrong Program: restricted code that issues a command to its own
+Program, or to a Program that is more permissive, gets what the target allows. Use `QoreModuleCommandContext` instead:
+
+```cpp
+static void my_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    assert(ctx);
+    if (cmd == "exec") {
+        // not for sandboxed code, nor for code that forbids uncontrolled APIs or embedded logic
+        if (ctx->check(PO_NO_UNCONTROLLED_APIS | PO_NO_EMBEDDED_LOGIC, true, "MY-COMMAND-ERROR", "exec", xsink)) {
+            return;
+        }
+        ...
+    }
+}
+```
+
+Qore fills the context in from the issuing code before it switches to the target Program (in `QoreModuleManager::
+issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's commands goes through the latter):
+
+| What the handler gets | Where it comes from |
+|---|---|
+| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v29; the options the program is declared with before that), and for a library module loaded compiled only those |
+| `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
+| `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
+
+Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is
+handling. The context is valid only while the handler runs, on its thread; hand `ctx->copy()` to another thread, and
+ask it with `hasAny()` and `isSandboxed()` there (`check()` raises an exception, so it needs a thread that Qore knows).
+A module function (not a command) that judges its caller asks `QoreModuleCommandRestrictions::getCallerRestrictions()`:
+the same restrictions as a command issued by the calling code would have (library module code: none but the sandbox).
+Reading `getProgram()->getParseOptions()` or using `QoreReflectionCaller` in such a function sees the parse options that
+the Program of a library module inherited from its loader, and refuses library module code that the sandbox allows.
+
+A DBI driver applies datasource options when a connection is opened, which can be on another thread and for other code
+than the code that set them (a `DatasourcePool` grows on the thread that first needs a connection; trusted code can open
+a datasource that sandboxed code configured). It judges an option by its setter, not by the code that opens the
+connection: `Datasource::getOptionRestrictions()` gives the restrictions recorded when the option was set (by
+`Datasource::setOption()`, the options of a constructor or a connection string, or for a pool's connections the code
+that created the pool; copies keep them), and `Datasource::getOptionPolicyManagerRef()` the setter's filesystem policy.
+Only an option with no recorded setter falls back to `getCallerRestrictions()` (qore#5741). The restrictions are checked
+first and refuse regardless of the policy: `getOptionPolicyManagerRef()` is `nullptr` whenever no sandbox policy governed
+the setter, also for sandboxed code inside a trusted `SandboxManager::callWithSystemPolicy()` barrier, so a missing
+policy is never treated as trust; only an option that the restrictions allow is checked against the policy.
+
+Through library module code the usual rule holds: a sandbox that governs the caller governs the module code that issues
+the command (`isSandboxed()`), a parse option that restricts the caller or that the module's Program inherited from its
+loader does not: a jni classpath command issued at run time by a library module (the Jdbc and Jms data providers) is not
+refused for a caller that has only `PO_NO_FILESYSTEM`, and is refused for a sandboxed one (see "Reading the calling
+Program's parse options").
+
+A module whose handler checks the context for every command that executes code, changes a path, touches the filesystem
+or the network, or has process-wide effect sets `mod_info.cmd_caller_aware = true`. A module that does not set it is
+refused every command from restricted code (sandboxed, or with a parse option that
+restricts a functional domain) before the handler runs, so a module that does not judge the issuer is safe by default.
+
+Audit checklist for a module with a command handler:
+- [ ] `cmd_caller_aware` is set only if every command is classified (executes code / changes a path / touches the
+  filesystem or the network / process-wide / none of these)
+- [ ] a command that executes code refuses a sandboxed issuer, and an issuer with `PO_NO_UNCONTROLLED_APIS` or, for
+  embedded logic, `PO_NO_EMBEDDED_LOGIC`
+- [ ] a command that changes a class path or search path, or reads a path, refuses `PO_NO_FILESYSTEM` and a sandboxed
+  issuer, and checks the path with the sandbox manager when one governs the issuer
+- [ ] a command with process-wide effect is refused for every restricted issuer
+- [ ] nothing in the handler reads `getProgram()->getParseOptions()` to decide whether the issuer may do something
+- [ ] the restrictions are copied (not the context pointer) when another thread continues the command
+- [ ] the descriptor sets `cmd_caller_aware` only if `is_module_api_supported(2, 2)` when a library that implements
+  module API 2.1 or earlier may load the module (the API version is validated only after the descriptor has filled in
+  the struct, which such a library creates without the field)
+
+Audit checklist for library module code (a Qore-language module in a module directory, or a binary module) that issues
+module commands, for every module with commands it issues to:
+- [ ] it never forwards a module-command argument that its caller controls (a path, a classpath, a class or module
+  name, code, a command string) to a command that it issues. Library module code is judged by the sandbox only, not by
+  the parse options of its caller or those that its Program inherited from its loader (see the table above): a command
+  issued by library code with an argument chosen by code that only parse options restrict (`PO_NO_FILESYSTEM`,
+  `PO_NO_UNCONTROLLED_APIS`, `PO_NO_EMBEDDED_LOGIC`, without a sandbox) is not refused, so it would let that code
+  bypass them. The arguments come from the module itself or from its trusted configuration, or the module function
+  that takes them refuses a restricted caller itself (`QoreModuleCommandRestrictions::getCallerRestrictions()`, with
+  the parse options that the command would need)
 
 ---
 

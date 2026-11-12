@@ -741,8 +741,14 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     \c APP-SANDBOX-ACCESS-DENIED exception naming the app; trusted callers are never refused, and apps without
     \c external_io are not affected.
 
-    The catalog applies the rule itself where an app's I/O can be reached, for code that a sandbox governs (see
-    Qore::SandboxManager::isSandboxed()), so sandboxed code cannot get around it by using the catalog directly:
+    For this rule, a sandbox is one that refuses uncontrolled APIs (Qore::SandboxManager::setUncontrolledApiPolicy(),
+    the default): code that a sandbox governs only for resource limits, interrupts or I/O policy, and that allows
+    uncontrolled APIs, is trusted code here, because the host trusts it to run arbitrary code in Java or Python
+    anyway.  The catalog's process-wide registrations, change listeners and callbacks are refused to code that any
+    sandbox governs (Qore::SandboxManager::isSandboxed()), because what such code registers carries its sandbox, whose
+    interrupts and limits would then apply to every other caller.  The catalog
+    applies the rule itself where an app's I/O can be reached, for code that such a sandbox governs (see
+    Qore::SandboxManager::isRestricted()), so sandboxed code cannot get around it by using the catalog directly:
     - @ref DataProvider::DataProviderActionCatalog::getDataProviderForAction()
       "DataProviderActionCatalog::getDataProviderForAction()" refuses the provider of an action of such an app, and of
       an app that is not registered; the caller passes the action, so the class that it creates must be the one that
@@ -769,7 +775,7 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     defines its class: a factory of a module that registers no app, or only apps without uncontrolled external I/O,
     is not refused, and an action that a module contributes to the app of another module is decided by that app's
     declarations.  The checks are cheap: for a trusted caller, the common path is one
-    @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()" call, with no lock.
+    @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()" call, with no lock.
 
     Data provider consumers that serve a sandboxed caller on a thread that the caller's sandbox does not govern (a
     server thread that runs a tenant's request, for example) apply the rule themselves with
@@ -1741,6 +1747,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - a caller counts as sandboxed for the \c external_io rule only when a sandbox that refuses uncontrolled APIs
+      governs it (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"); code that a host governs
+      with a sandbox only for its limits or interrupts, and that it allows uncontrolled APIs, may use the
+      \c external_io apps (see @ref sandbox_uncontrolled_api)
     - added the @ref DataProvider::DataProviderAppInfo::external_io "external_io" and
       @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" fields to
       @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo", which declare that an app does I/O that the

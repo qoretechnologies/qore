@@ -93,6 +93,10 @@ struct QoreSandboxMembers {
 
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
+    //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
+    //! state of the whole manager, kept here as the composition is, so that the layout of QoreSandboxManager, which is
+    //! part of the C++ API, does not change
+    std::atomic<bool> uncontrolled_api_allowed{false};
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -1132,6 +1136,23 @@ static T sandbox_intersection_limit(const QoreSandboxManager* manager, T own,
     return own;
 }
 
+void QoreSandboxManager::setUncontrolledApiPolicy(bool allow) {
+    fs_mgr.priv->uncontrolled_api_allowed.store(allow, std::memory_order_release);
+}
+
+bool QoreSandboxManager::getUncontrolledApiPolicy() const {
+    // a composition allows them only if every member does
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (!member->getUncontrolledApiPolicy()) {
+                return false;
+            }
+        }
+        return !members->empty();
+    }
+    return fs_mgr.priv->uncontrolled_api_allowed.load(std::memory_order_acquire);
+}
+
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
@@ -1418,6 +1439,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("memory_limit", static_cast<int64>(mem_account->limit.load()), xsink);
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
+    config->setKeyValue("uncontrolled_api_policy", getUncontrolledApiPolicy(), xsink);
 
     return config.release();
 }
@@ -1503,6 +1525,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->cpu_time_limit = cpu_time_limit.load();
     result->max_stack_size = max_stack_size.load();
     result->mem_account->limit.store(mem_account->limit.load());
+    // the effective policy: a copy of a composition allows them only if every member does
+    result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
     // Don't copy interrupt state
 
     return result;
@@ -1732,6 +1756,14 @@ QoreSandboxManagerHelper::QoreSandboxManagerHelper(Purpose purpose) {
     ptr = purpose == Policy
         ? qore_find_thread_sandbox_policy_manager_ref()
         : qore_find_thread_sandbox_manager_ref();
+}
+
+bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose) {
+    // the governing managers are resolved as QoreSandboxManagerHelper(purpose) resolves them, without combining them
+    // (which would allocate a composition on every call of an uncontrolled API): the composition allows them only if
+    // every member does
+    assert(purpose == QoreSandboxManagerHelper::Policy || purpose == QoreSandboxManagerHelper::All);
+    return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {

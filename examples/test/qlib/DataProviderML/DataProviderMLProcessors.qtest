@@ -169,6 +169,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("onnx-model - basic inference", \onnxModelBasicInference());
         addTestCase("onnx-model - diagnostics", \onnxModelDiagnostics());
         addTestCase("onnx-model - device binding diagnostics", \onnxModelDeviceBindingDiagnostics());
+        addTestCase("onnx-model - device binding is refused to a sandbox that refuses uncontrolled APIs",
+            \onnxModelDeviceBindingSandbox());
         addTestCase("onnx-model - flush partial", \onnxModelFlushPartial());
         addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
         addTestCase("onnx-model - DataFrameBlock multi-column tensor path",
@@ -2862,6 +2864,43 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "profile summary should include the test model operator");
         assertTrue(diag.profile_summary.provider_names.contains("CPUExecutionProvider"),
             "profile summary should include the active CPU execution provider");
+    }
+
+    onnxModelDeviceBindingSandbox() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+        # device binding uses uncontrolled APIs, which a sandbox refuses unless it allows them (qore#5741): the
+        # processor refuses it before any binding call, with its own error
+        string src = sprintf("%%requires DataProviderML\n%%requires dataframe\n"
+            "auto sub run() {\n"
+            "    DataProviderML::QoreOnnxModelProcessor proc({\"model_path\": %y, \"fields\": \"x\", "
+            "\"window_size\": 5, \"output_mode\": \"tensor\", \"execution_providers\": \"CPUExecutionProvider\", "
+            "\"device_binding\": True, \"output_device\": \"cpu\"});\n"
+            "    DataFrame::DataFrame df({\"x\": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0))});\n"
+            "    return proc.processRecordsShape(df, DataProviderShape::DataFrameBlock).Y instanceof ML::Tensor;\n"
+            "}\n", getTestModelPath());
+        foreach bool allow in ((False, True)) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+            if (allow) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(sm);
+            p.parse(src, "device-binding-sandbox");
+            if (allow) {
+                assertTrue(p.callFunction("run"), "a sandbox that allows uncontrolled APIs binds the device");
+            } else {
+                assertThrows("PROCESSOR-ERROR", "uncontrolled APIs", \p.callFunction(), "run",
+                    "the default sandbox is refused device binding");
+            }
+        }
+%endif
     }
 
     onnxModelDeviceBindingDiagnostics() {

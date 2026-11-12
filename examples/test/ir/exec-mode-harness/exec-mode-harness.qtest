@@ -45,7 +45,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
 
     #! the warning of the module loader for an AOT module that is out of date
     const StaleWarning = "warning: AOT module '/build/qlib-qmod/QUnit.qmod' for feature 'QUnit' is out of date: its "
-        "source '/opt/lib/qore-modules/xml-api-2.1.qmod' has changed since it was compiled; loading source module "
+        "source '/opt/lib/qore-modules/xml-api-2.2.qmod' has changed since it was compiled; loading source module "
         "'/src/qlib/QUnit.qm' instead; rebuild the AOT module";
 
     #! the warning of the module loader for an AOT module that cannot be loaded

@@ -17,8 +17,8 @@
 %exec-class ModuleApiVersionTest
 
 #! A binary module built for another module API is not loaded
-/** Module API 2.1 covers the public ABI changes made during Qore 3.0 development after module API 2.0 was introduced,
-    so a module built with the 2.0 headers must not be loaded.  Such a module is named <name>-api-2.0.qmod (apiold):
+/** Qore loads only a module built for the current module API, so a module built with the headers of the previous API
+    (2.1) must not be loaded.  Such a module is named <name>-api-2.1.qmod (apiold):
     looked up by its feature name, it is not found, and the error names the file and the module API to rebuild it for;
     loaded by its path, it is refused with the API mismatch error; a module built with the current headers (apicur)
     loads.
@@ -39,16 +39,16 @@ class ModuleApiVersionTest inherits QUnit::Test {
     }
 
     private versionTest() {
-        # apiold has the file name of a module built for module API 2.0 (see module-cpp-api/CMakeLists.txt)
+        # apiold has the file name of a module built for module API 2.1 (see module-cpp-api/CMakeLists.txt)
         *string old_path;
         foreach string dir in ((ENV.QORE_MODULE_DIR ?? "").split(":")) {
-            string path = dir + DirSep + "apiold-api-2.0.qmod";
+            string path = dir + DirSep + "apiold-api-2.1.qmod";
             if (is_file(path)) {
                 old_path = path;
                 break;
             }
         }
-        assertTrue(exists old_path, "apiold-api-2.0.qmod in QORE_MODULE_DIR: " + (ENV.QORE_MODULE_DIR ?? "<none>"));
+        assertTrue(exists old_path, "apiold-api-2.1.qmod in QORE_MODULE_DIR: " + (ENV.QORE_MODULE_DIR ?? "<none>"));
         if (!exists old_path) {
             return;
         }
@@ -58,12 +58,12 @@ class ModuleApiVersionTest inherits QUnit::Test {
             string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s %s", env, qore_bin, mode, probe,
                 old_path), NativeCheck::None);
             assertRegex("^feature apiold: LOAD-MODULE-ERROR: feature 'apiold' is not builtin and no module with this "
-                "name could be found in the module path: [^\n]*; found '[^'\n]*apiold-api-2\\.0\\.qmod' built for "
-                "module API 2\\.0: rebuild it for module API 2\\.1\n", out, mode + ": apiold by feature name");
-            assertRegex("\npath apiold: LOAD-MODULE-ERROR: module '[^']*apiold-api-2\\.0\\.qmod': feature 'apiold': API "
-                "mismatch, module supports API 2\\.0, however only version 2\\.1 is supported\n", out,
+                "name could be found in the module path: [^\n]*; found '[^'\n]*apiold-api-2\\.1\\.qmod' built for "
+                "module API 2\\.1: rebuild it for module API 2\\.2\n", out, mode + ": apiold by feature name");
+            assertRegex("\npath apiold: LOAD-MODULE-ERROR: module '[^']*apiold-api-2\\.1\\.qmod': feature 'apiold': API "
+                "mismatch, module supports API 2\\.1, however only version 2\\.2 is supported\n", out,
                 mode + ": apiold by path");
-            assertRegex("\napicur: loaded API 2\\.1\n$", out, mode + ": apicur");
+            assertRegex("\napicur: loaded API 2\\.2\n$", out, mode + ": apicur");
         }
     }
 
@@ -89,8 +89,8 @@ class ModuleApiVersionTest inherits QUnit::Test {
             string out = ExecModeHarness::run(cmd + " hint", NativeCheck::None);
             assertRegex("^hint: LOAD-MODULE-ERROR: feature 'hint' is not builtin and no module with this name could be "
                 "found in the module path: [^\n]*; found '" + quote(dir) + "/hint-api-1\\.9\\.qmod' built for module API "
-                "1\\.9: rebuild it for module API 2\\.1; found '" + quote(dir) + "/hint/hint-api-3\\.0\\.qmod' built for "
-                "module API 3\\.0: rebuild it for module API 2\\.1\n$", out, mode + ": hint");
+                "1\\.9: rebuild it for module API 2\\.2; found '" + quote(dir) + "/hint/hint-api-3\\.0\\.qmod' built for "
+                "module API 3\\.0: rebuild it for module API 2\\.2\n$", out, mode + ": hint");
             assertEq(2, (out =~ x/(; found ')/g).size(), mode + ": hint count");
 
             # no file of the feature: no hint

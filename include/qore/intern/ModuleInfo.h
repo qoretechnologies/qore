@@ -666,7 +666,16 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
+    //! issues a module command at run time
+    /** @param origin how the command was issued: MC_RUNTIME, or MC_REPLAY for a command that a compiled program
+        records and replays when it is loaded
+        @param declared_po for a replayed command, the parse options that the compiled program is declared with:
+        the code that loads the program cannot loosen what the source it was compiled from had (see
+        QoreModuleCommandContext)
+    */
+    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
+        QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
+        const QoreParseOptions* declared_po = nullptr);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -1307,6 +1316,7 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
+              cmd_caller_aware(mod_info.cmd_caller_aware),
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
               dependencies(mod_info.dependencies), aot(mod_info.is_aot), module_ns(mod_info.ns) {
         if (module_ns) {
@@ -1392,6 +1402,9 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
+    //! true if the parse command handler honors the restrictions of the code that issues a command (see
+    //! QoreModuleInfo::cmd_caller_aware)
+    bool cmd_caller_aware;
     //! The sink outlives its metadata holder, including constructor failure cleanup.
     ExceptionSink info_xsink;
     ReferenceHolder<QoreHashNode> info;
@@ -1456,8 +1469,8 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd,
             ExceptionSink* xsink) override {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' is a user module; only "
-                "builtin modules can support parse commands", name.c_str(), filename.c_str());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' is a user "
+                "module; only builtin modules can support parse commands", name.c_str(), filename.c_str());
         }
     }
 

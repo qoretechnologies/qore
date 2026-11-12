@@ -54,8 +54,11 @@
 
     @since %Qore 3.0: 2.1, which covers all public ABI changes made during %Qore 3.0 development after module API 2.0
     was introduced; modules built with the 2.0 headers are refused
+    @since %Qore 3.0: 2.2, which adds QoreModuleInfo::cmd_caller_aware, QoreModuleCommandRestrictions and
+    QoreModuleCommandContext (a module command handler judges the code that issues a command); modules built with the
+    2.1 headers are refused
 */
-#define QORE_MODULE_API_MINOR 1
+#define QORE_MODULE_API_MINOR 2
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
@@ -191,6 +194,28 @@ struct QoreModuleInfo {
         @since %Qore 3.0 (check @ref QORE_HAS_MODULE_NS_PURGE)
     */
     QoreNamespace* ns = nullptr;
+
+    //! set to true if the module's parse command handler honors the restrictions of the code that issues a command
+    /** The handler of a module that sets this checks QoreModuleCommandContext::get() for every command that executes
+        code, changes a classpath or search path, touches the filesystem or the network, or changes state shared by
+        all Programs, and refuses it when the issuing code is not allowed to do that.
+
+        A module that does not set it is not given a command issued by restricted code: the command is refused with
+        \c PARSE-COMMAND-ERROR for a \c %module-cmd directive, and with \c RUNTIME-COMMAND-ERROR for a command issued
+        at run time or replayed from a compiled program.  Code that is not restricted can issue commands to every
+        module.
+
+        @warning the module API version is validated only after the description function has filled in the struct; a
+        library that implements module API 2.1 or earlier creates a struct without this field, so a module that such a
+        library may load (by an explicit path, or by a file name without the API suffix) sets it only if
+        is_module_api_supported(2, 2) is true; the library then refuses the module for its API version without the
+        write
+
+        @see QoreModuleCommandContext
+
+        @since %Qore 3.0 (module API 2.2)
+    */
+    bool cmd_caller_aware = false;
 };
 
 //! defined if QoreModuleInfo::ns and QoreNamespace::purge() are available
@@ -200,6 +225,173 @@ struct QoreModuleInfo {
 
 //! Module description function
 typedef void (*qore_binary_module_desc_t)(QoreModuleInfo& mod_info);
+
+class QoreProgram;
+class ExceptionSink;
+
+//! The restrictions of the code that issued a module command
+/** A module command (a \c %module-cmd directive, Program::issueModuleCmd(), QoreProgram::issueModuleCmd(),
+    ModuleManager::issueRuntimeCmd(), or a command recorded in a compiled program and replayed when it is loaded) is
+    handled by the parse command function of a binary module (QoreModuleInfo::parse_cmd), which runs in the Program
+    that the command applies to: getProgram() there is the target of the command, and its parse options say nothing
+    about the code that issued it.  A handler decides what a command may do from an object of this class, which Qore
+    fills in from the issuing code before it switches to the target Program (see QoreModuleCommandContext).
+
+    The restrictions are those of the code that issued the command, with the restrictions that it inherits from its
+    callers: the effective run-time parse options (including a \c %push-parse-options block), whether a sandbox governs
+    it, and, for a command replayed from a compiled program, also the parse options that program is declared with.
+    Code of a library module (a module from the module path, not one that the code loading it chose by a path of its
+    own) has no parse options: only the sandbox that governs it restricts it, as module code is everywhere in %Qore.  They only grow within a command: a command that a handler
+    issues itself has at least the restrictions of the command it is handling.
+
+    An object of this class is a plain value: a handler that hands the restrictions to another thread passes a copy
+    (QoreModuleCommandContext::copy()), since the context that QoreModuleCommandContext::get() returns is valid only
+    while the handler runs.
+
+    @see QoreModuleCommandContext
+    @see QoreModuleInfo::cmd_caller_aware
+
+    @since %Qore 3.0 (module API 2.2)
+*/
+class QoreModuleCommandRestrictions {
+public:
+    //! creates unrestricted restrictions
+    DLLEXPORT QoreModuleCommandRestrictions();
+
+    //! creates restrictions from parse options and the sandbox state of the issuing code
+    /** @param po the parse options of the issuing code; only the options that restrict a functional domain are kept
+        (see getRestrictingOptions())
+        @param sandboxed true if a sandbox governs the issuing code
+    */
+    DLLEXPORT QoreModuleCommandRestrictions(const QoreParseOptions& po, bool sandboxed);
+
+    DLLEXPORT QoreModuleCommandRestrictions(const QoreModuleCommandRestrictions& old);
+    DLLEXPORT QoreModuleCommandRestrictions& operator=(const QoreModuleCommandRestrictions& old);
+    DLLEXPORT virtual ~QoreModuleCommandRestrictions();
+
+    //! returns the parse options of the issuing code that restrict a functional domain
+    DLLEXPORT QoreParseOptions getParseOptions() const;
+
+    //! returns true if a sandbox governs the issuing code, or the issuing code runs in a sandboxed Program
+    /** A sandbox that a host attaches to trusted code only for its interrupts or limits, and that allows uncontrolled
+        APIs (QoreSandboxManager::setUncontrolledApiPolicy()), does not make the code that it governs sandboxed here;
+        a Program that sandboxed code created with no sandbox of its own stays sandboxed
+    */
+    DLLEXPORT bool isSandboxed() const;
+
+    //! returns true if the issuing code is sandboxed or has a restricting parse option
+    DLLEXPORT bool isRestricted() const;
+
+    //! returns true if the issuing code has any of the options in \a mask
+    DLLEXPORT bool hasAny(const QoreParseOptions& mask) const;
+
+    //! checks that the issuing code may do what a command does, and raises an exception if it may not
+    /** Raises the exception in \a xsink, so it must be called on a thread that Qore knows (the thread of the
+        handler, or one started with the Qore thread API); another thread asks with hasAny() and isSandboxed() on a
+        copy of the restrictions and reports the refusal itself.
+
+        @param mask the restricting parse options (such as \c PO_NO_UNCONTROLLED_APIS) that forbid the action
+        @param sandboxed_denied true if the action is also forbidden for sandboxed code
+        @param err the exception code to raise (a module's own, such as \c "PYTHON-PARSE-COMMAND-ERROR")
+        @param what the action, for the exception description (such as \c "exec")
+        @param xsink the exception sink
+
+        @return 0 if the action is allowed, -1 if an exception was raised
+    */
+    DLLEXPORT int check(const QoreParseOptions& mask, bool sandboxed_denied, const char* err, const char* what,
+        ExceptionSink* xsink) const;
+
+    //! returns the parse options that restrict a functional domain
+    /** all domain restrictions except the options that grant something and the domain that marks the Program of a
+        module
+    */
+    DLLEXPORT static QoreParseOptions getRestrictingOptions();
+
+    //! returns the restrictions of the code that is calling the module function that is running
+    /** For a module function or method (not a module command) that decides what its caller may do: it gives the
+        restrictions that a module command issued by the same code would have in its QoreModuleCommandContext.  They
+        are the restricting parse options that apply to the calling code and whether a sandbox governs it
+        (isSandboxed()).  Code of a library module (a module found in a module directory, not one that the code
+        loading it chose by a path of its own) has no parse options, only the sandbox that governs it, as module code
+        has everywhere in %Qore: the parse options of the Program of such a module are only what it inherited from
+        the code that loaded it (for example \c PO_NO_FILESYSTEM from a \c %no-filesystem loader), so a module that
+        judges its caller by getProgram()->getParseOptions() or QoreReflectionCaller refuses library module code that
+        a sandbox allows.  Inside a module command handler the restrictions are those of the command, as in
+        QoreModuleCommandContext::get().
+
+        Call it on a thread that Qore knows, from the module function, before the function hands work to another
+        thread (pass a copy of the result).
+
+        @since %Qore 3.0 (module API 2.2)
+    */
+    DLLEXPORT static QoreModuleCommandRestrictions getCallerRestrictions();
+
+protected:
+    //! the restricting parse options of the issuing code
+    QoreParseOptions po;
+    //! true if a sandbox governs the issuing code
+    bool sandboxed;
+};
+
+//! The context of the module command that the parse command function of a binary module is handling
+/** Valid only while the handler runs, on the thread that runs it; see QoreModuleCommandRestrictions.
+
+    @code{.cpp}
+static void my_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    assert(ctx);
+    if (cmd == "exec") {
+        // a command that runs code: not for sandboxed code, nor for code that forbids uncontrolled APIs
+        if (ctx->check(PO_NO_UNCONTROLLED_APIS | PO_NO_EMBEDDED_LOGIC, true, "MY-COMMAND-ERROR", "exec", xsink)) {
+            return;
+        }
+        ...
+    }
+}
+    @endcode
+
+    @since %Qore 3.0 (module API 2.2)
+*/
+class QoreModuleCommandContext : public QoreModuleCommandRestrictions {
+public:
+    //! how the command reached the handler
+    enum Origin {
+        MC_PARSE = 0,    //!< a \c %module-cmd directive
+        MC_RUNTIME = 1,  //!< Program::issueModuleCmd(), QoreProgram::issueModuleCmd() or ModuleManager::issueRuntimeCmd()
+        MC_REPLAY = 2,   //!< a command recorded in a compiled program, replayed when the program is loaded
+    };
+
+    //! returns the context of the command that the calling thread's handler is handling, or nullptr
+    DLLEXPORT static const QoreModuleCommandContext* get();
+
+    //! returns how the command reached the handler
+    DLLEXPORT Origin getOrigin() const;
+
+    //! returns the Program that the issuing code runs in; the Program of a command may be its own issuer
+    /** For identity only: to decide what the command may do, use the restrictions
+    */
+    DLLEXPORT const QoreProgram* getIssuerProgram() const;
+
+    //! returns the Program that the command applies to; the same as getProgram() in the handler
+    DLLEXPORT const QoreProgram* getTargetProgram() const;
+
+    //! returns a copy of the restrictions that can be kept or given to another thread
+    DLLEXPORT QoreModuleCommandRestrictions copy() const;
+
+    DLLEXPORT virtual ~QoreModuleCommandContext();
+
+    //! not for module use: Qore creates the context
+    DLLLOCAL QoreModuleCommandContext(Origin origin, const QoreProgram* issuer, const QoreProgram* target,
+        const QoreParseOptions& po, bool sandboxed);
+
+    QoreModuleCommandContext(const QoreModuleCommandContext&) = delete;
+    QoreModuleCommandContext& operator=(const QoreModuleCommandContext&) = delete;
+
+private:
+    Origin origin;
+    const QoreProgram* issuer;
+    const QoreProgram* target;
+};
 
 //! manages the loading of Qore modules from feature or path names.  Also manages adding module changes into QoreProgram objects.
 /** in the case that a QoreProgram object is created before a module is loaded externally

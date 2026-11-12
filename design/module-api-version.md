@@ -12,10 +12,10 @@ changes with it.  What a user sees for a module built for another API:
 - looked up by its feature name (`%requires`, `load_module("name")`), the loader tries only
   `<name>-api-<supported>.qmod` and `<name>.qmod`, so the module is not found; the `LOAD-MODULE-ERROR` then names each
   `<name>-api-<major>.<minor>.qmod` file of the feature with an unsupported API in the module path (flat and split
-  form; the API is read from the file name, the module is not loaded): "...; found '<path>' built for module API 2.0:
-  rebuild it for module API 2.1" (`qore_append_unsupported_api_modules()` in lib/ModuleManager.cpp);
+  form; the API is read from the file name, the module is not loaded): "...; found '<path>' built for module API 2.1:
+  rebuild it for module API 2.2" (`qore_append_unsupported_api_modules()` in lib/ModuleManager.cpp);
 - loaded by its path, its description function is read and the module is refused with "API mismatch, module supports
-  API 2.0, however only version 2.1 is supported".
+  API 2.1, however only version 2.2 is supported".
 
 **Any change to the public headers that a module compiled with the previous headers would get wrong must increment
 `QORE_MODULE_API_MINOR`** (or `QORE_MODULE_API_MAJOR` for an incompatible redesign of the module interface), in the
@@ -48,6 +48,12 @@ Adding new exported functions, or new types that old modules do not use, needs n
   - the `QoreStackLocation` ABI (86ee672a22).
   - `QoreModuleInfo::ns`, through which a module registers the namespace that module teardown purges, with
     `QoreNamespace::purge()` (module namespace teardown, merged with this bump).
+- 2.2 (Qore 3.0): `QoreModuleInfo::cmd_caller_aware` (after `ns`), `QoreModuleCommandRestrictions` and
+  `QoreModuleCommandContext`, through which a module command handler judges the code that issues a command (#5699).
+  The struct grew a field that a module writes in its description function, before the library can check its API, so
+  a 2.2 module loaded by a 2.1 library (whose struct has no such field) would write past it; a 2.2 module that such a
+  library may load sets the field only if `is_module_api_supported(2, 2)` is true.  2.1 libraries were already
+  installed in development images when the field was added, so the API was incremented and 2.1 modules are refused.
 
 ## Guard
 
@@ -80,7 +86,8 @@ in an incrementally built tree, where tools that look for a module file by a pat
 from its output directory (the module's file base name is `$<TARGET_FILE_BASE_NAME>`, which follows
 `LIBRARY_OUTPUT_NAME` and `OUTPUT_NAME`; CMake 3.14, which lacks it, uses `OUTPUT_NAME` or the target name); the
 `QORE_BINARY_MODULE*` macros call it (and so external modules built with the installed
-macros), as do the in-tree modules that set their suffix themselves (dbi_test, the module-cpp-api test modules).
+macros), as do the in-tree modules that set their suffix themselves (dbi_test, the module-cpp-api test modules,
+staticpgm, staticpgmcode and avrocppapi).
 Test: examples/test/cmake/test_stale_module_api_files.py.
 
 ## Packaging
@@ -92,7 +99,7 @@ Test: examples/test/cmake/test_stale_module_api_files.py.
   `override_dh_gencontrol`, so that a module package can depend on the module API it was built for.
 - examples/test/cmake/test_module_api_version.py checks that these name the API of the header.
 
-Test: examples/test/module-cpp-api/module-api/module-api-version.qtest, in every execution mode: apiold (declares API
-2.0, built as `apiold-api-2.0.qmod`) is not found by its feature name and the error names its file, and is refused by
-its path with the API mismatch; apicur (the current headers) loads and reports 2.1; the hint names each file of a
+Test: examples/test/module-cpp-api/module-api/module-api-version.qtest, in every execution mode: apiold (declares the
+previous API, 2.1, built as `apiold-api-2.1.qmod`) is not found by its feature name and the error names its file, and is
+refused by its path with the API mismatch; apicur (the current headers) loads and reports 2.2; the hint names each file of a
 feature with an unsupported API in the flat and the split form and no other file.

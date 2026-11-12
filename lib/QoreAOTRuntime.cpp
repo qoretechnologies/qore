@@ -11125,7 +11125,14 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
 
         ExceptionSink xsink;
         QoreString qcmd(command.command.c_str());
-        int rc = MM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink);
+        // a command recorded from the source of the compiled program is replayed with the restrictions of the code
+        // that loads the program and the restricting parse options that were in force at the directive: the loader
+        // cannot loosen what the source was compiled under (issue #5699); an artifact that does not record them
+        // (before v29) is replayed with the parse options that the program is declared with, a superset
+        const QoreParseOptions declared_po = command.has_options
+            ? QoreParseOptions(command.options_lo, command.options_hi) : pgm->getParseOptions();
+        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCommandContext::MC_REPLAY,
+            &declared_po);
         if (rc < 0 || xsink.isException()) {
             error = "AOT module command failed";
             if (label && *label) {

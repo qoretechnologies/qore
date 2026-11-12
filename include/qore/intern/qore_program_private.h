@@ -565,6 +565,8 @@ public:
     struct ModuleParseCommand {
         std::string module;
         std::string command;
+        //! the restricting parse options that were in force at the directive (see QoreModuleCommandContext)
+        QoreParseOptions options;
     };
 
     //! `%module-cmd(<module>) <command>` directives executed while parsing this Program.
@@ -1418,8 +1420,12 @@ public:
         }
     }
 
-    DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {
-        module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str()});
+    //! records a %module-cmd directive that was executed while parsing the Program
+    /** @param options the restricting parse options that were in force at the directive, which a compiled program
+        replays the command with
+    */
+    DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd, const QoreParseOptions& options) {
+        module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str(), options});
     }
 
     //! Applies a %prepend-module-path / %append-module-path directive argument to this Program.

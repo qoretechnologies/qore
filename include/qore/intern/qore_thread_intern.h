@@ -688,6 +688,16 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
+/** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
+    qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
+    combining them: it allocates nothing and returns as soon as one of them refuses uncontrolled APIs.  It runs on
+    every call of an uncontrolled API by code that a sandbox governs (qore#5741).
+
+    @since Qore 3.0
+*/
+DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 

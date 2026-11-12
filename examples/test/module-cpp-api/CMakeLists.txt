@@ -67,6 +67,84 @@ endif()
 # (see fork-exit/forkexit-module.cpp): one source built twice, with an atexit() handler (forkexita, whose fork
 # handler has a leaf rank) and with a static destructor (forkexitb, whose fork handler has the reset rank)
 
+# --- the modules with a module command handler (issue #5699) ---------------------------------------------------
+# one source built twice (module-command/cmdctx-module.cpp): cmdctxaware declares that its handler honors the
+# restrictions of the code that issues a command (QoreModuleInfo::cmd_caller_aware), cmdctxlegacy does not
+
+foreach(_cmdctx_module cmdctxaware cmdctxlegacy)
+    if (_cmdctx_module STREQUAL "cmdctxaware")
+        set(_cmdctx_aware true)
+    else()
+        set(_cmdctx_aware false)
+    endif()
+    add_library(${_cmdctx_module} MODULE module-command/cmdctx-module.cpp)
+    add_dependencies(${_cmdctx_module} libqore)
+    target_include_directories(${_cmdctx_module} PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${_cmdctx_module} PRIVATE
+        BUILDING_DLL=1
+        HAVE_UNIX_CONFIG_H
+        PACKAGE_VERSION="${VERSION}"
+        CMDCTX_ID=${_cmdctx_module}
+        CMDCTX_NAME="${_cmdctx_module}"
+        CMDCTX_AWARE=${_cmdctx_aware}
+        $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+    set_target_properties(${_cmdctx_module} PROPERTIES
+        PREFIX ""
+        SUFFIX "${_cppapi_test_module_suffix}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/${_cmdctx_module}")
+    if (CMAKE_HOST_APPLE)
+        target_link_options(${_cmdctx_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+    endif()
+endforeach()
+
+# --- the module with builtins of the uncontrolled-API functional domain (qore#5741) ----------------------------------
+# a builtin class that Qore code can inherit and builtins with a default argument whose evaluation is visible
+# (uncontrolled-api/uncontrolledprobe-module.cpp)
+
+add_library(uncontrolledprobe MODULE uncontrolled-api/uncontrolledprobe-module.cpp)
+add_dependencies(uncontrolledprobe libqore)
+target_include_directories(uncontrolledprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(uncontrolledprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(uncontrolledprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/uncontrolledprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(uncontrolledprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
+# --- the module with a DBI driver that reports the setters of its options (qore#5741) --------------------------------
+# (datasource-option-setter/dsoptprobe-module.cpp)
+
+add_library(dsoptprobe MODULE datasource-option-setter/dsoptprobe-module.cpp)
+add_dependencies(dsoptprobe libqore)
+target_include_directories(dsoptprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(dsoptprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(dsoptprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/dsoptprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(dsoptprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
 foreach(_forkexit_module forkexita forkexitb)
     add_library(${_forkexit_module} MODULE fork-exit/forkexit-module.cpp)
     add_dependencies(${_forkexit_module} libqore)
@@ -94,8 +172,8 @@ target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_AT
 
 # --- the modules that declare a module API version -----------------------------------------------
 # (see module-api/apiprobe-module.cpp and module-api/module-api-version.qtest): one source built twice, declaring
-# the module API of the headers (apicur) and the module API 2.0 of the headers before qore#5519 (apiold); apiold has
-# the file name that a module built with the 2.0 headers has (apiold-api-2.0.qmod)
+# the module API of the headers (apicur) and the previous module API 2.1, the API before QoreModuleInfo::cmd_caller_aware
+# (apiold); apiold has the file name that a module built with the 2.1 headers has (apiold-api-2.1.qmod)
 
 foreach(_apiprobe_module apicur apiold)
     add_library(${_apiprobe_module} MODULE module-api/apiprobe-module.cpp)
@@ -119,9 +197,9 @@ foreach(_apiprobe_module apicur apiold)
         target_link_options(${_apiprobe_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
     endif()
 endforeach()
-set_target_properties(apiold PROPERTIES SUFFIX "-api-2.0.qmod")
+set_target_properties(apiold PROPERTIES SUFFIX "-api-2.1.qmod")
 target_compile_definitions(apicur PRIVATE APIPROBE_MAJOR=QORE_MODULE_API_MAJOR APIPROBE_MINOR=QORE_MODULE_API_MINOR)
-target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=2 APIPROBE_MINOR=0)
+target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=2 APIPROBE_MINOR=1)
 
 # --- the module that owns Programs, which it deletes when it is deleted ---------------------------
 # (see program-owner/tdpgmowner-module.cpp and program-owner/program-owner-teardown.qtest)
@@ -146,6 +224,7 @@ if (CMAKE_HOST_APPLE)
 endif()
 
 # remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
-foreach(_cppapi_test_module cppapitest cppapiuser forkexita forkexitb apicur apiold tdpgmowner)
+foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe forkexita
+        forkexitb apicur apiold tdpgmowner)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()
