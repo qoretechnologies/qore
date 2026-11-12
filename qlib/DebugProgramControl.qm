@@ -68,9 +68,9 @@ module DebugProgramControl {
       stack catches the exception
     - a thread stops once for an exception, at its first event that a client's exception filter matches: the
       exception events of the statements that contain it, which the exception leaves after the thread continued, do
-      not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes an exception
-      that the thread stopped at as caught uncaught (see the \c debug_id key of
-      @ref Qore::ExceptionInfo "ExceptionInfo")
+      not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes uncaught an
+      exception that the thread stopped at while it was caught and a client has the \c "uncaught" exception filter
+      (see the \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo")
     - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
       a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
       \c program//breakpoint/&lt;id&gt; set and get them, \c breakpoint//create takes them in its value (\c condition,
@@ -1578,14 +1578,22 @@ public namespace DebugProgramControl {
 
             @param ex the exception
             @param uncaught @ref True if no try statement of debuggable code in the call stack catches it
+            @param uncaught_only @ref True if only the \c "uncaught" filter stops the thread, as for an exception that
+            it stopped at while it was caught and that a rethrow made uncaught
         */
-        private bool stopsAtException(hash<auto> ex, bool uncaught) {
+        private bool stopsAtException(hash<auto> ex, bool uncaught, bool uncaught_only = False) {
             return DebugProgramControl::withReadLock(rwlConnection, bool sub () {
                 if (!ctxConnection) {
                     return True;
                 }
                 *string type = ex.type.lwr();
                 foreach hash<auto> c in (ctxConnection.iterator()) {
+                    if (uncaught_only) {
+                        if (!exists c.exceptionFilters || inlist("uncaught", c.exceptionFilters)) {
+                            return True;
+                        }
+                        continue;
+                    }
                     if (!exists c.exceptionFilters
                         || inlist(type, c.exceptionFilters)
                         || (uncaught && inlist("uncaught", c.exceptionFilters))
@@ -2512,7 +2520,8 @@ public namespace DebugProgramControl {
                     return;
                 }
                 except_uncaught = isUncaught(adjustStack(get_thread_call_stack(), ctx));
-                if ((exists stopped_uncaught && !except_uncaught) || !stopsAtException(except, except_uncaught)) {
+                if ((exists stopped_uncaught && !except_uncaught)
+                        || !stopsAtException(except, except_uncaught, exists stopped_uncaught)) {
                     runToStatementId = runToStatementIdBefore;
                     return;
                 }

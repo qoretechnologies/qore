@@ -1492,6 +1492,8 @@ try {
         assertEq({"INNER": 1, "OUTER": 1, "UP": 1, "UP/uncaught": 1}, getExceptionStops(NOTHING,
             ExceptionAgainScript));
         assertEq({"UP/uncaught": 1}, getExceptionStops(("uncaught",), ExceptionAgainScript));
+        # without the "uncaught" filter, the rethrow does not stop the thread again
+        assertEq({"INNER": 1, "OUTER": 1, "UP": 1}, getExceptionStops(("user",), ExceptionAgainScript));
     }
 
     exceptionFilterTest() {
