@@ -13436,6 +13436,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 // Write flags: "lambda,in_method" (matches write_slot_CLOSURE_CREATE ref1 format)
                 std::string flags = std::string(closure->isLambda() ? "1" : "0") + ","
                     + (closure->isInMethod() ? "1" : "0");
+                // ",1": the default values use the closure's object (issue #5931); left out otherwise
+                if (closure->defaultsNeedObject()) {
+                    flags += ",1";
+                }
                 writer.writeStringRef(flags.c_str());
 
                 // Write class type path (ref2)

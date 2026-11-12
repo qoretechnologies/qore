@@ -109,11 +109,11 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
-    //! Marks a closure read from an AOT image that uses the self of its method without capturing it (issue #5931)
-    DLLLOCAL void setSelfNotCaptured() { self_not_captured = true; }
+    //! Marks a closure whose default values use its object: they use self or create a closure (issue #5931)
+    DLLLOCAL void setDefaultsNeedObject() { defaults_need_object = true; }
 
-    //! Returns true if the closure uses the self of its method without capturing it, so its object is its self
-    DLLLOCAL bool isSelfNotCaptured() const { return self_not_captured; }
+    //! Returns true if the default values of the closure are evaluated with its object (issue #5931)
+    DLLLOCAL bool defaultsNeedObject() const { return defaults_need_object; }
 
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
@@ -144,8 +144,8 @@ private:
     qore_ns_private* parse_ns = nullptr;
     bool lambda, in_method,
         is_deferred = false,
-        //! the closure uses the self of its method, which an AOT image does not capture (see setSelfNotCaptured())
-        self_not_captured = false;
+        //! the default values of the closure use its object (see setDefaultsNeedObject())
+        defaults_need_object = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 

@@ -1550,7 +1550,7 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
 
                 if (closure && ((closure->getCvec() && !closure->getCvec()->empty())
-                        || closure->getClosureParseNode()->isSelfNotCaptured())) [[unlikely]] {
+                        || closure->getClosureParseNode()->defaultsNeedObject())) [[unlikely]] {
                     // a default value of a closure that captured variables or uses a self that it did not capture is
                     // evaluated with them (issues #5923, #5931)
                     p = qore_eval_closure_default_arg(*closure, defaultArgList[i], xsink);
@@ -2204,6 +2204,9 @@ int UserSignature::resolve() {
             // initialize default arguments
             if (defaultArgList[i]) {
                 QoreParseContext parse_context(selfid);
+                if (default_value_pflag) {
+                    parse_context.setFlags(default_value_pflag);
+                }
                 if (parse_init_value(defaultArgList[i], parse_context) && !err) {
                     err = -1;
                 }
@@ -8748,7 +8751,36 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
         // code that created it has returned: the variables of that code that they use are captured by the closure,
         // as those that its code uses are (issue #5923)
         ClosureParseEnvironment cenv(cf->getVList(), cf);
+        // self in a default value is the closure's own, as in its code, and not the captured self of the method that
+        // created the closure, which would keep the object alive; the default values are parsed in the closure's
+        // object context, as its code is, and one that is evaluated (and so can use the object, through self, a
+        // member or a method, or create a closure, which takes the current object) is evaluated with the closure's
+        // object (issue #5931)
+        const QoreTypeInfo* class_type = cf->getClassType();
+        if (class_type) {
+            if (signature.selfid) {
+                push_local_var(signature.selfid, signature.getParseLocation());
+            } else {
+                int self_err = 0;
+                signature.selfid = push_local_var("self", signature.getParseLocation(), class_type, self_err, true,
+                    1);
+                signature.selfid->setSelf();
+            }
+            // the default values of a closure in a const method cannot change the object, as its code cannot
+            if (cf->isConstMethodContext()) {
+                signature.default_value_pflag = PF_CONST_METHOD;
+            }
+        }
         err = signature.resolve();
+        if (class_type) {
+            pop_local_var();
+            for (const QoreValue& v : signature.getDefaultArgList()) {
+                if (v.needsEval()) {
+                    cf->setDefaultsNeedObject();
+                    break;
+                }
+            }
+        }
     }
 
     // resolve and push current return type on stack

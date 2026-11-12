@@ -519,6 +519,8 @@ public:
     LocalVar* selfid;
     bool resolved;
     int err = 0;
+    //! parse flags of the default values: PF_CONST_METHOD for a closure in a const method, as for its code
+    int default_value_pflag = 0;
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po);
 
@@ -2759,6 +2761,7 @@ protected:
     LVarSet varlist;  // closure local variable environment
     const QoreTypeInfo* classTypeInfo;
     bool has_nested_closures = false;  // set during parse if body contains nested closures
+    bool defaults_need_object = false; // set during parse if default values use self or create a closure
     bool const_method_context = false; // true when created inside a const method
     //! the identity of the closure function and of its one variant, which is never reused, unlike their addresses
     /** The IR interpreter's cache of closure calls is keyed by it, as the call has the closure function at hand: a
@@ -2811,6 +2814,16 @@ public:
 
     DLLLOCAL void setHasNestedClosures() {
         has_nested_closures = true;
+    }
+
+    //! Returns true if the default values of the closure use self or create a closure (issue #5931)
+    DLLLOCAL bool defaultsNeedObject() const {
+        return defaults_need_object;
+    }
+
+    //! Marks a closure whose default values use self or create a closure
+    DLLLOCAL void setDefaultsNeedObject() {
+        defaults_need_object = true;
     }
 
     DLLLOCAL void setConstMethodContext() {

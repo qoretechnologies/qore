@@ -16,7 +16,8 @@
     object context), so a closure default value using self read NOTHING or raised LVALUE-ERROR, and a closure created
     by a default value took the object of the caller, which tiered code at the IR tier read as its self: the default
     values of a closure with an object are now evaluated with its object and class context, and a closure in an AOT
-    image that uses the method's self takes the object when it is created.  The probes
+    image that uses the method's self takes the object when it is created.  self in a closure's default value is the
+    closure's own, as in its code, so the closure does not keep its object alive.  The probes
     (closure-default-self/probes.q) run in each execution
     mode in a child process, with tiered execution at the IR tier and promoted to native code, and as qcc-compiled
     executables (-O0, -O3).
@@ -25,7 +26,7 @@ class ClosureDefaultSelfTest inherits QUnit::Test {
     public {
         const ExecModes = ("ast", "ir", "jit", "tiered");
 
-        const Line = "14; 11; 22; 23; 20; \"14 1\"; 22";
+        const Line = "14; 11; 22; 23; 20; \"14 1 \\\"none\\\" 3\"; 55";
     }
 
     private {

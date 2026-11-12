@@ -2,8 +2,10 @@
 # method's self sees the object, also in qcc code, whose closures reach their object through their object context
 # and not as a captured variable: self in a closure in the default value together with a captured local, self as the
 # default value, a private method called through self, a closure of a base class method on an object of a subclass,
-# a closure stored and called later, which does not keep the object alive, and a closure called from a method of
-# another class; probes() returns one line per pass, so that the code runs on every tier with tiered execution
+# closures stored and called later, which do not keep the object alive (also when their default value uses self) and
+# whose default value does not see the caller's object after the object is deleted, and a closure called from a method
+# of another class, also with a member and a method used without self; probes() returns one line per pass, so that
+# the code runs on every tier with tiered execution
 
 %modern
 
@@ -23,6 +25,14 @@ class Base {
         return auto sub (*Base o = self) { return o.a; };
     }
 
+    code bare() {
+        return auto sub (int x = priv(), int y = a) { return x + y; };
+    }
+
+    code selfOrNone() {
+        return auto sub (auto o = self) { return o ? o.a : "none"; };
+    }
+
     code privateCall() {
         return auto sub (code c = auto sub () { return self.priv(); }) { return c(); };
     }
@@ -35,19 +45,18 @@ class Sub inherits Base {
 }
 
 class Other {
-    int call(code c) { return c(); }
+    public { int a = 99; }
+    auto call(code c) { return c(); }
 }
 
-string sub stored() {
-    code f;
+string sub stored(Other o) {
     int destroyed = Base::destroyed;
-    {
-        Base b();
-        f = b.withLocal();
-        int v = f();
-        delete b;
-        return sprintf("%d %d", v, Base::destroyed - destroyed);
-    }
+    Base b();
+    code f = b.withLocal();
+    code g = b.selfOrNone();
+    int v = f();
+    remove b;
+    return sprintf("%d %d %y %y", v, Base::destroyed - destroyed, o.call(g), o.call(f));
 }
 
 string sub probes() {
@@ -57,7 +66,7 @@ string sub probes() {
     string rv;
     for (int i = 0; i < 8; ++i) {
         rv += sprintf("%d: %y; %y; %y; %y; %y; %y; %y\n", i, b.withLocal()(), b.selfDefault()(), b.privateCall()(),
-            s.withLocal()(), s.selfDefault()(), stored(), o.call(b.privateCall()));
+            s.withLocal()(), s.selfDefault()(), stored(o), o.call(b.privateCall()) + o.call(b.bare()));
     }
     return rv;
 }
