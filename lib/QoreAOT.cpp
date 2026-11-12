@@ -35232,15 +35232,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             // the providers of other objects are keyed by the path without the leading "::" of a root function
             id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
-        if (const QoreTypeParamInstantiation* inst =
-                call->getExplicitTypeParamInstantiation()) {
-            id.ref2 += "\ntypeargs:";
-            id.ref2 += std::to_string(inst->type_args.size());
-            for (const QoreTypeInfo* type_arg : inst->type_args) {
-                id.ref2 += "\n";
-                id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-            }
-        }
+        qore_aot_append_call_type_args(id.ref2, call->getExplicitTypeParamInstantiation());
         return id;
     }
 
@@ -36085,14 +36077,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 }
             }
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
-            if (const QoreTypeParamInstantiation* inst = mc->getExplicitTypeParamInstantiation()) {
-                id.ref2 += "\ntypeargs:";
-                id.ref2 += std::to_string(inst->type_args.size());
-                for (const QoreTypeInfo* type_arg : inst->type_args) {
-                    id.ref2 += "\n";
-                    id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-                }
-            }
+            qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
             id.flags = is_pseudo ? 1 : 0;
             return id;
         }

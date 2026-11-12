@@ -68,6 +68,8 @@ class Var;
 class UserVariantBase;
 class UserSignature;
 class QoreFunction;
+class FunctionCallNode;
+class FunctionCallBase;
 class AbstractQoreFunctionVariant;
 class QoreParseListNode;
 struct QoreTypeParamInstantiation;
@@ -283,6 +285,49 @@ std::string qore_aot_encode_static_method_ref(const char* method_name,
     const AbstractQoreFunctionVariant* variant = nullptr,
     const type_vec_t* arg_types = nullptr,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+
+//! Marker of the explicit type arguments of a function or method call in a call reference (FUNC_CALL signature
+//! references, method references of method call slots and of serialized method calls): the marker and the count,
+//! followed by "\n<type path>" for each argument
+/** The signature text that precedes it has the default values of the parameters, whose strings can hold anything,
+    also the marker: the type arguments are found by the last marker in the reference (qore_aot_find_call_type_args()),
+    as they come last and a type path has no marker
+*/
+constexpr const char* QORE_AOT_CALL_TYPE_ARGS_MARKER = "\n@qore-aot-call-type-args-v1:";
+
+//! Returns the explicit type arguments of an encoded call reference (its last QORE_AOT_CALL_TYPE_ARGS_MARKER) or 0
+DLLLOCAL const char* qore_aot_find_call_type_args(const char* ref);
+
+//! Appends the explicit type arguments of a call to its encoded reference (see QORE_AOT_CALL_TYPE_ARGS_MARKER)
+DLLLOCAL void qore_aot_append_call_type_args(std::string& ref, const QoreTypeParamInstantiation* inst);
+
+//! Returns the signature reference of a serialized FUNC_CALL expression: "sig:<signature text>" of its variant, if
+//! resolved, and its explicit type arguments (see qore_aot_append_call_type_args())
+DLLLOCAL std::string qore_aot_get_function_call_signature_ref(const FunctionCallNode* call);
+
+//! Decodes the explicit type arguments of a call encoded by qore_aot_append_call_type_args()
+/** @param encoded the encoded type arguments, starting with QORE_AOT_CALL_TYPE_ARGS_MARKER
+    @param callee_signature the signature of the variant called, if known: the owner of the type arguments, whose
+    number of type parameters they must match; a call whose variant is chosen at run time has none, and its type
+    arguments are checked against the variant chosen then, as for the parsed call (qore#5791)
+    @param containing_signature the signature of the code that makes the call, whose type parameters the type
+    arguments can name, or nullptr
+
+    @return true if the type arguments were decoded into \a inst, which has none for a marker without type arguments
+    (see qore_aot_append_call_type_args()), false if they cannot be decoded or resolved
+*/
+DLLLOCAL bool qore_aot_decode_call_type_args(QoreProgram* pgm, const char* encoded,
+    const UserSignature* callee_signature, const UserSignature* containing_signature,
+    QoreTypeParamInstantiation& inst);
+
+//! Sets the explicit type arguments of a method reference on a call (QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER)
+/** @param containing_signature the signature of the code that makes the call, whose type parameters the type
+    arguments can name, or nullptr
+
+    @return true if the reference has no type arguments or they were set, false if they cannot be resolved
+*/
+DLLLOCAL bool qore_aot_apply_explicit_type_args(FunctionCallBase& call, const QoreAOTStaticMethodRef& method_ref,
+    QoreProgram* pgm, const UserSignature* containing_signature);
 
 //! Resolves a static-call argument type signature and uses it to find a method variant.
 const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,

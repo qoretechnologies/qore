@@ -170,17 +170,7 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
-            if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                    std::string sig_ref = "sig:";
-                    sig_ref += sig->getSignatureText();
-                    ctx.writer.writeStringRef(sig_ref.c_str());
-                } else {
-                    ctx.writer.writeStringRef("");
-                }
-            } else {
-                ctx.writer.writeStringRef("");
-            }
+            ctx.writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
         } else {
             ctx.writer.writeStringRef("");
         }
@@ -287,10 +277,30 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     // the active runtime program when they execute.
     FunctionCallNode* fcn = new FunctionCallNode(
         &loc_builtin, fe, pln);
+    // the signature reference: the variant, then the explicit type arguments of the call, if any (qore#5865)
+    const char* type_args = qore_aot_find_call_type_args(sig_ref);
+    const AbstractQoreFunctionVariant* variant = nullptr;
     if (sig_ref && strncmp(sig_ref, "sig:", 4) == 0) {
-        if (const AbstractQoreFunctionVariant* v =
-                fe->getFunction()->findVariantBySignatureText(sig_ref + 4)) {
-            fcn->setVariant(v);
+        std::string sig_text = type_args ? std::string(sig_ref + 4, type_args - sig_ref - 4) : std::string(sig_ref + 4);
+        variant = fe->getFunction()->findVariantBySignatureText(sig_text.c_str());
+        if (variant) {
+            fcn->setVariant(variant);
+        }
+    }
+    if (type_args) {
+        const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        QoreTypeParamInstantiation inst;
+        // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
+        if (!qore_aot_decode_call_type_args(ctx.pgm, type_args, uvb ? uvb->getUserSignature() : nullptr,
+                qore_aot_get_type_param_owner(), inst)) {
+            fcn->deref();
+            ctx.error = "cannot resolve the explicit type arguments of the call of '";
+            ctx.error += func_name;
+            ctx.error += "' in inline FUNC_CALL expression";
+            return QoreValue();
+        }
+        if (!inst.type_args.empty()) {
+            fcn->setExplicitTypeParamInstantiation(std::move(inst));
         }
     }
     if (pln) {
@@ -379,7 +389,7 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
         ctx.writer.writeStringRef(class_ref.c_str());
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         ctx.writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -400,7 +410,7 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
-static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_ref_str = ctx.reader.readStringRef(ctx.ptr);
     QoreAOTStaticMethodRef method_ref(method_ref_str);
@@ -640,7 +650,7 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         }
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         ctx.writer.writeStringRef(method_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -669,7 +679,7 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
-static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     QoreAOTStaticMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
     const char* receiver_type_path = nullptr;
@@ -824,6 +834,46 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     }
     return QoreValue(call_node);
 }
+
+//! Sets the explicit type arguments of a serialized method or static call on the call read (qore#5865)
+/** @param method_ref_str the method reference of the call, which carries its explicit type arguments, if any
+*/
+static QoreValue aot_apply_method_ref_type_args(AOTExprReadCtx& ctx, QoreValue rv, const char* method_ref_str) {
+    if (!rv.hasNode() || !method_ref_str) {
+        return rv;
+    }
+    QoreAOTStaticMethodRef method_ref(method_ref_str);
+    if (!method_ref.explicit_type_args_present) {
+        return rv;
+    }
+    auto* call = dynamic_cast<FunctionCallBase*>(rv.getInternalNode());
+    // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
+    if (!call || !qore_aot_apply_explicit_type_args(*call, method_ref, ctx.pgm, qore_aot_get_type_param_owner())) {
+        rv.discard(nullptr);
+        ctx.error = "cannot resolve the explicit type arguments of the call of '";
+        ctx.error += method_ref.method_name ? method_ref.method_name : "";
+        ctx.error += "' in an inline method call expression";
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! Reads a serialized self method call: <class path> <method reference> ...
+static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
+    const uint8_t* refs = ctx.ptr;
+    QoreValue rv = read_expr_self_method_call_intern(ctx);
+    ctx.reader.readStringRef(refs);
+    return aot_apply_method_ref_type_args(ctx, rv, ctx.reader.readStringRef(refs));
+}
+
+//! Reads a serialized static method call: <class path> <method reference> ...
+static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
+    const uint8_t* refs = ctx.ptr;
+    QoreValue rv = read_expr_static_method_call_intern(ctx);
+    ctx.reader.readStringRef(refs);
+    return aot_apply_method_ref_type_args(ctx, rv, ctx.reader.readStringRef(refs));
+}
+
 
 // ============================================================================
 // NEW_OBJECT (4)
@@ -3339,6 +3389,8 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     const char* method_name_ref = ctx.reader.readStringRef(ctx.ptr);
     std::string method_name_storage;
     const char* method_name = method_name_ref;
+    // the explicit type arguments of the call, if any (qore#5865)
+    const char* type_args = qore_aot_find_call_type_args(method_name_ref);
     if (method_name_ref) {
         const char* sig_sep = strchr(method_name_ref, '\n');
         if (sig_sep) {
@@ -3416,6 +3468,22 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         mc->parseSetClassAndMethod(resolved_qc, resolved_m);
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
+        }
+    }
+    if (type_args) {
+        // the variant is chosen when the call is made: the type arguments have no owner, as for a parsed call whose
+        // variant is chosen at run time (qore#5791); they can name the type parameters of the code whose context is
+        // being built (qore#5733)
+        QoreTypeParamInstantiation inst;
+        if (!qore_aot_decode_call_type_args(ctx.pgm, type_args, nullptr, qore_aot_get_type_param_owner(), inst)) {
+            ctx.error = std::string("cannot resolve the explicit type arguments of the call of method '")
+                + method_name + "' in an inline DOT_EVAL_TARGET expression";
+            mc->deref();
+            target.discard(nullptr);
+            return QoreValue();
+        }
+        if (!inst.type_args.empty()) {
+            mc->setExplicitTypeParamInstantiation(std::move(inst));
         }
     }
     mc->resolveParseArgs();

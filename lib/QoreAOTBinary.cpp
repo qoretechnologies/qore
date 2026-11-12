@@ -3142,7 +3142,9 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
     std::string type_arg_marker("\n");
     type_arg_marker += QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER;
     type_arg_marker += "\n";
-    size_t type_arg_pos = encoded_storage.find(type_arg_marker);
+    // the last marker: the signature text before it has the default values of the parameters, which can have the
+    // marker too (see qore_aot_encode_static_method_ref())
+    size_t type_arg_pos = encoded_storage.rfind(type_arg_marker);
     if (type_arg_pos != std::string::npos) {
         explicit_type_args_present = true;
         size_t count_start = type_arg_pos + type_arg_marker.size();
@@ -3177,6 +3179,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
             }
             if (explicit_type_arg_paths.size() != count) {
                 explicit_type_args_valid = false;
+            }
+            // a marker without type arguments ends a reference whose signature text has the marker
+            if (explicit_type_args_valid && !count) {
+                explicit_type_args_present = false;
             }
         }
         encoded_storage.resize(type_arg_pos);
@@ -3246,10 +3252,17 @@ std::string qore_aot_encode_static_method_ref(const char* method_name,
         rv += "\n";
         rv += qore_aot_encode_call_arg_type_signature(*arg_types);
     }
+    std::string type_arg_marker("\n");
+    type_arg_marker += QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER;
+    type_arg_marker += "\n";
+    if (!explicit_type_param_instantiation && rv.find(type_arg_marker) != std::string::npos) {
+        // the signature text has the marker (in a default value): a marker without type arguments ends the
+        // reference, so that the last marker in it is the one of its type arguments
+        rv += type_arg_marker;
+        rv += "0";
+    }
     if (explicit_type_param_instantiation) {
-        rv += "\n";
-        rv += QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER;
-        rv += "\n";
+        rv += type_arg_marker;
         rv += std::to_string(
             explicit_type_param_instantiation->type_args.size());
         for (const QoreTypeInfo* type_arg
@@ -3259,6 +3272,94 @@ std::string qore_aot_encode_static_method_ref(const char* method_name,
         }
     }
     return rv;
+}
+
+std::string qore_aot_get_function_call_signature_ref(const FunctionCallNode* call) {
+    std::string rv;
+    if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+        if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+            rv = "sig:";
+            rv += sig->getSignatureText();
+        }
+    }
+    // the explicit type arguments of the call (f<T>()), which serialized IR also carries (qore#5865)
+    qore_aot_append_call_type_args(rv, call->getExplicitTypeParamInstantiation());
+    return rv;
+}
+
+const char* qore_aot_find_call_type_args(const char* ref) {
+    const char* rv = nullptr;
+    for (const char* p = ref ? strstr(ref, QORE_AOT_CALL_TYPE_ARGS_MARKER) : nullptr; p;
+            p = strstr(p + 1, QORE_AOT_CALL_TYPE_ARGS_MARKER)) {
+        rv = p;
+    }
+    return rv;
+}
+
+void qore_aot_append_call_type_args(std::string& ref, const QoreTypeParamInstantiation* inst) {
+    if (!inst) {
+        // a reference whose signature text has the marker (in a default value) ends with a marker without type
+        // arguments, so that the last marker in it is the one of its type arguments
+        if (ref.find(QORE_AOT_CALL_TYPE_ARGS_MARKER) != std::string::npos) {
+            ref += QORE_AOT_CALL_TYPE_ARGS_MARKER;
+            ref += "0";
+        }
+        return;
+    }
+    ref += QORE_AOT_CALL_TYPE_ARGS_MARKER;
+    ref += std::to_string(inst->type_args.size());
+    for (const QoreTypeInfo* type_arg : inst->type_args) {
+        ref += "\n";
+        ref += qore_get_aot_serializable_type_path(type_arg);
+    }
+}
+
+bool qore_aot_decode_call_type_args(QoreProgram* pgm, const char* encoded, const UserSignature* callee_signature,
+        const UserSignature* containing_signature, QoreTypeParamInstantiation& inst) {
+    size_t marker_len = strlen(QORE_AOT_CALL_TYPE_ARGS_MARKER);
+    if (!encoded || strncmp(encoded, QORE_AOT_CALL_TYPE_ARGS_MARKER, marker_len)) {
+        return false;
+    }
+    const char* count_text = encoded + marker_len;
+    char* count_tail = nullptr;
+    unsigned long count = strtoul(count_text, &count_tail, 10);
+    if (count_tail == count_text || (*count_tail && *count_tail != '\n') || (!count && *count_tail)) {
+        return false;
+    }
+    inst.type_args.clear();
+    if (!count) {
+        // no type arguments: the marker ends a reference whose signature text has the marker
+        inst.owner = nullptr;
+        return true;
+    }
+    if (callee_signature && count != callee_signature->getTypeParameterCount()) {
+        return false;
+    }
+    inst.owner = callee_signature;
+    inst.type_args.clear();
+    QoreAOTTypeResolver type_resolver(pgm);
+    const char* path_start = count_tail;
+    for (unsigned long i = 0; i < count; ++i) {
+        if (*path_start != '\n') {
+            return false;
+        }
+        ++path_start;
+        const char* path_end = strchr(path_start, '\n');
+        std::string path = path_end ? std::string(path_start, path_end - path_start) : std::string(path_start);
+        if (path.empty()) {
+            return false;
+        }
+        std::string type_error;
+        const QoreTypeInfo* type_arg = containing_signature
+            ? type_resolver.resolveForSignature(path.c_str(), type_error, containing_signature)
+            : type_resolver.resolve(path.c_str(), type_error);
+        if (!type_arg || !type_error.empty()) {
+            return false;
+        }
+        inst.type_args.push_back(type_arg);
+        path_start = path_end ? path_end : path_start + path.size();
+    }
+    return !*path_start;
 }
 
 static bool qore_aot_type_signature_has_weak_arg_type(const type_vec_t& arg_types) {
@@ -12563,17 +12664,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
-            if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                    std::string sig_ref = "sig:";
-                    sig_ref += sig->getSignatureText();
-                    writer.writeStringRef(sig_ref.c_str());
-                } else {
-                    writer.writeStringRef("");
-                }
-            } else {
-                writer.writeStringRef("");
-            }
+            writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
         } else {
             writer.writeStringRef("");
         }
@@ -12607,7 +12698,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeStringRef(class_ref.c_str());
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -12641,7 +12732,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         }
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         writer.writeStringRef(method_ref.c_str());
         if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -13867,7 +13958,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 class_path = qore_aot_encode_class_ref(qc, mc->isPseudo());
             }
             writer.writeStringRef(class_path.c_str());
-            writer.writeStringRef(mc->getName() ? mc->getName() : "");
+            // the method name and the explicit type arguments of the call (obj.method<T>()), which a reader that
+            // does not know them ignores with any other suffix of the name (qore#5865)
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
+            writer.writeStringRef(method_ref.c_str());
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),
