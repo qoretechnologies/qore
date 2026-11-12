@@ -4055,6 +4055,13 @@ public:
     //! Must be called after IR lowering and verification, before execution.
     void computeSlotIdsAndEmbed();
 
+    //! Embeds QoreIRLocalInstruction::is_closure into the instructions that access locals
+    /** computeSlotIdsAndEmbed() embeds it with the slot IDs; the AOT top-level code, whose local slots are those that
+        buildAOTSlotMap() gives it, as when the runtime rebuilds its context, embeds it alone: the LLVM lowering pops a
+        closure-bound block local by this flag, and treats a local without it as a plain one (#5869)
+    */
+    void embedLocalClosureFlags();
+
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
