@@ -51,6 +51,7 @@ objects: list
 {z: \"p\"}
 mask: buffer<bool> 3
 data *hash<auto>
+fields: [\"a:*hash<auto>\"]
 ";
 
         #! the optimization levels of the AOT compiles
