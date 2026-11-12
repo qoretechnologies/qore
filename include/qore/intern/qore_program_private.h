@@ -617,6 +617,16 @@ public:
 
     // top level statements
     TopLevelStatementBlock sb;
+    //! AOT checks every source body and initializer, including code that fragment emission does not lower.
+    QoreNativeParseInfo native_parse_info;
+    QoreNativeParseInfo committed_native_parse_info;
+
+    DLLLOCAL void recordNativeParseInfo(const QoreNativeParseInfo& info) {
+        // Debugger expressions have their own block; declaration-only stubs generate no executable code.
+        if (!expression_mode && !parsing_stub_declarations) {
+            native_parse_info.merge(info);
+        }
+    }
 
     // bit field flags
     // written only by the thread that holds the parse lock, or before the Program can be reached by other threads;
@@ -3813,7 +3823,7 @@ public:
         i->second->clearTZ();
     }
 
-    DLLLOCAL void addStatement(AbstractStatement* s);
+    DLLLOCAL void addStatement(AbstractStatement* s, const QoreNativeParseInfo& info = {});
 
     DLLLOCAL q_exp_t createExpression(const QoreStringNode& source, const QoreStringNode& label,
             ExceptionSink* xsink) {
@@ -4264,8 +4274,9 @@ public:
         return pgm.priv->constructed;
     }
 
-    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s) {
-        pgm.priv->addStatement(s);
+    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s,
+            const QoreNativeParseInfo& native_parse_info = {}) {
+        pgm.priv->addStatement(s, native_parse_info);
     }
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {

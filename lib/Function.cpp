@@ -7014,6 +7014,21 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
 void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
         bool promote_to_ir) const {
+    // A mixed body is AST-only even when its first statement and its Program's final options are modern.
+    // This is a cold compilation decision; ordinary call dispatch and promotion keep their existing checks.
+    if (statements && statements->native_parse_info.legacy_location) {
+        ir_lower_failed = true;
+        const QoreNativeParseInfo& info = statements->native_parse_info;
+        std::string reason = info.describe();
+        if (pgm) {
+            pgm->recordIRFallback(reason.c_str());
+        }
+        // Separately parsed wholly legacy callees remain callable from modern code on the AST tier.
+        if (raise_on_failure && info.has_modern && pgm && pgm->getExecMode() != QEM_TIERED) {
+            parseException(*info.legacy_location, "IR-COMPILATION-ERROR", "%s: %s", name, reason.c_str());
+        }
+        return;
+    }
     // Only %modern functions may be IR-lowered.  The eager-compile path
     // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
     // the *program's* parse options, but a %modern program can legitimately

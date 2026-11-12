@@ -1,0 +1,341 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - checks source parsing and execution in children with explicit modes
+# test-platform: macos - native eligibility for JIT and AOT compilation
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class MixedDirectiveNativeGateTest
+
+class MixedDirectiveNativeGateTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? (dirname(QORE_ARGV[0]) + DirSep + "qcc");
+    }
+
+    # The compatibility directive is restored before the enclosing statement/body ends.
+    # Looking only at the first statement or at Program's final options misses these cases.
+    const Sources = {
+        "issue": '%modern
+list sub mixed() {
+    int x = 0;
+    x += 1;
+%loose-args
+%broken-range
+    return range(1, 2);
+}
+%correct-range
+%modern
+printf("%N\n", mixed());
+',
+        "nested": '%modern
+int sub mixed() {
+    int x = 1;
+    if (x) {
+%loose-args
+        x += 2;
+%modern
+    }
+    return x;
+}
+printf("%d\n", mixed());
+',
+        "expression": '%modern
+int sub mixed() {
+    int x = 1;
+    return x +
+%loose-args
+        2
+%modern
+        + 3;
+}
+printf("%d\n", mixed());
+',
+        "closure": '%modern
+code c = int sub () {
+    int x = 1;
+%loose-args
+    x += 2;
+%modern
+    return x;
+};
+printf("%d\n", c());
+',
+        "method": '%modern
+class Mixed {
+    int value() {
+        int x = 1;
+%loose-args
+        x += 2;
+%modern
+        return x;
+    }
+}
+printf("%d\n", (new Mixed()).value());
+',
+        "default": '%modern
+int sub mixed(int x =
+%loose-args
+    2
+%modern
+) {
+    return x + 1;
+}
+printf("%d\n", mixed());
+',
+        "try-module": '%modern
+%loose-args
+%try-module (err) ./not-present-5853.qm
+%endtry
+%modern
+printf("%d\n", exists err.err);
+',
+        "top-level": '%modern
+int x = 1;
+%loose-args
+x += 2;
+%modern
+printf("%d\n", x);
+',
+    };
+
+    constructor() : QUnit::Test("MixedDirectiveNativeGate", "1.0", \ARGV) {
+        addTestCase("AST reference and tiered fallback", \testFallback());
+        addTestCase("explicit native modes refuse mixed bodies", \testModes());
+        addTestCase("qcc refuses mixed bodies", \testAot());
+        addTestCase("qcc refuses legacy initializers", \testInitializers());
+        addTestCase("rollback removes pending eligibility metadata", \testRollback());
+        addTestCase("restored directives without legacy expressions remain eligible", \testModern());
+        set_return_value(main());
+    }
+
+    private string writeSource(TmpDir tmp, string name, string source) {
+        string path = tmp.path + DirSep + name + ".qr";
+        File f();
+        f.open(path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        f.write(source);
+        f.close();
+        return path;
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runMode(string path, string mode) {
+        return ExecModeHarness::run_command(sprintf("%s -b --enable-debug --exec-mode=%s %s",
+            qore_bin, mode, path));
+    }
+
+    private checkError(hash<ExecModeHarness::ModeRunResult> rv, string name, string source) {
+        assertNeq(0, rv.rc, name + ": mixed source must be refused");
+        assertTrue(rv.stderr.find("%loose-args") >= 0, name + ": " + rv.stderr);
+        list<string> lines = source.split("\n");
+        int line = 1;
+        while (lines[line - 1] != "%loose-args") {
+            ++line;
+        }
+        assertTrue(rv.stderr.find(sprintf("line %d", line)) >= 0, name + ": " + rv.stderr);
+    }
+
+    testFallback() {
+        TmpDir tmp("mixed-native-gate-");
+        foreach hash<auto> entry in (Sources.pairIterator()) {
+            string path = writeSource(tmp, entry.key, entry.value);
+            hash<auto> ast = runMode(path, "ast");
+            assertEq(0, ast.rc, entry.key + ": " + ast.stderr);
+            hash<auto> tiered = runMode(path, "tiered");
+            assertEq(0, tiered.rc, entry.key + ": " + tiered.stderr);
+            assertEq(ast.stdout, tiered.stdout, entry.key);
+        }
+    }
+
+    testModes() {
+        TmpDir tmp("mixed-native-gate-");
+        foreach hash<auto> entry in (Sources.pairIterator()) {
+            string path = writeSource(tmp, entry.key, entry.value);
+            foreach string mode in (("ir", "jit")) {
+                checkError(runMode(path, mode), entry.key + " " + mode, entry.value);
+            }
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("mixed-native-gate-");
+        foreach hash<auto> entry in (Sources.pairIterator()) {
+            string path = writeSource(tmp, entry.key, entry.value);
+            foreach string opts in (("-c", "-O0", "-O3 --include-source")) {
+                string output = tmp.path + DirSep + entry.key + ".out";
+                hash<ExecModeHarness::ModeRunResult> rv = ExecModeHarness::run_command(
+                    sprintf("%s %s -o %s %s", qcc_bin, opts, output, path));
+                checkError(rv, entry.key + " AOT " + opts, entry.value);
+                assertFalse(is_file(output), entry.key);
+            }
+        }
+    }
+
+    testInitializers() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("mixed-native-gate-");
+        hash<auto> sources = {
+            "constant": '%modern
+const V =
+%loose-args
+    now_us();
+%modern
+printf("%d\n", V > 0);
+',
+            "static": '%modern
+class Mixed {
+    public {
+        static date v =
+%loose-args
+            now_us();
+%modern
+    }
+}
+printf("%d\n", Mixed::v > 0);
+',
+            "hashdecl": '%modern
+hashdecl H {
+    int v =
+%loose-args
+        2;
+%modern
+}
+hash<H> h();
+printf("%d\n", h.v == 2);
+',
+            "enum": '%modern
+enum E {
+    V =
+%loose-args
+        2
+%modern
+}
+printf("%d\n", E::V == 2);
+',
+            "abstract": '%modern
+class C {
+    abstract int value(int v =
+%loose-args
+        2
+%modern
+    );
+}
+printf("1\n");
+',
+            "global": '%modern
+our date v =
+%loose-args
+    now_us();
+%modern
+printf("%d\n", v > 0);
+',
+        };
+        foreach hash<auto> entry in (sources.pairIterator()) {
+            string path = writeSource(tmp, entry.key, entry.value);
+            hash<auto> ast = runMode(path, "ast");
+            assertEq(0, ast.rc, entry.key + ": " + ast.stderr);
+            assertEq("1\n", ast.stdout, entry.key);
+            foreach string opts in (("-c", "-O0")) {
+                string output = tmp.path + DirSep + entry.key + ".out";
+                hash<ExecModeHarness::ModeRunResult> rv = ExecModeHarness::run_command(
+                    sprintf("%s %s -o %s %s", qcc_bin, opts, output, path));
+                checkError(rv, entry.key + " AOT " + opts, entry.value);
+                assertFalse(is_file(output), entry.key);
+            }
+        }
+        # Module constants take the native init-expression path even without a top-level block.
+        string source = '%modern
+module MixedNativeInit {
+    version = "1.0";
+    desc = "native eligibility test";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+public const V =
+%loose-args
+    now_us();
+%modern
+';
+        string path = tmp.path + DirSep + "MixedNativeInit.qm";
+        File f();
+        f.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        f.write(source);
+        f.close();
+        string output = tmp.path + DirSep + "MixedNativeInit.qmod";
+        hash<ExecModeHarness::ModeRunResult> rv = ExecModeHarness::run_command(
+            sprintf("%s -o %s %s", qcc_bin, output, path));
+        checkError(rv, "module initializer", source);
+        assertFalse(is_file(output));
+    }
+
+    testRollback() {
+        TmpDir tmp("mixed-native-gate-");
+        string path = writeSource(tmp, "rollback", '%modern
+%no-child-restrictions
+foreach int flags in ((0, PO_ALLOW_REPARSE)) {
+Program p(PO_MODERN | flags);
+p.parsePending("%modern\n%loose-args\nprintf(\"bad\\n\");\n%modern\n", "rolled-back");
+p.parseRollback();
+if (flags) {
+    p.disableParseOptions(PO_ALLOW_REPARSE);
+}
+p.setExecMode(EM_IR);
+p.parse("%modern\nprintf(\"good\\n\");\n", "good");
+p.run();
+}
+');
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<auto> rv = runMode(path, mode);
+            assertEq(0, rv.rc, mode + ": " + rv.stderr);
+            assertEq("good\ngood\n", rv.stdout, mode);
+        }
+    }
+
+    testModern() {
+        TmpDir tmp("mixed-native-gate-");
+        list<string> sources = ('%modern
+int sub modern() {
+    int x = 1;
+%loose-args
+%modern
+    return x + 2;
+}
+printf("%d\n", modern());
+', '%modern
+int sub modern() {
+    return 3;
+%loose-args
+}
+%modern
+printf("%d\n", modern());
+');
+        foreach string source in (sources) {
+            string path = writeSource(tmp, "modern", source);
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                hash<ExecModeHarness::ModeRunResult> rv = runMode(path, mode);
+                ExecModeHarness::check_native(rv, ExecModeHarness::NativeCheck::JitAndTiered);
+                assertEq(0, rv.rc, mode + ": " + rv.stderr);
+                assertEq("3\n", rv.stdout, mode);
+            }
+            if (is_file(qcc_bin)) {
+                string output = tmp.path + DirSep + "modern";
+                hash<auto> rv = ExecModeHarness::run_command(sprintf("%s -o %s %s", qcc_bin, output, path));
+                assertEq(0, rv.rc, rv.stderr);
+                rv = ExecModeHarness::run_command(output);
+                assertEq(0, rv.rc, rv.stderr);
+                assertEq("3\n", rv.stdout);
+            }
+        }
+    }
+}
