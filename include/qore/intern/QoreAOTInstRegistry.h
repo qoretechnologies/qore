@@ -148,6 +148,19 @@ inline const QoreIRInstGroupInfo* getAOTInstGroupInfo(uint8_t raw_group) {
     return &info;
 }
 
+//! Validate the serialized opcode/subclass pairing before calling a group reader.
+//! No instruction is constructed on a mismatch; unknown/reserved opcodes fail closed.
+bool qore_aot_validate_ir_layout(uint16_t opcode, uint8_t group, std::string& error);
+
+//! Validate the common SSA operand vector against the opcode's arity contract.
+bool qore_aot_validate_ir_operands(uint16_t opcode, size_t count, bool has_result, std::string& error);
+
+//! Validate an Invoke's nested operation and its operands before constructing the instruction.
+bool qore_aot_validate_ir_invoke(uint16_t opcode, size_t count, std::string& error);
+
+//! Validate the constant payload discriminator against its opcode.
+bool qore_aot_validate_ir_constant(uint16_t opcode, uint8_t kind, std::string& error);
+
 //! Validate instruction group registry invariants
 bool qore_aot_validate_inst_group_registry(std::string& error);
 
