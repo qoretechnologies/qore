@@ -12,12 +12,14 @@
 
 %exec-class ExceptionExitHandlerLocalUpdateTest
 
-#! Regression test: a handler that assigns to or removes a local of a function left by an exception, on the IR tier
-/** The handlers of a function left by an exception run with the function's local slots as their parent slots, and an
-    IR-only local exists only in its slot: what a handler assigns to it is kept there and released with the frame's
-    locals, last declared first, and the value that the handler replaces or removes is released where the handler
-    does so, as with the AST interpreter (see ExceptionExitHandlerLocalOrder.qtest).  The script runs with the AST
-    interpreter, with <tt>--exec-mode=ir</tt> and on the IR tier of tiered execution.
+#! Test: a handler that assigns to or removes a local of a function left by an exception
+/** The value that a handler of a function left by an exception replaces or removes is released where the handler
+    does so, and the value it assigns is released with the frame's locals, as with the AST interpreter.  The local is
+    referenced by the handler, so it is never IR-only (QoreIRFunction::computeIROnlyLocals()); the test covers the
+    semantics of assignment and remove in handlers, not the release of IR-only locals (see
+    ExceptionExitHandlerLocalOrder.qtest).  The script runs with the AST interpreter, with <tt>--exec-mode=ir</tt> and
+    on the IR tier of tiered execution; JIT execution, native code with tiered execution and qcc executables are left
+    out because of qore#5942 and should be added back once it is fixed.
 */
 class ExceptionExitHandlerLocalUpdateTest inherits QUnit::Test {
     public {
