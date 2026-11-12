@@ -485,7 +485,7 @@ def check(budgets, frames):
       identical code folding merged); the clone is returned;
     - as FOLDED if the function is only a branch to another function (identical code folding merged it into an
       identical one, or it only forwards to it), as it runs in that function's frame, which its own record does not
-      show;
+      show (not when that function is another overload of the same one, whose frame is charged already);
     - as DYNAMIC if one of its records is "dynamic" but not "bounded" (stack of a size known only at run time, which
       the record does not include);
     - as OVERLOAD-CALL if one of its overloads (a clone or .cold fragment of it included) calls another overload or
@@ -519,8 +519,10 @@ def check(budgets, frames):
                     split = split or sym.name
                 elif not problem and not sym.is_cold and "[clone " not in sym.name:
                     target = wrapper_target(sym, sym_cache)
-                    if target:
-                        name = Symbol(target).function() or target
+                    name = (Symbol(target).function() or target) if target else None
+                    # an overload that only forwards to another overload of the function runs in a frame that is
+                    # already charged (the largest of its records)
+                    if target and name != func:
                         problem = ("FOLDED", "%s runs entirely in the frame of %s (merged into it by identical code "
                             "folding, or a function that only forwards to it); budget %s or make the bodies differ"
                             % (func, target, name))

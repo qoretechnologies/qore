@@ -619,7 +619,9 @@ class SampleOracle:
             if len(insns) == 3 and insns[0][0] == "sub" and insns[1][0] == "add" and insns[0][1] == insns[1][1] \
                     and insns[0][1].endswith(",%rsp"):
                 insns = insns[2:]
-            if size <= 64 and len(insns) == 1 and insns[0][0] in ("jmp", "jmpq", "b"):
+            # not a branch to another overload of func (or a clone of one), whose frame is charged already
+            if size <= 64 and len(insns) == 1 and insns[0][0] in ("jmp", "jmpq", "b") \
+                    and not (insns[0][2] and self.is_function(func, insns[0][2])):
                 return "FOLDED"
         # calls between overloads, from clones and .cold fragments, to clones; a .part clone is SPLIT
         unclone = lambda name: re.sub(r"\s*\[clone [^\]]*\]", "", name)
@@ -705,6 +707,16 @@ int K::f(int x) {
 int entry(int x) { return K::f(x) + 1; }
 """
 
+# an overload that only forwards to another overload of the same function: "endbr64; jmp K::f(char const*)"
+FORWARDING_OVERLOAD_CPP = """
+#include <cstring>
+extern void use(char*);
+struct K { static int f(const char* p); static int f(char* p); };
+int K::f(const char* p) { char buf[600]; memset(buf, *p, sizeof buf); use(buf); return buf[*p & 63]; }
+int K::f(char* p) { return f((const char*)p); }
+int g(const char* p) { return K::f(p); }
+"""
+
 # overloads: K::f(int) calls K::f(double) and uses the result (both frames on the stack); K::g(int) only branches to
 # K::g(double) (a tail call, which reuses the frame)
 OVERLOAD_CPP = """
@@ -748,7 +760,7 @@ class ObjectCodeTest(unittest.TestCase):
         cases = [(FOLDED_CPP, folded, ()), (FOLDED_CPP, folded, ("-ffunction-sections",)),
             (FOLDED_CPP, folded, ("-fpatchable-function-entry=8",)), (DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"], ()),
             (OVERLOAD_CPP, ["K::f", "K::g"], ()), (OVERLOAD_CLONE_CPP, ["{anonymous}::K::f", "entry"], ()),
-            (OVERLOAD_COLD_CPP, ["{anonymous}::K::f", "entry"], ())]
+            (OVERLOAD_COLD_CPP, ["{anonymous}::K::f", "entry"], ()), (FORWARDING_OVERLOAD_CPP, ["K::f", "g"], ())]
         if platform.machine() in ("x86_64", "AMD64"):
             cases.append((FOLDED_CPP, folded, ("-pg", "-mfentry")))
         for source, funcs, flags in cases:
@@ -801,6 +813,22 @@ class ObjectCodeTest(unittest.TestCase):
             self.assertRegex(out, r"OK +A::a ")
             # the budget that the advice names is one the budget file takes
             csu.parse_budgets("@compiler GNU\n@build-type Release\n@target t\n100 A::a\n")
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the forwarding branch of x86_64 (endbr64; jmp)")
+    def test_forwarding_overload(self):
+        # K::f(char*) only branches to K::f(const char*), whose frame is charged to K::f already: not FOLDED; g()
+        # only branches to K::f, another function: FOLDED
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.compile(tmp, FORWARDING_OVERLOAD_CPP)
+            cache = {}
+            symbols = {sym.name: sym for sym in csu.object_symbols(tmp / "t.cpp.su", cache)}
+            self.assertEqual("K::f(char const*)", csu.wrapper_target(symbols["K::f(char*)"], cache))
+            results = {r[0]: r for r in csu.check([("K::f", 100000, 1), ("g", 100000, 1)], csu.collect_frames(tmp))}
+        self.assertIsNone(results["K::f"][5], results["K::f"])
+        self.assertGreater(results["K::f"][2], 600)
+        self.assertEqual("FOLDED", results["g"][5][0] if results["g"][5] else None, results["g"])
+        self.assertIn("g runs entirely in the frame of K::f(char const*)", results["g"][5][1])
 
     @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the wrapper of identical code folding is that of "
         "x86_64 (endbr64; jmp)")
