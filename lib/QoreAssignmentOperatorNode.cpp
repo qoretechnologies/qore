@@ -641,7 +641,7 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     // The container made unique is the value assigned: the variable is not read again, as another thread can assign
     // a variable that is shared (a global, a variable that a closure captures) between the two reads, and the
     // weak reference would then designate a container that the step did not make unique (qore#5847).
-    ValueHolder unique_source(xsink);
+    QoreValue unique_source;
     if (mode == AssignmentMode::Weak) {
         if (qore_weak_assignment_source_made_unique(right)) {
             LValueHelper source(right, xsink, true);
@@ -657,11 +657,13 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     }
 
     // the operand is a statement of its own where the other execution modes evaluate it so
-    QoreMutationOperandHolder new_value(left, unique_source ? *unique_source : right, true, xsink);
+    QoreMutationOperandHolder new_value(left, unique_source.hasNode() ? unique_source : right, true, xsink);
+    // the operand holds a reference of its own
+    if (unique_source.hasNode()) {
+        unique_source.discard(xsink);
+    }
     if (*xsink)
         return QoreValue();
-    // the operand holds a reference of its own
-    unique_source = QoreValue();
 
     if (broken_int) {
         // convert the value to an int unconditionally
