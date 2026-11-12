@@ -117,35 +117,52 @@ def is_part_clone(signature):
     return re.match(r"^\d+\(", signature) is not None
 
 
-def matches(func, signature):
-    """True if signature is the frame of func itself: the qualified name, not preceded by an identifier character or
-    a scope (so that A::f matches neither XA::f nor B::A::f), optionally followed by template arguments (as nm names
-    a template instance: "A::f<int>(int)"), then by its parameter list and nothing but qualifiers, the template
+def match_params(func, signature):
+    """Returns the parameter list of func in signature, or None if signature is not the frame of func itself.
+
+    func is a qualified name; it must not be preceded by an identifier character or a scope (so that A::f matches
+    neither XA::f nor B::A::f), and may be followed by ABI tags and template arguments (as nm names functions:
+    "A::f[abi:cxx11](int)", "A::f<int>(int)"), then by its parameter list and nothing but qualifiers, the template
     arguments that GCC's .su records give ("[with T = int]") and clone suffixes (so that a lambda or local class
-    inside func, which GCC names "A::f(...)::<lambda()>", is not func)."""
-    # a record without parameters (as Clang may write it) names the function exactly
+    inside func, which GCC names "A::f(...)::<lambda()>", is not func).  A record without parameters (as Clang may
+    write it) that names the function exactly has the parameter list ""."""
     if signature.strip() == func:
-        return True
-    pattern = r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"(?=[(<])"
+        return ""
+    pattern = r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"(?=[(<\[])"
     for m in re.finditer(pattern, signature):
         i = m.end()
-        # skip template arguments
-        if signature[i] == "<":
-            depth = 0
-            while i < len(signature):
-                if signature[i] == "<":
-                    depth += 1
-                elif signature[i] == ">":
-                    depth -= 1
-                    if not depth:
-                        i += 1
-                        break
-                i += 1
-            if depth or i >= len(signature) or signature[i] != "(":
-                continue
+        # skip ABI tags and template arguments
+        ok = True
+        while i < len(signature) and signature[i] != "(":
+            if signature.startswith("[abi:", i):
+                end = signature.find("]", i)
+                if end < 0:
+                    ok = False
+                    break
+                i = end + 1
+            elif signature[i] == "<":
+                depth = 0
+                while i < len(signature):
+                    if signature[i] == "<":
+                        depth += 1
+                    elif signature[i] == ">":
+                        depth -= 1
+                        if not depth:
+                            i += 1
+                            break
+                    i += 1
+                if depth:
+                    ok = False
+                    break
+            else:
+                ok = False
+                break
+        if not ok or i >= len(signature):
+            continue
         # find the end of the parameter list
+        start = i + 1
         depth = 1
-        i += 1
+        i = start
         while i < len(signature) and depth:
             if signature[i] == "(":
                 depth += 1
@@ -156,8 +173,26 @@ def matches(func, signature):
             continue
         rest = re.sub(r"\[(clone|with) [^\]]*\]", "", signature[i:])
         if re.fullmatch(r"(\s*(const|volatile|noexcept|&&|&))*\s*", rest):
-            return True
-    return False
+            return " ".join(signature[start:i - 1].split())
+    return None
+
+
+def matches(func, signature):
+    """True if signature is the frame of func itself; see match_params()."""
+    return match_params(func, signature) is not None
+
+
+def is_part_clone_of(func, signature, part_name):
+    """True if part_name, a ".part" clone that nm names, is a clone of the function that the .su record signature
+    records: the same function with the same parameters; for a template instance, which .su records name by its
+    template parameters ("int f(T) [with T = int]") and nm by its template arguments ("int f<int>(int)"), the same
+    function name only (conservative)."""
+    part_params = match_params(func, part_name)
+    if part_params is None:
+        return False
+    if "[with " in signature:
+        return True
+    return part_params == match_params(func, signature)
 
 
 def object_part_clones(su_path, cache):
@@ -204,8 +239,8 @@ def check(budgets, frames):
     - for a non-static member function or a template instance, under the function's own name at the same location;
       GCC records .constprop and .isra clones that way as well, and they are alternatives to the function, not
       frames on top of it, so two records of the same signature at the same location are added (the two largest)
-      only when nm lists a ".part" clone of the function in the object file, or when the object file cannot be read
-      (conservative); otherwise the largest counts."""
+      only when nm lists a ".part" clone of that function (the same name and parameters, see is_part_clone_of())
+      in the object file, or when the object file cannot be read (conservative); otherwise the largest counts."""
     zero_parts = {}
     for signature, size, path, location in frames:
         if location and is_part_clone(signature):
@@ -232,7 +267,7 @@ def check(budgets, frames):
                 note = " + .part clone %s at %s" % (zero_part[1], location)
             elif len(sizes) > 1:
                 part_names = object_part_clones(path, nm_cache)
-                if part_names is None or any(matches(func, n) for n in part_names):
+                if part_names is None or any(is_part_clone_of(func, signature, n) for n in part_names):
                     total += sizes[1]
                     note = " + .part clone recorded under the same name at %s%s" % (location,
                         "" if part_names is not None else " (assumed: no object file to tell it from a .constprop "

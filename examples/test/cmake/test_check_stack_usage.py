@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[3]
 TOOL = ROOT / "tools" / "check-stack-usage.py"
@@ -162,6 +163,34 @@ class ParseTest(unittest.TestCase):
         results = csu.check([("UserVariantBase::eval", 700, 1)], frames)
         self.assertEqual(600, results[0][2])
 
+    def test_part_clone_names(self):
+        # the .part clone that nm names belongs to the function with the same name and parameters
+        sig = "int N::K::big(int)"
+        self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big(int) [clone .part.0]"))
+        self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big[abi:cxx11](int) [clone .part.0]"))
+        self.assertFalse(csu.is_part_clone_of("N::K::big", "int N::K::big(int, int)", "N::K::big(int) [clone .part.0]"))
+        self.assertFalse(csu.is_part_clone_of("N::K::big", sig, "N::K::bigger(int) [clone .part.0]"))
+        # a template instance is matched by its name only (.su records give the template parameters)
+        self.assertTrue(csu.is_part_clone_of("tf", "int tf(T) [with T = int]", "int tf<char>(char) [clone .part.0]"))
+        self.assertEqual("int, int", csu.match_params("N::K::big", "int N::K::big(int,  int) const"))
+
+    def test_part_clone_from_nm_fixture(self):
+        # the records of an overload whose .part clone nm lists are added; those of an overload with .constprop and
+        # .isra clones are not (nm output as a fixture, so that this runs without g++)
+        su = ("/src/d.cpp:15:5:int N::K::big(int)\t576\tstatic\n"
+            "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n"
+            "/src/d.cpp:15:5:int N::K::big(int)\t8\tstatic\n"
+            "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n")
+        nm = ["N::K::big(int) [clone .part.0]", "N::K::big(int, int) [clone .constprop.0] [clone .isra.0]"]
+        nm = [n for n in nm if "[clone .part." in n]
+        frames = frames_of(su, Path("/src/d.cpp.su"))
+        with unittest.mock.patch.object(csu, "object_part_clones", return_value=nm):
+            results = csu.check([("N::K::big", 1, 1)], frames)
+        self.assertEqual(1632, results[0][2])
+        with unittest.mock.patch.object(csu, "object_part_clones", return_value=nm):
+            results = csu.check([("N::K::big", 1, 1)], [f for f in frames if f[1] != 1632])
+        self.assertEqual(584, results[0][2])
+
     def test_same_location_records_without_object(self):
         # two records of the same signature at the same location are a .part clone and its head, or a .constprop or
         # .isra clone and the function; without the object file to tell them apart, they are added
@@ -288,9 +317,20 @@ namespace N {
 struct K {
     int m;
     int big(int x);
+    // an overload with .constprop and .isra clones, at another location
+    int big(int a, int b);
 };
 int K::big(int x) { BODY(m, 9) }
+int __attribute__((noinline)) K::big(int a, int b) {
+    int x[400]; for (int i = 0; i < b; ++i) x[i & 63] = a + i + m; return g(x);
 }
+}
+// a member function with an ABI tag, which nm writes after the name: "A::big[abi:cxx11](int) [clone .part.0]"
+struct A {
+    int m;
+    [[gnu::abi_tag("cxx11")]] int big(int x);
+};
+int A::big(int x) { BODY(m, 12) }
 template <typename T> int tf(T x) { BODY(flag, sizeof(T) + 10) }
 // a function with .constprop and .isra clones, which are not frames on top of it
 struct S {
@@ -304,6 +344,11 @@ int c2(int n) { return big(n * 2) + 2; }
 int c3(N::K* k, int n) { return k->big(n) + 1; }
 int c4(N::K* k, int n) { return k->big(n * 2) + 2; }
 int c5(int n) { return tf<int>(n) + tf<int>(n * 3); }
+int c6(A* a, int n) { return a->big(n) + 1; }
+int c7(A* a, int n) { return a->big(n * 2) + 2; }
+int w1(N::K* k, int a) { return k->big(a, 5); }
+int w2(N::K* k, int a) { return k->big(a, 5) + 1; }
+int w3(N::K* k, int a, int b) { return k->big(a, b); }
 int v1(S* s, int a) { return s->mm(a, 5); }
 int v2(S* s, int a) { return s->mm(a, 5) + 1; }
 int v3(S* s, int a, int b) { return s->mm(a, b); }
@@ -319,8 +364,8 @@ int v3(S* s, int a, int b) { return s->mm(a, b); }
             def records(func):
                 return sorted((f[1] for f in frames if csu.matches(func, f[0])), reverse=True)
 
-            results = {r[0]: r for r in csu.check([("big", 1, 1), ("N::K::big", 1, 2), ("tf", 1, 3), ("S::mm", 1, 4)],
-                frames)}
+            results = {r[0]: r for r in csu.check([("big", 1, 1), ("N::K::big", 1, 2), ("tf", 1, 3), ("S::mm", 1, 4),
+                ("A::big", 1, 5)], frames)}
 
             # the free function: its head and the "0(int)" record at its location
             zero = [f for f in frames if csu.is_part_clone(f[0])]
@@ -331,11 +376,25 @@ int v3(S* s, int a, int b) { return s->mm(a, b); }
             self.assertIn(big[0][3], [f[3] for f in zero])
             self.assertEqual(big[0][1] + max(f[1] for f in zero if f[3] == big[0][3]), results["big"][2])
 
-            # the non-static member function: two records of its own name, head and .part clone, added
-            member = records("N::K::big")
+            # the non-static member function: two records of its own name, head and .part clone, added; its overload
+            # has .constprop and .isra clones at another location, which are not added, although the other overload
+            # has a .part clone
+            member = sorted((f[1] for f in frames if f[0] == "int N::K::big(int)"), reverse=True)
+            overload = sorted((f[1] for f in frames if f[0] == "int N::K::big(int, int)"), reverse=True)
             self.assertEqual(2, len(member))
             self.assertGreater(member[0], 300)
-            self.assertEqual(member[0] + member[1], results["N::K::big"][2])
+            self.assertGreater(len(overload), 1)
+            self.assertEqual(max(member[0] + member[1], overload[0]), results["N::K::big"][2])
+            self.assertEqual(member[0] + member[1],
+                csu.check([("N::K::big", 1, 1)], [f for f in frames if f[0] != "int N::K::big(int, int)"])[0][2])
+            self.assertEqual(overload[0],
+                csu.check([("N::K::big", 1, 1)], [f for f in frames if f[0] != "int N::K::big(int)"])[0][2])
+
+            # the member function with an ABI tag: its .part clone is found by nm under the tagged name
+            self.assertTrue(any("[abi:cxx11]" in n for n in parts))
+            tagged = records("A::big")
+            self.assertEqual(2, len(tagged))
+            self.assertEqual(tagged[0] + tagged[1], results["A::big"][2])
 
             # the template instance: its head is inlined into the caller, only the .part clone has a frame
             self.assertTrue(any(csu.matches("tf", n) for n in parts))
