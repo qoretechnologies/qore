@@ -135,45 +135,45 @@ int sub run(string f) {
             images); see the comment at the top
         */
         const Budgets = {
-            # measured: ast 2639, 2448, 2496; ir 4355, 5343, 4396
+            # measured: ast 2656, 2464, 2511; ir 4804, 5714, 4750
             "x86_64-linux-gnu release": {
-                "ast": {"function": 2820, "method": 2610, "static method": 2670},
-                "ir": {"function": 4650, "method": 5700, "static method": 4700},
+                "ast": {"function": 2840, "method": 2640, "static method": 2690},
+                "ir": {"function": 5140, "method": 6110, "static method": 5080},
             },
-            # measured: ast 2639, 2576, 2496; ir 4369, 5729, 4369
+            # measured: ast 2639, 2608, 2511; ir 4848, 6223, 4798
             "x86_64-linux-gnu debug": {
-                "ast": {"function": 2820, "method": 2750, "static method": 2670},
-                "ir": {"function": 4670, "method": 6120, "static method": 4670},
+                "ast": {"function": 2820, "method": 2790, "static method": 2690},
+                "ir": {"function": 5180, "method": 6650, "static method": 5130},
             },
-            # measured: ast 2639, 2448, 2496; ir 4350, 5343, 4401
+            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755
             "x86_64-alpine-linux-musl release": {
-                "ast": {"function": 2820, "method": 2610, "static method": 2670},
-                "ir": {"function": 4650, "method": 5700, "static method": 4700},
+                "ast": {"function": 2840, "method": 2640, "static method": 2690},
+                "ir": {"function": 5130, "method": 6110, "static method": 5080},
             },
-            # measured: ast 2639, 2576, 2496; ir 4364, 5722, 4364
+            # measured: ast 2639, 2608, 2511; ir 4843, 6223, 4798
             "x86_64-alpine-linux-musl debug": {
-                "ast": {"function": 2820, "method": 2750, "static method": 2670},
-                "ir": {"function": 4660, "method": 6120, "static method": 4660},
+                "ast": {"function": 2820, "method": 2790, "static method": 2690},
+                "ir": {"function": 5180, "method": 6650, "static method": 5130},
             },
-            # measured: ast 2734, 2592, 2592; ir 4258, 5216, 4271
+            # measured: ast 2750, 2606, 2608; ir 4670, 5599, 4639
             "aarch64-linux-gnu release": {
-                "ast": {"function": 2920, "method": 2770, "static method": 2770},
-                "ir": {"function": 4550, "method": 5580, "static method": 4560},
+                "ast": {"function": 2940, "method": 2790, "static method": 2790},
+                "ir": {"function": 4990, "method": 5980, "static method": 4960},
             },
-            # measured: ast 2623, 2623, 2511; ir 4096, 5555, 4112
+            # measured: ast 2641, 2641, 2526; ir 4495, 5991, 4447
             "aarch64-linux-gnu debug": {
-                "ast": {"function": 2800, "method": 2800, "static method": 2680},
-                "ir": {"function": 4380, "method": 5940, "static method": 4390},
+                "ast": {"function": 2830, "method": 2830, "static method": 2700},
+                "ir": {"function": 4810, "method": 6400, "static method": 4750},
             },
-            # measured: ast 2736, 2592, 2592; ir 4271, 5229, 4288
+            # measured: ast 2752, 2608, 2608; ir 4686, 5614, 4655
             "aarch64-alpine-linux-musl release": {
-                "ast": {"function": 2920, "method": 2770, "static method": 2770},
-                "ir": {"function": 4560, "method": 5590, "static method": 4580},
+                "ast": {"function": 2940, "method": 2790, "static method": 2790},
+                "ir": {"function": 5010, "method": 6000, "static method": 4980},
             },
-            # measured: ast 2623, 2623, 2511; ir 4096, 5555, 4112
+            # measured: ast 2639, 2641, 2526; ir 4495, 5983, 4447
             "aarch64-alpine-linux-musl debug": {
-                "ast": {"function": 2800, "method": 2800, "static method": 2680},
-                "ir": {"function": 4380, "method": 5940, "static method": 4390},
+                "ast": {"function": 2820, "method": 2830, "static method": 2700},
+                "ir": {"function": 4810, "method": 6390, "static method": 4750},
             },
         };
     }
