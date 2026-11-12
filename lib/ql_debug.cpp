@@ -349,27 +349,73 @@ struct UnitTestCounters {
     } \
 } while (0)
 
-//! Reserves a loopback TCP port that nothing listens on: binds a socket to an ephemeral port and closes it
-/** @return the port, or -1 if no port could be reserved
+//! Holds a loopback TCP port that nothing listens on, for a connection to it that must be refused
+/** A listener on 127.0.0.1 that does not reuse the address is connected to, the connection is accepted, and the
+    listener is closed: the connection then holds the port.  While the holder exists, the system assigns the port to
+    no other socket (neither to a bind of port 0 nor to a connection), a bind of the port without SO_REUSEADDR is
+    refused, and a connection request to the port finds no listener and is refused at once.  A port that was only
+    bound and closed could be assigned to a listener that a test running in parallel binds to port 0, which would then
+    accept the connection that the test expects to be refused.  A socket that stays bound without listening would hold
+    the port too, but macOS drops a connection request to such a socket instead of refusing it.  Both ends of the
+    connection are closed with an abortive close, so that no connection in TIME_WAIT is left on the port.
 */
-static int ut_reserve_closed_port() {
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
-        return -1;
+class UtClosedPort {
+public:
+    DLLLOCAL UtClosedPort() {
+        int lfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (lfd < 0) {
+            return;
+        }
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        socklen_t alen = sizeof(addr);
+        // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
+        if (!::bind(lfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) && !::listen(lfd, 1)
+            && !getsockname(lfd, reinterpret_cast<sockaddr*>(&addr), &alen)) {
+            client = socket(AF_INET, SOCK_STREAM, 0);
+            // the listener is blocking: the connection is accepted once it is in the listener's queue
+            if (client >= 0 && !::connect(client, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
+                peer = ::accept(lfd, nullptr, nullptr);
+            }
+        }
+        ::close(lfd);
+        if (peer < 0) {
+            closeAbortive(client);
+            return;
+        }
+        held_port = ntohs(addr.sin_port);
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    socklen_t alen = sizeof(addr);
-    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
-    int rc = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    if (!rc) {
-        rc = getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+
+    DLLLOCAL ~UtClosedPort() {
+        closeAbortive(client);
+        closeAbortive(peer);
     }
-    ::close(sfd);
-    return rc ? -1 : ntohs(addr.sin_port);
-}
+
+    UtClosedPort(const UtClosedPort&) = delete;
+    UtClosedPort& operator=(const UtClosedPort&) = delete;
+
+    //! returns the port, or -1 if no port could be held
+    DLLLOCAL int port() const {
+        return held_port;
+    }
+
+private:
+    int held_port = -1;
+    int client = -1;
+    int peer = -1;
+
+    DLLLOCAL static void closeAbortive(int& fd) {
+        if (fd < 0) {
+            return;
+        }
+        struct linger lg = {1, 0};
+        setsockopt(fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+        ::close(fd);
+        fd = -1;
+    }
+};
 
 // each argument is evaluated once: the failure message must not run a call with side effects (a fork(), a wait for
 // a child process) a second time
@@ -5810,7 +5856,85 @@ private:
         0;
 #endif
 
+    //! the number of IPv4 ports that bindIpv4ThenIpv6OnlyHolder() tries before it gives up
+    static constexpr int Ipv6OnlyPortAttempts = 16;
+
+    //! binds the IPv4 socket to 127.0.0.1 on a port that the system assigns, then the IPv6-only socket to :: on it
+    /** The IPv4 socket picks the port, so that the port is never free on IPv4 while the test runs: a port that the
+        system assigns to an IPv6-only socket on :: is only free on IPv6, as another socket on an IPv4 address serves
+        no address in common with it, and if the IPv4 socket were bound after the IPv6-only socket, another program
+        could hold the port on 127.0.0.1 already (as the local end of a connection), or be assigned it in the meantime
+        by a bind to port 0 (as a listener of a test that runs in parallel; see runIpv6OnlyPortHeldOnIpv4()), and the
+        bind of 127.0.0.1 would be refused.  The system assigns the IPv4 socket a port that no IPv4 or dual-stack
+        socket uses, and the IPv4 socket holds it from then on.  The bind of the IPv6-only socket is refused only if
+        another socket holds the port on IPv6: the refused IPv4 socket then stays open until the function returns, so
+        that the system assigns another port to the next one.
+
+        @param c the test counters
+        @param v4 receives the bound IPv4 socket
+        @param h the IPv6-only socket
+        @param reuseport if true, the IPv4 socket also reuses the port
+
+        @return the port, or -1
+    */
+    static int bindIpv4ThenIpv6OnlyHolder(UnitTestCounters& c, Fd& v4, int h, bool reuseport) {
+        std::vector<std::unique_ptr<Fd>> refused;
+        for (int i = 0; i < Ipv6OnlyPortAttempts; ++i) {
+            Fd s{open(AF_INET, false, true, reuseport)};
+            int rc = s.fd >= 0 ? bindTo(s.fd, AF_INET, "127.0.0.1", 0) : -1;
+            UT_ASSERT_EQ(c, 0, rc, "specific bind: the IPv4 socket is bound to a port on 127.0.0.1");
+            if (rc) {
+                return -1;
+            }
+            int port = portOf(s.fd);
+            rc = bindTo(h, AF_INET6, "::", port);
+            if (!rc) {
+                std::swap(v4.fd, s.fd);
+                return port;
+            }
+            UT_ASSERT_EQ(c, EADDRINUSE, rc,
+                "specific bind: the IPv6-only holder is refused a port only because another socket uses it on IPv6");
+            if (rc != EADDRINUSE) {
+                return -1;
+            }
+            refused.push_back(std::make_unique<Fd>());
+            std::swap(refused.back()->fd, s.fd);
+        }
+        UT_ASSERT(c, false, "specific bind: the IPv6-only holder is bound to the port of the IPv4 socket");
+        return -1;
+    }
+
+    //! a system-assigned port of an IPv6-only socket on :: can be used on IPv4
+    /** This is how the bind of 127.0.0.1 to the port of an IPv6-only socket on :: that the system had assigned failed
+        when another program held the port on 127.0.0.1, or was assigned it by a bind to port 0 before the bind of
+        127.0.0.1; bindIpv4ThenIpv6OnlyHolder() therefore lets the IPv4 socket pick the port.
+    */
+    static void runIpv6OnlyPortHeldOnIpv4(UnitTestCounters& c) {
+        Fd other{open(AF_INET, false, false)};
+        UT_ASSERT_EQ(c, 0, other.fd >= 0 ? bindTo(other.fd, AF_INET, "127.0.0.1", 0) : -1,
+            "specific bind: another socket holds a port on 127.0.0.1");
+        int port = portOf(other.fd);
+        if (port <= 0) {
+            return;
+        }
+        Fd h{open(AF_INET6, true, false)};
+        UT_ASSERT_EQ(c, 0, h.fd >= 0 ? bindTo(h.fd, AF_INET6, "::", port) : -1,
+            "specific bind: an IPv6-only socket on :: is given a port held on 127.0.0.1");
+        Fd v4{open(AF_INET, false, true)};
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
+            "specific bind: 127.0.0.1 is refused the port of an IPv6-only socket that is held on 127.0.0.1");
+    }
+
     //! an IPv6-only socket on :: serves no IPv4 address: 127.0.0.1 may share its port, ::1 may not
+    /** The socket on 127.0.0.1 is bound first and picks the port (see bindIpv4ThenIpv6OnlyHolder()), so that no other
+        program can take the port on IPv4 while the test runs.  The IPv6-only socket on :: is then bound to the port,
+        and the checks of qore_socket_bind_unshadowed() and qore_socket_listen_unshadowed() on 127.0.0.1 are made with
+        it holding the port: a second socket on 127.0.0.1 that reuses the port with the first one is bound (the bind
+        is checked for the port being held on another address, which the IPv6-only socket, which does not reuse the
+        port, must not be, as it serves no IPv4 address), and the first one listens (the listen is checked in the same
+        way).  The system applies the same rules, so each check also holds on Linux, where the functions leave them to
+        the system.
+    */
     static void runIpv6OnlyHolder(UnitTestCounters& c) {
         if (!hasIpv6()) {
             return;
@@ -5823,25 +5947,35 @@ private:
             UT_ASSERT_EQ(c, ReuseBoundHolderResult, bindTo(v6.fd, AF_INET6, "::1", portOf(h.fd)),
                 "specific bind: ::1 with SO_REUSEADDR over a bound IPv6-only socket on :: that reuses the address");
         }
+        runIpv6OnlyPortHeldOnIpv4(c);
+#ifdef SO_REUSEPORT
         for (bool listening : {true, false}) {
             Fd h{open(AF_INET6, true, false)};
             UT_ASSERT(c, h.fd >= 0, "specific bind: an IPv6-only holder is opened");
             if (h.fd < 0) {
                 return;
             }
-            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0), "specific bind: the IPv6-only holder is bound");
+            Fd v4;
+            int port = bindIpv4ThenIpv6OnlyHolder(c, v4, h.fd, true);
+            if (port <= 0) {
+                return;
+            }
             if (listening) {
                 UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv6-only holder listens");
             }
-            int port = portOf(h.fd);
-            Fd v4{open(AF_INET, false, true)};
-            UT_ASSERT_EQ(c, 0, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
-                "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            {
+                Fd v4b{open(AF_INET, false, true, true)};
+                UT_ASSERT_EQ(c, 0, bindTo(v4b.fd, AF_INET, "127.0.0.1", port),
+                    "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            }
+            UT_ASSERT_EQ(c, 0, listenOn(v4.fd),
+                "specific bind: 127.0.0.1 listens on the port of an IPv6-only socket on ::");
             Fd v6{open(AF_INET6, true, true)};
             UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v6.fd, AF_INET6, "::1", port),
                 "specific bind: ::1 with SO_REUSEADDR is refused the port of an IPv6-only socket on :: that does not "
                 "reuse the address");
         }
+#endif
     }
 
     //! of two sockets bound with SO_REUSEADDR to overlapping addresses, the one that listens first holds the port
@@ -6410,7 +6544,12 @@ public:
             if (rc || xsink) {
                 return;
             }
-            holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            struct pollfd lpfd = {listener.getDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
             if (holder_peer < 0) {
                 return;
@@ -6547,7 +6686,13 @@ public:
             if (rc || xsink) {
                 return;
             }
-            int peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            int peer = -1;
+            struct pollfd lpfd = {listener->getPollableDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, peer >= 0, "shared registration peer is accepted");
             if (peer < 0) {
                 return;
@@ -11548,7 +11693,8 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     // Pick an ephemeral closed port — connect will be refused, the poll op
     // will transition to CLOSED, and onClosedHook should fire once via the
     // I/O thread setError → setClosed path.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
@@ -11641,23 +11787,13 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
 static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Bind an ephemeral port then immediately close the listen socket —
-    // the kernel will refuse subsequent connects to it (ECONNREFUSED).
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    UT_ASSERT(c, sfd >= 0, "reserve socket succeeds");
-    if (sfd < 0) {
+    // a port with no listener, which no other socket can be given: the kernel refuses connects to it (ECONNREFUSED)
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
+    UT_ASSERT(c, dead_port > 0, "a port with no listener is held");
+    if (dead_port <= 0) {
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    int br = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    UT_ASSERT(c, br == 0, "bind ephemeral port succeeds");
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
@@ -12259,7 +12395,8 @@ static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
 // keep it.
 static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12469,7 +12606,8 @@ public:
 // the connection and been shut down.
 static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12510,7 +12648,8 @@ static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
 // before its close notification is sent, which is held here until the manager has evicted it and been shut down.
 static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12558,7 +12697,8 @@ static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
 // back-pointer cleared too, so that every connection the manager releases stops notifying it.
 static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12608,7 +12748,8 @@ static void ut_shut_down_manager_on_new_connection(HttpClientConnectionBase* con
 // released with its back-pointer cleared.
 static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12654,7 +12795,8 @@ static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
 // a thread whose count would go below zero now fails the assertion in inc_active_exceptions() at once.
 static void ut_async_redirect_task_error_counted_on_driving_thread(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -13897,10 +14039,11 @@ static void ut_http2_pending_response_data(UnitTestCounters& c) {
 
 static void ut_http2_connection_construct(UnitTestCounters& c) {
     ExceptionSink xsink;
-    // Bind an ephemeral port and immediately close — the next connect
-    // is refused.  H2 socket setup includes ALPN configuration which
+    // Hold a port with no listener — the next connect is refused.
+    // H2 socket setup includes ALPN configuration which
     // exercises the SSL code path on construction.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
@@ -13930,7 +14073,8 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
     // BEFORE the SSL handshake.  The actual handshake will fail (no
     // server) but we verify that the ALPN setup path doesn't crash.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14235,7 +14379,8 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
     if (xsink) { xsink.clear(); return; }
 
     // Bind+close an ephemeral port so the next connect is refused.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14369,7 +14514,8 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
     // before P4; now should attempt the connect and surface a CONNECT
     // error.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14392,7 +14538,8 @@ static void ut_http3_connection_construct(UnitTestCounters& c) {
     // Use localhost with a closed port — the QUIC handshake will fail but
     // the construction path (UDP bind + SocketQuicClientPollOperation
     // creation + controller submission) is exercised.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14425,7 +14572,8 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14501,10 +14649,11 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
 static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Reserve an ephemeral port to use as the "proxy" address.  It's closed
-    // immediately so the connect will fail — but the error message should
-    // reference this port, proving the H1 connection targets the proxy.
-    int proxy_port = ut_reserve_closed_port();
+    // Hold a port with no listener to use as the "proxy" address, so the
+    // connect will fail — but the error message should reference this port,
+    // proving the H1 connection targets the proxy.
+    UtClosedPort proxy_port_holder;
+    int proxy_port = proxy_port_holder.port();
     if (proxy_port <= 0) {
         UT_ASSERT(c, false, "reserve proxy port");
         return;
