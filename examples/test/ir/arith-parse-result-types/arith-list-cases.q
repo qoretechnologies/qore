@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# the list cases of part 3 of ArithParseResultTypes.qc (generated for the operand types and values below): each named
+# the list cases of part 5 of ArithParseResultTypes.qc (generated for the operand types and values below): each named
 # function adds parameters of declared types, a list and a list or a list and an element (which are not narrowed),
 # with the + operator and returns the result in a list literal, whose element type is the parse result type of the
 # operator in the compiled modes (the AST interpreter takes it from the value); each case is called with values that

@@ -14,7 +14,7 @@
 
 %exec-class ArithParseResultTypesPart2
 
-#! runs part 2 of 3 of the cases of ArithParseResultTypesBase: the matrix cases as AOT executables
+#! runs part 2 of 5 of the cases of ArithParseResultTypesBase: the matrix cases in the tiered mode and on the IR tier
 class ArithParseResultTypesPart2 inherits ArithParseResultTypesBase {
     constructor() : ArithParseResultTypesBase("ArithParseResultTypesPart2", 2) {
     }

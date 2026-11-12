@@ -13,13 +13,18 @@
     IR tier and as AOT executables (qcc -O0 and -O3) must be that of the AST interpreter, whose results are checked with
     the expected results below.
 
-    - arith-result-cases.q (part 1: execution modes, part 2: AOT executables): +, -, * and / applied to parameters
-      of plain, or-nothing, union and container types, with the result in a list literal
-    - arith-list-cases.q (part 3): list + list, list + element and element + list for list and element types (plain,
+    - arith-result-cases.q (parts 1-4: IR and JIT, tiered and the IR tier, AOT -O0, AOT -O3): +, -, * and / applied
+      to parameters of plain, or-nothing, union and container types, with the result in a list literal
+    - arith-list-cases.q (part 5): list + list, list + element and element + list for list and element types (plain,
       soft, or-nothing, typed and untyped), with the result in a list literal in a named function
-    - arith-container-cases.q (part 3): map expressions over typed lists, whose element type is the parse result type
+    - arith-container-cases.q (part 5): map expressions over typed lists, whose element type is the parse result type
       of the operator, with containers, unions, or-nothing, soft, untyped, timeout, date, bool, binary and char
       operands
+
+    A list that + gives has a parse-time type only when it does not depend on the types of the values at runtime (a
+    list of int, float, number, string, bool or binary and a value of one of these types); otherwise it has none, and
+    every mode gives the result of the AST interpreter (an error in its use, ex: assigning list<softint> + int to an
+    int, is raised at runtime; see the list section of the + operator in the language documentation).
 */
 class ArithParseResultTypesBase inherits QUnit::Test {
     public {
@@ -55,7 +60,7 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         #! the container case script, without its extension
         const ContainerScript = "arith-container-cases";
         #! the number of cases that the container case script prints
-        const ContainerCount = 57;
+        const ContainerCount = 66;
         #! results of the AST interpreter checked for the container case script: the list, its full type and the full
         #! type of its first element
         const ContainerExpected = {
@@ -72,6 +77,12 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "list<*int> + int (literal)": "[[1, 2]] list<list<*int>> list<*int>",
             "int + list<int> (literal)": "[[2, 1]] list<list<int>> list<int>",
             "int + list<int>": "[[4, 1, 2], [4, 3]] list<list<int>> list<int>",
+            # an int or string member initialized with an enum value keeps the enum type, which the runtime takes
+            "int member (enum value) + list<Pr>": "[[10, 0]] list<list<enum<Pr>>> list<enum<Pr>>",
+            "string member (enum value) + list<St>": "[[\"a\", \"a\"]] list<list<enum<St>>> list<enum<St>>",
+            "int member (enum value) + list<int>": "[[10, 1]] list<list<int>> list<int>",
+            # a result type that depends on the values is not known at parse time: an error at runtime
+            "list<softint> + int assigned to int": "RUNTIME-TYPE-ERROR",
             "softlist<int> + softlist<int> (element assignment)": "RUNTIME-TYPE-ERROR",
             "softlist<int> + int (element assignment)": "RUNTIME-TYPE-ERROR",
             "hash<D> + hash<D>": "[{x: 3, s: \"a\"}, {x: 3, s: \"a\"}] list<hash<D>> hash<D>",
@@ -133,15 +144,17 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addPartCase(1, "matrix cases: AST semantics", \astTest(), (MatrixScript, MatrixCount, MatrixExpected));
-        addPartCase(1, "matrix cases: execution modes", \modesTest(), MatrixScript);
-        addPartCase(2, "matrix cases: AOT executables", \aotTest(), MatrixScript);
-        addPartCase(3, "container cases: AST semantics", \astTest(),
+        addPartCase(1, "matrix cases: IR and JIT", \modesTest(), (MatrixScript, ("ir", "jit"), False));
+        addPartCase(2, "matrix cases: tiered and IR tier", \modesTest(), (MatrixScript, ("tiered",), True));
+        addPartCase(3, "matrix cases: AOT -O0", \aotTest(), (MatrixScript, True, ("-O0",)));
+        addPartCase(4, "matrix cases: AOT -O3", \aotTest(), (MatrixScript, True, ("-O3",)));
+        addPartCase(5, "container cases: AST semantics", \astTest(),
             (ContainerScript, ContainerCount, ContainerExpected));
-        addPartCase(3, "container cases: execution modes", \modesTest(), ContainerScript);
-        addPartCase(3, "container cases: AOT executables", \aotTest(), (ContainerScript, False));
-        addPartCase(3, "list cases: AST semantics", \astTest(), (ListScript, ListCount, ListExpected));
-        addPartCase(3, "list cases: execution modes", \modesTest(), ListScript);
-        addPartCase(3, "list cases: AOT executables", \aotTest(), (ListScript, False));
+        addPartCase(5, "container cases: execution modes", \modesTest(), ContainerScript);
+        addPartCase(5, "container cases: AOT executables", \aotTest(), (ContainerScript, False));
+        addPartCase(5, "list cases: AST semantics", \astTest(), (ListScript, ListCount, ListExpected));
+        addPartCase(5, "list cases: execution modes", \modesTest(), ListScript);
+        addPartCase(5, "list cases: AOT executables", \aotTest(), (ListScript, False));
         set_return_value(main());
     }
 
@@ -156,41 +169,40 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         list<string> lines = select astOutput(script).split("\n"), $1 =~ / => /;
         assertEq(count, lines.size(), "every case ran");
         # no result type refuses the value of the operator (an element assignment case assigns a value that the
-        # result type refuses)
-        assertEq((), (select lines, $1 =~ /RUNTIME-TYPE-ERROR/ && $1 !~ /\(element assignment\) => /),
-            "result types allow every result");
+        # result type refuses, and an "assigned to" case assigns the result to a variable of another type)
+        assertEq((), (select lines, $1 =~ /RUNTIME-TYPE-ERROR/
+            && $1 !~ /(\(element assignment\)| assigned to [a-z]+) => /), "result types allow every result");
         hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
         foreach hash<auto> i in (expected.pairIterator()) {
             assertEq(i.value, res{i.key}, i.key);
         }
     }
 
-    #! runs the script in every execution mode and on the IR tier
-    private modesTest(string script) {
+    #! runs the script in the given execution modes (every mode but ast by default) and on the IR tier
+    private modesTest(string script, *list<string> modes, bool ir_tier = True) {
         string exp = astOutput(script);
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
-            }
+        foreach string mode in (modes ?? (select ExecModeHarness::ExecModes, $1 != "ast")) {
             assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
                 scriptPath(script))), mode);
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
-            scriptPath(script))), ExecModeHarness::IRTierName);
+        if (ir_tier) {
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                scriptPath(script))), ExecModeHarness::IRTierName);
+        }
     }
 
-    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
-    #! interpreter
+    #! compiles the script with qcc with the given optimization levels (-O0 and -O3 by default) and checks that the
+    #! executables give the output of the AST interpreter
     /** With \a skip_or_nothing, the cases with an operand of an or-nothing type are left out: AOT code takes NOTHING
         as 0 in arithmetic on such operands of the matrix script (qore#5889)
     */
-    private aotTest(string script, bool skip_or_nothing = True) {
+    private aotTest(string script, bool skip_or_nothing = True, list<string> opts = ("-O0", "-O3")) {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
         list<string> exp = select astOutput(script).split("\n"), !skip_or_nothing || $1 !~ /(^|\s)\*[a-z]/;
         TmpDir dir(script + "-aot-");
-        foreach string opt in ("-O0", "-O3") {
+        foreach string opt in (opts) {
             string exe = sprintf("%s/%s%s", dir.path, script, opt);
             string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
                 scriptPath(script)));

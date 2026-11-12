@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# the container and typed cases of part 3 of ArithParseResultTypes.qc: each case builds a list with a map expression,
+# the container and typed cases of part 5 of ArithParseResultTypes.qc: each case builds a list with a map expression,
 # whose element type is the parse result type of the operator in every execution mode (the AST interpreter too), over a
 # typed list, and prints the list with its full type and the full type of its first element: a parse result type that
 # does not allow a value raises RUNTIME-TYPE-ERROR, and a container type that the rules of an operator keep (ex:
@@ -16,6 +16,27 @@
 hashdecl D {
     int x = 1;
     string s = "a";
+}
+
+enum Pr : int {
+    Low = 0,
+    High = 10,
+}
+
+enum St : string {
+    A = "a",
+}
+
+#! members initialized with enum values, which keep the enum type
+class EnumMembers {
+    public {
+        int m = Pr::High;
+        string s = St::A;
+    }
+}
+
+hashdecl EnumHash {
+    int x = Pr::High;
 }
 
 sub show(string label, code<list<auto>()> c) {
@@ -46,6 +67,17 @@ list<auto> sub litIntLists(list<int> a, list<int> b) { return (a + b,); }
 list<auto> sub litOrNothingIntListInt(list<*int> a, int b) { return (a + b,); }
 list<auto> sub litIntIntList(int a, list<int> b) { return (a + b,); }
 list<auto> sub litPlainListInt(list a, int b) { return (a + b,); }
+list<auto> sub litEnumMemberList(EnumMembers o, list<Pr> b) { return (o.m + b,); }
+list<auto> sub litListEnumMember(EnumMembers o, list<Pr> b) { return (b + o.m,); }
+list<auto> sub litStringEnumMemberList(EnumMembers o, list<St> b) { return (o.s + b,); }
+list<auto> sub litEnumHashMemberList(hash<EnumHash> h, list<Pr> b) { return (h.x + b,); }
+list<auto> sub litEnumMemberIntList(EnumMembers o, list<int> b) { return (o.m + b,); }
+list<auto> sub litEnumMemberOrNothingIntList(EnumMembers o, list<*int> b) { return (o.m + b,); }
+list<auto> sub litOrNothingIntListEnumMember(EnumMembers o, list<*int> b) { return (b + o.m,); }
+list<auto> sub litOrNothingStringListEnumMember(EnumMembers o, list<*string> b) { return (b + o.s,); }
+# the result of list<softint> + int has no parse-time type (it depends on the values), so its assignment to an int
+# parses and raises an error at runtime
+list<auto> sub litSoftIntListIntToInt(list<softint> l) { int x = l + 1; return (x,); }
 
 # containers: the type that the rules of the operator keep
 sub containers() {
@@ -94,6 +126,20 @@ sub containers() {
     showArgs("list<*int> + int (literal)", \litOrNothingIntListInt(), ((1,), 2));
     showArgs("int + list<int> (literal)", \litIntIntList(), (2, (1,)));
     showArgs("list + int (literal)", \litPlainListInt(), ((1,), 2));
+    # an int or string member initialized with an enum value keeps the enum type, which the runtime takes
+    EnumMembers em();
+    list<Pr> lpr = (Pr::Low,);
+    list<St> lst = (St::A,);
+    showArgs("int member (enum value) + list<Pr>", \litEnumMemberList(), (em, lpr));
+    showArgs("list<Pr> + int member (enum value)", \litListEnumMember(), (em, lpr));
+    showArgs("string member (enum value) + list<St>", \litStringEnumMemberList(), (em, lst));
+    showArgs("int hashdecl member (enum value) + list<Pr>", \litEnumHashMemberList(), (<EnumHash>{}, lpr));
+    showArgs("int member (enum value) + list<int>", \litEnumMemberIntList(), (em, (1,)));
+    showArgs("int member (enum value) + list<*int>", \litEnumMemberOrNothingIntList(), (em, (1, NOTHING)));
+    showArgs("list<*int> + int member (enum value)", \litOrNothingIntListEnumMember(), (em, (1, NOTHING)));
+    showArgs("list<*string> + string member (enum value)", \litOrNothingStringListEnumMember(), (em, ("x",)));
+    list<softint> lsi1 = (1,);
+    showArgs("list<softint> + int assigned to int", \litSoftIntListIntToInt(), (lsi1,));
 }
 
 # the AST interpreter applies the parse result type of a map expression (qore#5876)

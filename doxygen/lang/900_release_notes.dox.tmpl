@@ -80,6 +80,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Adding a Value in Front of a Typed List Keeps Its Type
+    The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
+    as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
+    \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
+
     @par Plain Function Bodies No Longer Inherit a Caller's Class Context
     A plain function's body could be parse-initialized in the class context of the method that first called it, which
     gave it access to that class's private and static members depending on the parse order; such code now raises a
@@ -1617,9 +1622,6 @@
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
       for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
       AST interpreter gave a \c float instead of a \c number for \c / of a \c float and a \c *number (issue #5663)
-    - the @ref plus_operator "+" operator gave a \c list&lt;auto&gt; when it added a value in front of a typed list (ex:
-      <tt>1 + l</tt> for a \c list&lt;int&gt; \c l); it now keeps the type of the list, as it does when it adds the value
-      at the end (issue #5936)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
