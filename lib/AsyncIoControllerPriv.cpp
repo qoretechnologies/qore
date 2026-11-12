@@ -830,6 +830,66 @@ void AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(bool hold, ExceptionSink*
         refs->release(xsink);
     }
 }
+
+// the pauses after a delivery requested by the dbg_async_io_pause_after_delivery() and
+// dbg_async_io_pause_after_step_result() test hooks; see dbgPauseAfterDelivery()
+namespace {
+struct AsyncIoDebugDeliveryPause {
+    //! True while a pause is requested and not taken yet; checked without the lock first
+    std::atomic<bool> requested{false};
+    QoreThreadLock lock;
+    QoreCondition cond;
+    //! True from the time a delivery takes the pause until it is ended
+    bool paused = false;
+    //! True if a delivery took the pause since it was requested
+    bool taken = false;
+
+    //! Returns the state of the given pause point, which is never destroyed (see AsyncIoDebugHeldReleases::get())
+    static AsyncIoDebugDeliveryPause& get(AsyncIoControllerPriv::DbgPausePoint point) {
+        static AsyncIoDebugDeliveryPause* delivery = new AsyncIoDebugDeliveryPause;
+        static AsyncIoDebugDeliveryPause* step_result = new AsyncIoDebugDeliveryPause;
+        return point == AsyncIoControllerPriv::DBG_PAUSE_STEP_RESULT ? *step_result : *delivery;
+    }
+};
+}
+
+bool AsyncIoControllerPriv::dbgPauseAfterDelivery(DbgPausePoint point, bool pause) {
+    assert(!on_async_io_thread);
+    AsyncIoDebugDeliveryPause& state = AsyncIoDebugDeliveryPause::get(point);
+    AutoLocker al(state.lock);
+    bool rv = state.taken;
+    state.taken = false;
+    state.paused = false;
+    state.requested.store(pause, std::memory_order_release);
+    state.cond.broadcast();
+    return rv;
+}
+
+bool AsyncIoControllerPriv::dbgTakeDeliveryPause(DbgPausePoint point) {
+    AsyncIoDebugDeliveryPause& state = AsyncIoDebugDeliveryPause::get(point);
+    // only an I/O thread (a callback worker for a step's result) pauses: another thread that delivers a result can
+    // be the one that waits for it
+    bool on_point_thread = point == DBG_PAUSE_STEP_RESULT ? on_callback_worker : on_async_io_thread;
+    if (!on_point_thread || !state.requested.load(std::memory_order_acquire)) {
+        return false;
+    }
+    AutoLocker al(state.lock);
+    if (!state.requested.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    state.requested.store(false, std::memory_order_relaxed);
+    state.paused = true;
+    state.taken = true;
+    return true;
+}
+
+void AsyncIoControllerPriv::dbgWaitAfterDelivery(DbgPausePoint point) {
+    AsyncIoDebugDeliveryPause& state = AsyncIoDebugDeliveryPause::get(point);
+    AutoLocker al(state.lock);
+    while (state.paused) {
+        state.cond.wait(state.lock);
+    }
+}
 #endif
 
 void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink) {
@@ -1997,6 +2057,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 
         ExceptionSink work_xsink;
         const char* method_name = nullptr;
+        // the class of the operation of a continuePoll() item, whose reference is released after the step; for the
+        // log below (copied, as the release can delete the object and, with it, the last reference to its class)
+        std::string step_class_name;
 
         // A step of a poll operation is governed by the sandbox of the code that submitted the operation, not by
         // the context of this worker: without it, a connection made here (to follow a redirect, retry a failed
@@ -2216,10 +2279,35 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         }
                     }
 
+                    // The step's reference to the operation is released before the step's result goes back to the
+                    // I/O thread, which can deliver the operation's result as soon as it has it: a thread that
+                    // receives the result and flushes the callbacks does not wait for continuePoll() items
+                    // (waitForIdle()), so a reference released after this could still be held when that thread
+                    // checks that the operation is gone.  While the operation is in the controller's cache, the
+                    // controller holds a reference too, so this is not the last one; if a cancellation has removed
+                    // it, the destructor runs here, as it would below: in the item's Program, with the delegation,
+                    // and as a callback worker (see waitForOwnerIdle()).  The cancellation of the item ends first,
+                    // as it does before the releases below.
+                    end_thread_cancellation();
+                    step_class_name = async_item.spop_obj->getClassName();
+                    async_item.spop_obj->deref(xsink);
+                    async_item.spop_obj = nullptr;
+
+#ifdef DEBUG
+                    // taken before the result is sent, so that a thread that receives the operation's result sees
+                    // that it was taken
+                    const bool dbg_pause = AsyncIoControllerPriv::dbgTakeDeliveryPause(
+                        AsyncIoControllerPriv::DBG_PAUSE_STEP_RESULT);
+#endif
                     // Send result back to the I/O thread
                     async_item.controller->enqueueContinuePollResult(
                         async_item.key, async_item.op_id, async_item.thread_idx, new_poll_info, ex_hash, completed,
                         has_state ? &state : nullptr);
+#ifdef DEBUG
+                    if (dbg_pause) {
+                        AsyncIoControllerPriv::dbgWaitAfterDelivery(AsyncIoControllerPriv::DBG_PAUSE_STEP_RESULT);
+                    }
+#endif
                     async_item.controller->deref(&work_xsink);
                     async_item.controller = nullptr;
                     break;
@@ -2272,7 +2360,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             QoreStringValueHelper err_str(work_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
             const char* type_name = getDispatchTypeName(async_item.type);
-            const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName() : "null";
+            const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName()
+                : (!step_class_name.empty() ? step_class_name.c_str() : "null");
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
             const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
             const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
@@ -7214,21 +7303,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         for (auto& te : timer_events) {
             // taken before the context is moved to the dispatched callback
             const bool te_delegate = async_io_module_cleanup_delegate(te.sandbox_ctx);
-            if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
+            // the references of the callback to dispatch, taken before the controller's reference is handed over
+            ReferenceHolder<ResolvedCallReferenceNode> code_ref(xsink);
+            ReferenceHolder<QoreListNode> args(xsink);
+            bool is_code = te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF;
+            if (is_code) {
                 // udata is a code reference — dispatch it asynchronously, tagged with
                 // the timer's owner (if any) so a teardown path can drain a
                 // fired-but-not-yet-run callback via flushCallbacksByOwner()
-                ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
-                code_ref->ref();
-#ifdef DEBUG
-                // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
-                if (dbgHoldTimerCallback(code_ref, te.owner, te.sandbox_ctx)) {
-                    code_ref = nullptr;
-                }
-                if (code_ref)
-#endif
-                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner,
-                    std::move(te.sandbox_ctx));
+                code_ref = te.udata.get<ResolvedCallReferenceNode>()->refRefSelf();
             } else if (cb_snapshot) {
                 // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
@@ -7238,20 +7321,45 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (te.udata.hasNode()) {
                         timer_hash->setKeyValue("udata", te.udata.refSelf(), xsink);
                     }
-                    QoreListNode* args = new QoreListNode(autoTypeInfo);
+                    args = new QoreListNode(autoTypeInfo);
                     args->push(timer_hash.release(), xsink);
                     cb_snapshot->ref();
-                    call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args, std::string(),
-                        std::move(te.sandbox_ctx));
+                    code_ref = cb_snapshot;
                 }
             }
-            // the dispatched callback holds its own reference, but it can finish first; a closure can hold the
-            // last references to arbitrary objects
-            AsyncIoDeferredRelease refs;
-            refs.udata = te.udata;
-            refs.module_cleanup_delegate = te_delegate;
-            te.udata = QoreValue();
-            releaseOffIoThread(refs, xsink);
+            // the controller's reference is handed over before the callback is dispatched: the dispatched callback
+            // holds its own reference, but it can finish first, and a closure can hold the last references to
+            // arbitrary objects; a thread that sees the callback's work done and then flushes the callbacks
+            // (flushCallbacks()) thus sees the reference released
+            {
+                AsyncIoDeferredRelease refs;
+                refs.udata = te.udata;
+                refs.module_cleanup_delegate = te_delegate;
+                te.udata = QoreValue();
+                releaseOffIoThread(refs, xsink);
+            }
+            if (!code_ref) {
+                continue;
+            }
+#ifdef DEBUG
+            if (is_code) {
+                // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
+                if (dbgHoldTimerCallback(*code_ref, te.owner, te.sandbox_ctx)) {
+                    code_ref.release();
+                    continue;
+                }
+            }
+            // taken before the dispatch, so that a thread that sees the callback's work done sees that it was taken
+            const bool dbg_pause = dbgTakeDeliveryPause(DBG_PAUSE_DELIVERY);
+#endif
+            // a code reference is tagged with the timer's owner (if any); see above
+            call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref.release(), args.release(),
+                is_code ? te.owner : std::string(), std::move(te.sandbox_ctx));
+#ifdef DEBUG
+            if (dbg_pause) {
+                dbgWaitAfterDelivery(DBG_PAUSE_DELIVERY);
+            }
+#endif
         }
         if (cb_snapshot) {
             cb_snapshot->deref(xsink);
@@ -9748,21 +9856,32 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
         QoreHashNode* queue_result = dispatch_on_complete && result
             ? result->hashRefSelf()
             : result;
-        // the reference to the operation is not used for the push: for a synchronous caller, it is handed over
-        // before it, so that the caller, which can end its wait as soon as the result is pushed, takes it (see
+        // the reference to the operation is not used for the push (the result holds its own), so it is handed over
+        // before it: a thread that receives the result, drops its own references to the operation and flushes the
+        // callbacks (flushCallbacks()) then sees the operation released, whatever this thread does after the push;
+        // a synchronous caller, which can end its wait as soon as the result is pushed, takes it (see
         // AsyncIoSyncRelease)
-        if (!dispatch_on_complete && sync_release && spop_obj) {
+        if (!dispatch_on_complete && spop_obj) {
             AsyncIoDeferredRelease refs;
             refs.spop_obj = spop_obj;
             refs.module_cleanup_delegate = delegate;
             releaseOffIoThread(refs, xsink, sync_release);
             spop_obj = nullptr;
         }
+#ifdef DEBUG
+        // taken before the push, so that the thread that receives the result sees that it was taken
+        const bool dbg_pause = dbgTakeDeliveryPause(DBG_PAUSE_DELIVERY);
+#endif
         // pushed with the Queue's object, as Queue::push() does: the collector then sees the references the result
         // holds (to the operation, for one), so a result left in a Queue that the operation references is collected
         queue->push(xsink, queue_obj, queue_result);
+#ifdef DEBUG
+        if (dbg_pause) {
+            dbgWaitAfterDelivery(DBG_PAUSE_DELIVERY);
+        }
+#endif
         if (!dispatch_on_complete) {
-            release_refs(spop_obj, nullptr);
+            assert(!spop_obj);
             return;
         }
     }

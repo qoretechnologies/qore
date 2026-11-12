@@ -3131,6 +3131,8 @@ public:
     bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
+    //! owns explicit_type_param_inst for an instruction read from serialized IR, which has no AST node to hold it
+    std::unique_ptr<QoreTypeParamInstantiation> aot_explicit_type_param_inst;
 
     //! Transient AOT-only scalar projection from a pure fixed aggregate.
     AOTAggregateProjectionKind aot_aggregate_projection =
@@ -3200,6 +3202,8 @@ public:
     bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
+    //! owns explicit_type_param_inst for an instruction read from serialized IR, which has no AST node to hold it
+    std::unique_ptr<QoreTypeParamInstantiation> aot_explicit_type_param_inst;
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
 
     // Cached inline IR call state for direct object-method calls.
@@ -4130,6 +4134,13 @@ public:
     //! Also computes max_value_id for right-sizing the interpreter value vector.
     //! Must be called after IR lowering and verification, before execution.
     void computeSlotIdsAndEmbed();
+
+    //! Embeds QoreIRLocalInstruction::is_closure into the instructions that access locals
+    /** computeSlotIdsAndEmbed() embeds it with the slot IDs; the AOT top-level code, whose local slots are those that
+        buildAOTSlotMap() gives it, as when the runtime rebuilds its context, embeds it alone: the LLVM lowering pops a
+        closure-bound block local by this flag, and treats a local without it as a plain one (#5869)
+    */
+    void embedLocalClosureFlags();
 
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.

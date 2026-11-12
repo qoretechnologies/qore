@@ -2017,7 +2017,11 @@ int x = 1;
         on_exit dpc.terminatingHook = NOTHING;
         dpc.command(sprintf("program/%d/terminate", p.pgmId));
         assertEq(("detach", p.tid), (detach.func, detach.tid));
-        # terminateProgram() resumes the thread, as it is stopped when it resumes the stopped threads
+        # the thread stays stopped at its detach although it stopped there before terminateProgram() resumed the
+        # stopped threads: the client that got the event resumes it, as any thread that ends; if terminateProgram()
+        # resumed it, the client's command would find it no longer stopped (DEBUG-HANDLER-ERROR)
+        assertTrue(dpc.isStoppedWithoutCommands(p.tid));
+        dpc.go(p.tid);
         hash<auto> rv = p.done.get(EventTimeout);
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);

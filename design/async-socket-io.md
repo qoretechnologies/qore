@@ -61,6 +61,30 @@ barrier waits for or discards it; it is released on the calling thread only when
 the I/O threads have exited) or the objects' program is shutting down.  Builtin objects whose destruction is pure
 C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
 
+The controller's references to an operation whose result goes to a result `Queue` are handed over before the result
+is pushed: `PollInfo::cleanup()` runs before `deliverResult()` on the completion paths, and `deliverResult()` releases
+its own reference to the operation (which the push does not use; the result holds one) before the push.  A thread
+that receives the result, drops its own references to the operation and calls `flushCallbacks()` (which waits for
+the `DT_RELEASE` items dispatched before it) therefore sees the operation destroyed, whatever the I/O thread does
+after the push; before, the reference of `deliverResult()` was released after the push, and such a thread could see
+the operation still alive (module-code-cleanup.qtest, rarely, under load).  Only the references to the result
+`Queue`'s object, which the push uses, are released after it; the receiving thread holds the `Queue` itself.
+The callback worker that runs a `continuePoll()` step releases its own reference to the operation before it sends
+the step's result to the I/O thread (`enqueueContinuePollResult()`): `flushCallbacks()` does not wait for
+`continuePoll()` items (`QoreCallDispatcher::waitForIdle()`), so a reference the worker released after sending the
+result could still be held when the receiving thread checks.  While the operation is in the controller's cache this
+release is not the last one; when a cancellation has removed it, the destructor runs there as it would at the end of
+the item (in the item's Program, with the module cleanup delegation, as a callback worker).
+`asyncio_result_release_order.qtest` checks these with the `dbg_async_io_pause_after_delivery()` and
+`dbg_async_io_pause_after_step_result()` debug hooks, which make the I/O thread wait after the push, or the worker
+wait after it sent the step's result.
+
+Likewise, the controller's reference to the user data of a fired timer (its callback) is handed over before the
+callback is dispatched, after the dispatched callback has taken its own: a thread that sees the callback's work done
+and then flushes the callbacks sees the reference released.  Before, it was handed over after the dispatch, and with
+`dbg_async_io_hold_releases()` it could land among the references held for the next operation of a test (the
+module-code-cleanup.qtest case waited for the wrong releases then).
+
 The controller's lock `m` is not recursive, and the cleanup of a command that will not be processed
 (`cleanupAbandonedCommand()`: the commands after a Quit in an I/O thread's batch, those drained when a thread stops
 for good, a submission refused while the controller shuts down) delivers a canceled result, logs, releases

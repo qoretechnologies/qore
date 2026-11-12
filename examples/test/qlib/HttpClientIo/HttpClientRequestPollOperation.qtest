@@ -354,11 +354,16 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
     testTimeoutCancel() {
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
         on_exit mgr.closeAll();
+        # the requests with a 300 ms timeout below take an idle connection of the manager, made by a request before
+        # each: their timeout is for the response, and making a connection can take longer than that under load
+        # ("timed out waiting for the connection")
+        assertEq("GET /plain", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/plain")).body);
         # poll-driven timeout
         assertThrows("HTTPCLIENT-TIMEOUT", "timed out waiting for the response", \runPoller(),
             new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
                 <HttpClientRequestPollOptions>{"timeout": 300}));
         assertEq("/block", peer_a.blocked.get(10s));
+        assertEq("GET /plain", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/plain")).body);
         # a timeout of an async operation rejects the Future
         HttpCancellableFuture f = new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
             <HttpClientRequestPollOptions>{"timeout": 300}).startAsync();

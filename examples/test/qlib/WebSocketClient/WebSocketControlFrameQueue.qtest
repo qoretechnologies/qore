@@ -1,0 +1,240 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/2 to a node server, flow control and control frames
+
+/*  WebSocketControlFrameQueue.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5900: the WebSocket frame state answers a ping with a pong, and an error with a close frame, from the async
+    I/O thread, which cannot wait for the stream's send buffer to drain; when the buffer was full, the frame was
+    dropped.  A close frame is now buffered past the limit, and the pong of the most recent ping is kept and buffered
+    once the buffer has room.  The server (node) grants the client no flow-control credit until the test releases it,
+    so the client's send buffer is full when the pong is sent; without the fix the server never gets the pong.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires FsUtil
+%requires WebSocketUtil
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class WebSocketControlFrameQueueTest
+
+#! a message larger than the stream's send buffer (1 MiB)
+const Size = 3 * 1024 * 1024;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Pushes the client's message about the start of an error close, so that a test can wait for it
+class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue lines();
+    }
+
+    constructor() : LoggerAppenderWithLayout("error-close", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /closing the connection for an error/) {
+            lines.push(params);
+        }
+    }
+}
+
+class WebSocketControlFrameQueueTest inherits QUnit::Test {
+    constructor() : QUnit::Test("WebSocketControlFrameQueue", "1.0") {
+        addTestCase("HTTP/2 client: the pong of the latest ping is sent when the send buffer has room",
+            \testPong());
+        addTestCase("HTTP/2 client: the close frame of an error is sent although the send buffer is full",
+            \testErrorClose(), True);
+        addTestCase("HTTP/2 client: an error close that the server does not answer ends at the close timeout",
+            \testErrorClose(), False);
+        set_return_value(main());
+    }
+
+%ifdef NoProcess
+    testPong() {
+        testSkip("the process module is not available");
+    }
+
+    testErrorClose(bool answer) {
+        testSkip("the process module is not available");
+    }
+%else
+    #! Two pings arrive while the client's send buffer is full: the pong of the second one is sent once it has room
+    testPong() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        Queue pings();
+        WebSocketClient wsc = connectNode(node.port, NOTHING, sub (hash<WsMsgInfo> event) {
+            if (event.op == WSOP_Ping) {
+                pings.push(event.msg.toString());
+            }
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        # the server grants no credit: the message stays buffered, over the send buffer's limit
+        wsc.send(binary(strmul("a", Size)));
+        node.process.write("ping p1,p2\n");
+        assertEq("SENT PING p1,p2", readLine(\node), "the server sent two pings");
+        # the client has answered both when it reports the second one: the pong is sent before the ping is reported
+        assertEq("p1", pings.get(HangGuard), "the client gets the first ping");
+        assertEq("p2", pings.get(HangGuard), "the client gets the second ping");
+        node.process.write("release\n");
+        assertEq(sprintf("MSG %d 97 97", Size), readLine(\node), "the message arrives");
+        # only the pong of the most recent ping is sent (RFC 6455 section 5.5.3), before the data sent after it
+        assertEq("PONG p2", readLine(\node), "the pong of the latest ping arrives");
+        wsc.send(binary("done"));
+        assertEq("MSG 4 100 101", readLine(\node), "the next message follows the pong");
+    }
+
+    #! The client rejects a frame with 1009 while its send buffer is full: its close frame reaches the server
+    /** The frame state queues the close frame past the send buffer's limit (issue #5900), and the client waits for
+        the server to end the stream instead of tearing the connection down, which discarded the buffered data with
+        the close frame (issue #5910); the close is reported with 1009 when the server has answered it
+    */
+    testErrorClose(bool answer) {
+        hash<auto> node = startNode();
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        on_exit stopNode(node.process);
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push(wsc.getCloseCode());
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            # the close timeout of the client is its I/O timeout: when the server does not answer, the close ends then
+            "timeout": answer ? HangGuard : 2s,
+            "logger": logger,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        wsc.send(binary(strmul("a", Size)));
+        node.process.write("big-header\n");
+        assertEq("SENT BIG-HEADER", readLine(\node), "the server announced a frame over the limit");
+        # the client has rejected the frame and queued its close frame: the server reads from now on (the old client
+        # tore the connection down then, discarding the buffered data with the close frame)
+        assertRegex("close code 1009", capture.lines.get(HangGuard), "the client starts the close for the error");
+        if (!answer) {
+            # the server neither reads nor answers: the close ends at the close timeout with the error's code
+            assertEq(WSCC_MessageTooBig, closed.get(HangGuard), "the client closes with 1009");
+            return;
+        }
+        node.process.write("release\n");
+        assertEq(sprintf("MSG %d 97 97", Size), readLine(\node), "the buffered message arrives");
+        assertEq(sprintf("CLOSE %d", WSCC_MessageTooBig), readLine(\node), "the client's close frame arrives");
+        # the server answered the close frame and ended the stream: the client reports the error's code
+        assertEq(WSCC_MessageTooBig, closed.get(HangGuard), "the client closes with 1009");
+    }
+
+    #! Starts the server that grants no credit until it is released; skips the test without node
+    private hash<auto> startNode() {
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -e \"process.exit(require('http2').constants.NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL "
+                "? 0 : 1)\" > /dev/null 2>&1")) {
+            testSkip("node with RFC 8441 extended CONNECT support is not available");
+        }
+        TmpDir dir("ws-control-frame-queue-");
+        foreach hash<auto> i in ({"cert.pem": CertPem, "key.pem": KeyPem}.pairIterator()) {
+            File f();
+            f.open2(dir.path + "/" + i.key, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+        Process p(node_bin, (get_script_dir() + "/http2-ws-paused-server.js", "0", dir.path + "/cert.pem",
+            dir.path + "/key.pem"));
+        on_error stopNode(p);
+        hash<auto> node = {"process": p, "buf": "", "dir": dir};
+        string line = readLine(\node);
+        *string port = (line =~ x/^READY ([0-9]+)$/)[0];
+        if (!exists port) {
+            throw "TEST-ERROR", "the node server reported no port: " + line;
+        }
+        node.port = port.toInt();
+        return node;
+    }
+
+    #! Returns the next line that the server printed
+    private string readLine(reference<hash<auto>> node) {
+        while (node.buf !~ /\n/) {
+            *string s = node.process.readStdout(4096, HangGuard);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server printed no line: %s",
+                    node.process.readStderr(4096, 0) ?? "");
+            }
+            node.buf += s;
+        }
+        int i = node.buf.find("\n");
+        string line = node.buf.substr(0, i);
+        node.buf = node.buf.substr(i + 1);
+        return line;
+    }
+
+    private stopNode(Process p) {
+        if (p.running()) {
+            p.terminate();
+        }
+        p.wait();
+    }
+
+    #! Returns a client connected to the node server over HTTP/2
+    private WebSocketClient connectNode(int port, *code callback, *code raw_callback) {
+        hash<auto> opts = {
+            "url": sprintf("wss://127.0.0.1:%d/ws", port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+        };
+        if (raw_callback) {
+            opts.raw_callback = raw_callback;
+        }
+        WebSocketClient wsc(callback ?? sub (*data msg) {}, opts);
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        return wsc;
+    }
+%endif
+}

@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads and thread_exit, and AOT code generation and linking of block handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RethrowThreadExitTest
+
+#! A rethrow in an on_error handler keeps a pending thread exit (#5904)
+/** A thread exit that another handler of the block raised, or a handler of an inner block, stays pending when an
+    on_error handler rethrows the exception, as without the rethrow: the thread exits after the handlers, and no catch
+    block runs.  RethrowThreadExit.q gives the output of the AST interpreter in every execution mode and compiled with
+    qcc.
+*/
+class RethrowThreadExitTest inherits QUnit::Test {
+    public {
+        #! the output of RethrowThreadExit.q with the AST interpreter
+        const Expected = "-- rethrow_after_exit
+on_exit
+on_error ERR
+-- no_rethrow
+on_exit
+on_error ERR
+-- exit_after_rethrow
+on_error ERR
+on_exit
+-- outer_rethrow
+inner on_exit
+outer on_error ERR
+-- rethrow_args
+on_exit
+on_error ERR
+-- caller
+on_exit
+on_error ERR
+-- caller_try
+on_exit
+on_error ERR
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("RethrowThreadExitTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/RethrowThreadExit.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a rethrow that keeps a thread exit", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a rethrow that keeps a thread exit", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-rethrow-thread-exit-");
+        string exe = tmp.path + DirSep + "rethrow-thread-exit";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}
