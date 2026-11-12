@@ -1609,6 +1609,9 @@
       constructor as a normal method, which crashed the process for objects of builtin and user classes alike, and
       <tt>background copy()</tt> in a method crashed when the thread was started in the AST interpreter; it now
       copies the object in every execution mode and in programs compiled with \c qcc (issue #5917)
+    - a qualified call of a method of the object in a background expression (for example
+      <tt>background Base::method()</tt>) raised \c BACKGROUND-ERROR in programs compiled with \c qcc, which looked
+      up the qualified name as the name of a method; it now calls the method of the class that it names
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

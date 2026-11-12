@@ -21237,11 +21237,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     if (!cls) {
         cls = qore_class_private::get(*self->getClass());
     }
+    // a qualified call (Class::method()) calls the method of the class that it names, like
+    // qore_rt_background_static_method_name_call_aot() and SelfFunctionCallNode::parseInitImpl() do; the name is
+    // passed as written, so it is resolved here
+    const qore_class_private* method_cls = cls;
+    const char* name = method_name;
+    NamedScope scope(method_name);
+    if (scope.size() > 1) {
+        const QoreClass* qc = qore_root_ns_private::get(*(getRootNS()))->runtimeFindScopedClassWithMethod(scope);
+        if (!qc) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot resolve the class of background method call '%s'",
+                method_name);
+            return toBits(QoreValue());
+        }
+        method_cls = qore_class_private::get(*qc);
+        name = scope.getIdentifier();
+    }
     ClassAccess access = Public;
-    const QoreMethod* method = cls->runtimeFindCommittedMethod(method_name, access, cls);
+    const QoreMethod* method = method_cls->runtimeFindCommittedMethod(name, access, cls);
     if (!method) {
         xsink->raiseException("BACKGROUND-ERROR", "cannot resolve method '%s' on class '%s'",
-            method_name, cls->name.c_str());
+            method_name, method_cls->name.c_str());
         return toBits(QoreValue());
     }
 

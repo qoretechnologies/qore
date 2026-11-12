@@ -85,6 +85,65 @@ class Plain {
     }
 }
 
+# a subclass of a user class with a copy() method: both copy constructors run, the base class's first
+class SubCounter inherits CopyCounter {
+    public {
+        bool sub_copy = False;
+    }
+
+    constructor(int value) : CopyCounter(value) {
+    }
+
+    copy() {
+        sub_copy = True;
+    }
+}
+
+# a subclass of a builtin class with a copy() method
+class SubMutex inherits Mutex {
+    public {
+        int value = 1;
+        bool sub_copy = False;
+    }
+
+    copy() {
+        sub_copy = True;
+    }
+}
+
+# self calls of other methods in the background: virtual, qualified (not virtual) and static
+class Caller {
+    public {
+        static Queue q();
+    }
+
+    int bgVirtual() {
+        return background record(1);
+    }
+
+    int bgQualified() {
+        return background Caller::record(2);
+    }
+
+    int bgStatic() {
+        return background srecord(3);
+    }
+
+    record(int i) {
+        Caller::q.push({\"class\": \"Caller\", \"i\": i});
+    }
+
+    static srecord(int i) {
+        Caller::q.push({\"class\": \"static\", \"i\": i});
+    }
+}
+
+class SubCaller inherits Caller {
+    record(int i) {
+        Caller::q.push({\"class\": \"SubCaller\", \"i\": i});
+    }
+}
+
 #! describes a copy and checks that it is not the original
 hash<auto> sub describe(object orig, object c) {
     return {
@@ -213,6 +272,91 @@ hash<auto> sub other_methods() {
     background q.push(cnt.getCount());
     return {\"direct\": direct, \"arg\": q.get(10s)};
 }
+
+#! a copy() call in an expression that the thread evaluates once for each element
+/** The background copy of the call is evaluated more than once (see AbstractFunctionCallNode::reusable_tmp_args)
+*/
+hash<auto> sub per_element() {
+    Queue q();
+    list<CopyCounter> l = (new CopyCounter(1), new CopyCounter(2), new CopyCounter(3));
+    int copies = CopyCounter::copies;
+    thread_join(background map q.push($1.copy()), l);
+    list<auto> values;
+    bool all_new = True;
+    for (int i = 0; i < l.size(); ++i) {
+        CopyCounter c = q.get(10s);
+        CopyCounter::made.get(10s);
+        values += c.value;
+        if (!c.is_copy || l[i].is_copy || c == l[i]) {
+            all_new = False;
+        }
+    }
+    list<Mutex> ml = (new Mutex(), new Mutex());
+    thread_join(background map q.push($1.copy()), ml);
+    list<auto> mutex_classes;
+    for (int i = 0; i < ml.size(); ++i) {
+        object c = q.get(10s);
+        mutex_classes += c.className();
+        if (c == ml[i]) {
+            all_new = False;
+        }
+    }
+    return {
+        \"values\": values,
+        \"new\": all_new,
+        \"copies\": CopyCounter::copies - copies,
+        \"mutexes\": mutex_classes,
+    };
+}
+
+#! copy() calls of objects of subclasses of a user class and of a builtin class
+hash<auto> sub subclasses() {
+    Queue q();
+    SubCounter s(11);
+    background q.push(s.copy());
+    SubCounter c = q.get(10s);
+    hash<auto> rv;
+    rv.user = describe(s, c) + {
+        \"value\": c.value,
+        \"copy\": c.is_copy,
+        \"sub_copy\": c.sub_copy,
+        \"orig\": s.is_copy || s.sub_copy,
+        \"made\": CopyCounter::made.get(10s) == c,
+    };
+    thread_join(background s.copy());
+    c = CopyCounter::made.get(10s);
+    rv.user_direct = describe(s, c) + {\"copy\": c.is_copy, \"sub_copy\": c.sub_copy};
+
+    SubMutex m();
+    m.value = 12;
+    background q.push(m.copy());
+    SubMutex mc = q.get(10s);
+    mc.lock();
+    rv.builtin = describe(m, mc) + {
+        \"value\": mc.value,
+        \"sub_copy\": mc.sub_copy,
+        \"orig\": m.sub_copy,
+        \"locked\": mc.lockOwner(),
+    };
+    mc.unlock();
+    return rv;
+}
+
+#! self calls of other methods in the background
+hash<auto> sub other_self_calls() {
+    Caller c();
+    SubCaller s();
+    hash<auto> rv;
+    thread_join(c.bgVirtual());
+    rv.virt = Caller::q.get(10s);
+    thread_join(s.bgVirtual());
+    rv.virt_sub = Caller::q.get(10s);
+    thread_join(s.bgQualified());
+    rv.qualified_sub = Caller::q.get(10s);
+    thread_join(s.bgStatic());
+    rv.static_call = Caller::q.get(10s);
+    return rv;
+}
 ";
 
 #! the expected results of the functions in Code, by function name
@@ -236,13 +380,29 @@ const Expected = {
         "plain_implicit_direct": True,
     },
     "other_methods": {"direct": True, "arg": 3},
+    "per_element": {"values": (1, 2, 3), "new": True, "copies": 3, "mutexes": ("Mutex", "Mutex")},
+    "subclasses": {
+        "user": {"class": "SubCounter", "new": True, "value": 11, "copy": True, "sub_copy": True, "orig": False,
+            "made": True},
+        "user_direct": {"class": "SubCounter", "new": True, "copy": True, "sub_copy": True},
+        "builtin": {"class": "SubMutex", "new": True, "value": 12, "sub_copy": True, "orig": False,
+            "locked": True},
+    },
+    "other_self_calls": {
+        "virt": {"class": "Caller", "i": 1},
+        "virt_sub": {"class": "SubCaller", "i": 1},
+        "qualified_sub": {"class": "Caller", "i": 2},
+        "static_call": {"class": "static", "i": 3},
+    },
 };
 
 #! Regression test for issue #5917: a background copy() call makes a copy of the object
 /** The background operator runs a copy of the call with its arguments evaluated; the copy of a copy() call is a
     method call with pre-evaluated arguments, and it was run as a call of the copy constructor as a normal method:
     for a builtin object that crashed, and for a user object it ran the body of copy() on the original object.  The
-    call is now dispatched to the copy constructor in every execution mode and in compiled programs.
+    call is now dispatched to the copy constructor in every execution mode and in compiled programs.  The test also
+    covers a copy evaluated once per element, objects of subclasses of user and builtin classes, and background self
+    calls of other methods: virtual, qualified (which compiled programs looked up by the qualified name) and static.
 */
 public class BackgroundCopyMethodTest inherits QUnit::Test {
     constructor() : Test("background copy() method", "1.0", \ARGV) {

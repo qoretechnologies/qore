@@ -2051,19 +2051,35 @@ public:
 
             // issue #2653: calling a static method from inside a non-static method in the background operator
             // incorrectly extends the lifetime of the object
-            // issue #5917: an implicit copy() call has no method (see SelfFunctionCallNode::parseInitImpl()); it
-            // copies the current object, which the thread therefore holds like for a call of a normal method
+            // issue #5917: a self call can have no method: an implicit copy() call (see
+            // SelfFunctionCallNode::parseInitImpl()), which copies the current object, and a call that is dispatched
+            // by name on the class of the object (one that the AOT runtime could not resolve when it loaded the
+            // code); such a call is a call of a normal method unless the name resolves only to a static method
             const QoreMethod* m = sfcn->getMethod();
-            assert(m || sfcn->isCopyCall());
-            if (!m || !m->isStatic()) {
+            bool is_static;
+            if (m) {
+                is_static = m->isStatic();
+            } else if (sfcn->isCopyCall()) {
+                is_static = false;
+            } else {
+                const QoreClass* qc = call_obj ? call_obj->getClass() : sfcn->getClass();
+                ClassAccess access;
+                is_static = qc && !qc->findMethod(sfcn->getName(), access)
+                    && qc->findStaticMethod(sfcn->getName(), access);
+            }
+            if (!is_static) {
                 //printd(5, "BGThreadParams::BGThreadParams() real object method call: %p\n", call_obj);
                 // must have a current object if an in-object method call is being executed
                 // (i.e. $.method())
                 // we reference the object so it won't go out of scope while the thread is running
                 obj = call_obj;
-                assert(obj);
-                obj->realRef();
-                call_obj = nullptr;
+                // the background copy of a self call (SetSelfFunctionCallNode) holds the object of the starting code,
+                // so there is one here; a call dispatched by name is not assumed to have one, however
+                assert(obj || (!m && !sfcn->isCopyCall()));
+                if (obj) {
+                    obj->realRef();
+                    call_obj = nullptr;
+                }
             }
         }
 
