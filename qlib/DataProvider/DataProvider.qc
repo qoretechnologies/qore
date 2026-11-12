@@ -2356,7 +2356,7 @@ if (action.data_provider_info) {
             str = replace(str, "$symbol", info.symbol);
         }
         if (str =~ /\$args/) {
-            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$#]),
                 exp.args)));
         }
         # make direct substitutions for plain argument references

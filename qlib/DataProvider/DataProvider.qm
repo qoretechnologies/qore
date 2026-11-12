@@ -1773,6 +1773,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::checkModuleSandboxAccess()
       "DataProviderActionCatalog::checkModuleSandboxAccess()" and
       @ref DataProvider::DataProviderActionCatalog::initLoadedApps() "DataProviderActionCatalog::initLoadedApps()"
+    - fixed @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" for expressions
+      rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
+      \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
+      instead of its own
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()
