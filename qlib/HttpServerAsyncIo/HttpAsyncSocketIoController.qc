@@ -431,11 +431,16 @@ public class HttpAsyncSocketIoController {
                 # it sends instead of waiting for another request; not a long-lived connection (WebSocket, SSE, or a
                 # response that starts one), which the server closes with its protocol's close
                 switch (ci.state) {
+                    # a connection that waits for a request (or will after its response) is closed if none has
+                    # arrived, even one that has not had a request yet
                     case HttpConnectionState::KeepAlive:
                     case HttpConnectionState::ReadHeader:
-                    case HttpConnectionState::ReadBody:
                     case HttpConnectionState::SendAndReadHeader:
                     case HttpConnectionState::SendStreamAndReadHeader:
+                        ci.sock.drainHttpConnection(True);
+                        break;
+                    # a connection with a request in progress is closed after its response
+                    case HttpConnectionState::ReadBody:
                     case HttpConnectionState::ResponseDelay:
                         ci.sock.drainHttpConnection();
                         break;
@@ -578,9 +583,10 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Http3:
             case HttpConnectionState::Http3Sending:
                 return ci;
-            # an HTTP/1.1 connection that has sent a request and was written after the drain started: its keep-alive
-            # operation must end after its response too (see startDrain()); not a connection that has not sent a
-            # request yet (a new connection, or one in its TLS handshake), whose first request is served
+            # an HTTP/1.1 connection that was written after the drain started: its keep-alive operation must end after
+            # its response too (see startDrain()); the first request of a new connection (one that the fused operation
+            # reads, or after its TLS handshake) is served, as the drain flag set here (level 1) closes a connection
+            # only after a response
             case HttpConnectionState::KeepAlive:
             case HttpConnectionState::ReadBody:
             case HttpConnectionState::SendAndReadHeader:
@@ -3659,10 +3665,10 @@ public class HttpAsyncSocketIoController {
     #! Handles connection errors
     private handleConnectionError(string uh, hash<HttpActiveConnectionInfo> cinfo,
             string state, hash<ExceptionInfo> ex) {
-        # the operation of a draining HTTP/3 listener has ended (qore#5899); for HTTP/3, cinfo.sock is the listener's
-        # UDP socket
-        if (state == HttpConnectionState::Http3 || state == HttpConnectionState::Http3Sending) {
-            on_exit endH3Drain(cinfo.sock.uniqueHash());
+        # the operation of a draining HTTP/3 listener has ended (qore#5899): its token is released when the error has
+        # been handled; for HTTP/3, cinfo.sock is the listener's UDP socket
+        on_exit if (state == HttpConnectionState::Http3 || state == HttpConnectionState::Http3Sending) {
+            endH3Drain(cinfo.sock.uniqueHash());
         }
         @debug {
             if (getenv("QORE_ASYNCIO_TRACE")) {

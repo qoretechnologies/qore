@@ -6876,16 +6876,25 @@ bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
 
     The change cannot be undone.
 
+    @param idle if @ref True, an operation that waits for a request ends at once if none has arrived, even if the
+    connection has not had a request yet (a connection that waited for its request when the server started to
+    drain); if @ref False (the default), the first request of a new connection is still served
+
     @par Example:
     @code{.py}
-sock.drainHttpConnection();
+sock.drainHttpConnection(True);
 controller.wakeSocket(sock);
     @endcode
 
     @since %Qore 3.0
 */
-nothing Socket::drainHttpConnection() [flags=CONSTANT] {
-    my_socket_priv::getPriv(*s)->http_draining.store(true, std::memory_order_release);
+nothing Socket::drainHttpConnection(bool idle = False) [flags=CONSTANT] {
+    std::atomic<int>& draining = my_socket_priv::getPriv(*s)->http_draining;
+    int level = idle ? 2 : 1;
+    int cur = draining.load(std::memory_order_acquire);
+    // the level is only ever raised
+    while (cur < level && !draining.compare_exchange_weak(cur, level, std::memory_order_acq_rel)) {
+    }
 }
 
 //! Starts a poll operation that waits for the first HTTP request of a connection and reads its header

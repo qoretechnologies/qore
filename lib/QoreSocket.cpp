@@ -18394,7 +18394,7 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     // when the drain started): the operation ends without a header, as when the peer closes it; a request that has
     // started to arrive is read and answered (qore#5899).  The state is read and released under the socket's lock,
     // as an abort can reset it from another thread
-    if (rv && sock->priv->http_draining.load(std::memory_order_acquire)) {
+    if (rv && sock->priv->http_draining.load(std::memory_order_acquire) > 1) {
         bool ended = false;
         {
             AutoLocker al(sock->priv->m);
@@ -19491,9 +19491,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 return nullptr;
             }
             if (!idle_rc) {
-                // a draining server closes a connection that has no request; a request that arrived is read and
-                // answered with Connection: close (qore#5899)
-                if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                // a draining server closes a connection that has no request: one that has had a response, or any
+                // that waited for a request when the drain started (level 2); the first request of a new connection
+                // is served; a request that arrived is read and answered with Connection: close (qore#5899)
+                int draining = sock->priv->http_draining.load(std::memory_order_acquire);
+                if (draining > 1 || (draining && responded)) {
                     phase = Phase::Closed;
                     sock->priv->clearNonBlock();
                     set_non_block = false;
@@ -19763,6 +19765,7 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
 }
 
 QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    responded = true;
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
     // then read and answered with Connection: close; the controller closes the connection when the operation

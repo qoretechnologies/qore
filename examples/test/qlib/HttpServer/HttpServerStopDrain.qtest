@@ -140,16 +140,24 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         addTestCase("stop() answers a request whose body is still arriving", \testBodyInProgress());
         addTestCase("stop() refuses an event stream that a handler starts during the drain", \testStreamRefused());
         addTestCase("stop() closes a connection that has sent no request", \testPreconnectClosed());
+        addTestCase("stop() closes a connection that has sent no request (fast routes)",
+            \testPreconnectClosed(), (True,));
         set_return_value(main());
     }
 
     #! returns a started server with a drain handler
-    private hash<auto> startServer(DrainHandler handler, DrainLogAppender appender, *hash<auto> opts) {
+    private hash<auto> startServer(DrainHandler handler, DrainLogAppender appender, *hash<auto> opts,
+            bool fast_route = False) {
         Logger logger("stop-drain-test", LoggerLevel::getLevelInfo());
         logger.addAppender(appender);
         HttpServer server(cast<hash<HttpServerOptionInfo>>({"logger": logger} + opts));
         server.setHandler("drain", "", NOTHING, handler);
         server.setDefaultHandler("drain", handler);
+        if (fast_route) {
+            # the listener's connections read their first request with the fused operation
+            server.addFastRoute("/fast", {"public": True, "response": {"code": 200, "body": "fast",
+                "content_type": "text/plain"}});
+        }
         int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
         return {"server": server, "port": port};
@@ -376,10 +384,10 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         assertFalse(appender.seen("did not finish"), "the drain did not time out");
     }
 
-    testPreconnectClosed() {
+    testPreconnectClosed(*bool fast_route) {
         DrainHandler handler();
         DrainLogAppender appender();
-        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain}, fast_route ?? False);
         HttpServer server = setup.server;
         on_exit {
             handler.releaseAll();

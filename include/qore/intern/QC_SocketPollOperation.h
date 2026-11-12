@@ -1117,6 +1117,10 @@ private:
     //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
     DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
 
+    //! true once the operation has sent a response (see enterIdle()): a draining server closes the connection if no
+    //! request has arrived after it; the first request of a new connection is served
+    bool responded = false;
+
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;
     }
