@@ -5659,6 +5659,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
                 }
+                // the class of a closure that is not in a method is the class it runs in, not a class type with
+                // self (issue #5907)
+                const QoreClass* static_class = nullptr;
+                if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+                    static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path,
+                        type_error));
+                    closure_class = nullptr;
+                }
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
                 // so signature locals are available for IR deserialization.
@@ -5909,8 +5917,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     AOTClosureRuntimeBinding binding;
                     binding.uvb = closure_variant;
                     binding.local_slots = closure_locals_vec;
-                    binding.class_ctx = closure_class
-                        ? qore_class_private::get(*const_cast<QoreClass*>(closure_class)) : nullptr;
+                    const QoreClass* binding_class = closure_class ? closure_class : static_class;
+                    binding.class_ctx = binding_class
+                        ? qore_class_private::get(*const_cast<QoreClass*>(binding_class)) : nullptr;
                     (*closure_bindings)[native_body_key] = std::move(binding);
                     if (q_env_is_set("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
                         fprintf(stderr, "AOT: resolved native closure '%s'\n", native_body_key);
@@ -5918,7 +5927,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
 
                 // Set class type if in a method context
-                if (class_type_path && *class_type_path) {
+                if (!static_class && class_type_path && *class_type_path) {
                     ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
                 }
 
@@ -5927,6 +5936,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_node->setNeedsTypeContext(closure_needs_type_context);
                 if (defaults_need_object) {
                     closure_node->setDefaultsNeedObject();
+                }
+                if (static_class) {
+                    closure_node->setStaticClass(qore_class_private::get(*static_class));
                 }
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;

@@ -1600,6 +1600,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
     }
+    // the class of a closure that is not in a method is the class it runs in, not a class type with self (#5907)
+    const QoreClass* static_class = nullptr;
+    if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path, type_error));
+        closure_class = nullptr;
+    }
 
     // Construct UserClosureFunction + UserClosureVariant
     auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
@@ -1785,7 +1791,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_variant->setProgram(ctx.pgm);
 
     // Set class type if in a method context
-    if (class_type_path && *class_type_path) {
+    if (!static_class && class_type_path && *class_type_path) {
         ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
     }
 
@@ -1794,6 +1800,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_node->setNeedsTypeContext(needs_type_context);
     if (defaults_need_object) {
         closure_node->setDefaultsNeedObject();
+    }
+    if (static_class) {
+        closure_node->setStaticClass(qore_class_private::get(*static_class));
     }
     return QoreValue(closure_node);
 }
