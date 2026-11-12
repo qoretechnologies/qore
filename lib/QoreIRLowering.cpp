@@ -12439,6 +12439,9 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     QoreIRLowering helper_lowering(helper_builder, parse_context, constant_reverse_map);
     helper_lowering.bg_helper_count = bg_helper_count;
     helper_lowering.bg_helper_index = helper_index;
+    // the new thread runs the expression with the object of the function (see uses_self): its calls through self are
+    // made on that object (issue #5823)
+    helper_lowering.self_local = self_local;
     BackgroundHelperLowering state;
     helper_lowering.bg_helper = &state;
 

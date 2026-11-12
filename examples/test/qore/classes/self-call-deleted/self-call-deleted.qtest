@@ -31,6 +31,10 @@ class SelfCallDeletedTest inherits QUnit::Test {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string fixture = get_script_dir() + "/SelfCallDeleted.q";
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SelfCallDeleted.expected");
+        # calls through self in background expressions: the output is compared on stdout, as the exception that ends
+        # a background thread is printed on stderr with the time and the thread
+        string bg_fixture = get_script_dir() + "/SelfCallDeletedBackground.q";
+        string bg_expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SelfCallDeletedBackground.expected");
     }
 
     constructor() : QUnit::Test("self call on a deleted object", "1.0", \ARGV) {
@@ -45,15 +49,27 @@ class SelfCallDeletedTest inherits QUnit::Test {
         });
         addTestCase("qcc -O0", sub () { checkQcc(0); });
         addTestCase("qcc -O3", sub () { checkQcc(3); });
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("background, execution mode " + mode, sub () {
+                assertEq(bg_expected, ExecModeHarness::run_command(command(execution_mode, bg_fixture)).stdout);
+            });
+        }
+        addTestCase("background, qcc -O0", sub () { checkQcc(0, bg_fixture, bg_expected, True); });
+        addTestCase("background, qcc -O3", sub () { checkQcc(3, bg_fixture, bg_expected, True); });
 
         set_return_value(main());
     }
 
-    private string command(string mode) {
-        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    private string command(string mode, *string script) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode,
+            shellQuote(script ?? fixture));
     }
 
-    private checkQcc(int opt) {
+    #! compiles a fixture with qcc and compares the output of the program (only stdout if @a stdout_only)
+    private checkQcc(int opt, *string script, *string expected_output, *bool stdout_only) {
+        script = script ?? fixture;
+        expected_output = expected_output ?? expected;
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";
@@ -62,9 +78,9 @@ class SelfCallDeletedTest inherits QUnit::Test {
         on_exit remove_tree(dir);
         string program = dir + "/self-call-deleted";
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
-            shellQuote(fixture)));
+            shellQuote(script)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        assertEq(expected_output, backquote(shellQuote(program) + (stdout_only ? " 2>/dev/null" : " 2>&1")));
     }
 
     private static string shellQuote(string value) {

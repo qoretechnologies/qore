@@ -9020,6 +9020,11 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self, as tryLowerFunction() lowers them, so that the expression slots are
+    // walked in the same order (issue #5823)
+    if (const UserSignature* self_sig = uvb->getUserSignature()) {
+        lowering.setSelfLocal(self_sig->selfid);
+    }
     std::string lower_error;
     if (!lowering.lowerStatementBlock(statements, lower_error)) {
         printd(1, "AOT: buildContextForVariant '%s': IR lowering failed: %s\n", name, lower_error.c_str());
