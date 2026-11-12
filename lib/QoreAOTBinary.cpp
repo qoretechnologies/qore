@@ -3523,10 +3523,53 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
 }
 
+//! Returns true if a value is plain data that a CONST_VALUE holds: scalars, binaries, enums, and hashes and lists of them
+/** An object, as the type object of the reflection module that a constant gives (AutoHashOrNothingType), or a
+    call reference is not: the container is then written as an expression, whose elements are written each as an
+    expression (#5895)
+*/
+static bool qore_aot_value_is_plain_data(const QoreValue& v) {
+    if (!v.hasNode() || v.isEnum()) {
+        return true;
+    }
+    switch (v.getType()) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_DATE:
+        case NT_BINARY:
+        case NT_NULL:
+        case NT_NOTHING:
+            return true;
+        case NT_HASH: {
+            ConstHashIterator hi(v.get<const QoreHashNode>());
+            while (hi.next()) {
+                if (!qore_aot_value_is_plain_data(hi.get())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case NT_LIST: {
+            ConstListIterator li(v.get<const QoreListNode>());
+            while (li.next()) {
+                if (!qore_aot_value_is_plain_data(li.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 bool qore_aot_value_container_is_typed(const AbstractQoreNode* node) {
     // a container whose elements are evaluated, as the argument list of a call (new buffer<bool>(mask)), is an
-    // expression and not a value
-    if (!node || node->needs_eval()) {
+    // expression and not a value, and so is one that holds a value that is not plain data
+    if (!node || node->needs_eval() || !qore_aot_value_is_plain_data(QoreValue(const_cast<AbstractQoreNode*>(node)))) {
         return false;
     }
     if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {

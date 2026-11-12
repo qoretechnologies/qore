@@ -3,6 +3,7 @@
 # Hashdecl and complex hash values in the expression slots of AOT code (#5895); see aot-hashdecl-hash-value.qtest
 
 %modern
+%requires reflection
 # the error variable of a %try-module of a module that does not exist is a hash<ExceptionInfo> value
 %try-module (err) ./not-present-5895.qm
 %endtry
@@ -27,6 +28,19 @@ const C3 = cast<list<hash<string, int>>>((cast<hash<string, int>>({"b": 2}),));
         push m, raw > 1;
     }
     return new buffer<bool>(m);
+}
+
+# a hash argument that holds an object constant (a type of the reflection module): an expression, not a typed value
+class FieldOwner {
+    public {
+        list<string> fields = ();
+    }
+    addField(hash<auto> f) {
+        fields += sprintf("%s:%s", f.name, f.type.getName());
+    }
+    init() {
+        addField({"name": "a", "type": AutoHashOrNothingType});
+    }
 }
 
 sub show(string label, auto v) {
@@ -61,3 +75,6 @@ printf("%y\n", init_err.arg.objects);
 printf("%y\n", <ThrowingInitHash5895>{"z": "p"});
 *buffer<bool> m = mask((1, 2, 3));
 printf("mask: %s %d\n", m.fullType(), m.size());
+FieldOwner owner();
+owner.init();
+printf("fields: %y\n", owner.fields);
