@@ -5810,6 +5810,79 @@ private:
         0;
 #endif
 
+    //! the number of ports that bindIpv6OnlyOnIpv4FreePort() reserves before it gives up
+    static constexpr int Ipv6OnlyPortAttempts = 16;
+
+    //! binds the IPv6-only socket to :: on a port that no socket uses on IPv4; returns the port, or -1
+    /** A port that the system assigns to an IPv6-only socket on :: is only free on IPv6: the system may assign a port
+        that another socket holds on an IPv4 address, for example the local end of a connection of another program on
+        127.0.0.1, as the two sockets serve no address in common, and a bind of 127.0.0.1 to the port is then refused.
+        The port is therefore assigned to a reservation on 0.0.0.0 that does not reuse the address, which the system
+        gives only a port that no IPv4 socket and no dual-stack socket uses, and the IPv6-only socket is bound to that
+        port.  That bind is refused only if another socket holds the port on IPv6; the refused reservation then stays
+        open until the function returns, so the system assigns another port to the next one.  The reservation is
+        released when the IPv6-only socket holds the port; a connection is never given a port that a socket has bound
+        explicitly, so the IPv4 addresses of the port stay free for the test unless another program binds one of them
+        explicitly between the release and the test's bind.
+    */
+    static int bindIpv6OnlyOnIpv4FreePort(UnitTestCounters& c, int fd) {
+        std::vector<std::unique_ptr<Fd>> refused;
+        for (int i = 0; i < Ipv6OnlyPortAttempts; ++i) {
+            Fd reservation{open(AF_INET, false, false)};
+            int rc = reservation.fd >= 0 ? bindTo(reservation.fd, AF_INET, "0.0.0.0", 0) : -1;
+            UT_ASSERT_EQ(c, 0, rc, "specific bind: a port free on IPv4 is reserved for the IPv6-only holder");
+            if (rc) {
+                return -1;
+            }
+            int port = portOf(reservation.fd);
+            rc = bindTo(fd, AF_INET6, "::", port);
+            if (!rc) {
+                return port;
+            }
+            UT_ASSERT_EQ(c, EADDRINUSE, rc,
+                "specific bind: the IPv6-only holder is refused a port free on IPv4 only because it is used on IPv6");
+            if (rc != EADDRINUSE) {
+                return -1;
+            }
+            refused.push_back(std::make_unique<Fd>());
+            std::swap(refused.back()->fd, reservation.fd);
+        }
+        UT_ASSERT(c, false, "specific bind: the IPv6-only holder is bound to a port free on IPv4");
+        return -1;
+    }
+
+    //! a system-assigned port of an IPv6-only socket on :: can be used on IPv4
+    /** This is how the bind of 127.0.0.1 to the port of an IPv6-only socket on :: that the system had assigned failed
+        when another program held the port on 127.0.0.1; bindIpv6OnlyOnIpv4FreePort() binds the IPv6-only holder of
+        the tests to a port free on IPv4.
+    */
+    static void runIpv6OnlyPortHeldOnIpv4(UnitTestCounters& c) {
+        Fd other{open(AF_INET, false, false)};
+        UT_ASSERT_EQ(c, 0, other.fd >= 0 ? bindTo(other.fd, AF_INET, "127.0.0.1", 0) : -1,
+            "specific bind: another socket holds a port on 127.0.0.1");
+        int port = portOf(other.fd);
+        if (port <= 0) {
+            return;
+        }
+        {
+            Fd h{open(AF_INET6, true, false)};
+            UT_ASSERT_EQ(c, 0, h.fd >= 0 ? bindTo(h.fd, AF_INET6, "::", port) : -1,
+                "specific bind: an IPv6-only socket on :: is given a port held on 127.0.0.1");
+            Fd v4{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
+                "specific bind: 127.0.0.1 is refused the port of an IPv6-only socket that is held on 127.0.0.1");
+        }
+        Fd h{open(AF_INET6, true, false)};
+        port = h.fd >= 0 ? bindIpv6OnlyOnIpv4FreePort(c, h.fd) : -1;
+        UT_ASSERT(c, port > 0, "specific bind: the IPv6-only holder is bound to a port free on IPv4");
+        if (port <= 0) {
+            return;
+        }
+        Fd probe{open(AF_INET, false, false)};
+        UT_ASSERT_EQ(c, 0, probe.fd >= 0 ? bindTo(probe.fd, AF_INET, "0.0.0.0", port) : -1,
+            "specific bind: no IPv4 socket uses the port of the IPv6-only holder");
+    }
+
     //! an IPv6-only socket on :: serves no IPv4 address: 127.0.0.1 may share its port, ::1 may not
     static void runIpv6OnlyHolder(UnitTestCounters& c) {
         if (!hasIpv6()) {
@@ -5823,17 +5896,20 @@ private:
             UT_ASSERT_EQ(c, ReuseBoundHolderResult, bindTo(v6.fd, AF_INET6, "::1", portOf(h.fd)),
                 "specific bind: ::1 with SO_REUSEADDR over a bound IPv6-only socket on :: that reuses the address");
         }
+        runIpv6OnlyPortHeldOnIpv4(c);
         for (bool listening : {true, false}) {
             Fd h{open(AF_INET6, true, false)};
             UT_ASSERT(c, h.fd >= 0, "specific bind: an IPv6-only holder is opened");
             if (h.fd < 0) {
                 return;
             }
-            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0), "specific bind: the IPv6-only holder is bound");
+            int port = bindIpv6OnlyOnIpv4FreePort(c, h.fd);
+            if (port <= 0) {
+                return;
+            }
             if (listening) {
                 UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv6-only holder listens");
             }
-            int port = portOf(h.fd);
             Fd v4{open(AF_INET, false, true)};
             UT_ASSERT_EQ(c, 0, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
                 "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
