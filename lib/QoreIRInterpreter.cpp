@@ -3266,12 +3266,21 @@ static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
     return named_self;
 }
 
-static bool methodVariantFastCallEligibleForInterpreter(const AbstractQoreFunctionVariant* variant) {
+//! Returns true if the interpreter can run a call of a method variant inline
+/** The variant must be eligible for fast calls, and its calls must need no frame of their own on the thread-local
+    variable stack: those of a Program that allows the debugger do (see QoreIRFunction::needs_call_frame, which is set
+    for the code of the same Programs and which the other inline paths check).  Out of line, as the check of the inline
+    call state that calls it is inlined in the code of the interpreter that runs for every call.
+*/
+static bool methodVariantInlineEligibleForInterpreter(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (uvb && uvb->pgm && (uvb->pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        return false;
+    }
     const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
     if (mvb) {
         return mvb->isStaticallyFastMethodCallEligible();
     }
-    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     return uvb && uvb->isStaticallyFastCallEligible();
 }
 
@@ -3557,7 +3566,7 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     // would hold anyway.
     const UserVariantBase* uvb = variant->getUserVariantBase();
     if (!uvb || uvb->hasCachedFunction()
-            || !methodVariantFastCallEligibleForInterpreter(variant)) {
+            || !methodVariantInlineEligibleForInterpreter(variant)) {
         return reject();
     }
 
@@ -3769,6 +3778,8 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
             || !callee_ir->ast_visible_body_locals.empty()
+            // an inlined call has no frame of its own on the thread-local variable stack
+            || callee_ir->needs_call_frame
             || callee_ir->hasTypeSpecialization()
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                 && nargs != static_cast<int>(sig->numParams()))) {
@@ -5731,6 +5742,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         if (!callee_ir || !sig
                 || sig->needsTypeParameterSubstitution()
                 || !callee_ir->ast_visible_body_locals.empty()
+                // an inlined call has no frame of its own on the thread-local variable stack
+                || callee_ir->needs_call_frame
                 || callee_ir->hasTypeSpecialization()
                 || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                     && nargs != static_cast<int>(sig->numParams()))) {

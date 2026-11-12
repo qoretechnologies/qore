@@ -3964,6 +3964,16 @@ public:
     // Populated by computeIROnlyLocals() after ir_only_locals is determined.
     std::vector<LocalVar*> ast_visible_body_locals;
 
+    //! True if every call of the function needs a frame of its own on the thread-local variable stack
+    /** Set when the function is lowered for a Program that allows the debugger (PO_ALLOW_DEBUGGER), whose code can
+        call get_local_vars() and set_local_var_value(), which find the local variables of a call by the frames on
+        that stack also while no debugger is attached; a call of the function is then neither inlined nor made
+        through a fast entry that pushes no frame, and its frame has \c argv and \c self also when the code does not
+        use them (UserVariantBase::getIRContextFlags()).  The decision is made when the function is lowered and when a
+        call site is compiled or first made, so that no call pays for it.
+    */
+    bool needs_call_frame = false;
+
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code — never referenced by Invoke expression subtrees,
     // delegate-to-AST statements, or closure captures.  For these locals, the LLVM
