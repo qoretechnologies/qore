@@ -37,6 +37,23 @@ class StringMember {
     }
 }
 
+#! a method returning a string, which a subclass overrides with a method that can return no value
+class StringSource {
+    string get() {
+        return "abc";
+    }
+
+    #! an unqualified call to the method, dispatched on the object's class
+    substrOfOwn() {
+        get().substr(arg_value());
+    }
+}
+
+class NoStringSource inherits StringSource {
+    *string get() {
+    }
+}
+
 class Sub inherits C {
 }
 
@@ -199,6 +216,15 @@ sub cases() {
     });
     # the result of a call with a return type that excludes no value
     check("pseudo-method on a call result", sub () { printf("  %y\n", "ABC".lwr().substr(arg_value())); });
+    # a method call result: a subclass can override the method with one that returns no value
+    check("pseudo-method on an overridden method's result", sub () {
+        StringSource s = new NoStringSource();
+        s.get().substr(arg_value());
+    });
+    check("pseudo-method on an overridden method's result, unqualified call", sub () {
+        StringSource s = new NoStringSource();
+        s.substrOfOwn();
+    });
     check("hash member call reference", sub () {
         hash<auto> h = {"f": sub (auto a) { printf("  closure called\n"); }};
         h.f(new A());

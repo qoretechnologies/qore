@@ -13211,15 +13211,18 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     && QoreTypeInfo::hasType(receiver_type)
                     && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING));
         }
-        // the result of a call has the call's return type, which is enforced when the call returns: a return type
-        // that excludes no value gives a value (value.lwr().contains(...))
+        // the result of a call that cannot be overridden has the call's return type, which is enforced when the
+        // call returns: a return type that excludes no value gives a value (value.lwr().contains(...)); a pseudo-
+        // method, a function and a static method are not overridden, while a method of an object can be overridden
+        // in a subclass with a return type that accepts no value (*string m())
         if (!pseudo_receiver_has_value) {
             const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
+            const QoreDotEvalOperatorNode* receiver_dot = dynamic_cast<const QoreDotEvalOperatorNode*>(receiver);
+            bool not_overridden = receiver_dot
+                ? receiver_dot->getMethodCall() && receiver_dot->getMethodCall()->isPseudo()
+                : receiver && (receiver->getType() == NT_FUNCTION_CALL || receiver->getType() == NT_STATIC_METHOD_CALL);
             const QoreTypeInfo* receiver_type = m->getSourceType();
-            pseudo_receiver_has_value = receiver
-                && (dynamic_cast<const QoreDotEvalOperatorNode*>(receiver)
-                    || dynamic_cast<const AbstractFunctionCallNode*>(receiver))
-                && QoreTypeInfo::hasType(receiver_type)
+            pseudo_receiver_has_value = not_overridden && QoreTypeInfo::hasType(receiver_type)
                 && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
         }
     }
