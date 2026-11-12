@@ -66,9 +66,10 @@ module DebugProgramControl {
       writes before an interrupt is sent before the interrupt
     - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
       stack catches the exception
-    - a thread stops at most once for an exception, at the statement that raised it: the exception events of the
-      statements that contain it, which the exception leaves after the thread continued, do not stop the thread
-      again (a rethrow of the exception does not either; see the \c debug_id key of
+    - a thread stops once for an exception, at its first event that a client's exception filter matches: the
+      exception events of the statements that contain it, which the exception leaves after the thread continued, do
+      not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes an exception
+      that the thread stopped at as caught uncaught (see the \c debug_id key of
       @ref Qore::ExceptionInfo "ExceptionInfo")
     - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
       a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
@@ -214,10 +215,13 @@ public namespace DebugProgramControl {
             #! serializes the access to pauseRequests and pauseSkippedBlocks
             Mutex pauseLock();
 
-            #! the ID of the exception that a thread last stopped at, by TID: the thread does not stop at the other
-            #! events of the exception, which it makes for each statement that the exception leaves (see the
-            #! \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo"; #5906)
-            hash<string, int> exceptionStops = {};
+            #! the exceptions that a thread stopped at, by TID, the last one last: their IDs (see the \c debug_id key of
+            #! @ref Qore::ExceptionInfo "ExceptionInfo") with whether they were uncaught at the stop; the thread does
+            #! not stop at the other events of such an exception, which it makes for each statement that the exception
+            #! leaves, unless a rethrow made a caught one uncaught (#5906); an exception that the thread stops at while
+            #! another one propagates, as in an on_error handler, does not remove the other one, and at most
+            #! ExceptionStopMax exceptions are kept
+            hash<string, list<hash<auto>>> exceptionStops = {};
             #! serializes the access to exceptionStops
             Mutex exceptionStopLock();
 
@@ -245,6 +249,8 @@ public namespace DebugProgramControl {
             const BreakpointOptions = ("condition", "hitCondition", "logMessage");
             #! the exception filters of the exception/filter/set command; a client without filters has all of them
             const ExceptionFilters = ("user", "system", "uncaught");
+            #! the number of exceptions that are kept for a thread in exceptionStops
+            const ExceptionStopMax = 8;
 
             #! the options of breakpoints by the names of their commands
             const BreakpointCommandOptions = {
@@ -2484,16 +2490,31 @@ public namespace DebugProgramControl {
             # an exception that no client stops at, or that the thread already stopped at, as it leaves a statement that
             # contains the one that it stopped at: the thread continues as it ran before; decided before the thread is
             # registered as stopped
+            # an exception that the thread stopped at stops it again only if it was caught then and is uncaught now, as
+            # after a rethrow
+            *int debug_id;
+            bool except_uncaught;
             if (exists except) {
-                *int debug_id = except.debug_id;
-                if ((exists debug_id && DebugProgramControl::withLock(exceptionStopLock,
-                            bool sub () { return exceptionStops{tid} === debug_id; }))
-                        || !stopsAtException(except, isUncaught(adjustStack(get_thread_call_stack(), ctx)))) {
+                debug_id = except.debug_id;
+                # True: the thread stopped at the exception as uncaught, False: as caught
+                *bool stopped_uncaught;
+                if (exists debug_id) {
+                    stopped_uncaught = DebugProgramControl::withLock(exceptionStopLock, *bool sub () {
+                        foreach hash<auto> stop in (exceptionStops{tid}) {
+                            if (stop.id == debug_id) {
+                                return stop.uncaught;
+                            }
+                        }
+                    });
+                }
+                if (stopped_uncaught) {
                     runToStatementId = runToStatementIdBefore;
                     return;
                 }
-                if (exists debug_id) {
-                    DebugProgramControl::withLock(exceptionStopLock, sub () { exceptionStops{tid} = debug_id; });
+                except_uncaught = isUncaught(adjustStack(get_thread_call_stack(), ctx));
+                if ((exists stopped_uncaught && !except_uncaught) || !stopsAtException(except, except_uncaught)) {
+                    runToStatementId = runToStatementIdBefore;
+                    return;
                 }
             }
             # the thread stops: a pause that a client requested is done; a stop of a step that is not at a breakpoint is
@@ -2540,6 +2561,18 @@ public namespace DebugProgramControl {
                 # the thread continues as it ran before, as without a client at the start of this method
                 runToStatementId = runToStatementIdBefore;
                 return;
+            }
+            # the exception that the thread stops at is recorded once it is registered as stopped, so that a client that
+            # connects while an exception that stopped no thread propagates gets it
+            if (exists debug_id) {
+                DebugProgramControl::withLock(exceptionStopLock, sub () {
+                    list<hash<auto>> stops = (map $1, exceptionStops{tid}, $1.id != debug_id) ?? ();
+                    stops += {"id": debug_id, "uncaught": except_uncaught};
+                    if (stops.size() > ExceptionStopMax) {
+                        splice stops, 0, stops.size() - ExceptionStopMax;
+                    }
+                    exceptionStops{tid} = stops;
+                });
             }
             # a thread that leaves its stop with an exception, as when it is cancelled while it waits for a command, is no
             # longer stopped: its registration is removed, and the clients are told that it runs again, as when it

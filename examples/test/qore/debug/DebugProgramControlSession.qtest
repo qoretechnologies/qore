@@ -152,6 +152,31 @@ try {
 f();
 ";
 
+#! a program whose exceptions stop a thread again: a rethrow that makes a caught exception uncaught, and an exception
+#! that propagates while one that a handler raised and caught stopped the thread (#5906)
+const ExceptionAgainScript = "%modern
+sub g() {
+    on_error {
+        try {
+            throw \"INNER\";
+        } catch () {
+        }
+    }
+    if (True) {
+        throw \"OUTER\";
+    }
+}
+try {
+    g();
+} catch () {
+}
+try {
+    throw \"UP\";
+} catch () {
+    rethrow;
+}
+";
+
 #! a program with an overloaded function
 const OverloadScript = "%modern
 int sub f(int i) {
@@ -1432,14 +1457,14 @@ try {
         return rv;
     }
 
-    #! runs ExceptionOnceScript with the given exception filters of the client and returns the stops of its
-    #! exceptions, by code
-    private hash<string, int> getExceptionStops(*list<string> filters) {
+    #! runs a script with the given exception filters of the client and returns the stops of its exceptions, by
+    #! code, with \c "/uncaught" after the code of an uncaught one
+    private hash<string, int> getExceptionStops(*list<string> filters, string script = ExceptionOnceScript) {
         if (exists filters) {
             dpc.command("exception/filter/set", {"value": filters});
         }
         on_exit dpc.command("exception/filter/set", {"value": ("user", "system", "uncaught")});
-        DebuggedProgram p(dpc, ExceptionOnceScript);
+        DebuggedProgram p(dpc, script);
         on_exit p.cleanup();
         hash<string, int> rv = {};
         dpc.go(p.tid);
@@ -1449,7 +1474,7 @@ try {
                 break;
             }
             if (e.func == "exception") {
-                ++rv{e.exception.err};
+                ++rv{e.exception.err + (e.uncaught ? "/uncaught" : "")};
             }
             dpc.go(e.tid);
         }
@@ -1460,8 +1485,13 @@ try {
     # an exception stops a thread once, at the statement that raised it, and not at the statements that it leaves
     # then, also after a rethrow of it, while each exception that a statement raises again stops it (#5906)
     exceptionOnceTest() {
-        assertEq({"LOOP": 2, "RE": 1, "RUNTIME-TYPE-ERROR": 1}, getExceptionStops());
-        assertEq({"RUNTIME-TYPE-ERROR": 1}, getExceptionStops(("uncaught",)));
+        assertEq({"LOOP": 2, "RE": 1, "RUNTIME-TYPE-ERROR/uncaught": 1}, getExceptionStops());
+        assertEq({"RUNTIME-TYPE-ERROR/uncaught": 1}, getExceptionStops(("uncaught",)));
+        # a rethrow that makes the exception uncaught stops the thread again, and an exception that a handler raises
+        # and catches while another one propagates does not make the other one stop again
+        assertEq({"INNER": 1, "OUTER": 1, "UP": 1, "UP/uncaught": 1}, getExceptionStops(NOTHING,
+            ExceptionAgainScript));
+        assertEq({"UP/uncaught": 1}, getExceptionStops(("uncaught",), ExceptionAgainScript));
     }
 
     exceptionFilterTest() {
