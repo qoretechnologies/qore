@@ -7,13 +7,13 @@ a user module declares the domains its own code uses.  User documentation: `doxy
 ## Syntax
 
 ```
-public sub register(string name, code c) [dom=PROCESS] { ... }
+public sub register(string name, code c) [dom=PROCESS_CONTROL] { ... }
 string sub fetch(string url) [dom=NETWORK,FILESYSTEM;] { ... }
-static setLogger(*LoggerInterface l) [dom=PROCESS] { ... }
-int count() const [dom=PROCESS] { ... }
-abstract reg(string name) [dom=PROCESS];
-constructor(string s) [dom=PROCESS] : Base(s) { ... }
-static Cls::m() [dom=PROCESS] { ... }                 # out-of-line
+static setLogger(*LoggerInterface l) [dom=PROCESS_CONTROL] { ... }
+int count() const [dom=PROCESS_CONTROL] { ... }
+abstract reg(string name) [dom=PROCESS_CONTROL];
+constructor(string s) [dom=PROCESS_CONTROL] : Base(s) { ... }
+static Cls::m() [dom=PROCESS_CONTROL] { ... }                 # out-of-line
 ```
 
 - The attribute list follows `)` and `const`, and precedes a base class constructor list and `returns`.
@@ -125,7 +125,7 @@ override.  Builtin base methods are not covered (their class domain is inherited
 ## Module opt-in (`domains` module key)
 
 A module Program inherits the loader's restriction options, so module code using a tagged API (or a builtin of a
-domain) cannot be loaded by a restricted Program.  `module X { ...; domains = "PROCESS"; }`
+domain) cannot be loaded by a restricted Program.  `module X { ...; domains = "PROCESS_CONTROL"; }`
 (`QoreModuleDefContext::setDomains()`):
 
 - only restriction domains (not `INJECTION`, `DEBUGGER`, `IN_MODULE`);
@@ -158,11 +158,11 @@ declaration digests.  `MODULE_DOMAINS` section (33).  AOT identity changes (gene
 ## qlib
 
 37 static registration and setter APIs in DataProvider, AbstractDataProvider, DataProviderActionCatalog and
-WebhookSupport declare `[dom=PROCESS]` (those with `isSandboxed()`/`checkNotSandboxed()`/`checkRegistration()`
+WebhookSupport declare `[dom=PROCESS_CONTROL]` (those with `isSandboxed()`/`checkNotSandboxed()`/`checkRegistration()`
 refusals, `registerFactory()`, and the builder/scheme setters guarded in module init); the `isSandboxed()` refusals
 stay (a sandbox does not imply `PO_NO_PROCESS_CONTROL`).  The 150 modules that call them declare
-`domains = "PROCESS"`.  Not tagged (no refusal today, decision pending): `AbstractDataProvider::registerChild()`,
-`DataProviderActionCatalog::registerLazyValue()`, `addCatalogChangeListener()`.
+`domains = "PROCESS_CONTROL"`.  Not tagged (no refusal today, decision pending):
+`AbstractDataProvider::registerChild()`, `DataProviderActionCatalog::registerLazyValue()`, `addCatalogChangeListener()`.
 
 ### qlib module audit (PO_NO_PROCESS_CONTROL, PO_NO_THREAD_CONTROL)
 

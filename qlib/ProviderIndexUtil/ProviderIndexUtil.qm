@@ -48,7 +48,7 @@ module ProviderIndexUtil {
     license = "MIT";
     # the module's own code sets the index directory environment variable (ProviderIndexUtil::setEnvironmentVariable(),
     # which declares the domain, so a restricted caller cannot)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage ProviderIndexUtil Module

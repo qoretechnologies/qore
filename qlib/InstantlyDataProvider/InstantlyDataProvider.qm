@@ -36,7 +36,7 @@
 
 module InstantlyDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "User module providing a data provider API for Instantly email outreach and sales automation";
     author = "Qore Technologies <info@qoretechnologies.com>";

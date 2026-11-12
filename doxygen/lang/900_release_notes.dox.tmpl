@@ -617,8 +617,8 @@
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Functional-Domain Declarations on Functions and Methods
     Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
-    attribute list (<tt>sub f() [dom=PROCESS]</tt>), which a restricted Program cannot reference or call, and a user
-    module declares the domains its own code uses with the \c domains key of its
+    attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
+    user module declares the domains its own code uses with the \c domains key of its
     @ref user_module_declarations "module declaration"
     (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>).
 

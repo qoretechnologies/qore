@@ -53,7 +53,7 @@ module RestClientIo {
     license = "MIT";
     # the module's own code waits between request retries with usleep()
     # and defers thread cancellation while it completes a request (defer_thread_cancel())
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage RestClientIo Module

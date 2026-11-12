@@ -48,43 +48,43 @@ class UserFunctionalDomainsModesTest inherits QUnit::Test {
 own_dyn: 3,3,3
 closure: 1
 init: registered
-dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 dyn_plain: 4
-cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS
-com: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
-create: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS
-sub_implicit: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS
+cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+com: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
+create: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS_CONTROL
+sub_implicit: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS_CONTROL
 ref_module: 1
 ref_module_method: 3
-ref_runtime: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
-ref_runtime_loop: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS
+ref_runtime: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
+ref_runtime_loop: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 ifdef: False
 ref_module_args: 2
-ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS
-override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS
+ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS_CONTROL
+override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS_CONTROL
 own_cf: 1
 own_iter: 1,2
 own_ref_obj: 3
-caller_iter: INVALID-FUNCTION-ACCESS: method '::DomMod::It::next()'; functional domain: PROCESS
-thread_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS
+caller_iter: INVALID-FUNCTION-ACCESS: method '::DomMod::It::next()'; functional domain: PROCESS_CONTROL
+thread_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
 yield_direct: yielded
 yield_cf: yielded
 yield_ref: yielded
 ";
 
         #! the output of the parse-time case
-        const ExpectedParseOutput = "direct function: refused: function 'tagged()'; functional domain: PROCESS
-static method: refused: method 'Api::s()'; functional domain: PROCESS
-typed method: refused: method 'Api::m()'; functional domain: PROCESS
-constructor: refused: method 'Guarded::constructor()'; functional domain: PROCESS
-function reference: refused: function 'tagged'; functional domain: PROCESS
-static method reference: refused: method 'Api::s()'; functional domain: PROCESS
-typed method reference: refused: method 'Api::m()'; functional domain: PROCESS
+        const ExpectedParseOutput = "direct function: refused: function 'tagged()'; functional domain: PROCESS_CONTROL
+static method: refused: method 'Api::s()'; functional domain: PROCESS_CONTROL
+typed method: refused: method 'Api::m()'; functional domain: PROCESS_CONTROL
+constructor: refused: method 'Guarded::constructor()'; functional domain: PROCESS_CONTROL
+function reference: refused: function 'tagged'; functional domain: PROCESS_CONTROL
+static method reference: refused: method 'Api::s()'; functional domain: PROCESS_CONTROL
+typed method reference: refused: method 'Api::m()'; functional domain: PROCESS_CONTROL
 plain method: ok
 ";
 
         #! the output of the case where the module is loaded by its path
-        const ExpectedPathOutput = "load: refused: PROCESS
+        const ExpectedPathOutput = "load: refused: PROCESS_CONTROL
 ";
     }
 
@@ -116,6 +116,9 @@ plain method: ok
     }
 
     #! the module: tagged APIs, code that uses them itself and a header that declares the domain
+    /** The header gives the qpp name PROCESS and the code the name of the DOM_* constant, PROCESS_CONTROL: they are
+        the same domain (issue #5843)
+    */
     private string moduleCode() {
         return "%modern
 
@@ -136,7 +139,7 @@ const PoNoProcessControl = False;
 %endif
 
 public namespace DomMod {
-public int sub tagged() [dom=PROCESS] {
+public int sub tagged() [dom=PROCESS_CONTROL] {
     return 1;
 }
 
@@ -145,11 +148,11 @@ public class Api {
         static string reg = \"\";
     }
 
-    static int s() [dom=PROCESS] {
+    static int s() [dom=PROCESS_CONTROL] {
         return 2;
     }
 
-    static register(string v) [dom=PROCESS] {
+    static register(string v) [dom=PROCESS_CONTROL] {
         reg = v;
     }
 
@@ -157,7 +160,7 @@ public class Api {
         return reg;
     }
 
-    int m() [dom=PROCESS] {
+    int m() [dom=PROCESS_CONTROL] {
         return 3;
     }
 
@@ -167,7 +170,7 @@ public class Api {
 }
 
 public class Guarded {
-    constructor() [dom=PROCESS] {
+    constructor() [dom=PROCESS_CONTROL] {
     }
 }
 
@@ -233,11 +236,11 @@ public class It inherits AbstractIterator {
         int i = 0;
     }
 
-    bool next() [dom=PROCESS] {
+    bool next() [dom=PROCESS_CONTROL] {
         return ++i <= 2;
     }
 
-    auto getValue() [dom=PROCESS] {
+    auto getValue() [dom=PROCESS_CONTROL] {
         return i;
     }
 
@@ -274,7 +277,7 @@ public bool sub po_no_process_control() {
     return PoNoProcessControl;
 }
 
-public int sub tagged_args(int x) [dom=PROCESS] {
+public int sub tagged_args(int x) [dom=PROCESS_CONTROL] {
     return x;
 }
 
@@ -299,7 +302,7 @@ public class Base2 {
 }
 
 public class Over inherits Base2 {
-    int m() [dom=PROCESS] {
+    int m() [dom=PROCESS_CONTROL] {
         return 2;
     }
 }

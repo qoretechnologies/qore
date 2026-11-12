@@ -870,7 +870,7 @@ public class CSTTranslator {
         if (exists mods) {
             result.modifiers = mods;
         }
-        # the attribute list after the parameters (ex: [dom=PROCESS])
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
         *hash<auto> callableAttrs = findType(node, "callable_attributes");
         if (exists callableAttrs) {
             result.callableAttributes = extractText(callableAttrs);
@@ -949,7 +949,7 @@ public class CSTTranslator {
         if (hasConstMethodQualifier(node)) {
             result.isConstMethod = True;
         }
-        # the attribute list after the parameters (ex: [dom=PROCESS])
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
         *hash<auto> callableAttrs = findType(node, "callable_attributes");
         if (exists callableAttrs) {
             result.callableAttributes = extractText(callableAttrs);
@@ -1001,7 +1001,7 @@ public class CSTTranslator {
         if (hasConstMethodQualifier(node)) {
             result.isConstMethod = True;
         }
-        # the attribute list after the parameters (ex: [dom=PROCESS])
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
         *hash<auto> callableAttrs = findType(node, "callable_attributes");
         if (exists callableAttrs) {
             result.callableAttributes = extractText(callableAttrs);

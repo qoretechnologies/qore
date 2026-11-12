@@ -54,7 +54,7 @@ public namespace NestedLoader {
         return result;
     }
 
-    public sub tagged() [dom=PROCESS] {
+    public sub tagged() [dom=PROCESS_CONTROL] {
     }
 
     # calls the module's own tagged code at run time: allowed for a sandboxed restricted caller only if the module

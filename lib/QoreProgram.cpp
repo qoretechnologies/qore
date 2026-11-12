@@ -248,7 +248,9 @@ std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po) {
 }
 
 namespace {
-//! a functional domain as named in a \c [dom=...] attribute list (the same names as in qpp)
+//! a functional domain as named in a \c [dom=...] attribute list and a module's \c domains key
+/** The names are those of the \c DOM_* constants and of the reflection API (getDomainStringList()); qore#5843
+*/
 struct SourceDomainName {
     const char* name;
     int64 dom;
@@ -260,7 +262,7 @@ struct SourceDomainName {
 
 constexpr SourceDomainName source_domain_names[] = {
     {"DEFAULT", QDOM_DEFAULT, "PO_DEFAULT", false},
-    {"PROCESS", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"PROCESS_CONTROL", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
     {"NETWORK", QDOM_NETWORK, "PO_NO_NETWORK", false},
     {"EXTERNAL_PROCESS", QDOM_EXTERNAL_PROCESS, "PO_NO_EXTERNAL_PROCESS", false},
     {"FILESYSTEM", QDOM_FILESYSTEM, "PO_NO_FILESYSTEM", false},
@@ -272,13 +274,19 @@ constexpr SourceDomainName source_domain_names[] = {
     {"EXTERNAL_INFO", QDOM_EXTERNAL_INFO, "PO_NO_EXTERNAL_INFO", false},
     {"THREAD_INFO", QDOM_THREAD_INFO, "PO_NO_THREAD_INFO", false},
     {"LOCALE_CONTROL", QDOM_LOCALE_CONTROL, "PO_NO_LOCALE_CONTROL", false},
-    {"MODULES", QDOM_MODULES, "PO_NO_MODULES", false},
+    {"MODULE", QDOM_MODULES, "PO_NO_MODULES", false},
     {"IN_MODULE", QDOM_IN_MODULE, "PO_IN_MODULE", false},
     {"EMBEDDED_LOGIC", QDOM_EMBEDDED_LOGIC, "PO_NO_EMBEDDED_LOGIC", false},
     {"REFLECTION", QDOM_REFLECTION, "PO_NO_REFLECTION", false},
     {"UNCONTROLLED_API", QDOM_UNCONTROLLED_API, "PO_NO_UNCONTROLLED_APIS", false},
     {"INJECTION", QDOM_INJECTION, "PO_ALLOW_INJECTION", true},
     {"DEBUGGER", QDOM_DEBUGGER, "PO_ALLOW_DEBUGGER", true},
+};
+
+//! other names accepted for a domain in Qore source: the names that qpp uses
+constexpr SourceDomainName source_domain_aliases[] = {
+    {"PROCESS", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"MODULES", QDOM_MODULES, "PO_NO_MODULES", false},
 };
 
 constexpr int64 source_domain_union() {
@@ -300,6 +308,11 @@ int64 qore_get_source_domain(const char* name) {
             return i.dom;
         }
     }
+    for (const SourceDomainName& i : source_domain_aliases) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
     return -1;
 }
 
@@ -315,6 +328,10 @@ std::string qore_get_source_domain_names(int64 dom) {
         rv += i.name;
     }
     return rv;
+}
+
+std::string q_describe_functional_domains(int64 dom) {
+    return qore_describe_source_domains(dom);
 }
 
 std::string qore_describe_source_domains(int64 dom) {

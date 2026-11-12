@@ -14,12 +14,17 @@
 %exec-class ReflectionTest
 
 # code that declares functional domains (issue #5803)
-int sub reflect_tagged() [dom=PROCESS,NETWORK] {
+int sub reflect_tagged() [dom=PROCESS_CONTROL,NETWORK] {
     return 1;
 }
 
+# the qpp names are accepted for PROCESS_CONTROL and MODULE (issue #5843)
+int sub reflect_alias() [dom=PROCESS,MODULES] {
+    return 3;
+}
+
 class ReflectTagged {
-    int m() [dom=PROCESS] {
+    int m() [dom=PROCESS_CONTROL] {
         return 2;
     }
 }
@@ -3691,22 +3696,28 @@ class ReflectionTest inherits QUnit::Test {
         AbstractReflectionFunction f = Function::forName("reflect_tagged");
         assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getDomain());
         assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getVariants()[0].getDomain());
-        assertEq(2, f.getDomainStringList().size());
+        # the names are those of the DOM_* constants (issue #5843)
+        assertEq(("NETWORK", "PROCESS_CONTROL"), sort(f.getDomainStringList()));
+        AbstractReflectionFunction alias = Function::forName("reflect_alias");
+        assertEq(DOM_PROCESS_CONTROL | DOM_MODULE, alias.getDomain());
+        assertEq(("MODULE", "PROCESS_CONTROL"), sort(alias.getDomainStringList()));
         AbstractMethod m = Class::forName("ReflectTagged").getNormalMethod("m");
         assertEq(DOM_PROCESS_CONTROL, m.getVariants()[0].getDomain());
 
         # a restricted Program is refused calls through reflection
         Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
         p.parse("%requires reflection
-int sub tagged() [dom=PROCESS] { return 1; }
-class T { int m() [dom=PROCESS] { return 2; } }
+int sub tagged() [dom=PROCESS_CONTROL] { return 1; }
+class T { int m() [dom=PROCESS_CONTROL] { return 2; } }
 auto sub fcall() { return Function::forName(\"tagged\").call(); }
 auto sub vcall() { return Function::forName(\"tagged\").getVariants()[0].call(); }
 auto sub mcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").call(t); }
 auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").getVariants()[0].call(t); }
 ", "reflect");
+        # every refusal names the denied functional domain (issue #5843)
         foreach string fn in ("fcall", "vcall", "mcall", "mvcall") {
-            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to", \p.callFunction(), fn, fn);
+            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to .*; functional domain: PROCESS_CONTROL "
+                "\\(restricted by PO_NO_PROCESS_CONTROL\\)$", \p.callFunction(), fn, fn);
         }
     }
 

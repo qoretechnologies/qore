@@ -45,7 +45,7 @@ module QUnit {
     # the module's own code uses process control: exit() for usage errors and the SIGUSR1 stack dump handler, only
     # when no caller restricts it (QUnit::Priv::callersMayControlProcess()); and thread control: the test case it
     # keeps in thread data and gives to the threads a test starts (set_thread_init())
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage QUnit Module

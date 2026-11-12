@@ -32,7 +32,7 @@
 
 module StabilityAiDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "1.1";
     desc = "user module providing Stability AI image, audio, 3D, and account actions";
     author = "David Nichols <david@qore.org>";

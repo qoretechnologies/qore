@@ -47,7 +47,7 @@ module McpClient {
     };
     # the module's own code waits between task status polls with usleep()
     # and starts background threads to handle streamed server messages
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage McpClient Module

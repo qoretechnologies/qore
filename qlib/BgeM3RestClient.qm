@@ -47,7 +47,7 @@ module BgeM3RestClient {
             new QoreRagUtils::BgeM3FastApiEmbedderFactory());
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage BgeM3RestClient Module

@@ -1398,7 +1398,7 @@ public class CodeFormatter {
         }
 
         string methodQualifier = exists node.isConstMethod && node.isConstMethod ? " const" : "";
-        # the attribute list after the parameters and the const qualifier (ex: [dom=PROCESS])
+        # the attribute list after the parameters and the const qualifier (ex: [dom=PROCESS_CONTROL])
         string attrStr = exists node.callableAttributes ? " " + node.callableAttributes : "";
         string returnsStr = "";
         if (exists node.returnsType) {

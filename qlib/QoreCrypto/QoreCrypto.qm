@@ -33,7 +33,7 @@ module QoreCrypto {
     url = "http://qore.org";
     license = "MIT";
     # the module's own code waits between retries with usleep() (ResilientKeyProvider)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage QoreCrypto Module

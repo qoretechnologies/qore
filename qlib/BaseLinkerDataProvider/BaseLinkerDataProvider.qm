@@ -37,7 +37,7 @@
 
 module BaseLinkerDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "BaseLinker e-commerce multichannel integration data provider";
     author = "Qore Technologies <info@qoretechnologies.com>";

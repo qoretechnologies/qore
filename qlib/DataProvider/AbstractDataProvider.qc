@@ -4966,7 +4966,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) [dom=PROCESS] {
+    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the generic API call child builder");
         if (cb_build_generic_api_call_child) {
@@ -4983,7 +4983,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static clearGenericApiCallChildBuilder() [dom=PROCESS] {
+    static clearGenericApiCallChildBuilder() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the generic API call child builder");
         delete cb_build_generic_api_call_child;
     }
@@ -6193,7 +6193,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks() [dom=PROCESS] {
+    static bool setDynamicValueCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("lock the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return !exists cb_resolve_value;
@@ -6787,7 +6787,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) [dom=PROCESS] {
+    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
@@ -6822,7 +6822,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
-            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS] {
+            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the template callbacks");
         if (template_callbacks_locked) {
@@ -6842,7 +6842,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @since DataProvider 3.3
     */
-    static clearTemplateCallbacks() [dom=PROCESS] {
+    static clearTemplateCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the template callbacks");
         template_callbacks_locked = False;
         delete cb_expand_template;

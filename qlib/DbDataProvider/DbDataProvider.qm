@@ -44,7 +44,7 @@
 
 module DbDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "2.5";
     desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
@@ -762,7 +762,7 @@ public hashdecl DbVendorInfo {
 
     @since %DbDataProvider 2.4
 */
-public sub registerDbVendorApp(hash<DbVendorInfo> vendor) [dom=PROCESS] {
+public sub registerDbVendorApp(hash<DbVendorInfo> vendor) [dom=PROCESS_CONTROL] {
     # build allowed driver values from vendor capabilities
     # NOTE: we do not check dbi_get_driver_list() here because DBI drivers may not be loaded yet
     # at module init time; driver availability is validated at connection creation time

@@ -1993,15 +1993,17 @@ public:
 
 DLLLOCAL extern ParseOptionMaps pomaps;
 
-//! Returns the QDOM_* bit for a functional domain name as given in a \c [dom=...] attribute list (the qpp names,
-//! case-insensitive, without the \c QDOM_ prefix), or -1 if the name is unknown
+//! Returns the QDOM_* bit for a functional domain name as given in a \c [dom=...] attribute list or a module's
+//! \c domains key (the names of the \c DOM_* constants, or the qpp names PROCESS and MODULES; case-insensitive,
+//! without the \c QDOM_ prefix), or -1 if the name is unknown
 DLLLOCAL int64 qore_get_source_domain(const char* name);
 
-//! Returns the domain names of the given QDOM_* bits as written in a \c [dom=...] attribute list ("PROCESS,NETWORK")
+//! Returns the domain names of the given QDOM_* bits as written in a \c [dom=...] attribute list
+//! ("PROCESS_CONTROL,NETWORK")
 DLLLOCAL std::string qore_get_source_domain_names(int64 dom);
 
 //! Returns a description of the given QDOM_* bits for error messages: each domain name with the parse option that
-//! restricts it ("PROCESS (restricted by PO_NO_PROCESS_CONTROL)")
+//! restricts it ("PROCESS_CONTROL (restricted by PO_NO_PROCESS_CONTROL)")
 DLLLOCAL std::string qore_describe_source_domains(int64 dom);
 
 //! The parse options that code must be parsed with to be run by IR, JIT or tiered execution or compiled by qcc

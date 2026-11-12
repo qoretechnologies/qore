@@ -43,7 +43,7 @@ module ConfluenceRestClient {
         ConnectionSchemeCache::registerScheme("confluence", ConfluenceRestConnection::ConnectionScheme);
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage ConfluenceRestClient Module

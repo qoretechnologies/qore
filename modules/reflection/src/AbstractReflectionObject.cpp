@@ -121,9 +121,10 @@ int reflection_check_variant_call(const QoreReflectionCaller& caller, const Qore
         return caller.checkClassCallAccess(variant->getClass(), target, xsink);
     }
     // the message of a call resolved at run time when the calling code's restrictions refuse the variant
-    xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'",
-        caller_refused ? "parse options" : "the parse options of the Program it was found in",
-        cname ? "method" : "function", cname ? cname : "", cname ? "::" : "", fname, variant->getSignatureText());
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'; functional domain: "
+        "%s", caller_refused ? "parse options" : "the parse options of the Program it was found in",
+        cname ? "method" : "function", cname ? cname : "", cname ? "::" : "", fname, variant->getSignatureText(),
+        q_describe_functional_domains(variant->getDomain()).c_str());
     return -1;
 }
 

@@ -1586,11 +1586,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - \c license: (optional) if present, must be a string giving the license of the module
     - \c domains: (optional) if present, must be a string giving the @ref function_domains "functional domains" that
       the module's own code uses, separated by commas and without the \c QDOM_ prefix, as in the attribute list of a
-      function (ex: <tt>domains = "PROCESS,THREAD_CONTROL";</tt>); only domains that a parse option restricts can be
-      given (not \c INJECTION, \c DEBUGGER nor \c IN_MODULE).  The module's @ref Qore::Program "Program" does not have
-      the restrictions of these domains, which it would otherwise inherit from the %Program that loads the module, so
-      a %Program restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can load a module that
-      registers process-wide functionality when it is loaded.  The declaration applies only to a module found in a
+      function (ex: <tt>domains = "PROCESS_CONTROL,THREAD_CONTROL";</tt>); only domains that a parse option restricts
+      can be given (not \c INJECTION, \c DEBUGGER nor \c IN_MODULE).  The module's @ref Qore::Program "Program" does
+      not have the restrictions of these domains, which it would otherwise inherit from the %Program that loads the
+      module, so a %Program restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can load a module
+      that registers process-wide functionality when it is loaded.  The declaration applies only to a module found in a
       directory of the process-wide module path (\c QORE_MODULE_DIR (see @ref environment_variables) and the built-in module
       directories, not a directory that a %Program adds with @ref append-module-path "%append-module-path" or
       @ref prepend-module-path "%prepend-module-path", nor a module loaded by its path): a module from anywhere else

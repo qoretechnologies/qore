@@ -476,7 +476,7 @@ DataProviderActionCatalog::getActions("Stripe");
     /** @param app the application name
         @param common values merged into every generated action definition
     */
-    registerActions(string app, *hash<auto> common) [dom=PROCESS] {
+    registerActions(string app, *hash<auto> common) [dom=PROCESS_CONTROL] {
         map DataProviderActionCatalog::registerAction($1), getActionInfoList(app, common);
     }
 

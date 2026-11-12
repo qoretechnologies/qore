@@ -27,7 +27,7 @@
 
 module FilePoller {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "2.1";
     desc = "Filesystem polling solution";
     author = "Petr Vanek <petr@yarpen.cz>";

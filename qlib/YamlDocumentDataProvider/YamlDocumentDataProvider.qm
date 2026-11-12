@@ -28,7 +28,7 @@
 
 module YamlDocumentDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "1.1";
     desc = "User module providing YAML document stream data providers";
     author = "Qore Technologies, s.r.o.";

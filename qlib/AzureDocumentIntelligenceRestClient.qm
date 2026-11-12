@@ -42,7 +42,7 @@ module AzureDocumentIntelligenceRestClient {
             AzureDocumentIntelligenceRestConnection::ConnectionScheme);
     };
     # the module's own code waits for rate limits and retries with sleep() or usleep()
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage AzureDocumentIntelligenceRestClient Module

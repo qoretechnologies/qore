@@ -53,7 +53,7 @@ module AwsRestClient {
     };
     # the module's own code defers thread cancellation while it completes a request (defer_thread_cancel())
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage AwsRestClient Module

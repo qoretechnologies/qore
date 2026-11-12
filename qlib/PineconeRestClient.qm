@@ -45,7 +45,7 @@ module PineconeRestClient {
             new PineconeVectorStoreFactory());
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage PineconeRestClient Module

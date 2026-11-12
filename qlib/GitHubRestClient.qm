@@ -43,7 +43,7 @@ module GitHubRestClient {
         ConnectionSchemeCache::registerScheme("github", GitHubRestConnection::ConnectionScheme);
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage GitHubRestClient Module

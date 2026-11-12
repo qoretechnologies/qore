@@ -2219,8 +2219,12 @@ string doxygen_output = proc.process();
         @endcode
     */
     public class AstProcessor {
-        #! the parse option references for the functional domains of a [dom=...] attribute list, as qpp writes them
+        #! the parse option references for the functional domains of a [dom=...] attribute list
+        /** The names of the \c DOM_* constants, and the names that qpp writes for two of them (\c PROCESS,
+            \c MODULES), which Qore source accepts too (issue #5843)
+        */
         const DomainRestrictionRefs = {
+            "PROCESS_CONTROL": "@ref Qore::PO_NO_PROCESS_CONTROL",
             "PROCESS": "@ref Qore::PO_NO_PROCESS_CONTROL",
             "NETWORK": "@ref Qore::PO_NO_NETWORK",
             "EXTERNAL_PROCESS": "@ref Qore::PO_NO_EXTERNAL_PROCESS",
@@ -2233,6 +2237,7 @@ string doxygen_output = proc.process();
             "EXTERNAL_INFO": "@ref Qore::PO_NO_EXTERNAL_INFO",
             "THREAD_INFO": "@ref Qore::PO_NO_THREAD_INFO",
             "LOCALE_CONTROL": "@ref Qore::PO_NO_LOCALE_CONTROL",
+            "MODULE": "@ref Qore::PO_NO_MODULES",
             "MODULES": "@ref Qore::PO_NO_MODULES",
             "IN_MODULE": "@ref Qore::PO_IN_MODULE",
             "EMBEDDED_LOGIC": "@ref Qore::PO_NO_EMBEDDED_LOGIC",

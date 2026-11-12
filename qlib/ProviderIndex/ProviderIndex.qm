@@ -44,7 +44,7 @@
 module ProviderIndex {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     # and starts the index worker threads of ProviderIndex::createDataProviderIndex(), which declares PROCESS
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "1.4";
     desc = "user module for indexing data providers";
     author = "David Nichols <david@qore.org>";

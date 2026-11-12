@@ -47,7 +47,7 @@ module Pop3Client {
         ConnectionSchemeCache::registerScheme("pop3s", Pop3Connection::ConnectionScheme);
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage Pop3Client Module

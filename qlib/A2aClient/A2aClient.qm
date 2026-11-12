@@ -47,7 +47,7 @@ module A2aClient {
         ConnectionSchemeCache::registerScheme("a2as", A2aConnection::ConnectionScheme);
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage A2aClient Module

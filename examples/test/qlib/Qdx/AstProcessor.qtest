@@ -133,10 +133,13 @@ public class AstProcessorTests inherits QUnit::Test {
         string code = "#! a tagged function
 /** registers something
 */
-sub tagged() [dom=PROCESS,NETWORK] { }
+sub tagged() [dom=PROCESS_CONTROL,NETWORK] { }
 
 #! no long comment
 sub tagged2() [dom=INJECTION] { }
+
+#! the names that qpp writes (#5843)
+sub tagged3() [dom=PROCESS,MODULES] { }
 
 #! no domain
 sub plain() { }
@@ -153,7 +156,9 @@ class C {
         assertTrue(output =~ /@par Restrictions:\s*MUST HAVE: @ref Qore::PO_ALLOW_INJECTION/,
             "permissive domain: " + output);
         assertTrue(output =~ /@par Restrictions:\s*@ref Qore::PO_NO_FILESYSTEM/, "method restrictions: " + output);
-        assertEq(3, (output =~ x/(@par Restrictions:)/g).size(), "only the tagged code has restrictions: " + output);
+        assertTrue(output =~ /@par Restrictions:\s*@ref Qore::PO_NO_PROCESS_CONTROL, @ref Qore::PO_NO_MODULES/,
+            "qpp names: " + output);
+        assertEq(4, (output =~ x/(@par Restrictions:)/g).size(), "only the tagged code has restrictions: " + output);
     }
 
     testGlobalVariables() {

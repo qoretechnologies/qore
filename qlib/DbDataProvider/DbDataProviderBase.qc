@@ -245,12 +245,12 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Sets the datasource lookup
-    static setDatasourceLookup(code datasource_lookup) [dom=PROCESS] {
+    static setDatasourceLookup(code datasource_lookup) [dom=PROCESS_CONTROL] {
         DbDataProvider::datasource_lookup = datasource_lookup;
     }
 
     #! Sets the table lookup
-    static setTableLookup(code table_lookup) [dom=PROCESS] {
+    static setTableLookup(code table_lookup) [dom=PROCESS_CONTROL] {
         DbDataProvider::table_lookup = table_lookup;
     }
 

@@ -68,7 +68,7 @@ public class DataProviderWebhook {
         @throw WEBHOOK-API-ERROR the webhook APIs are already registered
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
     */
-    static registerWebhookApis(code create, code destroy) [dom=PROCESS] {
+    static registerWebhookApis(code create, code destroy) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every interface that creates a webhook
         if (SandboxManager::isSandboxed()) {
             throw "DATA-PROVIDER-CALLBACK-ERROR", "code that a sandbox governs cannot register the webhook APIs: they "

@@ -33,7 +33,7 @@ module QoreAsyncJobUtils {
     url = "http://qore.org";
     license = "MIT";
     # the module's own code waits between status polls with usleep()
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage QoreAsyncJobUtils Module

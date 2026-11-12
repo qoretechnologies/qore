@@ -40,7 +40,7 @@ module AsyncSocketIo {
     # the module's own code sets the process-wide callback worker limit (AsyncSocketIoController::setMaxCallbackWorkers()
     # declares PROCESS, so a restricted caller cannot) and schedules timers and tasks; for a sandboxed caller, the
     # scheduling builtins refuse the caller's own code and timers (MODULE_OWNED)
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage AsyncSocketIo Module

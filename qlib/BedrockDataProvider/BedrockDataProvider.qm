@@ -35,7 +35,7 @@
 
 module BedrockDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "typed AWS Bedrock inference, guardrail, model, evaluation, and administration actions";
     author = "Qore Technologies, s.r.o.";

@@ -60,7 +60,7 @@ public class AssemblyAiActions {
 
     #! Registers the complete explicit action inventory
     /** @param app application identity */
-    static registerActions(string app = AppName) [dom=PROCESS] {
+    static registerActions(string app = AppName) [dom=PROCESS_CONTROL] {
         map DataProviderActionCatalog::registerAction($1), getActionInfoList(app);
     }
 }

@@ -1640,8 +1640,8 @@ int QoreModuleDefContext::setDomains(const QoreProgramLocation* loc, QoreValue v
         int64 d = name.empty() ? -1 : qore_get_source_domain(name.c_str());
         if (d <= 0 || (d & not_declarable)) {
             parse_error(*loc, "module key 'domains': '%s' is not a functional domain that a module can declare; give "
-                "restricted domains without the QDOM_ prefix, separated by commas (ex: \"PROCESS,THREAD_CONTROL\")",
-                name.c_str());
+                "restricted domains without the QDOM_ prefix, separated by commas "
+                "(ex: \"PROCESS_CONTROL,THREAD_CONTROL\")", name.c_str());
             err = -1;
         } else {
             dom |= d;

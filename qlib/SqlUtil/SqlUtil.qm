@@ -48,7 +48,7 @@ module SqlUtil {
     url = "http://qore.org";
     license = "MIT";
     # the module's own code waits before restarting a transaction with sleep() (RestartableTransaction)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 # version history is included below in the docs
@@ -7733,12 +7733,12 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     /** The callback continues to receive the string configuration, including for data that also contains the
         structured configuration used by the default deserializer.
     */
-    public sub sqlutil_register_ds_deserializer(*code new_ds_get) [dom=PROCESS] {
+    public sub sqlutil_register_ds_deserializer(*code new_ds_get) [dom=PROCESS_CONTROL] {
         ds_get = new_ds_get;
     }
 
     #! registers a closure or call reference taking a string type and string datasource configuration that will return an AbstractDatasource
-    public sub sqlutil_register_ds_serializer(*code new_ds_do) [dom=PROCESS] {
+    public sub sqlutil_register_ds_serializer(*code new_ds_do) [dom=PROCESS_CONTROL] {
         ds_do = new_ds_do;
     }
 
@@ -7805,7 +7805,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Caches the given table unless another thread cached one first; returns the table in the cache
-        static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS] {
+        static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             *AbstractTable cached = TableCache::cache{dsdesc}{name};
@@ -7816,7 +7816,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Discards cached tables; see @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()"
-        static clear(*string dsdesc, *string name) [dom=PROCESS] {
+        static clear(*string dsdesc, *string name) [dom=PROCESS_CONTROL] {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
 
@@ -7876,7 +7876,7 @@ sqlutil_register_table_resolver(\MyTableRegistry::getTable());
 
         @since %SqlUtil 3.2.0
     */
-    public sub sqlutil_register_table_resolver(*code new_table_resolve) [dom=PROCESS] {
+    public sub sqlutil_register_table_resolver(*code new_table_resolve) [dom=PROCESS_CONTROL] {
         table_resolve = new_table_resolve;
     }
 
@@ -7949,7 +7949,7 @@ sqlutil_clear_table_cache(ds, "my_table");
 
         @since %SqlUtil 3.2.0
     */
-    public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) [dom=PROCESS] {
+    public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) [dom=PROCESS_CONTROL] {
         TableCache::clear(ds ? AbstractSqlUtilBase::makeDatasourceDesc(ds) : NOTHING, name);
     }
 

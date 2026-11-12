@@ -327,9 +327,12 @@ int sub fibonacci(int num) {
 
     The domains are given without the \c QDOM_ prefix, in upper or lower case, separated by commas; elements of the
     list are separated by semicolons, and a trailing semicolon is allowed.  The only key is \c dom; an unknown key or
-    an unknown domain is a parse error.  The domains and the parse options that restrict them:
+    an unknown domain is a parse error.  The names are those of the \c DOM_* constants, which the
+    reflection module also gives (\c getDomainStringList()); \c PROCESS and \c MODULES, the names that
+    the sources of builtin code use, are accepted for \c PROCESS_CONTROL and \c MODULE.  The domains and the parse
+    options that restrict them:
     |!Domain|!Restricted by
-    |\c PROCESS|@ref Qore::PO_NO_PROCESS_CONTROL
+    |\c PROCESS_CONTROL (or \c PROCESS)|@ref Qore::PO_NO_PROCESS_CONTROL
     |\c NETWORK|@ref Qore::PO_NO_NETWORK
     |\c EXTERNAL_PROCESS|@ref Qore::PO_NO_EXTERNAL_PROCESS
     |\c FILESYSTEM|@ref Qore::PO_NO_FILESYSTEM
@@ -341,7 +344,7 @@ int sub fibonacci(int num) {
     |\c EXTERNAL_INFO|@ref Qore::PO_NO_EXTERNAL_INFO
     |\c THREAD_INFO|@ref Qore::PO_NO_THREAD_INFO
     |\c LOCALE_CONTROL|@ref Qore::PO_NO_LOCALE_CONTROL
-    |\c MODULES|@ref Qore::PO_NO_MODULES
+    |\c MODULE (or \c MODULES)|@ref Qore::PO_NO_MODULES
     |\c IN_MODULE|@ref Qore::PO_IN_MODULE
     |\c EMBEDDED_LOGIC|@ref Qore::PO_NO_EMBEDDED_LOGIC
     |\c REFLECTION|@ref Qore::PO_NO_REFLECTION
@@ -355,7 +358,7 @@ int sub fibonacci(int num) {
 %modern
 
 # a function that changes the state of the whole process
-public sub register_handler(string name, code handler) [dom=PROCESS] {
+public sub register_handler(string name, code handler) [dom=PROCESS_CONTROL] {
     ...
 }
 
@@ -366,10 +369,10 @@ public string sub fetch_to_file(string url, string path) [dom=NETWORK,FILESYSTEM
 
 public class Registry {
     # static, abstract and const methods, constructors
-    static setLogger(*LoggerInterface logger) [dom=PROCESS] { ... }
-    abstract register(string name) [dom=PROCESS];
-    int count() const [dom=PROCESS] { ... }
-    constructor(string name) [dom=PROCESS] : Base(name) { ... }
+    static setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] { ... }
+    abstract register(string name) [dom=PROCESS_CONTROL];
+    int count() const [dom=PROCESS_CONTROL] { ... }
+    constructor(string name) [dom=PROCESS_CONTROL] : Base(name) { ... }
 }
     @endcode
 

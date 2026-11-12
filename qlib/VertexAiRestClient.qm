@@ -52,7 +52,7 @@ module VertexAiRestClient {
             new VertexAiRestClient::VertexAiEmbedderFactory());
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS";
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage VertexAiRestClient Module

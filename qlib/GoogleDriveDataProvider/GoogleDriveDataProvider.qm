@@ -38,7 +38,7 @@
 module GoogleDriveDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     # the module's own code starts the background I/O thread of its file location handler streams
-    domains = "PROCESS,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Google Drive";
     author = "David Nichols <david@qore.org>";
