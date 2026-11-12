@@ -15559,6 +15559,39 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
+                if (path_inst->unary_op == LVUnaryOp::EnsureUnique && path_inst->path.size() == 1
+                        && path_inst->path[0].kind == LVPathStepKind::LocalVar && path_inst->path[0].ref_ptr
+                        && func.hasIRStorage(path_inst->path[0].ref_ptr)) {
+                    // the unique step of a weak assignment from an untyped local that keeps its IR storage
+                    // (qore#5847): the value in the slot is the local's own, changed in place of the runtime stack
+                    uint32_t sid = path_inst->lvalue_slot_id;
+                    if (sid < locals_slot_cache.size()) {
+                        // the interpreter's own references to the value (the slots of earlier loads of the local and
+                        // the value of its initializer) are not owners of the container
+                        clearLoadSlots(sid);
+                        if (sid < local_init_slots.size() && local_init_slots[sid] != UINT32_MAX) {
+                            uint32_t init_slot = local_init_slots[sid];
+                            if (init_slot < values.size()) {
+                                removeCleanupEntry(cleanup, init_slot);
+                                values[init_slot].discard(xsink);
+                                values[init_slot] = QoreValue();
+                            }
+                            local_init_slots[sid] = UINT32_MAX;
+                        }
+                        bool copied = false;
+                        // raw slot: the value that the local holds is replaced by a unique copy of it
+                        QoreValue unique = qore_ir_unique_container(locals_slot_cache.storage(sid), copied);
+                        if (copied) {
+                            locals_slot_cache.release(sid, xsink);
+                            locals_slot_cache.set(sid, unique);
+                        }
+                    }
+                    if (path_inst->result.isValid()) {
+                        setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                    }
+                    ++ip;
+                    break;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 // Release the interpreter's own references to the root local (its slot cache entry and the slots
                 // of earlier loads) before the path is navigated, as for an assignment: a statement that only
@@ -15908,6 +15941,11 @@ load_local_done:
                                 if (t == NT_HASH || t == NT_LIST) {
                                     lvh.ensureUnique();
                                 }
+                                // the value of the variable as it is read, taken under the lock of the variable: the
+                                // weak assignment assigns it, so that a variable that another thread assigns is not
+                                // read again (qore#5847)
+                                res = lvh.getReferencedValue();
+                                evaluateOwnedWeakReferenceResult(res, xsink);
                                 break;
                             }
                             case LVUnaryOp::Shift: {

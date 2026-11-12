@@ -34532,6 +34532,63 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 flushLocalReloadStateAtTempBoundary(module);
             }
 
+            // the unique step of a weak assignment from an untyped local that keeps its IR storage (qore#5847): the
+            // value in the local's cache is the local's own, which the step replaces with a unique copy if it is a
+            // shared hash or list; the local is not on the runtime stack
+            if (inst->opcode == QoreIROpcode::LValuePathUnary && path_inst->unary_op == LVUnaryOp::EnsureUnique
+                    && local_key && !direct_self_mutation && path_inst->path.size() == 1
+                    && path_inst->path[0].kind == LVPathStepKind::LocalVar
+                    && current_ir_func->hasIRStorage(local_key)
+                    // an AOT body local is published to the runtime stack, where the runtime step finds it
+                    && !(aot_mode && aot_body_locals.count(local_key))
+                    && !native_int_locals.count(local_key) && !native_float_locals.count(local_key)
+                    && !native_bool_locals.count(local_key)) {
+                auto cache_it = local_allocas.find(local_key);
+                if (cache_it == local_allocas.end()) {
+                    // no store to the local has been emitted yet: a body local starts as NOTHING
+                    llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                    llvm::AllocaInst* new_alloca = alloca_builder.CreateAlloca(i64_type, nullptr, "local");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), new_alloca);
+                    local_allocas[local_key] = LocalCacheSlot(new_alloca);
+                    cache_it = local_allocas.find(local_key);
+                }
+                // raw local cache: the value that the local holds is replaced by a unique copy of it
+                llvm::Value* storage = cache_it->second.storage();
+                llvm::Value* old_bits = builder->CreateLoad(i64_type, storage);
+                auto unique_fn = module.getOrInsertFunction("qore_rt_unique_container",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* new_bits = builder->CreateCall(unique_fn, {old_bits});
+                llvm::BasicBlock* replace_bb = llvm::BasicBlock::Create(ctx, "unique_replace", llvm_func);
+                llvm::BasicBlock* unique_done_bb = llvm::BasicBlock::Create(ctx, "unique_done", llvm_func);
+                builder->CreateCondBr(builder->CreateICmpNE(new_bits, old_bits), replace_bb, unique_done_bb,
+                    llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+                builder->SetInsertPoint(replace_bb);
+                // the reference of the cache moves to a cleanup slot, released with the other temporaries: a value
+                // read earlier in the statement borrows the container the cache held
+                llvm::AllocaInst* old_cleanup;
+                {
+                    llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                    old_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "unique_old");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), old_cleanup);
+                }
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* previous = builder->CreateLoad(i64_type, old_cleanup);
+                builder->CreateStore(old_bits, old_cleanup);
+                builder->CreateCall(decref_fn, {previous, xsink_arg});
+                registerInvokeCleanupAlloca(old_cleanup);
+                builder->CreateStore(new_bits, storage);
+                builder->CreateBr(unique_done_bb);
+                builder->SetInsertPoint(unique_done_bb);
+                if (inst->result.isValid()) {
+                    values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    nanboxed_values.insert(inst->result.id);
+                }
+                return true;
+            }
+
             // Pre-decref old result if result is used
             if (inst->result.isValid()) {
                 // Create or reuse cleanup alloca

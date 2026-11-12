@@ -20,11 +20,11 @@
     literal of the program or with another variable), so that the writes of the owner are seen through the weak
     reference in every mode.  The AST interpreter shared the literal of `hash<auto> h = {"a": 1}` with the program and
     copied it on the first write, leaving the weak reference with the literal, where the compiled modes, which build
-    the hash, followed the owner; a container shared with another variable behaved as the AST in all modes.  The rule
-    applies to a variable declared with a type that can be a hash or a list and cannot be an object (`hash<auto>`,
-    `list<int>`, `hash<string, int>`); an untyped (`auto`) variable, whose value can be an object that the execution
-    modes keep alive by the way they access the variable, is not changed.  Every mode must print the output of the
-    AST.
+    the hash, followed the owner; a container shared with another variable behaved as the AST in all modes.  This
+    test covers the variables declared with a type that can be a hash or a list and cannot be an object
+    (`hash<auto>`, `list<int>`, `hash<string, int>`); the untyped (`auto`) variables, the globals and the class static
+    variables are covered by weak-reference-unique-source-untyped.qtest (qore#5847).  Every mode must print the
+    output of the AST.
 
     The program is in \c weak-reference-unique-source/.
 */

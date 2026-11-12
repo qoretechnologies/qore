@@ -2085,6 +2085,30 @@ enum class LVTernaryOp : uint8_t {
 //! qore_rt_self_member_assign_consume()): the caller does not use the result of the assignment
 #define QORE_RT_ASSIGN_RESULT_UNUSED 1
 
+//! returns the container that a weak reference to a local with IR storage designates, as a unique value (qore#5847)
+/** The unique step of a weak assignment from an untyped local: a hash or a list that the local shares with another
+    owner (a literal of the program, another variable) is copied, so that the weak reference designates the local's
+    own container and sees its later changes, as for a variable on the runtime stack (LValueHelper::ensureUnique()).
+    A value of another type (an object, a scalar, NOTHING, a reference, a weak reference that the local holds) is not
+    touched.
+    @param value the value in the local's storage, which the caller still owns
+    @param copied set to true if the value returned is a new copy; the caller then releases the value it passed and
+    stores the copy in its place
+*/
+static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& copied) {
+    copied = false;
+    qore_type_t t = value.getType();
+    if (t != NT_HASH && t != NT_LIST) {
+        return value;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (!node || node->is_unique()) {
+        return value;
+    }
+    copied = true;
+    return QoreValue(node->realCopy());
+}
+
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
 public:
     QoreIRLValuePathInstruction(QoreIROpcode op)

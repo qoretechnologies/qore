@@ -168,6 +168,12 @@ int64_t qore_rt_is_null_or_nothing(uint64_t val);
 
 // --- Refcount helpers ---
 
+//! Returns the value of a local with IR storage as a unique container (qore#5847)
+/** A hash or list that is shared is copied: the copy is returned, the value passed is not released.  The value
+    itself is returned in every other case.
+*/
+uint64_t qore_rt_unique_container(uint64_t val);
+
 //! Increment reference count if value is a pointer type
 void qore_rt_incref(uint64_t val);
 

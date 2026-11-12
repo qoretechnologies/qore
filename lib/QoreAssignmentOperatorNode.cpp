@@ -37,6 +37,7 @@
 #include "qore/intern/QoreMapOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
@@ -613,6 +614,18 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     return err;
 }
 
+bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
+    const AbstractQoreNode* node = right.getInternalNode();
+    if (!node) {
+        return false;
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        return var->getType() != VT_IMMEDIATE && qore_weak_source_type_may_hold_container(var->getTypeInfo());
+    }
+    auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+    return static_var && qore_weak_source_type_may_hold_container(static_var->getTypeInfo());
+}
+
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
         AssignmentMode mode) const {
     /* assign new value, this value gets referenced with the
@@ -623,10 +636,12 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     // a weak reference to a variable designates the variable's own container: a container that the variable shares
     // with another owner (a literal of the program, another variable) is made unique first, so that the owner's later
     // writes are seen through the weak reference (qore#5756)
+    // The container made unique is the value assigned: the variable is not read again, as another thread can assign
+    // a variable that is shared (a global, a variable that a closure captures) between the two reads, and the
+    // weak reference would then designate a container that the step did not make unique (qore#5847).
+    ValueHolder unique_source(xsink);
     if (mode == AssignmentMode::Weak) {
-        const VarRefNode* source_var = dynamic_cast<const VarRefNode*>(right.getInternalNode());
-        if (source_var && source_var->getType() != VT_IMMEDIATE
-                && qore_weak_assignment_source_made_unique(source_var->getTypeInfo())) {
+        if (qore_weak_assignment_source_made_unique(right)) {
             LValueHelper source(right, xsink, true);
             if (*xsink) {
                 return QoreValue();
@@ -634,14 +649,17 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
             // a weak reference held by the variable and a value of another type are left as they are
             if (source && (source.getType() == NT_HASH || source.getType() == NT_LIST)) {
                 source.ensureUnique();
+                unique_source = source.getReferencedValue();
             }
         }
     }
 
     // the operand is a statement of its own where the other execution modes evaluate it so
-    QoreMutationOperandHolder new_value(left, right, true, xsink);
+    QoreMutationOperandHolder new_value(left, unique_source ? *unique_source : right, true, xsink);
     if (*xsink)
         return QoreValue();
+    // the operand holds a reference of its own
+    unique_source = QoreValue();
 
     if (broken_int) {
         // convert the value to an int unconditionally

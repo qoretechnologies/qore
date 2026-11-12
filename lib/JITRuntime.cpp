@@ -144,6 +144,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
+    { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -989,6 +990,12 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 }
 
 // --- Refcount helpers ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_unique_container(uint64_t val) {
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(fromBits(val), copied);
+    return copied ? toBits(unique) : val;
+}
 
 extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     QoreValue v = fromBits(val);
@@ -15944,6 +15951,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
+                }
+                // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
+                // reference that the variable holds reads as its target
+                res = lvh.getReferencedValue();
+                switch (res.getType()) {
+                    case NT_WEAKREF:
+                    case NT_WEAKREF_HASH:
+                    case NT_WEAKREF_LIST: {
+                        ValueHolder weak_holder(res, xsink);
+                        res = (res.getType() == NT_WEAKREF
+                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get())
+                            : res.getType() == NT_WEAKREF_HASH
+                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->get())
+                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->get())).refSelf();
+                        break;
+                    }
+                    default:
+                        break;
                 }
                 break;
             case LVUnaryOp::Shift:

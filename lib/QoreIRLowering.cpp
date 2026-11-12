@@ -7968,21 +7968,33 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     // a weak reference to a variable designates the variable's own container: a container that the variable shares
     // with another owner (a literal, another variable) is made unique first, as the AST interpreter does, so that the
     // owner's later writes are seen through the weak reference (qore#5756)
-    if (assign_mode == AssignmentMode::Weak) {
-        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
-        if (source_var && source_var->getType() != VT_IMMEDIATE
-                && qore_weak_assignment_source_made_unique(source_var->getTypeInfo())) {
-            QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
-                error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
-            if (!unique.isValid()) {
-                if (error.empty()) {
-                    error = "unsupported variable for weak assignment IR lowering";
-                }
-                return QoreIRValue();
+    // The unique step of a variable that another thread can assign (a global, a class static variable, a variable that
+    // a closure captures) gives the value of the variable, taken under its lock, which is the value assigned: the
+    // variable is not read again, as it can have been assigned in between (qore#5847).  The step of an untyped local
+    // keeps the local in IR storage (see QoreIRFunction::computeIROnlyLocals()).
+    QoreIRValue unique_source;
+    if (assign_mode == AssignmentMode::Weak && qore_weak_assignment_source_made_unique(right_expr)) {
+        QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
+            error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
+        if (!unique.isValid()) {
+            if (error.empty()) {
+                error = "unsupported variable for weak assignment IR lowering";
             }
+            return QoreIRValue();
+        }
+        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
+        bool shared_source = !source_var;  // a class static variable
+        if (source_var) {
+            qore_var_t vt = source_var->getType();
+            shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
+                || ((vt == VT_LOCAL) && source_var->ref.id && source_var->ref.id->closureUse());
+        }
+        if (shared_source) {
+            unique_source = unique;
         }
     }
-    QoreIRValue right = lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
+    QoreIRValue right = unique_source.isValid() ? unique_source
+        : lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
     if (!right.isValid()) {
         return QoreIRValue();
     }
