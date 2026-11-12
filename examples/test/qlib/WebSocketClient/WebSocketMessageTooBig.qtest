@@ -164,6 +164,13 @@ class TestHandler inherits WebSocketHandler {
         Queue events();
     }
 
+    #! the close timeout is a hang guard only: the server waits for the client's close frame, which follows the rest of a
+    #! message that is too big; the default of 5 seconds ran out while a slow client (as under valgrind) still sent it,
+    #! and the server's close of the connection with the client's data unread lost its close frame for the client
+    #! (1006 instead of 1009)
+    constructor() : WebSocketHandler(NOTHING, {"close_timeout": HangGuard}) {
+    }
+
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new TestConnection(self, events);
     }
