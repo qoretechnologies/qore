@@ -6394,7 +6394,9 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();
-            ctx->call_targets[i].method_name = self_call->getName();
+            // the name of the method without a class qualifier, by which unqualified and abstract calls are
+            // dispatched (issue #5933: a qualified call of an abstract method was dispatched by the qualified name)
+            ctx->call_targets[i].method_name = self_call->getMethodName();
             ctx->call_targets[i].variant = self_call->getVariant();
             if (ctx->call_targets[i].variant) {
                 ctx->call_targets[i].uvb = ctx->call_targets[i].variant->getUserVariantBase();

@@ -21219,8 +21219,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
 }
 
 //! Background self-method call (AOT mode): takes method name string for runtime resolution
-extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
+/** @param class_ref for a qualified call (Class::method()), the class that the call was resolved on when it was
+    compiled (encoded with qore_aot_encode_class_ref()), otherwise an empty string
+    @param method_name the name of the method as written in the call (qualified for a qualified call)
+
+    issue #5933: a qualified call is not virtual: it calls the method of the class that it was resolved on when it
+    was compiled, which must be the class of the object or a class that it inherits; resolving the qualified name at
+    run time from the root namespace could find another class with the same name
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(const char* class_ref,
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(class_ref);
     assert(method_name);
 
     // Get current self + class context
@@ -21237,17 +21246,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     if (!cls) {
         cls = qore_class_private::get(*self->getClass());
     }
-    // a qualified call (Class::method()) calls the method of the class that it names, like
-    // qore_rt_background_static_method_name_call_aot() and SelfFunctionCallNode::parseInitImpl() do; the name is
-    // passed as written, so it is resolved here
     const qore_class_private* method_cls = cls;
     const char* name = method_name;
     NamedScope scope(method_name);
-    if (scope.size() > 1) {
-        const QoreClass* qc = qore_root_ns_private::get(*(getRootNS()))->runtimeFindScopedClassWithMethod(scope);
+    if (*class_ref) {
+        assert(scope.size() > 1);
+        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), class_ref, false);
         if (!qc) {
             xsink->raiseException("BACKGROUND-ERROR", "cannot resolve the class of background method call '%s'",
                 method_name);
+            return toBits(QoreValue());
+        }
+        bool priv;
+        if (!self->getClass()->getClass(*qc, priv)) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
+                "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
             return toBits(QoreValue());
         }
         method_cls = qore_class_private::get(*qc);
@@ -21276,7 +21289,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         }
     }
 
-    // Create a temporary SelfFunctionCallNode with resolved method identity
+    // Create a temporary SelfFunctionCallNode with resolved method identity; the call of an abstract method is
+    // dispatched by name (see SelfFunctionCallNode::evalImpl())
     // strdup gives NamedScope ownership of the name string (del=true)
     SelfFunctionCallNode temp_sfcn(&loc_builtin, strdup(method_name),
         nullptr, method, method->getClass(), cls);
@@ -22105,8 +22119,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_throwing(
-        const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_background_self_call_aot(method_name, args, nargs, xsink);
+        const char* class_ref, const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_self_call_aot(class_ref, method_name, args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

@@ -144,6 +144,66 @@ class SubCaller inherits Caller {
     }
 }
 
+# qualified background self calls (issue #5933): a class in the root namespace with the same name as a base class in a
+# namespace, a three-part name, a private inherited method and an abstract method
+class QBase {
+    public {
+        static Queue q();
+    }
+
+    m(string s) {
+        QBase::q.push(\"root QBase: \" + s);
+    }
+}
+
+namespace QNS {
+    class QBase {
+        m(string s) {
+            ::QBase::q.push(\"QNS::QBase: \" + s);
+        }
+
+        private priv(string s) {
+            ::QBase::q.push(\"QNS::QBase priv: \" + s);
+        }
+    }
+
+    class QChild inherits QNS::QBase {
+        m(string s) {
+            ::QBase::q.push(\"QChild: \" + s);
+        }
+
+        int bgShort() {
+            return background QBase::m(\"short\");
+        }
+
+        int bgFull() {
+            return background QNS::QBase::m(\"full\");
+        }
+
+        int bgPriv() {
+            return background QBase::priv(\"priv\");
+        }
+    }
+}
+
+class QAbs {
+    abstract m(string s);
+
+    int bgAbs() {
+        return background QAbs::m(\"background\");
+    }
+
+    callAbs() {
+        QAbs::m(\"direct\");
+    }
+}
+
+class QConc inherits QAbs {
+    m(string s) {
+        QBase::q.push(\"QConc: \" + s);
+    }
+}
+
 #! describes a copy and checks that it is not the original
 hash<auto> sub describe(object orig, object c) {
     return {
@@ -357,6 +417,24 @@ hash<auto> sub other_self_calls() {
     rv.static_call = Caller::q.get(10s);
     return rv;
 }
+
+#! qualified self calls of methods of base classes (issue #5933)
+hash<auto> sub qualified_calls() {
+    QNS::QChild c();
+    hash<auto> rv;
+    thread_join(c.bgShort());
+    rv.short_name = QBase::q.get(10s);
+    thread_join(c.bgFull());
+    rv.full_name = QBase::q.get(10s);
+    thread_join(c.bgPriv());
+    rv.private_method = QBase::q.get(10s);
+    QConc a();
+    thread_join(a.bgAbs());
+    rv.abstract_background = QBase::q.get(10s);
+    a.callAbs();
+    rv.abstract_direct = QBase::q.get(10s);
+    return rv;
+}
 ";
 
 #! the expected results of the functions in Code, by function name
@@ -393,6 +471,13 @@ const Expected = {
         "virt_sub": {"class": "SubCaller", "i": 1},
         "qualified_sub": {"class": "Caller", "i": 2},
         "static_call": {"class": "static", "i": 3},
+    },
+    "qualified_calls": {
+        "short_name": "QNS::QBase: short",
+        "full_name": "QNS::QBase: full",
+        "private_method": "QNS::QBase priv: priv",
+        "abstract_background": "QConc: background",
+        "abstract_direct": "QConc: direct",
     },
 };
 
