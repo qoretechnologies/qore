@@ -1759,10 +1759,9 @@ for (int i = 0; i < 1; ++i) {
                 break;
             }
         }
-        # the other execution modes do not call the debugger's exception callback for an exception that a builtin
-        # raises in top-level code, so the thread stops only at its detach there
-        # (https://github.com/qoretechnologies/qore/issues/5795)
-        assertEq(p.pgm.getExecMode() == EM_AST ? ("exception", "detach") : ("detach",), stops);
+        # every execution mode calls the debugger's exception callback for an exception that a builtin raises in
+        # top-level code (qore#5795), so the thread stops at the exception and then at its detach
+        assertEq(("exception", "detach"), stops);
         hash<auto> rv = p.done.get(EventTimeout);
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);
