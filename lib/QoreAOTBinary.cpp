@@ -6169,9 +6169,27 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
     return qore_get_type_from_string_intern(use_path);
 }
 
+//! The signature whose type parameters the default value being read uses (see QoreAOTDefaultTypeParamSignatureHelper)
+static thread_local const UserSignature* g_aot_default_type_param_signature = nullptr;
+
+QoreAOTDefaultTypeParamSignatureHelper::QoreAOTDefaultTypeParamSignatureHelper(const UserSignature* sig)
+        : old(g_aot_default_type_param_signature) {
+    g_aot_default_type_param_signature = sig;
+}
+
+QoreAOTDefaultTypeParamSignatureHelper::~QoreAOTDefaultTypeParamSignatureHelper() {
+    g_aot_default_type_param_signature = old;
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& error) {
     if (!path || !*path) {
         return nullptr;  // null/empty = no type constraint (auto)
+    }
+
+    // a type parameter of the callable whose default value is being read (issue #5928)
+    if (!signature_type_param_owner && g_aot_default_type_param_signature
+            && qore_aot_type_path_has_signature_type_param(path)) {
+        return resolveForSignature(path, error, g_aot_default_type_param_signature);
     }
 
     // Signature-owned type parameter identities include their UserSignature
@@ -15977,7 +15995,12 @@ bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
         const uint8_t* p = pd.blob.data();
         const uint8_t* pend = p + pd.blob.size();
         std::string expr_error;
-        QoreValue v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        QoreValue v;
+        {
+            // the type paths of the default value can use the type parameters of its callable
+            QoreAOTDefaultTypeParamSignatureHelper type_param_signature(pd.uvb->getUserSignature());
+            v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        }
         if (!expr_error.empty() || p != pend) {
             v.discard(nullptr);
             error = "cannot deserialize deferred default-argument expression for parameter "
