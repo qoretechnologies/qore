@@ -2059,9 +2059,11 @@ print('exit code: %d' % p.wait(30))
         assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://localhost:%d: ", port),
             r.message);
         # the error of the connection is given: Linux refuses a connection to a port that is bound but does not
-        # listen, while on macOS the connection times out
-        assertRegex("SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
-            + "(Connection refused|Operation timed out)", r.message);
+        # listen, while on macOS the connection times out, or, when many processes connect at the same time, the
+        # connection is accepted by the system and then reset as the adapter writes its request, which is reported as
+        # a broken pipe: in each case the connection fails
+        assertRegex("(SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
+            + "(Connection refused|Operation timed out)|Broken pipe)", r.message);
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
