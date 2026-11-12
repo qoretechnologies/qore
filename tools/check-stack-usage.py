@@ -19,20 +19,18 @@ and the target (the compiler's -dumpmachine triple, which names the C library) n
 checked for a build that matches them all (any other build, such as one made with a multi-config generator, is
 reported, not checked, unless --force is given).
 
-The frame of a function counts the clones that GCC makes of it with the rule of check(): for each location of a
-record of the function (per overload group), the sum of the two largest of the records there (its head, the ".part"
-clone of partial inlining, which the head calls and GCC records as "0(...)" or under the function's name at the head's
-location, .constprop/.isra alternatives) and the record of each of its .part clones found with the object file's
-symbol table (objdump -t), also where identical code folding merged it with another function's clone, recorded at
-that function's location (or as "0(...)" where a function without records, its head inlined everywhere, was).  The
-head and its clone are both counted, so the sum can never be less than their frames together: growth cannot be
-hidden; it is more when the two largest records are alternatives, which can only fail a check falsely.  A .part clone
-for which no record can only be its own fails the check as UNACCOUNTED, and so do object files whose symbol tables
-cannot be read (unless --allow-no-symbols is given).
+The frame of a function is the largest of its records (all overloads; GCC records its .constprop and .isra clones,
+which are alternatives to it, under its own name), which is all of its frame as long as GCC did not split it: a
+function that partial inlining split into a head and a ".part" clone, which the head calls, has both frames on the
+stack, and GCC records the clone in ways that cannot be attributed reliably.  So a budgeted function with a .part
+clone in the object file's symbol table (objdump -t; .cold fragments, which share their function's frame, do not
+count) fails the check as SPLIT: an unsplit function's frame is fully in its own record, and a split one is never
+passed.  A SPLIT function needs a review: a budget for its head and part, or code that GCC does not split.  The check
+needs the symbol tables (an error without them, unless --allow-no-symbols is given).
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded,
-a function is missing or a .part clone of a function is unaccounted, 2 for a usage or input error
+a function is missing or split by partial inlining, 2 for a usage or input error
 """
 
 import argparse
@@ -187,55 +185,17 @@ def match_signature(func, signature):
     return None
 
 
-def split_params(params):
-    """Splits a parameter list at its top-level commas."""
-    rv = []
-    depth = 0
-    cur = ""
-    for c in params:
-        if c in "(<[":
-            depth += 1
-        elif c in ")>]":
-            depth -= 1
-        if c == "," and not depth:
-            rv.append(cur.strip())
-            cur = ""
-        else:
-            cur += c
-    if cur.strip():
-        rv.append(cur.strip())
-    return [] if rv == ["void"] else rv
-
-
 def matches(func, signature):
-    """True if signature is the frame of func itself; see match_params()."""
-    return match_params(func, signature) is not None
-
-
-def is_part_clone_of(func, signature, part_name):
-    """True if part_name, a ".part" clone that nm names, may be a clone of the function that the .su record signature
-    records: the same function name, the same number of parameters and the same qualifiers (const, &, &&).  The
-    parameter types are not compared: nm and .su records spell them differently ("char const*" and "const char*", a
-    std::string with its template arguments, typedefs resolved), so an overload with the same number of parameters
-    also counts (conservative); for a template instance, which .su records name by its template parameters
-    ("int f(T) [with T = int]") and nm by its template arguments ("int f<int>(int)"), the name only."""
-    part = match_signature(func, part_name)
-    if part is None:
-        return False
-    if "[with " in signature:
-        return True
-    own = match_signature(func, signature)
-    return own is not None and len(split_params(part[0])) == len(split_params(own[0])) and part[1] == own[1]
+    """True if signature is the frame of func itself, also with the template arguments of its scopes (as .su records
+    write the members of class templates: "int S<T>::h(int) [with T = int]") ignored; see match_params()."""
+    return match_params(func, signature) is not None or match_params(func, strip_templates(signature)) is not None
 
 
 class Symbol:
-    """A function defined in an object file: its name as objdump -C writes it (with "(anonymous namespace)" written
-    as .su records write it, "{anonymous}"), and the section and address of its code, which identical code folding
-    gives to every function it merges"""
+    """A function defined in an object file: its name as objdump -C writes it"""
 
-    def __init__(self, name, section, address, size):
+    def __init__(self, name, section=None, address=None, size=None):
         self.name = name.replace("(anonymous namespace)", "{anonymous}")
-        self.key = (section, address)
         # a .cold fragment of a function shares its frame and has no record of its own
         self.is_cold = "[clone .cold" in name
         self.is_part = "[clone .part." in name and not self.is_cold
@@ -264,13 +224,6 @@ def object_symbols(su_path, cache):
             rv = None
     cache[obj] = rv
     return rv
-
-
-def object_part_clones(su_path, cache):
-    """Returns the names of the ".part" clones defined in the object file of a .su file, or None if they cannot be
-    read; see object_symbols()."""
-    symbols = object_symbols(su_path, cache)
-    return None if symbols is None else [sym.name for sym in symbols if sym.is_part]
 
 
 def symbol_function(name):
@@ -338,151 +291,58 @@ def collect_frames(build_dir):
     return frames
 
 
-def arity_quals(func, signature):
-    """Returns (number of parameters, qualifiers) of func in signature, or None; see match_signature()."""
-    m = match_signature(func, signature)
-    return (len(split_params(m[0])), m[1]) if m else None
+def strip_templates(name):
+    """Returns a qualified name without the template arguments of any of its scopes and without ABI tags"""
+    name = re.sub(r"\[abi:[^\]]*\]", "", name)
+    out = ""
+    depth = 0
+    for i, c in enumerate(name):
+        # "operator<" and "operator<<" are names, not template arguments
+        if c == "<" and not re.search(r"operator\s*<*$", name[:i]):
+            depth += 1
+        elif c == ">" and depth:
+            depth -= 1
+        elif not depth:
+            out += c
+    return out
 
 
-def shape_of(func, signature):
-    """Returns the overload group of a record or symbol of func: its number of parameters and qualifiers, or
-    "template" for a template instance (which .su records name by its template parameters and the symbol table by
-    its template arguments, so its instances are grouped by name); None if it is not func"""
-    if "[with " in signature:
-        return "template" if matches(func, signature) else None
-    shape = arity_quals(func, signature)
-    if shape is not None and re.search(r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"(\[abi:[^\]]*\])*<", signature):
-        return "template"
-    return shape
-
-
-class ObjectRecords:
-    """The frame records of one .su file and the functions of its object file (None if they cannot be read)"""
-
-    def __init__(self, records, symbols):
-        # (signature, bytes, location, index): the index tells identical records apart
-        self.records = [(signature, size, location, i) for i, (signature, size, location) in enumerate(records)]
-        self.symbols = symbols
-        # the locations with a record of a named function
-        self.named_locations = set(location for signature, size, location in records if not is_part_clone(signature))
-
-    def own_records(self, func, shape):
-        """Returns the named records of func's overload group shape: (size, signature, location, index)"""
-        return [(size, signature, location, i) for signature, size, location, i in self.records
-            if not is_part_clone(signature) and shape_of(func, signature) == shape]
-
-    def at(self, location):
-        """Returns all records at a location: (size, signature, location, index)"""
-        return [(size, signature, loc, i) for signature, size, loc, i in self.records if loc == location]
-
-    def code_symbols(self, func, shape):
-        """Returns the number of functions of func's overload group in the symbol table that have a record of their
-        own: the function itself and its .constprop and .isra clones, not its .part clones and .cold fragments"""
-        return sum(1 for sym in self.symbols if not sym.is_part and not sym.is_cold
-            and "[clone .part." not in sym.name and symbol_function(sym.name) == func
-            and shape_of(func, sym.name) == shape)
-
-    def clone_records(self, func, shape):
-        """Returns the records that can only be a .part clone of func's overload group shape: a "0(...)" record at
-        a location of its records, or, if the group has more named records than functions with records of their own
-        in the symbol table, the largest of them (conservative)"""
-        own = self.own_records(func, shape)
-        locations = set(r[2] for r in own)
-        rv = [(size, signature, location, i) for signature, size, location, i in self.records
-            if location in locations and is_part_clone(signature)]
-        if own and len(own) > self.code_symbols(func, shape):
-            rv.append(max(own))
-        return rv
-
-    def orphan_records(self, arity):
-        """Returns the "0(...)" records with the given number of parameters at a location without a record of a named
-        function: the clones of functions whose heads were inlined into all of their callers"""
-        rv = []
-        for signature, size, location, i in self.records:
-            if is_part_clone(signature) and location not in self.named_locations:
-                if len(split_params(signature[signature.index("(") + 1:signature.rindex(")")])) == arity:
-                    rv.append((size, signature, location, i))
-        return rv
-
-    def fold_set_clone(self, key):
-        """Returns the record of the .part clones at an address (identical code folding merges identical clones of
-        several functions into one, which GCC records once): the largest record that can only be the clone of one of
-        those functions, or None if there is none"""
-        candidates = []
-        for sym in self.symbols:
-            if not sym.is_part or sym.key != key:
-                continue
-            func = symbol_function(sym.name)
-            shape = shape_of(func, sym.name) if func else None
-            if shape is None:
-                continue
-            candidates += self.clone_records(func, shape)
-            if not self.own_records(func, shape) and shape != "template":
-                # a function without records: its head was inlined into all of its callers, and its clone can be a
-                # "0(...)" record at its location, which has no other record
-                candidates += self.orphan_records(shape[0])
-        return max(candidates) if candidates else None
+def split_function(func, symbol):
+    """True if symbol, a function of the symbol table (objdump -C), is a .part clone of func (partial inlining), in
+    any overload or template instance (template arguments of every scope and ABI tags are ignored); .cold fragments
+    are not clones of their own"""
+    if not symbol.is_part:
+        return False
+    name = symbol_function(symbol.name)
+    return name is not None and strip_templates(name) == func
 
 
 def check(budgets, frames):
-    """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None,
-    unaccounted .part clone or None).
+    """Checks frames against budgets: returns a list of (func, budget, frame or None, signature or None, .part clone
+    or None).
 
-    frames are (signature, bytes, path, location) records.  The frame of a budgeted function is the largest, over the
-    locations of the records of each of its overload groups (number of parameters and qualifiers; template instances
-    by name), of the sum of the two largest records of the "pool" there: every record at the location (its head and
-    its .constprop and .isra clones, and a .part clone that GCC records as "0(...)" or under the function's name
-    there), plus the record of each of the group's .part clones (from the object file's symbol table, objdump -t).
-    The record of a .part clone is the largest record that can only be a clone of one of the functions whose .part
-    clones share its address (identical code folding merges identical clones into one, which GCC records once): a
-    "0(...)" record at a location of one of those functions, a named record of one of them beyond the number of its
-    functions with records of their own in the symbol table (the function and its .constprop and .isra clones), or,
-    for one of them without any record (its head inlined into all of its callers), a "0(...)" record with as many
-    parameters at a location without a named record; .cold fragments are ignored, as they share the frame of the
-    function they were split from.  A .part clone without such a record is UNACCOUNTED and fails the check.
-    The head and its clone are two records of the pool, so the sum of its two largest records is never less than
-    their frames together: growth cannot be hidden.  It overcharges when the two largest records are alternatives:
-    a false failure only.  Without the symbol table, clones that are not at the function's location are not seen."""
-    by_path = {}
-    for signature, size, path, location in frames:
-        by_path.setdefault(path, []).append((signature, size, location))
+    The frame of a budgeted function is the largest of its records (all overloads; GCC records its .constprop and
+    .isra clones, which are alternatives to it, under its own name).  A function that partial inlining split into a
+    head and a ".part" clone, which the head calls, has both frames on the stack, and GCC records the clone in ways
+    that cannot be attributed reliably (as "0(...)", under the function's name, or once for several functions whose
+    clones identical code folding merged): if the object file's symbol table (objdump -t) has a .part clone of the
+    function (not a .cold fragment), the clone is returned and the function fails the check as SPLIT."""
     sym_cache = {}
+    paths = sorted(set(path for _, _, path, _ in frames), key=str)
     results = []
     for func, budget, _ in budgets:
         worst = None
         worst_sig = None
-        unaccounted = None
-        for path, records in by_path.items():
-            obj = ObjectRecords(records, object_symbols(path, sym_cache))
-            shapes = set(shape_of(func, signature) for signature, size, location in records
-                if not is_part_clone(signature)) - {None}
-            # the records of the clones of each overload group, from the symbol table
-            clones = {}
-            for part in obj.symbols or ():
-                if not part.is_part:
-                    continue
-                shape = shape_of(func, part.name)
-                if shape is None:
-                    continue
-                shapes.add(shape)
-                clone = obj.fold_set_clone(part.key)
-                if clone is None:
-                    unaccounted = unaccounted or part.name
-                elif clone not in clones.setdefault(shape, []):
-                    clones[shape].append(clone)
-            for shape in shapes:
-                locations = sorted(set(r[2] for r in obj.own_records(func, shape)))
-                for location in locations or [None]:
-                    # each record once (a clone's record can be at the location as well)
-                    pool = sorted(set((obj.at(location) if location else []) + clones.get(shape, [])), reverse=True)
-                    if not pool:
-                        continue
-                    total = pool[0][0] + (pool[1][0] if len(pool) > 1 else 0)
-                    note = "" if len(pool) < 2 else " + %d B (%s at %s)" % (pool[1][0], pool[1][1], pool[1][2])
-                    if worst is None or total > worst:
-                        worst = total
-                        worst_sig = pool[0][1] + note
-        results.append((func, budget, worst, worst_sig, unaccounted))
+        split = None
+        for signature, size, path, location in frames:
+            if not is_part_clone(signature) and matches(func, signature) and (worst is None or size > worst):
+                worst = size
+                worst_sig = signature
+        for path in paths:
+            for sym in object_symbols(path, sym_cache) or ():
+                if split_function(func, sym):
+                    split = split or sym.name
+        results.append((func, budget, worst, worst_sig, split))
     return results
 
 
@@ -584,7 +444,7 @@ def main(argv=None):
         missing = missing_symbols(budgets, frames)
         if missing:
             msg = ("the symbol tables of the object files of %s cannot be read (no object file, or no objdump): the "
-                ".part clones that are not recorded at their function's location cannot be found" % ", ".join(missing))
+                "functions that partial inlining split cannot be found" % ", ".join(missing))
             if not args.allow_no_symbols:
                 raise InputError(msg + " (use --allow-no-symbols to check the records only)")
             print("stack usage: note: " + msg)
@@ -593,11 +453,11 @@ def main(argv=None):
         return 2
 
     failed = 0
-    for func, budget, worst, signature, unaccounted in check(budgets, frames):
-        if unaccounted:
-            print("UNACCOUNTED %-52s budget %5d B: the object file has the .part clone %r, which no record accounts "
-                "for (as when GCC records it only as \"0(...)\" at a location without a record of the function, or "
-                "for overloads with as many parameters); its frame is unknown" % (func, budget, unaccounted))
+    for func, budget, worst, signature, split in check(budgets, frames):
+        if split:
+            print("SPLIT    %-55s budget %5d B: %s was split by partial inlining (%s); its frame can't be checked "
+                "from .su: review it and add a budget for head+part, or prevent the split (e.g. "
+                "__attribute__((noinline)) on the cold part or restructuring)" % (func, budget, func, split))
             failed += 1
             continue
         if worst is None:
@@ -611,7 +471,7 @@ def main(argv=None):
         if args.verbose:
             print("         %s" % signature)
     if failed:
-        print("stack usage: FAILED: %d function(s) over budget or missing; a frame on the per-call path of interpreted "
+        print("stack usage: FAILED: %d function(s) over budget, missing or split; a frame on the per-call path of interpreted "
             "code costs its size at every level of a recursion: shrink it, or if the growth is justified, raise the "
             "budget in %s and explain why in the commit" % (failed, args.budgets))
         return 1

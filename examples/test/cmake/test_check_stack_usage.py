@@ -5,10 +5,9 @@
   type;
 - .su records of GCC and Clang are parsed, and a budget matches a function's own frame only: not a lambda or local
   class inside it, not a function of another class whose name ends with the same name, and every clone of it;
-- the frame of a function is never below a head plus its clone: the two largest records at a location, and the
-  clones folded with its own, from the symbol table (with g++ and objdump: the samples of GCC's .part, .cold,
-  .constprop and folded clones in stack-usage-samples, exact where the rule is); a .part clone without a record is
-  UNACCOUNTED;
+- the frame of a function is its largest record; a function with a .part clone (partial inlining) in the symbol
+  table fails as SPLIT, not its .cold fragments (with g++ and objdump: the samples of GCC's clones in
+  stack-usage-samples);
 - a frame over its budget and a function with no frame fail the check, frames within budget pass it, a build made
   with another compiler or major version, build type, flags or target (C library) is skipped unless --force is
   given, and a build directory without the configuration that QORE_STACK_USAGE_REPORT writes, or without .su files,
@@ -225,28 +224,6 @@ class ParseTest(unittest.TestCase):
         results = csu.check([("UserVariantBase::eval", 700, 1)], frames)
         self.assertEqual(600, results[0][2])
 
-    def test_part_clone_names(self):
-        # the .part clone that nm names belongs to the function with the same name and parameters
-        sig = "int N::K::big(int)"
-        self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big(int) [clone .part.0]"))
-        self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big[abi:cxx11](int) [clone .part.0]"))
-        self.assertFalse(csu.is_part_clone_of("N::K::big", "int N::K::big(int, int)", "N::K::big(int) [clone .part.0]"))
-        # the types are spelled differently by nm: the number of parameters and the qualifiers decide
-        self.assertTrue(csu.is_part_clone_of("K::b", "int K::b(const char*, ExceptionSink*, int)",
-            "K::b(char const*, ExceptionSink*, int) [clone .part.0]"))
-        self.assertTrue(csu.is_part_clone_of("K::s", "int K::s(int, const std::string&)",
-            "K::s(int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) "
-            "[clone .part.0]"))
-        self.assertFalse(csu.is_part_clone_of("K::a", "int K::a(int) const", "K::a(int) [clone .part.0]"))
-        self.assertTrue(csu.is_part_clone_of("K::a", "int K::a(int) &&", "K::a(int) && [clone .part.0]"))
-        self.assertEqual(["int", "std::map<int, int>", "int (*)(int, int)"],
-            csu.split_params("int, std::map<int, int>, int (*)(int, int)"))
-        self.assertEqual([], csu.split_params("void"))
-        self.assertFalse(csu.is_part_clone_of("N::K::big", sig, "N::K::bigger(int) [clone .part.0]"))
-        # a template instance is matched by its name only (.su records give the template parameters)
-        self.assertTrue(csu.is_part_clone_of("tf", "int tf(T) [with T = int]", "int tf<char>(char) [clone .part.0]"))
-        self.assertEqual("int, int", csu.match_params("N::K::big", "int N::K::big(int,  int) const"))
-
     def test_symbol_names(self):
         self.assertEqual("{anonymous}::K::f",
             csu.symbol_function(csu.Symbol("(anonymous namespace)::K::f(int) [clone .part.0]", ".text", 0, 1).name))
@@ -255,36 +232,56 @@ class ParseTest(unittest.TestCase):
         self.assertEqual("K::f", csu.symbol_function("K::f(int (*)(int), std::map<int, int> const&)"))
         self.assertIsNone(csu.symbol_function("not a function"))
 
-    def test_unaccounted_reported(self):
-        # a function with a .part clone that no record accounts for fails the check, with the clone named
-        su = "/src/d.cpp:15:5:int K::f2(int)\t8\tstatic\n"
-        with build_dir(su) as d:
-            b = write_budgets(d, "100 K::f2\n")
-            with unittest.mock.patch.object(csu, "object_symbols", return_value=[
-                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190),
-                    csu.Symbol("K::f2(int)", ".text", 0x200, 0x17)]):
-                rc, out, _ = run(["--budgets", b, str(d)])
-        self.assertEqual(1, rc, out)
-        self.assertRegex(out, r"UNACCOUNTED\s+K::f2")
-        # its head inlined into all of its callers, the function's only record is that of its clone: accounted
-        with build_dir(su) as d:
-            b = write_budgets(d, "100 K::f2\n")
-            with unittest.mock.patch.object(csu, "object_symbols", return_value=[
-                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190)]):
-                rc, out, _ = run(["--budgets", b, str(d)])
-        self.assertEqual(0, rc, out)
+    def test_template_names(self):
+        # the template arguments of every scope and ABI tags are ignored, "operator<" is a name
+        self.assertEqual("S::h", csu.strip_templates("S<int>::h"))
+        self.assertEqual("N::K::f", csu.strip_templates("N::K<std::map<int, int> >::f[abi:cxx11]<char>"))
+        self.assertEqual("A::operator<", csu.strip_templates("A::operator<"))
+        self.assertEqual("A::operator<<", csu.strip_templates("A::operator<<"))
+        self.assertTrue(csu.matches("S::h", "static int S<T>::h(int) [with T = int]"))
+        self.assertTrue(csu.matches("T::f", "int T<N>::f(int) [with int N = 1]"))
+        self.assertFalse(csu.matches("K::f", "int K::f(int)::<lambda()>"))
 
-    def test_same_location_records(self):
-        # the records at a function's location may be its head and a clone (or alternatives): the two largest are
-        # added, never less than the head and its clone
+    def test_split(self):
+        # a .part clone of a budgeted function (any overload or template instance) in the symbol table fails the
+        # check as SPLIT; a .cold fragment does not count, nor the .part clone of another function
+        su = "/src/d.cpp:15:5:int K::f(int)\t8\tstatic\n"
+        cases = (
+            ([csu.Symbol("K::f(int) [clone .part.0]"), csu.Symbol("K::f(int)")], "K::f(int) [clone .part.0]"),
+            ([csu.Symbol("K::f(long) [clone .part.0]")], "K::f(long) [clone .part.0]"),
+            ([csu.Symbol("int K<int>::f<char>(char) [clone .part.0]")], "int K<int>::f<char>(char) [clone .part.0]"),
+            ([csu.Symbol("K::f[abi:cxx11](int) [clone .part.0] [clone .constprop.0]")],
+                "K::f[abi:cxx11](int) [clone .part.0] [clone .constprop.0]"),
+            ([csu.Symbol("K::f(int) [clone .part.0] [clone .cold]"), csu.Symbol("K::f(int) [clone .cold]")], None),
+            ([csu.Symbol("K::g(int) [clone .part.0]"), csu.Symbol("XK::f(int) [clone .part.0]")], None),
+            ([csu.Symbol("K::f(int) [clone .constprop.0] [clone .isra.0]")], None),
+        )
+        for symbols, split in cases:
+            with build_dir(su) as d:
+                b = write_budgets(d, "100 K::f\n")
+                with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
+                    rc, out, _ = run(["--budgets", b, str(d)], allow_no_symbols=False)
+            if split:
+                self.assertEqual(1, rc, out)
+                self.assertRegex(out, r"SPLIT\s+K::f\s+budget\s+100 B: K::f was split by partial inlining")
+                self.assertIn(split, out)
+            else:
+                self.assertEqual(0, rc, out)
+                self.assertIn("OK: 1 function(s) within budget", out)
+
+    def test_largest_record(self):
+        # the frame is the largest record of the function, all overloads (.constprop and .isra clones are recorded
+        # under its name); "0(...)" records are not its
         su = ("/src/A.cpp:16:5:int N::K::big(int)\t576\tstatic\n"
             "/src/A.cpp:16:5:int N::K::big(int)\t8\tstatic\n"
-            "/src/A.cpp:16:5:int N::K::big(int)\t500\tstatic\n"
-            # an overload at another location is not added
-            "/src/A.cpp:20:5:int N::K::big(int, int)\t1000\tstatic\n")
-        results = csu.check([("N::K::big", 1, 1)], frames_of(su, Path("/nonexistent/A.cpp.su")))
-        self.assertEqual(1076, results[0][2])
+            "/src/A.cpp:16:5:0(int)\t900\tstatic\n"
+            "/src/A.cpp:20:5:int N::K::big(int, int)\t600\tstatic\n")
+        results = csu.check([("N::K::big", 1, 1)], frames_of(su))
+        self.assertEqual(600, results[0][2])
         self.assertIsNone(results[0][4])
+        self.assertTrue(csu.is_part_clone("0(int)"))
+        self.assertFalse(csu.is_part_clone("int big(int)"))
+
 
 class CheckTest(unittest.TestCase):
     def test_within_budget(self):
@@ -396,64 +393,36 @@ class CheckTest(unittest.TestCase):
             self.assertEqual(1, rc, out)
             self.assertIn("MISSING", out)
 
-    def test_part_clone_adds(self):
-        # GCC records the .part clone of a function split by partial inlining as "0(<params>)" at the function's own
-        # location; both frames can be on the stack, as the function calls the clone
-        su = ("/src/p.cpp:4:5:0(int)\t576\tstatic\n"
-            "/src/p.cpp:4:5:int big(int)\t8\tstatic\n"
-            "/src/p.cpp:11:5:int c1(int)\t16\tstatic\n"
-            # the clone of another function at another location is not big()'s
-            "/src/p.cpp:20:5:0(int)\t900\tstatic\n"
-            "/src/p.cpp:20:5:int other(int)\t8\tstatic\n")
-        frames = frames_of(su)
-        self.assertTrue(csu.is_part_clone("0(int)"))
-        self.assertFalse(csu.is_part_clone("int big(int)"))
-        results = csu.check([("big", 600, 1), ("c1", 100, 2)], frames)
-        self.assertEqual(584, results[0][2])
-        self.assertIn("0(int)", results[0][3])
-        self.assertEqual(16, results[1][2])
-        # the same location in another .su file is another function
-        frames2 = [(f[0], f[1], Path("other.su") if f[0] == "0(int)" else f[2], f[3]) for f in frames]
-        self.assertEqual(8, csu.check([("big", 600, 1)], frames2)[0][2])
-
     @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
     def test_samples_with_gcc(self):
-        # GCC's records of .part clones in the samples (examples/test/cmake/stack-usage-samples), with g++ -O3: the
-        # frame of each function is never below its worst case (a head plus its clone, or a single frame), and exact
-        # where the rule is (one location, a head and its clone); a clone without any record is UNACCOUNTED.  The
-        # worst cases were read from the records and the symbol tables of GCC 15.2, so other versions are skipped
+        # GCC's clones in the samples (examples/test/cmake/stack-usage-samples), with g++ -O3: a function that
+        # partial inlining split is SPLIT (also when identical code folding merged its .part clone with another
+        # function's, when its head is inlined into all callers, for template instances and members of class
+        # templates, with an ABI tag, and next to .cold fragments and .constprop variants); an unsplit function's
+        # frame is its largest record, also with .constprop and .isra clones.  The frames are those of GCC 15, so
+        # other versions are skipped
         version = subprocess.run(["g++", "-dumpversion"], stdout=subprocess.PIPE, universal_newlines=True).stdout
         if version.strip().split(".")[0] != "15":
-            self.skipTest("the worst cases are those of GCC 15, and g++ is %s" % version.strip())
+            self.skipTest("the frames are those of GCC 15, and g++ is %s" % version.strip())
+        split = "split"
         expected = {
-            # the clone of f(long) is folded with z's (recorded at z's location); f(int) has its own, smaller one
-            "folded-overload.cpp": {"K::f": ("min", 1272), "K::z": ("min", 1272), "Q::g": ("exact", 1272)},
-            # "(anonymous namespace)" in the symbol table, "{anonymous}" in the records
-            "anonymous-namespace.cpp": {"{anonymous}::K::f": ("exact", 1272)},
-            # the head of L::f(int) is inlined into all callers, its clone recorded only as "0(int)" at a location
-            # without a record of the function
-            "inlined-head-zero-record.cpp": {"{anonymous}::L::f": ("unaccounted", None)},
-            # "const char*" in the records, "char const*" in the symbol table
-            "member-const-char.cpp": {"K::b": ("exact", 584)},
-            # an ABI tag in the symbol table
-            "abi-tag.cpp": {"K::big": ("exact", 584)},
-            # a split overload next to one with .constprop/.isra clones, template instances
-            "overloads-templates.cpp": {"N::K::big": ("min", 1632), "tf": ("min", 576), "tf2": ("min", 304),
-                "M::K::big": ("min", 352)},
-            # a .cold fragment of g's clone, and K::f's clone folded with g's
-            "cold-fragment.cpp": {"K::f": ("exact", 1272), "g": ("exact", 1272)},
-            # a .part clone and its .constprop variant (member), a function with a .constprop clone (static)
-            "part-constprop.cpp": {"K::f": ("min", 1288), "g": ("min", 1264)},
-            "part-constprop-free.cpp": {"K::f": ("min", 1288), "g": ("min", 1272)},
-            # overloads with as many parameters whose clones are folded together
-            "folded-same-arity.cpp": {"K::f": ("min", 1272)},
-            # f(long)'s clone folded with z's, f(int) with a larger clone of its own
-            "folded-larger-own.cpp": {"K::f": ("min", 1320), "K::z": ("min", 1304)},
-            # g's clone folded with that of the static z, whose head is inlined into all of its callers and whose
-            # clone GCC records only as "0(int)" at z's location; z's frame is its clone's
-            "folded-into-inlined-static.cpp": {"g": ("exact", 1272), "z": ("exact", 1264)},
-            # the same with two instances of a template, whose heads are recorded at one location
-            "folded-into-inlined-static-template.cpp": {"tf": ("min", 1272), "z": ("exact", 1264)},
+            "abi-tag.cpp": {"K::big": split, "c3": 16},
+            "anonymous-namespace.cpp": {"{anonymous}::K::f": split},
+            "cold-fragment.cpp": {"K::f": split, "g": split, "c": 48},
+            "folded-into-class-template.cpp": {"S::h": split, "g": split, "z": split, "c3": 32},
+            "folded-into-inlined-static-template.cpp": {"tf": split, "z": split, "c2": 32},
+            "folded-into-inlined-static.cpp": {"g": split, "z": split, "call": 32},
+            "folded-larger-own.cpp": {"K::f": split, "K::z": split, "c": 64},
+            "folded-overload.cpp": {"K::f": split, "K::z": split, "Q::g": split, "c": 48},
+            "folded-same-arity.cpp": {"K::f": split},
+            "inlined-head-zero-record.cpp": {"{anonymous}::L::f": split, "K::f": 96, "call2": 48},
+            "member-const-char.cpp": {"K::b": split},
+            # an overload split next to one with .constprop/.isra clones; template instances
+            "overloads-templates.cpp": {"N::K::big": split, "tf": split, "tf2": 304, "M::K::big": 352, "v2": 16},
+            # a .part clone with a .constprop variant (member and free function); a static function with a
+            # .constprop clone, not split
+            "part-constprop.cpp": {"K::f": split, "g": 1264},
+            "part-constprop-free.cpp": {"K::f": split, "g": split},
         }
         samples = ROOT / "examples" / "test" / "cmake" / "stack-usage-samples"
         self.assertEqual(sorted(expected), sorted(p.name for p in samples.glob("*.cpp")))
@@ -464,16 +433,14 @@ class CheckTest(unittest.TestCase):
                 subprocess.run(["g++", "-O3", "-fstack-usage", "-c", name, "-o", name + ".o"], cwd=str(tmp),
                     check=True)
                 results = {r[0]: r for r in csu.check([(f, 1, 1) for f in funcs], csu.collect_frames(tmp))}
-            for func, (kind, value) in funcs.items():
+            for func, value in funcs.items():
                 label = "%s: %s: %r" % (name, func, results[func])
-                if kind == "unaccounted":
+                if value == split:
                     self.assertIsNotNone(results[func][4], label)
-                    continue
-                self.assertIsNone(results[func][4], label)
-                if kind == "exact":
-                    self.assertEqual(value, results[func][2], label)
+                    self.assertIn("[clone .part.", results[func][4], label)
                 else:
-                    self.assertGreaterEqual(results[func][2], value, label)
+                    self.assertIsNone(results[func][4], label)
+                    self.assertEqual(value, results[func][2], label)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,9 @@
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
-# the function, not the lambdas and local classes inside it.  Its frame counts its clones: the two largest records
-# at each of its locations plus the clones merged with its own, see tools/check-stack-usage.py.
+# the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
+# .constprop and .isra clones under its name); a function that partial inlining split (a .part clone in the symbol
+# table) fails as SPLIT, see tools/check-stack-usage.py.
 
 @compiler GNU
 # the major version must match
