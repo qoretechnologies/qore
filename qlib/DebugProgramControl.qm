@@ -70,7 +70,9 @@ module DebugProgramControl {
       exception events of the statements that contain it, which the exception leaves after the thread continued, do
       not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes uncaught an
       exception that the thread stopped at while it was caught and a client has the \c "uncaught" exception filter
-      (see the \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo")
+      (see the \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo"); so a step after an exception stop
+      continues to the handler of the exception (its catch block, or the caller that catches it) instead of stopping at
+      the exception again in each statement that the exception leaves
     - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
       a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
       \c program//breakpoint/&lt;id&gt; set and get them, \c breakpoint//create takes them in its value (\c condition,
