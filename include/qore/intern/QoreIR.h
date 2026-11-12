@@ -1308,6 +1308,13 @@ inline const char* qore_ir_cancel_point_operation(int64_t point) {
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
+//! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
+enum class QoreIRFusedCallTargetCheck : uint8_t {
+    None,           //!< no check
+    MethodCall,     //!< the call is a method call: a valid object needs no other check
+    Other,          //!< the call is a call through a call reference or of a value: always the full check
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1341,6 +1348,9 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
+    // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
+    // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
+    QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)

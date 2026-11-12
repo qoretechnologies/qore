@@ -33449,6 +33449,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check_aot",
                     llvm::FunctionType::get(i1_type, {ptr_type, i32_type, i64_type}, false));
                 no_check = builder->CreateCall(fast, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed});
+            } else if (call_val.isPointer() && call_val.getType() != NT_FUNCREFCALL) {
+                // not a call through a call reference: only the object is tested
+                auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
+                    llvm::FunctionType::get(i1_type, {i64_type}, false));
+                no_check = builder->CreateCall(fast, {boxed});
             } else {
                 auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check",
                     llvm::FunctionType::get(i1_type, {i64_type, i64_type}, false));

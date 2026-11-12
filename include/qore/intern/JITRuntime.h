@@ -338,6 +338,10 @@ static inline bool qore_call_target_needs_no_check(const QoreValue& call, const 
         && static_cast<const QoreObject*>(target_node)->isValid();
 }
 
+//! The JIT fast test of QoreIROpcode::CheckCallTarget for a call that is not a call through a call reference (known
+//! when the call is compiled): true if the target is an object that has not been deleted
+bool qore_rt_call_target_is_valid_object(uint64_t target_bits);
+
 //! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
 bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
 

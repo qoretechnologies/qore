@@ -841,6 +841,11 @@ public:
         return obj.priv->getLValue(key, lvh, class_ctx, for_remove, xsink);
     }
 
+    //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target
+    DLLLOCAL static bool isValidInline(const QoreObject* obj) {
+        return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
+    }
+
     DLLLOCAL static QoreStringNode* firstKey(QoreObject* obj, ExceptionSink* xsink) {
         return obj->priv->firstKey(xsink);
     }
