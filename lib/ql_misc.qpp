@@ -59,6 +59,42 @@
 #define WARN_MODULES QP_WARN_MODULES
 #endif
 
+// the hardening options of the compilation of the library, from the macros that the compiler defined for it
+static QoreHashNode* qore_get_library_hardening_info() {
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+#if defined(__SSP_EXPLICIT__)
+    int64 ssp = 4;
+#elif defined(__SSP_ALL__)
+    int64 ssp = 3;
+#elif defined(__SSP_STRONG__)
+    int64 ssp = 2;
+#elif defined(__SSP__)
+    int64 ssp = 1;
+#else
+    int64 ssp = 0;
+#endif
+#ifdef _FORTIFY_SOURCE
+    int64 fortify = _FORTIFY_SOURCE;
+#else
+    int64 fortify = 0;
+#endif
+#ifdef __CET__
+    int64 cet = __CET__;
+#else
+    int64 cet = 0;
+#endif
+#ifdef _GLIBCXX_ASSERTIONS
+    bool glibcxx_assertions = true;
+#else
+    bool glibcxx_assertions = false;
+#endif
+    h->setKeyValue("stack_protector", ssp, nullptr);
+    h->setKeyValue("fortify_source", fortify, nullptr);
+    h->setKeyValue("cet", cet, nullptr);
+    h->setKeyValue("glibcxx_assertions", glibcxx_assertions, nullptr);
+    return h;
+}
+
 static const QoreFunction* get_builtin_func(const QoreStringNode* str, ExceptionSink* xsink) {
    // the name is looked up as a C string, which would be cut at a NUL character and name another function
    if (q_check_no_nul(str->c_str(), str->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
@@ -3683,6 +3719,22 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     - \c LDFLAGS: The linker flags used to link the %Qore library
     - \c LLVMVersion: The version of LLVM that the %Qore library was built with (since %Qore 3.0); see
       @ref Qore::LLVMVersion
+    - \c CompilerVersion: The version of the compiler used to build the %Qore library (since %Qore 3.0)
+    - \c BuildType: The build type of the %Qore library, such as \c "release" or \c "debug" (since %Qore 3.0)
+    - \c BuildTypeCFLAGS: The compiler flags of the build type used in addition to \c CFLAGS, such as
+      <tt>-O3 -DNDEBUG</tt> (since %Qore 3.0)
+    - \c SingleCompilationUnit: @ref True if the %Qore library was compiled as one compilation unit (since %Qore 3.0)
+    - \c Target: The target triple of the compiler used to build the %Qore library, such as
+      \c "x86_64-linux-gnu", which names the C library (since %Qore 3.0)
+    - \c InterproceduralOptimization: @ref True if the %Qore library was built with link-time optimization (since
+      %Qore 3.0)
+    - \c Hardening: The hardening options in effect when the %Qore library was compiled, as the compiler defines
+      them, many of them by default (since %Qore 3.0):
+      - \c stack_protector: \c 0 none, \c 1 <tt>-fstack-protector</tt>, \c 2 <tt>-fstack-protector-strong</tt>,
+        \c 3 <tt>-fstack-protector-all</tt>, \c 4 <tt>-fstack-protector-explicit</tt>
+      - \c fortify_source: the level of \c _FORTIFY_SOURCE, \c 0 if it is not defined
+      - \c cet: the value of \c __CET__ (<tt>-fcf-protection</tt>), \c 0 if it is not defined
+      - \c glibcxx_assertions: @ref True if \c _GLIBCXX_ASSERTIONS was defined
 
     @par Example:
     @code{.py}
@@ -3711,6 +3763,13 @@ hash<auto> get_qore_library_info() [flags=CONSTANT] {
    h->setKeyValue("CFLAGS", new QoreStringNode(qore_cflags), xsink);
    h->setKeyValue("LDFLAGS", new QoreStringNode(qore_ldflags), xsink);
    h->setKeyValue("LLVMVersion", new QoreStringNode(LLVM_VERSION_STRING), xsink);
+   h->setKeyValue("CompilerVersion", new QoreStringNode(QORE_LIB_CXX_VERSION), xsink);
+   h->setKeyValue("BuildType", new QoreStringNode(QORE_LIB_BUILD_TYPE), xsink);
+   h->setKeyValue("BuildTypeCFLAGS", new QoreStringNode(QORE_LIB_BUILD_TYPE_CFLAGS), xsink);
+   h->setKeyValue("SingleCompilationUnit", (bool)QORE_LIB_SINGLE_COMPILATION_UNIT, xsink);
+   h->setKeyValue("Target", new QoreStringNode(QORE_LIB_TARGET), xsink);
+   h->setKeyValue("InterproceduralOptimization", (bool)QORE_LIB_IPO, xsink);
+   h->setKeyValue("Hardening", qore_get_library_hardening_info(), xsink);
 
    return h;
 }

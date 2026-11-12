@@ -93,6 +93,10 @@ option(QORE_BUILD_WITH_EXTERNAL_MODULES
        "Allow installed Qore modules to provide optional features in build outputs"
        ON)
 
+option(QORE_STACK_USAGE_REPORT
+       "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
+       OFF)
+
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
        OFF)
@@ -2728,6 +2732,70 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
+# tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
+# configuration at build time, so it has none here), the target triple, which names the C library
+# (x86_64-linux-gnu, x86_64-alpine-linux-musl), and link-time optimization
+get_property(_qore_lib_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (_qore_lib_multi_config)
+    set(QORE_LIB_BUILD_TYPE_VALUE "multi-config")
+    set(_qore_lib_build_type_flags "")
+else()
+    set(QORE_LIB_BUILD_TYPE_VALUE "${CMAKE_BUILD_TYPE}")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
+    set(_qore_lib_build_type_flags "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+endif()
+execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE QORE_LIB_TARGET_VALUE
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+# link-time optimization is enabled for all configurations or for the build type (INTERPROCEDURAL_OPTIMIZATION_<CONFIG>,
+# initialized from CMAKE_INTERPROCEDURAL_OPTIMIZATION_<CONFIG>)
+get_target_property(_qore_lib_ipo libqore INTERPROCEDURAL_OPTIMIZATION)
+if (NOT _qore_lib_multi_config AND _qore_lib_build_type_upper)
+    # the property of the configuration, if it is set, decides for that configuration (ON or OFF)
+    get_target_property(_qore_lib_ipo_config libqore INTERPROCEDURAL_OPTIMIZATION_${_qore_lib_build_type_upper})
+    if (NOT _qore_lib_ipo_config STREQUAL "_qore_lib_ipo_config-NOTFOUND")
+        set(_qore_lib_ipo "${_qore_lib_ipo_config}")
+    endif()
+endif()
+if (_qore_lib_ipo)
+    set(QORE_LIB_IPO_VALUE 1)
+else()
+    set(QORE_LIB_IPO_VALUE 0)
+endif()
+
+# The frame sizes of libqore's functions for tools/check-stack-usage.py, which checks the per-call path of interpreted
+# code against tools/stack-usage-budgets.txt (issue #5852): -fstack-usage writes a .su file next to each object and
+# does not change the generated code.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the
+# AOT identity (qcc-format-config.txt).
+if (QORE_STACK_USAGE_REPORT)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "QORE_STACK_USAGE_REPORT needs a compiler with -fstack-usage (GCC or Clang), not "
+            "${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    target_compile_options(libqore PRIVATE -fstack-usage)
+    # the hardening macros that the compiler driver predefines with these flags (stack protector, fortification,
+    # control-flow protection, libstdc++ assertions): distributions' compilers enable different ones by default
+    separate_arguments(_qore_stack_usage_flags UNIX_COMMAND "${CMAKE_CXX_FLAGS} ${_qore_lib_build_type_flags}")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} ${_qore_stack_usage_flags} -dM -E -x c++ /dev/null
+        OUTPUT_VARIABLE _qore_stack_usage_macros ERROR_QUIET)
+    string(REGEX MATCHALL "#define (_FORTIFY_SOURCE|__SSP__|__SSP_STRONG__|__SSP_ALL__|__SSP_EXPLICIT__|__CET__|_GLIBCXX_ASSERTIONS) [^\n]*"
+        _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    list(SORT _qore_stack_usage_macros)
+    string(REPLACE "#define " "" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE " " "=" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE ";" " " _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
+        "# written by CMake for tools/check-stack-usage.py\n"
+        "compiler=${CMAKE_CXX_COMPILER_ID}\n"
+        "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
+        "build-type=${QORE_LIB_BUILD_TYPE_VALUE}\n"
+        "build-type-flags=${_qore_lib_build_type_flags}\n"
+        "cxx-flags=${CMAKE_CXX_FLAGS}\n"
+        "hardening=${_qore_stack_usage_macros}\n"
+        "ipo=${QORE_LIB_IPO_VALUE}\n"
+        "target=${QORE_LIB_TARGET_VALUE}\n")
+endif()
+
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})
 add_dependencies(qore qore-aot-link-config)
@@ -3241,6 +3309,14 @@ if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 include(cmake/QoreRecordedCFlags.cmake)
 qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
+# the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
+# sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
+qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${_qore_lib_build_type_flags}")
+if (SINGLE_COMPILATION_UNIT)
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
+else()
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 0)
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)

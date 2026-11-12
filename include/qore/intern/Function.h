@@ -716,6 +716,36 @@ public:
 
 class RuntimeParseOptionsOverrideHelper;
 
+//! The name of the call stack frame of a call, built when it is first read
+/** Only call stacks and error messages read it, so a call does not build (and, for a name longer than the short
+    string buffer, allocate) "Class::method" (issue #5852).  The frame can be read by another thread walking the
+    thread's call stack (QoreThreadList::walkCallStack()) while the thread reads it itself, so the name is installed
+    atomically; the destructor runs after the frame has been removed from the stack.
+*/
+class CodeEvaluationCallName {
+public:
+    DLLLOCAL CodeEvaluationCallName() = default;
+
+    DLLLOCAL ~CodeEvaluationCallName() {
+        delete name.load(std::memory_order_acquire);
+    }
+
+    CodeEvaluationCallName(const CodeEvaluationCallName&) = delete;
+    CodeEvaluationCallName& operator=(const CodeEvaluationCallName&) = delete;
+
+    //! returns the name of the call of \a func: "[Class::]function", empty if \a func is nullptr
+    DLLLOCAL const std::string& get(const qore_class_private* qc, const QoreFunction* func) const {
+        std::string* n = name.load(std::memory_order_acquire);
+        return n ? *n : build(qc, func);
+    }
+
+private:
+    mutable std::atomic<std::string*> name{nullptr};
+
+    DLLLOCAL QORE_INTERN_NOINLINE const std::string& build(const qore_class_private* qc, const QoreFunction* func)
+        const;
+};
+
 class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -852,7 +882,7 @@ public:
 
     //! returns the name of the function or method call (ex: "[Class::]method")
     DLLLOCAL virtual const std::string& getCallName() const override {
-        return callName;
+        return call_name.get(qc, call_func);
     }
 
     DLLLOCAL virtual qore_call_t getCallType() const override {
@@ -875,8 +905,37 @@ public:
 
     //! returns true if the call entered a module's Program from another Program and set its runtime parse options
     //! override (see qore_get_module_call_runtime_po_override()), which is computed once for the crossing
+    /** The helper of that override is borrowed by UserVariantBase::eval() and UserClosureVariant::evalClosure() for
+        the override of the variant's code if the call did not set one (borrowPoOverride()); this must be asked before,
+        as the borrowed helper is set too
+    */
     DLLLOCAL bool hasModuleCallOverride() const {
-        return module_po_override.isSet();
+        assert(!po_override_borrowed);
+        return module_po_override.isSet() && !po_override_borrowed;
+    }
+
+    //! borrows the runtime parse options override helper of the call for the override of the variant's code
+    /** @return the helper, or nullptr if the call entered a module's Program and set its override already
+        (hasModuleCallOverride())
+
+        The helper is not set otherwise, so the variant's evaluation sets the override of its code in it instead of a
+        helper of its own, which would make its frame, on the stack at every level of a recursion, 120 bytes larger
+        (issue #5852); it is returned (restored and cleared) with returnPoOverride(), see CodeEvaluationPoOverrideBorrow
+    */
+    DLLLOCAL RuntimeParseOptionsOverrideHelper* borrowPoOverride() {
+        assert(!po_override_borrowed);
+        if (module_po_override.isSet()) {
+            return nullptr;
+        }
+        po_override_borrowed = true;
+        return &module_po_override;
+    }
+
+    //! restores the override that the borrowed helper set, if it set one, and returns the helper
+    DLLLOCAL void returnPoOverride() {
+        assert(po_override_borrowed);
+        module_po_override.reset();
+        po_override_borrowed = false;
     }
 
     DLLLOCAL virtual const AbstractStatement* getStatement() const override {
@@ -891,6 +950,18 @@ public:
 protected:
     QoreSandboxProvenanceHelper sandbox_provenance;
     qore_call_t ct;
+    // the flags follow ct, which would otherwise be followed by padding
+    bool variant_needs_type_param_substitution = false;
+    //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
+    //! with arguments of the same types could select another variant
+    bool variant_content_dependent = false;
+    bool restore_stack = false;
+    bool restore_runtime_ctx = false;
+    bool restore_receiver_type_info = false;
+    bool restore_type_param_instantiation = false;
+    bool restore_rtflags = false;
+    //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
+    bool po_override_borrowed = false;
     const char* name;
     ExceptionSink* xsink;
     RuntimeConfig& rc;
@@ -913,7 +984,10 @@ protected:
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
-    std::string callName;
+    //! the function or method called, which names the call stack frame; nullptr if the call did not start
+    const QoreFunction* call_func = nullptr;
+    //! the name of the call stack frame, built when it is first read; see getCallName()
+    CodeEvaluationCallName call_name;
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
     const AbstractStatement* old_runtime_stmt = nullptr;
@@ -932,15 +1006,6 @@ protected:
     QoreTypeParamInstantiation type_param_instantiation;
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
-    bool variant_needs_type_param_substitution = false;
-    //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
-    //! with arguments of the same types could select another variant
-    bool variant_content_dependent = false;
-    bool restore_stack = false;
-    bool restore_runtime_ctx = false;
-    bool restore_receiver_type_info = false;
-    bool restore_type_param_instantiation = false;
-    bool restore_rtflags = false;
     bool restore_call_program_context = false;
 
 #ifdef DEBUG
@@ -968,7 +1033,44 @@ protected:
     DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
         const AbstractFunctionSignature* sig);
 
-    DLLLOCAL void setCallName(const QoreFunction* func);
+    //! sets the function that names the call stack frame of the call; see getCallName()
+    DLLLOCAL void setCallName(const QoreFunction* func) {
+        call_func = func;
+    }
+};
+
+//! Borrows the runtime parse options override helper of a call for the override of a user variant's code
+/** See CodeEvaluationHelper::borrowPoOverride(); the override is restored where the variant's own helper was
+    destroyed before, as this object is
+*/
+class CodeEvaluationPoOverrideBorrow {
+public:
+    //! borrows the helper of \a ceh, unless the call set the override of a crossing into a module's Program
+    DLLLOCAL CodeEvaluationPoOverrideBorrow(CodeEvaluationHelper& ceh)
+            : ceh(ceh.hasModuleCallOverride() ? nullptr : &ceh) {
+        if (this->ceh) {
+            helper = this->ceh->borrowPoOverride();
+            assert(helper);
+        }
+    }
+
+    DLLLOCAL ~CodeEvaluationPoOverrideBorrow() {
+        if (ceh) {
+            ceh->returnPoOverride();
+        }
+    }
+
+    CodeEvaluationPoOverrideBorrow(const CodeEvaluationPoOverrideBorrow&) = delete;
+    CodeEvaluationPoOverrideBorrow& operator=(const CodeEvaluationPoOverrideBorrow&) = delete;
+
+    //! returns the borrowed helper, or nullptr if the call set the override of a crossing into a module's Program
+    DLLLOCAL RuntimeParseOptionsOverrideHelper* get() const {
+        return helper;
+    }
+
+private:
+    CodeEvaluationHelper* ceh;
+    RuntimeParseOptionsOverrideHelper* helper = nullptr;
 };
 
 class UserVariantBase;
@@ -1403,6 +1505,9 @@ protected:
             ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr, bool ref_obj = true) const;
+    //! eval() for a call without a CodeEvaluationHelper (destructors), which has a helper of its own for the override
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalWithoutHelper(const char* name, QoreObject* self,
+            ExceptionSink* xsink, const qore_class_private* qc, bool ref_obj) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
 

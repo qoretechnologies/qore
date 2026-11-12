@@ -7005,13 +7005,27 @@ MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVari
 
 QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
     //QORE_TRACE("UserMethodVariant::evalMethod()");
-    VRMutexOptionalLockHelper vrmolh(synchronized ? (
-        self
-            ? qore_object_private::get(*self)->getGate()
-            : ceh.getClass()->getGate()
-        ) : nullptr, xsink);
-    if (*xsink)
+    if (synchronized) {
+        return evalSynchronizedMethod(self, ceh, xsink);
+    }
+    // the callers have returned already if setting up the call (CodeEvaluationHelper) raised an exception
+    assert(!*xsink);
+    // Inherited methods are copied into the child class, but user variants are
+    // shared with the original declaring method. Execute the body in the
+    // declaring class context so self-member access resolves private:internal
+    // storage from the class where the body was parsed.
+    return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
+}
+
+QoreValue UserMethodVariant::evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+        ExceptionSink* xsink) const {
+    assert(synchronized);
+    VRMutexOptionalLockHelper vrmolh(self
+        ? qore_object_private::get(*self)->getGate()
+        : ceh.getClass()->getGate(), xsink);
+    if (*xsink) {
         return QoreValue();
+    }
     //printd(5, "UserMethodVariant::evalMethod() this: %p %s::%s() self: %p cctx: %p (%s)\n", this,
     //    getClassPriv()->name.c_str(), qmethod->getName(), self, runtime_get_class(),
     //    runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
@@ -7360,6 +7374,16 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     return mv->evalMethod(self, ceh, xsink);
 }
 
+// raises the exception for a call of an abstract variant
+/** Outlined from NormalMethodFunction::evalMethodTmpArgs(), whose frame is on the stack at every level of a recursion
+    of a method (issue #5852)
+*/
+static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsink, const NormalMethodFunction* f,
+        const MethodVariant* mv) {
+    xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",
+        f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
 QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -7367,7 +7391,6 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
         const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     //QORE_TRACE("NormalMethodFunction::evalMethodTmpArgs()");
-    const char* cname = getClassName();
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
 
@@ -7384,8 +7407,7 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     }
     const MethodVariant* mv = METHV_const(variant);
     if (mv->isAbstract()) {
-        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
-            mname, mv->getSignature()->getSignatureText());
+        raise_abstract_variant_call(xsink, this, mv);
         return QoreValue();
     }
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s(%s) (self: %s) variant: %p, mv: %p priv: %d access: %d "

@@ -46,6 +46,8 @@
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
+#include <bit>
+
 // Type name constants
 const char* qoreBoolTypeName = "bool";
 const char* qoreIntTypeName = "integer";
@@ -777,9 +779,8 @@ void QoreValue::set(AbstractQoreNode* n) {
 }
 
 void QoreValue::set(double f) {
-    // Copy double bits
-    uint64_t double_bits;
-    memcpy(&double_bits, &f, sizeof(f));
+    // the bits of the double (a bit cast, not memcpy(), which a fortified C library checks; see QoreJITIncludes.h)
+    uint64_t double_bits = std::bit_cast<uint64_t>(f);
 
     // Doubles whose encoding (raw bits + DOUBLE_ENCODE_OFFSET) would land in a value tag must be
     // stored as a QoreBigFloatNode: bits >= 0xFFF8000000000000 (negative NaNs) would reach TAG_INT48

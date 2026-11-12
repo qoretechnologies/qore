@@ -405,6 +405,21 @@ static int parse_init_complex_buffer_factory(const QoreProgramLocation* loc, con
     return parse_init_value(val, parse_context);
 }
 
+// raises the exception for a method call on a deleted object
+/** Outlined from AbstractMethodCallNode::exec(), whose frame is on the stack at every level of a recursion of a
+    method (issue #5852)
+*/
+static QORE_INTERN_NOINLINE void raise_method_call_deleted_object(ExceptionSink* xsink, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (variant) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has already been deleted",
+            qc->getName(), method->getName(), variant->getSignature()->getSignatureText());
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            qc->getName(), method->getName());
+    }
+}
+
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
@@ -431,14 +446,7 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
         if (!o->isValid()) {
-            if (variant) {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
-                    "already been deleted", qc->getName(), method->getName(),
-                    variant->getSignature()->getSignatureText());
-            } else {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
-                    "already been deleted", qc->getName(), method->getName());
-            }
+            raise_method_call_deleted_object(xsink, qc, method, variant);
             return QoreValue();
         }
 

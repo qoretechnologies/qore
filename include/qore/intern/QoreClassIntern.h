@@ -455,6 +455,14 @@ public:
     }
 
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const override;
+
+private:
+    //! evaluates a synchronized method: holds the object's (or the class's) gate during the call
+    /** Outlined from evalMethod(), so that the lock helper is not in the frame that every call of a method that is
+        not synchronized puts on the stack (issue #5852)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+            ExceptionSink* xsink) const;
 };
 
 #define UMV(f) (reinterpret_cast<UserMethodVariant*>(f))
