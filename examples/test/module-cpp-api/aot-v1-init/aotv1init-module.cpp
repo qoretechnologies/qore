@@ -5,9 +5,11 @@
     (#5953): this file is built twice, as the modules \c aotv1fail and \c aotv1ok, which are built into the build
     tree but never installed.  Each initializes itself as an AOT module compiled by an older qcc does, with the
     legacy entry point qore_aot_module_init(), which parses the module's source in a user module definition context:
-    the initialization closure of the source loads the user module \c AotV1Dep and then fails (\c aotv1fail) or
-    succeeds (\c aotv1ok).  The module is a binary module, so the user module is not recorded as its dependency: such
-    a record was never released, as delUser() does not delete binary modules.
+    the initialization closure of the source loads the user module \c AotV1Dep and the native binary module \c json,
+    and then fails (\c aotv1fail) or succeeds (\c aotv1ok).  The module is a binary module, so the user module is not
+    recorded as its dependency (such a record was never released, as delUser() does not delete binary modules); the
+    binary module is, so that it is deleted after the module, and the record is released if the initialization
+    fails.
 
     Qore Programming Language
 
@@ -61,7 +63,8 @@ std::string module_source() {
         "    author = \"Qore Technologies, s.r.o.\";\n"
         "    license = \"MIT\";\n"
         "    init = sub () {\n"
-        "        load_module(\"AotV1Dep\");\n";
+        "        load_module(\"AotV1Dep\");\n"
+        "        load_module(\"json\");\n";
 #if AOTV1_FAIL
     src += "        throw \"INIT-ERROR\", \"init fails\";\n";
 #endif

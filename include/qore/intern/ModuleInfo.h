@@ -895,7 +895,10 @@ public:
 
         @param name the name of the module in the current module context
     */
-    DLLLOCAL bool isUserModuleContext(const char* name);
+    /** @param binary_context true if the context of a binary module (QMRL_BINARY) counts: for the binary modules
+        that it requires, which are recorded for a binary module as for a user module
+    */
+    DLLLOCAL bool isUserModuleContext(const char* name, bool binary_context = false);
 
     //! Records that the user module in the current module context requires the given binary module
     /** A binary module (an AOT user module or a native binary module) is deleted in cleanup(); a user module that
@@ -941,7 +944,7 @@ public:
 
     //! Records the dependency registration of \a name, to restore it with rollbackUserModuleDependency()
     DLLLOCAL void getUserModuleRegistration(const char* name, QoreUserModuleRegistration& reg) {
-        // the mutex must be held (an error-checking mutex in a debug build cannot be locked again here)
+        // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
         assert(mutex.trylock());
         reg.name = name;
         reg.deps.clear();
@@ -974,6 +977,7 @@ public:
         record that cannot be released for lack of memory is kept, in both maps, so they stay consistent (#5953)
     */
     DLLLOCAL void rollbackUserModuleDependency(const QoreUserModuleRegistration& saved) noexcept {
+        // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
         assert(mutex.trylock());
         try {
             rollbackUserModuleDependencyIntern(saved);
@@ -1568,8 +1572,11 @@ enum QoreModuleRecordLock : unsigned char {
     //! and qore --compile-module compile in one thread, before any other code runs)
     QMRL_LOCK,
     //! the context of a binary module: the source of an AOT module initialized with the legacy entry point
-    //! qore_aot_module_init(), which runs without the mutex; no user module dependency is recorded under the name of a
-    //! binary module (see QoreModuleManager::isUserModuleContext()), so there is nothing to record or roll back
+    //! qore_aot_module_init(), which runs without the mutex, locked as with QMRL_LOCK.  No user module dependency is
+    //! recorded under the name of a binary module (see QoreModuleManager::isUserModuleContext()), only the binary
+    //! modules that it requires; those are released if the initialization fails.  Its success is recorded with
+    //! setRegistered() before the module is registered: a failure of the registration then leaves records under a
+    //! name that is not registered, which delUser() and cleanup() ignore
     QMRL_BINARY,
 };
 
@@ -1593,13 +1600,14 @@ public:
         if (!registered && !dup) {
             if (rlock == QMRL_HELD) {
                 QMM.rollbackUserModuleDependency(saved_reg);
-            } else if (rlock == QMRL_LOCK) {
+            } else {
                 QMM.rollbackUserModuleDependencyLocked(saved_reg);
             }
         }
     }
 
-    //! Returns true if this is the context of a binary module (QMRL_BINARY), whose dependencies are not recorded
+    //! Returns true if this is the context of a binary module (QMRL_BINARY), whose user module dependencies are not
+    //! recorded
     DLLLOCAL bool isBinaryModuleContext() const {
         return rlock == QMRL_BINARY;
     }

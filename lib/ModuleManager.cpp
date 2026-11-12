@@ -1701,7 +1701,7 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
     try {
         if (rlock == QMRL_HELD) {
             QMM.getUserModuleRegistration(name, saved_reg);
-        } else if (rlock == QMRL_LOCK) {
+        } else {
             QMM.getUserModuleRegistrationLocked(name, saved_reg);
         }
     } catch (...) {
@@ -1712,23 +1712,24 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
     }
 }
 
-bool QoreModuleManager::isUserModuleContext(const char* name) {
+bool QoreModuleManager::isUserModuleContext(const char* name, bool binary_context) {
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
         return mi->isUser();
     }
-    // a user module is registered only once its source has been parsed, and it loads the modules it requires while
-    // it is parsed: it is then the module of the thread's module definition context, which is always a user module
-    // definition context; the module context name set for the initialization of an AOT module does not change it
+    // a module is registered only once its source has been parsed, and it loads the modules it requires while it is
+    // parsed: it is then the module of the thread's module definition context; the module context name set for the
+    // initialization of an AOT module does not change it
     QoreModuleDefContext* qmd = get_module_def_context();
     if (!qmd) {
         return false;
     }
+    // every module definition context is a QoreUserModuleDefContextHelper, also that of a binary module (QMRL_BINARY)
     const QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(qmd);
     // the source of an AOT module initialized with the legacy entry point is parsed in a definition context, but the
-    // module is a binary module, which delUser() does not delete, so a dependency on it would never be released
-    // (#5953); the user modules that an AOT module requires are tracked by the AOT module state
-    if (uqmd->isBinaryModuleContext()) {
+    // module is a binary module, which delUser() does not delete, so a user module dependency of it would never be
+    // released (#5953); the user modules that an AOT module requires are tracked by the AOT module state
+    if (!binary_context && uqmd->isBinaryModuleContext()) {
         return false;
     }
     const char* def_name = uqmd->getModuleName();
@@ -1737,7 +1738,8 @@ bool QoreModuleManager::isUserModuleContext(const char* name) {
 
 void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
     const char* old_name = get_module_context_name();
-    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name)) {
+    // a binary module that an AOT module requires is recorded as for a user module, so it is deleted after it
+    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name, true)) {
         binary_user_dep_map.addDep(name, old_name);
     }
 }

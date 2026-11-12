@@ -405,7 +405,8 @@ public namespace %s {
         the legacy entry point (qore_aot_module_init()), which parses their source in a module definition context;
         the user module that their initialization loads must not be recorded as a dependency of these binary modules,
         which delUser() does not delete: the record was never released, and the process aborted at exit in a debug
-        build when the initialization succeeded.  A module
+        build when the initialization succeeded; the native binary module that it loads (json) is recorded, so that
+        it is deleted after the module, and released when the initialization fails.  A module
         whose initialization fails stays registered with its records, so that the binary modules that it requires are
         not deleted before it at exit.
     */
@@ -448,7 +449,7 @@ aot ok records: none
 " + (v1 ? "v1 fail: INIT-ERROR
 v1 fail records: none
 v1 ok: loaded
-v1 ok records: none
+v1 ok records: binary_users:json=InitFailBin,aotv1ok
 " : "");
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = runRecords(module_path, "load", dir, tmp.path, mode,
