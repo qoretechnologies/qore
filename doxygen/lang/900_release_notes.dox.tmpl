@@ -639,6 +639,12 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Debugger Exception IDs
+    The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
+    \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
+    @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
+    handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
+
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
