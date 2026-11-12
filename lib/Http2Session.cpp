@@ -1076,6 +1076,29 @@ int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
     return 0;
 }
 
+int Http2Session::submitShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // before the server's connection preface (SETTINGS) no other frame may be sent (RFC 9113 section 3.4)
+    if (goaway_sent || !connection_preface_submitted) {
+        return 0;
+    }
+    return submitGoaway(NGHTTP2_NO_ERROR, nullptr, 0, xsink) ? -1 : 0;
+}
+
+int Http2Session::sendShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (submitShutdownGoaway(xsink)) {
+        return -1;
+    }
+    // the server closes the connection after this frame: any error flushing it (the peer has closed or reset the
+    // connection already, for example) means that it cannot be delivered, and there is nothing more to do; the
+    // connection's own poll operation sees the same error on its next cycle and closes the connection
+    ExceptionSink send_xsink;
+    sendPendingData(0, &send_xsink);
+    send_xsink.clear();
+    return 0;
+}
+
 int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     int rv = nghttp2_submit_ping(session, NGHTTP2_FLAG_NONE, opaque_data);

@@ -858,6 +858,15 @@ if (accepted) {
     */
     DLLLOCAL int watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* xsink);
 
+    //! Sends a GOAWAY on the socket's server HTTP/2 session before the server closes the connection (qore#5899)
+    /** Does nothing if the socket has no server HTTP/2 session, or if a GOAWAY was sent already; the frame is written
+        without blocking on the I/O thread of the socket, and a caller on another thread waits for that; a caller on
+        an I/O thread or in a continuePoll worker only submits the frame, which the connection's poll operation writes
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int sendHttp2ShutdownGoaway(ExceptionSink* xsink);
+
     //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
     /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
     */
