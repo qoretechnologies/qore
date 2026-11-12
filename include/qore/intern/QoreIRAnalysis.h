@@ -37,6 +37,15 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns true for a release that only runs once a functional operator's loop has ended on an exception
+/** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
+    a value that it releases and that a Phi or a container took over is released there through its new owner, so the
+    release is not a use that keeps the value from being taken over (qore#5830)
+*/
+static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& inst) {
+    return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
+}
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
@@ -259,6 +268,15 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
     @param groups receives the class of each value, indexed by value id
 */
 DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
+
+//! Finds the implicit arguments and elements open at each instruction that leaves the function on an exception
+/** The PushImplicitArg, SetImplicitArgv and PushImplicitElement instructions that the lowering restores on every path
+    in the function (QoreIRInstruction::restore_on_exception_exit) are followed through the control flow, normal and exception edges;
+    an instruction with no exception target that runs while some are set gets them in \a open, outermost first, so
+    that the frame's exit restores them, innermost first, before it releases the frame's values (qore#5670)
+*/
+DLLLOCAL void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
+        std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>& open);
 
 //! Orders the temporaries of a statement for their release when an exception leaves it
 /** The temporaries of each argument list (see qore_ir_build_exception_release_groups()) are released together, first

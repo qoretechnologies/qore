@@ -80,6 +80,10 @@ object ConstructorMethodVariant::call(...) {
     if (check_constructor(caller, cls, v->pgm, xsink)) {
         return QoreValue();
     }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
 
     // the constructor variant must be allowed by the caller and the class's Program
     if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
@@ -117,6 +121,10 @@ object ConstructorMethodVariant::callArgs(*softlist argv) {
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreClass* cls = mv->getClass();
     if (check_constructor(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
         return QoreValue();
     }
 

@@ -1671,6 +1671,10 @@ uint32_t QoreIRBuilder::getExceptionTempScopeId() const {
     return exception_temp_scope_id;
 }
 
+uint32_t QoreIRBuilder::allocateUnmarkedTempScopeId() {
+    return next_temp_scope_id++;
+}
+
 void QoreIRBuilder::abandonTempScope() {
     if (!temp_scope_id_stack.empty()) {
         temp_scope_id_stack.pop_back();
@@ -1693,6 +1697,14 @@ QoreIRInstruction* QoreIRBuilder::createDebugStatement(const AbstractStatement* 
     assert(statement);
     auto inst = append<QoreIRDebugStatementInstruction>(statement);
     inst->loc = statement->loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRDebugStatementInstruction>(nullptr);
+    inst->nest_depth = depth;
+    inst->nest_flags = QORE_IR_DEBUG_NEST_VALID | QORE_IR_DEBUG_NEST_END;
+    inst->loc = loc;
     return inst;
 }
 
@@ -1723,6 +1735,13 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
     inst->operands.push_back(value);
     inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+        const QoreProgramLocation* loc) {
+    QoreIRInstruction* inst = createReleaseOwnedTemp(input, loc);
+    inst->operands.push_back(kept);
     return inst;
 }
 
@@ -1789,6 +1808,28 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSource(QoreIRValue operand,
+        QoreIRIteratorSourceKind kind, int64_t flags, QoreIRValue first, QoreIRValue second,
+        const QoreProgramLocation* loc) {
+    QoreIRValue kind_val = createConstInt(static_cast<int64_t>(kind), loc)->result;
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    if (!first.isValid()) {
+        first = createConstNothing(loc)->result;
+    }
+    if (!second.isValid()) {
+        second = createConstNothing(loc)->result;
+    }
+    auto inst = append<QoreIRIteratorCreateInstruction>(operand);
+    inst->opcode = QoreIROpcode::IteratorCreateSource;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(kind_val);
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(first);
+    inst->operands.push_back(second);
     return inst;
 }
 

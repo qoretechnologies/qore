@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include AOTSmoke.qc
+
+%exec-class AOTSmokePart2
+
+#! runs part 2 of 3 of the cases of AOTSmokeBase
+class AOTSmokePart2 inherits AOTSmokeBase {
+    constructor() : AOTSmokeBase("AOTSmokePart2", 2) {
+    }
+}

@@ -118,6 +118,12 @@ struct Http2StreamInfo {
     */
     bool body_too_large = false;
 
+    //! client: the error that the stream failed with (see Http2Session::failStream()); the stream's response is
+    //! this error, and its data is discarded as it arrives, as for @ref body_too_large
+    std::string fail_err;
+    //! client: the description of @ref fail_err
+    std::string fail_desc;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;
@@ -163,6 +169,13 @@ struct Http2StreamInfo {
     */
     bool end_stream_received = false;
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
+    //! The stream credit of the stream's data is granted when the data is consumed, not when it is received
+    /** Set by setStreamCreditOnConsume(): on a client once a consume hook reports the stream's consumption (issue
+        #5820), or once a stream queue is registered for it; on a server once a bounded stream queue is registered
+        for it, the data being consumed when the queue's drain takes it (issue #5859).  Data received before is
+        credited when it is received.
+    */
+    bool credit_on_consume = false;
     bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
                                    //!< response.  Separate from @c dispatched because we do NOT want to inhibit
                                    //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
@@ -228,6 +241,12 @@ public:
         O(remaining_data) but amortized: only fires after this many bytes consumed.
     */
     static constexpr size_t SEND_BUFFER_COMPACTION_THRESHOLD = 65536;
+    //! The unwritten output above which sendPendingData() takes no more output from nghttp2 until the socket takes it
+    /** Bounds the output held for a peer that does not read, whatever flow-control window it grants: the data of
+        the streams then stays in their pending data, where the per-stream limits apply (issue #5819).  The buffer can
+        exceed it by the last chunk that nghttp2 returned.
+    */
+    static constexpr size_t SEND_BUFFER_HIGH_WATER = 256 * 1024;
 
     //! Create a client-side HTTP/2 session
     /** @param sock Socket for the connection
@@ -377,6 +396,39 @@ public:
     */
     DLLLOCAL int consumeReceivedData(int32_t stream_id, size_t len);
 
+    //! Grants the stream flow-control credit of data that the application of a client has consumed (issue #5820)
+    /** The client grants the connection credit of a streaming response's data when it is received, and the stream
+        credit only when the application takes the data from the Channel or Queue that delivers it (see
+        QoreConsumeHook), so that the data held for an application that does not read is bounded by the stream's
+        window.  The credit is capped at the stream credit that was deferred for the stream, so that a value reported
+        twice, or data that was credited when it was received, is never credited twice; a stream that has closed
+        takes no credit (its connection credit was granted when the data was received).
+
+        Thread-safe; the caller wakes the I/O controller so that the WINDOW_UPDATE is sent.
+
+        @param stream_id the stream
+        @param len the number of bytes consumed
+
+        @return the number of bytes credited if a WINDOW_UPDATE is now pending (the caller wakes the I/O thread), else 0
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int32_t stream_id, size_t len);
+
+    //! Defers the stream credit of the stream's data until the data is consumed
+    /** Called on a client once a consume hook that reports the stream's consumption has been installed (see
+        HttpStreamConsumeHook), or once a stream queue is registered for the stream; on a server once a bounded
+        stream queue is registered for it (issue #5859).  The stream credit of data received from then on is
+        deferred; the connection credit is granted as the data is received.
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int32_t stream_id);
+
+    //! Fails a client stream: its response is the error given, and the stream is canceled (issue #5859)
+    /** The data already received and the data still arriving are discarded and credited; the stream ends with the
+        error as its response.  Does nothing if the stream has ended.
+
+        @return true if the stream was failed
+    */
+    DLLLOCAL bool failStream(int32_t stream_id, const char* err, const std::string& desc);
+
     //! Submit a PRIORITY frame to set stream priority
     /** @param stream_id Stream ID to prioritize
         @param dependency Stream ID this depends on (0 for root)
@@ -405,6 +457,23 @@ public:
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
+        is buffered.  With a limit, a send that would make the buffered data exceed it returns 1 instead, unless
+        nothing is buffered, so that one send larger than the limit can still be made.  Data that the peer's
+        flow-control window has accepted is no longer buffered here.  The limit ends with the stream.
+
+        @param stream_id the stream
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c HTTP2-ERROR if the limit is not positive or the stream
+        is not open)
+    */
+    DLLLOCAL int setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink);
+
+    //! The default limit of the data of a stream that is buffered for sending
+    static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
@@ -499,8 +568,24 @@ public:
     /** @param stream_id stream ID
         @param max_bytes maximum bytes to return; 0 means all available
         @param xsink Exception sink for error reporting
+        @param credit_deferred true if the caller hands the data to its consumer directly: the stream credit deferred
+        for it is granted now; false if it is delivered through a Channel or Queue that reports its consumption
+        @param credit_due if not null, set to true if credit was granted and the session has a frame to send (the
+        WINDOW_UPDATE, or any other frame queued meanwhile); the caller then calls
+        sendStreamCredit() (on any thread)
+
+        Raises no exception.
     */
-    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
+        bool credit_deferred = true, bool* credit_due = nullptr);
+
+    //! Sends the stream credit that a take queued (issue #5820)
+    /** The socket's I/O thread is woken to send it, as only the thread that owns the socket writes to it; this is
+        also correct on that thread, as the wake-up runs its poll operation again.
+
+        @param route_key the socket's I/O identity hash, to wake the I/O thread with
+    */
+    DLLLOCAL void sendStreamCredit(const std::string& route_key);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();
@@ -588,6 +673,9 @@ public:
         it was closed without END_STREAM (for example, by RST_STREAM); see Http2StreamInfo::end_stream_received
     */
     DLLLOCAL bool isStreamEndStreamReceived(int32_t stream_id) const;
+
+    //! Returns true if the stream is known and was reset (RST_STREAM sent or received) (issue #5859)
+    DLLLOCAL bool isStreamReset(int32_t stream_id) const;
 
     //! Returns the trailers received for a stream, or nullptr if none were received
     /** Server streams keep the trailers of the request until the stream is cleaned up, so that a handler can read
@@ -1056,6 +1144,11 @@ private:
               end_stream(end_stream) {}
     };
     std::unordered_map<int32_t, BodyData> pending_body_data;
+
+    //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
+    std::unordered_map<int32_t, size_t> stream_send_limits;
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that

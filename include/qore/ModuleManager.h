@@ -43,11 +43,25 @@
     provides definitions required to load qore modules
  */
 
-#define QORE_MODULE_API_MAJOR 2  //!< the major number of the Qore module API implemented
-#define QORE_MODULE_API_MINOR 1  //!< the minor number of the Qore module API implemented
+//! the major number of the Qore module API implemented
+#define QORE_MODULE_API_MAJOR 2
+//! the minor number of the Qore module API implemented
+/** A binary module carries the inline code and the layouts of the public headers that it was compiled with, and Qore
+    loads only a module whose module API it supports (qore_mod_api_list).  Any change to inline code or to an
+    exported or inline-visible type or function in the public headers (include/qore, outside include/qore/intern) that
+    a module built with the previous headers would get wrong must increment this number, so that such modules are
+    refused with an API mismatch error instead of failing at run time; see design/module-api-version.md.
+
+    @since %Qore 3.0: 2.1, which covers all public ABI changes made during %Qore 3.0 development after module API 2.0
+    was introduced; modules built with the 2.0 headers are refused
+    @since %Qore 3.0: 2.2, which adds QoreModuleInfo::cmd_caller_aware, QoreModuleCommandRestrictions and
+    QoreModuleCommandContext (a module command handler judges the code that issues a command); modules built with the
+    2.1 headers are refused
+*/
+#define QORE_MODULE_API_MINOR 2
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
-#define QORE_MODULE_COMPAT_API_MINOR 0  //!< the minor number of the earliest recommended Qore module API
+#define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
 
 //! Revision of the module descriptor protocol of AOT Qore modules.
 /** This is separate from the binary module API: ordinary C/C++ modules do not
@@ -169,26 +183,45 @@ struct QoreModuleInfo {
     */
     std::string aot_runtime_identity;
 
+    //! the namespace of the module with static storage duration, if any
+    /** A module that keeps its namespace in a variable with static storage duration sets this in its description
+        function.  When the module is deleted during qore_cleanup(), after its \a del function has run, the namespace
+        is purged with QoreNamespace::purge(), so that its constants, classes and other Qore values are released
+        before the types are freed instead of by the C++ static destructor of the namespace.  Other module-owned
+        Qore state (static Programs, objects, call references) is released by the \a del function.  See
+        @ref qore_module_teardown.
+
+        @since %Qore 3.0 (check @ref QORE_HAS_MODULE_NS_PURGE)
+    */
+    QoreNamespace* ns = nullptr;
+
     //! set to true if the module's parse command handler honors the restrictions of the code that issues a command
     /** The handler of a module that sets this checks QoreModuleCommandContext::get() for every command that executes
         code, changes a classpath or search path, touches the filesystem or the network, or changes state shared by
         all Programs, and refuses it when the issuing code is not allowed to do that.
 
-        A module that does not set it (any module built with module API 2.0) is not given a command issued by
-        restricted code: the command is refused with \c PARSE-COMMAND-ERROR for a \c %module-cmd directive, and with
-        \c RUNTIME-COMMAND-ERROR for a command issued at run time or replayed from a compiled program.  Code that is
-        not restricted can issue commands to every module.
+        A module that does not set it is not given a command issued by restricted code: the command is refused with
+        \c PARSE-COMMAND-ERROR for a \c %module-cmd directive, and with \c RUNTIME-COMMAND-ERROR for a command issued
+        at run time or replayed from a compiled program.  Code that is not restricted can issue commands to every
+        module.
 
         @warning the module API version is validated only after the description function has filled in the struct; a
-        library that implements only module API 2.0 creates a struct without this field, so a module that such a
-        library may load sets it only if is_module_api_supported(2, 1) is true
+        library that implements module API 2.1 or earlier creates a struct without this field, so a module that such a
+        library may load (by an explicit path, or by a file name without the API suffix) sets it only if
+        is_module_api_supported(2, 2) is true; the library then refuses the module for its API version without the
+        write
 
         @see QoreModuleCommandContext
 
-        @since %Qore 3.0 (module API 2.1)
+        @since %Qore 3.0 (module API 2.2)
     */
     bool cmd_caller_aware = false;
 };
+
+//! defined if QoreModuleInfo::ns and QoreNamespace::purge() are available
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_MODULE_NS_PURGE 1
 
 //! Module description function
 typedef void (*qore_binary_module_desc_t)(QoreModuleInfo& mod_info);
@@ -218,7 +251,7 @@ class ExceptionSink;
     @see QoreModuleCommandContext
     @see QoreModuleInfo::cmd_caller_aware
 
-    @since %Qore 3.0 (module API 2.1)
+    @since %Qore 3.0 (module API 2.2)
 */
 class QoreModuleCommandRestrictions {
 public:
@@ -289,7 +322,7 @@ public:
         Call it on a thread that Qore knows, from the module function, before the function hands work to another
         thread (pass a copy of the result).
 
-        @since %Qore 3.0 (module API 2.1)
+        @since %Qore 3.0 (module API 2.2)
     */
     DLLEXPORT static QoreModuleCommandRestrictions getCallerRestrictions();
 
@@ -317,7 +350,7 @@ static void my_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
 }
     @endcode
 
-    @since %Qore 3.0 (module API 2.1)
+    @since %Qore 3.0 (module API 2.2)
 */
 class QoreModuleCommandContext : public QoreModuleCommandRestrictions {
 public:

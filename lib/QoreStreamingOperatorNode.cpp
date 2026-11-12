@@ -93,6 +93,9 @@ int QoreStreamingOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     if (left && isPredicateOperator()) {
         ParseImplicitArgTypeHelper pia(elementTypeInfo);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
         parse_context.typeInfo = nullptr;
         {
             QoreParseContextAnalysisHelper ah(parse_context);

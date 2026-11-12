@@ -102,6 +102,26 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Plain Function Bodies No Longer Inherit a Caller's Class Context
+    A plain function's body could be parse-initialized in the class context of the method that first called it, which
+    gave it access to that class's private and static members depending on the parse order; such code now raises a
+    parse error and must qualify its references (<tt>Class::member</tt>).
+
+    @par Dynamic Static Method Calls Respect Private Access
+    call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
+    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
+    the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
+
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
+    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
+    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
+    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
+
+    @par Debugger Callbacks Run With the Cancellation Deferred
+    The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
+    deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
+    debugger resumes it (issue #5794).
+
     @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
     flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
@@ -128,6 +148,17 @@
     sandboxed code, or by code with a parse option that restricts a functional domain, is refused with
     \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
     (see @ref qore_modules); unrestricted code is not affected.
+
+    @par The Implicit Index Is Unset Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
+    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
+    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
+    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+
+    @par An Operator over a Single Value Gives It the Implicit Index 0
+    A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
+    it the @ref implicit_index "implicit index" (<tt>$#</tt>) \c 0, as for a list of one element, instead of leaving
+    the enclosing index.
 
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
@@ -170,6 +201,11 @@
     imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
     it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
+
+    @par The Keys of an Lvalue Path Are Evaluated From the Root Out
+    The AST interpreter evaluated the keys and indices of an lvalue path of two or more steps from the last step to
+    the root (ex: <tt>h.(k1()).(k2())[i()] = v</tt> evaluated \c i(), \c k2(), \c k1()); every execution mode now
+    evaluates them from the root out, also for a reference (see @ref lvalue_evaluation_order).
 
     @par A List of Selectors Removes Nothing From a Value That Is Not a List, a String or a Binary
     @ref remove "remove" and @ref delete "delete" with a list of selectors in square brackets on a hash, a number, an
@@ -218,10 +254,12 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.0
-    Every external binary module must be rebuilt for module API 2.0, which registers its metadata with a
-    \c {name}_qore_module_desc() function and reports initialization errors as exceptions; see "Developing Qore
-    Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.2
+    Every external binary module must be rebuilt for module API 2.2, which registers its metadata with a
+    \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI
+    changes of %Qore 3.0 and lets a module command handler judge the code that issues a command
+    (\c QoreModuleCommandContext); a module built for another module API (such as 2.0 or 2.1) is not found by its
+    feature name, and the \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
@@ -469,8 +507,9 @@
 
     @par Compatibility Parse Options Refused Under \%modern
     Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect; legacy code that needs them is
-    parsed without @ref modern "%modern" (see @ref modern_option_consistency).
+    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
+    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
+    @ref modern "%modern" (see @ref modern_option_consistency).
 
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
@@ -511,6 +550,10 @@
     - a value returned by builtin code together with an exception is released, so API callers receive no value
       with an exception (see \c q_func_t)
     - \c QoreFile::write() returns \c int64
+    - \c QoreProgram::deref() without an \c ExceptionSink releases the Program's own dependency reference with the last
+      reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
+      be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
+      \c QoreProgram::deref())
     @endparblock
 
     @par qget Command-Line Changes
@@ -589,6 +632,17 @@
     another @ref Qore::Program "Program" reads or writes its values, calls its code, or creates objects in it; see
     @ref reflection_caller_privilege (<a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>).
 
+    @par Reflection Respects the Export Boundary of User Modules
+    Sandboxed and restricted code no longer finds, calls, reads or writes through reflection what a user module does
+    not export, nor constructs or uses the static members of a class it does not export; see
+    @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
+    @par Call References to Builtin Methods Run in the Program That Made Them
+    A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
+    %Program that made it, wherever it is called, so restricted code's reference is refused like its direct call, also
+    for an object that module code created, and it raises \c PROGRAM-ERROR once that %Program is deleted; see
+    @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
@@ -600,17 +654,37 @@
     limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
+    @par Slow Server-Sent Events Clients Are Dropped
+    Every SSE stream bounds the data queued for its client (the \c sse_max_buffer_size listener and
+    \c ServerSentEventHandler options, default 1 MiB): queueing an event never waits for the client, a client whose
+    data would exceed the bound is dropped, and a send to that stream alone raises \c SSE-CLIENT-OVERFLOW, while a
+    send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer
+    (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
+
+    @par The Signal Handling Thread Is Woken With SIGRTMIN+1 on Linux
+    On Linux, the signal that wakes the signal handling thread is the real-time signal \c SIGRTMIN+1 instead of
+    @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
+    a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
+    @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
-    %Program, from the new \c QoreModuleCommandContext (module API 2.1; see @ref qore_modules), also for
+    %Program, from the new \c QoreModuleCommandContext (module API 2.2; see @ref qore_modules), also for
     \c %module-cmd and for commands that a compiled program replays when it is loaded.
+
+    @par Debugger Exception IDs
+    The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
+    \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
+    @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
+    handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
 
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
     activity. @ref Qore::Program::cancelThread() "cancelThread()" and
-    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program.
+    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program,
+    as @ref Qore::ProgramControl::cancelThread() "ProgramControl::cancelThread()" does for a debugger.
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
@@ -731,6 +805,12 @@
     \c q_get_module_cpp_api(), which raises a %Qore exception on a version mismatch, so an optional C++ dependency
     between modules is possible; see "Sharing a C++ API Between Modules" in the C++ API documentation.
 
+    @par Module State Released Before the Library Shuts Down
+    A binary module registers its static namespace with \c QoreModuleInfo::ns (\c QORE_HAS_MODULE_NS_PURGE), and the
+    library releases it when it deletes the module, not in a C++ static destructor.  All bundled modules do, so a
+    process that exits during a background JIT compile no longer leaks their values; see "Releasing Module State at
+    Shutdown" in the module development guide of the C++ API documentation.
+
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see
@@ -812,6 +892,9 @@
       @ref Qore::SQL::make_datasource_string() "make_datasource_string()",
       @ref Qore::get_value_byte_size() "get_value_byte_size()", @ref <binary>::toHexArray() "<binary>::toHexArray()",
       and @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()"
+    - @ref Qore::get_qore_library_info() "get_qore_library_info()" also reports the compiler version and target, the
+      build type and its compiler flags, the hardening options the compiler applied, whether link-time optimization
+      was used and whether the library was compiled as a single compilation unit
     @endparblock
 
     @par Generic Builtin Classes and Result Records
@@ -872,26 +955,10 @@
     and the DBI driver page of the C++ API documentation.
 
     @par C++ API: DBI Drivers Judge an Option by the Code That Set It
-    A datasource records the restrictions and the filesystem policy of the code that sets each of its options
-    (@ref Qore::SQL::Datasource::setOption() "Datasource::setOption()", the options of a constructor or a connection
-    string), and a @ref Qore::SQL::DatasourcePool "DatasourcePool" records those of the code that creates it for
-    every connection that it creates; copies keep them.  A driver reads them when it applies an option with the new
-    \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef() (feature macro
-    \c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS), so that whoever configures a datasource decides what its options
-    may do, not the code that happens to open a connection; see @ref sandbox_datasource_options
-    (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).  A driver checks the
-    restrictions first and refuses an option that they refuse whatever the policy is: the policy manager is missing
-    whenever no sandbox policy governed the setter, also inside a trusted
-    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.  An option's value
-    and its setter are kept together, so a copy of a datasource made while another thread sets an option pairs each
-    copied value with the code that set it.  A copy of a datasource with an open connection therefore takes the
-    option values that were set on it (as they were passed to \c setOption(), a constructor or a connection string)
-    instead of the values that the driver reports for them, and the values that the driver reports only for the
-    options that were never set: a driver that normalizes the value of an option it accepts hands the copy the value
-    as it was set, which the driver normalizes again when the copy opens its connection.  An option that has no stored
-    value and that is being set on the open connection at the moment of the copy (the driver is being given the
-    value) is not copied, as it has no setter yet; and a stored value of \c NOTHING or \c False is not copied even
-    if the driver reports a value for the option, as such a value counts as not set, as it did for copies before.
+    A datasource records the restrictions and the filesystem policy of the code that sets each option, which a driver
+    reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
+    whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
+    (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1233,6 +1300,8 @@
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
+      - every SSE stream bounds the data held for its client, and a slow client is dropped instead of making the
+        publisher wait or the server's memory grow (see @ref httpserverasyncio_sse_buffer)
       - see @ref serversenteventhandler_v1_2_0 for all changes
 
     - @ref servicenowrestdataproviderintro "ServiceNowRestDataProvider" module
@@ -1616,6 +1685,32 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an object collected with a reference cycle could be freed while it was still in use, which could crash the
+      process, when another thread released the last reference to it through a weak reference (or C++ code through
+      an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
+    - \c $2 and the following implicit arguments had the type of the element in the code of every operator, so
+      <tt>map ($2,), l</tt> over a typed list raised \c RUNTIME-TYPE-ERROR; only foldl and foldr, whose \c $2 is the
+      next element, now give it that type
+    - a hash or list whose value type is \c date&lt;absolute&gt; or \c date&lt;relative&gt; took a container of
+      \c date values without checking them and then had the value type \c date; it now checks each value and has
+      its declared type (see @ref date_literal_subtypes)
+    - a @ref call_reference "call reference" to a method of a builtin object (<tt>\\o.write()</tt>) ran with the
+      parse options of the object's @ref Qore::Program "Program", and one to an inherited method with those of the
+      Program calling it, so restricted code could use a privileged Program's object past the checks that a direct
+      call makes; it now runs as a direct call in the Program that created the reference
+    - a call through a fixed function variant (ex: <tt>FunctionVariant::call()</tt>) with arguments that only another
+      variant accepts called that variant without its arguments
+    - @ref Qore::set_signal_handler() "set_signal_handler()" and @ref Qore::remove_signal_handler()
+      "remove_signal_handler()" accepted a signal number one past the end of the library's signal table, which
+      corrupted memory, and a number that the platform has no signal for; both are refused now
+      (<a href="https://github.com/qoretechnologies/qore/issues/5829">issue 5829</a>)
+    - a @ref foreach "foreach" loop over a slice of a list read from a variable (ex:
+      <tt>foreach auto v in (l[1..2])</tt>) read freed memory when its body removed or assigned the variable; the loop
+      now keeps the list until it ends (issue #5770)
+    - @ref Qore::Program::getCallReference() "Program::getCallReference()" resolved a name as a method of the
+      @ref Qore::Program "Program" object first, so a function of the Program with the name of a method of the class
+      (ex: \c run()) could not be referenced; a class path naming a non-static method of the Program class no longer
+      returns a reference bound to the Program object (issue #5863)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
@@ -1865,6 +1960,9 @@
       yet, of a class that declares no members, crashed the process
     - resolving a long chain of references, as made by a recursion that passes on a reference, could overflow the
       stack and crash the process instead of raising \c STACK-LIMIT-EXCEEDED, seen in JIT and AOT code on Linux
+    - each level of a recursion of interpreted function, method and closure calls uses less stack (on Alpine Linux,
+      a third less with the IR interpreter), so that a deeper recursion fits in a thread's stack before
+      \c STACK-LIMIT-EXCEEDED is raised, as on Alpine Linux, whose threads have 8 MB stacks
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
@@ -2344,6 +2442,10 @@
     - a function first referenced in a method was parse-initialized in the method's class, namespace and local
       variables, so its body and default argument values could call the class's private methods or read the
       method's locals, also when called from elsewhere; see @ref private_methods
+    - the frame of the top-level code of a Program, including the main Program, was not reachable by
+      @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
+      from the calls it makes or from a debugger's callbacks in the same thread
+      (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

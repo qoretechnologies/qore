@@ -216,13 +216,13 @@ class ModuleInfoTest(unittest.TestCase):
         a.mkdir()
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b), str(self.dir / "missing")]))
         (b / "Opt" / "Opt.qm").write_text("x")
-        (a / "Opt-api-2.0.qmod").write_text("y")
+        (a / "Opt-api-2.2.qmod").write_text("y")
         (a / "Optional.qm").write_text("z")
         # a process lists each directory once
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b)]))
         qc._listdir_cache.clear()
         names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
-        self.assertEqual(["a/Opt-api-2.0.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
+        self.assertEqual(["a/Opt-api-2.2.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
 
 
 class IncludeTest(unittest.TestCase):
@@ -523,7 +523,7 @@ class KeyTest(unittest.TestCase):
         self.assertNotEqual(k, qc.result_key("base", deps[:1], opt, res))
         self.assertNotEqual(k, qc.result_key("base", deps, [], res))
         self.assertNotEqual(k, qc.result_key("base", deps, [{"spec": "xml", "name": "xml",
-                                                             "candidates": [["/m/xml-api-2.0.qmod", "d"]]}], res))
+                                                             "candidates": [["/m/xml-api-2.2.qmod", "d"]]}], res))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, []))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, [{"name": "U", "candidates": [
             ["/e/U.qm", "/e/U.qm"], ["/s/U.qm", "/s/U.qm"]]}]))

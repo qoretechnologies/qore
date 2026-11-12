@@ -162,6 +162,14 @@ static void aio_program_cleanup(QoreProgram* pgm) {
     }
 }
 
+AsyncIoControllerPriv* qore_get_async_io_controller_if_exists() {
+    AutoLocker al(aio_singleton_lock);
+    if (aio_singleton) {
+        aio_singleton->ref();
+    }
+    return aio_singleton;
+}
+
 QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     {
         AutoLocker al(aio_singleton_lock);

@@ -142,6 +142,8 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
+    bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
     /** Parallel to Http2StreamInfo::reset.  Subsequent
         @ref QuicSession::sendStreamData() calls must fail with a typed
@@ -215,6 +217,8 @@ struct QuicStreamingBodyData {
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
+    //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
+    size_t send_limit = 0;
 };
 
 class qore_socket_private;
@@ -523,6 +527,32 @@ public:
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
                        bool end_stream, ExceptionSink* xsink);
 
+    //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a
+        limit, a send that would make the staged data exceed it returns 1 instead, unless nothing is staged, so that
+        one send larger than the limit can still be made.  Data that has been handed to the transport within the
+        peer's flow-control credit is no longer staged.  The limit ends with the stream.
+
+        @param stream_id the stream of a streaming response
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c QUIC-HTTP3-ERROR if the limit is not positive or the
+        stream has no streaming response)
+    */
+    DLLLOCAL int setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionSink* xsink);
+    //! Client: the stream credit of the stream's response data is granted when the application consumes it
+    /** See Http2Session::setStreamCreditOnConsume() (issue #5820).
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int64_t stream_id);
+
+    //! Grants the stream credit of response data that the application of a client has consumed
+    /** See Http2Session::creditConsumedStreamData(); the caller wakes the I/O controller so that MAX_STREAM_DATA is
+        sent.
+
+        @return the number of bytes credited
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int64_t stream_id, size_t len);
+
     //! Handles a send on a stream that is closed for sending without an error; see sendStreamData()
     /** Must be called with \c mtx_ held.
 
@@ -714,9 +744,11 @@ public:
         Used by handler threads to incrementally read request body data.
         @param stream_id the HTTP/3 stream ID
         @param complete [out] set to true if body_complete (END_STREAM received) or stream not found
+        @param credit_due [out] if not null, set to true if credit was granted for the data taken (issue #5820): the
+        caller wakes the socket's I/O thread to send it
         @return body data as BinaryNode*, or NOTHING if no data available
     */
-    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
+    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete, bool* credit_due = nullptr);
 
     //! Returns True if the request body of the stream exceeded the maximum request body size (server)
     /** @see QuicStreamInfo::body_too_large
@@ -1011,11 +1043,16 @@ public:
     //! Read buffered data from an extended CONNECT stream (RFC 9220)
     /** Returns data received on the bidirectional tunnel.
 
+        A client holds the data of a CONNECT stream once, in the stream's body, which this takes; a server, in its
+        CONNECT buffer until a Queue or frame state is registered (issue #5821).
+
         @param stream_id the HTTP/3 stream ID
         @param xsink exception sink
+        @param credit_due if not null, set to true if stream credit was granted for the data taken: the caller wakes
+        the socket's I/O thread to send it
         @return binary data if available, or QoreValue() (NOTHING) if no data
     */
-    DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink);
+    DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink, bool* credit_due = nullptr);
 
     //! Register a Queue for direct data delivery on a CONNECT stream
     /** Once registered, h3RecvDataCallback pushes data directly to the Queue
@@ -1927,6 +1964,9 @@ private:
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
 
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int64_t, size_t> deferred_stream_credit_;
+
     //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
     /** @since %Qore 3.0
     */
@@ -1942,6 +1982,15 @@ private:
         Protected by connect_data_mutex_.
     */
     std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
+
+    //! Appends received data to a stream's extended-CONNECT buffer; called with connect_data_mutex_ held
+    DLLLOCAL void appendConnectStreamDataLocked(int64_t stream_id, const uint8_t* data, size_t len);
+
+    //! Takes the data of a stream's extended-CONNECT buffer, which stays empty; called with connect_data_mutex_ held
+    DLLLOCAL std::vector<uint8_t> takeConnectStreamDataLocked(int64_t stream_id);
+
+    //! Removes a stream's extended-CONNECT buffer; called with connect_data_mutex_ held
+    DLLLOCAL void eraseConnectStreamDataLocked(int64_t stream_id);
 
     //! Per-stream Queue for direct data delivery to CONNECT handlers
     /** When registered, h3RecvDataCallback pushes data directly to the Queue

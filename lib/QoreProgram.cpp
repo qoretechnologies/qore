@@ -40,6 +40,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -441,9 +442,20 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+#ifdef DEBUG
+size_t qore_program_private::dbgGetLiveProgramCount() {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    return qore_program_set.size();
+}
+#endif
+
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
+    // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
+    // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
+    // its locks protect, which fork() handles alike (see design/fork-handlers.md)
+    new (&user_variant_lock) std::mutex();
     // the thread counts keep only the forking thread
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
@@ -732,6 +744,8 @@ void qore_program_private::registerProgram() {
 }
 
 qore_program_private::~qore_program_private() {
+    // each user variant of the Program's code holds a dependency reference to it until it unregisters
+    assert(!user_variants);
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
@@ -762,6 +776,10 @@ qore_program_private::~qore_program_private() {
 
     statementByFileIndex.clear();
     statementIds.clear();
+    for (auto& i : aot_closure_debug_blocks) {
+        delete i.second;
+    }
+    aot_closure_debug_blocks.clear();
     reverseStatementIds.clear();
     statementByLabelIndex.clear();
 
@@ -1813,6 +1831,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
     // delete pending statements
     sb.parseRollback();
+    native_parse_info = committed_native_parse_info;
 
     // free temporary data structures
     str_set.clear();
@@ -1924,6 +1943,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+        // the fast paths that run the code of its variants without entering it take the call path from now on,
+        // which refuses the calls of other threads and of other Programs (qore#5822)
+        markUserVariantsDeleted();
 #ifdef DEBUG
         if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
             hook(pgm, DbgTeardownPoint::BeforeFinalWait);
@@ -2229,6 +2251,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 
             // commit pending statements
             sb.parseCommit(pgm);
+            committed_native_parse_info = native_parse_info;
 
             initDeferredCode();
             assert(dset.empty());
@@ -2294,7 +2317,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     return rc;
 }
 
-void qore_program_private::addStatement(AbstractStatement* s) {
+void qore_program_private::addStatement(AbstractStatement* s, const QoreNativeParseInfo& info) {
     if (expression_mode) {
         if (new_expression) {
             parse_error(*s->loc, "invalid expression; only a single expression can be parsed");
@@ -2310,6 +2333,7 @@ void qore_program_private::addStatement(AbstractStatement* s) {
 
         std::unique_ptr<StatementBlock> block(new StatementBlock(0, 0));
         block->addStatement(exp);
+        block->native_parse_info = info;
 
         // initialize expression
         QoreParseContext parse_context;
@@ -2331,6 +2355,8 @@ void qore_program_private::addStatement(AbstractStatement* s) {
         delete s;
     } else {
         sb.addStatement(s);
+        sb.native_parse_info.merge(info);
+        recordNativeParseInfo(info);
     }
 }
 
@@ -3083,6 +3109,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // delete all root code
     // method call can be repeated
     sb.del();
+    // and the code compiled from it, which refers to the closures that it creates (qore#5822)
+    sb.delCompiledCode();
 
     // clear expressions
     for (auto& i : exp_set) {
@@ -3262,6 +3290,19 @@ AbstractStatement* qore_program_private::findIndexedStatementForLocation(const c
         return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
     }
     return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+}
+
+StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
+    AutoLocker al(&plock);
+    if (!loc) {
+        loc = getLocation(0, 0);
+    }
+    StatementBlock*& b = aot_closure_debug_blocks[loc];
+    if (!b) {
+        b = new StatementBlock(this, loc);
+        registerStatement(pgm, b, false);
+    }
+    return b;
 }
 
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {
@@ -3558,6 +3599,11 @@ void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, Qo
 }
 
 void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, ExceptionSink* xsink) {
+    // A sink can request thread exit without holding an exception. Only real exceptions have an
+    // exception object for the debugger callback; non-exception unwinds preserve the current run state.
+    if (!xsink || !xsink->isException()) {
+        return;
+    }
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         checkAttach(xsink);
@@ -3630,7 +3676,11 @@ void QoreProgram::deref() {
     printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(),
         reference_count() - 1);
     if (priv->derefUnregister()) {
-        delete this;
+        // the Program's own dependency reference is released, as clear() does, so that the Program is destroyed once
+        // nothing refers to it (the user variants of its code, for example; qore#5822); its code is not deleted here,
+        // so a Program that was never cleared stays allocated with its code (its owner is expected to clear it first
+        // with waitForTerminationAndDeref())
+        priv->depDeref();
     }
 }
 
@@ -3867,6 +3917,48 @@ void qore_program_private_base::describeParseOptions(const QoreParseOptions& po,
     }
 }
 
+//! The reason that ends the descriptions of the conflicts between %modern and the options it does not allow
+static constexpr const char* qore_modern_conflict_reason = ": the option changes the meaning of code, and %modern "
+    "guarantees a consistent set of parse options";
+
+void qore_program_private_base::describeModernSetConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+        const QoreParseOptions& conflict, const char* verb, QoreString& desc) {
+    if (isModern(current)) {
+        // an option that %modern does not allow is set while %modern is in effect
+        describeParseOptions(conflict & po, desc);
+        desc.sprintf(" cannot be %s while %%modern is in effect", verb);
+    } else {
+        // the options set put %modern in effect: given as such, or completed by the options set
+        desc.concat((po & PO_MODERN) == PO_MODERN ? "%modern" : "%modern (which the options set complete)");
+        QoreParseOptions with = conflict & po;
+        QoreParseOptions in_effect = conflict & ~po;
+        if (with) {
+            desc.concat(" and ");
+            describeParseOptions(with, desc);
+            desc.sprintf(" cannot be %s together", verb);
+            if (in_effect) {
+                desc.concat(", nor while ");
+                describeParseOptions(in_effect, desc);
+                desc.concat(" is in effect");
+            }
+        } else {
+            desc.sprintf(" cannot be %s while ", verb);
+            describeParseOptions(in_effect, desc);
+            desc.concat(" is in effect");
+        }
+    }
+    desc.concat(qore_modern_conflict_reason);
+}
+
+void qore_program_private_base::describeModernSourceDefaultConflict(const char* filename,
+        const QoreParseOptions& conflict, QoreString& desc) {
+    desc.sprintf("'%s' is parsed in %%modern mode by its extension, which cannot be used while ", filename);
+    describeParseOptions(conflict, desc);
+    desc.concat(" is in effect");
+    desc.concat(qore_modern_conflict_reason);
+    desc.concat("; parse the code as a .q file, or without the option");
+}
+
 int qore_program_private_base::checkModernConflict(const QoreParseOptions& current, const QoreParseOptions& po, bool set,
         const char* what, ExceptionSink* xsink) {
     QoreParseOptions conflict = getModernConflict(current, po, set);
@@ -3874,12 +3966,13 @@ int qore_program_private_base::checkModernConflict(const QoreParseOptions& curre
         return 0;
     }
     QoreStringNode* desc = new QoreStringNodeMaker("%s: ", what);
-    describeParseOptions(conflict, *desc);
-    desc->concat(set
-        ? " cannot be set while %modern is in effect: the option changes the meaning of code, and %modern guarantees "
-            "a consistent set of parse options"
-        : " cannot be disabled while %modern is in effect, which implies the option and guarantees a consistent set of "
-            "parse options");
+    if (set) {
+        describeModernSetConflict(current, po, conflict, "set", *desc);
+    } else {
+        describeParseOptions(conflict, *desc);
+        desc->concat(" cannot be disabled while %modern is in effect, which implies the option and guarantees a "
+            "consistent set of parse options");
+    }
     xsink->raiseException("OPTION-ERROR", desc);
     return -1;
 }
@@ -3892,10 +3985,10 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
     }
     QoreStringNode* desc = new QoreStringNode;
     if (set) {
-        describeParseOptions(conflict, *desc);
-        desc->concat(" cannot be used while %modern is in effect: the option changes the meaning of code, and %modern "
-            "guarantees a consistent set of parse options; remove the directive, or parse the code without %modern (as "
-            "a .q file, or after %old-style)");
+        describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
+        desc->concat(isModern(pwo.parse_options)
+            ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
+            : "; remove the option, or parse the code without %modern");
     } else {
         // %no-negative-offsets is the only directive that disables an option that %modern implies
         desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
@@ -3907,23 +4000,50 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
     return -1;
 }
 
-int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
+int qore_program_private::checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
         ExceptionSink* xsink) {
-    // a child Program has its parent's options too, unless the parent allows other options for its children
-    QoreParseOptions effective = po;
-    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
-        effective |= parent->priv->pwo.parse_options;
-    }
-    if (!isModern(effective)) {
+    QoreParseOptions conflict = current & modernIncompatibleOptions();
+    if (!conflict) {
         return 0;
     }
-    if (isModern(po)) {
-        return checkModernConflict(effective, po, true, "Program::constructor()", xsink);
+    QoreStringNode* desc = new QoreStringNode;
+    describeModernSourceDefaultConflict(filename, conflict, *desc);
+    xsink->raiseException("PARSE-OPTION-ERROR", desc);
+    return -1;
+}
+
+bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error) {
+    if (!qore_program_private_base::isModern(po)) {
+        return true;
+    }
+    QoreParseOptions conflict = po & qore_program_private_base::modernIncompatibleOptions();
+    if (!conflict) {
+        return true;
+    }
+    QoreString desc("PARSE-OPTION-ERROR: ");
+    // the options are given together: nothing is in effect before them
+    qore_program_private_base::describeModernSetConflict(QoreParseOptions(), po, conflict, "set", desc);
+    error = desc.c_str();
+    return false;
+}
+
+int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
+        ExceptionSink* xsink, const char* what) {
+    // a child Program has its parent's options too, unless the parent allows other options for its children
+    QoreParseOptions inherited;
+    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+        inherited = parent->priv->pwo.parse_options;
+    }
+    if (!isModern(inherited | po)) {
+        return 0;
+    }
+    if (isModern(po) || !isModern(inherited)) {
+        return checkModernConflict(inherited, po, true, what, xsink);
     }
     // %modern comes from the parent
-    return checkModernConflict(effective, po, true, "Program::constructor() (the new Program has %modern from its "
-        "parent, which can allow other options for its child Programs with %no-child-restrictions, or create an "
-        "independent Program)", xsink);
+    QoreStringMaker label("%s (the new Program has %%modern from its parent, which can allow other options for its "
+        "child Programs with %%no-child-restrictions, or create an independent Program)", what);
+    return checkModernConflict(inherited, po, true, label.c_str(), xsink);
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
@@ -4135,6 +4255,8 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    // the frame of the top-level code is a frame of this context (see getContextFrame())
+    tch.setTopLevel();
 
     // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
     // builtin Program::run() method, has the Program object and class and the calling Program as its context, which
@@ -5259,6 +5381,21 @@ const_vec_t QoreProgram::findAllNamespaceConstantsRegex(const QoreString& patter
 const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
     const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
     return reinterpret_cast<const QoreExternalFunction*>(fe ? fe->getFunction() : nullptr);
+}
+
+const QoreExternalFunction* QoreProgram::findFunction(const char* path, const QoreNamespace*& pns) const {
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
+    if (!fe) {
+        pns = nullptr;
+        return nullptr;
+    }
+    pns = fe->getNamespace()->ns;
+    return reinterpret_cast<const QoreExternalFunction*>(fe->getFunction());
+}
+
+func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
 }
 
 const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {

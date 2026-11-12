@@ -30,7 +30,9 @@
 */
 
 #include "qore/intern/QoreJITIncludes.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
+#include "qore/intern/QoreOpcodeRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/CaseNodeRegex.h"
@@ -45,6 +47,7 @@
 #include "qore/QoreValue.h"
 
 #include <cstdio>
+#include <initializer_list>
 #include <string>
 
 // Forward declarations for recursive serialization functions
@@ -53,6 +56,550 @@
 
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
+
+namespace {
+
+// The wire group selects a C++ subclass, whereas execution dispatches on the opcode.  Both must agree.
+// Two words cover the registered groups (TypedBase and later groups are above bit 63).
+struct AOTOpcodeLayout {
+    QoreIROpcode opcode;
+    uint64_t groups[2]{};
+    bool invoke;
+    int constant_kind;
+    uint16_t min_operands;
+    uint16_t max_operands;
+    bool result_prefix;
+
+    constexpr AOTOpcodeLayout(QoreIROpcode op, std::initializer_list<QoreIRInstGroup> allowed,
+            bool nested = false, int kind = -1, int minimum = -1, int maximum = -1,
+            bool optional_result_prefix = false) : opcode(op), invoke(nested), constant_kind(kind),
+            min_operands(0), max_operands(UINT16_MAX), result_prefix(optional_result_prefix) {
+        int arity = OPCODE_REGISTRY[static_cast<unsigned>(op)].expected_operands;
+        min_operands = minimum >= 0 ? minimum : arity >= 0 ? arity : arity <= -2 ? -(arity + 2) : 0;
+        max_operands = maximum >= 0 ? maximum : arity >= 0 ? arity : UINT16_MAX;
+        for (auto group : allowed) {
+            unsigned value = static_cast<unsigned>(group);
+            groups[value / 64] |= uint64_t{1} << (value % 64);
+        }
+    }
+
+    constexpr bool allows(uint8_t group) const {
+        return group < 128 && (groups[group / 64] & (uint64_t{1} << (group % 64)));
+    }
+};
+
+using O = QoreIROpcode;
+using G = QoreIRInstGroup;
+
+// Explicit rows are in opcode ID order.  Empty groups mark reserved/non-serializable instructions.
+// Base/Expr alternatives retain the operand-only forms emitted by lowering and optimization; TypedBase
+// retains the same C++ base class with serialized element/return type metadata.  Invoke describes the
+// nested operation, not the outer Invoke instruction's class.
+constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
+    {O::ConstInt, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Int)},
+    {O::ConstFloat, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Float)},
+    {O::ConstBool, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Bool)},
+    {O::ConstNothing, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Nothing)},
+    {O::ConstNull, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Null)},
+    {O::ConstString, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::String)},
+    {O::ConstDate, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Date)},
+    {O::MakeList, {G::MakeList}},
+    {O::MakeHash, {G::MakeHash}},
+    {O::CreateEmptyList, {G::Base, G::TypedBase}},
+    {O::CreateSizedList, {G::Base, G::TypedBase}},
+    {O::ListAppend, {G::Base, G::TypedBase}},
+    {O::ListSize, {G::Base}},
+    {O::ListGetInt, {G::Base}},
+    {O::ListGetFloat, {G::Base}},
+    {O::ListGetValue, {G::Base}},
+    {O::ListSetInt, {G::Base}},
+    {O::ListSetFloat, {G::Base}},
+    {O::ListSetValue, {G::Base, G::TypedBase}},
+    {O::AddInt, {G::Base, G::Expr}, true},
+    {O::AddFloat, {G::Base, G::Expr}, true},
+    {O::AddAny, {G::Base, G::Expr}, true},
+    {O::AddString, {G::Base}, true},
+    {O::StringConcat, {G::Base}, true},
+    {O::SubInt, {G::Base, G::Expr}, true},
+    {O::SubFloat, {G::Base, G::Expr}, true},
+    {O::SubAny, {G::Base, G::Expr}, true},
+    {O::MulInt, {G::Base, G::Expr}, true},
+    {O::MulFloat, {G::Base, G::Expr}, true},
+    {O::MulAny, {G::Base, G::Expr}, true},
+    {O::DivInt, {G::Base, G::Expr}, true},
+    {O::DivFloat, {G::Base, G::Expr}, true},
+    {O::DivAny, {G::Base, G::Expr}, true},
+    {O::ModInt, {G::Base, G::Expr}, true},
+    {O::ModAny, {G::Base, G::Expr}, true},
+    {O::AndInt, {G::Base, G::Expr}, true},
+    {O::AndAny, {G::Base, G::Expr}, true},
+    {O::OrInt, {G::Base, G::Expr}, true},
+    {O::OrAny, {G::Base, G::Expr}, true},
+    {O::XorInt, {G::Base, G::Expr}, true},
+    {O::XorAny, {G::Base, G::Expr}, true},
+    {O::ShlInt, {G::Base, G::Expr}, true},
+    {O::ShlAny, {G::Base, G::Expr}, true},
+    {O::ShrInt, {G::Base, G::Expr}, true},
+    {O::ShrAny, {G::Base, G::Expr}, true},
+    {O::ShlAssignInt, {G::Base, G::Expr}, true},
+    {O::ShlAssignAny, {G::Base, G::Expr}, true},
+    {O::ShrAssignInt, {G::Base, G::Expr}, true},
+    {O::ShrAssignAny, {G::Base, G::Expr}, true},
+    {O::AddAssignInt, {G::Base, G::Expr}, true},
+    {O::AddAssignFloat, {G::Base, G::Expr}, true},
+    {O::AddAssignAny, {G::Base, G::Expr}, true},
+    {O::SubAssignInt, {G::Base, G::Expr}, true},
+    {O::SubAssignFloat, {G::Base, G::Expr}, true},
+    {O::SubAssignAny, {G::Base, G::Expr}, true},
+    {O::MulAssignInt, {G::Base, G::Expr}, true},
+    {O::MulAssignFloat, {G::Base, G::Expr}, true},
+    {O::MulAssignAny, {G::Base, G::Expr}, true},
+    {O::DivAssignInt, {G::Base, G::Expr}, true},
+    {O::DivAssignFloat, {G::Base, G::Expr}, true},
+    {O::DivAssignAny, {G::Base, G::Expr}, true},
+    {O::ModAssignInt, {G::Base, G::Expr}, true},
+    {O::ModAssignAny, {G::Base, G::Expr}, true},
+    {O::AndAssignInt, {G::Base, G::Expr}, true},
+    {O::AndAssignAny, {G::Base, G::Expr}, true},
+    {O::OrAssignInt, {G::Base, G::Expr}, true},
+    {O::OrAssignAny, {G::Base, G::Expr}, true},
+    {O::XorAssignInt, {G::Base, G::Expr}, true},
+    {O::XorAssignAny, {G::Base, G::Expr}, true},
+    {O::LoadLValue, {G::LValue}},
+    {O::StoreLValue, {G::LValue}, true},
+    {O::PreIncLValue, {G::LValue}, true},
+    {O::PreDecLValue, {G::LValue}, true},
+    {O::PostIncLValue, {G::LValue}, true},
+    {O::PostDecLValue, {G::LValue}, true},
+    {O::AddAssignLValue, {G::LValue}, true},
+    {O::SubAssignLValue, {G::LValue}, true},
+    {O::MulAssignLValue, {G::LValue}, true},
+    {O::DivAssignLValue, {G::LValue}, true},
+    {O::ModAssignLValue, {G::LValue}, true},
+    {O::AndAssignLValue, {G::LValue}, true},
+    {O::OrAssignLValue, {G::LValue}, true},
+    {O::XorAssignLValue, {G::LValue}, true},
+    {O::ShlAssignLValue, {G::LValue}, true},
+    {O::ShrAssignLValue, {G::LValue}, true},
+    {O::ShiftLValue, {G::LValue}, true},
+    {O::UnshiftLValue, {G::LValue}, true},
+    {O::PopAny, {G::Expr}, true},
+    {O::PushAny, {G::Expr}, true},
+    {O::SpliceLValue, {G::LValue}, true},
+    {O::ExtractAny, {G::Expr}, true},
+    {O::ExtractList, {G::Expr}, true},
+    {O::ExtractString, {G::Expr}, true},
+    {O::ExtractBinary, {G::Expr}, true},
+    {O::RemoveAny, {G::Expr}, true},
+    {O::RemoveList, {G::Expr}, true},
+    {O::RemoveHash, {G::Expr}, true},
+    {O::RemoveObject, {G::Expr}, true},
+    {O::RemoveString, {G::Expr}, true},
+    {O::RemoveBinary, {G::Expr}, true},
+    {O::KeysAny, {G::Expr}, true},
+    {O::KeysList, {G::Expr}, true},
+    {O::KeysHash, {G::Expr}, true},
+    {O::RegexMatchAny, {G::Expr}, true},
+    {O::RegexMatchBool, {G::Expr}, true},
+    {O::RegexNMatchBool, {G::Expr}, true},
+    {O::RegexExtractAny, {G::Expr}, true},
+    {O::RegexExtractList, {G::Expr}, true},
+    {O::RegexSubstAny, {G::Expr}, true},
+    {O::RegexSubstString, {G::Expr}, true},
+    {O::InstanceOfBool, {G::Expr}, true},
+    {O::TrimAny, {G::Expr}, true},
+    {O::TrimString, {G::Expr}, true},
+    {O::ChompAny, {G::Expr}, true},
+    {O::ChompString, {G::Expr}, true},
+    {O::TransliterateAny, {G::Expr}, true},
+    {O::TransliterateString, {G::Expr}, true},
+    {O::BackgroundInt, {G::Expr, G::Background}, true},
+    {O::ListAssignAny, {G::Expr}, true},
+    {O::ExistsAny, {G::Base, G::Expr}, true},
+    {O::ExistsBool, {G::Base, G::Expr}, true},
+    {O::ElementsAny, {G::Expr}, true},
+    {O::ElementsInt, {G::Expr}, true},
+    {O::DotEvalAny, {G::Expr}, true},
+    {O::DotEvalInt, {G::Expr}, true},
+    {O::DotEvalFloat, {G::Expr}, true},
+    {O::DotEvalString, {G::Expr}, true},
+    {O::DotEvalDate, {G::Expr}, true},
+    {O::DotEvalList, {G::Expr}, true},
+    {O::DotEvalHash, {G::Expr}, true},
+    {O::DotEvalObject, {G::Expr}, true},
+    {O::MapSelectList, {G::Base, G::Expr}},
+    {O::HashMap, {G::Base, G::Expr}},
+    {O::HashMapSelect, {G::Base, G::Expr}},
+    {O::IteratorCreate, {G::IteratorCreate}},
+    {O::IteratorNext, {G::IteratorNext}},
+    {O::OnBlockExit, {G::OnBlockExit}},
+    {O::ScopeEnter, {G::ScopeEnter}},
+    {O::ScopeExit, {G::ScopeExit}},
+    {O::ThreadExit, {G::Base}},
+    {O::Context, {G::Context}},
+    {O::Summarize, {}},
+    {O::EqInt, {G::Base, G::Expr}, true},
+    {O::EqFloat, {G::Base, G::Expr}, true},
+    {O::EqString, {G::Base}, true},
+    {O::EqAny, {G::Base, G::Expr}, true},
+    {O::NeInt, {G::Base, G::Expr}, true},
+    {O::NeFloat, {G::Base, G::Expr}, true},
+    {O::NeString, {G::Base}, true},
+    {O::NeAny, {G::Base, G::Expr}, true},
+    {O::EqHard, {G::Base, G::Expr}, true},
+    {O::NeHard, {G::Base, G::Expr}, true},
+    {O::LtInt, {G::Base, G::Expr}, true},
+    {O::LtFloat, {G::Base, G::Expr}, true},
+    {O::LtString, {G::Base}, true},
+    {O::LtAny, {G::Base, G::Expr}, true},
+    {O::LeInt, {G::Base, G::Expr}, true},
+    {O::LeFloat, {G::Base, G::Expr}, true},
+    {O::LeString, {G::Base}, true},
+    {O::LeAny, {G::Base, G::Expr}, true},
+    {O::GtInt, {G::Base, G::Expr}, true},
+    {O::GtFloat, {G::Base, G::Expr}, true},
+    {O::GtString, {G::Base}, true},
+    {O::GtAny, {G::Base, G::Expr}, true},
+    {O::GeInt, {G::Base, G::Expr}, true},
+    {O::GeFloat, {G::Base, G::Expr}, true},
+    {O::GeString, {G::Base}, true},
+    {O::GeAny, {G::Base, G::Expr}, true},
+    {O::CmpInt, {G::Base, G::Expr}, true},
+    {O::CmpFloat, {G::Base, G::Expr}, true},
+    {O::CmpString, {G::Base}, true},
+    {O::CmpAny, {G::Base, G::Expr}, true},
+    {O::ToBool, {G::Base, G::Expr}, true},
+    {O::Not, {G::Base, G::Expr}, true},
+    {O::IsNullOrNothing, {G::Base, G::Expr}, true},
+    {O::Phi, {G::Phi}},
+    {O::UnaryPlusAny, {G::Base, G::Expr}, true},
+    {O::UnaryMinusInt, {G::Base, G::Expr}, true},
+    {O::UnaryMinusFloat, {G::Base, G::Expr}, true},
+    {O::UnaryMinusAny, {G::Base, G::Expr}, true},
+    {O::FoldlAny, {G::Base, G::Expr}, true},
+    {O::FoldlInt, {G::Base, G::Expr}, true},
+    {O::FoldlFloat, {G::Base, G::Expr}, true},
+    {O::FoldrAny, {G::Base, G::Expr}, true},
+    {O::FoldrInt, {G::Base, G::Expr}, true},
+    {O::FoldrFloat, {G::Base, G::Expr}, true},
+    {O::FoldlSumInt, {G::Base, G::Expr}, true},
+    {O::FoldlSumFloat, {G::Base, G::Expr}, true},
+    {O::FoldlProdInt, {G::Base, G::Expr}, true},
+    {O::FoldlProdFloat, {G::Base, G::Expr}, true},
+    {O::FoldlDiffInt, {G::Base, G::Expr}, true},
+    {O::FoldlDiffFloat, {G::Base, G::Expr}, true},
+    {O::FoldlMinInt, {G::Base, G::Expr}, true},
+    {O::FoldlMinFloat, {G::Base, G::Expr}, true},
+    {O::FoldlMaxInt, {G::Base, G::Expr}, true},
+    {O::FoldlMaxFloat, {G::Base, G::Expr}, true},
+    {O::FoldrSumInt, {G::Base, G::Expr}, true},
+    {O::FoldrSumFloat, {G::Base, G::Expr}, true},
+    {O::FoldrProdInt, {G::Base, G::Expr}, true},
+    {O::FoldrProdFloat, {G::Base, G::Expr}, true},
+    {O::FoldrDiffInt, {G::Base, G::Expr}, true},
+    {O::FoldrDiffFloat, {G::Base, G::Expr}, true},
+    {O::FoldrMinInt, {G::Base, G::Expr}, true},
+    {O::FoldrMinFloat, {G::Base, G::Expr}, true},
+    {O::FoldrMaxInt, {G::Base, G::Expr}, true},
+    {O::FoldrMaxFloat, {G::Base, G::Expr}, true},
+    {O::MapAny, {G::Base, G::Expr}, true},
+    {O::MapInt, {G::Base, G::Expr}, true},
+    {O::MapFloat, {G::Base, G::Expr}, true},
+    {O::MapScaleInt, {G::Base}, true},
+    {O::MapScaleFloat, {G::Base}, true},
+    {O::MapOffsetInt, {G::Base}, true},
+    {O::MapOffsetFloat, {G::Base}, true},
+    {O::MapSquareInt, {G::Base}, true},
+    {O::MapSquareFloat, {G::Base}, true},
+    {O::MapHashKeyValue, {G::MapHashKey}},
+    {O::MapHashKeyInt, {G::MapHashKey}},
+    {O::MapHashKeyOffsetInt, {G::MapHashKey}},
+    {O::MapHashKeyScaleInt, {G::MapHashKey}},
+    {O::HashMapTwoKeys, {G::MapHashKey}},
+    {O::SelectAny, {G::Base, G::Expr}, true},
+    {O::SelectInt, {G::Base, G::Expr}, true},
+    {O::SelectFloat, {G::Base, G::Expr}, true},
+    {O::SelectPositiveInt, {G::Base}, true},
+    {O::SelectPositiveFloat, {G::Base}, true},
+    {O::SelectNonZeroInt, {G::Base}, true},
+    {O::SelectNonZeroFloat, {G::Base}, true},
+    {O::FusedMapSelectScalePositiveInt, {G::Base}, true},
+    {O::FusedMapSelectScalePositiveFloat, {G::Base}, true},
+    {O::FusedMapSelectOffsetPositiveInt, {G::Base}, true},
+    {O::FusedMapSelectOffsetPositiveFloat, {G::Base}, true},
+    {O::FusedMapSelectSquarePositiveInt, {G::Base}, true},
+    {O::FusedMapSelectSquarePositiveFloat, {G::Base}, true},
+    {O::FusedMapFoldlSumScaleInt, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlSumScaleFloat, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlSumSquareInt, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlSumSquareFloat, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlProdScaleInt, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlProdScaleFloat, {G::Base, G::Expr}, true},
+    {O::MapSelectAny, {G::Base, G::Expr}, false, -1, 3, 3},
+    {O::HashMapAny, {G::Base, G::Expr}, false, -1, 3, 3},
+    {O::HashMapSelectAny, {G::Base, G::Expr}, false, -1, 4, 4},
+    {O::RangeAny, {G::Base, G::Expr}, true},
+    {O::RangeInt, {G::Base, G::Expr}, true},
+    {O::RangeFloat, {G::Base, G::Expr}, true},
+    {O::RangeDate, {G::Base, G::Expr}, true},
+    {O::RangeSliceAny, {G::Base, G::Expr}, true},
+    {O::RangeSliceInt, {G::Base, G::Expr}, true},
+    {O::RangeSliceFloat, {G::Base, G::Expr}, true},
+    {O::CastAny, {G::Expr}, true},
+    {O::CastList, {G::Expr}, true},
+    {O::CastHash, {G::Expr}, true},
+    {O::CastObject, {G::Expr}, true},
+    {O::CastEnum, {G::Expr}, true},
+    {O::CastComplexHash, {G::Expr}, true},
+    {O::Br, {G::Branch}},
+    {O::BrIf, {G::BranchIf}},
+    {O::SwitchInt, {G::SwitchInt}},
+    {O::SwitchString, {G::SwitchString}},
+    {O::Return, {G::Return}},
+    {O::ReturnNothing, {G::Return, G::Base}},
+    {O::LoadLocal, {G::Local}},
+    {O::StoreLocal, {G::Local}},
+    {O::UninstantiateLocal, {G::Local}},
+    {O::LoadArg, {G::Base}, false, -1, 0, 1},
+    {O::LoadClosure, {G::Local}, false, -1, 0, 1},
+    {O::StoreClosure, {G::Local}},
+    {O::LoadGlobal, {G::Var}},
+    {O::StoreGlobal, {G::Var}},
+    {O::LoadThreadLocal, {G::Var}},
+    {O::StoreThreadLocal, {G::Var}},
+    {O::LoadImplicitArg, {G::ImplicitArg}},
+    {O::LoadImplicitArgv, {G::Base}},
+    {O::LoadImplicitElement, {G::Base}},
+    {O::PushImplicitArg, {G::Base}},
+    {O::SetImplicitArgv, {G::Base}},
+    {O::PopImplicitArg, {G::Base}},
+    {O::PushImplicitElement, {G::Base}},
+    {O::PopImplicitElement, {G::Base}},
+    {O::HashKeyAccess, {G::HashKeyAccess}, true},
+    {O::HashKeyAccessInt, {G::HashKeyAccess}, true},
+    {O::LoadSelfMember, {G::SelfMember}, true},
+    {O::LoadStaticVar, {G::StaticVar}, true},
+    {O::NewObject, {G::NewObject}, true},
+    {O::LoadConstant, {G::LoadConst}, true},
+    {O::CreateClosure, {G::CreateClosure}, true},
+    {O::CreateCallRef, {G::CreateCallRef}, true},
+    {O::CreateMethodRef, {G::CreateMethodRef}, true},
+    {O::CreateParseRef, {G::CreateParseRef}, true},
+    {O::NewHashDecl, {G::NewHashDecl}, true},
+    {O::NewComplexHash, {G::NewComplexHash}, true},
+    {O::NewComplexList, {G::NewComplexList}, true},
+    {O::VrnConstruct, {G::VrnConstruct}, true},
+    {O::HashSetKeyValue, {G::Base, G::TypedBase}},
+    {O::IteratorCreateReverse, {G::Base}},
+    {O::Call, {G::Expr}, true},
+    {O::CallDirect, {G::CallDirect}, true},
+    {O::CallIndirect, {}},
+    {O::CallMethod, {G::Expr}, true},
+    {O::CallMethodDirect, {G::CallMethodDirect}},
+    {O::InvokeMethodDirect, {G::InvokeMethodDirect}},
+    {O::CallStatic, {G::Expr}, true},
+    {O::CallStaticDirect, {G::CallStaticDirect}, true},
+    {O::DotEvalMethodDirect, {G::DotEvalMethodDirect}, false, -1, 1, UINT16_MAX},
+    {O::InvokeDotEvalMethodDirect, {G::InvokeDotEvalMethodDirect}, false, -1, 1, UINT16_MAX},
+    {O::CallClosureDirect, {G::CallClosureDirect}, true, -1, 1, UINT16_MAX},
+    {O::Invoke, {G::Invoke}},
+    {O::GuardInt, {G::Guard}},
+    {O::GetObjectClass, {G::Base}},
+    {O::GuardFloat, {G::Guard}},
+    {O::GuardType, {G::Guard}},
+    {O::GuardNotNothing, {G::Guard}},
+    {O::LandingPad, {G::LandingPad}},
+    {O::CatchException, {G::Base}},
+    {O::CatchCleanup, {G::Base}},
+    {O::Rethrow, {G::Throw}, false, -1, 0, 1},
+    {O::Throw, {G::Throw}},
+    {O::InvokeSimError, {G::Expr}},
+    {O::Incref, {G::Base}},
+    {O::Decref, {G::Base}},
+    {O::DecrefNoThrow, {G::Base}},
+    {O::SwitchRegexMatch, {G::SwitchRegexMatch}},
+    {O::ListPush, {G::Base, G::TypedBase}, true},
+    {O::RefForeachInit, {G::RefForeachInit}},
+    {O::RefForeachSize, {G::Base}},
+    {O::RefForeachGetEntry, {G::Base}},
+    {O::RefForeachRecord, {G::Base}},
+    {O::RefForeachFinalize, {G::Base}},
+    {O::RefForeachCleanup, {G::Base}},
+    {O::AddNumber, {G::Base, G::Expr}},
+    {O::SubNumber, {G::Base, G::Expr}},
+    {O::MulNumber, {G::Base, G::Expr}},
+    {O::DivNumber, {G::Base, G::Expr}},
+    {O::HashKeyStore, {G::HashKeyStore}},
+    {O::ListIndexAccess, {G::ListIndexAccess, G::Base}},
+    {O::ListIndexStore, {G::ListIndexStore}},
+    {O::AddAssignLocalInt, {G::FusedAddLocal}},
+    {O::IncrementLocalInt, {G::FusedIncLocal}},
+    {O::BranchIfLtLocalInt, {G::FusedBrLtLocal}},
+    {O::ConstEnum, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Enum)},
+    {O::ListGetValueNoRef, {G::Base}},
+    {O::SwitchCaseMatch, {G::SwitchCaseMatch}},
+    {O::IsCollectionType, {G::Base, G::Expr}, true},
+    {O::MakeHashConstKeys, {G::MakeHashConstKeys}},
+    {O::ToString, {G::Base, G::Expr}, true, -1, 1, 1},
+    {O::Sprintf, {G::Base, G::Expr}, false, -1, 1, 1},
+    {O::NewHashDeclFromHash, {G::NewHashDeclFromHash}, true},
+    {O::InstantiateLocal, {G::Local}},
+    {O::AddTimeout, {G::Base, G::Expr}, true},
+    {O::SubTimeout, {G::Base, G::Expr}, true},
+    {O::HashDerefDynamic, {G::Expr}, true},
+    {O::ListIndexDynamic, {G::Expr}, true},
+    {O::HashKeyStoreDynamic, {G::HashKeyStoreDynamic}},
+    {O::LValuePathAssign, {G::LValuePath}},
+    {O::LValuePathCompound, {G::LValuePath}},
+    {O::LValuePathUnary, {G::LValuePath}},
+    {O::LValuePathBinaryMut, {G::LValuePath}},
+    {O::LValuePathTernary, {G::LValuePath}},
+    {O::DiscardTemps, {G::Base}},
+    {O::PushTempMark, {G::Base}},
+    {O::CallAOTHelper, {}},
+    {O::ContextMaxPos, {G::Base}},
+    {O::ContextSetPos, {G::Base}},
+    {O::ContextDestroy, {G::Base}},
+    {O::Backquote, {G::Backquote}},
+    {O::Find, {G::Find}},
+    {O::ContextRef, {G::ContextRef}},
+    {O::ContextRow, {G::Base}},
+    {O::RefSelf, {G::Base}},
+    {O::DebugBlock, {G::Base, G::DebugStatement}},
+    {O::CheckException, {G::Base}},
+    {O::NewComplexBuffer, {G::NewComplexBuffer}, true},
+    {O::PluginUnary, {G::Plugin}},
+    {O::PluginBinary, {G::Plugin}},
+    {O::PluginCall, {G::Plugin}},
+    {O::PluginSubscript, {G::Plugin}},
+    {O::PluginConstruct, {G::Plugin}},
+    {O::PluginDenseBufferUnary, {G::Plugin}},
+    {O::PluginDenseBufferBinary, {G::Plugin}},
+    {O::IteratorCreateIterate, {G::IteratorCreate}},
+    {O::IterateValue, {G::Base, G::Expr}, true},
+    {O::ConstChar, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Char)},
+    {O::ToInt, {G::Base, G::Expr}, true},
+    {O::ToFloat, {G::Base, G::Expr}, true},
+    {O::SelectHashKeyPositiveInt, {G::MapHashKey}},
+    {O::HashKeyAccessHash, {G::HashKeyAccess}},
+    {O::HashKeyAccessHashGuarded, {G::HashKeyAccess}},
+    {O::TypedForeachNextInt, {G::IteratorNext}},
+    {O::TypedForeachNextFloat, {G::IteratorNext}},
+    {O::TypedForeachNextBool, {G::IteratorNext}},
+    {O::TypedForeachNextString, {G::IteratorNext}},
+    {O::FusedMapFoldlSumOffsetInt, {G::Base, G::Expr}, true},
+    {O::FusedMapFoldlSumOffsetFloat, {G::Base, G::Expr}, true},
+    {O::FoldlStringJoin, {G::Base, G::Expr}, true},
+    {O::StringJoinStart, {G::Base, G::Expr}, true},
+    {O::StringJoinAppend, {G::Base, G::Expr}, true},
+    {O::SprintfIntFixed, {G::Base, G::Expr}},
+    {O::AppendStringCow, {G::Base}, true},
+    {O::MapHashKeyOffsetAny, {G::MapHashKey}},
+    {O::ListSetLength, {G::Base}},
+    {O::ConstBoolBoxed, {G::Const}, false, static_cast<int>(QoreIRConstant::Kind::Bool)},
+    {O::ListGetValueNoRefUnchecked, {G::Base}},
+    {O::ListStringJoin, {G::Base, G::Expr}, true},
+    {O::FoldrStringJoin, {G::Base, G::Expr}, true},
+    {O::ListStringJoinIdentityMap, {G::Base, G::Expr}, true},
+    {O::StringMethodJoinStart, {G::Base, G::Expr}, true},
+    {O::ListIntSprintfJoin, {G::Base, G::Expr}, true},
+    {O::DiscardTempsKeep, {G::Base}},
+    {O::UnwindTemps, {G::Base}},
+    {O::CheckReturnValue, {G::Base, G::TypedBase}},
+    {O::IteratorRelease, {G::Base}},
+    {O::ReleaseOwnedTemp, {G::Base}},
+    {O::DebugStatement, {G::DebugStatement}},
+    {O::ListSetCommonType, {G::Base, G::TypedBase}},
+    {O::HashSetKeyValueFold, {G::Base}},
+    {O::HashSetCommonType, {G::Base}},
+    {O::ListSetScannedType, {G::Base, G::TypedBase}, false, -1, 1, 2},
+    {O::ListAppendElement, {G::Base, G::TypedBase}},
+    {O::CheckCancelEvery, {G::Base}},
+    {O::CheckRangeBound, {G::Base}},
+    {O::ListSelectorStep, {G::Base}, false, -1, 2, 2 + QORE_IR_LIST_SELECTOR_STEP_MAX * 2, true},
+    {O::IteratorCreateSelectors, {G::IteratorCreate}},
+    {O::SelectorIteratorPending, {G::Base}},
+    {O::SelectorIteratorFeed, {G::Base}, false, -1, 3, 4},
+    {O::ExceptionSuspend, {G::Base}},
+    {O::ExceptionResume, {G::Base}},
+    {O::IteratorNextSelectors, {G::IteratorNext}},
+    {O::ToStringChecked, {G::Base, G::Expr}, true},
+    {O::ToIntChecked, {G::Base, G::Expr}, true},
+    {O::ToFloatChecked, {G::Base, G::Expr}, true},
+    {O::IteratorCreateSource, {G::IteratorCreate}},
+};
+
+constexpr bool aotOpcodeLayoutsIndexed() {
+    for (unsigned i = 0; i < sizeof(aot_opcode_layouts) / sizeof(aot_opcode_layouts[0]); ++i) {
+        if (static_cast<unsigned>(aot_opcode_layouts[i].opcode) != i) {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(sizeof(aot_opcode_layouts) / sizeof(aot_opcode_layouts[0]) == QORE_IR_MAX_OPCODE + 1,
+    "every opcode needs an explicit AOT layout contract");
+static_assert(aotOpcodeLayoutsIndexed(), "AOT opcode layout rows must be in opcode ID order");
+
+std::string aotOpcodeDescription(uint16_t opcode) {
+    const auto* info = getOpcodeInfo(opcode);
+    return std::string(info ? info->name : "<unknown>") + " (" + std::to_string(opcode) + ")";
+}
+
+} // namespace
+
+bool qore_aot_validate_ir_layout(uint16_t opcode, uint8_t group, std::string& error) {
+    if (opcode <= QORE_IR_MAX_OPCODE && aot_opcode_layouts[opcode].allows(group)) {
+        return true;
+    }
+    const auto* info = getAOTInstGroupInfo(group);
+    error = "invalid AOT IR opcode/group pairing: " + aotOpcodeDescription(opcode)
+        + ", group " + (info ? info->name : "<unknown>") + " (" + std::to_string(group) + ")";
+    return false;
+}
+
+bool qore_aot_validate_ir_operands(uint16_t opcode, size_t count, bool has_result, std::string& error) {
+    if (opcode > QORE_IR_MAX_OPCODE) {
+        error = "invalid AOT IR operand opcode " + aotOpcodeDescription(opcode);
+        return false;
+    }
+    const auto& layout = aot_opcode_layouts[opcode];
+    // A non-begin ListSelectorStep consumes the prior result as its extra first operand.
+    unsigned prefix = layout.result_prefix && !has_result ? 1 : 0;
+    if (count < static_cast<unsigned>(layout.min_operands) + prefix
+            || count > static_cast<unsigned>(layout.max_operands) + prefix) {
+        error = "invalid AOT IR operand count for " + aotOpcodeDescription(opcode)
+            + ": got " + std::to_string(count);
+        return false;
+    }
+    return true;
+}
+
+bool qore_aot_validate_ir_invoke(uint16_t opcode, size_t count, std::string& error) {
+    if (opcode > QORE_IR_MAX_OPCODE || !aot_opcode_layouts[opcode].invoke) {
+        error = "invalid AOT IR opcode/group pairing: " + aotOpcodeDescription(opcode) + ", nested Invoke";
+        return false;
+    }
+    return qore_aot_validate_ir_operands(opcode, count, true, error);
+}
+
+static bool validateAOTIRExpression(uint16_t opcode, const QoreValue& expr, std::string& error) {
+    if (static_cast<O>(opcode) == O::InstanceOfBool
+            && !dynamic_cast<const QoreInstanceOfOperatorNode*>(expr.getInternalNode())) {
+        error = "invalid AOT IR expression kind for " + aotOpcodeDescription(opcode)
+            + ": expected instanceof expression";
+        return false;
+    }
+    return true;
+}
+
+bool qore_aot_validate_ir_constant(uint16_t opcode, uint8_t kind, std::string& error) {
+    if (opcode <= QORE_IR_MAX_OPCODE && aot_opcode_layouts[opcode].constant_kind == kind) {
+        return true;
+    }
+    error = "invalid AOT IR constant kind for " + aotOpcodeDescription(opcode) + ": " + std::to_string(kind);
+    return false;
+}
 
 static std::string formatAOTDateOffset(int utc_offset) {
     char buf[16];
@@ -505,9 +1052,16 @@ static std::unique_ptr<QoreIRInstruction> readConst(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
-    auto* ci = new QoreIRConstInstruction();
+    auto ci = std::make_unique<QoreIRConstInstruction>();
     ci->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    if (ctx.ptr >= ctx.end) {
+        ctx.error = "truncated AOT IR constant kind";
+        return nullptr;
+    }
     uint8_t kind_byte = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (!qore_aot_validate_ir_constant(opcode_raw, kind_byte, ctx.error)) {
+        return nullptr;
+    }
     ci->constant.kind = static_cast<QoreIRConstant::Kind>(kind_byte);
     switch (ci->constant.kind) {
         case QoreIRConstant::Kind::Int:
@@ -570,7 +1124,7 @@ static std::unique_ptr<QoreIRInstruction> readConst(
     ci->result = QoreIRValue(result_id);
     ci->operands = std::move(operands);
     ci->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(ci);
+    return ci;
 }
 
 // ============================================================================
@@ -1004,22 +1558,52 @@ static std::unique_ptr<QoreIRInstruction> readExpr(
         ctx.error = error;
         return nullptr;
     }
+    if (!validateAOTIRExpression(opcode_raw, expr, ctx.error)) {
+        expr.discard(nullptr);
+        return nullptr;
+    }
+    bool selectors = static_cast<O>(opcode_raw) == O::ListIndexDynamic
+        && (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LIST_SELECTOR_RANGE) != 0;
+    if (ctx.ptr > ctx.end || static_cast<size_t>(ctx.end - ctx.ptr) < (selectors ? 2u : 1u)) {
+        expr.discard(nullptr);
+        ctx.error = "truncated AOT IR expression metadata";
+        return nullptr;
+    }
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    auto* ei = new QoreIRExprInstruction(static_cast<QoreIROpcode>(opcode_raw), expr);
+    auto ei = std::make_unique<QoreIRExprInstruction>(static_cast<QoreIROpcode>(opcode_raw), expr);
+    expr.discard(nullptr);
     ei->has_ref_args = has_ref_args;
-    if (ei->opcode == QoreIROpcode::ListIndexDynamic
-            && (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LIST_SELECTOR_RANGE) != 0) {
+    if (selectors) {
         uint8_t count = QoreAOTBinaryReader::readU8(ctx.ptr);
+        if (static_cast<size_t>(ctx.end - ctx.ptr) < count) {
+            ctx.error = "truncated AOT IR list selector kinds";
+            return nullptr;
+        }
+        size_t required_operands = 1; // sequence, then one value per index or two per range
         ei->list_selector_kinds.reserve(count);
-        for (uint8_t i = 0; i < count; ++i) {
-            ei->list_selector_kinds.push_back(QoreAOTBinaryReader::readU8(ctx.ptr));
+        for (unsigned i = 0; i < count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT IR list selector metadata")) {
+                ctx.error = "cancelled while reading AOT IR list selector kinds";
+                return nullptr;
+            }
+            uint8_t kind = QoreAOTBinaryReader::readU8(ctx.ptr);
+            if (kind > 1) {
+                ctx.error = "invalid AOT IR list selector kind " + std::to_string(kind);
+                return nullptr;
+            }
+            required_operands += kind ? 2 : 1;
+            ei->list_selector_kinds.push_back(kind);
+        }
+        // An empty kinds vector is the legacy single-index representation (operand 1).
+        if (count && operands.size() != required_operands) {
+            ctx.error = "invalid AOT IR list selector operand count";
+            return nullptr;
         }
     }
-    expr.discard(nullptr);
     ei->result = QoreIRValue(result_id);
     ei->operands = operands;
     ei->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(ei);
+    return ei;
 }
 
 // ============================================================================
@@ -1707,7 +2291,19 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
         ctx.error = error;
         return nullptr;
     }
+    if (ctx.ptr > ctx.end || static_cast<size_t>(ctx.end - ctx.ptr) < 2) {
+        expr.discard(nullptr);
+        ctx.error = "truncated AOT IR nested Invoke opcode";
+        return nullptr;
+    }
     uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
+    // the registry's unsupported-opcode diagnostic (#5828) comes before the schema checks (#5836)
+    if (!validateAOTIROpcode(invoke_opcode_raw, ctx.error)
+            || !qore_aot_validate_ir_invoke(invoke_opcode_raw, operands.size(), ctx.error)
+            || !validateAOTIRExpression(invoke_opcode_raw, expr, ctx.error)) {
+        expr.discard(nullptr);
+        return nullptr;
+    }
     const char* invoke_key_name = ctx.reader.readStringRef(ctx.ptr);
     AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     bool has_ref_args = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0
@@ -2576,14 +3172,19 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // tree does not exist when the serialized IR is deserialized.  The instruction has no operands and no result; its
 // only runtime-relevant datum besides the statement pointer is the statement's source location, which the generic
 // base-instruction record already serializes from inst->loc (set to statement->loc by
-// QoreIRBuilder::createDebugStatement()).  So nothing group-specific is written here, and the reader reconstructs
-// the instruction with a null statement pointer.  The IR interpreter's DebugStatement handler resolves the
+// QoreIRBuilder::createDebugStatement()).  So the statement is not written here, and the reader reconstructs the
+// instruction with a null statement pointer; from format version 26, the nesting of the statement is written (see
+// writeDebugStatement()).  The IR interpreter's DebugStatement handler resolves the
 // statement from the instruction's source location at runtime when the raw pointer is null (see
 // QoreIRInterpreter.cpp), matching the step behavior of the AST and IR tiers for code whose statement index is
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
 static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
-    // No group-specific fields: the AST statement pointer is not serializable and the source location rides on
-    // the base-instruction record.
+    // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
+    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
+    // instruction of a block
+    auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
+    ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
+    ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
     return true;
 }
 
@@ -2601,6 +3202,11 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
         return nullptr;
     }
     auto inst = std::make_unique<QoreIRDebugStatementInstruction>(opcode, nullptr);
+    // the nesting of the statement (see writeDebugStatement())
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        inst->nest_depth = QoreAOTBinaryReader::readU16(ctx.ptr);
+        inst->nest_flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;
@@ -2917,7 +3523,28 @@ static bool writeIteratorNext(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU16(it_d != ctx.block_idx.end() ? it_d->second : 0xFFFF);
     auto it_c = ctx.block_idx.find(ii->continue_target);
     ctx.writer.writeU16(it_c != ctx.block_idx.end() ? it_c->second : 0xFFFF);
+    // the values that it releases after the previous element (v23)
+    if (ii->release_values.size() > UINT16_MAX) {
+        return false;
+    }
+    ctx.writer.writeU16(static_cast<uint16_t>(ii->release_values.size()));
+    for (const QoreIRValue& rv : ii->release_values) {
+        ctx.writer.writeU32(rv.id);
+    }
     return true;
+}
+
+//! Reads the release values of a v23 IteratorNext record (see writeIteratorNext())
+static void readIteratorNextReleases(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        QoreIRIteratorNextInstruction& inst) {
+    if (reader.getHeader().version < QORE_AOT_ITERATOR_RELEASES_VERSION) {
+        return;
+    }
+    uint16_t count = QoreAOTBinaryReader::readU16(ptr);
+    inst.release_values.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        inst.release_values.push_back(QoreIRValue(QoreAOTBinaryReader::readU32(ptr)));
+    }
 }
 
 static std::unique_ptr<QoreIRInstruction> readIteratorNext(
@@ -2942,6 +3569,7 @@ static std::unique_ptr<QoreIRInstruction> readIteratorNext(
             QoreIRValue(iterator_id), ctx.resolveBlock(done_idx), ctx.resolveBlock(continue_idx));
         inst->opcode = opcode;
     }
+    readIteratorNextReleases(ctx.reader, ctx.ptr, *inst);
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
@@ -3133,10 +3761,26 @@ static std::unique_ptr<QoreIRInstruction> readMakeHashConstKeys(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
+    if (ctx.ptr > ctx.end || static_cast<size_t>(ctx.end - ctx.ptr) < 2) {
+        ctx.error = "truncated AOT IR constant hash key count";
+        return nullptr;
+    }
     uint16_t key_count = QoreAOTBinaryReader::readU16(ctx.ptr);
+    if (key_count != operands.size()) {
+        ctx.error = "invalid AOT IR constant hash key operand count";
+        return nullptr;
+    }
+    if (static_cast<size_t>(ctx.end - ctx.ptr) < static_cast<size_t>(key_count) * 4) {
+        ctx.error = "truncated AOT IR constant hash keys";
+        return nullptr;
+    }
     std::vector<std::string> keys;
     keys.reserve(key_count);
     for (uint16_t k = 0; k < key_count; ++k) {
+        if (k && !(k % 100) && qore_check_cancel(nullptr, "AOT IR constant hash keys")) {
+            ctx.error = "cancelled while reading AOT IR constant hash keys";
+            return nullptr;
+        }
         const char* key = ctx.reader.readStringRef(ctx.ptr);
         keys.push_back(key ? key : "");
     }
@@ -3402,6 +4046,14 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
             for (uint32_t sid : step.slice_operand_ids) {
                 ctx.writer.writeU32(sid);
             }
+            // which selectors of a list of selectors are ranges (qore#5736)
+            if (step.kind == LVPathStepKind::ListIndexSlice) {
+                assert(&step == &pi->path.back());
+                assert(pi->slice_ranges.size() == step.slice_operand_ids.size());
+                for (bool range : pi->slice_ranges) {
+                    ctx.writer.writeU8(range ? 1 : 0);
+                }
+            }
         } else if (step.kind == LVPathStepKind::Cast) {
             // the cast operator whose type the step checks
             assert(step.cast_node);
@@ -3471,6 +4123,24 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                     return nullptr;
                 }
                 step.slice_operand_ids.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
+            }
+            if (step.kind == LVPathStepKind::ListIndexSlice) {
+                // which selectors are ranges (QORE_AOT_SLICE_RANGES_VERSION); an older step takes each as a range
+                if (ctx.reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                    pi->slice_ranges.clear();
+                    pi->slice_ranges.reserve(num_slice_ops);
+                    for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                        if (k && !(k % 100)
+                                && qore_check_cancel(nullptr, "AOT lvalue slice range deserialization")) {
+                            ctx.error = "operation cancelled during AOT lvalue slice range deserialization";
+                            delete pi;
+                            return nullptr;
+                        }
+                        pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ctx.ptr) != 0);
+                    }
+                } else {
+                    pi->slice_ranges.assign(num_slice_ops, true);
+                }
             }
         } else if (step.kind == LVPathStepKind::Cast) {
             std::string error;
@@ -3945,4 +4615,16 @@ bool qore_aot_validate_inst_group_registry(std::string& error) {
     }
 
     return true;
+}
+
+// Group tags are supplied by the image, so a supported group must not disguise an unsupported opcode.
+bool validateAOTIROpcode(uint16_t opcode, std::string& error) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode);
+    if (info && !info->hasProperty(QORE_OPCODE_PROPERTY_NO_AOT_IR)) {
+        return true;
+    }
+    error = "unsupported AOT IR opcode ";
+    error += info ? info->name : "<unknown>";
+    error += " (" + std::to_string(opcode) + ")";
+    return false;
 }

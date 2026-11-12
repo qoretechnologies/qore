@@ -134,6 +134,12 @@ public:
         StatementBlock* code;                               //!< handler code block
         const QoreProgramLocation* loc;                     //!< source location for error reporting
         QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
+        //! the debugger's nesting depth of the statement that declares the handler, whose place its statements take
+        //! (#5816)
+        uint16_t debug_nest_depth = 0;
+        //! the depth of the statements of the catch block that the handler is declared in, or -1 (see
+        //! QoreIRLowering::debug_catch_child_depth)
+        int debug_catch_child_depth = -1;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -272,6 +278,39 @@ public:
 
         @return the iterator handle, or an invalid value on error
     */
+    //! The list of a foreach statement that is iterated with the AST interpreter's iterator of its operator
+    struct ForeachSourceOperator {
+        //! the operator
+        QoreIRIteratorSourceKind kind = QoreIRIteratorSourceKind::Keys;
+        //! the operand of keys, or the sequence
+        QoreValue operand;
+        //! the start of a slice, or the list of indices
+        QoreValue first;
+        //! the end of a slice
+        QoreValue second;
+        //! the QoreIRListSelectorFlag flags of a list of indices
+        int64_t flags = 0;
+        //! true if the list is such an operator
+        bool valid = false;
+
+        explicit operator bool() const {
+            return valid;
+        }
+    };
+    //! Returns true and sets \a src if \a list, the list of a foreach statement, is keys, a slice or a list of indices
+    //! (without a range) whose operand can hold an object
+    /** The AST interpreter's iterator of the operator keeps the hash or the sequence for the whole loop, while the
+        other temporaries of the list are released before the body runs; an object that it holds is then destroyed
+        after the loop (qore#5770).  An operand that holds no object cannot show when it is released: its list is
+        built first, as for any other expression.
+    */
+    bool getForeachSource(const QoreValue& list, ForeachSourceOperator& src);
+    //! Lowers the iterator of the foreach source \a src: its operand and indices, and IteratorCreateSource, in a temp
+    //! scope of their own that ends once the iterator is made
+    /** @return the iterator handle, or an invalid value on error
+    */
+    QoreIRValue lowerForeachSourceIterator(const ForeachSourceOperator& src, const QoreProgramLocation* loc,
+        std::string& error);
     QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
         bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
     //! Emits the iteration of a lazy list of selectors in place of IteratorNext
@@ -300,8 +339,10 @@ public:
     //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
     //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
     //! (LValueRemoveHelper::doRemove()); see tryEmitLValuePathOp()
+    //! (\a slice_ranges: the selectors of the path that are ranges, QoreIRLValuePathInstruction::slice_ranges)
     void emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
-        const std::vector<QoreIRValue>& dyn_vals, size_t selector_count, AssignmentMode mode,
+        const std::vector<bool>& slice_ranges, const std::vector<QoreIRValue>& dyn_vals, size_t selector_count,
+        AssignmentMode mode,
         const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
@@ -346,6 +387,17 @@ public:
             std::string& error, F&& lower);
     //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
     void setFunctionalBaseSource(const QoreValue& base_source);
+    //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
+    class FunctionalLoopExceptionCleanup;
+    //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
+    //! are restored on every path, also when the code raises an exception (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
+            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
+    //! Lowers code that runs with the implicit argument list (arg0) or (arg0, arg1) (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitArgs(QoreIRValue arg0, QoreIRValue arg1, QoreIRValue index,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -393,9 +445,10 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         const QoreTypeInfo* element_type, std::string& error);
-    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
-    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
-        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
+    //! Restores the implicit arguments that the SetImplicitArgv of a fold's (accumulator, element) argument list
+    //! replaced (\a old_argv; see lowerWithImplicitArgs()), and releases the reference to them that the IR
+    //! interpreter's slot keeps
+    void createFoldPopImplicitArg(QoreIRValue old_argv, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
@@ -470,7 +523,8 @@ private:
     //! The decisions of decideLazySelectorSource(), by list of selectors
     std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
 
-    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+    //! Lowers a pipeline stage with virtual $1/$# values, and with the element as the implicit argument list also at
+    //! run time when the stage needs it (see the definition)
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
         QoreIRValue element, QoreIRValue index, std::string& error);
 
@@ -849,12 +903,27 @@ private:
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
-    /** Releases the iterator, the list and the loop variables, as the AST's foreach statement does when an exception
-        unwinds it, before the handler of the enclosing try block or block with handlers runs.
+    /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their
+        order: the list holds a reference of its own), the partial result (if valid: the list that a functional operator built so far), the
+        iterator (if valid), the list and the loop variables, in this order, as the AST's foreach statement and
+        functional operators do when an exception unwinds them, before the handler of the enclosing try block or block
+        with handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
     */
+    //! Releases the value of a functional operator's predicate once it has been converted to a bool, if it can
+    //! hold an object
+    /** The AST interpreter holds the value of the predicate for the element (ValueEvalOptimizedRefHolder) and
+        releases it when it has decided on the element; as a temporary of the statement, it was released when the
+        next element's value was, or with the statement's temporaries after the operator's values when an exception
+        left the operator.  Nothing is emitted for a value that cannot hold an object, whose release cannot be
+        observed, or that is the element (\a element) itself.
+    */
+    DLLLOCAL void releasePredicateValue(QoreIRValue value, const QoreValue& expr, QoreIRValue element,
+            const QoreProgramLocation* loc);
+
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
-            const QoreProgramLocation* loc);
+            const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
+            const std::vector<QoreIRValue>& element_values = {});
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
@@ -917,6 +986,10 @@ private:
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
+    uint16_t debug_nest_depth = 0;
+    //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
+    int debug_catch_child_depth = -1;
 
     //! Returns the number of active catch scopes that a throw or rethrow statement at the current point leaves
     /** These are the catch scopes entered since the body of the innermost enclosing try statement began, or all of
@@ -937,6 +1010,8 @@ private:
         QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
         QoreIRValue element;   //!< virtual $# value
         bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
     };
     VirtualImplicitContext virtual_implicit;
 
@@ -985,8 +1060,10 @@ private:
         holds in a parameter: the new thread has no object context (issue #5723: <tt>background (o.x = 1)</tt> in a
         method of a class with an object member \c o raised "no object context for self member access")
     */
+    //! (\a slice_ranges: required with \a allow_slice; see QoreIRLValuePathInstruction::slice_ranges)
     bool extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
-            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false);
+            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false,
+            std::vector<bool>* slice_ranges = nullptr);
 
     //! Lowers a background expression to a helper function and the instruction starting the thread with it
     /** See QoreIRBackgroundInstruction.

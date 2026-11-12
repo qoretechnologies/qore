@@ -7,11 +7,32 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 3.0, binary modules use Module API 2.x, which requires a single
-    \c extern \c "C" module description function instead of the old-style exported global variables.  Module API 2.1
-    adds QoreModuleInfo::cmd_caller_aware and QoreModuleCommandContext (see the parse command handler below); a module
-    built with module API 2.0 still loads, with the restriction on its module commands that the handler section
-    describes.
+    Since %Qore 3.0, binary modules use Module API 2.2, which requires a single
+    \c extern \c "C" module description function instead of the old-style exported global variables.
+
+    @subsection module_api_version Module API Version
+
+    A binary module carries the inline code and the type layouts of the %Qore headers that it was compiled with, so
+    %Qore loads only a module built for the module API that it implements (@ref QORE_MODULE_API_MAJOR and
+    @ref QORE_MODULE_API_MINOR, which the module sets in its description function).  A module file is named
+    <tt>{name}-api-{major}.{minor}.qmod</tt> after the module API of the headers that it was built with, and a module
+    built with the headers of another module API must be rebuilt:
+    - looked up by its feature name (\c %%requires, @ref Qore::load_module() "load_module()"), only the files of the
+      supported module API are considered, so the module is not found; the \c LOAD-MODULE-ERROR exception names each
+      file of the feature built for another module API that is in the module path:
+      <tt>...; found '/usr/lib/qore-modules/xml-api-2.1.qmod' built for module API 2.1: rebuild it for module API
+      2.2</tt>
+    - loaded by its path, it is refused with a \c LOAD-MODULE-ERROR exception that reports the API mismatch
+
+    Module API 2.1 covers all public ABI changes made during %Qore 3.0 development after module API 2.0 was introduced
+    (enum value ownership, new virtual methods in the I/O, iterator and polling classes, the representation of
+    @ref QoreValue, program IDs, among others); a module built with the 2.0 headers is refused.  Module API 2.2 adds
+    QoreModuleInfo::cmd_caller_aware and QoreModuleCommandContext, through which a module command handler judges the
+    code that issues a command (see the parse command handler below); a module built with the 2.1 headers is refused.
+
+    @note Any change to inline code, or to an exported or inline-visible type or function, in the public headers
+    (<tt>include/qore</tt>, outside <tt>include/qore/intern</tt>) that a module compiled with the previous headers would
+    get wrong increments @ref QORE_MODULE_API_MINOR (or @ref QORE_MODULE_API_MAJOR for an incompatible redesign).
 
     @subsection module_header Module Description Function
 
@@ -34,6 +55,7 @@
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
@@ -56,6 +78,8 @@
     - \c license_str — the license as a string (e.g. \c "MIT", \c "LGPL", \c "GPL")
     - \c dependencies — a list of other binary module names this module depends on (\c strvec_t)
     - \c info — an optional @ref QoreHashNode pointer with extra module metadata (default: \c nullptr)
+    - \c ns — the module's namespace with static storage duration, if any (default: \c nullptr); it is purged when
+      the module is deleted, see @ref qore_module_teardown (since %Qore 3.0, @ref QORE_HAS_MODULE_NS_PURGE)
 
     @note The @ref QoreModuleInfo struct uses default member initializers, so fields like \c license (defaults to
     @ref QL_MIT) and callback pointers (default to \c nullptr) only need to be set if non-default values are
@@ -92,7 +116,8 @@
     @endcode
 
     Called when the module is unloaded (typically when the %Qore library shuts down).  Free any resources allocated
-    during initialization.
+    during initialization, including every Qore value the module holds outside its namespace; see
+    @ref qore_module_teardown.
 
     @par Parse Command Handler — \c qore_module_parse_cmd_t (optional)
 
@@ -105,7 +130,7 @@
     ModuleManager::issueRuntimeCmd(), as well as the commands that a compiled program records and replays when it is
     loaded.  Set to \c nullptr in the description function if not used (this is the default).
 
-    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.1)
+    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.2)
 
     The handler runs in the Program that the command applies to: \c getProgram() there is the target of the command,
     and its parse options say nothing about the code that issued the command.  A handler decides what a command may do
@@ -148,22 +173,21 @@
     @endcode
 
     A module whose handler checks the context for every such command sets \c QoreModuleInfo::cmd_caller_aware to
-    \c true in its description function.  A module that does not set it (every module built with module API 2.0) is
-    not given a command that restricted code issues (code that is sandboxed or has a parse option that restricts a
-    functional domain): the command is refused with \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR before the
-    handler runs.  Code that is not restricted can issue commands to every module.
+    \c true in its description function.  A module that does not set it is not given a command that restricted code
+    issues (code that is sandboxed or has a parse option that restricts a functional domain): the command is refused
+    with \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR before the handler runs.  Code that is not restricted can
+    issue commands to every module.
 
     @warning The library creates the @ref QoreModuleInfo struct and validates the module API version only after the
     description function has filled it in, since the version is one of its fields: the version cannot be checked
-    before the description function runs.  A struct created by a library that implements only module API 2.0 (an
-    earlier %Qore 3.0 development build) has no \c cmd_caller_aware field, so a module built with module API 2.1
-    that such a library loads (by an explicit path or a file name without the API suffix; the library does not look
-    for a \c -api-2.1.qmod file) would write past the end of the struct.  A module that may be loaded by such a
-    library sets the field only if the library implements module API 2.1; the library then refuses the module for its
-    API version, without the write:
+    before the description function runs.  A struct created by a library that implements module API 2.1 or earlier
+    has no \c cmd_caller_aware field, so a module built with module API 2.2 that such a library loads (by an explicit
+    path or a file name without the API suffix; the library does not look for a \c -api-2.2.qmod file) would write
+    past the end of the struct.  A module that may be loaded by such a library sets the field only if the library
+    implements module API 2.2; the library then refuses the module for its API version, without the write:
     @code{.cpp}
-    // the field exists only in a library that implements module API 2.1
-    if (is_module_api_supported(2, 1)) {
+    // the field exists only in a library that implements module API 2.2
+    if (is_module_api_supported(2, 2)) {
         mod_info.cmd_caller_aware = true;
     }
     @endcode
@@ -175,7 +199,7 @@
     to change a classpath that the code of a library module issues at run time is not refused for a caller that has
     only \c PO_NO_FILESYSTEM (see design/module-sandboxing-audit-guide.md).
 
-    @par The Restrictions of the Caller of a Module Function (module API 2.1)
+    @par The Restrictions of the Caller of a Module Function (module API 2.2)
 
     A module function or method that decides what its caller may do (a database driver that judges a classpath
     option, for example) asks QoreModuleCommandRestrictions::getCallerRestrictions() instead of reading
@@ -262,6 +286,9 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     static void mymodule_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
     static void mymodule_module_delete();
 
+    // Reference namespace — initialized once, copied for each QoreProgram
+    static QoreNamespace MyModuleNS("Qore::mymodule");
+
     // Module description function — the entry point discovered by the Qore library
     extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
         mod_info.name = "mymodule";
@@ -274,12 +301,11 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        // the namespace is purged when the module is deleted, before the types are freed
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
-
-    // Reference namespace — initialized once, copied for each QoreProgram
-    static QoreNamespace MyModuleNS("Qore::mymodule");
 
     static void mymodule_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         // Register classes, constants, and functions in the namespace
@@ -293,7 +319,7 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     }
 
     static void mymodule_module_delete() {
-        // Free any resources allocated during initialization
+        // Free any resources allocated during initialization; MyModuleNS is purged after this returns
     }
     @endcode
 
@@ -305,6 +331,57 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
 
     @note Classes must not be created more than once, because each Qore class gets a unique ID at creation time.
     Initialize classes in the \c init callback and use \c copy() in the \c ns_init callback.
+
+    @subsection qore_module_teardown Releasing Module State at Shutdown
+
+    A module releases all the %Qore state it owns when it is deleted: its namespace and the constants, classes,
+    hashdecls and enums in it, and any %Qore value it keeps elsewhere (objects, call references, hashes, lists,
+    strings, and Programs that the module created).  Modules are deleted by qore_cleanup(), modules that require
+    another module before it, and all of this must be released then, before the library frees the types.  It must
+    never be left to a C++ static destructor: static destructors run after qore_cleanup() has freed the types, when
+    releasing a %Qore value (and running a destructor of a Qore object) is no longer safe, and they do not run at
+    all when the process ends with \c _exit() (as it does when a background JIT compile is still running when the
+    process exits, or in a child process that requested qore_fork_child_exit_quickly()), so a leak checker such as
+    valgrind reports their values as lost.
+
+    - a namespace with static storage duration is registered with QoreModuleInfo::ns in the description function;
+      after the module's \c del function has run, it is purged with QoreNamespace::purge(), which releases
+      everything in it and leaves it empty, so that its C++ static destructor has nothing left to release.  The
+      \c del function can still use the namespace, and does not need to call QoreNamespace::clear() or
+      QoreNamespace::purge() itself
+    - everything else is released by the \c del function: a QoreProgram that the module owns is deleted there (with
+      QoreProgram::waitForTerminationAndDeref()), and objects, call references and other values are dereferenced
+      there
+    - a module that also supports %Qore versions without QoreModuleInfo::ns tests @ref QORE_HAS_MODULE_NS_PURGE and
+      calls QoreNamespace::clear() in its \c del function otherwise
+
+    @code{.cpp}
+    static QoreNamespace MyModuleNS("Qore::mymodule");
+    static ResolvedCallReferenceNode* my_callback = nullptr;
+
+    extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
+        // ...
+        mod_info.del = mymodule_module_delete;
+    #ifdef QORE_HAS_MODULE_NS_PURGE
+        mod_info.ns = &MyModuleNS;
+    #endif
+    }
+
+    static void mymodule_module_delete() {
+        if (my_callback) {
+            ExceptionSink xsink;
+            my_callback->deref(&xsink);
+            my_callback = nullptr;
+        }
+    #ifndef QORE_HAS_MODULE_NS_PURGE
+        MyModuleNS.clear(nullptr);
+    #endif
+    }
+    @endcode
+
+    Debug builds of the library count the module namespaces that still hold values when the types are freed;
+    with the \c QORE_TEARDOWN_REPORT environment variable set, the count and each such namespace are printed on
+    \c stderr, and a registered namespace destroyed with content after that point fails an assertion.
 
     @subsection module_cpp_api_dev Sharing a C++ API Between Modules
 

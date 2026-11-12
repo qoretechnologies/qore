@@ -149,8 +149,11 @@ void Http3ServerPollOperationPriv::closeStreamQueues() {
             // NOTHING sentinel — handler thread's read loop exits clean.
             // Don't deref the Queue: the QoreObject ref is held in the
             // QPP layer's `stream_queue_objs` member hash, which is
-            // released by the standard internal_members deref path.
-            queue->pushAndTakeRef(QoreValue());
+            // released by the standard internal_members deref path.  Pushed
+            // without waiting, even if the Queue is bounded and full (issue #5859).
+            ExceptionSink push_xsink;
+            queue->tryPush(&push_xsink, QoreValue(), true);
+            push_xsink.clear();
         }
     }
     stream_queues.clear();
@@ -827,7 +830,10 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
             }
             ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
                 "pushing persistent close session=%lld\n", (long long)sid);
-            q->pushAndTakeRef(close_entry.release());
+            // pushed without waiting, even if the Queue is bounded and full (issue #5859)
+            ExceptionSink push_xsink;
+            q->tryPush(&push_xsink, close_entry.release(), true);
+            push_xsink.clear();
         }
     }
 
@@ -872,7 +878,10 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
             // ref lives in the QPP `stream_queue_objs` member.  Same contract as
             // closeStreamQueues(), but scoped to one session, so `stream_queues_closed`
             // stays clear: other live sessions must still be able to register.
-            it->second->pushAndTakeRef(QoreValue());
+            // Pushed without waiting, even if the Queue is bounded and full (issue #5859).
+            ExceptionSink push_xsink;
+            it->second->tryPush(&push_xsink, QoreValue(), true);
+            push_xsink.clear();
         }
         // Dispatch onStreamData() for this stream so the listener's notifyIo()
         // runs on a worker and consumes the sentinel.  The I/O thread must never

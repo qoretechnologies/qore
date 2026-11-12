@@ -140,6 +140,14 @@ DLLLOCAL RuntimeConfig rc_get_parse_time();
  */
 DLLLOCAL RuntimeConfig& rc_get_current_ref();
 
+//! returns the current Program from a RuntimeConfig that rc_get_current_ref() returned, without a call
+/** rc_get_current_ref() always sets the Program in the thread-local RuntimeConfig, so its implementation exists
+*/
+DLLLOCAL inline QoreProgram* rc_get_current_program(const RuntimeConfig& rc) {
+    assert(rc.impl);
+    return rc.impl->pgm;
+}
+
 /**
  * @brief Get a direct reference to the thread-local RuntimeConfig.
  *

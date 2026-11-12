@@ -46,6 +46,59 @@ bool qore_closure_self_context(const QoreObject* obj) {
     return closure_self_context == obj;
 }
 
+void QoreClosureBase::captureTypeContext() {
+    assert(!type_context);
+    const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+    if (inst && inst->empty()) {
+        inst = nullptr;
+    }
+    // the receiver type binds the type parameters of the class (also of a generic base class of a class that is not
+    // generic itself); this is only called for a closure in generic code (see QoreClosureParseNode::needsTypeContext())
+    const QoreTypeInfo* receiver = runtime_get_receiver_type_info();
+    if (!inst && !receiver) {
+        return;
+    }
+    std::unique_ptr<QoreClosureTypeContext> ctx(new QoreClosureTypeContext);
+    if (inst) {
+        ctx->inst = *inst;
+    }
+    ctx->receiver_type_info = receiver;
+    type_context = ctx.release();
+}
+
+void QoreClosureBase::captureObjectReceiver(const QoreObject* obj) {
+    // the receiver type is the object's instantiated type (or its class's type), which binds the type parameters of
+    // its class and of its base classes, as for a call of the method that creates the closure; the run-time receiver
+    // type that is current is not used, as it can be that of other code (it is not reset by a call of a function or
+    // by code that binds the type parameters statically)
+    const QoreTypeInfo* receiver = obj ? qore_get_object_receiver_type_info(obj) : nullptr;
+    if (!receiver) {
+        return;
+    }
+    if (!type_context) {
+        type_context = new QoreClosureTypeContext;
+    }
+    type_context->receiver_type_info = receiver;
+}
+
+void QoreClosureTypeContextHelper::set() {
+    if (!ctx->inst.empty()) {
+        old_inst = runtime_set_type_param_instantiation(&ctx->inst);
+    } else {
+        old_inst = runtime_get_type_param_instantiation();
+    }
+    if (ctx->receiver_type_info) {
+        old_receiver_type_info = runtime_set_receiver_type_info(ctx->receiver_type_info);
+    } else {
+        old_receiver_type_info = runtime_get_receiver_type_info();
+    }
+}
+
+void QoreClosureTypeContextHelper::restore() {
+    runtime_set_type_param_instantiation(old_inst);
+    runtime_set_receiver_type_info(old_receiver_type_info);
+}
+
 const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
     UserClosureFunction* f = closure->getFunction();
     if (f) {

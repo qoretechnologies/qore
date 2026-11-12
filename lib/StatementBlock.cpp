@@ -163,6 +163,13 @@ VariableBlockHelper::~VariableBlockHelper() {
    //printd(5, "VariableBlockHelper::~VariableBlockHelper() this=%p got %p\n", this, vnode->lvar);
 }
 
+std::string QoreNativeParseInfo::describe() const {
+    assert(legacy_location);
+    return std::string("native execution requires every statement and expression to use %modern; ")
+        + (directive ? directive : "non-%modern parse options") + " at " + legacy_location->getFile()
+        + " line " + std::to_string(legacy_location->start_line) + " requires the AST tier";
+}
+
 StatementBlock::StatementBlock(qore_program_private_base* p) : AbstractStatement(p) {
 }
 
@@ -769,11 +776,42 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
         start++;
     }
     hwm = statement_list.last();
+    committed_native_parse_info = native_parse_info;
 }
 
 TopLevelStatementBlock::~TopLevelStatementBlock() {
+    delete cached_toplevel_aot_debug_ir;
     delete cached_toplevel_aot_ctx;
     delete cached_toplevel_ir;
+}
+
+QoreIRFunction* TopLevelStatementBlock::getAOTDebugIR(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(toplevel_aot_debug_ir_mutex);
+    if (!cached_toplevel_aot_debug_ir) {
+        std::string error;
+        std::unique_ptr<QoreIRFunction> ir = cached_toplevel_aot_ctx->materializeDebugIR("_toplevel", error);
+        if (!ir) {
+            xsink->raiseException("AOT-DEBUG-IR-ERROR",
+                "could not materialize the source-stripped AOT debug IR of the top-level code: %s",
+                error.empty() ? "unknown error" : error.c_str());
+            return nullptr;
+        }
+        cached_toplevel_aot_debug_ir = ir.release();
+    }
+    return cached_toplevel_aot_debug_ir;
+}
+
+void TopLevelStatementBlock::delCompiledCode() {
+    // the entry points into the code freed here are cleared as well
+    cached_toplevel_jit_fn = nullptr;
+    cached_toplevel_aot_fn = nullptr;
+    // the debug IR materialized from the AOT context (qore#5851) goes first, as in the destructor
+    delete cached_toplevel_aot_debug_ir;
+    cached_toplevel_aot_debug_ir = nullptr;
+    delete cached_toplevel_aot_ctx;
+    cached_toplevel_aot_ctx = nullptr;
+    delete cached_toplevel_ir;
+    cached_toplevel_ir = nullptr;
 }
 
 void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
@@ -825,8 +863,27 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     }
     const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
+    // with a debugger attached, the top-level code runs on the AST tier, as a function does (see
+    // UserVariantBase::evalTiered()): the debugger's callbacks, such as the exception callback of each statement that
+    // an exception leaves, are those of the AST interpreter, which is the reference; native code has no such
+    // callbacks.  Code without statements, as the top-level code of an AOT image, runs as it is
+    const bool debug_ast = !statement_list.empty() && qore_program_private::get(*pgm)->hasDebuggerAttached();
+
+    // with a debugger attached, top-level code compiled ahead of time runs its debug IR in the IR interpreter, as an AOT
+    // function does (UserVariantBase::materializeAOTDebugIR()): native code reads no value that the debugger sets
+    // and does not stop for an exception that a try statement catches (qore#5851)
+    if (statement_list.empty() && cached_toplevel_aot_ctx && cached_toplevel_aot_ctx->hasLazyDebugIR()
+            && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        QoreIRFunction* debug_ir = getAOTDebugIR(xsink);
+        if (!debug_ir) {
+            return -1;
+        }
+        return execIR(debug_ir, false, runtime_parse_options, pgm, return_value, xsink);
+    }
+
     // AOT pre-compiled top-level function — execute directly if registered
-    if (!((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+    if (!debug_ast
+            && !((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -880,7 +937,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     }
 
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
-    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+    if (!debug_ast && !(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
         // QEM_TIERED uses IR immediately for top-level code and leaves native
         // promotion to functions. Top-level code is commonly one-shot, so
@@ -1003,7 +1060,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             // falling back to AST.  This path runs only under %modern
             // (ensureIrExecMode guarantees it), so any lowering gap is a
             // bug in the IR implementation that must surface.
-            if (toplevel_ir_failed) {
+            if (toplevel_ir_failed
+                    && !(exec_mode == QEM_TIERED && native_parse_info.legacy_location)) {
                 xsink->raiseException("IR-COMPILATION-ERROR",
                     "IR lowering of top-level code failed: %s (silent AST fallback "
                     "disabled)", toplevel_ir_fail_reason.c_str());
@@ -1011,99 +1069,12 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             }
 
             if (ir_func) {
-                if (qore_program_private::get(*pgm)->ir_dump) {
-                    QoreIRPrinter::print(*ir_func, std::cout);
-                }
-                QoreValue ir_return_value;
-                bool ok;
-                // Build set of pre-instantiated local variables from the IR function's
-                // all_body_locals.  This ensures the pointers match those embedded in
-                // the JIT-compiled code (captured at IR creation time).
-                //
-                // Nested closure-use locals must be EXCLUDED: the loop below deliberately does
-                // not instantiate them, because the cvstack is LIFO and block-scope cleanup pops
-                // from the top, so they are scoped by the IR's InstantiateLocal /
-                // UninstantiateLocal operations instead (same rule as the function/method path in
-                // UserFunctionVariant::evalTiered(), see cached_pre_instantiated in Function.cpp).
-                // Listing them here as pre-instantiated made ensureLocalInstantiated() skip them,
-                // so a captured block-scoped local whose declaration has no initializer never got
-                // a ClosureVarValue at all and closure creation dereferenced null
-                // (thread_get_closure_vars_for_vlist()).  Declarations *with* an initializer
-                // happened to work because StoreClosure instantiates on demand.
-                std::unordered_set<const LocalVar*> pre_instantiated;
-                for (LocalVar* lv : ir_func->all_body_locals) {
-                    if (!lv->closureUse()) {
-                        pre_instantiated.insert(lv);
-                    }
-                }
-                // The top-level block's own locals are program-scoped: QoreProgram instantiates
-                // them for every thread before the top-level block runs (closure-use ones land on
-                // the cvstack), so they are genuinely pre-instantiated.
-                if (const LVList* top_lvars = getLVList()) {
-                    for (unsigned i = 0; i < top_lvars->size(); ++i) {
-                        pre_instantiated.insert(top_lvars->lv[i]);
-                    }
-                }
-
-                // Instantiate nested non-closure body locals before optimized execution.
-                // Closure-use nested locals are scoped by explicit IR
-                // InstantiateLocal / UninstantiateLocal operations.
-                const LVList* toplevel_lvars = getLVList();
-                std::unordered_set<const LocalVar*> toplevel_set;
-                if (toplevel_lvars) {
-                    for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
-                        toplevel_set.insert(toplevel_lvars->lv[i]);
-                    }
-                }
-                std::vector<LocalVar*> nested_locals;
-                for (LocalVar* lv : ir_func->all_body_locals) {
-                    if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
-                        lv->instantiate(runtime_parse_options);
-                        nested_locals.push_back(lv);
-                    }
-                }
-
-                std::string error;
-                if (exec_mode == QEM_JIT) {
-                    ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
-                        &pre_instantiated);
-
-                    // Clear any pending deopt request from top-level JIT execution.
-                    // Top-level code handles guard failures internally (e.g., via
-                    // try-catch) and must not propagate deopt to subsequent calls.
-                    qore_jit_deopt_requested();
-                } else {
-                    // suppress_guard_deopt=true: top-level code must not deopt on
-                    // guard failure because re-executing the entire block from the
-                    // beginning would duplicate side effects (I/O, mutations).
-                    ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
-                        nullptr, nullptr, &pre_instantiated, nullptr, this, pgm, true);
-                }
-
-                // Uninstantiate nested locals after JIT execution (reverse order)
-                for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
-                    (*it)->uninstantiate(xsink);
-                }
-
-                if (ok && !*xsink) {
-                    return_value = ir_return_value;
-                    return 0;
-                }
-                // If IR execution raised an exception, propagate it
-                if (*xsink) {
-                    return 0;
-                }
-                // IR execution failed without raising an exception.  This path only
-                // runs under %modern (ensureIrExecMode guarantees it), so silent AST
-                // fallback is disabled to expose IR-interpreter bugs immediately.
-                if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
-                    QoreIRInterpreter::dumpLastSilentFail("toplevel");
-                }
-                qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
-                xsink->raiseException("IR-EXECUTION-ERROR",
-                    "IR interpreter execution of top-level code failed without raising an "
-                    "exception; this is a bug in the IR interpreter (silent AST fallback disabled)");
-                return -1;
+                // native code does not read the local variables again after a stop, where the debugger can set
+                // them, and does not stop at an exception that a try statement of the code catches: with a debugger
+                // attached, the top-level code runs in the IR interpreter, as a function runs in the AST
+                // interpreter (UserVariantBase::evalTiered()) (qore#5796)
+                return execIR(ir_func, exec_mode == QEM_JIT && !qore_program_private::get(*pgm)->hasDebuggerAttached(),
+                    runtime_parse_options, pgm, return_value, xsink);
             }
         }
     }
@@ -1158,6 +1129,104 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
 
     // Normal mode - execute all statements
     return execIntern(rc, return_value, xsink);
+}
+
+//! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
+int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const QoreParseOptions& runtime_parse_options,
+        QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink) {
+    if (qore_program_private::get(*pgm)->ir_dump) {
+        QoreIRPrinter::print(*ir_func, std::cout);
+    }
+    QoreValue ir_return_value;
+    bool ok;
+    // Build set of pre-instantiated local variables from the IR function's
+    // all_body_locals.  This ensures the pointers match those embedded in
+    // the JIT-compiled code (captured at IR creation time).
+    //
+    // Nested closure-use locals must be EXCLUDED: the loop below deliberately does
+    // not instantiate them, because the cvstack is LIFO and block-scope cleanup pops
+    // from the top, so they are scoped by the IR's InstantiateLocal /
+    // UninstantiateLocal operations instead (same rule as the function/method path in
+    // UserFunctionVariant::evalTiered(), see cached_pre_instantiated in Function.cpp).
+    // Listing them here as pre-instantiated made ensureLocalInstantiated() skip them,
+    // so a captured block-scoped local whose declaration has no initializer never got
+    // a ClosureVarValue at all and closure creation dereferenced null
+    // (thread_get_closure_vars_for_vlist()).  Declarations *with* an initializer
+    // happened to work because StoreClosure instantiates on demand.
+    std::unordered_set<const LocalVar*> pre_instantiated;
+    for (LocalVar* lv : ir_func->all_body_locals) {
+        if (!lv->closureUse()) {
+            pre_instantiated.insert(lv);
+        }
+    }
+    // The top-level block's own locals are program-scoped: QoreProgram instantiates
+    // them for every thread before the top-level block runs (closure-use ones land on
+    // the cvstack), so they are genuinely pre-instantiated.
+    if (const LVList* top_lvars = getLVList()) {
+        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+            pre_instantiated.insert(top_lvars->lv[i]);
+        }
+    }
+
+    // Instantiate nested non-closure body locals before optimized execution.
+    // Closure-use nested locals are scoped by explicit IR
+    // InstantiateLocal / UninstantiateLocal operations.
+    const LVList* toplevel_lvars = getLVList();
+    std::unordered_set<const LocalVar*> toplevel_set;
+    if (toplevel_lvars) {
+        for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+            toplevel_set.insert(toplevel_lvars->lv[i]);
+        }
+    }
+    std::vector<LocalVar*> nested_locals;
+    for (LocalVar* lv : ir_func->all_body_locals) {
+        if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
+            lv->instantiate(runtime_parse_options);
+            nested_locals.push_back(lv);
+        }
+    }
+
+    std::string error;
+    if (use_jit) {
+        ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
+            &pre_instantiated);
+
+        // Clear any pending deopt request from top-level JIT execution.
+        // Top-level code handles guard failures internally (e.g., via
+        // try-catch) and must not propagate deopt to subsequent calls.
+        qore_jit_deopt_requested();
+    } else {
+        // suppress_guard_deopt=true: top-level code must not deopt on
+        // guard failure because re-executing the entire block from the
+        // beginning would duplicate side effects (I/O, mutations).
+        ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
+            nullptr, nullptr, &pre_instantiated, nullptr, this, pgm, true);
+    }
+
+    // Uninstantiate nested locals after JIT execution (reverse order)
+    for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+        (*it)->uninstantiate(xsink);
+    }
+
+    if (ok && !*xsink) {
+        return_value = ir_return_value;
+        return 0;
+    }
+    // If IR execution raised an exception, propagate it
+    if (*xsink) {
+        return 0;
+    }
+    // IR execution failed without raising an exception.  This path only
+    // runs under %modern (ensureIrExecMode guarantees it), so silent AST
+    // fallback is disabled to expose IR-interpreter bugs immediately.
+    if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
+        QoreIRInterpreter::dumpLastSilentFail("toplevel");
+    }
+    qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
+    xsink->raiseException("IR-EXECUTION-ERROR",
+        "IR interpreter execution of top-level code failed without raising an "
+        "exception; this is a bug in the IR interpreter (silent AST fallback disabled)");
+    return -1;
 }
 
 QoreParseContextLvarHelper::~QoreParseContextLvarHelper() {

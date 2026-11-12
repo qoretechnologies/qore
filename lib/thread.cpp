@@ -782,8 +782,14 @@ public:
     // parse-time block return type
     const QoreTypeInfo* parse_return_type_info = nullptr;
 
-    // parse-time implicit argument type
+    // parse-time implicit argument type ($1)
     const QoreTypeInfo* implicit_arg_type_info = nullptr;
+    // parse-time type of the second implicit argument ($2): only foldl and foldr give their code a second element
+    const QoreTypeInfo* implicit_arg2_type_info = nullptr;
+    //! the number of operators that set the implicit arguments (map, select, foldl, ...) around the code that is parsed
+    unsigned implicit_arg_ctx_depth = 0;
+    //! set when the function or closure body that is parsed reads the implicit arguments of its own call (qore#5805)
+    bool* fn_reads_implicit_args = nullptr;
 
     // current implicit element offset
     int element = 0;
@@ -1982,6 +1988,39 @@ public:
     }
 };
 
+//! makes the type arguments of the generic code that started a background thread current in the thread (qore#5732)
+/** The type arguments of the starting code's call (its own type parameters) and its receiver type (the type
+    parameters of its class)
+*/
+class BGTypeParamInstantiationHelper {
+public:
+    DLLLOCAL BGTypeParamInstantiationHelper(const QoreTypeParamInstantiation& inst,
+            const QoreTypeInfo* receiver_type_info) : inst_set(!inst.empty()),
+            receiver_set(receiver_type_info != nullptr) {
+        if (inst_set) {
+            old_inst = runtime_set_type_param_instantiation(&inst);
+        }
+        if (receiver_set) {
+            old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        }
+    }
+
+    DLLLOCAL ~BGTypeParamInstantiationHelper() {
+        if (inst_set) {
+            runtime_set_type_param_instantiation(old_inst);
+        }
+        if (receiver_set) {
+            runtime_set_receiver_type_info(old_receiver_type_info);
+        }
+    }
+
+private:
+    const QoreTypeParamInstantiation* old_inst = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    bool inst_set;
+    bool receiver_set;
+};
+
 class BGThreadParams {
 private:
     // call_obj: get and reference the current stack object, if any, for the new call stack
@@ -2008,6 +2047,12 @@ public:
     const QoreProgramLocation* loc;
     //! the identity of the thread for its Program's lifecycle events
     ProgramThreadIdentity identity;
+    //! the type arguments of the generic code that starts the thread, which its expression runs with (qore#5732)
+    /** A copy: the instantiation of the starting code's call ends with that call, which the thread can outlive
+    */
+    QoreTypeParamInstantiation type_param_inst;
+    //! the receiver type of the code that starts the thread, which binds the type parameters of its class (qore#5732)
+    const QoreTypeInfo* receiver_type_info = nullptr;
     bool registered = false,
         started = false;
 
@@ -2023,6 +2068,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
         //    "fct: %d\n", f, f->getTypeName(), f->getType(), t, this, call_obj,
@@ -2084,6 +2130,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         if (preregister(xsink)) {
             return;
@@ -2100,6 +2147,15 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! copies the type arguments and the receiver type of the generic code that starts the thread, if any
+    DLLLOCAL void setTypeParamInstantiation() {
+        const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+        if (inst && !inst->empty()) {
+            type_param_inst = *inst;
+        }
+        receiver_type_info = runtime_get_receiver_type_info();
     }
 
     //! records the identity of the new thread and of the starting thread
@@ -2773,6 +2829,38 @@ const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
 
 const QoreTypeInfo* parse_get_implicit_arg_type_info() {
     return thread_data.get()->implicit_arg_type_info;
+}
+
+const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti) {
+    ThreadData* td = thread_data.get();
+    const QoreTypeInfo* rv = td->implicit_arg2_type_info;
+    td->implicit_arg2_type_info = ti;
+    return rv;
+}
+
+const QoreTypeInfo* parse_get_implicit_arg2_type_info() {
+    return thread_data.get()->implicit_arg2_type_info;
+}
+
+unsigned parse_set_implicit_arg_ctx_depth(unsigned depth) {
+    ThreadData* td = thread_data.get();
+    unsigned rv = td->implicit_arg_ctx_depth;
+    td->implicit_arg_ctx_depth = depth;
+    return rv;
+}
+
+bool* parse_set_function_reads_implicit_args(bool* reads) {
+    ThreadData* td = thread_data.get();
+    bool* rv = td->fn_reads_implicit_args;
+    td->fn_reads_implicit_args = reads;
+    return rv;
+}
+
+void parse_note_implicit_arg_use() {
+    ThreadData* td = thread_data.get();
+    if (!td->implicit_arg_ctx_depth && td->fn_reads_implicit_args) {
+        *td->fn_reads_implicit_args = true;
+    }
 }
 
 void parse_set_try_reexport(bool tr) {
@@ -4144,6 +4232,13 @@ void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& q
     qc = td->current_class;
 }
 
+void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    pgm = td->current_pgm;
+    qc = td->current_class;
+}
+
 const QoreTypeInfo* runtime_get_receiver_type_info() {
     return thread_data.get()->current_receiver_type_info;
 }
@@ -4656,6 +4751,15 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     }
 }
 
+void ProgramThreadCountContextHelper::setTopLevel() {
+    // only a context that switched to the Program is on the thread's chain of contexts; init_tlpd is used by set()
+    // (which ran already) and then only to count the context's bottom frame (getContextFrame()), so it marks the
+    // top-level code's frame too, with no field of its own that every context would initialize
+    if (restore && isFirstThreadLocalProgramData(ctx_td->tlpd)) {
+        init_tlpd = true;
+    }
+}
+
 bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const{
     /* find if tlpd is in lower context, i.e. the first usage of particular tlpd
         Not sure if may be substituted with init_tlpd when calling dbgXX event.
@@ -4694,7 +4798,11 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     */
     while (ch && frame >= frameCount - ch->save_frameCount + (ch->init_tlpd ? 1 : 0) ) {
         frame -= frameCount - ch->save_frameCount;
-        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1)
+        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1), as has the context of the
+        // top-level code in the thread's first entry into the Program, whose frame has no frame boundary; the
+        // thread's data in the Program is normally created before the top-level code runs (when the Program is
+        // parsed, for example), so the context of the top-level code is not always the initial instance; setTopLevel()
+        // sets init_tlpd for it
         if (ch->init_tlpd) {
             frame--;
         }
@@ -7053,6 +7161,10 @@ namespace {
                     // run thread expression; it is the statement of the thread, so its temporaries live until it
                     // returns
                     if (entered) {
+                        // the expression runs with the type arguments of the generic code that started the thread,
+                        // as it would have in that code (qore#5732); the thread has none of its own
+                        BGTypeParamInstantiationHelper type_param_helper(btp->type_param_inst,
+                            btp->receiver_type_info);
                         QoreStatementTempScope temps(&xsink);
                         rv = btp->exec(&xsink);
                     } else {

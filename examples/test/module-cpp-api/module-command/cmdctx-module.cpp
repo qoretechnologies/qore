@@ -3,7 +3,7 @@
 
     Test scaffolding for QoreModuleCommandContext (issue #5699): this file is built twice, as the modules
     \c cmdctxaware, whose descriptor sets QoreModuleInfo::cmd_caller_aware, and \c cmdctxlegacy, which does not (as a
-    module built with module API 2.0).  Neither is installed: both are built into the build tree.
+    module that does not judge the issuer of a command).  Neither is installed: both are built into the build tree.
 
     The handler accepts these commands:
     - \c record: appends one entry (the origin, the restricting parse options, whether the issuing code is sandboxed,
@@ -180,8 +180,8 @@ extern "C" DLLEXPORT void CMDCTX_DESC_FUNC(QoreModuleInfo& mod_info) {
     mod_info.ns_init = cmdctx_module_ns_init;
     mod_info.del = cmdctx_module_delete;
     mod_info.parse_cmd = cmdctx_module_parse_cmd;
-    // the field exists only in a library that implements module API 2.1 (see QoreModuleInfo::cmd_caller_aware)
-    if (is_module_api_supported(2, 1)) {
+    // the field exists only in a library that implements module API 2.2 (see QoreModuleInfo::cmd_caller_aware)
+    if (is_module_api_supported(2, 2)) {
         mod_info.cmd_caller_aware = CMDCTX_AWARE;
     }
     mod_info.license = QL_MIT;

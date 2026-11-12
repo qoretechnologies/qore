@@ -273,7 +273,15 @@ authenticate();
     - a @ref Qore::SQL::DatasourcePool "DatasourcePool": the code that creates the pool is the setter of the options
       of every connection of the pool, also of a connection that the pool creates later on the thread of other code
 
-    A copy of a datasource or of a pool keeps the setters of the options that it copies.  So:
+    A copy of a datasource or of a pool keeps the setters of the options that it copies; an option's value and its
+    setter are kept together, so a copy made while another thread sets an option pairs each copied value with the code
+    that set it.  A copy of a datasource with an open connection therefore takes the option values as they were set
+    (with \c setOption(), a constructor or a connection string) instead of the values that the driver reports for
+    them, and the values that the driver reports only for the options that were never set: a driver that normalizes
+    the value of an option hands the copy the value as it was set, which it normalizes again when the copy opens its
+    connection.  An option with no stored value that is being set on the open connection at the moment of the copy
+    is not copied, as it has no setter yet, and a stored value of \c NOTHING or \c False is not copied even if the
+    driver reports a value for the option, as such a value counts as not set.  So:
     - a datasource whose option sandboxed code set is refused the option when trusted code opens it (or a copy that
       trusted code makes of it)
     - a trusted pool or datasource keeps its configuration when a connection is opened on a sandboxed caller's

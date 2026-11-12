@@ -84,16 +84,45 @@ class CancelBodyHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! tries to register a bounded Queue for the request body and answers with the error
+#! receives the request body through a bounded Queue and answers with the number of bytes received
+/** The I/O thread never waits for room in the Queue: the body's data stays in the stream until the Queue has room
+    (issue #5859)
+*/
 class BoundedQueueHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives True when the body Queue is registered
+        Queue registered();
+        #! the handler reads the body once it receives a value
+        Queue go();
+        #! the number of values in the Queue when the handler starts reading
+        int held;
+    }
+
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
         return True;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        string rv = "registered";
+        Queue q(2);
+        string rv;
         try {
-            cx."header-info".register_body_queue(new Queue(10));
+            cx."header-info".register_body_queue(q);
+            registered.push(True);
+            # the client sends the body while nothing takes from the Queue
+            go.get(30s);
+            held = q.size();
+            int bytes = 0;
+            while (True) {
+                auto chunk = q.get(30s);
+                if (!exists chunk) {
+                    break;
+                }
+                if (chunk.typeCode() == NT_HASH) {
+                    throw chunk.err, chunk.desc;
+                }
+                bytes += chunk.size();
+            }
+            rv = string(bytes);
         } catch (hash<ExceptionInfo> ex) {
             rv = ex.err;
         }
@@ -134,6 +163,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         HttpServer server;
         int port;
         CancelBodyHandler cancel_handler();
+        BoundedQueueHandler bounded_handler();
     }
 
     constructor() : Test("HttpServerHttp2StopRequestTest", "1.0") {
@@ -143,7 +173,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
             \oversizedRequestTest());
         addTestCase("a response to a complete request is not followed by RST_STREAM", \completeRequestTest());
         addTestCase("DATA for a cancelled body read is discarded", \cancelledBodyReadTest());
-        addTestCase("a bounded body Queue is rejected", \boundedQueueTest());
+        addTestCase("a bounded body Queue receives the whole body", \boundedQueueTest());
         addTestCase("the connection window is credited for data on reset streams", \windowNotLostTest());
         set_return_value(main());
     }
@@ -160,7 +190,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         server.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
         server.setHandler("size", "/size", NOTHING, new BodySizeHandler(), NOTHING, False);
         server.setHandler("cancel", "/cancel", NOTHING, cancel_handler, NOTHING, False);
-        server.setHandler("bounded", "/bounded", NOTHING, new BoundedQueueHandler(), NOTHING, False);
+        server.setHandler("bounded", "/bounded", NOTHING, bounded_handler, NOTHING, False);
         port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": 0,
@@ -255,10 +285,33 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         on_exit s.close();
 
         sendRequest(s, 1, "/bounded", False);
-        s.send(frame(DATA, END_STREAM, 1, binary("body")));
+        on_exit bounded_handler.go.push(True);
+        assertTrue(bounded_handler.registered.get(30s), "the body Queue is registered");
+        # more chunks than the Queue has room for, within the maximum request body size, while nothing takes from
+        # the Queue; each is acknowledged by a PING, which the server answers after it has read the chunk, so each
+        # reaches the I/O thread's drain on its own: the Queue takes two, the third waits for room, and the fourth
+        # stays in the stream
+        foreach int i in (xrange(4)) {
+            s.send(frame(DATA, i == 3 ? END_STREAM : 0, 1, binary(strmul("b", 200))));
+            syncPing(s, i);
+        }
+        bounded_handler.go.push(True);
         list<hash<H2Frame>> stream = getStreamFrames(readResponse(s, 1), 1);
         binary body = foldl $1 + $2, (map $1.payload, stream, $1.type == DATA);
-        assertEq("HTTP2-QUEUE-ERROR", body.toString(), "the bounded Queue was rejected");
+        assertEq("800", body.toString(), "the bounded Queue receives the whole body");
+        assertEq(2, bounded_handler.held, "the Queue held no more values than its maximum size");
+    }
+
+    #! sends a PING and reads frames until its acknowledgement, which the server sends after the frames before it
+    private syncPing(Socket s, int n) {
+        binary payload = binary(sprintf("sync%04d", n));
+        s.send(frame(PING, 0, 0, payload));
+        while (True) {
+            hash<H2Frame> f = readFrame(s);
+            if (f.type == PING && (f.flags & ACK) && f.payload == payload) {
+                break;
+            }
+        }
     }
 
     #! DATA that the client sent before it received the RST_STREAM(NO_ERROR) that follows a response is credited

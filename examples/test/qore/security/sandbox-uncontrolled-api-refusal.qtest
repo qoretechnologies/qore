@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its sandbox cases run in Programs of the test's own process; the mode matrix runs in children
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

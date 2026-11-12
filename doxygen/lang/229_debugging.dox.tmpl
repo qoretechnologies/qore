@@ -72,6 +72,26 @@
     exceptions), and exceptions with given codes, such as \c FILE-OPEN-ERROR.  A client without filters stops at all exceptions; an exception that no client stops at
     does not stop the thread.
 
+    The debugger is told of an exception (@ref Qore::DebugProgram::onException() "DebugProgram::onException()") for
+    each statement that the exception leaves: the statement that raised it, each statement that contains that one,
+    and the statement of each caller, until a try statement catches it; it can dismiss the exception there, and the
+    code then continues after that statement.  The events are the same in every execution mode: code with a parse
+    tree runs on the AST interpreter while a debugger is attached, its top-level code too.
+
+    @anchor debugger_aot_exception_events
+    AOT-compiled code (a function, a closure or the top-level code of a program) runs its debug IR while a debugger is
+    attached, which records the nesting of its statements, so that it gets the same events.  The events and dismissals
+    differ in the following code:
+    - in AOT-compiled code, a debugger that dismisses an exception ends the function or the top-level code, which
+      returns no value, instead of continuing after the statement; this is temporary (see
+      <a href="https://github.com/qoretechnologies/qore/issues/5825">issue 5825</a>)
+    - code that was already running when the debugger attached keeps running as it did until it returns: on the IR
+      interpreter, it gets the events of its statements from its next statement on, but not of the statements that
+      contain them and that started before the debugger attached, an exception in the condition of a loop gets an
+      event for the last statement of its body too, and after a debugger dismisses an exception, the
+      function can end there, with no value, instead of continuing after the statement; as native code, it gets no
+      event
+
     An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
     but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg
     and \c qdbg-remote when the thread stops at it, and by the debug adapter in the details of the exception (see

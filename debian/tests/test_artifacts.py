@@ -74,7 +74,7 @@ class ArtifactChecksTest(unittest.TestCase):
 
         for architecture, multiarch in (("amd64", "x86_64-linux-gnu"), ("arm64", "aarch64-linux-gnu")):
             path = f"/usr/lib/jvm/java-21-openjdk-{architecture}/lib/server"
-            member = f"usr/lib/{multiarch}/qore-modules/jni-api-2.0.qmod"
+            member = f"usr/lib/{multiarch}/qore-modules/jni-api-2.2.qmod"
             flags = ["-fPIE", "-pie", "-Wl,-z,relro,-z,now,-z,noexecstack",
                      "-Wl,--no-as-needed", "-L" + str(self.root), "-ljvm"]
             data = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + path)
@@ -85,7 +85,7 @@ class ArtifactChecksTest(unittest.TestCase):
                 self.assertFalse(inspect_package(data, member, architecture=architecture, depends="libc6"))
                 self.assertFalse(inspect_package(data, member, architecture=architecture,
                                                 depends="openjdk-21-jre-headless | java-runtime"))
-                self.assertFalse(inspect_package(data, "usr/lib/other-api-2.0.qmod", architecture=architecture))
+                self.assertFalse(inspect_package(data, "usr/lib/other-api-2.2.qmod", architecture=architecture))
                 for extra in ("/tmp", path + ":/tmp", "$ORIGIN", path.replace("21", "25")):
                     bad = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + extra)
                     self.assertFalse(inspect_package(bad, member, architecture=architecture))

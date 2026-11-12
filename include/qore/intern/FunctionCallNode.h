@@ -98,6 +98,13 @@ public:
 
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
 
+    //! Transfers ownership of evaluated arguments to the caller for exception-aware cleanup
+    DLLLOCAL QoreListNode* takeArgs() {
+        QoreListNode* rv = args;
+        args = nullptr;
+        return rv;
+    }
+
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
             qore_ns_private* ns, bool infer_class_receiver_from_args = false,
@@ -409,12 +416,6 @@ public:
     DLLLOCAL QoreParseListNode* takeParseArgs() {
         QoreParseListNode* rv = parse_args;
         parse_args = nullptr;
-        return rv;
-    }
-
-    DLLLOCAL QoreListNode* takeArgs() {
-        QoreListNode* rv = args;
-        args = nullptr;
         return rv;
     }
 

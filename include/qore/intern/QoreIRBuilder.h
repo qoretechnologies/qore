@@ -372,6 +372,13 @@ public:
     void setExceptionTempScopeId(uint32_t id);
     //! Return the statement temp scope currently assigned to invoke instructions.
     uint32_t getExceptionTempScopeId() const;
+    //! Return a new temp scope id that no PushTempMark opens
+    /** An instruction that records it releases no temporaries when it raises an exception and branches to a handler
+        in the frame (the interpreter's and native code's drain finds no mark), and the call arguments that code in
+        the scope creates are still the call's own (they are defined in the call's temp scope); see
+        QoreIRLowering::lowerWithImplicitContext()
+    */
+    uint32_t allocateUnmarkedTempScopeId();
     //! Drop the current temp scope after lowering emits a terminating instruction.
     void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
@@ -384,6 +391,9 @@ public:
             const AbstractStatement* block = nullptr);
     //! Emit the debugger's step event for a statement (QoreIROpcode::DebugStatement)
     QoreIRInstruction* createDebugStatement(const AbstractStatement* statement);
+    //! Emit the end of a statement at the given depth for the debugger (QORE_IR_DEBUG_NEST_END), where a frame
+    //! continues when a debugger dismisses an exception of the statement
+    QoreIRInstruction* createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
@@ -396,6 +406,12 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
+    //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
+    //! with \a kept as a second operand
+    QoreIRInstruction* createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+            const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 
@@ -418,6 +434,16 @@ public:
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorCreateInstruction* createIteratorCreateIterate(QoreIRValue iterable,
         const QoreProgramLocation* loc = nullptr);
+    //! Creates the iterator of a foreach statement over keys, a slice or a list of indices; see
+    //! QoreIROpcode::IteratorCreateSource
+    /** @param operand the evaluated operand: the operand of keys, or the sequence
+        @param kind the operator
+        @param flags the QoreIRListSelectorFlag flags of a list of indices (StringIndexChar, NegativeOffsets)
+        @param first the start of a slice, or the list of indices; invalid for keys
+        @param second the end of a slice; invalid otherwise
+    */
+    QoreIRIteratorCreateInstruction* createIteratorCreateSource(QoreIRValue operand, QoreIRIteratorSourceKind kind,
+        int64_t flags, QoreIRValue first, QoreIRValue second, const QoreProgramLocation* loc = nullptr);
     //! Creates the iterator of a list of selectors with ranges; see QoreIROpcode::IteratorCreateSelectors
     /** @param seq the sequence
         @param flags the QoreIRListSelectorFlag flags (StringIndexChar)

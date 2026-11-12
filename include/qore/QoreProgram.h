@@ -191,7 +191,10 @@ public:
 
     //! creates the object and sets the parse options
     /**
-        @param parse_options the parse options mask for the QoreProgram object
+        @param parse_options the parse options mask for the QoreProgram object; it must not have %modern
+        (\c PO_MODERN) with a compatibility option that %modern does not allow (ex: \c PO_BROKEN_RANGE): this
+        constructor has no exception sink to refuse them; QoreProgramHelper refuses them with an \c OPTION-ERROR
+        exception (since %Qore 3.0)
     */
     DLLEXPORT QoreProgram(const QoreParseOptions& parse_options);
 
@@ -200,7 +203,8 @@ public:
         Kept exported for binary module compatibility with modules built before
         QoreParseOptions replaced raw int64 parse-option bitfields.
 
-        @param parse_options the legacy int64 parse options mask for the QoreProgram object
+        @param parse_options the legacy int64 parse options mask for the QoreProgram object; see
+        QoreProgram(const QoreParseOptions&) for the options it must not have together
     */
     DLLEXPORT QoreProgram(int64 parse_options);
 
@@ -473,15 +477,22 @@ public:
     //! returns true if the given function exists as a user function, false if not
     DLLEXPORT bool existsFunction(const char* name);
 
-    //! dereferences the object and deletes it if the reference count reaches zero, without clearing it first
-    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero
+    //! dereferences the object without clearing it; its last reference releases the Program's own dependency reference
+    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero, and
+        it is destroyed once nothing depends on it any more (see depRef()).  Clearing a Program
+        (waitForTerminationAndDeref(), deref(ExceptionSink*)) deletes its code, so that only what outlives it keeps it
+        allocated (closures, call references, imported functions and objects held elsewhere, for example); the code of
+        a Program that was never cleared keeps it allocated
 
-        @since %Qore 3.0 the Program leaves the registry with its last reference
+        @since %Qore 3.0 the Program leaves the registry with its last reference, and is destroyed with its last
+        dependency
     */
     DLLEXPORT virtual void deref();
 
-    //! dereferences the object and deletes it if the reference count reaches zero
-    /** do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
+    //! dereferences the object; its last reference clears it (deletes its code) and releases its dependency reference
+    /** the Program is destroyed once nothing depends on it any more (see deref())
+
+        do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @see QoreProgram::waitForTerminationAndDeref()
     */
@@ -510,7 +521,7 @@ public:
     //! this call blocks until the program's last thread terminates
     DLLEXPORT void waitForTermination();
 
-    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref()
+    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref(ExceptionSink*)
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
@@ -819,6 +830,12 @@ public:
     */
     DLLEXPORT func_vec_t findAllFunctionsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const;
 
+    //! returns a list of all functions that match the pattern, each with the namespace it was found in
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT func_ns_vec_t findAllFunctionsRegexNs(const QoreString& pattern, int re_opts, ExceptionSink* xsink)
+            const;
+
     //! returns a list of all namespaces that match the pattern
     /** @since %Qore 0.9
     */
@@ -838,6 +855,14 @@ public:
     /** @since %Qore 0.9
     */
     DLLEXPORT const QoreExternalFunction* findFunction(const char* path) const;
+
+    //! search for the given function in the program and return the namespace it was found in
+    /** @param path a simple function name or a namespace-prefixed path (ex: "NamespaceName::function_name")
+        @param pns set to the namespace that holds the function, or nullptr if it is not found
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreExternalFunction* findFunction(const char* path, const QoreNamespace*& pns) const;
 
     //! search for the given typed hash (hashdecl) in the program; can be a simple function name or a namespace-prefixed path (ex: "NamespaceName::TypedHashName")
     /** @since %Qore 0.9

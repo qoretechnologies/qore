@@ -79,6 +79,8 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void ml_module_delete();
 
+extern QoreNamespace MLNS;
+
 extern "C" DLLEXPORT void ml_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "ml";
     mod_info.version = PACKAGE_VERSION;
@@ -91,6 +93,8 @@ extern "C" DLLEXPORT void ml_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = ml_module_init;
     mod_info.ns_init = ml_module_ns_init;
     mod_info.del = ml_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &MLNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
@@ -558,6 +562,5 @@ static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionS
 
 static void ml_module_delete() {
     qore_ml_onnx_unregister_fork_handlers();
-    ExceptionSink xsink;
-    MLNS.clear(&xsink);
+    // MLNS is purged by the module manager after this function returns (see QoreModuleInfo::ns)
 }

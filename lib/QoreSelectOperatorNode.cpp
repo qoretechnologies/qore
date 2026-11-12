@@ -76,6 +76,9 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     {
         // set implicit argv arg type
         ParseImplicitArgTypeHelper pia(elementTypeInfo);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
 
         QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
@@ -258,6 +261,8 @@ bool QoreFunctionalSelectSingleValueOperator::getNextImpl(ValueOptionalRefHolder
     done = true;
 
     // setup the implicit argument
+    // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
+    ImplicitElementHelper eh(0);
     SingleArgvContextHelper argv_helper(v.refSelf(), xsink);
 
     // check if value can be selected

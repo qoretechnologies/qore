@@ -1,0 +1,378 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of a debugged program, and the debugger's callbacks in its threads
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerExceptionEventsTest
+
+#! A debugger gets the same exception events in every execution mode (#5795)
+/** The AST interpreter calls the debugger's onException() callback for each statement that an exception leaves: the
+    statement that raised it, each statement that contains it, and the statement of each caller, until a try
+    statement catches it.  The script DebuggerExceptionEvents.q records these events for programs that raise
+    exceptions in top-level code, functions, methods, nested statements, loops and catch blocks, and its output with
+    the AST interpreter is the reference for the other execution modes.
+
+    The debugged programs run on the AST interpreter while a debugger is attached, also their top-level code: the IR
+    interpreter and native code made no event for most of these statements, and top-level code with JIT execution made
+    none at all.  The tiered run of ExecModeHarness::run_ir_tier() is not used: it requires that no call runs on the
+    AST tier.
+
+    The script DebuggerExceptionEventsFunctions.q does the same for the functions of the script itself, which are
+    also compiled ahead of time with qcc: with a debugger attached, AOT functions run their debug IR, whose IR
+    interpreter makes the event of the current statement wherever an exception leaves a frame or reaches a handler in
+    it; before, a builtin's exception made no event, a caller none for its statement, a closure and the statements of
+    on_exit and on_error code none, a rethrow in on_error code an event too many, and a function left by an exception
+    no exit event.  With the argument \c step, the debugger steps through the code, and the exit events of the
+    functions are recorded too, which must follow the exception events, as with the AST interpreter.  The debug IR
+    of AOT code records the nesting of its statements and the end of each statement, and its closures their
+    locations (#5816), so that AOT-compiled code gives the events of the AST interpreter: the statements that
+    contain the one that raised the exception get their events, and a closure's events have its lines.  A debugger
+    that dismisses an exception in AOT-compiled code ends the function, which returns no value, where the AST
+    interpreter continues after the statement; this is temporary
+    (https://github.com/qoretechnologies/qore/issues/5825).  DebuggerDismissals.q dismisses exceptions at the
+    statements that raise them and at the statements that contain them.
+*/
+class DebuggerExceptionEventsTest inherits QUnit::Test {
+    public {
+        #! the output of DebuggerExceptionEvents.q with the AST interpreter
+        const Expected = "top-level throw: [\"A@2\"]
+function: [\"B@3\", \"B@5\"]
+nested statements: [\"C@4\", \"C@3\", \"C@7\"]
+top-level builtin: [\"DIVISION-BY-ZERO@3\"]
+builtin in a function: [\"DIVISION-BY-ZERO@4\", \"DIVISION-BY-ZERO@6\"]
+top-level try: [\"E@3\", \"F@6\"]
+caught from a function: [\"G@3\", \"G@6\"]
+top-level loop: [\"H@3\", \"H@2\"]
+method: [\"I@4\", \"I@8\"]
+rethrow in a catch block: [\"J@3\", \"K@5\", \"K@2\"]
+loop in a function: [\"L@5\", \"L@4\", \"L@3\", \"L@9\"]
+";
+
+        #! the output of DebuggerExceptionEventsFunctions.q with the AST interpreter, by its argument
+        const ExpectedFunctions = {
+            "run": "f_throw: [\"B@73\"]
+f_nested: [\"C@77\", \"C@76\"]
+f_builtin: [\"DIVISION-BY-ZERO@82\"]
+f_caught: [\"E@86\", \"F@89\"]
+f_loop: [\"H@93\", \"H@92\"]
+f_caller: [\"B@73\", \"B@97\"]
+f_catch_rethrow: [\"J@101\", \"K@103\", \"K@100\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@109\"]
+f_closure: [\"CL@114\", \"CL@115\"]
+f_on_exit_throw: [\"C@119\", \"C2@118\"]
+f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
+f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"DO@220\", \"DO@219\"]
+f_empty: [\"EM@234\", \"EM@232\", \"EM@231\"]
+f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\"]
+f_break: [\"BR@253\", \"BR@251\", \"BR@250\"]
+f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\"]
+f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\"]
+f_obe_try_local: [\"OTL@333\", \"DTD@215\", \"OTL@331\"]
+f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=2
+f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=5
+",
+            "step": "f_throw: [\"B@73\", \"exit@73\"]
+f_nested: [\"C@77\", \"C@76\", \"exit@76\"]
+f_builtin: [\"DIVISION-BY-ZERO@82\", \"exit@81\"]
+f_caught: [\"E@86\", \"F@89\", \"exit@85\"]
+f_loop: [\"H@93\", \"H@92\", \"exit@92\"]
+f_caller: [\"B@73\", \"exit@73\", \"B@97\", \"exit@97\"]
+f_catch_rethrow: [\"J@101\", \"K@103\", \"K@100\", \"exit@100\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@109\", \"exit@107\"]
+f_closure: [\"CL@114\", \"exit@114\", \"CL@115\", \"exit@114\"]
+f_on_exit_throw: [\"C@119\", \"C2@118\", \"exit@118\"]
+f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
+f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\", \"exit@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\", \"exit@191\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\", \"exit@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"exit@215\", \"DO@220\", \"DO@219\", \"exit@219\"]
+f_empty: [\"EM@234\", \"EM@232\", \"EM@231\", \"exit@231\"]
+f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\", \"exit@239\"]
+f_break: [\"BR@253\", \"BR@251\", \"BR@250\", \"exit@250\"]
+f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\", \"exit@261\"]
+f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\", \"exit@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\", \"exit@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\", \"exit@297\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\", \"exit@312\"]
+f_obe_try_local: [\"OTL@333\", \"DTD@215\", \"exit@215\", \"OTL@331\", \"exit@330\"]
+f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=2
+f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
+",
+        };
+
+        #! the output of DebuggerExceptionEventsFunctions.q compiled ahead of time, by its argument
+        /** the events are those of the AST interpreter; a dismissal ends the function, which returns no value
+            (temporary: https://github.com/qoretechnologies/qore/issues/5825), and the local of a block that has
+            handlers and no exception path of its own (f_dtor_order) is released when the frame ends, after the events
+            of the statements that contain the block (temporary: https://github.com/qoretechnologies/qore/issues/5867)
+        */
+        const ExpectedFunctionsAot = {
+            "run": "f_throw: [\"B@73\"]
+f_nested: [\"C@77\", \"C@76\"]
+f_builtin: [\"DIVISION-BY-ZERO@82\"]
+f_caught: [\"E@86\", \"F@89\"]
+f_loop: [\"H@93\", \"H@92\"]
+f_caller: [\"B@73\", \"B@97\"]
+f_catch_rethrow: [\"J@101\", \"K@103\", \"K@100\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@109\"]
+f_closure: [\"CL@114\", \"CL@115\"]
+f_on_exit_throw: [\"C@119\", \"C2@118\"]
+f_on_error_rethrow_caught: [\"R@124\", \"R@123\"]
+f_dtor: [\"DTOR@130\", \"DTOR@135\", \"DTOR@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"OC@170\", \"OC@169\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DO@220\", \"DO@219\", \"DTD@215\"]
+f_empty: [\"EM@234\", \"EM@232\", \"EM@231\"]
+f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\"]
+f_break: [\"BR@253\", \"BR@251\", \"BR@250\"]
+f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\"]
+f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\"]
+f_obe_try_local: [\"OTL@333\", \"DTD@215\", \"OTL@331\"]
+f_dismiss: [\"DIVISION-BY-ZERO@140\"] rv=null
+f_dismiss_enclosing: [\"DE@145\", \"DE@144\"] rv=null
+",
+            "step": "f_throw: [\"B@73\", \"exit@73\"]
+f_nested: [\"C@77\", \"C@76\", \"exit@76\"]
+f_builtin: [\"DIVISION-BY-ZERO@82\", \"exit@81\"]
+f_caught: [\"E@86\", \"F@89\", \"exit@85\"]
+f_loop: [\"H@93\", \"H@92\", \"exit@92\"]
+f_caller: [\"B@73\", \"exit@73\", \"B@97\", \"exit@97\"]
+f_catch_rethrow: [\"J@101\", \"K@103\", \"K@100\", \"exit@100\"]
+f_builtin_caught: [\"DIVISION-BY-ZERO@109\", \"exit@107\"]
+f_closure: [\"CL@114\", \"exit@114\", \"CL@115\", \"exit@114\"]
+f_on_exit_throw: [\"C@119\", \"C2@118\", \"exit@118\"]
+f_on_error_rethrow_caught: [\"R@124\", \"R@123\", \"exit@122\"]
+f_dtor: [\"DTOR@130\", \"exit@130\", \"DTOR@135\", \"DTOR@134\", \"exit@134\"]
+f_foreach_on_exit: [\"FO@157\", \"FO@156\", \"FO@155\", \"exit@152\"]
+f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@165\", \"exit@165\", \"OC@170\", \"OC@169\", \"exit@163\"]
+f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\", \"exit@182\"]
+f_obe_normal_try: [\"ONT@194\", \"ONT@192\", \"exit@191\"]
+f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\", \"exit@201\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DO@220\", \"DO@219\", \"exit@219\", \"DTD@215\", \"exit@215\"]
+f_empty: [\"EM@234\", \"EM@232\", \"EM@231\", \"exit@231\"]
+f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\", \"exit@239\"]
+f_break: [\"BR@253\", \"BR@251\", \"BR@250\", \"exit@250\"]
+f_break_try: [\"BT@264\", \"BT@262\", \"BT@261\", \"exit@261\"]
+f_return_try: [\"RTT@277\", \"RTT@275\", \"RTT@274\", \"exit@274\"]
+f_catch_inline: [\"C0@289\", \"CI@291\", \"CI@288\", \"CI@287\", \"exit@287\"]
+f_outer_scope_try: [\"G@301\", \"G@300\", \"G@299\", \"G2@308\", \"G2@307\", \"exit@297\"]
+f_catch_inner_return: [\"C0@314\", \"C1@318\", \"KR@316\", \"KR@313\", \"KR@312\", \"exit@312\"]
+f_obe_try_local: [\"OTL@333\", \"DTD@215\", \"exit@215\", \"OTL@331\", \"exit@330\"]
+f_dismiss: [\"DIVISION-BY-ZERO@140\", \"exit@139\"] rv=null
+f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=null
+",
+        };
+
+        #! the output of DebuggerDismissals.q with the AST interpreter, which every execution mode gives
+        const ExpectedDismissals = "a_t_local/1: [\"A@56\"] rv=\"kept\"
+a_t_local/2: [\"A@56\", \"A@55\"] rv=\"kept\"
+a_t_loop/1: [\"B@64\"] rv=\"123\"
+a_t_loop/2: [\"B@64\", \"B@63\"] rv=\"123\"
+a_t_loop/3: [\"B@64\", \"B@63\", \"B@62\"] rv=\"1\"
+a_t_try/1: [\"C@74\"] rv=\"kt\"
+a_t_try/2: [\"C@74\", \"C@73\"] rv=\"kt\"
+a_t_onerr/1: [\"D@88\"] rv=\"knX|\"
+a_t_onerr/2: [\"D@88\", \"D@87\"] rv=\"knX|\"
+a_t_onerr/3: [\"D@88\", \"D@87\", \"D@85\"] rv=\"kXE|\"
+a_t_while/1: [\"W@100\"] rv=\"123\"
+a_t_while/2: [\"W@100\", \"W@100\"] rv=\"123\"
+a_t_while/3: [\"W@100\", \"W@100\", \"W@97\"] rv=\"12\"
+b_t_local/1: [\"DIVISION-BY-ZERO@107\"] rv=\"kept\"
+b_t_local/2: [\"DIVISION-BY-ZERO@107\", \"DIVISION-BY-ZERO@106\"] rv=\"kept\"
+b_t_loop/1: [\"DIVISION-BY-ZERO@115\"] rv=\"123\"
+b_t_loop/2: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\"] rv=\"123\"
+b_t_loop/3: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\", \"DIVISION-BY-ZERO@113\"] rv=\"1\"
+b_t_rec/1: [\"DIVISION-BY-ZERO@126\"] rv=\"r2r1r0\"
+b_t_rec/2: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\"] rv=\"r2r1r0\"
+b_t_rec/3: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\"] rv=\"r2r1\"
+b_t_rec/4: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\", \"DIVISION-BY-ZERO@123\"] rv=\"r2r1\"
+b_t_nested/1: [\"N@134\"] rv=\"k\"
+b_t_nested/2: [\"N@134\", \"N@137\"] rv=\"k1\"
+b_t_nested/3: [\"N@134\", \"N@137\", \"N@133\"] rv=\"k1\"
+b_t_nested/4: [\"N@134\", \"N@137\", \"N@133\"] rv=\"k12\"
+b_t_cl/1: [\"DIVISION-BY-ZERO@146\"] rv=\"kab\"
+b_t_cl/2: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] rv=\"ka\"
+b_t_cl/3: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] EXC DIVISION-BY-ZERO
+b_t_sw/1: [\"DIVISION-BY-ZERO@153\"] rv=\"k1x2\"
+b_t_sw/2: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] rv=\"k1\"
+b_t_sw/3: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] EXC DIVISION-BY-ZERO
+c_t_fe/1: [\"RUNTIME-TYPE-ERROR@161\"] rv=\"1|\"
+c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=\"12|\"
+";
+
+        #! the output of DebuggerDismissals.q compiled ahead of time
+        /** the events are those of the AST interpreter; a dismissal ends the function, which returns no value, and its
+            caller continues (temporary: https://github.com/qoretechnologies/qore/issues/5825)
+        */
+        const ExpectedDismissalsAot = "a_t_local/1: [\"A@56\"] rv=null
+a_t_local/2: [\"A@56\", \"A@55\"] rv=null
+a_t_loop/1: [\"B@64\"] rv=null
+a_t_loop/2: [\"B@64\", \"B@63\"] rv=null
+a_t_loop/3: [\"B@64\", \"B@63\", \"B@62\"] rv=null
+a_t_try/1: [\"C@74\"] rv=null
+a_t_try/2: [\"C@74\", \"C@73\"] rv=null
+a_t_onerr/1: [\"D@88\"] rv=null
+a_t_onerr/2: [\"D@88\", \"D@87\"] rv=null
+a_t_onerr/3: [\"D@88\", \"D@87\", \"D@85\"] rv=null
+a_t_while/1: [\"W@100\"] rv=null
+a_t_while/2: [\"W@100\", \"W@100\"] rv=null
+a_t_while/3: [\"W@100\", \"W@100\", \"W@97\"] rv=null
+b_t_local/1: [\"DIVISION-BY-ZERO@107\"] rv=null
+b_t_local/2: [\"DIVISION-BY-ZERO@107\", \"DIVISION-BY-ZERO@106\"] rv=null
+b_t_loop/1: [\"DIVISION-BY-ZERO@115\"] rv=null
+b_t_loop/2: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\"] rv=null
+b_t_loop/3: [\"DIVISION-BY-ZERO@115\", \"DIVISION-BY-ZERO@114\", \"DIVISION-BY-ZERO@113\"] rv=null
+b_t_rec/1: [\"DIVISION-BY-ZERO@126\"] rv=\"r2r1\"
+b_t_rec/2: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\"] rv=\"r2r1\"
+b_t_rec/3: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\"] rv=\"r2\"
+b_t_rec/4: [\"DIVISION-BY-ZERO@126\", \"DIVISION-BY-ZERO@123\", \"DIVISION-BY-ZERO@124\", \"DIVISION-BY-ZERO@123\"] rv=\"r2\"
+b_t_nested/1: [\"N@134\"] rv=null
+b_t_nested/2: [\"N@134\", \"N@137\"] rv=null
+b_t_nested/3: [\"N@134\", \"N@137\", \"N@133\"] rv=null
+b_t_nested/4: [\"N@134\", \"N@137\", \"N@133\"] rv=\"k12\"
+b_t_cl/1: [\"DIVISION-BY-ZERO@146\"] rv=\"ka\"
+b_t_cl/2: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] rv=null
+b_t_cl/3: [\"DIVISION-BY-ZERO@146\", \"DIVISION-BY-ZERO@147\"] EXC DIVISION-BY-ZERO
+b_t_sw/1: [\"DIVISION-BY-ZERO@153\"] rv=null
+b_t_sw/2: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] rv=null
+b_t_sw/3: [\"DIVISION-BY-ZERO@153\", \"DIVISION-BY-ZERO@152\"] EXC DIVISION-BY-ZERO
+c_t_fe/1: [\"RUNTIME-TYPE-ERROR@161\"] rv=null
+c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=null
+";
+
+        #! the output of DebuggerEntryReturn.q in every execution mode and compiled ahead of time
+        const ExpectedEntryReturn = "returned=True rv=null\n";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+        string functions_script;
+        string entry_return_script;
+        string dismissals_script;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("DebuggerExceptionEventsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/DebuggerExceptionEvents.q";
+        functions_script = get_script_dir() + "/DebuggerExceptionEventsFunctions.q";
+        entry_return_script = get_script_dir() + "/DebuggerEntryReturn.q";
+        dismissals_script = get_script_dir() + "/DebuggerDismissals.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": exception events", \eventsTest(), (mode,));
+            foreach string arg in (ExpectedFunctions.keys()) {
+                addTestCase(sprintf("%s: exception events of functions (%s)", mode, arg), \functionEventsTest(),
+                    (mode, arg));
+            }
+            addTestCase(mode + ": a return at the start of a function", \entryReturnTest(), (mode,));
+            addTestCase(mode + ": dismissed exceptions", \dismissalsTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            foreach string arg in (ExpectedFunctions.keys()) {
+                addTestCase(sprintf("qcc -O%d: exception events of functions (%s)", opt, arg),
+                    \aotFunctionEventsTest(), (opt, arg));
+            }
+            addTestCase(sprintf("qcc -O%d: a return at the start of a function", opt), \aotEntryReturnTest(), (opt,));
+            addTestCase(sprintf("qcc -O%d: dismissed exceptions", opt), \aotDismissalsTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    eventsTest(string mode) {
+        # the debugged programs run on the AST interpreter; only the script's own code is compiled with JIT execution
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script), NativeCheck::Jit);
+        assertEq(Expected, output, mode + ": the exception events of the AST interpreter");
+    }
+
+    functionEventsTest(string mode, string arg) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, functions_script, arg), NativeCheck::Jit);
+        assertEq(ExpectedFunctions{arg}, output, mode + ": the exception events of the AST interpreter");
+    }
+
+    #! a debugger's return at the start of a function ends it with no value; the debug IR of AOT code failed with
+    #! IR-EXECUTION-ERROR
+    entryReturnTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, entry_return_script), NativeCheck::Jit);
+        assertEq(ExpectedEntryReturn, output, mode + ": the function returned at its start");
+    }
+
+    #! a debugger dismisses exceptions at the statements that raise them and at the statements that contain them; the
+    #! functions continue after the statements, with their locals, as with the AST interpreter (AOT-compiled code:
+    #! see ExpectedDismissalsAot)
+    dismissalsTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, dismissals_script), NativeCheck::Jit);
+        assertEq(ExpectedDismissals, output, mode + ": the dismissals of the AST interpreter");
+    }
+
+    aotDismissalsTest(int opt) {
+        TmpDir tmp("qore-debugger-dismissals-");
+        string exe = tmp.path + DirSep + "dismissals";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            dismissals_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(ExpectedDismissalsAot, output, sprintf("qcc -O%d: the events of the AST interpreter", opt));
+    }
+
+    aotEntryReturnTest(int opt) {
+        TmpDir tmp("qore-debugger-entry-return-");
+        string exe = tmp.path + DirSep + "entry-return";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            entry_return_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(ExpectedEntryReturn, output, sprintf("qcc -O%d: the function returned at its start", opt));
+    }
+
+    aotFunctionEventsTest(int opt, string arg) {
+        TmpDir tmp("qore-debugger-exception-events-");
+        string exe = tmp.path + DirSep + "functions";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            functions_script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, exe, arg));
+        assertEq(ExpectedFunctionsAot{arg}, output, sprintf("qcc -O%d: the exception events of the AST interpreter",
+            opt));
+    }
+}

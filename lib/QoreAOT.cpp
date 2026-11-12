@@ -619,6 +619,30 @@ void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
     qore_aot_note_referenced_decl(provider_loc, loc);
 }
 
+void qore_aot_record_folded_constant_import(const QoreProgramLocation* consumer_loc, const ConstantEntry* ce,
+        const ClassNs& ptr) {
+    if ((!aot_source_parse_active && !aot_resolved_source_import_recording_active) || !consumer_loc || !ce
+            || ce->isSystem() || ce->isExternalStub()) {
+        return;
+    }
+    QoreProgram* pgm = getProgram();
+    const char* consumer_file = consumer_loc->getFile();
+    const char* provider_file = ce->getLocation() ? ce->getLocation()->getFile() : nullptr;
+    if (!pgm || !consumer_file || !*consumer_file || *consumer_file == '<' || !provider_file || !*provider_file
+            || *provider_file == '<' || !strcmp(consumer_file, provider_file)) {
+        return;
+    }
+    // only a preloaded sibling object provides the constant to a link: one of an %include'd file is part of this
+    // object, and one of a loaded module is provided at run time, so importing either would make the link fail with
+    // an unresolved import (the parse labels cover the included files and the modules too, so they cannot tell)
+    const std::unordered_set<std::string> provider_files = {provider_file};
+    if (!qore_aot_source_provider_is_preloaded(provider_files)) {
+        return;
+    }
+    const std::string path = qore_aot_constant_symbol_path(ptr, ce->getName());
+    qore_program_private::recordSourceParseConstantImport(pgm, consumer_loc, path.c_str(), ce, !ptr.isNs());
+}
+
 void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
         const QoreProgramLocation* consumer_loc) {
     if ((!aot_dep_sink && !aot_dep_map) || !provider_loc) {
@@ -3725,6 +3749,7 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
         case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource:
             // IteratorCreateReverse carries its iterable in operands (above)
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
@@ -23729,11 +23754,19 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     @param po the parse options of the code once its source is parsed
     @param source the source file or label, for the diagnostic
     @param error set to the diagnostic if the code is rejected
+    @param pgm the parsed Program, including the lexical eligibility of all its bodies and initializers
 
     @return true if the code may be compiled, false if not, in which case @a error is set
 */
-static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error) {
+static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error,
+        QoreProgram* pgm) {
+    const QoreNativeParseInfo& info = qore_program_private::get(*pgm)->native_parse_info;
     if (qore_parse_options_support_ir(po)) {
+        if (info.legacy_location) {
+            error = (source.empty() ? std::string("<unknown source>") : source)
+                + ": AOT compilation: " + info.describe();
+            return false;
+        }
         return true;
     }
     error = (source.empty() ? std::string("<unknown source>") : source)
@@ -23758,7 +23791,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         error = "no Program to compile";
         return false;
     }
-    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error, pgm)) {
         return false;
     }
 
@@ -23899,6 +23932,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     {
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
+        // The IR is also serialized as the top-level code's source-stripped debug IR, which runs in the IR interpreter
+        // while a debugger is attached (TopLevelStatementBlock::execImpl()), as that of a function does: in a Program
+        // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
+        // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
+        ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -23982,6 +24020,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
+                    // the debug IR of the top-level code (qore#5851): the IR interpreter needs the slot IDs and the
+                    // IR of the handlers, which are made after the native code, which does not use them; if the
+                    // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
+                    // as native code while a debugger is attached, as before
+                    if (ir_func->emit_debug_statements) {
+                        ir_func->computeSlotIdsAndEmbed();
+                        std::string handler_error;
+                        if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+                            printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
+                                handler_error.c_str());
+                        } else {
+                            cf.debug_ir.reset(ir_func);
+                            ir_func = nullptr;
+                        }
+                    }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
@@ -25365,26 +25418,46 @@ static std::string fileBasenameKeepExt(const std::string& path) {
     Applied per compile unit; a batch keeps legacy semantics if ANY of its sources is a \c .q file,
     since a batch shares one Program and cannot parse half its sources each way.
 
+    %%modern cannot be in effect with a compatibility option that it does not allow (issue #5682), also when it is
+    given with the options (qcc -M): the compile fails with a \c PARSE-OPTION-ERROR in \a error.
+
     @param po the parse options to extend
-    @param files the compile unit's target sources */
-static void applyAOTModernSourceDefault(QoreParseOptions& po,
-        const std::vector<std::string>& files) {
-    if (files.empty()) {
-        return;
-    }
+    @param files the compile unit's target sources
+    @param error the error message if the options are refused
+
+    @return false if the options are refused, true if not */
+static bool applyAOTModernSourceDefault(QoreParseOptions& po,
+        const std::vector<std::string>& files, std::string& error) {
+    bool by_extension = !files.empty();
     size_t i = 0;
     for (const std::string& f : files) {
         // A cancelled scan leaves the default unset; the caller aborts the compile on its own
         // cancellation check immediately afterwards, so the parse options are never used.
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT modern-source default scan")) {
-            return;
+            return true;
         }
         ++i;
         if (!qore_program_private::should_auto_enable_modern(f.c_str())) {
-            return;
+            by_extension = false;
+            break;
         }
     }
+    if (!by_extension && !qore_program_private::isModern(po)) {
+        return true;
+    }
+    if (qore_program_private::isModern(po)) {
+        // %modern given with the options (qcc -M, --parse-option)
+        if (!qore_check_modern_parse_options(po, error)) {
+            return false;
+        }
+    } else if (QoreParseOptions conflict = po & qore_program_private::modernIncompatibleOptions()) {
+        QoreString desc("PARSE-OPTION-ERROR: ");
+        qore_program_private::describeModernSourceDefaultConflict(files[0].c_str(), conflict, desc);
+        error = desc.c_str();
+        return false;
+    }
     po |= QoreParseOptions(PO_MODERN);
+    return true;
 }
 
 //! Source identity for script-context batch `.qo` artifacts.
@@ -26346,7 +26419,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {label});
+    if (!applyAOTModernSourceDefault(mod_po, {label}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -26407,7 +26482,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         error = "module parsing failed";
         return false;
     }
-    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error, *qpgm)) {
         return false;
     }
 
@@ -26776,7 +26851,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -26806,7 +26883,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -26863,7 +26940,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -28486,10 +28563,16 @@ struct AOTBatchParseOptionGuard {
     source's extension implies it.  Called inside an AOTBatchParseOptionGuard, so the default does not carry over to
     the next source.
 */
-static void applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& canon) {
-    if (qore_program_private::should_auto_enable_modern(canon.c_str())) {
-        qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& canon, ExceptionSink* xsink) {
+    if (!qore_program_private::should_auto_enable_modern(canon.c_str())) {
+        return 0;
     }
+    // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
+    if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
+        return -1;
+    }
+    qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+    return 0;
 }
 
 bool QoreAOT::compileScriptFilesBatch(
@@ -28631,12 +28714,12 @@ bool QoreAOT::compileScriptFilesBatch(
     batch_memory.beginParse(batch_source_bytes);
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
-    applyAOTModernSourceDefault(po, target_files);
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
     // before QoreProgram construction so method-domain checks
     // (e.g. PO_ALLOW_INJECTION-gated `Program::loadApplyTo*`)
     // align with what the runtime host installs via
-    // `qpgm->parseSetParseOptions(...)`.
+    // `qpgm->parseSetParseOptions(...)`; they are applied before the %modern default of the sources' extensions, which
+    // refuses a compatibility option among them that %modern does not allow (issue #5682)
     for (const std::string& flag : parse_option_flags) {
         QoreParseOptions add;
         if (!resolveParseOptionFlag(flag, add)) {
@@ -28644,6 +28727,9 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
         po |= add;
+    }
+    if (!applyAOTModernSourceDefault(po, target_files, error)) {
+        return false;
     }
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -28770,9 +28856,10 @@ bool QoreAOT::compileScriptFilesBatch(
             AOTPreloadedSourceGuard preloaded_source_guard(
                 &sibling_preload.source_labels);
             AOTParseSourceGuard parse_source_guard(&batch_target_set);
-            applyAOTSourceModernDefault(**qpgm, e.canon);
-            qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-                &xsink, &wsink, QP_WARN_DEFAULT);
+            if (!applyAOTSourceModernDefault(**qpgm, e.canon, &xsink)) {
+                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                    &xsink, &wsink, QP_WARN_DEFAULT);
+            }
             // each source's parse options are restored when the guard goes out of scope, so they are checked here
             file_po = qpgm->getParseOptions();
         }
@@ -28781,7 +28868,7 @@ bool QoreAOT::compileScriptFilesBatch(
             error = "parse error in target file: " + e.canon;
             return false;
         }
-        if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+        if (!qore_aot_check_parse_options(file_po, e.canon, error, *qpgm)) {
             return false;
         }
         e.module_cmd_end = batch_pp->module_parse_commands.size();
@@ -29446,6 +29533,10 @@ bool QoreAOT::compileScriptAggregate(
         po |= add;
         ++flag_i;
     }
+    // %modern cannot be given with a compatibility option that it does not allow (issue #5682)
+    if (!qore_check_modern_parse_options(po, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -29480,9 +29571,10 @@ bool QoreAOT::compileScriptAggregate(
             {
                 // parse directives are a property of the source that wrote them (see AOTBatchParseOptionGuard)
                 AOTBatchParseOptionGuard parse_option_guard(*qpgm);
-                applyAOTSourceModernDefault(*qpgm, e.canon);
-                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                if (!applyAOTSourceModernDefault(*qpgm, e.canon, &xsink)) {
+                    qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                        &xsink, &wsink, QP_WARN_DEFAULT);
+                }
                 file_po = qpgm->getParseOptions();
             }
             if (xsink.isException()) {
@@ -29490,7 +29582,7 @@ bool QoreAOT::compileScriptAggregate(
                 error = "parse error in target file: " + e.canon;
                 return false;
             }
-            if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+            if (!qore_aot_check_parse_options(file_po, e.canon, error, qpgm)) {
                 return false;
             }
         }
@@ -29947,7 +30039,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     QoreParseOptions po = parse_options;
-    applyAOTModernSourceDefault(po, {target_canon});
+    if (!applyAOTModernSourceDefault(po, {target_canon}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -30138,7 +30232,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         error = "parse commit failed: " + target_canon;
         return false;
     }
-    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error)) {
+    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error, *qpgm)) {
         return false;
     }
 
@@ -30624,7 +30718,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -30650,7 +30746,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -30718,7 +30814,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "parse error in component file: " + file_path;
                 return false;
             }
-            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                 mod_ctx.close();
                 return false;
             }
@@ -31191,7 +31287,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -31217,7 +31315,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31266,7 +31364,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -31742,7 +31840,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
     // a module is parsed as modern by default when loaded, so it must be compiled the same way
-    applyAOTModernSourceDefault(mod_po, {qm_path});
+    if (!applyAOTModernSourceDefault(mod_po, {qm_path}, error)) {
+        return false;
+    }
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -31768,7 +31868,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31817,7 +31917,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -34275,7 +34375,15 @@ class ExprTreeSerializer {
         if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NEW));
             const QoreClass* qc = no->getClass();
-            writeStr(qore_aot_encode_class_ref(qc));
+            // the object type with the type arguments of a generic class (new G<float>()): without them the object
+            // is constructed as a plain generic class
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            const QoreTypeInfo* object_type_info = no->getObjectTypeInfo();
+            if (object_type_info && QoreTypeInfo::getParameterizedClassType(object_type_info)) {
+                class_ref += "\ntype:";
+                class_ref += qore_get_aot_serializable_type_path(object_type_info);
+            }
+            writeStr(class_ref);
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -34290,7 +34398,14 @@ class ExprTreeSerializer {
         // ScopedObjectCallNode: new Namespace::ClassName(args)
         if (auto* so = dynamic_cast<const ScopedObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SCOPED_NEW));
-            writeStr(qore_aot_encode_class_ref(so->oc));
+            // the object type with the type arguments of a generic class; see EN_NEW
+            std::string class_ref = qore_aot_encode_class_ref(so->oc);
+            const QoreTypeInfo* object_type_info = so->getObjectTypeInfo();
+            if (object_type_info && QoreTypeInfo::getParameterizedClassType(object_type_info)) {
+                class_ref += "\ntype:";
+                class_ref += qore_get_aot_serializable_type_path(object_type_info);
+            }
+            writeStr(class_ref);
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -35145,8 +35260,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         const AbstractQoreFunctionVariant* call_variant = call->getVariant();
+        // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo());
+            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
@@ -35375,9 +35491,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         id.kind = AOTExprKind::CLOSURE_CREATE;
         UserClosureFunction* ucf = closure->getFunction();
-        // ref1 = flags: "lambda,in_method" (comma-separated booleans)
+        // ref1 = flags: "lambda,in_method,type_context" (comma-separated booleans; type_context: the closure is in
+        // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
-                + (closure->isInMethod() ? "1" : "0");
+                + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {
@@ -36721,6 +36838,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             }
             lvid.steps.push_back(std::move(sid));
         }
+        lvid.slice_ranges = pi->slice_ranges;
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);
@@ -36817,15 +36935,26 @@ void captureLastError(ExceptionSink& xsink) {
 }
 }  // namespace
 
+//! Creates the Program of an AOT executable, or returns nullptr with qore_last_error() set if its options have %modern
+//! and a compatibility option that it does not allow (an artifact built before issue #5682; it must be rebuilt)
+static QoreProgram* qore_create_checked_program(const QoreParseOptions& po) {
+    std::string error;
+    if (!qore_check_modern_parse_options(po, error)) {
+        qore_last_error_storage = error + "; rebuild the program with this version of Qore";
+        return nullptr;
+    }
+    qore_last_error_storage.clear();
+    return new QoreProgram(po);
+}
+
 extern "C" DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options) {
-    // Delegate to the standard QoreProgram constructor.  QoreParseOptions
-    // has an implicit ctor from int64 that zero-fills the high 64 bits —
-    // matches common.h's PO_* flag layout.
-    return new QoreProgram(QoreParseOptions(parse_options));
+    // QoreParseOptions has an implicit ctor from int64 that zero-fills the high 64 bits — matches common.h's PO_*
+    // flag layout.
+    return qore_create_checked_program(QoreParseOptions(parse_options));
 }
 
 extern "C" DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi) {
-    return new QoreProgram(QoreParseOptions(parse_options_lo, parse_options_hi));
+    return qore_create_checked_program(QoreParseOptions(parse_options_lo, parse_options_hi));
 }
 
 extern "C" DLLEXPORT void qore_destroy_program(QoreProgram* pgm) {

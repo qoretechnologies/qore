@@ -472,7 +472,8 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         }
 
         QoreParseContextFlagHelper fh0(parse_context);
-        fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
+        // the body runs for each element with the element's index as $# (qore#5690)
+        fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK | PF_IMPLICIT_ELEMENT);
 
         if (code->parseInitImpl(parse_context) && !err) {
             err = -1;

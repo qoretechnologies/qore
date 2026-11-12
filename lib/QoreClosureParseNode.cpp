@@ -168,6 +168,12 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         // Use generic closure type for deferred initialization
         parse_context.typeInfo = runTimeClosureTypeInfo;
     } else {
+        // in generic code, the closure names its type parameters (see UserSignatureTypeParamContextHelper), or
+        // those of its class
+        {
+            const qore_class_private* qc = parse_get_class_priv();
+            needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams());
+        }
         err = uf->parseInitClosure();
         uf->parseCommit();
 
@@ -183,6 +189,9 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 }
 
 int QoreClosureParseNode::parseInitDeferred() {
+    // a deferred closure (of a constant expression) is initialized out of the code that it is in, which can be the
+    // parse of a generic function: it names no type parameters (qore#5733)
+    UserSignatureTypeParamContextHelper type_param_context(nullptr);
     // Idempotent: a closure in a constant expression can have its deferred parse-init forced on demand by exec()
     // when the constant's value is evaluated during parse-commit (before initDeferredCode() flushes the deferred
     // set).  In that case this is called a second time from initDeferredCode(); do nothing the second time.

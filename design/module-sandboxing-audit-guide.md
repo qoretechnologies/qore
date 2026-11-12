@@ -461,7 +461,7 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 
 | What the handler gets | Where it comes from |
 |---|---|
-| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v25; the options the program is declared with before that), and for a library module loaded compiled only those |
+| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v29; the options the program is declared with before that), and for a library module loaded compiled only those |
 | `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
 | `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
 
@@ -491,9 +491,9 @@ refused for a caller that has only `PO_NO_FILESYSTEM`, and is refused for a sand
 Program's parse options").
 
 A module whose handler checks the context for every command that executes code, changes a path, touches the filesystem
-or the network, or has process-wide effect sets `mod_info.cmd_caller_aware = true`. A module that does not set it (any
-module built with module API 2.0) is refused every command from restricted code (sandboxed, or with a parse option that
-restricts a functional domain) before the handler runs, so a module that predates the API is safe by default.
+or the network, or has process-wide effect sets `mod_info.cmd_caller_aware = true`. A module that does not set it is
+refused every command from restricted code (sandboxed, or with a parse option that
+restricts a functional domain) before the handler runs, so a module that does not judge the issuer is safe by default.
 
 Audit checklist for a module with a command handler:
 - [ ] `cmd_caller_aware` is set only if every command is classified (executes code / changes a path / touches the
@@ -505,9 +505,9 @@ Audit checklist for a module with a command handler:
 - [ ] a command with process-wide effect is refused for every restricted issuer
 - [ ] nothing in the handler reads `getProgram()->getParseOptions()` to decide whether the issuer may do something
 - [ ] the restrictions are copied (not the context pointer) when another thread continues the command
-- [ ] the descriptor sets `cmd_caller_aware` only if `is_module_api_supported(2, 1)` when a library that implements
-  only module API 2.0 may load the module (the API version is validated only after the descriptor has filled in the
-  struct, which such a library creates without the field)
+- [ ] the descriptor sets `cmd_caller_aware` only if `is_module_api_supported(2, 2)` when a library that implements
+  module API 2.1 or earlier may load the module (the API version is validated only after the descriptor has filled in
+  the struct, which such a library creates without the field)
 
 Audit checklist for library module code (a Qore-language module in a module directory, or a binary module) that issues
 module commands, for every module with commands it issues to:

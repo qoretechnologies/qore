@@ -206,6 +206,38 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+// ============================================================================
+// SOURCE_LOCATION (122): the location of the call expression that follows (#5745)
+// ============================================================================
+
+//! not written through the registry: classifyAndWriteExpr() writes the location before a call
+static bool write_expr_source_location(AOTExprWriteCtx& ctx) {
+    return false;
+}
+
+//! Gives a call node read from an AOT image the location of the call
+static void qore_aot_set_call_location(AbstractQoreNode* node, const QoreProgramLocation* loc) {
+    if (auto* pn = dynamic_cast<ParseNode*>(node)) {
+        pn->loc = loc;
+    }
+    // the frame of a method call through the dot operator is located at its method call node
+    if (auto* dot = dynamic_cast<QoreDotEvalOperatorNode*>(node)) {
+        if (MethodCallNode* m = dot->getMethodCall()) {
+            m->loc = loc;
+        }
+    }
+}
+
+static QoreValue read_expr_source_location(AOTExprReadCtx& ctx) {
+    const QoreProgramLocation* loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    QoreValue v = readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (loc && ctx.error.empty() && v.hasNode()) {
+        qore_aot_set_call_location(v.getInternalNode(), loc);
+    }
+    return v;
+}
+
 static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     const char* func_name = ctx.reader.readStringRef(ctx.ptr);
     const char* sig_ref = nullptr;
@@ -1346,46 +1378,107 @@ static bool write_expr_closure_create(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
+    // The closure record is read and the closure constructed in the closure's Program: the types and default values
+    // of its parameters (a default can be an expression tree that calls a function of the Program, qore#5827), its
+    // class and the closure itself.  This runs when a cold call or a closure's first call deserializes IR, so it
+    // selects the Program without claiming parse ownership, like the CLOSURE_CREATE slot reader in
+    // buildContextFromSlotMap(): a module loader can own parsing while waiting for this thread.  The caller keeps the
+    // Program alive, and the Program's runtime metadata lock protects the locations, strings, and locals that the
+    // closure signature allocates.
+    QoreProgramContextHelper closure_program_context(ctx.pgm);
+
+    // the record is read with its bounds checked: a malformed record, or one that a default that cannot be read
+    // left at the end of the data (QoreAOTBinaryReader::readValue()), fails with the read pointer at the end of the
+    // data (qore#5848); the error of a default comes first
+    std::vector<QoreValue> defaults;
+    std::string default_error;
+    auto have = [&ctx](size_t n) -> bool {
+        return ctx.ptr <= ctx.end && static_cast<size_t>(ctx.end - ctx.ptr) >= n;
+    };
+    auto fail = [&ctx, &defaults, &default_error](const char* what) -> QoreValue {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ctx.end;
+        if (!default_error.empty()) {
+            ctx.error = std::move(default_error);
+        } else {
+            ctx.error = "unexpected end of data reading closure ";
+            ctx.error += what;
+        }
+        return QoreValue();
+    };
+
+    const bool has_native_body_key = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0;
+    if (!have(has_native_body_key ? 16 : 12)) {
+        return fail("flags");
+    }
     // Read flags
     const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
     const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+    if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
+    // the location of the closure (see v26), which its signature gets: two lines, the offset and two string refs,
+    // followed by the return type, which the size check above counted before the location was added
+    const QoreProgramLocation* closure_loc = nullptr;
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        if (!have(2 * qore_aot_line_size(ctx.reader) + 8 + 8 + 4)) {
+            return fail("location");
+        }
+        closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    }
 
-    bool is_lambda = false, is_in_method = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+        needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
     }
 
     // Read return type
     const char* ret_type_path = ctx.reader.readStringRef(ctx.ptr);
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
+    // the closure's types name the type parameters of the function whose context is being built (qore#5733)
+    const UserSignature* closure_type_param_owner = qore_aot_get_type_param_owner();
     const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
-        ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+        ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner) : nullptr;
 
     // Read params
+    if (!have(2)) {
+        return fail("parameter count");
+    }
     uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> param_names(closure_num_params);
     std::vector<const QoreTypeInfo*> param_types(closure_num_params);
-    std::vector<QoreValue> defaults(closure_num_params);
+    defaults.resize(closure_num_params);
     for (uint16_t p = 0; p < closure_num_params; ++p) {
+        if (!have(9)) {
+            return fail("parameter");
+        }
         const char* pname = ctx.reader.readStringRef(ctx.ptr);
         param_names[p] = pname ? pname : "";
         const char* ptype = ctx.reader.readStringRef(ctx.ptr);
         param_types[p] = (ptype && *ptype)
-            ? type_resolver.resolve(ptype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            if (!val_error.empty() && default_error.empty()) {
+                // a closure without the default would run with another value
+                default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
+            }
         }
     }
     bool closure_sig_has_varargs = false;
     bool closure_needs_extra_args = false;
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+    const bool has_varargs_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0;
+    if (!have(has_varargs_flags ? 4 : 3)) {
+        return fail("flags and captures");
+    }
+    if (has_varargs_flags) {
         uint16_t closure_flags = QoreAOTBinaryReader::readU16(ctx.ptr);
         closure_needs_extra_args = (closure_flags & 0x0001) != 0;
         closure_sig_has_varargs = (closure_flags & 0x0004) != 0;
@@ -1400,29 +1493,53 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     std::vector<std::string> captured_names(num_captured);
     std::vector<int32_t> captured_parent_slots(num_captured, -1);
     for (uint16_t c = 0; c < num_captured; ++c) {
+        if (!have(8)) {
+            return fail("capture");
+        }
         const char* cname = ctx.reader.readStringRef(ctx.ptr);
         captured_names[c] = cname ? cname : "";
         captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
     }
 
     // Read closure body IR
+    if (!have(1)) {
+        return fail("IR flag");
+    }
     uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!has_ir) {
-        ctx.error = "closure has no IR data";
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.error = default_error.empty() ? std::string("closure has no IR data") : std::move(default_error);
         return QoreValue();
     }
 
+    if (!have(4)) {
+        return fail("IR size");
+    }
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    // the IR must be in the data, as in the slot-map reader (buildContextFromSlotMap())
+    if (ctx.ptr > ctx.end || ir_size > static_cast<size_t>(ctx.end - ctx.ptr)) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        // at the end of the data, so that no reader reads the IR as an expression
+        ctx.ptr = ctx.end;
+        ctx.error = default_error.empty() ? std::string("closure IR range exceeds the expression data")
+            : std::move(default_error);
+        return QoreValue();
+    }
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
+    if (!default_error.empty()) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ir_end_ptr;
+        ctx.error = std::move(default_error);
+        return QoreValue();
+    }
 
-    // Resolve the class for the method context and construct the closure in the
-    // closure's Program.  This runs when a cold call or a closure's first call
-    // deserializes IR, so it selects the Program without claiming parse ownership,
-    // like the CLOSURE_CREATE slot reader in buildContextFromSlotMap(): a module
-    // loader can own parsing while waiting for this thread.  The caller keeps the
-    // Program alive, and the Program's runtime metadata lock protects the
-    // locations, strings, and locals that the closure signature allocates.
-    QoreProgramContextHelper closure_program_context(ctx.pgm);
+    // Resolve the class for the method context (in the closure's Program; see closure_program_context above)
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
@@ -1433,10 +1550,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     auto* closure_variant = static_cast<UserClosureVariant*>(
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
     UserSignature* closure_sig = closure_variant->getUserSignature();
+    closure_sig->enclosing_signature = closure_type_param_owner;
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+        closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+        closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
         std::vector<uint8_t>(), ctx.local_owner_pgm);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
@@ -1611,6 +1730,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    closure_node->setNeedsTypeContext(needs_type_context);
     return QoreValue(closure_node);
 }
 
@@ -1664,14 +1784,11 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = "empty call reference function name";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 
@@ -1777,14 +1894,11 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
 
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 

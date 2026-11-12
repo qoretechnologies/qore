@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native AOT IR decoding rejects crafted instruction payloads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%exec-class AOTIRInstructionValidationTest
+
+class AOTIRInstructionValidationTest inherits QUnit::Test {
+    constructor() : Test("AOT IR instruction validation", "1.0", \ARGV) {
+        addTestCase("malformed instruction classes, operands and constant kinds", \nativeValidation());
+        set_return_value(main());
+    }
+
+    private nativeValidation() {
+        string native = ENV.QORE_AOT_IR_INSTRUCTION_TEST ?? dirname(QORE_ARGV[0]) + "/qore-aot-ir-instruction-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT IR opcode test executable is not available");
+            return;
+        }
+        string prefix;
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        int rc;
+        string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 140 AOT IR instruction validation checks\n", output);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

@@ -1031,7 +1031,7 @@ nothing length() [flags=RUNTIME_NOOP] {
 /** A member or variable of a string type that is not assigned has no value; its length is 0, also in code with
     @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with @ref modern "%modern")
 
-    @param arg no value (@ref nothing)
+    @param str no value (@ref nothing)
 
     @return 0
 
@@ -1043,7 +1043,7 @@ int len = length(h.missing_key); # 0
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     0 for no value)
  */
-int length(nothing[doc] arg) [flags=CONSTANT] {
+int length(nothing[doc] str) [flags=CONSTANT,NAMED_ARGS] {
    return 0;
 }
 
@@ -1086,7 +1086,7 @@ nothing strlen() [flags=RUNTIME_NOOP] {
 /** A member or variable of a string type that is not assigned has no value; its byte length is 0, also in code with
     @ref strict-args "%strict-args" or @ref require-types "%require-types" (as with @ref modern "%modern")
 
-    @param arg no value (@ref nothing)
+    @param str no value (@ref nothing)
 
     @return 0
 
@@ -1098,7 +1098,7 @@ int size = strlen(h.missing_key); # 0
     @since %Qore 3.0 a regular variant (before, a @ref NOOP variant that is not called with strict arguments returned
     0 for no value)
  */
-int strlen(nothing[doc] arg) [flags=CONSTANT] {
+int strlen(nothing[doc] str) [flags=CONSTANT,NAMED_ARGS] {
    return 0;
 }
 

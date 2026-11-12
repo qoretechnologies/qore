@@ -119,6 +119,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <unordered_map>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -1195,6 +1196,57 @@ static void ut_fork_jit_background_compiler(UnitTestCounters& c) {
     UT_ASSERT(c, pid > 0, "fork() succeeds");
     if (pid > 0) {
         UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child stopped the background compiler");
+    }
+}
+
+//! A synchronous JIT compile that waits for the compile lock in another thread is not counted in a child process
+/** The background compile thread takes no work while a synchronous compile waits for the lock; a child created while
+    another thread waited kept the count of the thread that does not exist in it, and its background thread never
+    compiled anything
+*/
+static void ut_fork_jit_sync_compile_waiter(UnitTestCounters& c) {
+    QoreJIT& jit = QoreJIT::instance();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        jit.lockCompileForTest();
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&] { return release; });
+        ul.unlock();
+        jit.releaseCompileLock();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&] { return held; });
+    }
+    bool waiter_locked = false;
+    std::thread waiter([&]() {
+        waiter_locked = jit.lockForSyncCompileForTest();
+        if (waiter_locked) {
+            jit.releaseCompileLock();
+        }
+    });
+    bool waiting = jit.dbgWaitSyncCompileWaiting(60000);
+    UT_ASSERT(c, waiting, "a synchronous compile waits for the compile lock");
+    pid_t pid = waiting ? fork() : -1;
+    if (!pid) {
+        _exit(jit.syncCompileWaitersForTest() ? 1 : 0);
+    }
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    waiter.join();
+    UT_ASSERT(c, waiter_locked, "the synchronous compile gets the compile lock");
+    UT_ASSERT_EQ(c, 0, jit.syncCompileWaitersForTest(), "no synchronous compile waits in the parent afterwards");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "no synchronous compile waits in the child");
     }
 }
 
@@ -17426,6 +17478,299 @@ static QoreValue f_dbg_get_program_thread_cancel_generation_count(const QoreList
 }
 #endif
 
+//! Crafted AOT value payloads: a value that cannot be read leaves the read pointer past the value, or at the end of
+//! the data if it is malformed, and no reader reads past the end (qore#5848)
+/** The payloads are read from buffers of their exact size, so a read past the end is seen by valgrind and ASan.
+*/
+namespace {
+struct AotCraft {
+    QoreAOTBinaryWriter w;
+    std::vector<uint8_t> image;
+    QoreAOTBinaryReader r;
+    std::string error;
+
+    AotCraft() {
+        w.feature_flags = QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS;
+    }
+
+    //! makes the image; the payloads use the string pool of the writer
+    bool finish() {
+        uint32_t sec = w.beginSection(QoreAOTSectionType::TYPEDEFS);
+        w.endSection(sec);
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.feature_flags = w.feature_flags;
+        return w.finalize(hdr, image) && r.open(image.data(), static_cast<uint32_t>(image.size()), error);
+    }
+
+    //! a string ref: the offset of the string in the pool, written to a scratch writer
+    uint32_t ref(const char* str) {
+        QoreAOTBinaryWriter& wr = w;
+        uint32_t pos = wr.position();
+        wr.writeStringRef(str);
+        const uint8_t* p = wr.getBuffer().data() + pos;
+        uint32_t off = QoreAOTBinaryReader::readU32(p);
+        wr.truncate(pos);
+        return off;
+    }
+};
+
+struct Bytes {
+    std::vector<uint8_t> b;
+    Bytes& u8(uint8_t v) { b.push_back(v); return *this; }
+    Bytes& u16(uint16_t v) { uint8_t t[2]; memcpy(t, &v, 2); b.insert(b.end(), t, t + 2); return *this; }
+    Bytes& u32(uint32_t v) { uint8_t t[4]; memcpy(t, &v, 4); b.insert(b.end(), t, t + 4); return *this; }
+    Bytes& i64(int64_t v) { uint8_t t[8]; memcpy(t, &v, 8); b.insert(b.end(), t, t + 8); return *this; }
+    Bytes& tag(QoreAOTValueTag t) { return u8(static_cast<uint8_t>(t)); }
+    Bytes& add(const Bytes& o) { b.insert(b.end(), o.b.begin(), o.b.end()); return *this; }
+    //! an int value
+    Bytes& intv(int64_t v) { return tag(QoreAOTValueTag::VT_INT64).i64(v); }
+    //! a plain container kind (typed value containers are enabled)
+    Bytes& plain() { return u8(static_cast<uint8_t>(QoreAOTContainerValueType::Plain)); }
+};
+
+//! reads a value from an exactly-sized copy of the payload; returns the offset of the read pointer after it
+static size_t ut_aot_read(AotCraft& a, const std::vector<uint8_t>& payload, std::string& error, QoreValue* out = nullptr,
+        size_t start = 0) {
+    std::unique_ptr<uint8_t[]> buf(new uint8_t[payload.size()]);
+    memcpy(buf.get(), payload.data(), payload.size());
+    const uint8_t* p = buf.get() + start;
+    QoreValue v = a.r.readValue(p, buf.get() + payload.size(), error);
+    size_t rv = p - buf.get();
+    if (out) {
+        *out = v;
+    } else {
+        v.discard(nullptr);
+    }
+    return rv;
+}
+}
+
+static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
+    AotCraft a;
+    // valid values of every kind that needs no Program, written by the writer: reading and skipping each consume the
+    // same bytes, as a value that fails is skipped
+    std::vector<std::vector<uint8_t>> valid;
+    {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        l->push(QoreValue(1), &xsink);
+        l->push(new QoreStringNode("x"), &xsink);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        h->setKeyValue("a", l->refSelf(), &xsink);
+        h->setKeyValue("b", QoreValue(2.5), &xsink);
+        std::vector<QoreValue> vals = {QoreValue(), QoreValue(null()), QoreValue(true), QoreValue(-5),
+            QoreValue(1.25), QoreValue(new QoreStringNode("abc")), QoreValue(new QoreNumberNode("1.5")),
+            QoreValue(new BinaryNode(strdup("xyz"), 3)), QoreValue(DateTimeNode::makeAbsolute(nullptr, 1000, 5)),
+            QoreValue(DateTimeNode::makeRelative(1, 2, 3, 4, 5, 6, 7)), QoreValue(l->refSelf()),
+            QoreValue(h->refSelf())};
+        for (QoreValue& v : vals) {
+            uint32_t pos = a.w.position();
+            if (a.w.writeValue(v)) {
+                const std::vector<uint8_t>& buf = a.w.getBuffer();
+                valid.emplace_back(buf.begin() + pos, buf.end());
+            }
+            a.w.truncate(pos);
+            v.discard(&xsink);
+        }
+    }
+    uint32_t key = a.ref("k");
+    uint32_t str = a.ref("abc");
+    uint32_t enum_path = a.ref("NoSuchEnum5848");
+    uint32_t enum_member = a.ref("X");
+    uint32_t class_path = a.ref("NoSuchClass5848");
+    if (!a.finish()) {
+        UT_ASSERT(c, false, ("AOT value reader: image: " + a.error).c_str());
+        return;
+    }
+    const uint32_t bad_offset = 0xfffffff0u;
+
+    UT_ASSERT_EQ(c, 12, static_cast<int>(valid.size()), "AOT value reader: the valid values are written");
+    for (size_t i = 0; i < valid.size(); ++i) {
+        std::string err;
+        QoreValue v;
+        size_t read_len = ut_aot_read(a, valid[i], err, &v);
+        v.discard(nullptr);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[valid[i].size()]);
+        memcpy(buf.get(), valid[i].data(), valid[i].size());
+        const uint8_t* p = buf.get();
+        std::string skip_err;
+        bool skipped = a.r.skipValue(p, buf.get() + valid[i].size(), skip_err);
+        UT_ASSERT(c, err.empty() && skipped && read_len == valid[i].size()
+            && static_cast<size_t>(p - buf.get()) == valid[i].size(),
+            ("AOT value reader: value " + std::to_string(i) + " is read and skipped whole: " + err + skip_err).c_str());
+    }
+    // a string whose length is past the end of the string pool
+    {
+        Bytes sv;
+        sv.tag(QoreAOTValueTag::VT_STRING).u32(0x7fffffffu).u32(str);
+        std::string err;
+        size_t pos = ut_aot_read(a, sv.b, err);
+        UT_ASSERT(c, !err.empty() && pos == sv.b.size(),
+            "AOT value reader: a string longer than the string pool fails, and is skipped");
+    }
+    // a value nested deeper than the reader allows: it fails without overflowing the stack
+    {
+        Bytes deep;
+        for (int i = 0; i < 300; ++i) {
+            deep.tag(QoreAOTValueTag::VT_LIST).plain().u32(1);
+        }
+        deep.intv(1);
+        std::string err;
+        size_t pos = ut_aot_read(a, deep.b, err);
+        UT_ASSERT(c, !err.empty() && pos == deep.b.size(), "AOT value reader: a value nested too deeply fails");
+    }
+
+    // a list whose second element has an invalid string offset, followed by an int
+    {
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(3).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset).intv(3);
+        Bytes all = Bytes().add(list).intv(7);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a list element with an invalid string offset fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is past the list after an element error");
+        std::string err2;
+        QoreValue v;
+        ut_aot_read(a, all.b, err2, &v, pos);
+        UT_ASSERT(c, err2.empty() && v.getType() == NT_INT && v.getAsBigInt() == 7,
+            "AOT value reader: the value after a list that failed is read");
+        v.discard(nullptr);
+    }
+    // a hash with an enum that does not resolve, followed by an int
+    {
+        Bytes hash;
+        hash.tag(QoreAOTValueTag::VT_HASH).plain().u32(2).u32(key).tag(QoreAOTValueTag::VT_ENUM)
+            .u32(14).u32(enum_path).u32(1).u32(enum_member).u32(key).intv(2);
+        Bytes all = Bytes().add(hash).intv(8);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a hash value with an unknown enum fails");
+        UT_ASSERT_EQ(c, hash.b.size(), pos, "AOT value reader: the pointer is past the hash after a value error");
+    }
+    // a constructor default whose second argument fails, followed by an int
+    {
+        Bytes obj;
+        obj.tag(QoreAOTValueTag::VT_NEW_OBJECT).u32(15).u32(class_path).u32(2).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset);
+        Bytes all = Bytes().add(obj).intv(9);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a constructor argument with an invalid string offset fails");
+        UT_ASSERT_EQ(c, obj.b.size(), pos, "AOT value reader: the pointer is past the constructor default after an "
+            "argument error");
+    }
+    // a plugin value with a non-zero reserved field
+    {
+        Bytes pl;
+        pl.tag(QoreAOTValueTag::VT_PLUGIN_INSTANCE).u16(0).u16(0).u16(0).u16(1).u32(3).u8(1).u8(2).u8(3);
+        Bytes all = Bytes().add(pl).intv(10);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a plugin value with a reserved field fails");
+        UT_ASSERT_EQ(c, pl.b.size(), pos, "AOT value reader: the pointer is past the plugin value after an error");
+    }
+    // malformed values: the pointer is at the end of the data
+    {
+        // a list that claims more elements than the data has
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(0xffffffffu).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3);
+        std::string err;
+        size_t pos = ut_aot_read(a, list.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a truncated list fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is at the end after a truncated list");
+        // every prefix of a valid hash with a nested list
+        Bytes nested;
+        nested.tag(QoreAOTValueTag::VT_HASH).plain().u32(1).u32(key).tag(QoreAOTValueTag::VT_LIST).plain().u32(2)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(str).intv(4);
+        bool all_ok = true;
+        for (size_t n = 0; n < nested.b.size(); ++n) {
+            std::vector<uint8_t> prefix(nested.b.begin(), nested.b.begin() + n);
+            std::string perr;
+            size_t ppos = prefix.empty() ? 0 : ut_aot_read(a, prefix, perr);
+            if (!prefix.empty() && (perr.empty() || ppos != prefix.size())) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a nested value fails at the end of the data");
+        std::string err2;
+        QoreValue v;
+        size_t pos2 = ut_aot_read(a, nested.b, err2, &v);
+        UT_ASSERT(c, err2.empty() && pos2 == nested.b.size() && v.getType() == NT_HASH,
+            "AOT value reader: the complete nested value is read");
+        v.discard(nullptr);
+    }
+    // a closure record read as an expression (read_expr_closure_create()): truncated after each field, and with a
+    // default that fails, after which the next expression is read
+    {
+        auto closure = [&](bool bad_default) {
+            Bytes e;
+            // flags and class type
+            e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str);
+            // the location of the closure (format version 26: QORE_AOT_SOURCE_LOCATIONS_VERSION): none (lines 0)
+            if (a.r.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                e.u32(0).u32(0).i64(0).u32(str).u32(str);
+            }
+            // return type, one parameter with a default
+            e.u32(str).u16(1).u32(str).u32(str).u8(1);
+            if (bad_default) {
+                e.tag(QoreAOTValueTag::VT_LIST).plain().u32(2).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3)
+                    .u32(bad_offset);
+            } else {
+                e.intv(5);
+            }
+            // varargs flag (old form), no captures, IR of 4 bytes
+            e.u8(0).u16(0).u8(1).u32(4).u32(0);
+            return e;
+        };
+        Bytes full = closure(true);
+        bool all_ok = true;
+        for (size_t n = 1; n < full.b.size(); ++n) {
+            std::unique_ptr<uint8_t[]> buf(new uint8_t[n]);
+            memcpy(buf.get(), full.b.data(), n);
+            const uint8_t* p = buf.get();
+            std::string err;
+            QoreValue v = readOneExpr(a.r, p, buf.get() + n, err, getProgram(), nullptr, 0, nullptr, 0);
+            v.discard(nullptr);
+            if (err.empty() || p > buf.get() + n) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a closure record fails within the data");
+        Bytes all = Bytes().add(full).u8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE)).intv(11);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[all.b.size()]);
+        memcpy(buf.get(), all.b.data(), all.b.size());
+        const uint8_t* p = buf.get();
+        const uint8_t* end = buf.get() + all.b.size();
+        std::string err;
+        QoreValue v = readOneExpr(a.r, p, end, err, getProgram(), nullptr, 0, nullptr, 0);
+        v.discard(nullptr);
+        UT_ASSERT(c, err.find("default") != std::string::npos,
+            ("AOT value reader: a closure default that fails is the error: " + err).c_str());
+        UT_ASSERT_EQ(c, full.b.size(), static_cast<size_t>(p - buf.get()),
+            "AOT value reader: the pointer is past the closure record after a default error");
+        std::string err2;
+        QoreValue v2 = readOneExpr(a.r, p, end, err2, getProgram(), nullptr, 0, nullptr, 0);
+        UT_ASSERT(c, err2.empty() && v2.getType() == NT_INT && v2.getAsBigInt() == 11,
+            "AOT value reader: the expression after a closure record that failed is read");
+        v2.discard(nullptr);
+    }
+}
+
+//! Debug-only: runs the unit tests of the AOT value reader with crafted payloads (qore#5848)
+static QoreValue f_dbg_run_aot_value_reader_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_aot_value_reader_bounds(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -17709,6 +18054,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
+    ut_fork_jit_sync_compile_waiter(c);
     ut_fork_aot_module_state(c);
     ut_fork_aot_lazy_constant_lock(c);
     ut_fork_lazy_value_in_first_use(c);
@@ -18481,6 +18827,12 @@ static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeC
     return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
 }
 
+//! waits until a synchronous JIT compile waits for the compilation lock; returns False on timeout
+static QoreValue f_dbg_wait_sync_compile_waiting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgWaitSyncCompileWaiting(get_param_value(params, 0).getAsBigInt());
+}
+
 //! returns True if the background JIT compiler is stopped at a hold point
 static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return QoreJIT::instance().dbgBgCompileHeld();
@@ -18655,6 +19007,11 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_live_bigfloat_count();
+}
+
+//! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
 
 //! returns the number of hashes and lists copied in the current thread
@@ -19226,6 +19583,10 @@ struct DerefPointHold {
 DerefPointHold deref_decide_hold;
 //! the hold of dbg_hold_deref_marked()
 DerefPointHold deref_marked_hold;
+//! the hold of dbg_hold_deref_delete()
+DerefPointHold deref_delete_hold;
+//! the hold of dbg_hold_deref_last()
+DerefPointHold deref_last_hold;
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -19261,6 +19622,14 @@ void dbg_hold_deref_decide_hook(const char* class_name) {
 
 void dbg_hold_deref_marked_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, class_name, "dbg_hold_deref_marked");
+}
+
+void dbg_hold_deref_delete_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, class_name, "dbg_hold_deref_delete");
+}
+
+void dbg_hold_deref_last_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
 }
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
@@ -19322,6 +19691,40 @@ static QoreValue f_dbg_hold_deref_decide(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, dbg_hold_deref_marked_hook,
         params, xsink);
+}
+
+//! holds the next dereference that deletes an object of the given class, once it has completed
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference that marked the object as
+    being destroyed has completed (RObject::derefDone()), and before the deletion starts (the object's destructor);
+    another thread can release a reference to the object meanwhile, and tests use the hold to make that
+    deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, dbg_hold_deref_delete_hook,
+        params, xsink);
+}
+
+//! holds the next dereference that releases the last reference to an object of the given class
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has released the last
+    reference to the object (one that has no collection to decide), and before it takes the object's lock to delete
+    the object or to hand its deletion off; another dereference can mark the object as being destroyed meanwhile, and
+    tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
+        xsink);
 }
 
 namespace {
@@ -19458,6 +19861,26 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     h.waiting = waiting.release();
     qore_dbg_deref_wait_hook.store(dbg_deref_wait_notify_hook);
     return QoreValue();
+}
+
+//! disarms the notification of dbg_deref_wait_notify(), if it has not been made
+/** A test disarms it when the wait it was armed for did not happen.
+
+    @return true if a notification was armed
+*/
+static QoreValue f_dbg_deref_wait_notify_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DerefWaitNotify& h = deref_wait_notify;
+    ReferenceHolder<Counter> waiting(xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.waiting) {
+            return false;
+        }
+        waiting = h.waiting;
+        h.waiting = nullptr;
+        qore_dbg_deref_wait_hook.store(nullptr);
+    }
+    return true;
 }
 
 namespace {
@@ -20254,6 +20677,222 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     }
     dbg_http1_send_failure_arm(http1_send_failure.hold_recovery, c, nullptr, std::string(),
         "dbg_hold_http1_send_failure_recovery", xsink);
+    return QoreValue();
+}
+
+QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+
+std::atomic<int64_t> qore_dbg_quic_connect_buffered{0};
+
+//! returns the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (issue #5821)
+static QoreValue f_dbg_quic_connect_buffered_bytes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_connect_buffered.load();
+}
+
+namespace {
+//! wakes the threads waiting in dbg_http_stream_credit_wait_deferred()
+std::mutex dbg_stream_credit_m;
+std::condition_variable dbg_stream_credit_cond;
+}
+
+void qore_dbg_stream_credit_deferred(int64_t bytes) {
+    {
+        std::lock_guard<std::mutex> lg(dbg_stream_credit_m);
+        qore_dbg_stream_credit_stats.deferred.fetch_add(bytes, std::memory_order_relaxed);
+    }
+    dbg_stream_credit_cond.notify_all();
+}
+
+//! waits until the bytes whose stream credit was deferred reach the given total
+/** @param total the total of the \c deferred count of dbg_http_stream_credit_stats() to wait for
+    @param timeout_ms the maximum time to wait (a hang guard)
+
+    @return the \c deferred count, or -1 if the timeout expired first
+*/
+static QoreValue f_dbg_http_stream_credit_wait_deferred(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 total = HARD_QORE_VALUE_INT(params, 0);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 1);
+    std::unique_lock<std::mutex> ul(dbg_stream_credit_m);
+    if (!dbg_stream_credit_cond.wait_for(ul, std::chrono::milliseconds(timeout_ms), [total] () {
+                return qore_dbg_stream_credit_stats.deferred.load() >= total;
+            })) {
+        return -1;
+    }
+    return qore_dbg_stream_credit_stats.deferred.load();
+}
+
+//! returns the accounting of the client stream credit deferred until the application consumes the data
+/** @return a hash with keys \c deferred, \c credited, \c settled, \c excess and \c orphaned (bytes); see
+    QoreDbgStreamCreditStats
+*/
+static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    QoreDbgStreamCreditStats& s = qore_dbg_stream_credit_stats;
+    h->setKeyValue("deferred", s.deferred.load(), xsink);
+    h->setKeyValue("credited", s.credited.load(), xsink);
+    h->setKeyValue("settled", s.settled.load(), xsink);
+    h->setKeyValue("excess", s.excess.load(), xsink);
+    h->setKeyValue("orphaned", s.orphaned.load(), xsink);
+    return h.release();
+}
+
+namespace {
+//! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
+std::atomic<int64_t> dbg_quic_hold_session{0};
+std::atomic<int64_t> dbg_quic_hold_stream{-1};
+}
+
+bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
+    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
+        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
+//! flow-control credit
+/** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
+    stream's send buffer deterministically.  Only one stream is held at a time.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID of a streaming response
+*/
+static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || stream_id < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
+            "ID %lld", (long long)session_id, (long long)stream_id);
+        return QoreValue();
+    }
+    // the stream is set first, so that no other stream of the session matches meanwhile
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_session.store(session_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
+//! one point armed by dbg_http_hold_at(): the Counters are referenced
+struct DbgHttpHold {
+    Counter* reached = nullptr;
+    Counter* release = nullptr;
+};
+std::mutex dbg_http_hold_m;
+DbgHttpHold dbg_http_holds[2];
+}
+
+void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
+    DbgHttpHold h;
+    {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& armed = dbg_http_holds[static_cast<int>(point)];
+        if (!armed.reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        h = armed;
+        armed = DbgHttpHold();
+    }
+    ExceptionSink xsink;
+    h.reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    h.release->waitForZero(&xsink, 60000);
+    h.reached->deref(&xsink);
+    h.release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
+/** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
+    the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
+    calls on it are refused) and is not closed yet
+    @param reached decremented when a thread reaches the point
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
+*/
+static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    int point;
+    if (!strcmp(name->c_str(), "submit")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Submit);
+    } else if (!strcmp(name->c_str(), "close")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    DbgHttpHold& h = dbg_http_holds[point];
+    if (h.reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): point '%s' is already armed",
+            name->c_str());
+        return QoreValue();
+    }
+    h.reached = reached.release();
+    h.release = release.release();
+    return QoreValue();
+}
+
+namespace {
+//! the HTTP client connections whose closeConnection() runs now, with the number of closes of each
+std::mutex dbg_http_closing_m;
+std::unordered_map<const void*, int> dbg_http_closing;
+//! the number of times a close of a connection started while another close of it ran
+std::atomic<int64_t> dbg_http_concurrent_closes{0};
+}
+
+QoreDbgHttpCloseScope::QoreDbgHttpCloseScope(const void* conn) : conn(conn) {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    if (dbg_http_closing[conn]++) {
+        dbg_http_concurrent_closes.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+QoreDbgHttpCloseScope::~QoreDbgHttpCloseScope() {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    auto i = dbg_http_closing.find(conn);
+    assert(i != dbg_http_closing.end());
+    if (!--i->second) {
+        dbg_http_closing.erase(i);
+    }
+}
+
+//! returns the number of times a close of an HTTP client connection started while another close of the same
+//! connection was running
+static QoreValue f_dbg_http_concurrent_closes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_http_concurrent_closes.load(std::memory_order_relaxed);
+}
+
+//! disarms the points armed by dbg_http_hold_at() that were not reached
+static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    for (DbgHttpHold& h : dbg_http_holds) {
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+            h = DbgHttpHold();
+        }
+    }
     return QoreValue();
 }
 
@@ -21201,6 +21840,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_aot_value_reader_tests", f_dbg_run_aot_value_reader_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
@@ -21382,6 +22023,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_sync_compile_waiting", f_dbg_wait_sync_compile_waiting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_wait_bg_compile_teardown_waiting", f_dbg_wait_bg_compile_teardown_waiting,
@@ -21424,6 +22067,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
@@ -21483,6 +22128,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_hold_deref_collect", f_dbg_hold_deref_collect,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -21490,6 +22143,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_deref_wait_notify_clear", f_dbg_deref_wait_notify_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_fd_wait_notify", f_dbg_fd_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo,
         3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_QUEUE->getTypeInfo(), QORE_PARAM_NO_ARG, "queue",
         autoTypeInfo, QORE_PARAM_NO_ARG, "value");
@@ -21522,6 +22177,25 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id");
+    qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_connect_buffered_bytes", f_dbg_quic_connect_buffered_bytes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_wait_deferred", f_dbg_http_stream_credit_wait_deferred,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "total",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");

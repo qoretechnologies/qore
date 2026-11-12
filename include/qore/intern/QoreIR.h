@@ -486,7 +486,7 @@ enum class QoreIROpcode : uint16_t {
     // Function/method calls (295-306)
     Call                = 295,
     CallDirect          = 296,  // Direct function call - resolved at parse time
-    CallIndirect        = 297,
+    CallIndirect        = 297,  //!< Reserved: never emitted; call references use CallClosureDirect
     CallMethod          = 298,
     CallMethodDirect    = 299,  // Direct method call - no dispatch needed
     InvokeMethodDirect  = 300,  // Direct method call with exception handling
@@ -1010,7 +1010,18 @@ enum class QoreIROpcode : uint16_t {
     ToIntChecked = 428,
     ToFloatChecked = 429,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (430, 431, ...)
+    //! Create the iterator of a foreach statement whose list is an operator that the AST interpreter iterates lazily
+    //!
+    //! A QoreIRIteratorCreateInstruction whose iterable is the evaluated operand of the operator: the hash or object
+    //! of keys, or the sequence of a slice or of a list of indices.  operands[0] = the QoreIRIteratorSourceKind
+    //! (native int); operands[1] = the QoreIRListSelectorFlag flags (native int: StringIndexChar, NegativeOffsets);
+    //! operands[2] and operands[3] = the start and the end of a slice, or the list of indices and NOTHING.  The
+    //! iterator is the one that the AST interpreter's ForEachStatement gets from the operator, and it keeps what the
+    //! AST's keeps: the hash, or a list or binary sequence, for the whole loop, while the other temporaries of the
+    //! list expression are released before the body runs (qore#5770).
+    IteratorCreateSource = 430,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (431, 432, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1019,8 +1030,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
-static_assert(QORE_IR_MAX_OPCODE == 429, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::IteratorCreateSource);
+static_assert(QORE_IR_MAX_OPCODE == 430, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -1042,6 +1053,16 @@ enum class QoreIRListSelectorFlag : int64_t {
     //! the sequence is a list whose values hold no reference (int, float or bool values); IteratorCreateSelectors
     //! only: native code iterates it with the selector-segment loop (qore#5711)
     Segment = 1 << 5,
+};
+
+//! The operator of QoreIROpcode::IteratorCreateSource (operands[0])
+enum class QoreIRIteratorSourceKind : int64_t {
+    //! keys: QoreKeysOperatorNode::getKeysIterator()
+    Keys = 0,
+    //! a slice (seq[start..end]): QoreSquareBracketsRangeOperatorNode::getSliceIterator()
+    Slice = 1,
+    //! a list of indices without a range (seq[i, j]): QoreSquareBracketsOperatorNode::getIndexesIterator()
+    Indexes = 2,
 };
 
 //! The largest number of selectors of one QoreIROpcode::ListSelectorStep (QoreIRListSelectorFlag::RangeShift)
@@ -1340,6 +1361,14 @@ public:
     bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
     bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
     bool aot_int_to_string_measure = false;  // Transient: ToString returns the native decimal width
+    // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
+    // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
+    // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
+    bool restore_on_exception_exit = false;
+    // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
+    // ended (see qore_ir_is_exception_only_release())
+    bool exception_cleanup_release = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
@@ -1382,6 +1411,17 @@ public:
     QoreIRPluginOperationRef operation;
 };
 
+//! QoreIRDebugStatementInstruction::nest_flags: the nesting of the statement is known (#5816)
+constexpr uint8_t QORE_IR_DEBUG_NEST_VALID = 0x01;
+//! QoreIRDebugStatementInstruction::nest_flags: the statement is a try statement
+constexpr uint8_t QORE_IR_DEBUG_NEST_TRY = 0x02;
+//! QoreIRDebugStatementInstruction::nest_flags: the statement is a statement of the catch block of a try statement
+constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
+//! QoreIRDebugStatementInstruction::nest_flags: the instruction marks the end of a statement at its depth, after which
+//! the frame is in the statement that contains it, which an exception raised after it, as in the condition of a loop,
+//! is reported for; it makes no event
+constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
+
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
 class QoreIRDebugStatementInstruction : public QoreIRInstruction {
 public:
@@ -1401,6 +1441,16 @@ public:
         whose block is found from its location (qore_program_private::getBlockFromIndex())
     */
     const AbstractStatement* statement;
+
+    //! the depth of the statement in its function: 0 for a statement of the function's block (#5816)
+    /** The debugger's exception events of the IR interpreter are made for each statement that an exception leaves,
+        from the innermost, as with the AST interpreter: the statements that a frame is in are the statements of its
+        last DebugStatement instructions at each depth up to that of the current statement
+    */
+    uint16_t nest_depth = 0;
+    //! QORE_IR_DEBUG_NEST_* flags; QORE_IR_DEBUG_NEST_VALID is not set if the nesting is not known (AOT debug IR
+    //! before format version 26)
+    uint8_t nest_flags = 0;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {
@@ -2055,6 +2105,10 @@ enum class LVCompoundOp : uint8_t {
 enum class LVUnaryOp : uint8_t {
     PreInc = 0, PreDec, PostInc, PostDec,
     Remove, Delete, Shift, Pop, Trim, Chomp,
+    //! makes the container of the lvalue unique (copy on write if it is shared) and changes nothing else; emitted
+    //! before the weak assignment of a variable, so that the weak reference designates the owner's own container
+    //! (qore#5756); appended last so that the values of the other operations do not change
+    EnsureUnique,
 };
 
 //! Sub-operation type for LValuePathBinaryMut
@@ -2095,6 +2149,14 @@ public:
     }
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
+
+    //! A path ending with a ListIndexSlice step: for each of its selectors, true if it is a range
+    /** A range's value is the list of the indexes it selects; any other selector is one index, even if its value is
+        a list (getAsBigInt()), as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#5736).  It is kept
+        here and not in the step, so that the steps that a dynamic path copies for each execution (patchLVPath())
+        stay as small as they were.
+    */
+    std::vector<bool> slice_ranges;
 
     //! For LValuePathAssign: the representation the store uses
     AssignmentMode mode = AssignmentMode::Normal;
@@ -2148,8 +2210,9 @@ class LValueHelper;  // forward
 DLLLOCAL QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink);
+//! (\a slice_ranges: QoreIRLValuePathInstruction::slice_ranges, for a ListIndexSlice step)
 DLLLOCAL QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
-        const LVPathStep& last_step, LVUnaryOp unary_op,
+        const LVPathStep& last_step, const std::vector<bool>& slice_ranges, LVUnaryOp unary_op,
         ExceptionSink* xsink);
 DLLLOCAL QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
@@ -3212,6 +3275,14 @@ public:
     QoreIRValue limit;                          //!< Source size captured at loop entry
     QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
     QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
+    //! Values that the loop derived from the previous element (the values of a fused pipeline's map stages that can
+    //! hold an object), released in this order after the previous element and before the iterator is asked for the
+    //! next one, as the AST interpreter's functional iterators release them
+    /** They are not operands: the loop's body defines them after this instruction, so this instruction releases the
+        reference that the frame holds in their slots, if any (an exhausted or skipped stage left none), as
+        ReleaseOwnedTemp releases a temporary.
+    */
+    std::vector<QoreIRValue> release_values;
 };
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {
@@ -3551,6 +3622,33 @@ public:
         instructions.insert(instructions.begin(), std::move(inst));
     }
 
+    //! Returns the temp scope in which the code of this block runs as the handler of an exception
+    /** The scope that the block's first instruction recorded (QoreIRInstruction::temp_scope_id), other than an
+        instruction that opens or closes a temp scope and records its own; 0 if none is known.  An exception that
+        branches to the block leaves every temp scope opened after this one, and releases their temporaries before
+        the block runs (see design/ir-exception-branch-temp-scope.md).
+
+        A block whose first instruction opens a temp scope of its own (PushTempMark) is skipped over to the
+        instructions in that scope, which is not open when an exception branches to the block: the scope returned is
+        then found on no stack of open scopes, and the exception drains the raising instruction's own scope, as before
+        the rule for nested scopes.  The handlers that the lowering creates record their scope first (a landing pad, a
+        cleanup block's releases), so this does not arise for them.
+    */
+    uint32_t getHandlerTempScopeId() const {
+        for (const auto& inst : instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                case QoreIROpcode::DiscardTempsKeep:
+                case QoreIROpcode::UnwindTemps:
+                    continue;
+                default:
+                    return inst->temp_scope_id;
+            }
+        }
+        return 0;
+    }
+
     std::string name;
     std::vector<std::unique_ptr<QoreIRInstruction>> instructions;
 
@@ -3866,6 +3964,16 @@ public:
     // Populated by computeIROnlyLocals() after ir_only_locals is determined.
     std::vector<LocalVar*> ast_visible_body_locals;
 
+    //! True if every call of the function needs a frame of its own on the thread-local variable stack
+    /** Set when the function is lowered for a Program that allows the debugger (PO_ALLOW_DEBUGGER), whose code can
+        call get_local_vars() and set_local_var_value(), which find the local variables of a call by the frames on
+        that stack also while no debugger is attached; a call of the function is then neither inlined nor made
+        through a fast entry that pushes no frame, and its frame has \c argv and \c self also when the code does not
+        use them (UserVariantBase::getIRContextFlags()).  The decision is made when the function is lowered and when a
+        call site is compiled or first made, so that no call pays for it.
+    */
+    bool needs_call_frame = false;
+
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code — never referenced by Invoke expression subtrees,
     // delegate-to-AST statements, or closure captures.  For these locals, the LLVM
@@ -4176,6 +4284,12 @@ public:
     //! The class of each value for the order of the release of a statement's temporaries by an exception (see
     //! qore_ir_build_exception_release_groups())
     mutable std::vector<uint32_t> interpreter_exception_release_groups;
+    //! the PushImplicitArg / SetImplicitArgv / PushImplicitElement instructions
+    //! (QoreIRInstruction::restore_on_exception_exit) open
+    //! at each instruction that leaves the function on an exception, outermost first; the interpreter's frame exit
+    //! restores them (see qore_ir_find_open_implicit_contexts())
+    mutable std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>
+        interpreter_open_implicit_contexts;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
