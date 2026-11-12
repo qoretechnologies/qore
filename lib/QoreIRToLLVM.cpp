@@ -31280,6 +31280,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreTypeInfo* construction_type =
                 fresh_init == fresh_container_init_types.end()
                     ? ml->typeInfo : fresh_init->second;
+            // the parse type of a list of closures of a constant expression, whose closures are initialized after the
+            // expression (their parse type is the generic closure type), does not give the type of the list: it has
+            // the type of the closures, as the AST interpreter derives it from the values (qore#5925)
+            if (fresh_init == fresh_container_init_types.end() && construction_type
+                    && QoreTypeInfo::getComplexListValueType(construction_type) == runTimeClosureTypeInfo) {
+                construction_type = nullptr;
+            }
             // Allocate stack array and fill with NaN-boxed operand values
             int count = static_cast<int>(inst->operands.size());
             llvm::Value* count_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count);

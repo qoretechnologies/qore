@@ -10976,7 +10976,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     // non-literal init expression (value is not foldable
                     // until the __const_init::<path>::<name> init-func runs
                     // at register time).
-                    writer.writeU8(ce->hasInitExpr() ? 1 : 0);
+                    // and, from format v29, QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (#5925)
+                    writer.writeU8((ce->hasInitExpr() ? QORE_AOT_CONST_FLAG_PENDING : 0)
+                        | (ce->hasExplicitType() ? QORE_AOT_CONST_FLAG_EXPLICIT_TYPE : 0));
                     if (ce->hasInitExpr()) {
                         // Class constants with init expressions get NOTHING placeholder
                         bool placeholder_ok = writer.writeValue(QoreValue());
@@ -11261,7 +11263,9 @@ static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         // __const_init::<ns>::<name> init-func runs at register time).
         // Readers wrap pending constants in a RuntimeConstantRefNode so
         // references from sibling `.qo`s defer evaluation.
-        writer.writeU8(ce->hasInitExpr() ? 1 : 0);
+        // and, from format v29, QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (#5925)
+        writer.writeU8((ce->hasInitExpr() ? QORE_AOT_CONST_FLAG_PENDING : 0)
+            | (ce->hasExplicitType() ? QORE_AOT_CONST_FLAG_EXPLICIT_TYPE : 0));
         if (ce->hasInitExpr()) {
             // Constants with init expressions will be initialized at runtime
             // by their lowered init function — serialize NOTHING as placeholder
@@ -16714,7 +16718,12 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
-            uint8_t cpending = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+            uint8_t cflags = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+            // the flags of a v9-v28 constant are its pending flag; it is taken to have an explicit type (#5925)
+            uint8_t cpending = reader.getHeader().version >= QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+                ? (cflags & QORE_AOT_CONST_FLAG_PENDING) : cflags;
+            bool cexplicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+                || (cflags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
             QoreAOTDeferredValueBlob value_blob;
             if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
@@ -16741,6 +16750,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.type_path = makeDeferredStringRef(ctype_path);
                 pcc.access = caccess;
                 pcc.pending_init = (cpending != 0);
+                pcc.explicit_type = cexplicit_type;
                 pcc.value_blob = std::move(value_blob);
                 if (preload_parse_constant_values) {
                     pcc.parse_value_blob = std::move(parse_value_blob);
@@ -17365,6 +17375,7 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (ce) {
                 ce->loc = getBlobLocation();
+                ce->explicit_type = pcc.explicit_type;
                 // Every class constant shell starts without its serialized value.
                 // Keep it pending so sibling constants that refer forward do not
                 // resolve to the placeholder value installed by addUserConstant().
@@ -18337,7 +18348,12 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t access = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t pending = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+        uint8_t flags = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+        // the flags of a v9-v28 constant are its pending flag; it is taken to have an explicit type (#5925)
+        uint8_t pending = reader.getHeader().version >= QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+            ? (flags & QORE_AOT_CONST_FLAG_PENDING) : flags;
+        bool explicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+            || (flags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
 
         QoreAOTDeferredValueBlob value_blob;
         if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
@@ -18391,6 +18407,7 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, QoreValue(),
             autoTypeInfo, is_pub != 0, true, false, static_cast<ClassAccess>(access));
         ns_list[ns_idx]->constant.addEntry(name, ce);
+        ce->explicit_type = explicit_type;
 
         ce->aot_shell_pending = true;
         if (pending) {
