@@ -8868,8 +8868,16 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         return toBits(QoreValue());
     }
 
-    QoreValue result = callref->invoke(*arg_list, xsink);
-    return toBits(result);
+    ValueHolder result(callref->invoke(*arg_list, xsink), xsink);
+    // the list holds the only references of the arguments that the frame gave over: they are released last argument
+    // first, as the AST interpreter releases the parameters that took them over when the callee returns (the list
+    // releases its elements first to last); a list that the callee kept is left as it is
+    if (arg_list && arg_list->is_unique()) {
+        while (!arg_list->empty()) {
+            ValueHolder arg(arg_list->pop(), xsink);
+        }
+    }
+    return toBits(result.release());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
