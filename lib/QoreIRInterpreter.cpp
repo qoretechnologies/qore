@@ -3259,6 +3259,15 @@ static bool refineInterpreterEffectSummary(const QoreIRFunction& root, Exception
         bool may_invalidate = false;
     };
 
+    // the code of the callees is read, and the summaries written to it, while their Programs are held: another thread
+    // can delete them meanwhile (qore#5874); the code of a Program that its teardown has marked is not read, and the
+    // summary is not refined, as for a callee that is not known.  The root's Program is held as well: the thread need
+    // not be counted in it (see QoreProgramCodeHolds)
+    QoreProgramCodeHolds holds(&root.name);
+    if (!holds.holdRoot(root.pgm)) {
+        return true;
+    }
+
     std::vector<EffectNode> nodes;
     std::unordered_map<const QoreIRFunction*, size_t> node_ids;
     auto addNode = [&](const QoreIRFunction* func) {
@@ -3285,8 +3294,15 @@ static bool refineInterpreterEffectSummary(const QoreIRFunction& root, Exception
             if (!call) {
                 return true;
             }
+            // the call belongs to code whose Program is held, so its variant is allocated, and so is the
+            // pointer to its IR, which is checked first, so that a summary that cannot be refined yet (a callee
+            // without IR, which leaves it to be refined at a later call) takes no hold; the callee's Program is held
+            // before its code is read
             const QoreIRFunction* callee = getInterpreterDirectCallEffectCallee(*call);
             if (!callee) {
+                return true;
+            }
+            if (!holds.holdVariant(call->variant)) {
                 return true;
             }
             size_t callee_id = addNode(callee);

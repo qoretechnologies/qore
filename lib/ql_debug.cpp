@@ -17957,12 +17957,17 @@ struct ProgramTeardownHold {
     std::condition_variable cond;
     //! the Program to hold the teardown of; null if not armed; only compared, never dereferenced
     QoreProgram* pgm = nullptr;
-    //! the thread is waiting in the hook
+    //! the thread has reached the hook (it stays set when the thread continues)
     bool held = false;
     //! the thread may continue
     bool released = false;
     //! the thread has marked the Program and waits for the threads in it to leave
     bool final_wait = false;
+    //! a thread waits in the hook and has not woken yet; a new hold is not armed then, as arming it resets "released"
+    bool waiting = false;
+    //! the thread was released without being woken (a negative timeout of dbg_continue_program_teardown()); it
+    //! continues at the next call of that function, not at a spurious wakeup
+    bool no_wake = false;
 };
 
 ProgramTeardownHold& program_teardown_hold() {
@@ -17982,8 +17987,10 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
             return;
         }
         h.held = true;
+        h.waiting = true;
         h.cond.notify_all();
-        h.cond.wait(l, [&h]() { return h.released; });
+        h.cond.wait(l, [&h]() { return h.released && !h.no_wake; });
+        h.waiting = false;
         return;
     }
     // the Program's lock is held: this point only reports that it was reached
@@ -17995,7 +18002,7 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
 }
 
 //! arms a hold of the thread that tears down the given Program; see ProgramTeardownHold
-/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed, or the thread of the previous hold has not woken yet
 */
 static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -18010,10 +18017,17 @@ static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, Runtime
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a Program teardown hold is already armed");
         return QoreValue();
     }
+    // the thread of a hold whose dbg_continue_program_teardown() timed out before the thread woke still waits for
+    // "released", which a new hold would reset
+    if (h.waiting) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the teardown of the previous hold has not continued yet");
+        return QoreValue();
+    }
     h.pgm = *pgm;
     h.held = false;
     h.released = false;
     h.final_wait = false;
+    h.no_wake = false;
     qore_program_private::dbg_teardown_hook.store(dbg_hold_program_teardown);
     return QoreValue();
 }
@@ -18030,9 +18044,13 @@ static QoreValue f_dbg_wait_program_teardown_held(const QoreListNode* params, Ru
 //! lets the held teardown continue and waits until it waits for the threads in the Program to leave it
 /** The hold is disarmed in any case.
 
-    @return False if the teardown did not reach the wait within the timeout
+    A negative timeout lets the teardown continue without waking its thread and returns at once: the thread wakes at
+    the next notification (another call of this function); a test uses it for a thread that has not woken yet, which
+    a timeout can leave as well.
 
-    @throw DBG-ARGUMENT-ERROR no teardown is held
+    @return False if the teardown did not reach the wait within the timeout; True with a negative timeout
+
+    @throw DBG-ARGUMENT-ERROR no teardown is held (a thread that waits in the hold is woken all the same)
 */
 static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -18040,10 +18058,24 @@ static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, Run
     ProgramTeardownHold& h = program_teardown_hold();
     std::unique_lock<std::mutex> l(h.m);
     if (!h.pgm || !h.held) {
+        // an armed hold that no teardown has reached is disarmed, so that a teardown that reaches it later continues
+        if (h.pgm) {
+            h.pgm = nullptr;
+            h.released = true;
+        }
+        // and a thread of an earlier hold that was not woken (see above) is woken
+        h.no_wake = false;
+        h.cond.notify_all();
         xsink->raiseException("DBG-ARGUMENT-ERROR", "no Program teardown is held");
         return QoreValue();
     }
     h.released = true;
+    if (timeout_ms < 0) {
+        h.no_wake = true;
+        h.pgm = nullptr;
+        return true;
+    }
+    h.no_wake = false;
     h.cond.notify_all();
     bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.final_wait; });
     // "released" stays set, so that a held thread that has not woken yet continues
@@ -18629,6 +18661,45 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
+}
+
+//! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
+static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_hold_batch_collection(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! waits until the armed batch collection is held; returns False on timeout
+static QoreValue f_dbg_wait_batch_collection_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_batch_collection_held(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until a Program's teardown waits for a batch collection's hold; returns False on timeout
+static QoreValue f_dbg_wait_teardown_compile_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_teardown_compile_hold(get_param_value(params, 0).getAsBigInt());
+}
+
+//! counts the holds refused to the batch collections and effect analyses of the named root function (qore#5874)
+static QoreValue f_dbg_count_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_count_batch_collection_refusals(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! returns the number of holds refused since dbg_count_batch_collection_refusals()
+static QoreValue f_dbg_get_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_get_batch_collection_refusals();
+}
+
+//! lets the held batch collection continue; returns False if it did not continue before the timeout
+static QoreValue f_dbg_continue_batch_collection(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_continue_batch_collection(get_param_value(params, 0).getAsBigInt());
 }
 
 //! returns the number of hashes and lists copied in the current thread
@@ -21691,6 +21762,18 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_teardown_compile_hold", f_dbg_wait_teardown_compile_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_batch_collection", f_dbg_continue_batch_collection, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_count_batch_collection_refusals", f_dbg_count_batch_collection_refusals,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

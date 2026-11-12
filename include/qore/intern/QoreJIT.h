@@ -1007,9 +1007,14 @@ public:
     //! Enqueue a function for background JIT compilation.
     //! The function stays at IR tier until compilation finishes in the background.
     //! Safe to call from any thread, including during tiered execution.
+    /** @param queued called once the work is queued, before a synchronous compile is waited for
+        (QORE_JIT_SYNC_COMPILE), and not called if the work is refused; the teardown of the work's Programs drains or
+        detaches queued work
+    */
     void enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
             void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr,
-            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr);
+            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr,
+            const std::function<void()>& queued = std::function<void()>());
 
     //! Wait for all pending background compilations to complete.
     //! Used during shutdown, and after every enqueue when syncBgCompile() is set.
