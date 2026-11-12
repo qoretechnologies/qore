@@ -7956,12 +7956,6 @@ public class WebSocketClientHcioPollOp {
         return drainMsgQueue();
     }
 
-    #! Drains all typed frame hashes from msg_queue and dispatches them
-    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
-        sentinel is observed.  NOTHING is the stream-ended signal emitted by
-        FrameStateAction::complete / executeError.
-        @return True if any frames were processed
-    */
     #! Closes the connection when its stream ended without a close frame, or failed
     /** After an error that the client closed the connection for, the server answered the client's close frame (see
         startErrorClose()), and the close is reported with the error's code; a connection that was closed already keeps
@@ -7991,6 +7985,12 @@ public class WebSocketClientHcioPollOp {
         markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
     }
 
+    #! Drains all typed frame hashes from msg_queue and dispatches them
+    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
+        sentinel is observed.  NOTHING is the stream-ended signal emitted by
+        FrameStateAction::complete / executeError.
+        @return True if any frames were processed
+    */
     private bool drainMsgQueue() {
         bool processed = False;
         int max_entries = 1000;
@@ -8018,7 +8018,8 @@ public class WebSocketClientHcioPollOp {
 
     #! Processes a single typed frame hash pushed by the C++ frame-state decoder
     /** Entry shape: \c {type: text|binary|ping|pong|close|error, data?: data,
-        rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}
+        rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}, or \c {err: string, desc?: string}
+        without a type when the stream failed (pushed by the stream action's error handling)
     */
     private processFrameHash(hash<auto> h) {
         noteRecvActivity();
@@ -8074,7 +8075,7 @@ public class WebSocketClientHcioPollOp {
         # server reset the stream): the connection is lost, and the close reports the error (issue #5862)
         if (!t.val() && h.err) {
             logError("the stream failed: %s: %s", h.err, h.desc ?? "");
-            closeOnStreamEnd(sprintf("%s: %s", h.err, h.desc ?? ""));
+            closeOnStreamEnd(h.desc.val() ? sprintf("%s: %s", h.err, h.desc) : h.err);
             return;
         }
 
