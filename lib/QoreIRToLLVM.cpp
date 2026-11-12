@@ -462,8 +462,6 @@ static bool isFastMethodCallEligible(
 #include <cstdio>
 #include <cstring>
 
-// LLVM 23 made getTerminator() assert that the block is already well formed;
-// getTerminatorOrNull() preserves the nullable contract used while lowering.
 //! Returns the runtime helper that a store to a local calls: for the assignment of an element to the variable of a
 //! foreach loop, the variant of a helper that checks the value's type which describes a type error as the AST
 //! interpreter does ("<foreach lvalue assignment>"); the description is given to the store's own type check only,
@@ -491,6 +489,8 @@ static std::string qore_store_helper_name(const char* name, bool foreach_assignm
     return name;
 }
 
+// LLVM 23 made getTerminator() assert that the block is already well formed;
+// getTerminatorOrNull() preserves the nullable contract used while lowering.
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 #if LLVM_VERSION_MAJOR >= 23
     return block->getTerminatorOrNull();
@@ -501,6 +501,110 @@ static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
     return qoreGetTerminator(&block);
+}
+
+static const llvm::Instruction* qoreGetTerminator(const llvm::BasicBlock* block) {
+    return qoreGetTerminator(const_cast<llvm::BasicBlock*>(block));
+}
+
+//! Calls \a f with each successor of \a block; a block that has no terminator yet has none
+/** While a function is lowered, some of its blocks have no terminator yet (the error return, the deopt block and the
+    shared cleanup blocks are completed at the end of lowerFunction()).  The control flow graph of the function must
+    therefore never be walked with LLVM's successor iterators (llvm::successors(), succ_begin(), or a graph algorithm
+    over the function such as llvm::scc_iterator) before it is complete: LLVM 23 made them require a terminator, so
+    that they read the end of the empty instruction list of a block that has none, which crashed qcc on macOS (the
+    first CI platform with LLVM 23); before LLVM 23 such a block had no successors, as it has here
+*/
+template <typename F>
+static void qoreForEachSuccessor(const llvm::BasicBlock* block, F&& f) {
+    const llvm::Instruction* term = qoreGetTerminator(block);
+    if (!term) {
+        return;
+    }
+    for (unsigned i = 0, e = term->getNumSuccessors(); i < e; ++i) {
+        f(term->getSuccessor(i));
+    }
+}
+
+//! Gives each block that is reachable from the entry of \a func and in a cycle of its control flow graph the number
+//! (from 1) of its strongly connected component in \a cycle_of
+/** An iterative form of Tarjan's algorithm over the terminators of the blocks, which a function whose lowering is not
+    finished needs, as some of its blocks have no terminator yet (see qoreForEachSuccessor()); a component is a cycle
+    if it has more than one block or a block that branches to itself
+*/
+static void qoreFindBlockCycles(llvm::Function* func,
+        std::unordered_map<const llvm::BasicBlock*, size_t>& cycle_of) {
+    cycle_of.clear();
+    if (func->empty()) {
+        return;
+    }
+    struct BlockState {
+        size_t index;
+        size_t lowlink;
+        bool on_stack;
+    };
+    std::unordered_map<const llvm::BasicBlock*, BlockState> state;
+    // the blocks of the components that are not complete yet
+    std::vector<const llvm::BasicBlock*> component_stack;
+    // the depth-first path: each block and the index of its next successor to visit
+    std::vector<std::pair<const llvm::BasicBlock*, unsigned>> path;
+    size_t next_index = 0;
+    size_t components = 0;
+    auto visit = [&](const llvm::BasicBlock* bb) {
+        if (!(++next_index % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM ordered error return cycles");
+        }
+        state.emplace(bb, BlockState{next_index, next_index, true});
+        component_stack.push_back(bb);
+        path.emplace_back(bb, 0);
+    };
+    visit(&func->getEntryBlock());
+    while (!path.empty()) {
+        const llvm::BasicBlock* bb = path.back().first;
+        const llvm::Instruction* term = qoreGetTerminator(bb);
+        unsigned succ_count = term ? term->getNumSuccessors() : 0;
+        if (path.back().second < succ_count) {
+            const llvm::BasicBlock* succ = term->getSuccessor(path.back().second++);
+            auto it = state.find(succ);
+            if (it == state.end()) {
+                visit(succ);
+            } else if (it->second.on_stack) {
+                BlockState& bs = state.at(bb);
+                bs.lowlink = std::min(bs.lowlink, it->second.index);
+            }
+            continue;
+        }
+        path.pop_back();
+        const BlockState& bs = state.at(bb);
+        if (!path.empty()) {
+            BlockState& parent = state.at(path.back().first);
+            parent.lowlink = std::min(parent.lowlink, bs.lowlink);
+        }
+        if (bs.lowlink != bs.index) {
+            continue;
+        }
+        // bb is the root of a component: its blocks are bb and those above it on the stack
+        ++components;
+        size_t first = component_stack.size();
+        do {
+            --first;
+            state.at(component_stack[first]).on_stack = false;
+        } while (component_stack[first] != bb);
+        bool cycle = component_stack.size() - first > 1;
+        if (!cycle) {
+            qoreForEachSuccessor(bb, [&](const llvm::BasicBlock* succ) {
+                if (succ == bb) {
+                    cycle = true;
+                }
+            });
+        }
+        if (cycle) {
+            for (size_t i = first, e = component_stack.size(); i < e; ++i) {
+                cycle_of[component_stack[i]] = components;
+            }
+        }
+        component_stack.resize(first);
+    }
 }
 
 static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr,
@@ -4042,6 +4146,13 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
 }
 
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
+    if (exception_exit) {
+        // the iterators of the functional operators that the exception leaves are released before the statement's
+        // temporaries, as the AST interpreter unwinds the operators and as the IR interpreter's frame exit releases
+        // them (releaseOperatorIterators()): released after them, an operator's iterator kept its source, and the
+        // values that it holds, alive after the temporaries (qore#5884)
+        emitIteratorCleanup(module, positionIterators());
+    }
     if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
             && exit_temp_cleanup_array_count == exit_temp_cleanup_count
             && exit_temp_cleanup_array_count >= 32) {
@@ -4070,7 +4181,9 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
     if (pending_ssa) {
         emitPendingSsaCleanup(module);
     }
-    emitIteratorCleanup(module, exception_exit && positionIterators());
+    if (!exception_exit) {
+        emitIteratorCleanup(module, false);
+    }
 }
 
 llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
@@ -4154,14 +4267,24 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
 }
 
 bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps) {
+    std::vector<size_t> indices;
+    for (size_t i = start; i < invoke_result_allocas.size(); ++i) {
+        indices.push_back(i);
+    }
+    return orderExceptionTemps(indices, observable_only, temps);
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::orderExceptionTemps(const std::vector<size_t>& indices, bool observable_only,
+        std::vector<llvm::Value*>& temps) {
     temps.clear();
     std::vector<llvm::Value*> allocas;
     std::vector<uint32_t> ids;
-    for (size_t i = start; i < invoke_result_allocas.size(); ++i) {
-        if (!((i - start + 1) % 100)) {
+    for (size_t n = 0; n < indices.size(); ++n) {
+        if (!((n + 1) % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
         }
-        llvm::Value* alloca_ptr = invoke_result_allocas[i];
+        llvm::Value* alloca_ptr = invoke_result_allocas[indices[n]];
         if (persistent_cleanup_allocas.count(alloca_ptr)) {
             continue;
         }
@@ -4187,22 +4310,6 @@ bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::
     return reordered;
 }
 
-llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
-        const QoreIRInstruction* inst, llvm::BasicBlock* target) {
-    std::vector<llvm::Value*> temps;
-    if (!getOrderedErrorReturnTemps(inst, temps)) {
-        return target;
-    }
-    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
-    auto saved_ip = builder->GetInsertPoint();
-    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
-    builder->SetInsertPoint(edge);
-    emitOrderedErrorReturnTemps(module, temps);
-    builder->CreateBr(target);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
-}
-
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
@@ -4214,10 +4321,16 @@ void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::
     }
 }
 
+// only temporaries whose release can run a destructor are released on the edge to the error return, and only if the
+// order differs: the error return releases them all, last registered first.  Each exception check of a statement orders
+// the statement's temporaries, so a statement with more than this number of them (a generated literal of thousands of
+// calls) keeps the error return's order rather than take compile time quadratic in its size
+static constexpr size_t MaxOrderedErrorReturnTemps = 256;
+
 // documented in QoreIRToLLVM.h
-bool QoreIRToLLVM::getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std::vector<llvm::Value*>& temps) {
+const QoreIRToLLVM::TempCleanupMark* QoreIRToLLVM::getOrderedErrorReturnMark(const QoreIRInstruction* inst) const {
     if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
-        return false;
+        return nullptr;
     }
     const TempCleanupMark* mark = nullptr;
     for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
@@ -4226,15 +4339,155 @@ bool QoreIRToLLVM::getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std
             break;
         }
     }
-    // only temporaries whose release can run a destructor are released here, and only if the order differs: the
-    // error return releases them all, last registered first.  Each exception check of a statement orders the
-    // statement's temporaries registered so far, so a statement with more than MaxOrderedErrorReturnTemps of them
-    // (a generated literal of thousands of calls) keeps the error return's order rather than take compile time
-    // quadratic in its size
-    static constexpr size_t MaxOrderedErrorReturnTemps = 256;
     return mark && pending_ssa_cleanup.size() <= mark->pending_ssa_count
         && invoke_result_allocas.size() - mark->invoke_alloca_count <= MaxOrderedErrorReturnTemps
-        && orderExceptionTemps(mark->invoke_alloca_count, true, temps);
+        ? mark : nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitOperatorIteratorRelease(llvm::Module& module, size_t start, size_t end) {
+    auto helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+    for (size_t i = end; i > start; --i) {
+        llvm::Value* alloca_ptr = iterator_cleanup_allocas[i - 1];
+        // a foreach statement's iterator is released with the locals
+        if (positioned_iterator_alloca_set.count(alloca_ptr)) {
+            continue;
+        }
+        llvm::Value* iter_ptr = builder->CreateLoad(ptr_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), alloca_ptr);
+        builder->CreateCall(helper, {iter_ptr});
+    }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::Function* llvm_func) {
+    if (ordered_error_return_sites.empty() || !error_return_block) {
+        ordered_error_return_sites.clear();
+        return;
+    }
+    // the strongly connected component of each block that is in a cycle, computed on first use: a temporary
+    // registered after a check holds a value at the check only if a loop that contains the check stores it, and does
+    // not release it before it comes back to the check.  The function is not complete here (the error return block,
+    // among others, has no terminator yet), so its graph is walked over the terminators of its blocks and never with
+    // LLVM's successor iterators, which require a terminator since LLVM 23 (see qoreForEachSuccessor())
+    std::unordered_map<const llvm::BasicBlock*, size_t> cycle_of;
+    bool cycles_known = false;
+    auto getCycle = [&](const llvm::BasicBlock* bb) -> size_t {
+        if (!cycles_known) {
+            cycles_known = true;
+            qoreFindBlockCycles(llvm_func, cycle_of);
+        }
+        auto it = cycle_of.find(bb);
+        return it == cycle_of.end() ? 0 : it->second;
+    };
+    // the blocks of a cycle that a value stored in each temporary in that cycle can reach before it is released (a
+    // release stores NOTHING, as the end of the statement does): a temporary of a statement in a loop body that the
+    // statement releases when it ends holds nothing at the next iteration's check
+    std::unordered_map<llvm::Value*, std::unordered_set<const llvm::BasicBlock*>> reached_blocks;
+    auto reaches = [&](llvm::Value* alloca_ptr, const llvm::BasicBlock* bb) {
+        auto [it, inserted] = reached_blocks.try_emplace(alloca_ptr);
+        if (inserted) {
+            // the last store of each block that stores the temporary, and whether it stores a value
+            std::unordered_map<const llvm::BasicBlock*, std::pair<llvm::StoreInst*, bool>> last_store;
+            for (llvm::User* user : alloca_ptr->users()) {
+                auto* store = llvm::dyn_cast<llvm::StoreInst>(user);
+                if (!store || store->getPointerOperand() != alloca_ptr) {
+                    continue;
+                }
+                auto [store_it, first] = last_store.try_emplace(store->getParent(), store, false);
+                if (!first && !store_it->second.first->comesBefore(store)) {
+                    continue;
+                }
+                store_it->second.first = store;
+                auto* c = llvm::dyn_cast<llvm::ConstantInt>(store->getValueOperand());
+                store_it->second.second = !c || c->getZExtValue() != VAL_NOTHING;
+            }
+            std::vector<const llvm::BasicBlock*> work;
+            for (const auto& [store_bb, last] : last_store) {
+                if (!last.second) {
+                    continue;
+                }
+                size_t cycle = getCycle(store_bb);
+                if (!cycle) {
+                    continue;
+                }
+                work.push_back(store_bb);
+                while (!work.empty()) {
+                    const llvm::BasicBlock* from = work.back();
+                    work.pop_back();
+                    qoreForEachSuccessor(from, [&](const llvm::BasicBlock* succ) {
+                        if (getCycle(succ) != cycle || !it->second.insert(succ).second) {
+                            return;
+                        }
+                        // a block that stores the temporary gives it the value of its own last store
+                        if (!last_store.count(succ)) {
+                            work.push_back(succ);
+                        }
+                    });
+                }
+            }
+        }
+        return it->second.count(bb) > 0;
+    };
+
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::DebugLoc saved_loc = builder->getCurrentDebugLocation();
+    size_t count = 0;
+    for (const OrderedErrorReturnSite& site : ordered_error_return_sites) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM ordered error return edges");
+        }
+        std::vector<size_t> indices;
+        for (size_t i = site.start; i < site.count; ++i) {
+            indices.push_back(i);
+        }
+        auto end_it = temp_scope_end.find(site.scope_id);
+        size_t end = end_it == temp_scope_end.end() ? invoke_result_allocas.size() : end_it->second;
+        // a statement with too many temporaries keeps the order of those registered before the check (see
+        // MaxOrderedErrorReturnTemps)
+        if (end > site.later_start && end - site.start <= MaxOrderedErrorReturnTemps) {
+            const llvm::BasicBlock* check_bb = site.check->getParent();
+            if (getCycle(check_bb)) {
+                for (size_t i = site.later_start; i < end; ++i) {
+                    llvm::Value* alloca_ptr = invoke_result_allocas[i];
+                    if (!persistent_cleanup_allocas.count(alloca_ptr) && reaches(alloca_ptr, check_bb)) {
+                        indices.push_back(i);
+                    }
+                }
+            }
+        }
+        std::vector<llvm::Value*> temps;
+        if (!orderExceptionTemps(indices, true, temps)) {
+            continue;
+        }
+        llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+        builder->SetInsertPoint(edge);
+        builder->SetCurrentDebugLocation(site.loc);
+        emitOperatorIteratorRelease(module, site.iter_start, site.iter_end);
+        emitOrderedErrorReturnTemps(module, temps);
+        builder->CreateBr(error_return_block);
+#ifdef DEBUG
+        // the recorded branch leads to the error return directly: the exception check's own, or the single block of
+        // the implicit-context restore (getImplicitContextRestoreEdge()); otherwise the edge would be lost silently
+        {
+            bool to_error_return = false;
+            for (unsigned i = 0, e = site.branch->getNumSuccessors(); i < e; ++i) {
+                if (site.branch->getSuccessor(i) == error_return_block) {
+                    to_error_return = true;
+                }
+            }
+            assert(to_error_return);
+        }
+#endif
+        site.branch->replaceSuccessorWith(error_return_block, edge);
+    }
+    ordered_error_return_sites.clear();
+    builder->SetCurrentDebugLocation(saved_loc);
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
@@ -4287,6 +4540,8 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
         }
         mark = temp_cleanup_marks[idx];
         temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
+        // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
+        temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
     }
 
     auto helper = module.getOrInsertFunction("qore_rt_decref",
@@ -11255,6 +11510,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
             exception_block = getExceptionEdgeTarget(module, llvm_func, inst, except_it->second);
         }
     }
+    const TempCleanupMark* ordered_mark = nullptr;
     if (!exception_block) {
         // Outside try block: use the function-level error return block.
         // Create it lazily on first use — terminator is added later in
@@ -11262,8 +11518,19 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         if (!error_return_block) {
             error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
         }
-        exception_block = getOrderedErrorReturnEdge(module, llvm_func, inst, error_return_block);
-        exception_block = getImplicitContextRestoreEdge(module, llvm_func, inst, exception_block);
+        exception_block = getImplicitContextRestoreEdge(module, llvm_func, inst, error_return_block);
+        // the release of the statement's temporaries in their order on the way to the error return, after the
+        // implicit contexts are restored, is decided once the function is lowered (finalizeOrderedErrorReturnEdges())
+        ordered_mark = getOrderedErrorReturnMark(inst);
+    }
+    OrderedErrorReturnSite site;
+    if (ordered_mark) {
+        site.scope_id = ordered_mark->scope_id;
+        site.start = ordered_mark->invoke_alloca_count;
+        site.count = invoke_result_allocas.size();
+        site.iter_start = ordered_mark->iterator_count;
+        site.iter_end = iterator_cleanup_allocas.size();
+        site.loc = builder->getCurrentDebugLocation();
     }
     // Inline exception check as direct memory loads instead of function call
     // ExceptionSink::priv at offset 0 -> qore_es_private*
@@ -11301,6 +11568,13 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     // forest that pushes HttpServer's LLVM IR into quadratic codegen.
     emitCondBrWithSsaPreamble(module, llvm_func, has_exception,
             exception_block, cont);
+    if (ordered_mark) {
+        site.check = qoreGetTerminator(*builder->GetInsertBlock());
+        site.branch = exception_block == error_return_block ? site.check : qoreGetTerminator(*exception_block);
+        // the SSA cleanups of enclosing scopes that the check put in allocas are not the statement's
+        site.later_start = invoke_result_allocas.size();
+        ordered_error_return_sites.push_back(site);
+    }
     builder->SetInsertPoint(cont);
 }
 
@@ -11308,14 +11582,28 @@ static const char* qoreIROpcodeDiagnosticName(QoreIROpcode op) {
     return getOpcodeName(static_cast<int>(op));
 }
 
+//! Returns the explicit type arguments of a dot-eval method call instruction
+/** From the instruction, which has them also when it was read from serialized IR, whose instructions have no
+    expression (qore#5865); otherwise from its expression
+*/
 static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_instantiation(
-        const QoreValue& expr) {
+        const QoreTypeParamInstantiation* inst, const QoreValue& expr) {
+    if (inst) {
+        return inst;
+    }
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
     if (!dot_eval) {
         return nullptr;
     }
     MethodCallNode* call = dot_eval->getMethodCall();
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
+}
+
+//! Returns the method of a static method call expression, or nullptr if it is not one or its method is not resolved
+static const QoreMethod* qore_ir_static_call_node_method(const QoreValue& expr) {
+    const auto* static_call = expr.hasNode()
+        ? dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode()) : nullptr;
+    return static_call ? static_call->getMethod() : nullptr;
 }
 
 static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
@@ -12422,6 +12710,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     iterator_cleanup_allocas.clear();
     positioned_iterator_allocas.clear();
     positioned_iterator_alloca_set.clear();
+    temp_scope_end.clear();
+    ordered_error_return_sites.clear();
     pending_phis.clear();
 
     // Native PHIs can be introduced by cross-block scalar replacement in a
@@ -14510,6 +14800,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
         prepareIteratorCleanupArray(llvm_func, exit_edges);
     }
+
+    // the edges of the exception checks that release the statement's temporaries in their order on the way to the
+    // error return, now that every cleanup alloca is known; they run before finalizeIteratorReleases(), whose stores
+    // of NOTHING at IteratorNext they do not see, so an edge can include a slot that is already empty when it runs
+    // (harmless: the release of an empty slot does nothing)
+    finalizeOrderedErrorReturnEdges(module, llvm_func);
 
     if (error_return_block) {
         // Choose how boxed exit cleanup is emitted before writing any of it:
@@ -19668,11 +19964,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {i64_type, ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {ref_boxed, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode) {
-                    // CallStaticDirect invoke: call static method directly with embedded pointer
-                    const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode
+                        && qore_ir_static_call_node_method(inv->expr)) {
+                    // CallStaticDirect invoke: call static method directly with embedded pointer; a call whose method
+                    // is not resolved is made through its expression below (qore#5897)
+                    const auto* static_call = static_cast<const StaticMethodCallNode*>(
                             inv->expr.getInternalNode());
-                    assert(static_call);
                     llvm::Value* method_ptr = builder->CreateIntToPtr(
                             llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(static_call->getMethod())), ptr_type);
@@ -21299,11 +21596,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // No exception target: execute on_block_exit, uninstantiate locals and return NOTHING
             // the implicit arguments that the throw leaves are restored first (see getImplicitContextRestoreEdge()),
             // and the statement's temporaries are released in the order of an exception check's exit (see
-            // getOrderedErrorReturnEdge())
+            // finalizeOrderedErrorReturnEdges())
             emitImplicitContextRestore(module, inst);
             {
+                // the iterators of the statement's functional operators are released first (see
+                // emitExitStatementCleanup())
+                const TempCleanupMark* mark = getOrderedErrorReturnMark(inst);
                 std::vector<llvm::Value*> temps;
-                if (getOrderedErrorReturnTemps(inst, temps)) {
+                if (mark && orderExceptionTemps(mark->invoke_alloca_count, true, temps)) {
+                    emitOperatorIteratorRelease(module, mark->iterator_count, iterator_cleanup_allocas.size());
                     emitOrderedErrorReturnTemps(module, temps);
                 }
             }
@@ -21367,8 +21668,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // and the statement's temporaries are released as for a throw
             emitImplicitContextRestore(module, inst);
             {
+                // the iterators of the statement's functional operators are released first (see
+                // emitExitStatementCleanup())
+                const TempCleanupMark* mark = getOrderedErrorReturnMark(inst);
                 std::vector<llvm::Value*> temps;
-                if (getOrderedErrorReturnTemps(inst, temps)) {
+                if (mark && orderExceptionTemps(mark->invoke_alloca_count, true, temps)) {
+                    emitOperatorIteratorRelease(module, mark->iterator_count, iterator_cleanup_allocas.size());
                     emitOrderedErrorReturnTemps(module, temps);
                 }
             }
@@ -24052,6 +24357,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                              llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
                             module, llvm_func, inst);
                 }
+            } else if (!direct_inst->method) {
+                // a static method that is not resolved: the instruction was read from serialized IR while the class
+                // of the method had no methods yet (an AOT image reads the member initializers of a class before the
+                // methods of the classes that they call); the call is made through its expression, as the IR
+                // interpreter makes it (qore#5897)
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
@@ -24454,7 +24771,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result = nullptr;
             const QoreTypeParamInstantiation* explicit_inst =
-                qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr);
+                qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->explicit_type_param_inst,
+                    direct_inst->expr);
             llvm::Value* explicit_inst_ptr = explicit_inst
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
@@ -24816,7 +25134,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 bool object_fast_path = !direct_inst->pseudo && !has_arg_cleanups
                     && !q_env_is_set("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH")
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->explicit_type_param_inst,
+                        direct_inst->expr)
                     && base_facts
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
@@ -25367,7 +25686,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             const QoreTypeParamInstantiation* explicit_inst =
-                qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr);
+                qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->explicit_type_param_inst,
+                    invoke_inst->expr);
             llvm::Value* explicit_inst_ptr = explicit_inst
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
@@ -25630,7 +25950,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 bool object_fast_path = !invoke_inst->pseudo && !has_arg_cleanups
                     && !q_env_is_set("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH")
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->explicit_type_param_inst,
+                        invoke_inst->expr)
                     && base_facts
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
@@ -33833,7 +34154,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             temp_cleanup_marks.push_back({
                 invoke_result_allocas.size(),
                 pending_ssa_cleanup.size(),
-                inst->temp_scope_id
+                inst->temp_scope_id,
+                iterator_cleanup_allocas.size()
             });
             return true;
         }

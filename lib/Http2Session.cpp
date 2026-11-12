@@ -35,6 +35,7 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -1073,6 +1074,29 @@ int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
         return -1;
     }
     goaway_sent = true;
+    return 0;
+}
+
+int Http2Session::submitShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // before the server's connection preface (SETTINGS) no other frame may be sent (RFC 9113 section 3.4)
+    if (goaway_sent || !connection_preface_submitted) {
+        return 0;
+    }
+    return submitGoaway(NGHTTP2_NO_ERROR, nullptr, 0, xsink) ? -1 : 0;
+}
+
+int Http2Session::sendShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (submitShutdownGoaway(xsink)) {
+        return -1;
+    }
+    // the server closes the connection after this frame: any error flushing it (the peer has closed or reset the
+    // connection already, for example) means that it cannot be delivered, and there is nothing more to do; the
+    // connection's own poll operation sees the same error on its next cycle and closes the connection
+    ExceptionSink send_xsink;
+    sendPendingData(0, &send_xsink);
+    send_xsink.clear();
     return 0;
 }
 
@@ -2702,6 +2726,8 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    h2->pending_pongs.erase(stream_id);
+    h2->close_frame_streams.erase(stream_id);
     h2->stream_send_limits.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
@@ -2794,6 +2820,25 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     if (to_copy > 0) {
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
+    }
+
+    // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
+    // the end of the buffered data is handled, so that it is sent next (issue #5900)
+    // the room is checked as sendStreamData() admits data, so that the pong is buffered before any data that a
+    // sender waiting for room adds after it
+    {
+        auto pit = h2->pending_pongs.find(stream_id);
+        if (pit != h2->pending_pongs.end() && !bd.end_stream
+                && h2->hasSendRoomUnlocked(stream_id, bd.data.size() - bd.offset, pit->second.size())) {
+            // this callback is called from nghttp2's C code: no exception may leave it
+            try {
+                bd.data.insert(bd.data.end(), pit->second.begin(), pit->second.end());
+            } catch (const std::bad_alloc&) {
+                printd(0, "Http2Session::dataProviderReadCallback() stream %d: no memory for a pong of %zu "
+                    "bytes; dropped\n", stream_id, pit->second.size());
+            }
+            h2->pending_pongs.erase(pit);
+        }
     }
 
     if (bd.offset >= bd.data.size()) {
@@ -3006,7 +3051,7 @@ int Http2Session::setStreamSendLimit(int32_t stream_id, int64_t limit, Exception
 }
 
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
-        bool end_stream, ExceptionSink* xsink) {
+        bool end_stream, ExceptionSink* xsink, bool ignore_limit) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: sendStreamData stream=%d len=%zu end_stream=%d\n",
@@ -3070,7 +3115,9 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     // A stream with its own limit (setStreamSendLimit()) refuses data that would take the buffer over it
     auto it = pending_body_data.find(stream_id);
     auto lit = stream_send_limits.find(stream_id);
-    if (lit != stream_send_limits.end()) {
+    // a WebSocket control frame of the frame state is buffered past the limit (sendStreamControlFrame())
+    if (ignore_limit) {
+    } else if (lit != stream_send_limits.end()) {
         if (len > 0 && it != pending_body_data.end()) {
             size_t pending = it->second.data.size() - it->second.offset;
             if (pending > 0 && pending + len > lit->second) {
@@ -3131,6 +3178,46 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     return 0;
 }
 
+bool Http2Session::hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t len) const {
+    auto lit = stream_send_limits.find(stream_id);
+    if (lit != stream_send_limits.end()) {
+        return !pending || pending + len <= lit->second;
+    }
+    return pending <= MAX_STREAM_BUFFER;
+}
+
+int Http2Session::sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
+    // a close frame is buffered past the send limit once per stream: a close is never dropped (issue #5900)
+    if (opcode == WSOP_CLOSE && close_frame_streams.insert(stream_id).second) {
+        int rv = sendStreamData(stream_id, data, len, false, xsink, true);
+        if (rv) {
+            close_frame_streams.erase(stream_id);
+        } else {
+            // a pong kept before is not sent after the close frame
+            pending_pongs.erase(stream_id);
+        }
+        return rv;
+    }
+    int rv = sendStreamData(stream_id, data, len, false, xsink);
+    // no pong is kept to follow a close frame queued before it
+    if (rv == 1 && opcode == WSOP_PONG && close_frame_streams.find(stream_id) == close_frame_streams.end()) {
+        // the buffer is full: the pong is kept, replacing an older one (it answers the most recent ping, RFC 6455
+        // section 5.5.3), and buffered by dataProviderReadCallback() when the buffered data falls under the limit
+        const uint8_t* p = static_cast<const uint8_t*>(data);
+        pending_pongs[stream_id].assign(p, p + len);
+        printd(5, "Http2Session::sendStreamControlFrame() stream %d: buffer full; pong of %zu bytes kept\n",
+            stream_id, len);
+        return 0;
+    }
+    if (!rv && opcode == WSOP_PONG) {
+        // a pong kept before is answered by this newer one
+        pending_pongs.erase(stream_id);
+    }
+    return rv;
+}
+
 #ifdef DEBUG
 QoreHashNode* Http2Session::dbgGetStreamRecordCounts() const {
     std::lock_guard<std::recursive_mutex> lg(m);
@@ -3146,6 +3233,8 @@ QoreHashNode* Http2Session::dbgGetStreamRecordCounts() const {
     set("pending_body_data", pending_body_data.size());
     set("pending_data_providers", pending_data_providers.size());
     set("stream_input_streams", stream_input_streams_.size());
+    set("pending_pongs", pending_pongs.size());
+    set("close_frame_streams", close_frame_streams.size());
     return h.release();
 }
 #endif
