@@ -410,7 +410,22 @@ public:
         reset with an error code raises \c HTTP2-STREAM-RESET.
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
-        bool end_stream, ExceptionSink* xsink);
+        bool end_stream, ExceptionSink* xsink, bool ignore_limit = false);
+
+    //! Sends a WebSocket control frame that the frame state of a WebSocket stream answers with (issue #5900)
+    /** The frame state answers a ping with a pong and a close frame with its echo on the async I/O thread, which
+        cannot wait for the stream's send buffer to drain, so these frames are never refused for a full buffer:
+        - a close frame is buffered past the stream's send limit, once per stream (a later one is sent as data);
+        - a pong is buffered when there is room; otherwise it is kept, replacing a pong kept before it (a pong
+          answers the most recent ping, RFC 6455 section 5.5.3), and buffered when the buffered data falls under
+          the limit, so that a ping flood from a peer that does not read keeps at most one pong.
+
+        The opcode is taken from the frame's first byte; any other frame is sent as data.
+
+        @return 0 if the frame was buffered or kept, 1 if it was refused (not a control frame, buffer full), -1 on
+        error (exception raised)
+    */
+    DLLLOCAL int sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -1082,6 +1097,20 @@ private:
 
     //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
     std::unordered_map<int32_t, size_t> stream_send_limits;
+
+    //! The latest pong of a stream whose send buffer was full, buffered when the buffer falls under its limit;
+    //! erased with the stream (issue #5900)
+    std::unordered_map<int32_t, std::vector<uint8_t>> pending_pongs;
+
+    //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
+    std::unordered_set<int32_t> close_frame_streams;
+
+    //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
+    /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),
+        the data must fit under it unless nothing is buffered; otherwise up to MAX_STREAM_BUFFER may be buffered
+        before more is taken
+    */
+    DLLLOCAL bool hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t len) const;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that

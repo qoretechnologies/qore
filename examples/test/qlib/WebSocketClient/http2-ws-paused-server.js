@@ -7,7 +7,9 @@
 // Usage: http2-ws-paused-server.js <port> <cert.pem> <key.pem>
 // - prints "READY <port>" once listening
 // - a line "release" on stdin resumes reading the WebSocket streams; a line "close <code>[:<reason>][,...]" writes a
-//   close frame for each code (with its reason) in one write
+//   close frame for each code (with its reason) in one write; a line "ping <payload>[,...]" writes a ping frame for
+//   each payload in one write
+// - prints "PONG <payload>" for each pong received
 // - prints "MSG <size> <first byte> <last byte>" for each message received, and "CLOSE <code>" for a close frame,
 //   which it answers
 
@@ -136,6 +138,15 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       }
     }
     console.log('SENT CLOSE ' + cmd[1]);
+  } else if (cmd[0] === 'ping' && cmd[1]) {
+    // writes a ping frame for each payload given (comma-separated) in one write
+    const frames = cmd[1].split(',').map((p) => encodeFrame(0x9, Buffer.from(p, 'utf8')));
+    for (const s of streams) {
+      if (!s.destroyed && s.writable) {
+        s.write(Buffer.concat(frames));
+      }
+    }
+    console.log('SENT PING ' + cmd[1]);
   }
 });
 
@@ -169,6 +180,10 @@ server.on('stream', (stream, headers) => {
   stream.on('data', (chunk) => {
     recvBuffer = Buffer.concat([recvBuffer, chunk]);
     recvBuffer = parseFrames(recvBuffer, (frame) => {
+      if (frame.opcode === 0xA) {
+        console.log('PONG ' + frame.payload.toString('utf8'));
+        return;
+      }
       if (frame.opcode === 0x8) {
         const code = frame.payload.length >= 2 ? frame.payload.readUInt16BE(0) : 1005;
         console.log('CLOSE ' + code);

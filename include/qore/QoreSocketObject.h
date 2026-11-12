@@ -730,6 +730,18 @@ if (accepted) {
     DLLLOCAL int sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
 
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/2 stream
+    /** A close frame and a pong are not refused for a full send buffer; see Http2Session::sendStreamControlFrame()
+        (issue #5900).  Safe on the I/O thread, as sendHttp2StreamDataForAsyncPoll().
+
+        @return 0 if the frame was buffered or kept, 1 if the frame was refused for a full buffer (a frame that is
+        not a pong or a close, or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendHttp2StreamControlFrameForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+            ExceptionSink* xsink);
+
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
         the InputStream and sends DATA frames incrementally.
@@ -1075,6 +1087,18 @@ if (accepted) {
     */
     DLLLOCAL int sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
+
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/3 client stream
+    /** See QuicSession::sendStreamControlFrame() (issue #5900); safe on the I/O thread, as
+        sendQuicClientStreamDataForAsyncPoll().
+
+        @return 0 if the frame was staged or kept, 1 if the frame was refused (a frame that is not a pong or a close,
+        or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendQuicClientStreamControlFrameForAsyncPoll(int64_t stream_id, const void* data, size_t len,
+        ExceptionSink* xsink);
 
     //! Mark a client-side HTTP/3 stream for incremental response body delivery
     /** Internal direct variant for callers that already serialized request submission on the

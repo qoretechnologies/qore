@@ -301,11 +301,11 @@ void WebSocketStreamFrameState::setError(const std::string& msg, uint16_t wire_c
     }
     error_state = true;
     error_msg = msg;
-    // Notify the handler
-    pushMessage(MessageKind::Error, nullptr, /* rsv */ 0, wire_code, msg.c_str());
     // Attempt to send a close frame to the peer so they see a proper
     // termination rather than an abrupt stream reset.  Caller may also
-    // tear down the transport.
+    // tear down the transport.  The close is queued before the handler is
+    // notified, so a handler that ends the connection when it is told of the
+    // error finds the close frame queued (issue #5900).
     if (!close_sent && send_cb) {
         SimpleRefHolder<BinaryNode> close_frame(
             WebSocketFrameEncoder::encodeClose(wire_code, msg.c_str(),
@@ -317,6 +317,8 @@ void WebSocketStreamFrameState::setError(const std::string& msg, uint16_t wire_c
             close_sent = true;
         }
     }
+    // Notify the handler
+    pushMessage(MessageKind::Error, nullptr, /* rsv */ 0, wire_code, msg.c_str());
 }
 
 void WebSocketStreamFrameState::sendText(const char* text, size_t len) {

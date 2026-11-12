@@ -5834,6 +5834,28 @@ int QoreSocketObject::sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const B
         end_stream, xsink);
 }
 
+int QoreSocketObject::sendHttp2StreamControlFrameForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+        ExceptionSink* xsink) {
+    // as sendHttp2StreamDataForAsyncPoll(): only enqueues on the locked session and wakes the controller
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    int rv = h2->sendStreamControlFrame(stream_id, data ? data->getPtr() : nullptr, data ? data->size() : 0,
+        xsink);
+    if (*xsink || rv < 0) {
+        return -1;
+    }
+    if (!rv && !qore_on_async_io_thread()) {
+        qore_socket_object_wake_async_controller(this, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    return rv;
+}
+
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
     return qore_socket_object_exec_http2_stream_data(this,
         new QoreSocketObjectHttp2StreamDataPollOperation(this, stream_id, max_bytes), stream_id, xsink);
@@ -6779,6 +6801,21 @@ int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, co
         return -1;
     }
     int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    if (!*xsink && rv == 0 && !qore_on_async_io_thread()) {
+        qore_socket_object_wake_async_controller(this, xsink);
+    }
+    return *xsink ? -1 : rv;
+}
+
+int QoreSocketObject::sendQuicClientStreamControlFrameForAsyncPoll(int64_t stream_id, const void* data,
+        size_t len, ExceptionSink* xsink) {
+    // as sendQuicClientStreamDataForAsyncPoll(): only stages under the session's mutex and wakes the controller
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+        return -1;
+    }
+    int rv = session->sendStreamControlFrame(stream_id, data, len, xsink);
     if (!*xsink && rv == 0 && !qore_on_async_io_thread()) {
         qore_socket_object_wake_async_controller(this, xsink);
     }

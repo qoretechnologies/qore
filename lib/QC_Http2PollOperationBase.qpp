@@ -560,7 +560,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();

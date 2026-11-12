@@ -217,6 +217,10 @@ struct QuicStreamingBodyData {
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
     //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
     size_t send_limit = 0;
+    //! the latest WebSocket pong kept while the staged data was over its limit (issue #5900)
+    std::vector<uint8_t> pending_pong;
+    //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
+    bool close_frame_staged = false;
 };
 
 class qore_socket_private;
@@ -523,7 +527,22 @@ public:
         send raises \c QUIC-STREAM-CLOSED.
     */
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
-                       bool end_stream, ExceptionSink* xsink);
+                       bool end_stream, ExceptionSink* xsink, bool ignore_limit = false);
+
+    //! Sends a WebSocket control frame that the frame state of a WebSocket stream answers with (issue #5900)
+    /** The frame state answers a ping with a pong and a close frame with its echo on the async I/O thread, which
+        cannot wait for the stream's staged data to drain, so these frames are never refused for a full buffer:
+        - a close frame is staged past the stream's send limit, once per stream (a later one is sent as data);
+        - a pong is staged when there is room; otherwise it is kept, replacing a pong kept before it (a pong
+          answers the most recent ping, RFC 6455 section 5.5.3), and staged when the staged data falls under
+          the limit, so that a ping flood from a peer that does not read keeps at most one pong.
+
+        The opcode is taken from the frame's first byte; any other frame is sent as data.
+
+        @return 0 if the frame was staged or kept, 1 if it was refused (not a control frame, buffer full), -1 on
+        error (exception raised)
+    */
+    DLLLOCAL int sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
     //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
     /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a

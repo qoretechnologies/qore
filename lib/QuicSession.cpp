@@ -35,6 +35,7 @@
 #include <qore/QoreSSLPrivateKey.h>
 
 #include "qore/intern/QuicSession.h"
+#include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 
@@ -3452,7 +3453,7 @@ int QuicSession::sendOnClosedStream(int64_t stream_id, size_t len, bool end_stre
 }
 
 int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
-                                 bool end_stream, ExceptionSink* xsink) {
+                                 bool end_stream, ExceptionSink* xsink, bool ignore_limit) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     // If the peer reset the stream with an error (RESET_STREAM, or a close carrying an application error code),
@@ -3511,9 +3512,10 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     // the FIN when the buffer is transiently above the threshold would leave the
     // stream open forever if the caller has no retry loop for the FIN.
     // a stream with its own limit (setStreamSendLimit()) refuses data that would take the staged data over it
-    bool over_limit = sbd.send_limit
+    // a WebSocket control frame of the frame state is staged past the limit (sendStreamControlFrame())
+    bool over_limit = !ignore_limit && (sbd.send_limit
         ? (data && len > 0 && !sbd.data.empty() && sbd.data.size() + len > sbd.send_limit)
-        : (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0));
+        : (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0)));
     if (over_limit) {
         ASYNC_IO_TRACE("QuicSession::sendStreamData BACKPRESSURE session=%lld stream_id=%lld len=%zu pending=%zu sent_bufs=%zu\n",
             (long long)getSessionId(), (long long)stream_id, len,
@@ -3575,6 +3577,45 @@ int QuicSession::setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionS
     }
     it->second.send_limit = (size_t)limit;
     return 0;
+}
+
+int QuicSession::sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
+    auto it = streaming_body_data_.find(stream_id);
+    // a close frame is staged past the limit once per stream: a close is never dropped (issue #5900)
+    if (opcode == WSOP_CLOSE && it != streaming_body_data_.end() && !it->second.close_frame_staged) {
+        int rv = sendStreamData(stream_id, data, len, false, xsink, true);
+        if (!rv) {
+            auto it2 = streaming_body_data_.find(stream_id);
+            if (it2 != streaming_body_data_.end()) {
+                it2->second.close_frame_staged = true;
+                // a pong kept before is not sent after the close frame
+                it2->second.pending_pong.clear();
+            }
+        }
+        return rv;
+    }
+    int rv = sendStreamData(stream_id, data, len, false, xsink);
+    auto it2 = streaming_body_data_.find(stream_id);
+    if (opcode == WSOP_PONG && it2 != streaming_body_data_.end()) {
+        // no pong is kept to follow a close frame staged before it
+        if (rv == 1 && !it2->second.close_frame_staged) {
+            // the staged data is over its limit: the pong is kept, replacing an older one (it answers the most
+            // recent ping, RFC 6455 section 5.5.3), and staged by h3ReadDataCallback() once the staged data has
+            // been handed to the transport
+            const uint8_t* p = static_cast<const uint8_t*>(data);
+            it2->second.pending_pong.assign(p, p + len);
+            printd(5, "QuicSession::sendStreamControlFrame() stream " QLLD ": staged data over its limit; pong of "
+                "%zu bytes kept\n", (int64)stream_id, len);
+            return 0;
+        }
+        if (!rv) {
+            // a pong kept before is answered by this newer one
+            it2->second.pending_pong.clear();
+        }
+    }
+    return rv;
 }
 
 int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
@@ -3862,8 +3903,8 @@ void QuicSession::registerConnectStreamFrameState(int64_t stream_id, Queue* msg_
                 return;
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
-            int rv = sendStreamData(stream_id, holder->getPtr(), holder->size(),
-                false, &cxsink);
+            // a pong or a close echo is never refused for a full buffer (issue #5900)
+            int rv = sendStreamControlFrame(stream_id, holder->getPtr(), holder->size(), &cxsink);
             if (cxsink || rv < 0) {
                 // Send failures here are non-fatal for incoming data
                 // processing — the transport teardown path will handle
@@ -6265,7 +6306,12 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
                 // entries for retransmission — the buffer must remain valid
                 // until acked_stream_data fires or the stream is closed.
                 sbd.sent_bufs.emplace_back(std::move(sbd.data));
-                // data is now moved-from (empty), ready for new appends
+                // data is now moved-from (empty), ready for new appends; a WebSocket pong kept while the staged data
+                // was over its limit is staged now, so that it is provided next (issue #5900)
+                sbd.data.clear();
+                if (!sbd.pending_pong.empty() && !sbd.eof) {
+                    sbd.data.swap(sbd.pending_pong);
+                }
                 auto& buf = sbd.sent_bufs.back();
 
                 vec[0].base = const_cast<uint8_t*>(buf.data());
