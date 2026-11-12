@@ -23979,6 +23979,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
+                // closure-bound local of a block was not popped at the end of the block, so that the closures of all
+                // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local
+                // slots of the top-level code are those of buildAOTSlotMap() below, which the runtime rebuilds
+                ir_func->embedLocalClosureFlags();
                 // Classify locals as IR-only vs AST-visible for optimization
                 ir_func->computeIROnlyLocals();
 
