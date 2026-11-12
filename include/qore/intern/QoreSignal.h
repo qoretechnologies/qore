@@ -57,8 +57,22 @@
 #endif
 #endif
 
-// use SIGSYS for the status signal
+// the signal that wakes the signal handling thread (issue #5787)
+/* On Linux a real-time signal: valgrind delivers a real-time signal only at system calls, while it treats SIGSYS as a
+   synchronous fault signal, which it can deliver with its default action ("Bad system call") or deadlock on when
+   another thread sends it.  SIGRTMIN is not a constant (the C library reserves the first real-time signals for
+   itself), so the signal is determined once, at the first use, and the same signal is used from then on.  Other
+   platforms (macOS has no real-time signals) keep SIGSYS.
+*/
+#if defined(__linux__) && defined(SIGRTMIN)
+//! returns the signal that wakes the signal handling thread: SIGRTMIN + 1, determined once
+DLLLOCAL int qore_get_status_signal();
+#define QORE_STATUS_SIGNAL (qore_get_status_signal())
+#define QORE_STATUS_SIGNAL_DESC "QORE (SIGRTMIN+1 for internal use)"
+#else
 #define QORE_STATUS_SIGNAL SIGSYS
+#define QORE_STATUS_SIGNAL_DESC "QORE (SIGSYS for internal use)"
+#endif
 
 class CodePgm {
 public:

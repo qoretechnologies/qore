@@ -362,8 +362,8 @@ static bool has_qo_extension(const char* path) {
 
 //! Initializes the Qore library for qcc itself
 /** qcc installs no signal handlers and runs no code that does, so it does not start the signal handling thread:
-    SIGINT and SIGTERM keep their default actions, and the thread cannot kill qcc with SIGSYS at shutdown when it is
-    run under valgrind.
+    SIGINT and SIGTERM keep their default actions, and under valgrind no wake-up of the thread is sent at shutdown
+    (on platforms where it is SIGSYS, valgrind can kill the process with it).
 
     This does not change the code qcc compiles: Qore::Option::HAVE_SIGNAL_HANDLING is read in the process the
     compiled code runs in, and marking this process as the compiler makes the \c HAVE_SIGNAL_HANDLING parse define

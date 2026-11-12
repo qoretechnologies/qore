@@ -139,7 +139,7 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     }
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
-        fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
+        fmap[QORE_STATUS_SIGNAL] = QORE_STATUS_SIGNAL_DESC;
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
         fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
@@ -276,8 +276,28 @@ void QoreSignalManager::reload() {
 // Must be called with mutex held. A security policy can deny even a signal sent to another thread of this
 // process. The command is already recorded under the lock; a timed wait lets the receiver observe it without
 // relying on that signal. On platforms without timed signal waits, report the fatal failure instead of hanging.
+#if defined(__linux__) && defined(SIGRTMIN)
+int qore_get_status_signal() {
+    // determined once: SIGRTMIN can rise after the start of the process if the C library hands out real-time
+    // signals, and the signal thread must keep waiting for the signal that is sent
+    static const int status_signal = SIGRTMIN + 1;
+    return status_signal;
+}
+#endif
+
 void QoreSignalManager::wake_signal_thread_unlocked() {
     int rc = pthread_kill(ptid, QORE_STATUS_SIGNAL);
+#if defined(__linux__) && defined(SIGRTMIN) && defined(HAVE_SIGTIMEDWAIT)
+    // the wake-up is a real-time signal, which is queued: EAGAIN means that the process's queue of pending real-time
+    // signals is full (RLIMIT_SIGPENDING); the command is recorded under the lock, and the timed signal wait of the
+    // signal thread (below) sees it without the signal, so it is not reported
+    if (rc == EAGAIN) {
+        // every change of signal handling waits for the signal thread's timed wait then; noted in debug builds
+        printd(1, "QoreSignalManager::wake_signal_thread_unlocked(): the real-time signal queue is full (EAGAIN); "
+            "the signal thread sees the command at its next timed wait\n");
+        return;
+    }
+#endif
     if (rc) {
 #ifdef HAVE_SIGTIMEDWAIT
         fprintf(stderr, "Qore signal manager: internal wakeup failed: %s; using timed signal wait\n", strerror(rc));
