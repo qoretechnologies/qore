@@ -20369,6 +20369,31 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 }
 
 QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2] = {{0}, {0}};
+std::atomic<bool> qore_dbg_h2_default_connection_window{false};
+
+//! keeps (or no longer keeps) the RFC 9113 default connection window (65535) in the HTTP/2 sessions created from now on
+/** For tests that detect lost connection credit by watching the window shrink, which the larger window would hide
+
+    @param on True to keep the default window
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http2_default_connection_window(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_h2_default_connection_window.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent
+/** @return a hash with keys \c client and \c server: the frames sent by client and by server sessions
+*/
+static QoreValue f_dbg_http2_connection_window_updates(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("client", qore_dbg_h2_connection_window_updates[0].load(), xsink);
+    h->setKeyValue("server", qore_dbg_h2_connection_window_updates[1].load(), xsink);
+    return h.release();
+}
 
 std::atomic<int64_t> qore_dbg_quic_connect_buffered{0};
 
@@ -21882,6 +21907,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "stream_id");

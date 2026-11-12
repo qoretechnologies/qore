@@ -507,6 +507,10 @@ public:
     //! The default limit of the data of a stream that is buffered for sending
     static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
+    //! the connection's receive window, in stream windows (SETTINGS_INITIAL_WINDOW_SIZE): the RFC 9113 default of
+    //! 65535 bytes made every 64 KiB received wait for a WINDOW_UPDATE round trip
+    static constexpr uint32_t ConnectionWindowStreams = 16;
+
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
         The data provider for this stream is configured to signal EOF without
