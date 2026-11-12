@@ -606,9 +606,9 @@ public class HttpAsyncSocketIoController {
         }
         # the UDP socket of an HTTP/3 listener is closed here, as removeListener() does, now that no operation uses it
         # (an operation that holds the descriptor would only shut it down): otherwise it is closed only when its last
-        # reference goes, an unknown time after stop() returns, and its port stays bound (qore#5812).  The streams of
-        # its sessions were aborted above (their handlers are released); the clients are not notified, and a request
-        # that one sends then gets no answer.  A TCP listener is closed by its HttpListener.
+        # reference goes, an unknown time after stop() returns, and its port stays bound (qore#5812).  Its sessions
+        # were ended when their operation was aborted above: each client was sent an HTTP/3 GOAWAY and a QUIC
+        # CONNECTION_CLOSE (SocketQuicServerPollOperation::abort()).  A TCP listener is closed by its HttpListener.
         foreach Socket sock in (h3_sockets) {
             try {
                 sock.close();
