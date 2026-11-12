@@ -12,15 +12,18 @@
 
 #! Regression test: call references to functions of namespaces in the code of a qcc-compiled module
 /** AOT code named the function of a call reference to a function of a namespace other than the root namespace by
-    its bare name, and a reference made without a namespace path had no namespace at all, so that the loader resolved
-    them to the functions of the same names in the root namespace of the Program that loaded the module.  The module
-    here makes unqualified references to functions of its namespace (<tt>\\step()</tt>, <tt>\\Sub::step()</tt>),
-    keeps them in constants and member initializers, and references a function of its root namespace that it does
-    not export (<tt>\\helper()</tt>, <tt>\\::helper()</tt>) and functions of the same name in its namespace and its
-    root namespace (<tt>\\twin()</tt>, <tt>\\::twin()</tt>), and calls them itself and returns them to the script that
-    loads it, which defines functions with the same names and calls them.  The module is compiled with qcc at -O0 and at -O3, and the script runs with each image in every
-    execution mode; every result must be that of the module loaded from source with the AST interpreter.  See
-    AOTNamespacedFunctionRef.qtest for references in a qcc executable.
+    its bare name, and a reference made without a namespace path had no namespace at all.  In a module, the loader
+    then resolved the bare name in the module's own namespaces instead of the function's namespace: a reference to
+    <tt>\\Sub::step()</tt> called the module's <tt>step()</tt>, and a reference to the module's namespace function
+    <tt>\\twin()</tt> called its root function <tt>::twin()</tt>.  The module here makes unqualified references to
+    functions of its namespace (<tt>\\step()</tt>, <tt>\\Sub::step()</tt>), keeps them in constants and member
+    initializers, and references a function of its root namespace that it does not export (<tt>\\helper()</tt>,
+    <tt>\\::helper()</tt>) and functions of the same name in its namespace and its root namespace
+    (<tt>\\twin()</tt>, <tt>\\::twin()</tt>); it calls them itself and returns them to the script that loads it.  The
+    script also defines functions with the same names, which a reference from the module must never call.  The module
+    is compiled with qcc at -O0 and at -O3, and the script runs with each image in every execution mode; every result
+    must be that of the module loaded from source with the AST interpreter.  See AOTNamespacedFunctionRef.qtest for
+    references in a qcc executable, where the bare name resolved in the root namespace of the Program.
 */
 class AOTModuleNamespacedFunctionRefTest inherits QUnit::Test {
     public {
