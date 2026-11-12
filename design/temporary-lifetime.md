@@ -312,7 +312,16 @@ releases the frame's values (`qore_ir_find_open_implicit_contexts()`: the IR int
 `QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only, and
 `emitImplicitContextRestore()` on the exit of a `throw` and of an operator cleanup's synthetic rethrow, which also
 release the statement's temporaries in the order of an exception check's exit), and releases the operator's iterator
-before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).  Native code raises an integer
+before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`) and before the statement's
+temporaries, as the IR interpreter's frame exit does (`releaseOperatorIterators()`; native code's
+`emitExitStatementCleanup()` for an exception exit, and the edge below): native code released it after them, so a
+fold's list outlived an enclosing map's element (qore#5884).  The edge of a native exception check that releases the
+statement's temporaries in their order on the way to the error return is made once the function is lowered
+(`QoreIRToLLVM::finalizeOrderedErrorReturnEdges()`), and orders, with the temporaries registered before the check, those
+registered after it that a loop containing the check stores and does not release before it comes back to the check:
+the value that such a temporary holds from the previous element (the value of `??` in a map) was released before the
+element and the list (qore#5884).
+Native code raises an integer
 or float division by zero where it happens, on the path that only a zero divisor takes, and the exception of an
 operation through a runtime helper (an untyped division, modulo, addition, subtraction or multiplication, a number
 division, a string concatenation) on the path where the helper returns NOTHING, which it returns when it raises: left

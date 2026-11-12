@@ -759,9 +759,12 @@ from `cleanupToTempScope()` and `cleanupValues()` when they release for an excep
 releases the temporaries of the raising statement in that order on the edge to an in-frame handler
 (`getExceptionEdgeTarget()`), and, for an exception leaving the function, on a per-site edge to the
 error return when the order of the temporaries that can run a destructor (a value whose type can hold
-an object, `QoreTypeInfo::needsScan()`) differs from the error return's (`getOrderedErrorReturnEdge()`;
-a statement with more than 256 temporaries keeps the error return's order, as each exception check
-orders the temporaries registered before it).
+an object, `QoreTypeInfo::needsScan()`) differs from the error return's (`finalizeOrderedErrorReturnEdges()`,
+once the function is lowered, which also orders the temporaries that the statement registers after the
+check and that a loop containing the check stores and does not release before it comes back to it; the
+edge releases the iterators of the statement's
+functional operators first; a statement with more than 256 temporaries keeps the error return's
+order, as each exception check orders the temporaries registered before it).
 `ExceptionTempReleaseOrder.qtest`.
 
 The temporary operands of an operator live until the end of the statement in every mode (qore#5712:
