@@ -1087,6 +1087,12 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     need_cancel = false;
     QoreListNode* buffered = nullptr;
 
+    // the stream credit of a streaming response is granted as the action's consumer takes the data (issue #5820);
+    // installed before the action can receive anything
+    if (action->isStreaming() && sock_obj) {
+        sock_obj->installQuicStreamConsumeHook(session_id.load(std::memory_order_acquire), stream_id, action);
+    }
+
     AutoLocker al(stream_lock);
     pending_stream_ids.erase(sid);
 

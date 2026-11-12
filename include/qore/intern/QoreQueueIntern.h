@@ -33,6 +33,7 @@
 
 #define _QORE_QOREQUEUEINTERN_H
 
+#include "qore/intern/QoreConsumeHook.h"
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreCondition.h>
 
@@ -93,6 +94,8 @@ private:
                     write_cond;  // write Condition variable
     QoreQueueNode* head,
                     * tail;
+    //! told about the values taken from the queue and those dropped with it, if set; see QoreConsumeHook
+    std::shared_ptr<QoreConsumeHook> consume_hook;
     std::string err;
     QoreStringNode* desc;
     // len, read_waiting and write_waiting are only written with the lock held, but size(), empty(),
@@ -255,6 +258,45 @@ public:
     // push at the end of the queue and take the reference - can only be used when len == -1; the reference is
     // released if the queue is deleted or in an error state
     DLLLOCAL void pushAndTakeRef(QoreValue n);
+
+    //! Sets the hook that is told about the values taken from the queue, and those dropped with it
+    /** See QoreConsumeHook for the lock order; values already in the queue are reported when they are taken.
+    */
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook);
+
+    //! Returns the queue's item consume hook, which is created if the queue has none
+    DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
+
+    //! Tells the item consume hook, if any, that a value it may know was not queued (issue #5820)
+    /** Called without the lock and before the value is released, so that its address is not reused meanwhile; the
+        data reported with the value counts as consumed.
+    */
+    DLLLOCAL void forgetRefusedItem(const AbstractQoreNode* node);
+
+    //! Forgets a value that is not queued when it goes out of scope; declared after the value's holder
+    class RefusedItemGuard {
+    public:
+        DLLLOCAL RefusedItemGuard(qore_queue_private& q, const QoreValue& v) : q(q), node(v.getInternalNode()) {
+        }
+
+        DLLLOCAL ~RefusedItemGuard() {
+            if (node) {
+                q.forgetRefusedItem(node);
+            }
+        }
+
+        //! The value was queued
+        DLLLOCAL void queued() {
+            node = nullptr;
+        }
+
+    private:
+        qore_queue_private& q;
+        const AbstractQoreNode* node;
+    };
+
+    //! Reports the values of the queue to the consume hook, when the lock is released; called with the lock held
+    DLLLOCAL void measureAllIntern(QoreConsumeNotifier& cn);
 
     //! Counts the values of the queue that can be part of a cycle, with the given object as the queue's object
     /** Called for a copy made by Queue::copy() before the copy is given to its object: the copy constructor has no

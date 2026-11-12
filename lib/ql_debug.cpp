@@ -19998,6 +19998,57 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     return QoreValue();
 }
 
+QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+
+namespace {
+//! wakes the threads waiting in dbg_http_stream_credit_wait_deferred()
+std::mutex dbg_stream_credit_m;
+std::condition_variable dbg_stream_credit_cond;
+}
+
+void qore_dbg_stream_credit_deferred(int64_t bytes) {
+    {
+        std::lock_guard<std::mutex> lg(dbg_stream_credit_m);
+        qore_dbg_stream_credit_stats.deferred.fetch_add(bytes, std::memory_order_relaxed);
+    }
+    dbg_stream_credit_cond.notify_all();
+}
+
+//! waits until the bytes whose stream credit was deferred reach the given total
+/** @param total the total of the \c deferred count of dbg_http_stream_credit_stats() to wait for
+    @param timeout_ms the maximum time to wait (a hang guard)
+
+    @return the \c deferred count, or -1 if the timeout expired first
+*/
+static QoreValue f_dbg_http_stream_credit_wait_deferred(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 total = HARD_QORE_VALUE_INT(params, 0);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 1);
+    std::unique_lock<std::mutex> ul(dbg_stream_credit_m);
+    if (!dbg_stream_credit_cond.wait_for(ul, std::chrono::milliseconds(timeout_ms), [total] () {
+                return qore_dbg_stream_credit_stats.deferred.load() >= total;
+            })) {
+        return -1;
+    }
+    return qore_dbg_stream_credit_stats.deferred.load();
+}
+
+//! returns the accounting of the client stream credit deferred until the application consumes the data
+/** @return a hash with keys \c deferred, \c credited, \c settled, \c excess and \c orphaned (bytes); see
+    QoreDbgStreamCreditStats
+*/
+static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    QoreDbgStreamCreditStats& s = qore_dbg_stream_credit_stats;
+    h->setKeyValue("deferred", s.deferred.load(), xsink);
+    h->setKeyValue("credited", s.credited.load(), xsink);
+    h->setKeyValue("settled", s.settled.load(), xsink);
+    h->setKeyValue("excess", s.excess.load(), xsink);
+    h->setKeyValue("orphaned", s.orphaned.load(), xsink);
+    return h.release();
+}
+
 namespace {
 //! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
 std::atomic<int64_t> dbg_quic_hold_session{0};
@@ -21317,6 +21368,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_wait_deferred", f_dbg_http_stream_credit_wait_deferred,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "total",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "stream_id");

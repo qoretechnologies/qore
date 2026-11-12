@@ -680,6 +680,19 @@ static int qore_socket_close_from_controller(QoreSocket* s) {
     return qore_socket_close_private_from_controller(qore_socket_private::get(*s));
 }
 
+//! Returns the key that the operations of the socket are registered under with the async I/O controller
+/** The operations of a socket wrapped by a Socket object are registered under the Socket object's identity (which is
+    its route key; see qore_socket_private::async_io_route_key), those of any other socket under its pointer hash.
+*/
+std::string qore_socket_async_io_route_key(const qore_socket_private* priv) {
+    if (!priv->async_io_route_key.empty()) {
+        return priv->async_io_route_key;
+    }
+    QoreString tmp;
+    qore_get_ptr_hash(tmp, priv);
+    return tmp.c_str();
+}
+
 static void qore_socket_wake_async_controller(qore_socket_private* priv) {
     if (qore_on_async_io_thread()) {
         return;
@@ -694,15 +707,7 @@ static void qore_socket_wake_async_controller(qore_socket_private* priv) {
             : nullptr,
         &xsink);
     if (!xsink && ctrl) {
-        // the operations of a socket wrapped by a Socket object are registered under the Socket object's identity
-        // (which is its route key); see qore_socket_private::async_io_route_key
-        if (!priv->async_io_route_key.empty()) {
-            ctrl->wakeSocket(priv->async_io_route_key);
-        } else {
-            QoreString tmp;
-            qore_get_ptr_hash(tmp, priv);
-            ctrl->wakeSocket(tmp.c_str());
-        }
+        ctrl->wakeSocket(qore_socket_async_io_route_key(priv));
     }
     xsink.clear();
 }
@@ -3362,7 +3367,13 @@ public:
             return nullptr;
         }
 
-        data = h2->takeStreamData(stream_id, max_bytes, xsink);
+        bool credit_due;
+        data = h2->takeStreamData(stream_id, max_bytes, xsink, true, &credit_due);
+        // the stream credit granted for the data taken (issue #5820) is sent by the session's poll operation, which
+        // the wake-up runs again
+        if (credit_due) {
+            h2->sendStreamCredit(qore_socket_async_io_route_key(priv));
+        }
         done = true;
         return nullptr;
     }
@@ -11487,8 +11498,9 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lg(mtx);
 
-    // the stream is discarded after an event exceeded the maximum size
+    // the stream is discarded after an event exceeded the maximum size; its data counts as consumed
     if (too_large) {
+        creditNow(qore_http_stream_value_body_size(output));
         output.discard(xsink);
         return;
     }
@@ -11536,25 +11548,45 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
     // the stream is split into events byte by byte, so that a blank line ends an event whatever the line endings
     // are, as the event stream format requires (for example a line that ends with LF, then a line that ends with
     // CRLF), and a leading byte order mark of the stream is dropped
+    // the data that each event is made from is reported to the item hook, if any, with the event (issue #5820): the
+    // stream's credit is granted as the application takes the event; data that makes no event is reported at once
+    size_t block_start = 0;
     for (size_t i = 0; i < len; ++i) {
         if (framer.add(data[i])) {
+            size_t block_bytes = pending_bytes + (i + 1 - block_start);
+            pending_bytes = 0;
+            // the event is complete: its data is reported with it, or at once
+            closeItemLocked();
+            block_start = i + 1;
             std::string event = framer.take();
             // parseSseEvent() parses the lines of the event, which end with LF
             QoreString event_text(event.c_str(), event.size(), QCS_UTF8);
             ReferenceHolder<QoreHashNode> evt(parseSseEvent(xsink, event_text), xsink);
             // a block without a field is not an event, as no field of it was kept
             if (evt && !evt->empty() && queue) {
+                if (item_hook) {
+                    item_hook->record(*evt, stream_hook, block_bytes);
+                }
                 queue->pushAndTakeRef(evt.release());
                 pushed = true;
+            } else {
+                creditNow(block_bytes);
             }
             continue;
         }
         if (static_cast<int64>(framer.size()) > MaxEventSize) {
             too_large = true;
             framer.reset();
-            break;
+            // the event read so far and the rest of the data are discarded
+            closeItemLocked();
+            creditNow(pending_bytes + (len - block_start));
+            pending_bytes = 0;
+            return pushed;
         }
     }
+    pending_bytes += len - block_start;
+    // the event in progress can be larger than the stream's window (issue #5820)
+    reportProgressLocked();
     return pushed;
 }
 
@@ -21716,7 +21748,8 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     while (batch < MAX_STREAMING_BATCH
                             && h2_session->hasStreamingData(streaming_id)) {
                         // Take body data from the streaming stream
-                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink);
+                        // delivered through the stream's action, whose Channel or Queue reports the consumption (issue #5820)
+                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink, false);
                         if (*xsink) {
                             return nullptr;
                         }

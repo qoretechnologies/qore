@@ -1604,6 +1604,9 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // for END_STREAM (which never comes for SSE streams).
     if (action->isStreaming()) {
         sock_obj->setHttp2StreamStreamingDirect(stream_id);
+        // the stream credit of the response data is granted as the action's consumer takes it (issue #5820);
+        // installed before the action is registered, so before it can receive anything
+        sock_obj->installHttp2StreamConsumeHook(stream_id, action);
     }
 
     // Register action (take ownership — action was created with refcount 1 by caller)

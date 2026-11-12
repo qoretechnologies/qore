@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreQueue.h>
 #include "qore/intern/QoreQueueIntern.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 
@@ -47,6 +48,8 @@ void Queue::deref(ExceptionSink* xsink) {
 void qore_queue_private::destructor(ExceptionSink* xsink) {
     // declared before the lock, so that the weak reference is released after it
     ScanHolderRelease release;
+    // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+    QoreConsumeNotifier cn;
     // declared before the lock, so that the values are released after it
     NodeListRelease values(xsink);
     AutoLocker al(&l);
@@ -60,11 +63,51 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
     }
 
     uncountAllIntern(release);
+    measureAllIntern(cn);
     takeAllIntern(values);
     setLenIntern(Queue_Deleted);
     if (desc) {
         desc->deref();
         desc = nullptr;
+    }
+}
+
+void qore_queue_private::measureAllIntern(QoreConsumeNotifier& cn) {
+    if (!consume_hook) {
+        return;
+    }
+    size_t bytes = 0;
+    for (QoreQueueNode* n = head; n; n = n->next) {
+        bytes += consume_hook->measure(n->node);
+    }
+    cn.set(consume_hook, bytes);
+}
+
+void qore_queue_private::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    AutoLocker al(&l);
+    consume_hook = std::move(hook);
+}
+
+std::shared_ptr<QueueItemConsumeHook> qore_queue_private::getItemConsumeHook() {
+    AutoLocker al(&l);
+    std::shared_ptr<QueueItemConsumeHook> rv = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    if (!rv) {
+        // a queue whose items no stream reports yet; any other hook would not know the items
+        assert(!consume_hook);
+        rv = std::make_shared<QueueItemConsumeHook>();
+        consume_hook = rv;
+    }
+    return rv;
+}
+
+void qore_queue_private::forgetRefusedItem(const AbstractQoreNode* node) {
+    std::shared_ptr<QueueItemConsumeHook> hook;
+    {
+        AutoLocker al(&l);
+        hook = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    }
+    if (hook) {
+        hook->forget(node);
     }
 }
 
@@ -319,6 +362,9 @@ void qore_queue_private::pushAndTakeRef(QoreValue n) {
 
     // a deleted queue or a queue in an error state does not take the value, so the reference is released here,
     // outside the lock; this API has no exception sink, so any exception is reported by the temporary one
+    if (const AbstractQoreNode* node = n.getInternalNode()) {
+        forgetRefusedItem(node);
+    }
     ExceptionSink xsink;
     n.discard(&xsink);
 }
@@ -339,6 +385,8 @@ void qore_queue_private::countValues(QoreObject& self) {
 void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -357,6 +405,7 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
         }
 
         pushIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             tail->scan_counted = true;
             countIntern(*self);
@@ -380,6 +429,8 @@ std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook{n
 void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -398,6 +449,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
         }
 
         insertIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             head->scan_counted = true;
             countIntern(*self);
@@ -412,6 +464,8 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
     to = false;
     QoreValue rv{};
     {
+        // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         SafeLocker sl(&l);
@@ -462,6 +516,9 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             uncountIntern(release);
         }
 
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(n->node));
+        }
         sl.unlock();
         rv = n->takeAndDel();
     }
@@ -473,6 +530,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
     to = false;
     QoreValue rv{};
     {
+        // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         SafeLocker sl(&l);
@@ -517,6 +576,9 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             uncountIntern(release);
         }
 
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(n->node));
+        }
         sl.unlock();
         rv = n->takeAndDel();
     }
@@ -528,6 +590,8 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
     {
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the values are released after it
         NodeListRelease values(xsink);
         AutoLocker al(&l);
@@ -550,6 +614,7 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         markRemovedIntern();
         uncountAllIntern(release);
 
+        measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
 
@@ -563,6 +628,8 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
     {
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the values are released after it
         NodeListRelease values(xsink);
         AutoLocker al(&l);
@@ -585,6 +652,7 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         uncountAllIntern(release);
 
         // clear the queue
+        measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
 
@@ -637,6 +705,14 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
     }
 
     return false;
+}
+
+void QoreQueue::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    priv->setConsumeHook(std::move(hook));
+}
+
+std::shared_ptr<QueueItemConsumeHook> QoreQueue::getItemConsumeHook() {
+    return priv->getItemConsumeHook();
 }
 
 QoreQueue::QoreQueue(int n_max) : priv(new qore_queue_private(n_max)) {

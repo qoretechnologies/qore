@@ -45,6 +45,7 @@ class QoreSSLCertificate;
 class QoreConnectionDestinations;
 class QoreSSLPrivateKey;
 class Queue;
+class AbstractAsyncAction;
 class my_socket_priv;
 
 //! Non-blocking operation direction flags for directional socket locking
@@ -1168,6 +1169,23 @@ if (accepted) {
         @since %Qore 3.0
     */
     DLLLOCAL int cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Has the stream credit of an HTTP/2 client stream's response data granted as the action's consumer takes it
+    /** Installs a consume hook (see HttpStreamConsumeHook) on @p action if it is a streaming action that delivers
+        the data to a consumer (ChannelAction) or discards it (StreamingHeadersPromiseNotifierAction,
+        FrameStateAction), and then defers the stream's credit (issue #5820); with any other action, the stream's
+        credit is granted as the data is received.  Called before the action is registered for the stream.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void installHttp2StreamConsumeHook(int32_t stream_id, AbstractAsyncAction* action);
+
+    //! Has the stream credit of an HTTP/3 client stream's response data granted as the action's consumer takes it
+    /** See installHttp2StreamConsumeHook().
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void installQuicStreamConsumeHook(int64_t session_id, int64_t stream_id, AbstractAsyncAction* action);
 
     //! Sets the limit of the data of an HTTP/2 stream that is buffered for sending; see Http2Session::setStreamSendLimit()
     /** @return 0 on success, -1 on error (exception raised)

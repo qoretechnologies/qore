@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QC_Queue.h"
 
@@ -53,16 +54,63 @@ WebSocketStreamFrameState::~WebSocketStreamFrameState() {
     }
 }
 
+bool WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    // the queue's hook serves every stream whose messages it receives; without a queue, no message is kept, and the
+    // data is credited as it is fed (creditUnusedData())
+    if (msg_queue) {
+        item_hook = msg_queue->getItemConsumeHook();
+    }
+    stream_hook = std::move(hook);
+    return true;
+}
+
+void WebSocketStreamFrameState::closeItem() {
+    if (stream_hook && progress_bytes) {
+        stream_hook->closeItem();
+    }
+    progress_bytes = 0;
+}
+
+void WebSocketStreamFrameState::reportProgress() {
+    if (stream_hook && pending_bytes > progress_bytes) {
+        stream_hook->progress(pending_bytes - progress_bytes);
+        progress_bytes = pending_bytes;
+    }
+}
+
+void WebSocketStreamFrameState::creditUnusedData() {
+    // data that made no message is reported at once, unless it is part of a message still being read: a frame still
+    // being decoded, or the fragments of a message that the queue gets when it is complete (their credit is
+    // advanced by reportProgress(), so a fragmented message does not have the client buffer without bound)
+    if (stream_hook && pending_bytes && !decoder.bufferedBytes()
+            && !(item_hook && reassembler.isFragmenting())) {
+        closeItem();
+        stream_hook->consumed(pending_bytes);
+        pending_bytes = 0;
+    }
+}
+
 int WebSocketStreamFrameState::feedData(const void* data, size_t len) {
     if (error_state || peer_closed) {
         // Ignore further data once the stream is done — control-frame
         // responses have already been dispatched (or never will be).
+        // The ignored data counts as consumed (issue #5820).
+        if (stream_hook && len) {
+            closeItem();
+            stream_hook->consumed(len + pending_bytes);
+            pending_bytes = 0;
+        }
         return 0;
     }
     if (data && len) {
         decoder.appendData(data, len);
+        pending_bytes += len;
     }
-    return processFrames();
+    int rv = processFrames();
+    creditUnusedData();
+    // a message in progress can be larger than the stream's window (issue #5820)
+    reportProgress();
+    return rv;
 }
 
 int WebSocketStreamFrameState::processFrames() {
@@ -281,6 +329,14 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
         h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), &xs);
     }
     if (!xs && msg_queue) {
+        // the data fed since the last message is reported with this message (issue #5820)
+        if (item_hook) {
+            // the message is complete: its data is reported with it
+            closeItem();
+            item_hook->record(*h, stream_hook, pending_bytes);
+            pending_bytes = 0;
+        }
+        // a message that is not queued is forgotten by the queue's item hook: its data counts as consumed
         msg_queue->push(&xs, h.release());
         if (!xs) {
             ++messages_pushed;
@@ -373,6 +429,12 @@ void WebSocketStreamFrameState::sendClose(uint16_t code, const char* reason) {
 }
 
 void WebSocketStreamFrameState::pushCloseSentinel() {
+    // the data of a message that the stream did not end makes no message
+    if (stream_hook && pending_bytes) {
+        closeItem();
+        stream_hook->consumed(pending_bytes);
+        pending_bytes = 0;
+    }
     if (!msg_queue) {
         return;
     }

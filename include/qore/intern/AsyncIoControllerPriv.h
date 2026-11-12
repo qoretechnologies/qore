@@ -2517,6 +2517,9 @@ private:
 //! Returns the global AsyncIoController singleton QoreObject (ref'd for caller); lazy-creates on first call
 DLLLOCAL QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink);
 
+//! Returns the global async I/O controller with a reference, or nullptr if none has been created; never creates one
+DLLLOCAL AsyncIoControllerPriv* qore_get_async_io_controller_if_exists();
+
 //! Cleans up the global AsyncIoController singleton (called from qore_cleanup())
 DLLLOCAL void qore_async_io_controller_cleanup();
 
