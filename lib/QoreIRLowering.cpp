@@ -3992,6 +3992,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // the index of the Scope entry of this block in cleanup_stack
     size_t scope_entry_index = SIZE_MAX;
 
+    QoreIRScopeEnterInstruction* scope_enter = nullptr;
     if (has_on_block_exit) {
         // Allocate a unique scope ID (for compatibility with Phase 2/3)
         scope_id = ++scope_counter;
@@ -4006,7 +4007,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             pushBlockCleanup(scope_entry);
         }
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
-        builder.createScopeEnter(scope_id);
+        scope_enter = builder.createScopeEnter(scope_id);
     }
 
     QoreIRBasicBlock* lvar_exception_cleanup_block = nullptr;
@@ -4030,6 +4031,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // innermost runtime scope).  The handlers that are lowered inline at the exits of the block raise their
     // exceptions here too, while the handlers registered before them are still registered (see
     // lowerHandlersAtExit()).  The frame has exception edges already, so the AOT outliner loses nothing.
+    // a block without an exception path of its own: an exception leaves the frame through the unwind path of the
+    // interpreter, which releases the locals of the block that ScopeEnter records after its handlers, before the
+    // events of the statements that contain it (#5867)
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget())) {
+        scope_enter->locals = lvars->lv;
+    }
     if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through

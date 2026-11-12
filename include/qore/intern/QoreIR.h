@@ -3270,6 +3270,15 @@ public:
     }
 
     uint32_t scope_id = 0;  //!< unique scope ID within function
+    //! the locals of the block, which an exception that leaves the scope releases after the handlers of the block
+    //! and before the events of the statements that contain it, as the AST interpreter does (#5867)
+    /** only for a block without an exception path of its own, whose exception leaves the frame through
+        QoreIRInterpreter's unwind path; a block with one releases its locals in its own exception cleanup.  Read only
+        on the unwind path, so that the exit of a block costs nothing more.
+    */
+    std::vector<LocalVar*> locals;
+    //! the slots of the locals, embedded by QoreIRFunction::computeSlotIdsAndEmbed() (UINT32_MAX if a local has none)
+    std::vector<uint32_t> local_slots;
 };
 
 //! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter

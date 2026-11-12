@@ -355,8 +355,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
 //!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
 //!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
+//! v26: a ScopeEnter instruction ends with the locals of its block that an exception leaving the scope releases
+//!      (QoreIRScopeEnterInstruction::locals: u32 count + N x (name stringref + slot u32)), so that the debug IR
+//!      releases them before the debugger's exception events of the statements that contain the block (#5867).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 26;
+//! First format version whose ScopeEnter instructions record the locals of their block (see v26 above).
+constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 26;
 //! First format version with source locations of calls, members and default arguments (see v25 above).
 constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
