@@ -194,23 +194,20 @@ public:
         }
     }
 
-    //! Sends the application's WebSocket close frame through the stream's frame state, if one is installed
-    /** The frame state then knows that the close frame was sent, so it sends no second one when it fails the
-        connection later with an error (RFC 6455 section 5.5.1: an endpoint sends one close frame); see
-        WebSocketStreamFrameState::sendClose().  Serialized with the frame state's other uses by the action's mutex.
+    //! Records on the stream's frame state, if one is installed, that the application sends its close frame itself
+    /** The frame state then sends no second close frame when it fails the connection later with an error (RFC 6455
+        section 5.5.1: an endpoint sends one close frame); see WebSocketStreamFrameState::markCloseSent().
+        Serialized with the frame state's other uses by the action's mutex.
 
-        @param code the close code (1005 and 1006 are sent as a close frame without a status code)
-        @param reason the close reason, if any
-
-        @return true if a frame state took the close (sent now, or sent before), false if none is installed
+        @return 0 if no frame state is installed, 1 if the close is recorded (the caller sends its close frame), 2 if
+        the frame state sent a close frame before (the caller sends none)
     */
-    DLLLOCAL bool sendFrameStateClose(uint16_t code, const char* reason) {
+    DLLLOCAL int markFrameStateCloseSent() {
         std::lock_guard<std::mutex> lg(mtx);
         if (!frame_state) {
-            return false;
+            return 0;
         }
-        frame_state->sendClose(code, reason);
-        return true;
+        return frame_state->markCloseSent() ? 1 : 2;
     }
 
     //! Installs a WebSocket frame-state decoder on this ChannelAction

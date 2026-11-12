@@ -757,19 +757,19 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         return h3conn.getSocket().getQuicMaxDatagramSize(sid, stream_id);
     }
 
-    #! Sends the application's WebSocket close frame through the stream's frame state
-    /** See @ref HttpClientStreamHandle::sendFrameStateClose()
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** See @ref HttpClientStreamHandle::markFrameStateCloseSent()
     */
-    bool sendFrameStateClose(int code, *string reason) {
+    int markFrameStateCloseSent() {
         int sid;
         {
             AutoLock al(lock);
             if (!streaming || !exists stream_id) {
-                return False;
+                return 0;
             }
             sid = stream_id;
         }
-        return h3conn.sendFrameStateClose(sid, code, reason);
+        return h3conn.markFrameStateCloseSent(sid);
     }
 
     #! Installs a WebSocket frame-state decoder for this H3 CONNECT stream
