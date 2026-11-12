@@ -36,6 +36,9 @@
 %requires QUnit
 %requires Logger
 %requires FsUtil
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketHandler
 %requires WebSocketUtil
 %requires WebSocketClient
 %requires ../../TestCertificates.qm
@@ -51,6 +54,41 @@ const Size = 3 * 1024 * 1024;
 
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
+
+#! The server side of the HTTP/3 case: sends a large message on request and reports the messages it gets
+class TestConnection inherits WebSocketConnection {
+    public {
+        Queue events;
+    }
+
+    constructor(WebSocketHandler handler, Queue events) : WebSocketConnection(handler) {
+        self.events = events;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "big") {
+            send(binary(strmul("s", Size)));
+        }
+        events.push(msg);
+    }
+
+    gotMessage(binary msg) {
+        gotMessage(msg.toString());
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    public {
+        Queue events();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        # the stream's staged data is held back from the transport, as when the client grants no credit, until the
+        # test releases it
+        call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
+        return new TestConnection(self, events);
+    }
+}
 
 #! Pushes the client's message about the start of an error close, so that a test can wait for it
 class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
@@ -73,11 +111,72 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
     constructor() : QUnit::Test("WebSocketControlFrameQueue", "1.0") {
         addTestCase("HTTP/2 client: the pong of the latest ping is sent when the send buffer has room",
             \testPong());
+        addTestCase("HTTP/3 server: the pong is sent once the staged data has been handed to the transport",
+            \testH3ServerPong());
         addTestCase("HTTP/2 client: the close frame of an error is sent although the send buffer is full",
             \testErrorClose(), True);
         addTestCase("HTTP/2 client: an error close that the server does not answer ends at the close timeout",
             \testErrorClose(), False);
         set_return_value(main());
+    }
+
+    #! A ping arrives while the server's staged data for the stream is over its limit: the pong follows the data
+    testH3ServerPong() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        TestHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit {
+            call_function("dbg_quic_release_stream_data");
+            server.stop();
+        }
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        # the frames that the client receives, in order: with a raw callback, the messages are delivered to it
+        Queue frames();
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "raw_callback": int sub (hash<WsMsgInfo> event) {
+                if (event.op == WSOP_Pong) {
+                    frames.push("pong " + event.msg.toString());
+                } else if (event.op == WSOP_Binary) {
+                    frames.push("binary " + event.msg.size());
+                }
+                return WSC_Process;
+            },
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp3(), "the connection uses HTTP/3");
+        # the server stages a message over the staged data's limit, which is held back from the transport
+        wsc.send("big");
+        assertEq("big", handler.events.get(HangGuard), "the server staged the large message");
+        # frames are handled in order: when the server reports the message after the ping, it has answered the ping
+        wsc.ping(binary("p1"));
+        wsc.send("after");
+        assertEq("after", handler.events.get(HangGuard), "the server got the ping and the next message");
+        call_function("dbg_quic_release_stream_data");
+        # a packet of the client makes the server write the stream's data
+        wsc.send("go");
+        assertEq("go", handler.events.get(HangGuard), "the server got the next message");
+        assertEq("binary " + Size, frames.get(HangGuard), "the client gets the large message");
+        assertEq("pong p1", frames.get(HangGuard), "the client gets the pong after it");
     }
 
 %ifdef NoProcess
