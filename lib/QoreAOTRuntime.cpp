@@ -1031,6 +1031,8 @@ static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const Qor
 struct AOTSlotResolutionCache {
     QoreProgram* pgm;
     std::unordered_map<std::string, const FunctionEntry*> functions;
+    //! the functions of calls left to other source objects, which can be found by their names alone
+    std::unordered_map<std::string, const FunctionEntry*> deferred_source_functions;
     std::unordered_map<std::string, const QoreClass*> classes;
 };
 
@@ -1165,7 +1167,8 @@ LocalFunctionCallReferenceNode* qore_aot_make_function_ref(QoreProgram* pgm, con
     return fcr;
 }
 
-static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
+static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name,
+        bool deferred_source) {
     qore_program_private* pp = qore_program_private::get(*pgm);
     // "::name": the function of the root namespace itself, never the builtin of the same name that the root function
     // index would find first
@@ -1204,34 +1207,50 @@ static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* 
             }
         }
 
-        // Standalone script fragments can serialize an unqualified function
-        // call as current-namespace qualified (for example OMQ::QDBG_LOG),
-        // while the aggregate metadata resolves the same symbol through the
-        // root function index.  Try the terminal identifier as a final
-        // pending-safe fallback after exact scoped lookup fails.
-        if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                *pp->RootNS, nscope.getIdentifier())) {
-            return fe;
+        // A standalone script fragment records a call that another source object provides with the path of the
+        // source manifest, which for a call written without a namespace path can be the namespace of the call (for
+        // example OMQ::QDBG_LOG), while the program that links the objects has the function elsewhere: it is found
+        // by its name alone, as the parser finds it (qore_aot_resolve_deferred_source_function_entry()).  A name that
+        // the compiler recorded for a function it resolved names that function, and finding another one with the same
+        // name bound the reference to the wrong function silently (qore#5956)
+        if (deferred_source) {
+            if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                    *pp->RootNS, nscope.getIdentifier())) {
+                return fe;
+            }
         }
     }
     return nullptr;
 }
 
-const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+static const FunctionEntry* resolveAOTFunctionEntryForSlot(QoreProgram* pgm, const char* name, bool deferred_source) {
+    if (!name || !*name) {
+        return nullptr;
+    }
     AOTSlotResolutionCache* cache = current_aot_slot_resolution_cache;
-    if (!cache || cache->pgm != pgm || !name || !*name) {
-        return resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    if (!cache || cache->pgm != pgm) {
+        return resolveAOTFunctionEntryForSlotUncached(pgm, name, deferred_source);
     }
 
-    auto i = cache->functions.find(name);
-    if (i != cache->functions.end()) {
+    std::unordered_map<std::string, const FunctionEntry*>& functions = deferred_source
+        ? cache->deferred_source_functions : cache->functions;
+    auto i = functions.find(name);
+    if (i != functions.end()) {
         return i->second;
     }
-    const FunctionEntry* fe = resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    const FunctionEntry* fe = resolveAOTFunctionEntryForSlotUncached(pgm, name, deferred_source);
     if (fe) {
-        cache->functions.emplace(name, fe);
+        functions.emplace(name, fe);
     }
     return fe;
+}
+
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+    return resolveAOTFunctionEntryForSlot(pgm, name, false);
+}
+
+const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram* pgm, const char* name) {
+    return resolveAOTFunctionEntryForSlot(pgm, name, true);
 }
 
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args) {
@@ -1444,8 +1463,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            // Look up function by name
-            const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
+            // Look up function by name: a call left to another source object by the name of its source, every other
+            // exactly by the identity of the function the compiler resolved
+            const FunctionEntry* fe = ref2 && !strcmp(ref2, QORE_AOT_DEFERRED_SOURCE_CALL_SLOT)
+                ? qore_aot_resolve_deferred_source_function_entry(pgm, ref1)
+                : qore_aot_resolve_function_entry_for_slot(pgm, ref1);
             if (!fe) {
                 printd(0, "AOT v2: cannot resolve function '%s' for expr slot\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("function", ref1, pgm);

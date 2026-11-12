@@ -12575,7 +12575,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 writer.writeStringRef("");
             }
         } else {
-            writer.writeStringRef("");
+            writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();

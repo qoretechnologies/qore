@@ -1,0 +1,270 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTScopedFunctionNoFallbackTest
+
+#! Regression test: a function that an AOT image names with its namespace path is not replaced by another one
+/** The AOT loader looked a function up by the name the image recorded for it, and when a name with a namespace path
+    did not resolve, it took any function with the same name: an executable or module compiled against a module that
+    had \c Other::step() bound its calls to the \c step() of the root namespace when it was loaded with a version of
+    the module without it, and ran the wrong function silently (qore#5956).  The image now fails to load (or the
+    function whose code calls it fails to run) with an error that names the function.  A call that the compiler left
+    to another source object (a per-file \c .qo build with a source symbol manifest) is still found by its name alone,
+    as the parser finds a function called without a namespace path.
+*/
+class AOTScopedFunctionNoFallbackTest inherits QUnit::Test {
+    public {
+        #! the module that the images are compiled against
+        const ModuleV1 = '%modern
+module NsMod {
+    version = "1.0";
+    desc = "a module with a function of a namespace";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+public int sub step(int x) { return x + 1; }
+public namespace Other {
+    public int sub step(int x) { return x * 10; }
+}
+';
+
+        #! a later version of the module without Other::step(), with step() in the root namespace
+        const ModuleV2 = '%modern
+module NsMod {
+    version = "2.0";
+    desc = "a module without the function of the namespace";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+public int sub step(int x) { return x + 1; }
+public namespace Other {
+    public int sub other(int x) { return x; }
+}
+';
+
+        #! a script that calls the function of the namespace
+        const Script = '%modern
+%requires NsMod
+printf("call: %d\n", Other::step(2));
+';
+
+        #! a module whose code calls the function of the namespace
+        const UseModule = '%modern
+module UseMod {
+    version = "1.0";
+    desc = "a module that calls a function of a namespace of another module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+%requires NsMod
+public namespace UseMod {
+    public int sub viaCall(int x) { return Other::step(x); }
+}
+';
+
+        #! a script that loads the module that calls the function
+        const UseScript = '%modern
+%requires UseMod
+printf("mod: %d\n", UseMod::viaCall(2));
+';
+
+        #! the provider of the per-file build: helper() is declared in the root namespace
+        const ProviderCode = '%new-style
+int sub helper(int x) { return x * 7; }
+';
+
+        #! the consumer of the per-file build calls helper() without a namespace path in namespace OMQ
+        const ConsumerCode = '%new-style
+namespace OMQ {
+    public class Consumer {
+        static int f() { return helper(3); }
+    }
+}
+';
+
+        #! the entry point of the per-file build
+        const MainCode = '%new-style
+int sub main() {
+    printf("deferred=%d\n", OMQ::Consumer::f());
+    return 0;
+}
+';
+
+        #! the error that names the function that is missing
+        const MissingError = "function 'Other::step' could not be resolved";
+
+        #! the optimization levels that the images are compiled at
+        const Levels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTScopedFunctionNoFallback", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("an executable compiled against a source module", \testExecutableSourceModule());
+        addTestCase("an executable compiled against a compiled module", \testExecutableCompiledModule());
+        addTestCase("a compiled module compiled against a compiled module", \testCompiledModule());
+        addTestCase("a call left to another source object", \testDeferredSourceCall());
+        set_return_value(main());
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    private string env(*string module_dirs) {
+        string dirs = module_dirs ?? "";
+        if (ENV.QORE_MODULE_DIR) {
+            dirs = dirs ? dirs + ":" + ENV.QORE_MODULE_DIR : ENV.QORE_MODULE_DIR;
+        }
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, dirs);
+    }
+
+    #! runs a command and returns its output and exit status
+    private hash<auto> run(string cmd) {
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        return {"out": out, "rc": rc};
+    }
+
+    #! writes a module into a directory of its own
+    private string writeModule(string dir, string name, string source) {
+        mkdir(dir);
+        string path = dir + DirSep + name + ".qm";
+        write(path, source);
+        return path;
+    }
+
+    #! compiles a module into an image in its directory and removes its source
+    private compileModule(string src, string opt, *string module_dirs) {
+        string qmod = src.substr(0, -3) + ".qmod";
+        hash<auto> r = run(sprintf("%s %s --module %s -o %s %s", env(module_dirs), qcc_bin, opt, qmod, src));
+        assertTrue(is_file(qmod), "qcc " + opt + " compiled " + basename(src) + ": " + r.out);
+        # only the image can satisfy the module requirement
+        unlink(src);
+    }
+
+    #! compiles an executable against the module directories given
+    private string compileExecutable(string dir, string name, string opt, string module_dirs) {
+        string src = dir + DirSep + name + ".qr";
+        write(src, Script);
+        string exe = dir + DirSep + name;
+        hash<auto> r = run(sprintf("%s %s %s -o %s %s", env(module_dirs), qcc_bin, opt, exe, src));
+        assertTrue(is_file(exe), "qcc " + opt + " compiled the executable: " + r.out);
+        return exe;
+    }
+
+    #! checks that an image runs the function of the namespace with the module it was compiled against
+    private checkCompiledAgainst(hash<auto> r, string expected, string label) {
+        assertEq(0, r.rc, label + ": " + r.out);
+        assertEq(expected + "\n", r.out, label);
+    }
+
+    #! checks that an image fails with a module without the function, and does not run another one
+    private checkMissing(hash<auto> r, string wrong, string label) {
+        assertNeq(0, r.rc, label + " fails: " + r.out);
+        assertEq(-1, r.out.find(wrong), label + " does not run the function of the root namespace: " + r.out);
+        assertNeq(-1, r.out.find(MissingError), label + " names the missing function: " + r.out);
+    }
+
+    testExecutableSourceModule() {
+        TmpDir tmp("qore-aot-scoped-fn-src-");
+        string v1 = tmp.path + DirSep + "v1";
+        string v2 = tmp.path + DirSep + "v2";
+        writeModule(v1, "NsMod", ModuleV1);
+        writeModule(v2, "NsMod", ModuleV2);
+        foreach string opt in (Levels) {
+            string exe = compileExecutable(tmp.path, "exe" + opt, opt, v1);
+            checkCompiledAgainst(run(sprintf("%s %s", env(v1), exe)), "call: 20", opt + " with v1");
+            checkMissing(run(sprintf("%s %s", env(v2), exe)), "call: 3", opt + " with v2");
+        }
+    }
+
+    testExecutableCompiledModule() {
+        TmpDir tmp("qore-aot-scoped-fn-qmod-");
+        foreach string opt in (Levels) {
+            string base = tmp.path + DirSep + opt.substr(1);
+            mkdir(base);
+            string v1 = base + DirSep + "v1";
+            string v2 = base + DirSep + "v2";
+            compileModule(writeModule(v1, "NsMod", ModuleV1), opt);
+            compileModule(writeModule(v2, "NsMod", ModuleV2), opt);
+            string exe = compileExecutable(base, "exe", opt, v1);
+            checkCompiledAgainst(run(sprintf("%s %s", env(v1), exe)), "call: 20", opt + " with v1");
+            checkMissing(run(sprintf("%s %s", env(v2), exe)), "call: 3", opt + " with v2");
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-aot-scoped-fn-mod-");
+        foreach string opt in (Levels) {
+            string base = tmp.path + DirSep + opt.substr(1);
+            mkdir(base);
+            string v1 = base + DirSep + "v1";
+            string v2 = base + DirSep + "v2";
+            string use = base + DirSep + "use";
+            compileModule(writeModule(v1, "NsMod", ModuleV1), opt);
+            compileModule(writeModule(v2, "NsMod", ModuleV2), opt);
+            compileModule(writeModule(use, "UseMod", UseModule), opt, v1);
+            string script = base + DirSep + "use.qr";
+            write(script, UseScript);
+            checkCompiledAgainst(run(sprintf("%s %s %s", env(use + ":" + v1), qore_bin, script)), "mod: 20",
+                opt + " with v1");
+            checkMissing(run(sprintf("%s %s %s", env(use + ":" + v2), qore_bin, script)), "mod: 3",
+                opt + " with v2");
+        }
+    }
+
+    testDeferredSourceCall() {
+        TmpDir tmp("qore-aot-scoped-fn-deferred-");
+        string provider = tmp.path + DirSep + "provider.qc";
+        string consumer = tmp.path + DirSep + "consumer.qc";
+        string main = tmp.path + DirSep + "main.q";
+        write(provider, ProviderCode);
+        write(consumer, ConsumerCode);
+        write(main, MainCode);
+        # the manifest names the function with the namespace of the call, the provider declares it in the root
+        # namespace
+        string manifest = tmp.path + DirSep + "symbols.manifest";
+        write(manifest, sprintf("format=1\nfunction\tOMQ::helper\t%s\n", provider));
+        foreach string opt in (Levels) {
+            string lib = tmp.path + DirSep + "lib" + opt;
+            mkdir(lib);
+            hash<auto> r = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/provider.qo %s", env(),
+                qcc_bin, lib, lib, provider));
+            assertTrue(is_file(lib + "/provider.qo"), "compiled the provider: " + r.out);
+            r = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --source-symbol-manifest=%s -o "
+                "%s/consumer.qo %s", env(), qcc_bin, lib, manifest, lib, consumer));
+            assertTrue(is_file(lib + "/consumer.qo"), "compiled the consumer: " + r.out);
+            # the consumer's object names the function as the manifest does
+            assertNeq(-1, make_hex_string(ReadOnlyFile::readBinaryFile(lib + "/consumer.qo"))
+                .find(make_hex_string(binary("OMQ::helper"))), "the deferred call is named OMQ::helper");
+            r = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/main.qo %s", env(), qcc_bin, lib, lib,
+                main));
+            assertTrue(is_file(lib + "/main.qo"), "compiled the entry point: " + r.out);
+            string exe = tmp.path + DirSep + "deferred" + opt;
+            r = run(sprintf("%s %s %s -o %s %s/*.qo", env(), qcc_bin, opt, exe, lib));
+            assertTrue(is_file(exe), "linked the executable " + opt + ": " + r.out);
+            checkCompiledAgainst(run(sprintf("%s %s", env(), exe)), "deferred=21", opt);
+        }
+    }
+}
