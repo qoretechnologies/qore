@@ -1419,10 +1419,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
-    // the location of the closure (see v26), which its signature gets: two lines, the offset and two string refs
+    // the location of the closure (see v26), which its signature gets: two lines, the offset and two string refs,
+    // followed by the return type, which the size check above counted before the location was added
     const QoreProgramLocation* closure_loc = nullptr;
     if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
-        if (!have(2 * qore_aot_line_size(ctx.reader) + 8 + 8)) {
+        if (!have(2 * qore_aot_line_size(ctx.reader) + 8 + 8 + 4)) {
             return fail("location");
         }
         closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
