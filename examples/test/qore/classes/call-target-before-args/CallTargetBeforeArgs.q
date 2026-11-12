@@ -26,6 +26,17 @@ class A {
     }
 }
 
+#! a declared string that can have no value
+hashdecl StringField {
+    string a;
+}
+
+class StringMember {
+    public {
+        string m;
+    }
+}
+
 class Sub inherits C {
 }
 
@@ -179,6 +190,15 @@ sub cases() {
     check("valid call reference", sub () { C o(); code r = \o.m(); r(new A()); });
     check("valid method call", sub () { C o(); o.m(new A()); });
     check("existing pseudo-method", sub () { string s = "abc"; printf("  %y\n", s.substr(arg_value())); });
+    # a value declared string can have no value: the "<nothing>" pseudo-class has no such method
+    check("pseudo-method on an unassigned string", sub () { string s; s.substr(arg_value()); });
+    check("pseudo-method on an unassigned member", sub () { StringMember o(); o.m.substr(arg_value()); });
+    check("pseudo-method on an unassigned hash member", sub () {
+        hash<StringField> h();
+        h.a.substr(arg_value());
+    });
+    # the result of a call with a return type that excludes no value
+    check("pseudo-method on a call result", sub () { printf("  %y\n", "ABC".lwr().substr(arg_value())); });
     check("hash member call reference", sub () {
         hash<auto> h = {"f": sub (auto a) { printf("  closure called\n"); }};
         h.f(new A());

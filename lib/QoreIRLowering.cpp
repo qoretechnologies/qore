@@ -13197,9 +13197,32 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // (issue #5784); a pseudo-method resolved at parse time is checked only for a receiver with no value
     // (qore_check_method_call_receiver()), so a receiver whose type excludes no value needs no check (and the call
     // stays fused with the operation that gives its receiver, as value.lwr().contains(...))
-    const QoreTypeInfo* pseudo_receiver_type = m && m->isPseudo() && m->getMethod() ? m->getSourceType() : nullptr;
-    bool pseudo_receiver_has_value = pseudo_receiver_type && QoreTypeInfo::hasType(pseudo_receiver_type)
-        && QoreTypeInfo::parseReturns(pseudo_receiver_type, NT_NOTHING) == QTI_NOT_EQUAL;
+    // the declared type is not enough: a value of a type that excludes no value can still have none (an unassigned
+    // local or member declared "string"); the parse analysis of the receiver tells that it has one, as for the
+    // string case transform of a switch statement
+    bool pseudo_receiver_has_value = false;
+    if (m && m->isPseudo() && m->getMethod()) {
+        QoreParseAnalysis receiver_analysis;
+        if (getAnalysis(op->getExpression(), receiver_analysis)) {
+            const QoreTypeInfo* receiver_type = receiver_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                ? selectAnalysisType(receiver_analysis) : nullptr;
+            pseudo_receiver_has_value = receiver_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || (receiver_type && receiver_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                    && QoreTypeInfo::hasType(receiver_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING));
+        }
+        // the result of a call has the call's return type, which is enforced when the call returns: a return type
+        // that excludes no value gives a value (value.lwr().contains(...))
+        if (!pseudo_receiver_has_value) {
+            const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
+            const QoreTypeInfo* receiver_type = m->getSourceType();
+            pseudo_receiver_has_value = receiver
+                && (dynamic_cast<const QoreDotEvalOperatorNode*>(receiver)
+                    || dynamic_cast<const AbstractFunctionCallNode*>(receiver))
+                && QoreTypeInfo::hasType(receiver_type)
+                && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
+        }
+    }
     if (m && !pseudo_receiver_has_value && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
         builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
     }

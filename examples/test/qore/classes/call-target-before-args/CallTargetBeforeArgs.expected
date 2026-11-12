@@ -64,6 +64,15 @@ valid method call:
 existing pseudo-method:
   arg function called
   "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
+  arg function called
+  "bc"
 hash member call reference:
   arg evaluated
   closure called
@@ -134,6 +143,15 @@ valid method call:
 existing pseudo-method:
   arg function called
   "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
+  arg function called
+  "bc"
 hash member call reference:
   arg evaluated
   closure called
@@ -202,6 +220,15 @@ valid method call:
   C::m() called
   arg destroyed
 existing pseudo-method:
+  arg function called
+  "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
   arg function called
   "bc"
 hash member call reference:
