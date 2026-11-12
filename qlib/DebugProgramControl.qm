@@ -559,7 +559,6 @@ public namespace DebugProgramControl {
         */
         public terminateProgram(ProgramControl pgm) {
             int pgm_id = pgm.getProgramId();
-            list<int> stopped = ();
             {
                 AutoLock al(startedLock);
                 terminatingPrograms{pgm_id} = True;
@@ -574,22 +573,24 @@ public namespace DebugProgramControl {
                 on_exit rwlThread.writeUnlock();
                 foreach hash<auto> i in (ctxThread.pairIterator()) {
                     if (i.value.pgmId == pgm_id) {
-                        push stopped, int(i.key);
                         # it runs, so that it leaves the program as a thread that is debugged (the detach is
                         # reported), also from the stop at the start of the program, where it was not yet debugged
                         # the command itself tells the thread to end: the mark of the program is gone if debugging
-                        # ends before the thread continues, and the thread is not cancelled (see handleInterrupt())
+                        # ends before the thread continues (see handleInterrupt())
                         i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
                     }
                 }
             }
-            # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
-            # debugger; it ends when it continues (see handleInterrupt()); the lock makes checking and cancelling a
-            # thread atomic against a thread that ends its code (see threadEnds())
+            # a thread that is stopped is cancelled too, so that its end is sticky: the debugger's callbacks run with
+            # the cancellation deferred (qore#5794), so its stop is not ended by the cancellation but by the command
+            # above, with THREAD-CANCELLED, and a try statement of the program that catches that exception, or the
+            # exception that the thread was stopped at, does not keep the thread running: the next cancellation point
+            # raises the cancellation again (qore#5797); the lock makes checking and cancelling a thread atomic against
+            # a thread that ends its code (see threadEnds())
             {
                 AutoLock al(startedLock);
                 foreach int tid in (pgm.getThreadList()) {
-                    if (tid == gettid() || inlist(tid, stopped) || endedThreads{pgm_id}{tid}) {
+                    if (tid == gettid() || endedThreads{pgm_id}{tid}) {
                         continue;
                     }
                     try {
@@ -2904,9 +2905,9 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
-            # a thread of a program that the debugger ends ends, unless it ends anyway; a thread that was stopped then
-            # has not been cancelled, so it must end here also if its program is no longer debugged, or nothing would
-            # end it
+            # a thread of a program that the debugger ends ends, unless it ends anyway, also if its program is no longer
+            # debugged; terminateProgram() has cancelled it as well, so that a try statement of the program that catches
+            # the exception does not keep it running (qore#5797)
             if (!ends && (terminated || isTerminating(ctx.pgmId))) {
                 throw "THREAD-CANCELLED", TerminateReason;
             }
