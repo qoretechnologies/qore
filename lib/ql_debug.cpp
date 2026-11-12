@@ -17332,8 +17332,14 @@ static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
     {
         auto closure = [&](bool bad_default) {
             Bytes e;
-            e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str).u32(str).u16(1)
-                .u32(str).u32(str).u8(1);
+            // flags and class type
+            e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str);
+            // the location of the closure (format version 26: QORE_AOT_SOURCE_LOCATIONS_VERSION): none (lines 0)
+            if (a.r.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                e.u32(0).u32(0).i64(0).u32(str).u32(str);
+            }
+            // return type, one parameter with a default
+            e.u32(str).u16(1).u32(str).u32(str).u8(1);
             if (bad_default) {
                 e.tag(QoreAOTValueTag::VT_LIST).plain().u32(2).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3)
                     .u32(bad_offset);
