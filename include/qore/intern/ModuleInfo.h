@@ -722,27 +722,6 @@ public:
         return i == map.end() ? nullptr : i->second;
     }
 
-    //! Import a module's namespace into a program without acquiring the lock
-    /** This is for use by AOT runtime code that is called from within a locked context
-        (e.g., qore_aot_module_init called from loadBinaryModuleFromDesc).
-        @param name the module name to import
-        @param pgm the target QoreProgram
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink);
-
-    //! Import a module's namespace into a program (locked version)
-    /** @param name the module feature name
-        @param pgm the target QoreProgram
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int importModuleNS(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
-        AutoLocker al(mutex);
-        return importModuleNSUnlocked(name, pgm, xsink);
-    }
-
     //! Loads a module for a parse directive (\c %%requires or \c %%try-module) of \a pgm
     /** The warnings of the module loader for the module and the modules loaded with it are warnings of the parse
         action of \a pgm (see qore_report_module_load_warning() in ModuleManager.cpp).
@@ -884,18 +863,31 @@ public:
     /** User modules are deleted in dependency order at shutdown (see delUser()), so a module is deleted only after
         every user module that loaded it.
 
+        The mutex must be held.
+
         @param mi the module loaded
     */
     DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi);
+
+    //! Calls trySetUserModuleDependency() with the mutex locked; the mutex must not be held
+    /** For QoreAbstractModule::addToProgramImpl(), which runs without the mutex: a module is applied to a Program with
+        the mutex released, as its namespace initialization can run code that loads modules (see
+        qore_check_load_module_intern())
+    */
+    DLLLOCAL void trySetUserModuleDependencyLocked(const QoreAbstractModule* mi) {
+        AutoLocker al(mutex);
+        trySetUserModuleDependency(mi);
+    }
 
     //! Returns true if the module named \a name in the current module context is a user module
     /** Binary modules (including AOT modules) are not deleted by delUser(), so a dependency on one of them would
         never be released.  A user module is not in the module map while its source is parsed, which is when it
         loads the modules it requires; it is then the module of the user module definition context of the thread.
 
+        The mutex must be held.
+
         @param name the name of the module in the current module context
-    */
-    /** @param binary_context true if the context of a binary module (QMRL_BINARY) counts: for the binary modules
+        @param binary_context true if the context of a binary module (QMRL_BINARY) counts: for the binary modules
         that it requires, which are recorded for a binary module as for a user module
     */
     DLLLOCAL bool isUserModuleContext(const char* name, bool binary_context = false);
@@ -905,9 +897,20 @@ public:
         requires it can hold objects of its classes, so a user module whose deletion is deferred to cleanup() is
         deleted before the binary modules it requires (see delUser() and cleanup())
 
+        The mutex must be held.
+
         @param name the name of the binary module imported
     */
     DLLLOCAL void trySetUserBinaryModuleDependency(const char* name);
+
+    //! Calls trySetUserBinaryModuleDependency() with the mutex locked; the mutex must not be held
+    /** For QoreBuiltinModule::addToProgramImpl(), which runs without the mutex (see
+        trySetUserModuleDependencyLocked())
+    */
+    DLLLOCAL void trySetUserBinaryModuleDependencyLocked(const char* name) {
+        AutoLocker al(mutex);
+        trySetUserBinaryModuleDependency(name);
+    }
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);

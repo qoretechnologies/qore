@@ -13491,10 +13491,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // the binary modules, which are released if the initialization fails (#5953)
     QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink, QMRL_BINARY);
     {
-        // Strip %requires directives from embedded source to avoid deadlock.
-        // The module manager holds a lock when calling this init function, and
-        // parsing %requires would try to acquire the same lock.
-        // Note: We've already imported the dependency namespaces above.
+        // Strip %requires directives from the embedded source: the dependencies were loaded and their namespaces
+        // imported above.  This init function runs without the module manager's mutex (loadBinaryModuleFromDesc()
+        // releases it for the module's initialization), but the module's load is still in progress, so a %requires
+        // of a module that requires this one would wait for it.
         std::string stripped_src = stripRequiresDirectives(source, source_len, local_pgm);
 
         printd(2, "AOT module '%s': source_len=%d stripped_len=%d deps=%d\n",
