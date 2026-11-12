@@ -2776,6 +2776,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
+    // the object of the calls through self (issue #5823)
+    if (sig) {
+        lowering.setSelfLocal(sig->selfid);
+    }
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (q_env_is_set("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());

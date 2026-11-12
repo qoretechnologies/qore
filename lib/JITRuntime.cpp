@@ -1753,6 +1753,13 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
     if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         return dot->checkReceiver(target, xsink);
     }
+    if (const SelfFunctionCallNode* self_call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        // an unqualified call to a method: its object is self (issue #5823)
+        return target.getType() == NT_OBJECT
+            ? self_call->checkObject(const_cast<QoreObject*>(target.get<const QoreObject>()), self_call->getName(),
+                xsink)
+            : 0;
+    }
     if (const CallReferenceCallNode* call_node = dynamic_cast<const CallReferenceCallNode*>(node)) {
         // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
         // arguments are evaluated
@@ -13135,6 +13142,12 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
     }
 
     if (target.self_ns_single) {
+        // as AbstractMethodCallNode::exec(), which SelfFunctionCallNode::evalImpl() calls: an object that has been
+        // deleted raises the error of the call, which names the variant resolved at parse time (issue #5823)
+        if (!self->isValid()) {
+            qore_raise_deleted_method_call(xsink, self, method_name, target.qc, method, target.variant);
+            return toBits(QoreValue());
+        }
         // Match SelfFunctionCallNode::evalImpl(): unqualified self calls are virtual, so unless the object's class
         // is the parse-time class (or the method's), the method is resolved by name on the object's class
         if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {

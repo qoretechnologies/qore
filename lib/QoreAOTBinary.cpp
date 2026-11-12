@@ -11885,6 +11885,10 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self in a closure created in a method (issue #5823)
+    if (sig) {
+        lowering.setSelfLocal(sig->selfid);
+    }
     std::string error;
     if (!lowering.lowerStatementBlock(sb, error)) {
         printd(2, "AOT: closure IR lowering failed: %s\n", error.c_str());
@@ -13657,7 +13661,20 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 class_path = qore_aot_encode_class_ref(qc, mc->isPseudo());
             }
             writer.writeStringRef(class_path.c_str());
-            writer.writeStringRef(mc->getName() ? mc->getName() : "");
+            // the method name, followed by the variant resolved at parse time ("\n<variant class>\n<signature>"),
+            // so that the node read back is the node parsed: the messages of a call on an object that has been
+            // deleted name the variant (issue #5823)
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
+                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)
+                        ->getSignature()) {
+                    method_ref += "\n";
+                    method_ref += qore_aot_encode_class_ref(variant->getClass(), mc->isPseudo());
+                    method_ref += "\n";
+                    method_ref += sig->getSignatureText();
+                }
+            }
+            writer.writeStringRef(method_ref.c_str());
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),

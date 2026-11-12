@@ -4592,6 +4592,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
         // background helper parameter names are unique within the function the handler belongs to
         handler_lowering.bg_helper_count = bg_helper_count;
+        // the handler runs in the frame of the function: its calls through self are made on the same object
+        // (issue #5823)
+        handler_lowering.self_local = self_local;
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -4724,6 +4727,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
         // background helper parameter names are unique within the function the handler belongs to
         handler_lowering.bg_helper_count = bg_helper_count;
+        // the handler runs in the frame of the function: its calls through self are made on the same object
+        // (issue #5823)
+        handler_lowering.self_local = self_local;
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -12976,6 +12982,9 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         if (method && qc && qore_ir_method_target_is_final(qc, variant)
                 && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
                     variant, m->getParseArgs(), m->getArgs())) {
+            // the direct call does not check the object: it is checked before the arguments, as the AST interpreter
+            // checks it (issue #5823)
+            emitSelfCallTargetCheck(expr, QoreIRValue(), op->loc);
             std::vector<QoreIRValue> lowered_args;
             if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
                 if (!exception_stack.empty()) {
@@ -15275,6 +15284,21 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
 // QoreIRInlineStateClaim in QoreIR.h), so a value written at lowering time would never be
 // read; the interpreter resolves the same values from the variant on first execution.
 
+void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, QoreIRValue self_val,
+        const QoreProgramLocation* loc) {
+    if (!self_val.isValid()) {
+        if (!self_local) {
+            // code without a self local (a closure, for example) keeps the check made by the call
+            return;
+        }
+        QoreIRLocalInstruction* load = self_local->closureUse()
+            ? builder.createLoadClosure(self_local, loc)
+            : builder.createLoadLocal(self_local, loc);
+        self_val = load->result;
+    }
+    builder.createCheckCallTarget(call, self_val, getCurrentExceptionTarget(), loc);
+}
+
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const SelfFunctionCallNode*>(node);
@@ -15292,6 +15316,21 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     // a background expression calling a method of the object runs with the object in the new thread
     if (bg_helper && (!call->getMethod() || !call->getMethod()->isStatic())) {
         bg_helper->uses_self = true;
+    }
+    // the object is checked before the arguments, as the AST interpreter checks it (issue #5823): always for a direct
+    // call (see below), which does not check it, and for a call dispatched at run time when the arguments can show the
+    // order; a static method has no object, and copy() is not a method call
+    {
+        const QoreMethod* method = call->getMethod();
+        const QoreClass* qc = call->getClass();
+        bool direct = !call->hasExplicitTypeArgs() && method && qc
+            && qore_ir_method_target_is_final(qc, call->getVariant())
+            && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
+                call->getVariant(), call->getParseArgs(), call->getArgs());
+        if ((!method || !method->isStatic()) && !call->isCopyCall()
+                && (direct || callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs()))) {
+            emitSelfCallTargetCheck(expr, QoreIRValue(), call->loc);
+        }
     }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {

@@ -3219,11 +3219,14 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     const char* method_name_ref = ctx.reader.readStringRef(ctx.ptr);
     std::string method_name_storage;
     const char* method_name = method_name_ref;
+    // the variant resolved at parse time ("<variant class>\n<signature>"), if any (issue #5823)
+    const char* variant_ref = nullptr;
     if (method_name_ref) {
         const char* sig_sep = strchr(method_name_ref, '\n');
         if (sig_sep) {
             method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
             method_name = method_name_storage.c_str();
+            variant_ref = sig_sep + 1;
         }
     }
     uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -3296,6 +3299,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         mc->parseSetClassAndMethod(resolved_qc, resolved_m);
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
+        }
+        if (const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
+                method_name, variant_ref, is_pseudo != 0)) {
+            mc->setVariant(variant);
         }
     }
     mc->resolveParseArgs();

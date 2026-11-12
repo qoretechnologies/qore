@@ -565,6 +565,29 @@ private:
     //! Returns true if evaluating an argument of a call can have an effect that the order of evaluation can show
     //! (issue #5784); conservative: only a value and a read of a local variable have none
     bool callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+
+public:
+    //! Gives the "self" local of the method lowered, the object that a call through self or an unqualified call to a
+    //! method is made on; null (the default) for code without one
+    void setSelfLocal(LocalVar* n_self_local) {
+        self_local = n_self_local;
+    }
+
+private:
+    //! the "self" local of the method lowered, if any (see setSelfLocal())
+    LocalVar* self_local = nullptr;
+
+    //! Emits the check of the object of a call through self (issue #5823), before the arguments are evaluated
+    /** The direct calls of a method of a final class or of a final method on self (CallMethodDirect,
+        InvokeMethodDirect) call the method without checking the object, so they are always checked; a call that is
+        dispatched at run time checks the object itself, after its arguments, so it is checked here only when the
+        arguments can show the order (callArgsMayHaveSideEffects()).
+
+        @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param self_val the object, if already loaded; otherwise the self local is loaded, if known
+        @param loc the location of the call
+    */
+    void emitSelfCallTargetCheck(const QoreValue& call, QoreIRValue self_val, const QoreProgramLocation* loc);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
