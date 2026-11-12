@@ -3023,8 +3023,7 @@ ws.setEventQueue();
         5.5.1)
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
-        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
-        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
         \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(string str) {
@@ -3051,8 +3050,7 @@ ws.setEventQueue();
         5.5.1)
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
-        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
-        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
         \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(binary bin) {
@@ -3076,8 +3074,7 @@ ws.setEventQueue();
         5.5.1)
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
-        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
-        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
         \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(data msg, int op, bool fin) {

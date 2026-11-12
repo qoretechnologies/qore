@@ -415,6 +415,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         response can still be read with @ref readData()
         @throw QUIC-STREAM-RESET if the server reset the stream or stopped reading it with an error; every later send
         raises it again
+        @throw HTTP3-FLOW-CONTROL if the stream's send buffer did not drain in time: when the server has not granted
+        the flow-control credit for the data staged, the send waits for it for the request timeout (twice the connect
+        timeout without one); the data was not sent
+
+        @note a send waits while the stream's send buffer is full, so it must not be called on the I/O thread of the
+        async I/O controller, nor in the \c continuePoll() of a poll operation that the controller runs
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -480,14 +486,19 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         try {
             if (trailers) {
                 if (data) {
-                    h3conn.sendStreamData(sid, data, False);
+                    h3conn.sendStreamData(sid, data, False, getConnectWait());
                 }
                 h3conn.sendTrailers(sid, trailers);
                 return;
             }
             # a half-close on a stream the server has already closed is a no-op in sendStreamData()
-            h3conn.sendStreamData(sid, data, end_stream);
+            h3conn.sendStreamData(sid, data, end_stream, getConnectWait());
         } catch (hash<ExceptionInfo> ex) {
+            # data that was not sent leaves the trailers to the send that is made again
+            if (trailers && ex.err == "HTTP3-FLOW-CONTROL") {
+                AutoLock al(lock);
+                send_trailers = trailers;
+            }
             if (ex.err == "QUIC-STREAM-CLOSED") {
                 throw "HTTPCLIENT-STREAM-CLOSED", sprintf("cannot send data: stream %d was closed by the server",
                     sid);

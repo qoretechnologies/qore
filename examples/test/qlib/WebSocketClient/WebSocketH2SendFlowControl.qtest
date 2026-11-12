@@ -85,12 +85,24 @@ class TestConnection inherits WebSocketConnection {
 }
 
 class TestHandler inherits WebSocketHandler {
-    public {
-        Queue events();
+    private {
+        #! the events of each connection, by the path of its request: each case connects to a path of its own, so
+        #! that an event of an earlier case's connection (its close, reported after the case ended) is not this
+        #! case's
+        hash<string, Queue> events;
+        Mutex lck();
+    }
+
+    #! Returns the events of the connections to the given path
+    Queue getEvents(string path) {
+        # the path of the request, without its leading "/"
+        path =~ s/^\/+//;
+        AutoLock al(lck);
+        return events{path} ?? (events{path} = new Queue());
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        return new TestConnection(self, events);
+        return new TestConnection(self, getEvents(hdr.path ?? "/"));
     }
 }
 
@@ -99,6 +111,8 @@ class WebSocketH2SendFlowControlTest inherits QUnit::Test {
         HttpServer server;
         TestHandler handler();
         int port;
+        #! numbers the cases' paths
+        int case_count = 0;
     }
 
     constructor() : QUnit::Test("WebSocketH2SendFlowControl", "1.0") {
@@ -143,8 +157,9 @@ class WebSocketH2SendFlowControlTest inherits QUnit::Test {
         frame are sent before the connection ends
     */
     testSends(string ver, bool disconnect) {
-        handler.events.clear();
-        WebSocketClient wsc = connect(ver);
+        string path = getPath(ver);
+        Queue events = handler.getEvents(path);
+        WebSocketClient wsc = connect(ver, path);
         on_exit {
             try {
                 wsc.disconnect();
@@ -158,19 +173,20 @@ class WebSocketH2SendFlowControlTest inherits QUnit::Test {
             wsc.disconnect();
         }
         for (int i = 0; i < Count; ++i) {
-            hash<auto> e = handler.events.get(HangGuard);
+            hash<auto> e = events.get(HangGuard);
             assertEq({"size": Size, "first": i, "last": i}, e, sprintf("message %d arrives whole and in order", i));
         }
         if (disconnect) {
-            hash<auto> e = handler.events.get(HangGuard);
+            hash<auto> e = events.get(HangGuard);
             assertEq({"closed": WSCC_GoingAway}, e, "the client's close frame reaches the server");
         }
     }
 
     #! Sends a message in fragments that are each larger than the stream's send buffer
     testFragments(string ver) {
-        handler.events.clear();
-        WebSocketClient wsc = connect(ver);
+        string path = getPath(ver);
+        Queue events = handler.getEvents(path);
+        WebSocketClient wsc = connect(ver, path);
         on_exit {
             try {
                 wsc.disconnect();
@@ -180,7 +196,7 @@ class WebSocketH2SendFlowControlTest inherits QUnit::Test {
         wsc.send(message(1, Size), WSOP_Binary, False);
         wsc.send(message(2, Size), WSOP_Continuation, False);
         wsc.send(message(3, Size), WSOP_Continuation, True);
-        hash<auto> e = handler.events.get(HangGuard);
+        hash<auto> e = events.get(HangGuard);
         assertEq({"size": 3 * Size, "first": 1, "last": 3}, e, "the message arrives whole");
     }
 
@@ -331,11 +347,19 @@ class WebSocketH2SendFlowControlTest inherits QUnit::Test {
 %endif
 
     #! Returns a connected client
-    private WebSocketClient connect(string ver) {
+    #! Returns a path of the case's own: see TestHandler::getEvents()
+    private string getPath(string ver) {
+        return sprintf("case-%s-%d", ver, ++case_count);
+    }
+
+    private WebSocketClient connect(string ver, string path) {
         WebSocketClient wsc(sub (*data msg) {}, {
-            "url": sprintf("wss://localhost:%d", port),
+            "url": sprintf("wss://localhost:%d/%s", port, path),
             "http_version": ver,
             "ssl_verify_cert": False,
+            # a send waits for flow-control credit at most the client's timeout: a hang guard only, so that a loaded
+            # host that drains the 24 MiB slowly does not fail the case (the default timeout is 15 s)
+            "timeout": HangGuard,
         });
         wsc.connect();
         return wsc;
