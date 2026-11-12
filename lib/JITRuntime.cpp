@@ -186,6 +186,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
+    { "qore_rt_call_target_is_valid_object", reinterpret_cast<void*>(&qore_rt_call_target_is_valid_object) },
+    { "qore_rt_call_target_needs_no_check", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check) },
+    { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
+    { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
+    { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -1643,6 +1648,167 @@ static QoreValue qore_rt_accept_return_statement_nothing(const QoreTypeInfo* ti,
 */
 extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSink* xsink) {
     qore_rt_accept_return_statement_nothing(ti, xsink).discard(xsink);
+}
+
+//! Returns true if @a target is an object that has not been deleted (issue #5784)
+static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT && static_cast<const QoreObject*>(n)->isValid();
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_is_valid_object(uint64_t target_bits) {
+    QoreValue target = fromBits(target_bits);
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT && qore_object_private::isValidInline(static_cast<const QoreObject*>(n));
+}
+
+// the fields read by the JIT's inline test for a valid object (QoreJITObjectLayout): a plain 32-bit load of the
+// status must see what QoreObject::isValid() sees, and a deleted object's type must fit the 11-bit field
+static_assert(std::is_same<decltype(qore_object_private::status), std::atomic<int>>::value,
+    "the JIT's inline test of an object's status reads a std::atomic<int>");
+static_assert(sizeof(std::atomic<int>) == sizeof(int32_t) && std::atomic<int>::is_always_lock_free,
+    "the JIT's inline test of an object's status reads it as a lock-free 32-bit int");
+static_assert(NT_OBJECT > 0 && NT_OBJECT < (1 << 10), "the JIT's inline test reads the type as an 11-bit field");
+
+//! Finds the position of the type bitfield of an AbstractQoreNode in its storage (see qore_jit_object_layout())
+/** Returns true if exactly one bit position gives the type of every node given.
+*/
+static bool qore_jit_find_type_bits(const std::vector<const AbstractQoreNode*>& nodes, uint32_t& byte_offset,
+        uint32_t& shift) {
+    constexpr size_t size = sizeof(AbstractQoreNode);
+    constexpr uint32_t mask = (1u << 11) - 1;
+    int found = -1;
+    for (size_t bit = 0; bit + 11 <= size * 8; ++bit) {
+        size_t byte = bit / 8;
+        if (byte + sizeof(uint32_t) > size) {
+            break;
+        }
+        bool match = true;
+        for (const AbstractQoreNode* n : nodes) {
+            uint8_t bytes[sizeof(uint32_t)];
+            std::memcpy(bytes, reinterpret_cast<const unsigned char*>(n) + byte, sizeof(bytes));
+            // little-endian, as the JIT code loads it
+            uint32_t word = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8)
+                | (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
+            if (((word >> (bit % 8)) & mask) != static_cast<uint32_t>(n->getType())) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            if (found >= 0) {
+                // more than one position: not known
+                return false;
+            }
+            found = static_cast<int>(bit);
+        }
+    }
+    if (found < 0) {
+        return false;
+    }
+    byte_offset = static_cast<uint32_t>(found / 8);
+    shift = static_cast<uint32_t>(found % 8);
+    return true;
+}
+
+//! Returns the layout read by JIT code, computed once (see qore_jit_object_layout())
+static std::unique_ptr<QoreJITObjectLayout> qore_jit_compute_object_layout() {
+    // the JIT code loads the type's word as little-endian
+    uint16_t endian_probe = 1;
+    uint8_t endian_byte;
+    std::memcpy(&endian_byte, &endian_probe, 1);
+    if (endian_byte != 1) {
+        return nullptr;
+    }
+    // nodes of several types whose values tell every position apart: 3 (string), 4 (date), 7 (binary), 8 (list),
+    // 9 (hash), 11 (number)
+    ExceptionSink xsink;
+    ReferenceHolder<QoreStringNode> str(new QoreStringNode, &xsink);
+    ReferenceHolder<DateTimeNode> date(DateTimeNode::makeAbsolute(nullptr, (int64)0), &xsink);
+    ReferenceHolder<BinaryNode> bin(new BinaryNode, &xsink);
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreNumberNode> num(new QoreNumberNode, &xsink);
+    std::vector<const AbstractQoreNode*> nodes = {*str, *date, *bin, *list, *hash, *num};
+    std::unique_ptr<QoreJITObjectLayout> layout(new QoreJITObjectLayout);
+    if (!qore_jit_find_type_bits(nodes, layout->type_byte_offset, layout->type_shift)) {
+        return nullptr;
+    }
+    layout->priv_offset = qore_object_private::getPrivOffset();
+    layout->status_offset = qore_object_private::getStatusOffset();
+    layout->deleted_status = OS_DELETED;
+    return layout;
+}
+
+const QoreJITObjectLayout* qore_jit_object_layout() {
+    static std::unique_ptr<QoreJITObjectLayout> layout = qore_jit_compute_object_layout();
+    return layout.get();
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits) {
+    return qore_call_target_needs_no_check(fromBits(call_bits), fromBits(target_bits));
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t target_bits) {
+    // a slot without an expression is a direct method call (AOTExprKind::DOT_EVAL_TARGET)
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        return qore_call_target_is_valid_object(fromBits(target_bits));
+    }
+    return qore_call_target_needs_no_check(fromBits(ctx->exprs[slot]), fromBits(target_bits));
+}
+
+int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
+    // the common case first: see qore_call_target_needs_no_check()
+    if (qore_call_target_needs_no_check(call, target)) {
+        return 0;
+    }
+    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        return dot->checkReceiver(target, xsink);
+    }
+    if (const CallReferenceCallNode* call_node = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
+        // arguments are evaluated
+        const ResolvedCallReferenceNode* r = target.hasNode()
+            ? dynamic_cast<const ResolvedCallReferenceNode*>(target.getInternalNode()) : nullptr;
+        if (!r) {
+            qore_raise_not_call_reference(xsink, call_node->loc, target);
+            return -1;
+        }
+        return qore_call_reference_check_target(r, xsink);
+    }
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
+    qore_check_call_target(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
+        ExceptionSink* xsink) {
+    // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET), not its
+    // expression: the check is made from the target
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        // the common case first: a method call on an object that has not been deleted has nothing to check
+        if (qore_call_target_is_valid_object(fromBits(target_bits))) {
+            return;
+        }
+        const QoreAOTCallTarget& target = ctx->call_targets[slot];
+        const char* name = target.method ? target.method->getName() : target.method_name;
+        if (name) {
+            qore_check_method_call_receiver(fromBits(target_bits), name, target.qc, target.method, target.variant,
+                target.is_pseudo, xsink);
+        }
+        return;
+    }
+    qore_rt_check_call_target(ctx->exprs[slot], target_bits, xsink);
 }
 
 //! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
@@ -8544,7 +8710,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8588,7 +8755,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         return toBits(result);
     }
 
-    xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+    // as the AST interpreter raises it (issue #5784)
+    qore_raise_not_call_reference(xsink, nullptr, ref_val);
     return toBits(QoreValue());
 }
 
@@ -8599,7 +8767,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8637,7 +8806,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8661,7 +8831,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8700,7 +8871,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -18780,8 +18952,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     if (!o->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-            "already been deleted", qc->getName(), method->getName());
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
         result = toBits(QoreValue());
         return true;
     }
@@ -18983,8 +19155,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     }
     if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
-            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-                "already been deleted", qc->getName(), method->getName());
+            // as the AST interpreter raises it (issue #5784)
+            qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
             return toBits(QoreValue());
         }
         // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list while still honoring the

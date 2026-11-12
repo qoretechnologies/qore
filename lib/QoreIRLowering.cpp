@@ -13436,6 +13436,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     if (!base_val.isValid()) {
         return QoreIRValue();
     }
+    // the receiver is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784)
+    if (m && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
+        builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
+    }
 
     // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
     // This handles both resolved methods (class+method set) and abstract/unresolved methods
@@ -14805,6 +14810,48 @@ bool QoreIRLowering::markReferenceArgumentAssignmentsUnknown(
     return true;
 }
 
+//! Returns true if no value of the type can be a reference (issue #5784)
+/** A type without a type (auto, any) can hold one, and so can a reference type (reference, *reference,
+    reference<T>, *reference<T>): each of their values is returned as one of the type's return specs.
+*/
+static bool qore_ir_type_cannot_hold_reference(const QoreTypeInfo* type) {
+    if (!QoreTypeInfo::hasType(type) || type == autoTypeInfo || type == anyTypeInfo) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        qore_type_t t = ret.spec.getType();
+        if (t == NT_REFERENCE || t == NT_ALL || ret.spec.getComplexReference()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const {
+    // every argument, in any order: named and mapped arguments are evaluated all the same
+    size_t count = parse_args ? parse_args->size() : (args ? args->size() : 0);
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue arg = parse_args ? parse_args->get(i) : args->retrieveEntry(i);
+        if (!arg.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = arg.getInternalNode();
+        if (!node || !node->needs_eval()) {
+            continue;
+        }
+        // a local variable whose declared type is a concrete type that cannot hold a reference is read without any
+        // effect; the read of a reference (a parameter declared as a reference, or a local of a type that can hold
+        // one, such as auto) gives the referenced value, which can run code (memberGate())
+        if (LocalVar* local = getLocalVarFromValue(arg)) {
+            if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
+                continue;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
     if (arg.isNothing()) {
         return true;
@@ -15439,6 +15486,13 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     QoreIRValue callee = lowerExpression(call->getExp(), error);
     if (!callee.isValid()) {
         return QoreIRValue();
+    }
+    // the callable is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784); a closure created by the call's own expression is always callable and has no object, so it is
+    // not checked (and stays an immediate closure whose only use is the call)
+    if (!dynamic_cast<const QoreClosureParseNode*>(call->getExp().getInternalNode())
+            && callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
+        builder.createCheckCallTarget(expr, callee, getCurrentExceptionTarget(), call->loc);
     }
     std::vector<QoreIRValue> operands;
     operands.push_back(callee);

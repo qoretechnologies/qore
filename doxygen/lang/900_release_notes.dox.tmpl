@@ -1654,6 +1654,10 @@
     - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
       context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
       \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
+    - in the IR, JIT and AOT @ref execution_modes "execution modes", a method call or a call through a method call
+      reference evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED for an object that had been
+      deleted, or \c PSEUDO-METHOD-DOES-NOT-EXIST for a value without the method; as in the AST interpreter, no
+      argument is evaluated then
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

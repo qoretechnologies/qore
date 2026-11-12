@@ -1,0 +1,210 @@
+round 0
+call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference of object:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference, function argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call of object:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call of auto:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+method call of subclass:
+  OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
+method call through weak reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+local try block:
+  local handler: OBJECT-ALREADY-DELETED
+call of an int:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+call of no value:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
+call reference, local argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call, local argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing, literal argument:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+valid call reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+valid method call:
+  arg evaluated
+  C::m() called
+  arg destroyed
+existing pseudo-method:
+  arg function called
+  "bc"
+hash member call reference:
+  arg evaluated
+  closure called
+  arg destroyed
+round 1
+call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference of object:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference, function argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call of object:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call of auto:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+method call of subclass:
+  OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
+method call through weak reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+local try block:
+  local handler: OBJECT-ALREADY-DELETED
+call of an int:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+call of no value:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
+call reference, local argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call, local argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing, literal argument:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+valid call reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+valid method call:
+  arg evaluated
+  C::m() called
+  arg destroyed
+existing pseudo-method:
+  arg function called
+  "bc"
+hash member call reference:
+  arg evaluated
+  closure called
+  arg destroyed
+round 2
+call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference of object:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference, function argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call of object:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call of auto:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+method call, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+method call of subclass:
+  OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
+method call through weak reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+returned call reference:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call reference from an immediate closure:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call of an int in map:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+local try block:
+  local handler: OBJECT-ALREADY-DELETED
+call of an int:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+call of no value:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
+call reference, local argument:
+  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method call, local argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call on nothing, literal argument:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::m() has been defined
+valid call reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
+valid method call:
+  arg evaluated
+  C::m() called
+  arg destroyed
+existing pseudo-method:
+  arg function called
+  "bc"
+hash member call reference:
+  arg evaluated
+  closure called
+  arg destroyed

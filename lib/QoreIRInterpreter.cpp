@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 430,
+static_assert(QORE_IR_MAX_OPCODE == 431,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -5384,8 +5384,8 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (!self->isValid()) {
-        qore_raise_deleted_object(xsink, 
-            "cannot call '%s()' on an object that has already been deleted", method_name);
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_deleted_method_call(xsink, self, method_name, inst->qc, inst->method, inst->variant);
         result = QoreValue();
         return true;
     }
@@ -10828,6 +10828,38 @@ load_local_done:
                         load_slot_registered[rid] = true;
                     }
                 }
+                if (local_inst->fused_call_target_check != QoreIRFusedCallTargetCheck::None) {
+                    // the CheckCallTarget of the loaded value follows: it is made here, and the operand bookkeeping
+                    // after the switch is the check's (qore_ir_fuse_call_target_checks(); issue #5784)
+                    assert(ip + 1 < block->instructions.size());
+                    QoreIRInstruction* check = block->instructions[ip + 1].get();
+                    assert(check->opcode == QoreIROpcode::CheckCallTarget && check->operands.size() == 1
+                        && check->operands.front().id == local_inst->result.id);
+                    inst = check;
+                    ++ip;
+                    const QoreValue& call = static_cast<const QoreIRExprInstruction*>(check)->expr;
+                    // the common case first, inline: a method call on an object that has not been deleted
+                    const AbstractQoreNode* target_node = out.isPointer() ? out.getPtr() : nullptr;
+                    if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::MethodCall
+                            && target_node && target_node->getType() == NT_OBJECT
+                            && qore_object_private::isValidInline(static_cast<const QoreObject*>(target_node))) {
+                        ++ip;
+                        break;
+                    }
+                    if (qore_check_call_target(call, out, xsink)) {
+                        if (check->exception_target) {
+                            // the handler is in this frame: only the raising statement's temps are dead there
+                            cleanupToTempScope(check->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = check->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
                 ++ip;
                 break;
             }
@@ -14827,6 +14859,28 @@ load_local_done:
                 // no exception check otherwise: the instruction also runs on the path of an exception, which stays
                 // raised; an exception raised by a destructor is added to it, and the CheckException that follows the
                 // releases of a statement's exit, as UninstantiateLocal, branches to the handler
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CheckCallTarget: {
+                // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
+                // it (issue #5784)
+                const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
+                // qore_check_call_target() decides the common case (a method call on an object that has not been
+                // deleted) first; testing it inline here measured the same
+                if (qore_check_call_target(ei->expr, getIRValue(values, inst->operands.front()), xsink)) {
+                    if (inst->exception_target) {
+                        // the handler is in this frame: only the raising statement's temps are dead there
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }

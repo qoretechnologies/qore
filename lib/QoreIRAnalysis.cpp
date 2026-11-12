@@ -2512,6 +2512,31 @@ bool QoreIRControlFlowGraph::dominates(size_t dominator, size_t block) const {
         && (dominators[block][dominator / 64] & (uint64_t(1) << (dominator % 64)));
 }
 
+size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
+    size_t count = 0;
+    for (auto& block : func.blocks) {
+        auto& insts = block->instructions;
+        for (size_t i = 0; i + 1 < insts.size(); ++i) {
+            QoreIRInstruction* load = insts[i].get();
+            const QoreIRInstruction* check = insts[i + 1].get();
+            load->fused_call_target_check = QoreIRFusedCallTargetCheck::None;
+            // the check runs in the load on the load's line: the interpreter sets the location of an exception from
+            // the first instruction of each line, so the location stays the same; the load has no operands, so the
+            // operand bookkeeping after the load is the check's
+            if (load->opcode == QoreIROpcode::LoadLocal && check->opcode == QoreIROpcode::CheckCallTarget
+                    && load->operands.empty() && load->result.isValid() && check->operands.size() == 1
+                    && check->operands.front().id == load->result.id
+                    && check->cached_start_line == load->cached_start_line) {
+                const QoreValue& call = static_cast<const QoreIRExprInstruction*>(check)->expr;
+                load->fused_call_target_check = call.isPointer() && call.getType() != NT_FUNCREFCALL
+                    ? QoreIRFusedCallTargetCheck::MethodCall : QoreIRFusedCallTargetCheck::Other;
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
     static const char* const operation = "IR reused call argument analysis";
     auto cancelled = [&]() -> bool {

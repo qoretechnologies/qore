@@ -53,6 +53,7 @@ class FunctionEntry;
 #include <llvm/IR/Module.h>
 
 class QoreIRFunction;
+struct QoreJITObjectLayout;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
@@ -1377,6 +1378,10 @@ private:
     // Phase 4: LLVM IR helper inlining helpers
     // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
     llvm::Value* hasNodeInline(llvm::Value* qv);
+
+    //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
+    //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node

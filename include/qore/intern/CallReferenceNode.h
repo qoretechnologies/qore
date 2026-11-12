@@ -384,6 +384,12 @@ class ImportedFunctionEntry;
 //! a run-time call reference to a method of a particular object
 class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const char* n_method);
 
@@ -427,6 +433,12 @@ private:
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
     //! creates the reference with the class context of the creating code
     DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const QoreMethod* n_method);
@@ -491,6 +503,19 @@ private:
     ResolvedCallReferenceNode::getProgram().  Returns nullptr for builtin code, which has no Program.
 */
 DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
+
+//! Raises the exception for a call of a value that is not a call reference or a closure, as the AST interpreter
+//! raises it (CallReferenceCallNode::evalImpl()); every execution mode uses it (issue #5784)
+/** @param loc the location of the call, if known
+*/
+DLLLOCAL void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v);
+
+//! Raises the exception that a call through @a rcr raises before it evaluates the arguments, if any (issue #5784)
+/** A reference to a method of an object that has been deleted.
+
+    @return -1 if the exception was raised, 0 if not
+*/
+DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink);
 
 //! Gets the parse options of the Program whose code a call reference runs (see qore_call_reference_code_program())
 /** The Program of a user function is the Program that defined it, which can have been deleted while a Program that

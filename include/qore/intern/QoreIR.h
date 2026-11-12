@@ -1021,7 +1021,15 @@ enum class QoreIROpcode : uint16_t {
     //! list expression are released before the body runs (qore#5770).
     IteratorCreateSource = 430,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (431, 432, ...)
+    /** Checks the target of a call before its arguments are evaluated, as the AST interpreter does (issue #5784)
+        operands[0] = the receiver of a method call or the callable of a call through a call reference; the
+        instruction's expression is the call.  Raises the exception that the call raises for the target before it
+        evaluates its arguments (an object that has been deleted, a value without the method), if any; lowered only
+        when an argument can have side effects, so that the order cannot be seen otherwise.  No result.
+    */
+    CheckCallTarget = 431,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (432, 433, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1030,8 +1038,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::IteratorCreateSource);
-static_assert(QORE_IR_MAX_OPCODE == 430, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
+static_assert(QORE_IR_MAX_OPCODE == 431, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -1321,6 +1329,13 @@ inline const char* qore_ir_cancel_point_operation(int64_t point) {
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
+//! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
+enum class QoreIRFusedCallTargetCheck : uint8_t {
+    None,           //!< no check
+    MethodCall,     //!< the call is a method call: a valid object needs no other check
+    Other,          //!< the call is a call through a call reference or of a value: always the full check
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1354,6 +1369,9 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
+    // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
+    // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
+    QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)
