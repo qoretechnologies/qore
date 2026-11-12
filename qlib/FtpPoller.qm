@@ -157,8 +157,10 @@ poller.waitStop();
     following parse options set:
     - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
       @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "sleep" option is required in
-      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
@@ -401,7 +403,7 @@ public class FtpPoller {
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
         - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
-        - \c sleep: (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
@@ -511,7 +513,7 @@ public class FtpPoller {
         - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
           thread ID (if not set then @ref background will be used)
-        - \c sleep: (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c tempfile_template: (used when \c local_dir and \c atomic_transfer are set) the temporary filename prefix

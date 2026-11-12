@@ -105,8 +105,10 @@ module FilePoller {
     the following parse options set:
     - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
       @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "sleep" option is required in
-      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 
     @section file_poller_relnotes FilePoller Release Notes
 
@@ -333,7 +335,7 @@ public class FilePoller {
           \c poll_inteval is 10 seconds
         - \c "reopt": regular expression options; see @ref regex_constants for possible values (ex
           @ref Qore::RE_Caseless for case-insensitive matches)
-        - \c "sleep": (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c "sleep": (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c "sort_order": an integer constant giving the sort order; valid options are:

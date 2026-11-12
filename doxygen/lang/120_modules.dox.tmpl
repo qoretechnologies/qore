@@ -1598,7 +1598,13 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       @ref conditional_parsing "%ifdef" directives for the restricting parse options, sees the options without these
       restrictions, as do the \c init and \c del closures.  The code that calls the module is still checked against
       its own restrictions.  Each module declares the domains that its own code uses; the modules that it requires do
-      not get them.  Since %Qore 3.0
+      not get them.  A declaration must not make the module's public API a way around the caller's restrictions: the
+      module's public functions and methods whose effect is the restricted capability itself (changing process-wide
+      state such as environment variables, registrations, caches or settings, exiting the process, signal handlers,
+      loading modules) declare the domain too, so that a restricted caller cannot call them, and module code that would
+      use the capability for its caller checks the caller first
+      (@ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()"); what the module does for its
+      own work (its threads, waits and thread data) needs no such declaration.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be

@@ -142,7 +142,8 @@ A declaration must not turn the module's public API into a bypass, so for each m
   (`background`, timers and tasks: the scheduling builtins are `MODULE_OWNED` and refuse a restricted caller's own
   code, and `background` in module code is checked against the module's options, see `222_sandboxing.dox.tmpl`),
   thread data it keeps, waits between retries or polls (`usleep()`, `sleep()`: these let a caller wait, as
-  `Counter::waitForZero()` with a timeout already does; open decision C1 in the review findings below);
+  `Counter::waitForZero()` with a timeout already does; decided (David, 2026-11-12): modules that wait declare `PROCESS`; the `%ifdef` workaround code stays for a
+  module loaded by its path, where the declaration does not apply (C1);
 - **guard** module code that would use a capability for its caller: QUnit exits the process for a usage error and
   installs its `SIGUSR1` handler only if no Program in the call stack restricts process control
   (`QUnit::Priv::callersMayControlProcess()`), as `ConnectionSchemeCache::deregisterScheme()` and
@@ -151,16 +152,17 @@ A declaration must not turn the module's public API into a bypass, so for each m
   module code arms its own timers for restricted callers (`ir/ModuleOwnedAsync.qtest`; WebSocketClient and
   DiscordWebSocketClient do), and for a sandboxed caller (a Qorus interface has a `SandboxManager`) the
   `MODULE_OWNED` checks of the builtins refuse the caller's own code and timers; a Program restricted only with
-  parse options has no such composition, so its closures can run on module threads (open decision C4); modules with
+  parse options has no such composition, so its closures can run on module threads (C4: kept as designed and
+  documented, David 2026-11-12: parse options restrict a Program's own code, a `SandboxManager` contains it); modules with
   `%ifdef PO_NO_THREAD_CONTROL` workarounds (QoreAgentStrategies, QoreStructuredExtraction, WebSocketClient, ...)
   do not declare `THREAD_CONTROL`, which would disable the workaround (C1);
-- open decision C3: DataProvider declares `THREAD_CONTROL` for its own `background` threads, but its default
+- C3, accepted (David, 2026-11-12; documented in `222_sandboxing.dox.tmpl`): DataProvider declares `THREAD_CONTROL` for its own `background` threads, but its default
   `*Async()` methods and `DataProviderPipeline` run the caller's code (overrides, callbacks) on them; the same holds
   for overridable methods that other declared modules run on their threads (`HttpServerUtil`'s
   `StreamResponseProducer::run()`, the `eventLoop()` methods of the OpenAI and Anthropic stream providers,
   ConnectDataProvider's `streamLoop()`/`datagramLoop()`, `McpClient::handleServerRequest()`), and a
   `SandboxManager` does not stop it, as `background` in module code is checked against the module's options;
-- open decision C5: a module that module code loads at run time (`load_module()`, the on-demand factory and type
+- C5, kept as designed and documented (David, 2026-11-12): a module that module code loads at run time (`load_module()`, the on-demand factory and type
   loading of DataProvider) is loaded with the restrictions that the loading module's Program has, which a
   `domains` declaration relaxes, not with those of the restricted caller; the explicit "load everything" APIs
   (`ProviderIndexUtil::tryLoadModule()`, `DataProvider::registerKnownFactories*()`) declare `PROCESS`, but the root
