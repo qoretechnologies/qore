@@ -5905,7 +5905,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                QoreValue value = reader.readValue(ptr, end, value_error);
+                // the Program resolves the hashdecls and types of typed container values (#5895)
+                QoreValue value;
+                {
+                    QoreProgramContextHelper value_pch(pgm);
+                    value = reader.readValue(ptr, end, value_error);
+                }
                 if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
                     // a malformed value: the read pointer is at the end of the data, and the rest of the entry
                     // cannot be read (qore#5848)

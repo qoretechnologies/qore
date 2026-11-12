@@ -963,6 +963,15 @@ inline bool qore_aot_string_needs_value(const QoreValue& v) {
     return qore_aot_string_needs_value(str.c_str(), str.size(), str.getEncoding());
 }
 
+//! Returns true if a hash or list value has a type that a literal of it does not give (#5895)
+/** a hash of a hashdecl or of a complex type, or a list of a complex type, such as the hash<ExceptionInfo> of a
+    %try-module error variable and the lists and hashes in it; such a value is an AOTExprKind::CONST_VALUE, whose value
+    keeps the type and exactly the keys and their order: a HASH_LITERAL or LIST_LITERAL is untyped, and a construction
+    of the hashdecl from the members would order the keys as the hashdecl does and give a member that the value does
+    not have its default value
+*/
+DLLLOCAL bool qore_aot_value_container_is_typed(const AbstractQoreNode* node);
+
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
 //! payloads when QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS is set.
 enum class QoreAOTContainerValueType : uint8_t {
@@ -1155,6 +1164,9 @@ public:
     //! Program and module ownership context for distinguishing constants
     //! provided by dependencies from constants emitted by this artifact.
     QoreProgram* serialization_program = nullptr;
+    //! The Program in which the types of typed container values that are written must be resolvable, as the reader
+    //! resolves them in the Program that loads the image; set while the slot maps are written (serializeSlotMaps())
+    QoreProgram* value_type_program = nullptr;
     const char* serialization_module_name = nullptr;
     const std::unordered_set<std::string>* serialization_keep_modules = nullptr;
 
@@ -2802,8 +2814,11 @@ struct AOTCompiledInitFunc {
     @param funcs vector of compiled function descriptors with slot identities
     @param const_reverse_map optional reverse map for constant node → FQN resolution
 */
+/** @param pgm the Program that is serialized, in which the types of typed container values in the slots must be
+    resolvable as they are when the image is loaded (#5895); null if it is not known
+*/
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
-    const AOTConstantReverseMap* const_reverse_map, std::string& error);
+    const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm = nullptr);
 
 //! Serialize embedded source into the FUNC_SOURCES binary section
 /** Current AOT compilation rejects functions that would require source fallback.
