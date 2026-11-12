@@ -6865,20 +6865,26 @@ bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
 }
 
 //! Makes the HTTP keep-alive poll operations of the socket close the connection instead of waiting for another request
-/** Used by an HTTP server that drains its connections before it stops: an operation started with
-    @ref startPollSendHttpResponseAndReadHeader(), @ref startPollIdleAndReadHttpHeader() or the streaming variant
-    of the former ends after the response that it sends, in a state that tells the server to close the connection,
-    unless a request has arrived, which is read and answered on the server's ordinary path (no fast route answers
-    it); an operation that waits for a request ends at once if none has arrived, as does an operation started with
-    @ref startPollReadHttpHeader() that has received no byte of a request.  An operation that is waiting must be
-    woken to see the change (see @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").  On
-    the UDP socket of an HTTP/3 listener, the change makes the server's QUIC operation drain its sessions.
+/** Used by an HTTP server that drains its connections before it stops.  With \a idle @ref False (the default), an
+    operation started with @ref startPollSendHttpResponseAndReadHeader() or the streaming variant of it ends after
+    the response that it sends, in a state that tells the server to close the connection, unless a request has
+    arrived, which is read and answered on the server's ordinary path (no fast route answers it); the first request
+    of a new connection (an operation started with @ref startPollIdleAndReadHttpHeader() or
+    @ref startPollReadHttpHeader()) is still served.
 
-    The change cannot be undone.
+    With \a idle @ref True, in addition, an operation that waits for a request ends at once if none has arrived, even
+    on a connection that has not had one (one that waited for its request when the server started to drain), as does
+    an operation started with @ref startPollReadHttpHeader() that has received no byte of a request.
 
-    @param idle if @ref True, an operation that waits for a request ends at once if none has arrived, even if the
-    connection has not had a request yet (a connection that waited for its request when the server started to
-    drain); if @ref False (the default), the first request of a new connection is still served
+    An operation that is waiting must be woken to see the change (see
+    @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").  On the UDP socket of an HTTP/3
+    listener, the change makes the server's QUIC operation drain its sessions.
+
+    The change cannot be undone: a later call with \a idle @ref True makes it stronger, and a call with \a idle
+    @ref False after one with @ref True changes nothing.
+
+    @param idle if @ref True, an operation that waits for a request ends at once if none has arrived, even on a
+    connection that has not had a request yet
 
     @par Example:
     @code{.py}
