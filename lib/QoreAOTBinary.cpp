@@ -1316,6 +1316,12 @@ static thread_local std::vector<PendingFunctionDefault>*
 // including one whose variant the loaded code's options do not allow, is left to be resolved when it is evaluated,
 // as before, so nothing is allowed that the parser would refuse.
 
+// the serialized new-object values carry the object type of a generic class after the class reference (defined below)
+static std::string qoreAOTNewObjectClassRef(const std::string& class_ref);
+static std::string qoreAOTNewObjectTypePath(const std::string& class_ref);
+static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
+        const std::string& full_class_path, std::vector<QoreValue>& args, std::string& type_error);
+
 //! binds the builtin constructor variant that a deserialized object construction resolves to
 static void qore_aot_bind_constructor_variant(ScopedObjectCallNode* socn, const QoreClass* qc) {
     assert(socn);
@@ -1590,24 +1596,16 @@ static bool readDeferredMemberDefault(
 
     // Try to resolve class in the in-progress class maps first, then via the
     // AOT class-ref resolver for committed program/module classes.
-    const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(getProgram(), class_path);
+    const std::string member_class_path = qoreAOTNewObjectClassRef(class_path);
+    const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(getProgram(), member_class_path.c_str());
     if (qc) {
-        // Resolvable now: construct ScopedObjectCallNode immediately.
-        QoreParseListNode* parse_args = nullptr;
-        if (nargs > 0) {
-            parse_args = new QoreParseListNode(&loc_builtin);
-            for (auto& v : args) {
-                parse_args->add(v, &loc_builtin);
-            }
-            args.clear();
+        // Resolvable now: construct ScopedObjectCallNode immediately (with the object type of a generic class)
+        std::string type_error;
+        default_val = qoreAOTMakeObjectDefaultNode(getProgram(), qc, class_path, args, type_error);
+        if (!type_error.empty()) {
+            error = "cannot resolve the object type of a new_object default: " + type_error;
+            return false;
         }
-        ScopedObjectCallNode* socn = new ScopedObjectCallNode(
-            &loc_builtin, qc, parse_args);
-        if (parse_args) {
-            socn->resolveParseArgs();
-        }
-        qore_aot_bind_constructor_variant(socn, qc);
-        default_val = QoreValue(socn);
     } else {
         // Defer: store class path + args; second pass resolves.
         pim.pending_new_class_path = class_path;
@@ -3404,12 +3402,58 @@ static QoreParseListNode* qoreAOTTakeParseArgs(std::vector<QoreValue>& args) {
     return parse_args;
 }
 
+//! the marker that separates the class reference of a serialized new-object value from the object type
+/** A generic class is constructed as an object type that has the type arguments (new G<float>()): a serialized value
+    names the class, and the object type follows it as "\ntype:<type path>"
+*/
+static constexpr const char* QORE_AOT_NEW_OBJECT_TYPE_MARKER = "\ntype:";
+
+//! returns the class reference of a serialized new-object value without its object type
+static std::string qoreAOTNewObjectClassRef(const std::string& class_ref) {
+    size_t pos = class_ref.find(QORE_AOT_NEW_OBJECT_TYPE_MARKER);
+    return pos == std::string::npos ? class_ref : class_ref.substr(0, pos);
+}
+
+//! returns the type path of the object type of a serialized new-object value, or an empty string
+static std::string qoreAOTNewObjectTypePath(const std::string& class_ref) {
+    size_t pos = class_ref.find(QORE_AOT_NEW_OBJECT_TYPE_MARKER);
+    return pos == std::string::npos ? std::string()
+        : class_ref.substr(pos + strlen(QORE_AOT_NEW_OBJECT_TYPE_MARKER));
+}
+
+//! creates the node of a serialized new-object default
+/** @param type_error receives the reason if the object type of the value cannot be resolved: nothing is created then
+    (the arguments are released) and the caller reports the error, as the readers of the same value do; a value
+    whose object type cannot be resolved is a serializer bug, which a fallback to the plain class type would hide
+    @return the node, or nothing if the object type cannot be resolved
+*/
 static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
-        const std::string& class_path, std::vector<QoreValue>& args) {
+        const std::string& full_class_path, std::vector<QoreValue>& args, std::string& type_error) {
+    const std::string class_path = qoreAOTNewObjectClassRef(full_class_path);
+    type_error.clear();
+    // the object type with the type arguments of a generic class, if the class was constructed with them
+    const QoreTypeInfo* object_type_info = qc ? qc->getTypeInfo() : nullptr;
+    if (qc) {
+        const std::string type_path = qoreAOTNewObjectTypePath(full_class_path);
+        if (!type_path.empty()) {
+            QoreAOTTypeResolver resolver(pgm);
+            object_type_info = resolver.resolve(type_path.c_str(), type_error);
+            if (!object_type_info || !type_error.empty()) {
+                if (type_error.empty()) {
+                    type_error = "the object type '" + type_path + "' is not resolved";
+                }
+                for (QoreValue& v : args) {
+                    v.discard(nullptr);
+                }
+                args.clear();
+                return QoreValue();
+            }
+        }
+    }
     QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
     ScopedObjectCallNode* socn = nullptr;
     if (qc) {
-        socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, qc->getTypeInfo());
+        socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, object_type_info);
     } else {
         const QoreTypeInfo* object_type_info = qore_get_aot_deferred_type_info(
             &loc_builtin, class_path.c_str(), false, false);
@@ -3848,6 +3892,15 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 std::string class_path = socn->oc
                     ? qore_aot_encode_class_ref(socn->oc)
                     : socn->getDynamicClassName();
+                // the object type of a generic class (new G<float>()): without the type arguments the object is
+                // constructed as a generic class that has none
+                if (socn->oc) {
+                    const QoreTypeInfo* object_type_info = socn->getObjectTypeInfo();
+                    if (object_type_info && QoreTypeInfo::getParameterizedClassType(object_type_info)) {
+                        class_path += QORE_AOT_NEW_OBJECT_TYPE_MARKER;
+                        class_path += getAOTSerializableTypePath(object_type_info);
+                    }
+                }
                 const QoreListNode* args = socn->getArgs();
                 const QoreParseListNode* parse_args = socn->getParseArgs();
                 if (parse_args && !parse_args->empty() && (!args || args->empty())) {
@@ -4841,16 +4894,33 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             // Resolve the class through the same encoded class-ref path used
             // by call sites and slots. This preserves module ownership for
             // private classes referenced by defaults.
+            const std::string new_object_class_path = qoreAOTNewObjectClassRef(class_path);
             const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(
-                getProgram(), class_path);
+                getProgram(), new_object_class_path.c_str());
             if (!qc) {
                 error = "cannot resolve new_object default class '";
-                error += qoreAOTDescribeClassRef(class_path);
+                error += qoreAOTDescribeClassRef(new_object_class_path.c_str());
                 error += "'";
                 delete parse_args;
                 return QoreValue();
             }
-            ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args);
+            // the object type with the type arguments of a generic class, if it was constructed with them
+            const QoreTypeInfo* object_type_info = nullptr;
+            {
+                const std::string type_path = qoreAOTNewObjectTypePath(class_path);
+                if (!type_path.empty()) {
+                    QoreAOTTypeResolver resolver(getProgram());
+                    std::string type_error;
+                    object_type_info = resolver.resolve(type_path.c_str(), type_error);
+                    if (!object_type_info || !type_error.empty()) {
+                        error = "cannot resolve the object type '" + type_path + "' of a new_object default: "
+                            + type_error;
+                        delete parse_args;
+                        return QoreValue();
+                    }
+                }
+            }
+            ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, object_type_info);
             // Convert parse_args to args so evalImpl() doesn't hit the assertion
             if (parse_args) {
                 socn->resolveParseArgs();
@@ -8022,6 +8092,55 @@ static bool aotAppendStaticMemberImportRecords(const std::vector<AOTCompiledFunc
     return true;
 }
 
+//! The declaration hash that the symbol index publishes for a constant
+/** the provider and a consumer that folded the constant compute it here, so they cannot differ
+*/
+static std::string aotConstantDeclarationHash(const char* kind_label, const std::string& qore_path,
+        const std::string& visibility, const ConstantEntry* ce) {
+    return aotHashParts({
+        kind_label,
+        qore_path,
+        visibility,
+        aotTypePathString(ce->typeInfo),
+        ce->hasInitExpr() ? "pending" : "literal",
+    });
+}
+
+//! Imports the constants of other source files whose values the parse of this source folded (qore#5798)
+/** the record carries the value and declaration hashes of the constant as the parse saw it, so that linking the
+    object with a provider whose value has since changed is refused as stale (qo-link compares an import's non-empty
+    hashes with the provider's)
+*/
+static bool aotAppendConstantImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
+        const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!pgm) {
+        return true;
+    }
+    const std::vector<qore_program_private::source_parse_constant_import_t>& constant_imports =
+        qore_program_private::getSourceParseConstantImportRecords(pgm);
+    for (size_t i = 0; i < constant_imports.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index source constant-import collection")) {
+            return false;
+        }
+        const qore_program_private::source_parse_constant_import_t& rec = constant_imports[i];
+        if (shouldSkipByCompileFile(rec.source_file.c_str(), compile_file, compile_files)) {
+            continue;
+        }
+        const ConstantEntry* ce = rec.entry;
+        QoreAOTSymbolIndexRecord ir;
+        ir.kind = QoreAOTSymbolKind::CONSTANT;
+        ir.dependency_class = ce->hasInitExpr()
+            ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
+        ir.qore_path = rec.qore_path;
+        ir.consumer_source_file = rec.source_file;
+        ir.value_hash = aotValueHashForConstant(ce);
+        ir.declaration_hash = aotConstantDeclarationHash(rec.class_constant ? "class_constant" : "constant",
+            rec.qore_path, aotVisibility(ce->getAccess()), ce);
+        imported.push_back(std::move(ir));
+    }
+    return true;
+}
+
 static bool aotAppendTypeImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
         const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
     if (!pgm) {
@@ -8233,13 +8352,7 @@ static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
         rec.value_hash = aotValueHashForConstant(ce);
-        rec.declaration_hash = aotHashParts({
-            "class_constant",
-            rec.qore_path,
-            rec.visibility,
-            aotTypePathString(ce->typeInfo),
-            ce->hasInitExpr() ? "pending" : "literal",
-        });
+        rec.declaration_hash = aotConstantDeclarationHash("class_constant", rec.qore_path, rec.visibility, ce);
         defined.push_back(std::move(rec));
     }
     return true;
@@ -8553,6 +8666,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         if (!aotAppendTypeImportRecords(pgm, imported, compile_file, compile_files, error)) {
             return false;
         }
+        if (!aotAppendConstantImportRecords(pgm, imported, compile_file, compile_files, error)) {
+            return false;
+        }
         if (!aotAppendFunctionImportRecords(pgm, imported, compile_file, compile_files, error)) {
             return false;
         }
@@ -8746,13 +8862,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
         rec.value_hash = aotValueHashForConstant(ce);
-        rec.declaration_hash = aotHashParts({
-            "constant",
-            rec.qore_path,
-            rec.visibility,
-            aotTypePathString(ce->typeInfo),
-            ce->hasInitExpr() ? "pending" : "literal",
-        });
+        rec.declaration_hash = aotConstantDeclarationHash("constant", rec.qore_path, rec.visibility, ce);
         defined.push_back(std::move(rec));
     }
 
@@ -11872,8 +11982,10 @@ bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
-                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
-                if (bi->kind != QoreIRBackgroundKind::Helper || !bi->helper_ir) {
+                // a background call of a function, of a closure or of a resolved self or static method is an
+                // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
+                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (!bi || bi->kind != QoreIRBackgroundKind::Helper || !bi->helper_ir) {
                     continue;
                 }
                 for (const auto& param : bi->owned_params) {
@@ -16615,9 +16727,15 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             // Resolve a pending forward-referenced NewObject default if any.
             if (!pim.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
-                    pim.pending_new_class_path.c_str(), &all_class_map);
+                    qoreAOTNewObjectClassRef(pim.pending_new_class_path).c_str(), &all_class_map);
+                std::string type_error;
                 pim.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    pim.pending_new_class_path, pim.pending_new_args);
+                    pim.pending_new_class_path, pim.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        pim.pending_new_class_path.c_str(), "class", qc->getName(), pim.name.c_str(),
+                        type_error.c_str());
+                }
                 pim.pending_new_class_path.clear();
             }
 
@@ -16819,9 +16937,15 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             // Resolve a pending forward-referenced NewObject default if any
             if (!psm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
-                    psm.pending_new_class_path.c_str(), &all_class_map);
+                    qoreAOTNewObjectClassRef(psm.pending_new_class_path).c_str(), &all_class_map);
+                std::string type_error;
                 psm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    psm.pending_new_class_path, psm.pending_new_args);
+                    psm.pending_new_class_path, psm.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        psm.pending_new_class_path.c_str(), "class", qc->getName(), psm.name.c_str(),
+                        type_error.c_str());
+                }
                 psm.pending_new_class_path.clear();
             }
 
@@ -17324,9 +17448,15 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // for `Class(args)` defaults now that the class is registered.
             if (!phm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
-                    phm.pending_new_class_path.c_str());
+                    qoreAOTNewObjectClassRef(phm.pending_new_class_path).c_str());
+                std::string type_error;
                 phm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    phm.pending_new_class_path, phm.pending_new_args);
+                    phm.pending_new_class_path, phm.pending_new_args, type_error);
+                if (!type_error.empty()) {
+                    return setAOTDeferredMemberResolutionError(error, "object type of the default",
+                        phm.pending_new_class_path.c_str(), "hashdecl", hd->getName(), phm.name.c_str(),
+                        type_error.c_str());
+                }
                 phm.pending_new_class_path.clear();
             }
 
@@ -21135,4 +21265,11 @@ bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
         return false;
     }
     return true;
+}
+
+std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name) {
+    if (ptr.isNs()) {
+        return getNamespaceConstantPath(ptr.getNs(), name);
+    }
+    return getClassConstantPath(ptr.getClass(), name);
 }

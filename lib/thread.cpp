@@ -782,8 +782,10 @@ public:
     // parse-time block return type
     const QoreTypeInfo* parse_return_type_info = nullptr;
 
-    // parse-time implicit argument type
+    // parse-time implicit argument type ($1)
     const QoreTypeInfo* implicit_arg_type_info = nullptr;
+    // parse-time type of the second implicit argument ($2): only foldl and foldr give their code a second element
+    const QoreTypeInfo* implicit_arg2_type_info = nullptr;
 
     // current implicit element offset
     int element = 0;
@@ -2773,6 +2775,17 @@ const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
 
 const QoreTypeInfo* parse_get_implicit_arg_type_info() {
     return thread_data.get()->implicit_arg_type_info;
+}
+
+const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti) {
+    ThreadData* td = thread_data.get();
+    const QoreTypeInfo* rv = td->implicit_arg2_type_info;
+    td->implicit_arg2_type_info = ti;
+    return rv;
+}
+
+const QoreTypeInfo* parse_get_implicit_arg2_type_info() {
+    return thread_data.get()->implicit_arg2_type_info;
 }
 
 void parse_set_try_reexport(bool tr) {

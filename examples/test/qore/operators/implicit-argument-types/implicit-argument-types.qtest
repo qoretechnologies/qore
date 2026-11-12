@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the scripts in child processes that set their own --exec-mode, or AOT
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ImplicitArgumentTypesTest
+
+#! the parse-time types of the implicit arguments
+/** $1 has the type of the element that an operator gives its code.  $2 has the type of the next element in the code
+    of foldl and foldr, and no type in the code of every other operator, where it has no value: in a map over a
+    list<int>, ($2,) was typed list<int> and raised RUNTIME-TYPE-ERROR for its element.  The typed fold operations of
+    the IR lowering (FoldlSumInt and the others) are chosen only when $2 has the element type.
+
+    implicit-argument-types.q prints the result of each case: its output is checked with the AST interpreter, and it
+    must be the same in every other execution mode, on the IR tier and as AOT executables compiled with -O0 and -O3.
+*/
+class ImplicitArgumentTypesTest inherits QUnit::Test {
+    public {
+        #! the output of implicit-argument-types.q
+        const Expected = "map ($2,): [[null], [null]]
+map ($1, $2): [[1, null], [2, null]]
+map ($3, $1): [[null, 1], [null, 2]]
+map ($2,) string: [[null], [null]]
+select ($2,): [1, 2]
+map-select ($2, $1): [[null, 1], [null, 2]]
+new list $2: [[null], [null]]
+new list $1: [[1], [2]]
+new list $1 $2: [[1, null], [2, null]]
+new hash $2: [{a: null}, {a: null}]
+$1 element type: [[1], [2]] list<int>
+foldl sum int: 6
+foldl diff int: -4
+foldl prod int: 6
+foldl sum float: 4.0
+foldr sum int: 6
+foldr diff int: 0
+foldl ($2,): [1, 2, 3]
+foldl string: a/b/c
+foldl max: 3
+foldl nested map: 8
+map nested foldl: [2, 3, 4]
+";
+
+        #! the output of parse-types.q
+        const ParseExpected = "list<int> tl = (1, 2); string s = foldl $1 + $2, tl;: PARSE-TYPE-ERROR
+list<int> tl = (1, 2); string s = foldr $1 + $2, tl;: PARSE-TYPE-ERROR
+list<int> tl = (1, 2); list<list<auto>> l = map ($2,), tl;: ok
+list<int> tl = (1, 2); list<string> l = map $1, tl;: PARSE-TYPE-ERROR
+";
+
+        #! the typed fold operations that fold-specializations.q must be lowered to
+        const FoldOps = ("foldl.sum.int", "foldl.diff.int", "foldl.prod.int", "foldl.sum.float", "foldl.diff.float",
+            "foldl.prod.float");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+        string fold_script;
+        string parse_script;
+    }
+
+    constructor() : QUnit::Test("implicit argument types", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/implicit-argument-types.q";
+        fold_script = get_script_dir() + "/fold-specializations.q";
+        parse_script = get_script_dir() + "/parse-types.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        addTestCase("parse-time types", \parseTest());
+        addTestCase("typed fold operations", \foldOpsTest());
+
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        assertEq(Expected, ast());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)),
+                mode);
+        }
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            script)), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("implicit-argument-types-aot-");
+        string exe = dir.path + "/implicit-argument-types";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! the parse-time types of $1 and $2 in folds and maps, in every execution mode
+    /** the script only parses code in Programs that it does not run, so no native code is required
+    */
+    private parseTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(ParseExpected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                parse_script), ExecModeHarness::NativeCheck::None), mode);
+        }
+    }
+
+    #! folds over typed lists that add, subtract or multiply $1 and $2 are lowered to the typed fold operations
+    private foldOpsTest() {
+        string dump = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ir --ir-dump %s", env, qore_bin,
+            fold_script));
+        foreach string op in (FoldOps) {
+            assertTrue(dump.find(op) >= 0, op + " in the IR dump:\n" + dump);
+        }
+        assertEq(-1, dump.find("foldl.any"), "no untyped fold in the IR dump:\n" + dump);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

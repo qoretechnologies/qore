@@ -9331,15 +9331,18 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return deferred_error(err_str, desc_str);
     };
 
-    // true if the submit failed because the connection was closed meanwhile: the connection is closed and the error
-    // is the one a submit on a closed connection raises (the connection's own error, or the closed-state error)
+    // true if the submit failed because the connection was closed meanwhile: the error is the connection's own error,
+    // or the closed-state error of a connection that is closed.  The connection's own error is matched whether or not
+    // the connection is marked closed yet: its protocol operation stores the error before it marks the connection
+    // closed, on the I/O thread, and a submit made in between raises the stored error while the connection still
+    // looks open (#5802)
     auto closed_submit_error = [&] () -> bool {
-        if (!*xsink || !conn->isClosed()) {
+        if (!*xsink) {
             return false;
         }
         QoreStringValueHelper err(xsink->getExceptionErr());
         if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
-            return true;
+            return conn->isClosed();
         }
         ExceptionSink info_xsink;
         ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);

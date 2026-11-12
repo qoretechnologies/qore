@@ -41,6 +41,8 @@ extern "C" {
 }
 #endif
 
+#include <cstdio>
+#include <exception>
 #include <string>
 #include <map>
 #include <set>
@@ -617,6 +619,9 @@ public:
     }
 #endif
 };
+
+//! marks the namespace that a binary module registered with QoreModuleInfo::ns; see QoreNamespace::purge()
+DLLLOCAL void qore_ns_set_module_owned(QoreNamespace& ns);
 
 struct DLHelper {
     void* ptr;
@@ -1303,7 +1308,10 @@ public:
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
-              dependencies(mod_info.dependencies), aot(mod_info.is_aot) {
+              dependencies(mod_info.dependencies), aot(mod_info.is_aot), module_ns(mod_info.ns) {
+        if (module_ns) {
+            qore_ns_set_module_owned(*module_ns);
+        }
     }
 
     //! returns the Program of an AOT user module, or nullptr for a binary module
@@ -1317,7 +1325,24 @@ public:
         // module is replaced by a reinjection (see QoreModuleManager::reinjectModule()), while the module's own
         // code (e.g. qore_aot_module_delete()) identifies its state by the feature name
         const char* old_ctx_name = set_module_context_name(feature.c_str());
-        module_delete();
+        if (module_delete) {
+            module_delete();
+        }
+        // the module's namespace with static storage duration is released now, during qore_cleanup() and before the
+        // types are freed, and not by its C++ static destructor; exceptions raised by destructors are reported here
+        if (module_ns) {
+            ExceptionSink xsink;
+            try {
+                module_ns->purge(&xsink);
+            } catch (const std::exception& e) {
+                // a destructor cannot throw (for example std::bad_alloc while purging); whatever was not released is
+                // released by the C++ static destructor of the namespace
+                fprintf(stderr, "module '%s': the module's namespace could not be released: %s\n", name.c_str(),
+                    e.what());
+            } catch (...) {
+                fprintf(stderr, "module '%s': the module's namespace could not be released\n", name.c_str());
+            }
+        }
         set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be
         // destroyed when exit() is called
@@ -1377,6 +1402,8 @@ protected:
     const std::vector<std::string> dependencies;
     //! true for an AOT module
     const bool aot;
+    //! the module's namespace with static storage duration (QoreModuleInfo::ns), purged when the module is deleted
+    QoreNamespace* const module_ns;
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };

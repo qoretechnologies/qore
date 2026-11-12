@@ -1,0 +1,20 @@
+sort: {a: ["x", "y", "z"]}
+sort_descending: {a: ["z", "y", "x"]}
+sort_stable: {a: ["x", "y", "z"]}
+sort_descending_stable: {a: ["z", "y", "x"]}
+no value: null
+value: ["a", "b"]
+generic: {a: ["y", "x", "z"]}
+type of sort(keys h): *list<auto>
+type of sort_descending(keys h): *list<auto>
+type of sort_stable(keys h): *list<auto>
+type of sort_descending_stable(keys h): *list<auto>
+type of g(keys h): *list<string>
+type of (new C<string>()).m(keys h): *list<string>
+type of u(hi.a + 1): *int
+type of (new B()).m(hi.a + 1): *int
+type of S::s(hi.a + 1): *int
+type of nm(i: hi.a + 1): *int
+type of va(hi.a + 1): *int
+type of eq(hi.a + 1): int
+type of pow(h.a ? 1 : 2.0, 2): untyped

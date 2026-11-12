@@ -825,8 +825,15 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     }
     const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
+    // with a debugger attached, the top-level code runs on the AST tier, as a function does (see
+    // UserVariantBase::evalTiered()): the debugger's callbacks, such as the exception callback of each statement that
+    // an exception leaves, are those of the AST interpreter, which is the reference; native code has no such
+    // callbacks.  Code without statements, as the top-level code of an AOT image, runs as it is
+    const bool debug_ast = !statement_list.empty() && qore_program_private::get(*pgm)->hasDebuggerAttached();
+
     // AOT pre-compiled top-level function — execute directly if registered
-    if (!((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+    if (!debug_ast
+            && !((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -880,7 +887,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     }
 
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
-    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+    if (!debug_ast && !(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
         // QEM_TIERED uses IR immediately for top-level code and leaves native
         // promotion to functions. Top-level code is commonly one-shot, so

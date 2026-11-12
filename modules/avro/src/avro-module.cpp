@@ -50,6 +50,8 @@ extern "C" DLLEXPORT void avro_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = avro_module_init;
     mod_info.ns_init = avro_module_ns_init;
     mod_info.del = avro_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &AvroNs;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

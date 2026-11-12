@@ -727,7 +727,7 @@ public class Message {
 
             # process/decode parts; the preamble and the epilogue of the multipart body are not part of the message
             # content (RFC 2046 section 5.1.1): they were taken as the body or as another part
-            map processPart($1), mpb.part;
+            map processPart($1 + {"part_index": $#}), mpb.part;
         } else {
             if (ct) {
                 bodyContentType = ct;
@@ -951,11 +951,12 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         return force_encoding(convert_encoding(tmp, "ISO-8859-1"), enc);
     }
 
+    #! processes a part; \c part_index in the hash is its index in the list of parts that holds it
     private processPart(hash<auto> p) {
         # a part that has parts (ex: multipart/alternative in multipart/mixed) holds no content of its own: its body
         # is the preamble and epilogue of its multipart body, which was taken as the message body or as a part
         if (p.part) {
-            map processPart($1), p.part;
+            map processPart($1 + {"part_index": $#}), p.part;
             return;
         }
 
@@ -1043,7 +1044,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (is_attachment || is_inline_attachment) {
             # generate a name for the part if no filename is available
             if (!pn) {
-                pn = "unnamed-attachment-" + $#;
+                pn = "unnamed-attachment-" + (p.part_index ?? 0);
             }
 
             # the attachment is encoded again with its content transfer encoding if it has one for re-encoding
