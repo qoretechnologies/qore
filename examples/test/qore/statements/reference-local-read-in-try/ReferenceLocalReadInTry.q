@@ -84,6 +84,19 @@ sub no_handler(reference p) {
     printf("  after the read (wrong)\n");
 }
 
+#! a reference parameter read by an on_exit statement in a try block
+sub on_exit_read(reference p) {
+    C o();
+    try {
+        on_exit {
+            o.m(p);
+        }
+        printf("  in the try block\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("  local handler: %s\n", ex.err);
+    }
+}
+
 #! a local declared as a reference, read in a try block
 sub local_reference() {
     object g = new Declared();
@@ -114,12 +127,15 @@ sub check(string name, code c) {
 }
 
 sub cases() {
+    # the cases that failed in the JIT and AOT code: the read was made when the function was entered
     check("method call argument", sub () { object g = new Declared(); method_arg(\g.q); });
     check("method call argument in an expression", sub () { object g = new Declared(); method_arg_expr(\g.q); });
-    check("optional reference parameter", sub () { object g = new Declared(); optional_method_arg(\g.q); });
-    check("function call argument", sub () { object g = new Declared(); function_arg(\g.q); });
     check("read after other code", sub () { object g = new Declared(); read_later(\g.q); });
     check("no handler", sub () { object g = new Declared(); no_handler(\g.q); });
+    check("on_exit read", sub () { object g = new Declared(); on_exit_read(\g.q); });
+    # the same reads where every execution mode already matched the AST interpreter
+    check("optional reference parameter", sub () { object g = new Declared(); optional_method_arg(\g.q); });
+    check("function call argument", sub () { object g = new Declared(); function_arg(\g.q); });
     check("local declared as a reference", \local_reference());
     check("valid reference", sub () {
         int i = 1;

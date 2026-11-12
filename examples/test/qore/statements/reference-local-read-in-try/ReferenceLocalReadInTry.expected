@@ -3,10 +3,6 @@ method call argument:
   local handler: INVALID-MEMBER
 method call argument in an expression:
   local handler: INVALID-MEMBER
-optional reference parameter:
-  local handler: INVALID-MEMBER
-function call argument:
-  local handler: INVALID-MEMBER
 read after other code:
   before the read
   local handler: INVALID-MEMBER
@@ -14,6 +10,13 @@ read after other code:
 no handler:
   before the read
   caller handler: INVALID-MEMBER
+on_exit read:
+  in the try block
+  local handler: INVALID-MEMBER
+optional reference parameter:
+  local handler: INVALID-MEMBER
+function call argument:
+  local handler: INVALID-MEMBER
 local declared as a reference:
   local handler: INVALID-MEMBER
 valid reference:
@@ -25,10 +28,6 @@ method call argument:
   local handler: INVALID-MEMBER
 method call argument in an expression:
   local handler: INVALID-MEMBER
-optional reference parameter:
-  local handler: INVALID-MEMBER
-function call argument:
-  local handler: INVALID-MEMBER
 read after other code:
   before the read
   local handler: INVALID-MEMBER
@@ -36,6 +35,13 @@ read after other code:
 no handler:
   before the read
   caller handler: INVALID-MEMBER
+on_exit read:
+  in the try block
+  local handler: INVALID-MEMBER
+optional reference parameter:
+  local handler: INVALID-MEMBER
+function call argument:
+  local handler: INVALID-MEMBER
 local declared as a reference:
   local handler: INVALID-MEMBER
 valid reference:
@@ -47,10 +53,6 @@ method call argument:
   local handler: INVALID-MEMBER
 method call argument in an expression:
   local handler: INVALID-MEMBER
-optional reference parameter:
-  local handler: INVALID-MEMBER
-function call argument:
-  local handler: INVALID-MEMBER
 read after other code:
   before the read
   local handler: INVALID-MEMBER
@@ -58,6 +60,13 @@ read after other code:
 no handler:
   before the read
   caller handler: INVALID-MEMBER
+on_exit read:
+  in the try block
+  local handler: INVALID-MEMBER
+optional reference parameter:
+  local handler: INVALID-MEMBER
+function call argument:
+  local handler: INVALID-MEMBER
 local declared as a reference:
   local handler: INVALID-MEMBER
 valid reference:
