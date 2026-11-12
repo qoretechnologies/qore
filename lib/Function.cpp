@@ -3232,7 +3232,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         }
 
         // check functionality flags to see if the variant is accessible
-        if (int64 denied = qore_get_variant_denied_domains(*i, ppo)) {
+        if (int64 denied = qore_get_variant_denied_domains(*i, ppo, nullptr, ::getProgram())) {
             printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, denied: 0x%llx\n",
                 this, (unsigned long long)denied);
             continue;
@@ -3732,8 +3732,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
 DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
         const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const {
-    // check the functional domains of the variant
-    if (int64 denied = qore_get_variant_denied_domains(variant, ppo)) {
+    // check the functional domains of the variant; a type-based lookup is made by the code running, so the domains that
+    // its module declares are allowed (see qore_relieve_module_declared_domains())
+    if (int64 denied = qore_get_variant_denied_domains(variant, ppo, nullptr, ::getProgram())) {
         raise_invalid_function_access(xsink, this, variant, denied);
         return nullptr;
     }

@@ -1523,6 +1523,8 @@ public:
     //! applies the declared domains to the module's Program and lifts them from the header's own restrictions
     DLLLOCAL virtual int64 applyDomains(int64 dom) override;
 
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const override;
+
     DLLLOCAL void close();
 
 protected:

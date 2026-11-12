@@ -87,7 +87,20 @@ rest (class domain, builtins) is checked as before.
   attempt used the former and let the caller's own `call_function()` of a tagged module function through.  Test:
   `user-functional-domains-modes.qtest`, with and without a `SandboxManager` (the module's own `call_function()`,
   untyped calls and references of its tagged code; the caller's closure run on a module thread stays refused; an
-  untagged method using `thread_yield()` works for the restricted caller by every route).
+  untagged method using `thread_yield()` works for the restricted caller by every route).  Review fixes: the
+  iterator helper of `foreach` (`AbstractIteratorHelper::getCheckVariant()`), the type-based lookups
+  (`checkVariantDomain()`: reflection, AOT load-time binding) and `runtimeGetCallVariants()` pass the current
+  Program, which is the calling code's there (no switch); the creator relief tests `::getProgram()`, the Program
+  running the code, not the reference's `getProgram()` (the object's Program for a method reference: a module's
+  `\o.m()` on an object of a caller subclass was refused).  Implicit base class constructors stay checked against
+  the code running `new` (no module code runs: a module subclass without its own constructor); an explicit base
+  constructor list in the module is module code.  A module that hands out a generic dispatcher (`\call_function()`
+  or a `call_object_method()` wrapper that it creates) lets its callers reach its declared code through it.
+- The thread's module definition context (`ThreadData::qmd`) applies only while its module's Program is parsed
+  (`QoreModuleDefContext::getDefinitionProgram()`, `get_module_def_context()`): a Program that a module's `init`
+  closure parses applied its own `module` block to the loading module (qore#5938: a nested `version` key raised
+  "given multiple times", a nested `url` key asserted, and a nested `domains` key would have added domains to the
+  loading module); test `nested-module-parse.qtest`.
 - Implicit base class constructors are resolved at run time and checked against the code running `new`.
 - No-domain fast path: `qore_get_variant_denied_domains()` returns at once for functionality 0.
 

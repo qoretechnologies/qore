@@ -226,6 +226,12 @@ public:
     //! restrictions that were removed
     DLLLOCAL virtual int64 applyDomains(int64 dom);
 
+    //! returns the Program of the module that this context defines, if known; the context applies only to the parse of
+    //! that Program, not to another Program parsed while the module is loaded (ex: from its init closure)
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const {
+        return nullptr;
+    }
+
 protected:
     //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
     int64 dom_removed = QDOM_DEFAULT;

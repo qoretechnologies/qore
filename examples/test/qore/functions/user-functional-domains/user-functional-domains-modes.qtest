@@ -63,6 +63,9 @@ ref_module_args: 2
 ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS
 override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS
 own_cf: 1
+own_iter: 1,2
+own_ref_obj: 3
+caller_iter: INVALID-FUNCTION-ACCESS: method '::DomMod::It::next()'; functional domain: PROCESS
 thread_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS
 yield_direct: yielded
 yield_cf: yielded
@@ -224,6 +227,39 @@ public auto sub run_in_thread(code c) {
     return h.v;
 }
 
+# an iterator with tagged methods, which the module's own foreach uses
+public class It inherits AbstractIterator {
+    private {
+        int i = 0;
+    }
+
+    bool next() [dom=PROCESS] {
+        return ++i <= 2;
+    }
+
+    auto getValue() [dom=PROCESS] {
+        return i;
+    }
+
+    bool valid() {
+        return i > 0 && i <= 2;
+    }
+}
+
+public string sub own_iter() {
+    list<int> l = ();
+    foreach int v in (new It()) {
+        l += v;
+    }
+    return l.join(\",\");
+}
+
+# a call reference that module code creates to its own tagged method of an object of a class of the caller
+public int sub own_ref_obj(Api o) {
+    code r = \\o.m();
+    return r();
+}
+
 # not tagged: uses a PROCESS builtin for any caller, as the module declares the domain
 public string sub my_yield() {
     Qore::thread_yield();
@@ -312,6 +348,10 @@ auto sub ref_static_by_name() { code c = get_call_reference(\"DomMod::Api::s\");
 int sub base_call(Base2 b) { return b.m(); }
 auto sub override_dispatch() { return base_call(get_over()); }
 auto sub own_cf() { return call_own_cf(); }
+auto sub own_iter() { return DomMod::own_iter(); }
+class CSub inherits Api {}
+auto sub own_ref_obj() { return DomMod::own_ref_obj(new CSub()); }
+auto sub caller_iter() { list<int> l = (); foreach int v in (new It()) { l += v; } return l.join(\",\"); }
 auto sub thread_cf() { return run_in_thread(auto sub () { return call_function(\"DomMod::tagged\"); }); }
 auto sub yield_direct() { return my_yield(); }
 auto sub yield_cf() { return call_function(\"DomMod::my_yield\"); }

@@ -3682,13 +3682,27 @@ QoreModuleDefContext* set_module_def_context(QoreModuleDefContext* qmd) {
     return rv;
 }
 
+//! the module definition context of the thread, if it defines the module of the Program being parsed
+static QoreModuleDefContext* get_module_def_context(ThreadData* td) {
+    QoreModuleDefContext* qmd = td->qmd;
+    // another Program parsed while a module is loaded (ex: by its init closure) is not the module's: its module
+    // declarations are not the module's
+    if (qmd) {
+        const QoreProgram* def_pgm = qmd->getDefinitionProgram();
+        if (def_pgm && def_pgm != td->current_pgm) {
+            return nullptr;
+        }
+    }
+    return qmd;
+}
+
 QoreModuleDefContext* get_module_def_context() {
-    return thread_data.get()->qmd;
+    return get_module_def_context(thread_data.get());
 }
 
 void parse_set_module_def_context_name(const char* name) {
     ThreadData* td = thread_data.get();
-    if (td->qmd) {
+    if (get_module_def_context(td)) {
         QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(td->qmd);
         // set name and setup for parsing any header closures / call references
         uqmd->setNameInit(name);

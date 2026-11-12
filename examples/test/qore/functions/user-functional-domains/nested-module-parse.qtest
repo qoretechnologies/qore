@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the module is loaded in a child process whose module path holds it, so that its declaration applies
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class NestedModuleParseTest
+
+#! A Program parsed while a module is loaded (by its init closure) does not change the module's definition (#5803, #5938)
+/** The module definition context of the thread belongs to the module being loaded; module declarations in another
+    Program parsed meanwhile are that Program's (and ignored, as it defines no module): they cannot change the loading
+    module's version or add functional domains to it, and a parse of a nested module block no longer fails or aborts
+*/
+class NestedModuleParseTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-nested-module-parse-");
+    }
+
+    const ModuleSource = "%modern
+module NestedLoader {
+    version = \"1.0\";
+    desc = \"nested parse test\";
+    author = \"Qore Technologies\";
+    license = \"MIT\";
+    init = sub () { NestedLoader::parseNested(); };
+}
+
+public namespace NestedLoader {
+    our string result;
+
+    public sub parseNested() {
+        result = \"\";
+        foreach string body in ((\"module Z { url = \\\"y\\\"; }\", \"module Z { version = \\\"2\\\"; }\",
+                \"module Z { domains = \\\"PROCESS\\\"; }\")) {
+            Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+            try {
+                p.parse(body + \"\\nauto sub f() { return 1; }\", \"nested\");
+                result += sprintf(\"%y %y; \", p.callFunction(\"f\"),
+                    boolean(p.getParseOptions() & PO_NO_PROCESS_CONTROL));
+            } catch (hash<ExceptionInfo> ex) {
+                result += sprintf(\"%s; \", ex.err);
+            }
+        }
+    }
+
+    public string sub getResult() {
+        return result;
+    }
+
+    public sub tagged() [dom=PROCESS] {
+    }
+}
+";
+
+    # the loading module declares no domain: a restricted Program cannot load a module that calls its own tagged code
+    # in its init, so the module's options are checked through the restricted Program's parse of a call
+    const ScriptSource = "%modern
+%requires NestedLoader
+printf(\"nested: %s\\n\", trim(NestedLoader::getResult()));
+printf(\"version: %s\\n\", get_module_hash().NestedLoader.version);
+Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+try {
+    p.parse(\"%requires NestedLoader\\nNestedLoader::tagged();\", \"restricted\");
+    printf(\"restricted call: parsed\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"restricted call: %s\\n\", ex.err);
+}
+";
+
+    const Expected = "nested: 1 True; 1 True; 1 True;
+version: 1.0
+restricted call: PARSE-EXCEPTION
+";
+
+    constructor() : QUnit::Test("NestedModuleParseTest", "1.0", \ARGV) {
+        addTestCase("a Program parsed in a module's init does not change the module", \testNestedParse());
+        set_return_value(main());
+    }
+
+    testNestedParse() {
+        string mod_dir = tmp.path + "/mods";
+        mkdir(mod_dir);
+        writeFile(mod_dir + "/NestedLoader.qm", ModuleSource);
+        string script = writeFile(tmp.path + "/run.q", ScriptSource);
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        string mod_path = mod_dir + ":" + qlib_dir + (env_dir ? ":" + env_dir : "");
+        int rc;
+        string err_file = tmp.path + "/stderr.txt";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b "
+            "%s 2>%s", libqore_dir, libqore_dir, libqore_dir, mod_path, qore_bin, script, err_file), \rc);
+        assertEq(0, rc, "exit code; stderr: " + ReadOnlyFile::readTextFile(err_file));
+        assertEq(Expected, out);
+    }
+
+    private string writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        f.close();
+        return path;
+    }
+}

@@ -299,9 +299,10 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
     // permissions of that code, which uses the domains that its module declares (see
     // qore_relieve_module_declared_domains()); only module code runs with the module's override, so a reference that
-    // the caller's code creates to the module's code is not relieved, although the current Program can be the
-    // module's while the reference is created
-    const QoreProgram* pgm = getProgram();
+    // the caller's code creates to the module's code is not relieved (the caller's code clears the module's
+    // override); the Program running the code is tested, not the Program of the reference, which is the object's for
+    // a method reference
+    const QoreProgram* pgm = ::getProgram();
     if (pgm && runtime_get_module_call_program() == pgm) {
         creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
     }

@@ -1768,6 +1768,10 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
     QMM.getUserModuleRegistration(name, saved_reg);
 }
 
+const QoreProgram* QoreUserModuleDefContextHelper::getDefinitionProgram() const {
+    return pgm->pgm;
+}
+
 bool QoreModuleManager::isUserModuleContext(const char* name) {
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
