@@ -5,10 +5,10 @@
   type;
 - .su records of GCC and Clang are parsed, and a budget matches a function's own frame only: not a lambda or local
   class inside it, not a function of another class whose name ends with the same name, and every clone of it;
-- a function split by partial inlining counts its frame and that of its .part clone, which GCC records as
-  "0(<params>)" at the function's location (a free or static member function) or under the function's own name there
-  (a non-static member function or a template instance, told from .constprop and .isra clones with nm), also with the
-  real g++ and nm when they are available; .constprop and .isra clones count only the largest;
+- the frame of a function is never below a head plus its clone: the two largest records at a location, and the
+  clones folded with its own, from the symbol table (with g++ and objdump: the samples of GCC's .part, .cold,
+  .constprop and folded clones in stack-usage-samples, exact where the rule is); a .part clone without a record is
+  UNACCOUNTED;
 - a frame over its budget and a function with no frame fail the check, frames within budget pass it, a build made
   with another compiler or major version, build type, flags or target (C library) is skipped unless --force is
   given, and a build directory without the configuration that QORE_STACK_USAGE_REPORT writes, or without .su files,
@@ -106,7 +106,67 @@ def write_budgets(tmp, body,
     return str(path)
 
 
+# the frames that check-stack-usage.py --force reported for the release builds in CI's arm64 images (GCC 15.2):
+# Ubuntu (aarch64-linux-gnu) and Alpine (aarch64-alpine-linux-musl)
+ARM64_RELEASE_FRAMES = {
+    "aarch64-linux-gnu": {
+        "QoreIRInterpreter::execute": 3488, "tryExecuteInterpreterInlineIRFunction": 768,
+        "tryExecuteInterpreterInlineIRStaticMethod": 784, "evalAndRef": 48, "AbstractQoreNode::eval": 64,
+        "AbstractMethodCallNode::exec": 160, "NormalMethodFunction::evalMethodTmpArgs": 768,
+        "StaticMethodFunction::evalMethodTmpArgs": 768, "qore_method_private::evalNormalVariant": 816,
+        "UserMethodVariant::evalMethod": 64, "UserVariantBase::eval": 416, "UserClosureVariant::evalClosure": 464,
+        "UserVariantBase::evalTiered": 272, "UserVariantBase::evalIntern": 128, "QoreFunction::evalFunction": 992,
+        "QoreFunction::evalFunctionTmpArgs": 1008, "UserFunctionVariant::evalFunction": 0,
+        "FunctionCallNode::evalImpl": 128, "StaticMethodCallNode::evalImpl": 160, "StatementBlock::execIntern": 288,
+        "StatementBlock::execImpl": 224, "AbstractStatement::exec": 304, "ReturnStatement::execImpl": 112,
+    },
+}
+ARM64_RELEASE_FRAMES["aarch64-alpine-linux-musl"] = dict(ARM64_RELEASE_FRAMES["aarch64-linux-gnu"],
+    **{"QoreIRInterpreter::execute": 3504})
+ARM64_HARDENING = {
+    "aarch64-linux-gnu": "_FORTIFY_SOURCE=3 __SSP_STRONG__=3",
+    "aarch64-alpine-linux-musl": "_FORTIFY_SOURCE=2 __SSP_STRONG__=3",
+}
+
+
 class RepositoryBudgetsTest(unittest.TestCase):
+    def test_budget_files(self):
+        # every budget file parses, names the same functions, is for its own target, and is chosen for it
+        files = sorted((ROOT / "tools").glob("stack-usage-budgets*.txt"))
+        targets = {}
+        names = None
+        for path in files:
+            settings, budgets = csu.parse_budgets(path.read_text(), str(path))
+            self.assertNotIn(settings["target"], targets, path)
+            targets[settings["target"]] = path
+            if names is None:
+                names = [b[0] for b in budgets]
+            self.assertEqual(names, [b[0] for b in budgets], path)
+            self.assertEqual(path, csu.select_budgets(settings["target"]))
+        self.assertEqual(sorted(["x86_64-linux-gnu", "aarch64-linux-gnu", "aarch64-alpine-linux-musl"]),
+            sorted(targets))
+        self.assertEqual(csu.DEFAULT_BUDGETS, csu.select_budgets("powerpc64le-linux-gnu"))
+
+    def test_arm64_calibration(self):
+        # the release frames measured in CI's arm64 images pass their target's budgets (chosen by the target of the
+        # build), by the margin of the budgets, and the x86_64 budgets do not fit them (StatementBlock::execImpl)
+        for target, frames in ARM64_RELEASE_FRAMES.items():
+            su = "".join("/src/lib/x.cpp:%d:1:int %s(int)\t%d\tstatic\n" % (i, f, size)
+                for i, (f, size) in enumerate(sorted(frames.items()), 1))
+            with build_dir(su, target=target, hardening=ARM64_HARDENING[target]) as d:
+                rc, out, _ = run([str(d)])
+                self.assertEqual(0, rc, out)
+                self.assertIn("for %s; budgets calibrated for GNU, Release build for %s" % (target, target), out)
+                self.assertIn("OK: 23 function(s) within budget", out)
+                rc, out, _ = run(["--budgets", str(csu.DEFAULT_BUDGETS), "--force", str(d)])
+                self.assertEqual(1, rc, out)
+                self.assertRegex(out, r"OVER\s+StatementBlock::execImpl")
+            settings, budgets = csu.parse_budgets(csu.select_budgets(target).read_text())
+            for func, budget, _ in budgets:
+                # a margin of at least 32 bytes, but one array of 528 bytes more in a frame fails
+                self.assertGreaterEqual(budget - frames[func], 32, func)
+                self.assertLess(budget, frames[func] + 528, func)
+
     def test_budget_file_parses(self):
         settings, budgets = csu.parse_budgets(BUDGETS.read_text(), str(BUDGETS))
         self.assertEqual("GNU", settings["compiler"])
@@ -185,56 +245,6 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(csu.is_part_clone_of("tf", "int tf(T) [with T = int]", "int tf<char>(char) [clone .part.0]"))
         self.assertEqual("int, int", csu.match_params("N::K::big", "int N::K::big(int,  int) const"))
 
-    def test_part_clone_from_symbol_fixture(self):
-        # the records of an overload whose .part clone the symbol table lists are added; those of an overload with
-        # .constprop and .isra clones are not (symbols as a fixture, so that this runs without g++)
-        su = ("/src/d.cpp:15:5:int N::K::big(int)\t576\tstatic\n"
-            "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n"
-            "/src/d.cpp:15:5:int N::K::big(int)\t8\tstatic\n"
-            "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n")
-        symbols = [csu.Symbol("N::K::big(int) [clone .part.0]", ".text", 0, 0x190),
-            csu.Symbol("N::K::big(int, int) [clone .constprop.0] [clone .isra.0]", ".text", 0x200, 0x80),
-            csu.Symbol("N::K::big(int)", ".text", 0x300, 0x17),
-            csu.Symbol("N::K::big(int, int)", ".text", 0x320, 0x40)]
-        frames = frames_of(su, Path("/src/d.cpp.su"))
-        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
-            results = csu.check([("N::K::big", 1, 1)], frames)
-        self.assertEqual(1632, results[0][2])
-        self.assertIsNone(results[0][4])
-        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
-            results = csu.check([("N::K::big", 1, 1)], [f for f in frames if f[1] != 1632])
-        self.assertEqual(584, results[0][2])
-        # without the object file the two records of the overload are added (conservative)
-        self.assertEqual(3264, csu.check([("N::K::big", 1, 1)], frames)[0][2])
-
-    def test_folded_clone_fixture(self):
-        # identical code folding merged the clone of K::f(long) with that of K::z(long), which GCC recorded at z's
-        # location: f(long)'s frame is its head plus that clone, although its overload f(int) has a smaller clone
-        su = ("/src/o.cpp:14:5:int K::z(long int)\t1264\tstatic\n"
-            "/src/o.cpp:15:5:int K::f(int)\t368\tstatic\n"
-            "/src/o.cpp:14:5:int K::z(long int)\t8\tstatic\n"
-            "/src/o.cpp:15:5:int K::f(int)\t8\tstatic\n"
-            "/src/o.cpp:16:5:int K::f(long int)\t8\tstatic\n")
-        symbols = [csu.Symbol("K::z(long) [clone .part.0]", ".text", 0, 0x18b),
-            csu.Symbol("K::f(long) [clone .part.0]", ".text", 0, 0x18b),
-            csu.Symbol("K::f(int) [clone .part.0]", ".text", 0x190, 0x190),
-            csu.Symbol("K::z(long)", ".text", 0x650, 0x18),
-            csu.Symbol("K::f(int)", ".text", 0x670, 0x17),
-            csu.Symbol("K::f(long)", ".text", 0x690, 0x18)]
-        frames = frames_of(su, Path("/src/o.cpp.su"))
-        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
-            results = {r[0]: r for r in csu.check([("K::f", 1, 1), ("K::z", 1, 2)], frames)}
-        self.assertEqual(1272, results["K::f"][2])
-        self.assertIn("folded", results["K::f"][3])
-        self.assertIsNone(results["K::f"][4])
-        self.assertEqual(1272, results["K::z"][2])
-        # a clone at another address is not folded with z's: it is unaccounted
-        symbols[1] = csu.Symbol("K::f(long) [clone .part.0]", ".text", 0x400, 0x18b)
-        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
-            results = {r[0]: r for r in csu.check([("K::f", 1, 1)], frames)}
-        # the two clones of the overloads with one parameter cannot be told apart: one of them is unaccounted
-        self.assertIn(results["K::f"][4], ("K::f(long) [clone .part.0]", "K::f(int) [clone .part.0]"))
-
     def test_symbol_names(self):
         self.assertEqual("{anonymous}::K::f",
             csu.symbol_function(csu.Symbol("(anonymous namespace)::K::f(int) [clone .part.0]", ".text", 0, 1).name))
@@ -242,67 +252,6 @@ class ParseTest(unittest.TestCase):
         self.assertEqual("K::big", csu.symbol_function("K::big[abi:cxx11](int) const [clone .part.0]"))
         self.assertEqual("K::f", csu.symbol_function("K::f(int (*)(int), std::map<int, int> const&)"))
         self.assertIsNone(csu.symbol_function("not a function"))
-
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
-    def test_part_clone_types_and_folding_with_gcc(self):
-        # nm and .su records spell parameter types differently ("char const*" and "const char*", std::string with its
-        # template arguments): the clones of split members with such parameters are matched by their number; and two
-        # identical .part clones folded into one by identical code folding are recorded once, at one function's
-        # location, and charged to both functions
-        source = """#include <cstring>
-#include <string>
-extern void use(char*);
-struct ExceptionSink;
-#define BODY(test, k) if (test) return 1; \\
-    char buf[300]; memset(buf, x, sizeof buf); use(buf); use(buf+1); use(buf+2); use(buf+k); \\
-    for (int i = 0; i < x; ++i) { char b2[200]; memset(b2, i, sizeof b2); use(b2); use(b2+1); use(b2+2);} \\
-    use(buf+4); use(buf+5); use(buf+6); use(buf+7); use(buf+8); return buf[k];
-struct K {
-    int m;
-    int b(const char* p, ExceptionSink* xsink, int x);
-    int s(int x, const std::string& str);
-    // identical bodies: identical code folding merges their .part clones
-    int f1(int x);
-    int f2(int x);
-};
-int K::b(const char* p, ExceptionSink* xsink, int x) { BODY(m, 3) }
-int K::s(int x, const std::string& str) { BODY(m, 5) }
-int K::f1(int x) { BODY(m, 7) }
-int K::f2(int x) { BODY(m, 7) }
-int c1(K* k, int n) { return k->b("a", 0, n) + k->b("b", 0, n * 2); }
-int c2(K* k, int n, const std::string& s) { return k->s(n, s) + k->s(n * 2, s); }
-int c3(K* k, int n) { return k->f1(n) + k->f1(n * 2) + k->f2(n) + k->f2(n * 3); }
-"""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            (tmp / "p.cpp").write_text(source)
-            subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "p.cpp", "-o", "p.cpp.o"], cwd=str(tmp), check=True)
-            frames = csu.collect_frames(tmp)
-            parts = csu.object_part_clones(tmp / "p.cpp.su", {})
-            results = {r[0]: r for r in csu.check([("K::b", 1, 1), ("K::s", 1, 2), ("K::f1", 1, 3), ("K::f2", 1, 4)],
-                frames)}
-
-        def records(func):
-            return sorted((f[1] for f in frames if csu.matches(func, f[0])), reverse=True)
-
-        if not any(csu.matches("K::b", n) for n in parts):
-            self.skipTest("this g++ does not split the functions by partial inlining")
-        # nm spells the parameters "char const*" and "std::__cxx11::basic_string<...> const&"
-        self.assertTrue(any("char const*" in n for n in parts))
-        for func in ("K::b", "K::s"):
-            r = records(func)
-            self.assertEqual(2, len(r), func)
-            self.assertEqual(r[0] + r[1], results[func][2], func)
-            self.assertIsNone(results[func][4], func)
-        # one of the folded clones is recorded at the location of its function; the other function's frame is its
-        # head plus that record
-        folded = [f for f in ("K::f1", "K::f2") if len(records(f)) == 1]
-        if len(folded) != 1:
-            self.skipTest("this g++ does not fold the identical .part clones")
-        recorded = "K::f2" if folded[0] == "K::f1" else "K::f1"
-        self.assertIsNone(results[folded[0]][4])
-        self.assertEqual(records(folded[0])[0] + records(recorded)[0], results[folded[0]][2])
-        self.assertEqual(results[recorded][2], results[folded[0]][2])
 
     def test_unaccounted_reported(self):
         # a function with a .part clone that no record accounts for fails the check, with the clone named
@@ -322,106 +271,17 @@ int c3(K* k, int n) { return k->f1(n) + k->f1(n * 2) + k->f2(n) + k->f2(n * 3); 
                 rc, out, _ = run(["--budgets", b, str(d)])
         self.assertEqual(0, rc, out)
 
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
-    def test_overloads_folding_and_internal_with_gcc(self):
-        # an overload whose clone identical code folding merged with another function's while the other overload
-        # has a smaller clone of its own; a function in an anonymous namespace (objdump writes "(anonymous
-        # namespace)", .su records "{anonymous}"); and one whose head is inlined into all of its callers, whose clone
-        # GCC records only as "0(int)" with no record of the function at that location, so that it is unaccounted
-        source = """#include <cstring>
-extern void use(char*);
-extern void usep(void*);
-#define BODY(test, k, N) if (test) return 1; \\
-    char buf[N]; memset(buf, x, sizeof buf); usep(this); use(buf); use(buf+1); use(buf+2); use(buf+k); \\
-    for (int i = 0; i < x; ++i) { char b2[200]; memset(b2, i, sizeof b2); use(b2); use(b2+1); use(b2+2);} \\
-    use(buf+4); use(buf+5); use(buf+6); use(buf+7); use(buf+8); return buf[k];
-struct K {
-    int m;
-    int f(int x);
-    int f(long x);
-    int z(long x);
-};
-int K::z(long x) { BODY(m, 9, 1000) }
-int K::f(int x) { BODY(m, 9, 100) }
-int K::f(long x) { BODY(m, 9, 1000) }
-int c1(K* k, int n) {
-    int r = 0;
-    for (int j = 0; j < 2; ++j) r += k->f(n + j) + k->f((long)n + j) + k->z((long)n + j);
-    return r;
-}
-namespace {
-struct A {
-    int m;
-    int f(int x);
-};
-int A::f(int x) { BODY(m, 3, 1000) }
-struct L {
-    int m;
-    int f(int x);
-    int f(long x);
-};
-int L::f(int x) { BODY(m, 1, 1000) }
-__attribute__((noinline)) int L::f(long x) {
-    usep(this); int y = m; if (x > y) { char b[50]; memset(b, x, 50); use(b); } return y;
-}
-}
-int c2(A* a, int n) { int r = 0; for (int j = 0; j < 2; ++j) r += a->f(n + j); return r; }
-int (A::*ap)(int) = &A::f;
-void* app = &ap;
-void* mk();
-int c3(int n) {
-    L* l = (L*)mk();
-    int r = 0;
-    for (int j = 0; j < 2; ++j) r += l->f(n + j) + l->f((long)n + j);
-    return r;
-}
-int c4(int n) { L* l = (L*)mk(); return l->f(n * 3) + l->f(n * 5); }
-"""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            (tmp / "p.cpp").write_text(source)
-            subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "p.cpp", "-o", "p.cpp.o"], cwd=str(tmp), check=True)
-            frames = csu.collect_frames(tmp)
-            symbols = csu.object_symbols(tmp / "p.cpp.su", {})
-            results = {r[0]: r for r in csu.check([("K::f", 1, 1), ("K::z", 1, 2), ("{anonymous}::A::f", 1, 3),
-                ("{anonymous}::L::f", 1, 4)], frames)}
-
-        def location_total(sig):
-            # the records at the location of the function's record: its head and its clone, which GCC records as
-            # "0(...)" or under the function's name there
-            location = [f[3] for f in frames if f[0] == sig][0]
-            return sum(f[1] for f in frames if f[3] == location)
-
-        def key(name):
-            return [sym.key for sym in symbols if sym.name == name]
-
-        if not key("K::f(long) [clone .part.0]") or key("K::f(long) [clone .part.0]") != key("K::z(long) [clone .part.0]"):
-            self.skipTest("this g++ does not split and fold the functions")
-        z = location_total("int K::z(long int)")
-        self.assertEqual(z, results["K::z"][2])
-        # f(long): its head and z's clone, more than f(int)'s head and clone
-        self.assertEqual(z, results["K::f"][2])
-        self.assertGreater(results["K::f"][2], location_total("int K::f(int)"))
-        self.assertIsNone(results["K::f"][4])
-        self.assertIsNone(results["K::z"][4])
-        # the anonymous namespace
-        self.assertEqual(location_total("int {anonymous}::A::f(int)"), results["{anonymous}::A::f"][2])
-        self.assertGreater(results["{anonymous}::A::f"][2], 1000)
-        self.assertIsNone(results["{anonymous}::A::f"][4])
-        # the clone recorded only as "0(int)", at a location without a record of its function
-        if any(sym.name == "{anonymous}::L::f(int)" for sym in symbols):
-            self.skipTest("this g++ does not inline L::f(int) into all of its callers")
-        self.assertEqual("{anonymous}::L::f(int) [clone .part.0]", results["{anonymous}::L::f"][4])
-
-    def test_same_location_records_without_object(self):
-        # two records of the same signature at the same location are a .part clone and its head, or a .constprop or
-        # .isra clone and the function; without the object file to tell them apart, they are added
+    def test_same_location_records(self):
+        # the records at a function's location may be its head and a clone (or alternatives): the two largest are
+        # added, never less than the head and its clone
         su = ("/src/A.cpp:16:5:int N::K::big(int)\t576\tstatic\n"
-            "/src/A.cpp:16:5:int N::K::big(int)\t8\tstatic\n")
-        results = csu.check([("N::K::big", 1000, 1)], frames_of(su, Path("/nonexistent/A.cpp.su")))
-        self.assertEqual(584, results[0][2])
-        self.assertIn("assumed", results[0][3])
-
+            "/src/A.cpp:16:5:int N::K::big(int)\t8\tstatic\n"
+            "/src/A.cpp:16:5:int N::K::big(int)\t500\tstatic\n"
+            # an overload at another location is not added
+            "/src/A.cpp:20:5:int N::K::big(int, int)\t1000\tstatic\n")
+        results = csu.check([("N::K::big", 1, 1)], frames_of(su, Path("/nonexistent/A.cpp.su")))
+        self.assertEqual(1076, results[0][2])
+        self.assertIsNone(results[0][4])
 
 class CheckTest(unittest.TestCase):
     def test_within_budget(self):
@@ -514,118 +374,65 @@ class CheckTest(unittest.TestCase):
         self.assertFalse(csu.is_part_clone("int big(int)"))
         results = csu.check([("big", 600, 1), ("c1", 100, 2)], frames)
         self.assertEqual(584, results[0][2])
-        self.assertIn(".part clone recorded as 0(...) at /src/p.cpp:4:5", results[0][3])
+        self.assertIn("0(int)", results[0][3])
         self.assertEqual(16, results[1][2])
         # the same location in another .su file is another function
         frames2 = [(f[0], f[1], Path("other.su") if f[0] == "0(int)" else f[2], f[3]) for f in frames]
         self.assertEqual(8, csu.check([("big", 600, 1)], frames2)[0][2])
 
     @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
-    def test_part_clones_with_gcc(self):
-        # functions that GCC splits by partial inlining at -O3: the cold part with the large arrays becomes a .part
-        # clone that the callers call after the inlined head; GCC records the clone of a free function as "0(int)",
-        # and that of a non-static member function or a template instance under the function's own name
-        # the bodies differ, so that identical code folding does not merge the .part clones
-        source = """#include <cstring>
-extern void use(char*);
-extern int flag;
-extern int g(int*);
-#define BODY(test, k) if (test) return 1; \\
-    char buf[300]; memset(buf, x, sizeof buf); use(buf); use(buf+1); use(buf+2); use(buf+k); \\
-    for (int i = 0; i < x; ++i) { char b2[200]; memset(b2, i, sizeof b2); use(b2); use(b2+1); use(b2+2);} \\
-    use(buf+4); use(buf+5); use(buf+6); use(buf+7); use(buf+8); return buf[k];
-int big(int x) { BODY(flag, 3) }
-namespace N {
-struct K {
-    int m;
-    int big(int x);
-    // an overload with .constprop and .isra clones, at another location
-    int big(int a, int b);
-};
-int K::big(int x) { BODY(m, 9) }
-int __attribute__((noinline)) K::big(int a, int b) {
-    int x[400]; for (int i = 0; i < b; ++i) x[i & 63] = a + i + m; return g(x);
-}
-}
-// a member function with an ABI tag, which nm writes after the name: "A::big[abi:cxx11](int) [clone .part.0]"
-struct A {
-    int m;
-    [[gnu::abi_tag("cxx11")]] int big(int x);
-};
-int A::big(int x) { BODY(m, 12) }
-template <typename T> int tf(T x) { BODY(flag, sizeof(T) + 10) }
-// a function with .constprop and .isra clones, which are not frames on top of it
-struct S {
-    int m;
-    int __attribute__((noinline)) mm(int a, int b) {
-        int x[64]; for (int i = 0; i < b; ++i) x[i & 63] = a + i + m; return g(x);
-    }
-};
-int c1(int n) { return big(n) + 1; }
-int c2(int n) { return big(n * 2) + 2; }
-int c3(N::K* k, int n) { return k->big(n) + 1; }
-int c4(N::K* k, int n) { return k->big(n * 2) + 2; }
-int c5(int n) { return tf<int>(n) + tf<int>(n * 3); }
-int c6(A* a, int n) { return a->big(n) + 1; }
-int c7(A* a, int n) { return a->big(n * 2) + 2; }
-int w1(N::K* k, int a) { return k->big(a, 5); }
-int w2(N::K* k, int a) { return k->big(a, 5) + 1; }
-int w3(N::K* k, int a, int b) { return k->big(a, b); }
-int v1(S* s, int a) { return s->mm(a, 5); }
-int v2(S* s, int a) { return s->mm(a, 5) + 1; }
-int v3(S* s, int a, int b) { return s->mm(a, b); }
-"""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            (tmp / "p.cpp").write_text(source)
-            subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "p.cpp", "-o", "p.cpp.o"], cwd=str(tmp), check=True)
-            frames = csu.collect_frames(tmp)
-            parts = csu.object_part_clones(tmp / "p.cpp.su", {})
-            self.assertIsNotNone(parts)
-
-            def records(func):
-                return sorted((f[1] for f in frames if csu.matches(func, f[0])), reverse=True)
-
-            results = {r[0]: r for r in csu.check([("big", 1, 1), ("N::K::big", 1, 2), ("tf", 1, 3), ("S::mm", 1, 4),
-                ("A::big", 1, 5)], frames)}
-
-            # the free function: its head and the "0(int)" record at its location
-            zero = [f for f in frames if csu.is_part_clone(f[0])]
-            big = [f for f in frames if csu.matches("big", f[0])]
-            if not zero or not any(csu.matches("N::K::big", n) for n in parts):
-                self.skipTest("this g++ does not split the functions by partial inlining")
-            self.assertEqual(1, len(big))
-            self.assertIn(big[0][3], [f[3] for f in zero])
-            self.assertEqual(big[0][1] + max(f[1] for f in zero if f[3] == big[0][3]), results["big"][2])
-
-            # the non-static member function: two records of its own name, head and .part clone, added; its overload
-            # has .constprop and .isra clones at another location, which are not added, although the other overload
-            # has a .part clone
-            member = sorted((f[1] for f in frames if f[0] == "int N::K::big(int)"), reverse=True)
-            overload = sorted((f[1] for f in frames if f[0] == "int N::K::big(int, int)"), reverse=True)
-            self.assertEqual(2, len(member))
-            self.assertGreater(member[0], 300)
-            self.assertGreater(len(overload), 1)
-            self.assertEqual(max(member[0] + member[1], overload[0]), results["N::K::big"][2])
-            self.assertEqual(member[0] + member[1],
-                csu.check([("N::K::big", 1, 1)], [f for f in frames if f[0] != "int N::K::big(int, int)"])[0][2])
-            self.assertEqual(overload[0],
-                csu.check([("N::K::big", 1, 1)], [f for f in frames if f[0] != "int N::K::big(int)"])[0][2])
-
-            # the member function with an ABI tag: its .part clone is found by nm under the tagged name
-            self.assertTrue(any("[abi:cxx11]" in n for n in parts))
-            tagged = records("A::big")
-            self.assertEqual(2, len(tagged))
-            self.assertEqual(tagged[0] + tagged[1], results["A::big"][2])
-
-            # the template instance: its head is inlined into the caller, only the .part clone has a frame
-            self.assertTrue(any(csu.matches("tf", n) for n in parts))
-            self.assertEqual(records("tf")[0], results["tf"][2])
-
-            # .constprop and .isra clones under the same name and location are alternatives: the largest counts
-            self.assertFalse(any(csu.matches("S::mm", n) for n in parts))
-            self.assertGreater(len(records("S::mm")), 1)
-            self.assertEqual(records("S::mm")[0], results["S::mm"][2])
+    def test_samples_with_gcc(self):
+        # GCC's records of .part clones in the samples (examples/test/cmake/stack-usage-samples), with g++ -O3: the
+        # frame of each function is never below its worst case (a head plus its clone, or a single frame), and exact
+        # where the rule is (one location, a head and its clone); a clone without any record is UNACCOUNTED.  The
+        # worst cases were read from the records and the symbol tables of GCC 15.2, so other versions are skipped
+        version = subprocess.run(["g++", "-dumpversion"], stdout=subprocess.PIPE, universal_newlines=True).stdout
+        if version.strip().split(".")[0] != "15":
+            self.skipTest("the worst cases are those of GCC 15, and g++ is %s" % version.strip())
+        expected = {
+            # the clone of f(long) is folded with z's (recorded at z's location); f(int) has its own, smaller one
+            "folded-overload.cpp": {"K::f": ("min", 1272), "K::z": ("min", 1272), "Q::g": ("exact", 1272)},
+            # "(anonymous namespace)" in the symbol table, "{anonymous}" in the records
+            "anonymous-namespace.cpp": {"{anonymous}::K::f": ("exact", 1272)},
+            # the head of L::f(int) is inlined into all callers, its clone recorded only as "0(int)" at a location
+            # without a record of the function
+            "inlined-head-zero-record.cpp": {"{anonymous}::L::f": ("unaccounted", None)},
+            # "const char*" in the records, "char const*" in the symbol table
+            "member-const-char.cpp": {"K::b": ("exact", 584)},
+            # an ABI tag in the symbol table
+            "abi-tag.cpp": {"K::big": ("exact", 584)},
+            # a split overload next to one with .constprop/.isra clones, template instances
+            "overloads-templates.cpp": {"N::K::big": ("min", 1632), "tf": ("min", 576), "tf2": ("min", 304),
+                "M::K::big": ("min", 352)},
+            # a .cold fragment of g's clone, and K::f's clone folded with g's
+            "cold-fragment.cpp": {"K::f": ("exact", 1272), "g": ("exact", 1272)},
+            # a .part clone and its .constprop variant (member), a function with a .constprop clone (static)
+            "part-constprop.cpp": {"K::f": ("min", 1288), "g": ("min", 1264)},
+            "part-constprop-free.cpp": {"K::f": ("min", 1288), "g": ("min", 1272)},
+            # overloads with as many parameters whose clones are folded together
+            "folded-same-arity.cpp": {"K::f": ("min", 1272)},
+            # f(long)'s clone folded with z's, f(int) with a larger clone of its own
+            "folded-larger-own.cpp": {"K::f": ("min", 1320), "K::z": ("min", 1304)},
+        }
+        samples = ROOT / "examples" / "test" / "cmake" / "stack-usage-samples"
+        self.assertEqual(sorted(expected), sorted(p.name for p in samples.glob("*.cpp")))
+        for name, funcs in expected.items():
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                shutil.copy(str(samples / name), str(tmp / name))
+                subprocess.run(["g++", "-O3", "-fstack-usage", "-c", name, "-o", name + ".o"], cwd=str(tmp),
+                    check=True)
+                results = {r[0]: r for r in csu.check([(f, 1, 1) for f in funcs], csu.collect_frames(tmp))}
+            for func, (kind, value) in funcs.items():
+                label = "%s: %s: %r" % (name, func, results[func])
+                if kind == "unaccounted":
+                    self.assertIsNotNone(results[func][4], label)
+                    continue
+                self.assertIsNone(results[func][4], label)
+                if kind == "exact":
+                    self.assertEqual(value, results[func][2], label)
+                else:
+                    self.assertGreaterEqual(results[func][2], value, label)
 
 
 if __name__ == "__main__":

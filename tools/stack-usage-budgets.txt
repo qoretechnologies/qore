@@ -13,11 +13,9 @@
 # (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit.  A function that is MISSING was renamed or
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
-# Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload and
-# clone of the function, not the lambdas and local classes inside it; the largest frame counts, plus that of a
-# ".part" clone, which the function calls (GCC records it as "0(...)" at the function's location, or under the
-# function's own name there for a non-static member function or a template; see tools/check-stack-usage.py).  A .part
-# clone that no record accounts for (as with identical code folding's merges, where it is not resolved) is UNACCOUNTED.
+# Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
+# the function, not the lambdas and local classes inside it.  Its frame counts its clones: the two largest records
+# at each of its locations plus the clones merged with its own, see tools/check-stack-usage.py.
 
 @compiler GNU
 # the major version must match
