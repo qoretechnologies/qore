@@ -320,11 +320,13 @@ class HttpServerStopDrainTest inherits QUnit::Test {
             server.stopImmediate();
         }
 
-        # the header and half of the body are sent before the stop, the rest of the body after the drain started
+        # the header is read before the stop (the server answers it with 100 Continue, and its handler reads the
+        # body), the body is sent after the drain started
         Socket s();
         s.connect(sprintf("127.0.0.1:%d", setup.port), 10s);
         on_exit s.close();
-        s.send("POST /post HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\n12345");
+        s.send("POST /post HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\nExpect: 100-continue\r\n\r\n");
+        assertEq(100, s.readHTTPHeader(StopTimeout).status_code, "the header is read");
 
         Counter stopped(1);
         background sub () {
@@ -332,7 +334,7 @@ class HttpServerStopDrainTest inherits QUnit::Test {
             server.stop();
         }();
         appender.waitFor("drain started");
-        s.send("67890");
+        s.send("1234567890");
 
         hash<auto> resp = readResponse(s);
         assertEq(200, resp.status_code, "the request is answered");
