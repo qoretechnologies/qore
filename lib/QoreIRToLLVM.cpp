@@ -11325,6 +11325,13 @@ static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_inst
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
 }
 
+//! Returns the method of a static method call expression, or nullptr if it is not one or its method is not resolved
+static const QoreMethod* qore_ir_static_call_node_method(const QoreValue& expr) {
+    const auto* static_call = expr.hasNode()
+        ? dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode()) : nullptr;
+    return static_call ? static_call->getMethod() : nullptr;
+}
+
 static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
     if (inst->opcode == QoreIROpcode::Invoke) {
         return true;
@@ -19675,11 +19682,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {i64_type, ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {ref_boxed, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode) {
-                    // CallStaticDirect invoke: call static method directly with embedded pointer
-                    const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode
+                        && qore_ir_static_call_node_method(inv->expr)) {
+                    // CallStaticDirect invoke: call static method directly with embedded pointer; a call whose method
+                    // is not resolved is made through its expression below (qore#5897)
+                    const auto* static_call = static_cast<const StaticMethodCallNode*>(
                             inv->expr.getInternalNode());
-                    assert(static_call);
                     llvm::Value* method_ptr = builder->CreateIntToPtr(
                             llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(static_call->getMethod())), ptr_type);
@@ -24059,6 +24067,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                              llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
                             module, llvm_func, inst);
                 }
+            } else if (!direct_inst->method) {
+                // a static method that is not resolved: the instruction was read from serialized IR while the class
+                // of the method had no methods yet (an AOT image reads the member initializers of a class before the
+                // methods of the classes that they call); the call is made through its expression, as the IR
+                // interpreter makes it (qore#5897)
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
