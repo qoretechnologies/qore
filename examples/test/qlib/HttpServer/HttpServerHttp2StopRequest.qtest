@@ -269,6 +269,14 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         and the last request could not send its body.
     */
     windowNotLostTest() {
+        # the lost credit is seen as the 65535 byte default connection window shrinking: the server keeps it for the
+        # case (a debug hook), as it raises its window otherwise
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", True);
+        }
+        on_exit if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", False);
+        }
         Socket s = connect();
         on_exit s.close();
 

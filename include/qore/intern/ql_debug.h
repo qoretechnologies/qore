@@ -147,6 +147,12 @@ struct QoreDbgStreamCreditStats {
     std::atomic<int64_t> orphaned{0};
 };
 DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent: [0] client sessions, [1] server
+//! sessions; see dbg_http2_connection_window_updates()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2];
+//! true to keep the RFC 9113 default connection window (65535) in new HTTP/2 sessions, for tests that detect lost
+//! connection credit by watching the window shrink; see dbg_http2_default_connection_window()
+DLLLOCAL extern std::atomic<bool> qore_dbg_h2_default_connection_window;
 //! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
 DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 

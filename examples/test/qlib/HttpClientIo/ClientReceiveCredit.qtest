@@ -794,6 +794,14 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             "max_connections_per_host": 1,
         });
         on_exit delete mgr;
+        # the lost credit is seen as the 64 KiB default connection window filling up: the client keeps it for the case
+        # (a debug hook), as it raises its window otherwise
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", True);
+        }
+        on_exit if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", False);
+        }
         # the data of each oversized response that the session discards is credited to the connection; without it,
         # each response leaked a DATA frame (about 16 KiB) of the 64 KiB connection window, which pinned the
         # connection after a few responses

@@ -558,6 +558,25 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
                 nghttp2_strerror(rv));
             return -1;
         }
+        // the connection window bounds the data in flight on all the streams of the connection: at the RFC 9113
+        // default of 65535 bytes, every 64 KiB received needs a WINDOW_UPDATE round trip whatever the stream windows,
+        // and a loaded host that takes ~200 ms to schedule a round trip receives a few hundred KB/s; it is raised to
+        // ConnectionWindowStreams stream windows (nghttp2 sends the WINDOW_UPDATE for stream 0; the received data is
+        // credited as before, so the stream windows still bound the data buffered for each stream)
+#ifdef DEBUG
+        // tests that detect lost connection credit by watching the window shrink keep the default window
+        if (!qore_dbg_h2_default_connection_window.load())
+#endif
+        {
+            int64_t window = std::min<int64_t>(static_cast<int64_t>(local_settings.initial_window_size)
+                * ConnectionWindowStreams, NGHTTP2_MAX_WINDOW_SIZE);
+            rv = nghttp2_session_set_local_window_size(session, NGHTTP2_FLAG_NONE, 0, static_cast<int32_t>(window));
+            if (rv != 0) {
+                xsink->raiseException("HTTP2-ERROR", "failed to set the connection window: %s",
+                    nghttp2_strerror(rv));
+                return -1;
+            }
+        }
         connection_preface_submitted = true;
     }
 
@@ -2129,6 +2148,11 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         printd(1, "HTTP2 WARN: outgoing frame length %d exceeds peer max_frame_size %u\n",
             (int)frame->hd.length, remote_max);
     }
+#ifdef DEBUG
+    if (frame->hd.type == NGHTTP2_WINDOW_UPDATE && !frame->hd.stream_id) {
+        qore_dbg_h2_connection_window_updates[is_server ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
