@@ -3272,7 +3272,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 return False;
             }
             foreach Class c in (cls.getClassHierarchy()) {
-                if (c.getPathName() == "RestClient::RestConnection") {
+                # AbstractRestConnection: the base class of RestConnection and of REST connections whose client is not
+                # a RestClient (issue #5838)
+                if (c.getPathName() == "RestClient::AbstractRestConnection") {
                     return True;
                 }
             }

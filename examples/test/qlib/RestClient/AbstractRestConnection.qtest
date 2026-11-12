@@ -8,6 +8,7 @@
 %requires QUnit
 %requires ConnectionProvider
 %requires RestClient
+%requires Logger
 
 %exec-class AbstractRestConnectionTest
 
@@ -52,6 +53,7 @@ class AbstractRestConnectionTest inherits QUnit::Test {
     constructor() : QUnit::Test("AbstractRestConnection", "1.0") {
         addTestCase("RestConnection is unchanged", \restConnection());
         addTestCase("a subclass with another client", \otherClient());
+        addTestCase("the poll ping of a subclass with another client", \pollPing());
         set_return_value(main());
     }
 
@@ -89,5 +91,17 @@ class AbstractRestConnectionTest inherits QUnit::Test {
         # OAuth2 is available as for a RestConnection
         assertEq(Type::Hash, conn.getOAuth2Options().type(), "the OAuth2 options are available");
         assertEq(False, conn.needsAuth(), "no authentication is needed without credentials");
+    }
+
+    #! the poll operations of the ping accept a connection that is not a RestConnection
+    pollPing() {
+        TestApiConnection conn("api", "test", "rest://127.0.0.1:1", NOTHING, {
+            "ping_method": "GET",
+            "ping_path": "/api/public/info",
+        });
+        Logger logger("test");
+        AbstractPollOperation op = conn.startPollConnect(logger);
+        on_exit op.abort();
+        assertEq(True, op instanceof AbstractPollOperation, "the poll ping starts");
     }
 }

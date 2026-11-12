@@ -7026,8 +7026,7 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
             }
             for (vlist_t::const_iterator gi = g->vlist.begin(), ge = g->vlist.end(); gi != ge; ++gi) {
                 MethodVariantBase* gv = const_cast<MethodVariantBase*>(METHVB_const(*gi));
-                // an abstract variant is never called: the variant that implements it is checked itself
-                if (gv->getAccess() == Internal || gv->isAbstract()) {
+                if (gv->getAccess() == Internal) {
                     continue;
                 }
                 gv->parseResolveUserSignature();

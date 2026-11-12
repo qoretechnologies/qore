@@ -6734,7 +6734,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     private {
         #! Strong reference to the connection for the lifetime of this polling operation
-        RestClient::RestConnection conn;
+        RestClient::AbstractRestConnection conn;
 
         #! Ping options
         hash<auto> ping_opts;
@@ -6864,7 +6864,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             openapi3, swagger, oauth2_auto_refresh, etc.)
         @param logger optional logger
     */
-    constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+    constructor(RestClient::AbstractRestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
         self.conn = conn;
         self.ping_opts = ping_opts;
         self.logger = logger;

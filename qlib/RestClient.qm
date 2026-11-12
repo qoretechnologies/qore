@@ -232,7 +232,7 @@ printf("%Y\n", ans.body);
     - polling pings decode response bodies by the rules shared by all HTTP clients instead of as ISO-8859-1
       without a charset; added
       @ref RestClient::RestClient::getPollResponseBodyText() "RestClient::getPollResponseBodyText()"
-    - @ref RestClient::AbstractRestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
+    - @ref RestClient::AbstractRestConnection::getDataProvider() "AbstractRestConnection::getDataProvider()" returns data
       providers with a @ref restclientiointro "RestClientIo" client and no longer connects
       to the server to create them
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
@@ -6288,7 +6288,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
     private {
         #! Strong reference to the connection for the lifetime of this polling operation
-        RestConnection conn;
+        AbstractRestConnection conn;
 
         #! The RestClient object to use for polling I/O
         RestClient rc;
@@ -6335,7 +6335,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
         @param rc the REST client to use for polling I/O
         @param real_opts the connection options
     */
-    constructor(RestConnection conn, RestClient rc, hash<auto> real_opts) {
+    constructor(AbstractRestConnection conn, RestClient rc, hash<auto> real_opts) {
         self.conn = conn;
         self.rc = rc;
         self.real_opts = real_opts;

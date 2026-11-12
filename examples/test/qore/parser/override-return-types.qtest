@@ -160,9 +160,18 @@ string sub get_rcv() { Base b = new C(); return b.rcv(\"a\", \"b\"); }
             "class C2 inherits A2, B2 { string m(string s) { return s; } }", "class 'C2' cannot inherit method "
             "A2::m\\(softint i\\) returning string with parent class method B2::m\\(int i\\) returning int",
             "a sibling parent class's method before the other one");
-        # an abstract variant of a parent class listed first, which another parent class's variant implements
+        # an abstract variant of a parent class listed first fixes the return type: a class that inherits an
+        # incompatible implementation with it is refused, as the abstract variant's implementation answers the calls
+        assertRejected("class AJ { abstract *int prog(); } class LJ { int prog() { return 1; } } "
+            "class J inherits AJ, LJ {}", "class 'J' cannot inherit method AJ::prog\\(\\) returning \\*int with parent "
+            "class method LJ::prog\\(\\) returning int", "an abstract variant first");
+        assertRejected("class P { int m() { return 12345; } } class AJ { abstract int m(); } "
+            "class LJ { string m() { return \"LJ\"; } } class J inherits AJ, LJ, P {}",
+            "cannot inherit method AJ::m\\(\\) returning int with parent class method LJ::m\\(\\) returning string",
+            "an abstract variant implemented by a later parent class");
+        # the class resolves it with its own variant
         parseAccepted("class AJ { abstract *int prog(); } class LJ { int prog() { return 1; } } "
-            "class J inherits AJ, LJ {}", "an abstract variant implemented by another parent class");
+            "class J inherits AJ, LJ { int prog() { return LJ::prog(); } }", "the class's own implementation");
         # compatible sibling parent classes
         Program p = parseAccepted("class A3 { int m(softint i) { return 1; } } class B3 { *int m(int i) { return i; } } "
             "class C3 inherits A3, B3 {} *int sub get() { B3 b = new C3(); return b.m(5); }", "compatible siblings");
