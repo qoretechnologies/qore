@@ -252,13 +252,33 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
 
     When the target has a single variant, an argument whose type is only known at runtime (for example an \c auto
     value, or a <tt>*string</tt> value for an \c auto parameter) is bound by name at parse time and type-checked at
-    runtime exactly as the same positional argument would be. When the target is overloaded, the arguments are bound
-    to the parameter names of a variant at parse time; when the variant depends on an argument's runtime type (or
-    value, as for an argument that can have no value, see @ref overloading), it is resolved at runtime among the
-    variants that have the same parameter names at the positions of the arguments, so the arguments are never passed
-    to a variant by position.  If another variant that the runtime resolution could select has other parameter names
-    at those positions, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give the
-    argument an explicit type that has a value.
+    runtime exactly as the same positional argument would be. When the target is overloaded and the arguments
+    select one variant at parse time, they are bound to its parameter names then. When the variant of a function call
+    depends on an argument's runtime type (or value, as for an argument that can have no value, see @ref overloading),
+    or the arguments match several variants equally well and the type of an argument is not known at parse time, the
+    variant is resolved at runtime: the arguments are bound by name to the parameters of each variant that accepts
+    named arguments, a variant that does not have a parameter for each named argument is not a candidate, and the best
+    match among the others is called with the arguments bound to its parameters (of variants that match equally well
+    and take the arguments at the same positions, the first one, as for positional arguments).  If none matches, or
+    two variants that take the arguments at other positions match equally well, the call raises
+    \c RUNTIME-OVERLOAD-ERROR, whose message gives the names and types of the arguments; arguments whose types are
+    known and that two variants match equally well are rejected at parse time with \c NAMED-CALL-NOT-SUPPORTED.  The arguments are not passed to a variant by position, except to a variant
+    whose parameters only accept no value (type \c nothing), which is given no value however they are named.  The
+    return type of the call is that of the variants that its arguments can be bound to:
+    @code{.py}
+string sub show(int count, string label) { return sprintf("%s: %d", label, count); }
+string sub show(string label, float count) { return sprintf("%g x %s", count, label); }
+auto n = 2;
+auto l = "items";
+# resolved at runtime: both variants take the arguments by name; show(int count, string label) matches the int
+# value of n best
+string str = show(label: l, count: n);
+    @endcode
+
+    For a method or static method call whose variant is resolved at runtime, the variants that the runtime resolution
+    can select must have the same parameter names at the positions of the arguments; if another such variant has
+    other parameter names at those positions, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional
+    arguments or give the argument an explicit type that has a value.
 
     @note Parameter names are part of the public calling interface for named callers. Renaming a public parameter can
     break callers that use named arguments even when positional callers are unaffected.

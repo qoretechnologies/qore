@@ -1,0 +1,31 @@
+sw label first: sw(int count, string label) count=1 label="x"
+sw count first: sw(int count, string label) count=1 label="x"
+sw float: sw(string label, float count) label="x" count=1.5
+tie: RUNTIME-OVERLOAD-ERROR
+reference: rf(string b, reference<int> a) b="x" ri=11
+one b: one(string b) b="x"
+one a: one(int a) a=1
+one b int: RUNTIME-OVERLOAD-ERROR
+dflt a: dflt(int a, string b) a=1 b="db"
+dflt b: dflt(string b, *int c) b="x" c=null
+dflt b c nothing: dflt(string b, *int c) b="x" c=null
+dflt b c: dflt(string b, *int c) b="x" c=1
+va a: va(int a, ...) a=1 argv=null
+va s: va(string s) s="x"
+mix: mix(int a, int b, string c) a=1 b=2 c="x"
+mix float: mix(int a, string c, float b) a=1 c="x" b=2.5
+mix wrong: RUNTIME-OVERLOAD-ERROR
+loop: ["one(string b) b=\"s0\"", "sw(int count, string label) count=0 label=\"l0\"", "one(int a) a=1", "sw(int count, string label) count=1 label=\"l1\"", "one(string b) b=\"s2\"", "sw(int count, string label) count=2 label=\"l2\"", "one(int a) a=3", "sw(int count, string label) count=3 label=\"l3\""]
+background: sw(int count, string label) count=1 label="x"
+background call: bg(Queue q, string b, string a) b="B" a="A"
+default committed: g2(string a, string b) a="A3" b="B3"
+default runtime: one(string b) b="v"
+member committed: g2(string a, string b) a="A" b="B"
+member runtime: one(string b) b="v"
+same names positional: same(*int a)
+same names: same(*int a)
+same names NOTHING: same(*int a)
+length bin: 3
+length str: 3
+substr: "bc"
+substr len: "ab"

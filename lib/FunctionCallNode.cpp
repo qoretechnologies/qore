@@ -600,6 +600,12 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
     return err;
 }
 
+void FunctionCallBase::setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size) {
+    assert(args);
+    qore_list_private::setNeedsEval(*args);
+    qore_list_private::get(args)->setCallArgEvalMap(std::move(source_to_param), result_size);
+}
+
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns, bool infer_class_receiver_from_args,
         const char* receiver_inference_call_desc) {
@@ -711,7 +717,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
                 receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
-                &args_with_value, &deferred_rt)
+                &args_with_value, &deferred_rt, allow_runtime_arg_names)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
                 &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
                 &args_with_value, &deferred_rt);
@@ -719,12 +725,24 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         if (named_args) {
             // a call whose variant is resolved at run time keeps the binding of its arguments (see
             // QoreFunction::parseFindVariantNamed())
-            if (!variant && !named_binding.variant) {
+            if (named_binding.runtime_names) {
+                // the variant is resolved at run time by binding the arguments by name to each candidate variant
+                // (see QoreFunction::runtimeFindVariant()): the arguments are kept in source order with their names;
+                // the return type is that of the variants that the names can be bound to (deferred_rt)
+                assert(allow_runtime_arg_names);
+                assert(!variant);
+                runtime_arg_names = std::make_shared<const name_vec_t>(std::move(arg_names));
+                type_param_instantiation.clear();
+            } else if (!variant && !named_binding.variant) {
                 if (!err) {
                     qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
-                        new QoreStringNode("named arguments require a parse-time-resolved signature in this version; "
-                            "this call to an overloaded target is ambiguous or depends on runtime argument types, so "
-                            "use positional arguments or give the arguments explicit types"));
+                        new QoreStringNode(allow_runtime_arg_names
+                            ? "this named call to an overloaded target is ambiguous: its arguments, whose types are "
+                                "known, match more than one variant equally well; give the arguments types that only "
+                                "one of the variants accepts, or use positional arguments"
+                            : "named arguments require a parse-time-resolved signature in this version; "
+                                "this call to an overloaded target is ambiguous or depends on runtime argument types, "
+                                "so use positional arguments or give the arguments explicit types"));
                     err = -1;
                 }
             } else if (args) {
@@ -1058,6 +1076,19 @@ QoreString* FunctionCallNode::getAsString(bool& del, int foff, ExceptionSink* xs
     return rv;
 }
 
+// a named call resolved at run time by parameter name; outside of evalImpl(), whose other calls are hot
+__attribute__((noinline, cold)) QoreValue FunctionCallNode::evalNamed(QoreFunction* func, QoreProgram* call_pgm,
+        RuntimeConfig& rc, bool defer_domain_po, ExceptionSink* xsink) const {
+    assert(!variant);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return func->evalFunctionTmpArgsNamed(getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), defer_domain_po, *runtime_arg_names);
+    }
+    return func->evalFunctionNamed(args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(), defer_domain_po,
+        *runtime_arg_names);
+}
+
 // eval(): return value requires a deref(xsink)
 QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -1089,6 +1120,9 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
     const bool defer_domain_po = (pgm != nullptr);
+    if (__builtin_expect(static_cast<bool>(runtime_arg_names), 0)) {
+        return evalNamed(func, call_pgm, rc, defer_domain_po, xsink);
+    }
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
         return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
@@ -1333,6 +1367,9 @@ int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& p
     assert(!parse_context.typeInfo);
     assert(fe);
     QoreFunction* func = fe->getFunction();
+    // a function call binds named arguments at run time when the variants that could be selected name their
+    // parameters differently (see FunctionCallNode::evalImpl())
+    allow_runtime_arg_names = true;
     return parseArgs(parse_context, func, fe->getNamespace());
 }
 

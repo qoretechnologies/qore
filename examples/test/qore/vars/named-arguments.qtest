@@ -370,12 +370,16 @@ public class NamedArgumentsTest inherits QUnit::Test {
             assertEq("o(string) \"s\" 9", p.callFunction("t", "s"),
                 "overloaded named call resolved at runtime: string");
         }
-        # ... and rejected when a variant with other parameter names at those positions could be selected
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "but o\\(string b, int c = 3\\)", sub () {
+        # ... and among the variants that the names can be bound to when the variants name their parameters
+        # differently: the arguments are bound by name to each variant at run time
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("sub o(int a, int c = 3) {} sub o(string b, int c = 3) {} sub t(auto x) { o(x, c: 9); }",
-                "overloaded-runtime-typed-other-names");
-        });
+            p.parse("string sub o(int a, int c = 3) { return sprintf(\"o(int a) %y %y\", a, c); } "
+                "string sub o(string b, int c = 3) { return sprintf(\"o(string b) %y %y\", b, c); } "
+                "string sub t(auto x) { return o(x, c: 9); }", "overloaded-runtime-typed-other-names");
+            assertEq("o(int a) 1 9", p.callFunction("t", 1));
+            assertEq("o(string b) \"s\" 9", p.callFunction("t", "s"));
+        }
 
         # untyped parameters (only allowed without %require-types) are skipped the same way
         {
@@ -2213,7 +2217,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub f(...) {} f(a: 1);", "varargs-only");
         });
 
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous or depends on runtime argument types", sub() {
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("abs(value: 1);", "ambiguous-builtin-named");
         });

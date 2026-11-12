@@ -12244,17 +12244,18 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
+            std::string sig_ref;
             if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
                 if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                    std::string sig_ref = "sig:";
+                    sig_ref = "sig:";
                     sig_ref += sig->getSignatureText();
-                    writer.writeStringRef(sig_ref.c_str());
-                } else {
-                    writer.writeStringRef("");
                 }
-            } else {
-                writer.writeStringRef("");
             }
+            // the arguments of a named call are written in source order (the order of their evaluation); the call
+            // keeps the positions of their parameters (bound at parse time) or their names (resolved at run time by
+            // parameter name) after the signature (read by read_expr_func_call())
+            sig_ref += qore_aot_named_call_arg_suffix(call);
+            writer.writeStringRef(sig_ref.c_str());
         } else {
             writer.writeStringRef("");
         }

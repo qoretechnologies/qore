@@ -48,7 +48,13 @@ protected:
     type_vec_t explicit_type_args;
     type_vec_t parsed_arg_type_info;
     QoreTypeParamInstantiation explicit_runtime_type_param_instantiation;
+    //! the names of the arguments in source order ("" for a positional argument) of a named call whose variant is
+    //! resolved at run time by parameter name; the arguments are then kept in source order (see
+    //! QoreFunction::runtimeFindVariant())
+    std::shared_ptr<const name_vec_t> runtime_arg_names;
     bool has_explicit_type_args = false;
+    //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
+    bool allow_runtime_arg_names = false;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -64,6 +70,7 @@ public:
         explicit_type_args(old.explicit_type_args),
         parsed_arg_type_info(old.parsed_arg_type_info),
         explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+        runtime_arg_names(old.runtime_arg_names),
         has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
         for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
@@ -77,6 +84,7 @@ public:
             explicit_type_args(old.explicit_type_args),
             parsed_arg_type_info(old.parsed_arg_type_info),
             explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+            runtime_arg_names(old.runtime_arg_names),
             has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
         for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
@@ -97,6 +105,18 @@ public:
     DLLLOCAL const QoreParseListNode* getParseArgs() const { return parse_args; }
 
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
+
+    //! the names of the arguments in source order of a named call resolved at run time by parameter name, if any
+    DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names.get(); }
+
+    //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)
+    DLLLOCAL void setRuntimeArgNames(name_vec_t&& names) {
+        runtime_arg_names = std::make_shared<const name_vec_t>(std::move(names));
+    }
+
+    //! sets the positions of the parameters of the arguments of a named call bound at parse time (AOT
+    //! deserialization); the arguments must be set
+    DLLLOCAL void setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size);
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
@@ -451,6 +471,10 @@ protected:
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! evaluates a named call whose variant is resolved at run time by parameter name
+    DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, bool defer_domain_po,
+            ExceptionSink* xsink) const;
 
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* a, qore_type_t n_type)
             : AbstractFunctionCallNode(loc, n_type, a), c_str(name), finalized(false) {

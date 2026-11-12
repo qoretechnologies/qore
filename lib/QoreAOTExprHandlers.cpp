@@ -138,6 +138,115 @@ static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const Us
         + "_" + std::to_string(closure_ir_counter.fetch_add(1));
 }
 
+std::string qore_aot_named_call_arg_suffix(const FunctionCallNode* call, bool with_map) {
+    std::string rv;
+    if (const name_vec_t* arg_names = call->getRuntimeArgNames()) {
+        rv = "\nargnames:";
+        rv += std::to_string(arg_names->size());
+        for (const std::string& name : *arg_names) {
+            assert(name.find('\n') == std::string::npos);
+            rv += "\n";
+            rv += name;
+        }
+        return rv;
+    }
+    const QoreListNode* args = call->getArgs();
+    const qore_list_private* args_priv = args ? qore_list_private::get(args) : nullptr;
+    if (with_map && args_priv && args_priv->hasCallArgEvalMap()) {
+        rv = "\nargmap:";
+        rv += std::to_string(args_priv->getCallArgEvalResultSize());
+        rv += ":";
+        const std::vector<size_t>& pos_map = *args_priv->getCallArgEvalMap();
+        for (size_t i = 0, e = pos_map.size(); i < e; ++i) {
+            if (i) {
+                rv += ",";
+            }
+            rv += std::to_string(pos_map[i]);
+        }
+    }
+    return rv;
+}
+
+// parses a decimal number in [start, end); returns -1 if invalid
+static int qore_aot_parse_size(const std::string& s, size_t start, size_t end, size_t& rv) {
+    if (start >= end || end > s.size()) {
+        return -1;
+    }
+    rv = 0;
+    for (size_t i = start; i < end; ++i) {
+        if (s[i] < '0' || s[i] > '9' || rv > (SIZE_MAX - 9) / 10) {
+            return -1;
+        }
+        rv = rv * 10 + (s[i] - '0');
+    }
+    return 0;
+}
+
+int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs& named) {
+    static constexpr const char* map_marker = "\nargmap:";
+    static constexpr const char* names_marker = "\nargnames:";
+    size_t map_pos = ref.find(map_marker);
+    size_t names_pos = ref.find(names_marker);
+    if (map_pos != std::string::npos && names_pos != std::string::npos) {
+        return -1;
+    }
+    if (map_pos != std::string::npos) {
+        size_t start = map_pos + strlen(map_marker);
+        size_t colon = ref.find(':', start);
+        // a call has at most 65535 arguments (see the readers)
+        if (colon == std::string::npos || qore_aot_parse_size(ref, start, colon, named.result_size)
+                || !named.result_size || named.result_size > 65535) {
+            return -1;
+        }
+        // each parameter position is given at most once
+        std::vector<bool> seen(named.result_size, false);
+        size_t pos = colon + 1;
+        while (pos < ref.size()) {
+            size_t comma = ref.find(',', pos);
+            size_t end = comma == std::string::npos ? ref.size() : comma;
+            size_t p;
+            if (qore_aot_parse_size(ref, pos, end, p) || p >= named.result_size || seen[p]) {
+                return -1;
+            }
+            seen[p] = true;
+            named.source_to_param.push_back(p);
+            pos = comma == std::string::npos ? ref.size() : comma + 1;
+        }
+        if (named.source_to_param.empty()) {
+            return -1;
+        }
+        named.has_map = true;
+        ref.erase(map_pos);
+        return 0;
+    }
+    if (names_pos != std::string::npos) {
+        size_t start = names_pos + strlen(names_marker);
+        size_t pos = ref.find('\n', start);
+        size_t count;
+        // each name takes at least its line's newline
+        if (qore_aot_parse_size(ref, start, pos == std::string::npos ? ref.size() : pos, count) || !count
+                || count > ref.size() - start) {
+            return -1;
+        }
+        named.names.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            if (pos == std::string::npos) {
+                return -1;
+            }
+            size_t name_start = pos + 1;
+            pos = ref.find('\n', name_start);
+            named.names.push_back(ref.substr(name_start,
+                pos == std::string::npos ? std::string::npos : pos - name_start));
+        }
+        if (pos != std::string::npos) {
+            return -1;
+        }
+        named.has_names = true;
+        ref.erase(names_pos);
+    }
+    return 0;
+}
+
 // ============================================================================
 // FUNC_CALL (1)
 // ============================================================================
@@ -170,17 +279,18 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
+            std::string sig_ref;
             if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
                 if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                    std::string sig_ref = "sig:";
+                    sig_ref = "sig:";
                     sig_ref += sig->getSignatureText();
-                    ctx.writer.writeStringRef(sig_ref.c_str());
-                } else {
-                    ctx.writer.writeStringRef("");
                 }
-            } else {
-                ctx.writer.writeStringRef("");
             }
+            // the arguments of a named call are written in source order (the order of their evaluation); the call
+            // keeps the positions of their parameters (a call bound at parse time) or their names (a call resolved
+            // at run time by parameter name) after the signature
+            sig_ref += qore_aot_named_call_arg_suffix(call);
+            ctx.writer.writeStringRef(sig_ref.c_str());
         } else {
             ctx.writer.writeStringRef("");
         }
@@ -255,14 +365,37 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     // the active runtime program when they execute.
     FunctionCallNode* fcn = new FunctionCallNode(
         &loc_builtin, fe, pln);
-    if (sig_ref && strncmp(sig_ref, "sig:", 4) == 0) {
+    // the signature, followed by the binding of the arguments of a named call
+    std::string sig_text = sig_ref ? sig_ref : "";
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(sig_text, named)) {
+        fcn->deref(nullptr);
+        ctx.error = "invalid named call arguments in inline FUNC_CALL expression for '";
+        ctx.error += func_name;
+        ctx.error += "'";
+        return QoreValue();
+    }
+    if (sig_text.compare(0, 4, "sig:") == 0) {
         if (const AbstractQoreFunctionVariant* v =
-                fe->getFunction()->findVariantBySignatureText(sig_ref + 4)) {
+                fe->getFunction()->findVariantBySignatureText(sig_text.c_str() + 4)) {
             fcn->setVariant(v);
         }
     }
     if (pln) {
         fcn->resolveParseArgs();
+    }
+    // the binding has one entry for each argument
+    size_t nargs = fcn->getArgs() ? fcn->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        fcn->deref(nullptr);
+        ctx.error = "named call arguments that do not match the number of arguments in inline FUNC_CALL expression";
+        return QoreValue();
+    }
+    if (named.has_names) {
+        fcn->setRuntimeArgNames(std::move(named.names));
+    } else if (named.has_map) {
+        fcn->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
     }
     return QoreValue(fcn);
 }

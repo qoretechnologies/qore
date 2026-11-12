@@ -10792,7 +10792,9 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     // Skip QoreListNode allocation for builtins with fast-call variants; only for a call of the Qore builtin, never of
     // a user or module function with the same name, and each fast path returns what the builtin returns
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
-        const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) ? call->getName() : nullptr;
+        // a named call resolved by parameter name binds its arguments by name; the fast paths take them by position
+        const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) && !call->getRuntimeArgNames()
+            ? call->getName() : nullptr;
         if (fname) {
             // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
             if (nargs == 0) {
@@ -16770,6 +16772,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, in
             "qore_rt_call_with_args_aot", "call", "QORE_AOT_DISABLE_PRELINKED_CALLS");
     }
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.runtime_arg_names) {
+        // the call node binds the arguments by name to the variant that it selects
+        return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, nullptr, nargs, xsink,
+            "qore_rt_call_with_args_aot", "call", "named call resolved by parameter name");
+    }
     if (target.is_static_method && target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot", "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method, target.variant,
@@ -16811,6 +16818,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_consume_args(
             "qore_rt_call_with_args_aot_consume_args", "call", "QORE_AOT_DISABLE_PRELINKED_CALLS");
     }
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.runtime_arg_names) {
+        // the call node binds the arguments by name to the variant that it selects
+        return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, arg_cleanups, nargs, xsink,
+            "qore_rt_call_with_args_aot_consume_args", "call", "named call resolved by parameter name");
+    }
     if (target.is_static_method && target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot_consume_args",
             "static_method", "use");

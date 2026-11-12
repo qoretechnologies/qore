@@ -256,6 +256,9 @@ struct QoreNamedArgBinding {
     //! the variant whose parameter names the arguments are bound to; set if the binding is valid, also when the
     //! variant of the call is resolved at run time (see QoreFunction::parseFindVariantNamed())
     const AbstractQoreFunctionVariant* variant = nullptr;
+    //! set if the variant of the call is resolved at run time by binding the arguments by name to each candidate
+    //! variant, as the variants that could be selected name their parameters differently
+    bool runtime_names = false;
 };
 
 class UserSignatureTypeParamContextHelper {
@@ -700,6 +703,20 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             bool n_defer_domain_po = false);
 
+    //! Creates the object for evaluating a named function call whose variant is resolved at run time by parameter
+    //! name; the arguments are in source order with the names in "n_arg_names" (see
+    //! QoreFunction::runtimeFindVariant())
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
+            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            bool n_defer_domain_po, const name_vec_t& n_arg_names);
+
+    //! Creates the object for evaluating a named function call with temporary arguments (see above)
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
+            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            bool n_defer_domain_po, const name_vec_t& n_arg_names);
+
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
         @param func the code being called
@@ -861,6 +878,8 @@ protected:
     const QoreProgramLocation** hidden_call_site_slot = nullptr;
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
+    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name
+    const name_vec_t* arg_names = nullptr;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
@@ -916,6 +935,9 @@ protected:
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
+
+    DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
+            const qore_class_private* class_ctx);
 
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
@@ -2173,6 +2195,32 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             bool defer_domain_po = false) const;
 
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order, with the names in "arg_names" (see runtimeFindVariant())
+    DLLLOCAL QoreValue evalFunctionNamed(const QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            bool defer_domain_po, const name_vec_t& arg_names) const;
+
+    //! evalFunctionNamed() with temporary arguments
+    DLLLOCAL QoreValue evalFunctionTmpArgsNamed(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            bool defer_domain_po, const name_vec_t& arg_names) const;
+
+    //! evalFunction() and evalFunctionNamed() (NAMED)
+    template <bool NAMED>
+    DLLLOCAL inline __attribute__((always_inline)) QoreValue evalFunctionIntern(
+            const AbstractQoreFunctionVariant* variant, const QoreListNode* args, QoreProgram* pgm,
+            RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po,
+            const name_vec_t* arg_names) const;
+
+    //! evalFunctionTmpArgs() and evalFunctionTmpArgsNamed() (NAMED)
+    template <bool NAMED>
+    DLLLOCAL inline __attribute__((always_inline)) QoreValue evalFunctionTmpArgsIntern(
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            bool defer_domain_po, const name_vec_t* arg_names) const;
+
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
@@ -2220,7 +2268,12 @@ public:
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
             const arg_value_vec_t* args_with_value = nullptr,
-            const QoreTypeInfo** deferred_rt = nullptr) const;
+            const QoreTypeInfo** deferred_rt = nullptr, bool allow_runtime_names = false) const;
+
+    //! Returns the union of the return types of the variants that the arguments of a named call can be bound to by
+    //! name, for a call resolved at run time by parameter name, or nullptr if it is not known
+    DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
+            const qore_class_private* class_ctx, QoreParseOptions po) const;
 
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none
@@ -2272,12 +2325,26 @@ public:
 
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
+    // arg_names: for a named call resolved by parameter name, the names of "args" (in source order; "" for a
+    // positional argument): each variant is matched with the arguments bound to its parameters by name, and a variant
+    // to whose parameters they cannot be bound is skipped; the arguments bound to the selected variant's parameters
+    // are returned in "named_bound_args" (which must then be set)
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             bool only_user, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
-            bool* content_dependent = nullptr) const;
+            bool* content_dependent = nullptr, const name_vec_t* arg_names = nullptr,
+            QoreListNode** named_bound_args = nullptr) const;
+
+    //! runtimeFindVariant() for a named call resolved by parameter name (NAMED) or a call with positional arguments,
+    //! for user variants only (ONLY_USER) or all variants
+    template <bool NAMED, bool ONLY_USER>
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariantIntern(ExceptionSink* xsink,
+            const QoreListNode* args, const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
+            const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
+            const name_vec_t* arg_names, QoreListNode** named_bound_args) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

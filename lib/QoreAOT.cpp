@@ -34175,12 +34175,13 @@ class ExprTreeSerializer {
             // `OMQ::substitute_env_vars` (the wrapper itself),
             // infinite-recursing).
             const FunctionEntry* fe = fc->getFunctionEntry();
-            if (fe && fe->getNamespace()) {
-                std::string qualified = qore_aot_get_function_identity_name(fe);
-                writeStr(qualified.c_str());
-            } else {
-                writeStr(fc->getName());
-            }
+            std::string qualified = fe && fe->getNamespace() ? qore_aot_get_function_identity_name(fe)
+                : std::string(fc->getName());
+            // the arguments are written in source order (the order of their evaluation): a named call keeps the
+            // positions of their parameters (bound at parse time) or their names (resolved at run time) after the
+            // name
+            qualified += qore_aot_named_call_arg_suffix(fc);
+            writeStr(qualified.c_str());
             // Count and serialize args
             size_t count_pos = buf.size();
             writeU16(0); // placeholder for num_children
@@ -35126,6 +35127,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 += qore_get_aot_serializable_type_path(type_arg);
             }
         }
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, last; the
+        // compiled arguments of any other call are passed at the positions of their parameters
+        id.ref2 += qore_aot_named_call_arg_suffix(call, false);
         return id;
     }
 

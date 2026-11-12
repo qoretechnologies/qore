@@ -1369,6 +1369,15 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             FunctionCallNode* fcn = new FunctionCallNode(
                 &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
             std::string encoded_ref = ref2 ? ref2 : "";
+            // a named call resolved at run time by parameter name: the names of its arguments, written last
+            QoreAOTNamedCallArgs named;
+            if (qore_aot_parse_named_call_arg_suffix(encoded_ref, named) || named.has_map) {
+                delete fcn;
+                return 0;
+            }
+            if (named.has_names) {
+                fcn->setRuntimeArgNames(std::move(named.names));
+            }
             static constexpr const char* type_arg_marker = "\ntypeargs:";
             size_t type_arg_pos = encoded_ref.find(type_arg_marker);
             std::string variant_ref = type_arg_pos == std::string::npos
@@ -6271,6 +6280,12 @@ static QoreAOTContext* buildContextFromSlotMap(
         const AbstractQoreNode* node = expr_val.getInternalNode();
         // Function call
         const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+        // a named call resolved at run time by parameter name is evaluated through its node, which binds its
+        // arguments by name (FunctionCallNode::evalImpl())
+        if (fcn && fcn->getRuntimeArgNames()) {
+            ctx->call_targets[i].runtime_arg_names = true;
+            continue;
+        }
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();

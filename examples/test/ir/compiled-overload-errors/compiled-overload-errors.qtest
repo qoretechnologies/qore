@@ -36,8 +36,8 @@
 class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named",
-            "access-control", "or-nothing-casts");
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
+            "assigned", "named", "named-runtime", "access-control", "or-nothing-casts");
     }
 
     private {
@@ -64,7 +64,9 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     }
 
     #! a named call whose variant can be resolved at run time to a variant with other parameter names at the
-    #! positions of its arguments is a parse error; the same call with positional arguments is not
+    #! positions of its arguments binds its arguments by name to each candidate variant at run time (M4): only a
+    #! variant with the names of the arguments can be selected; the same call with positional arguments selects by
+    #! position
     namedBindingConflictTest() {
         string decl = "%modern\n"
             "class C { public { int mi; } }\n"
@@ -72,8 +74,11 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             "string sub nf5(*int x, string y) { return \"nf5(*int x, string y)\"; }\n";
         {
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-            assertThrows("NAMED-CALL-NOT-SUPPORTED", "nf5\\(\\*int x, string y\\)", \p.parse(),
-                (decl + "string sub t() { C c(); return nf5(a: c.mi, b: \"s\"); }\n", "named-conflict"));
+            p.parse(decl + "string sub t(bool set) { C c(); if (set) { c.mi = 1; } return nf5(a: c.mi, b: \"s\"); }\n",
+                "named-conflict");
+            assertEq("nf5(int a, string b)", p.callFunction("t", True));
+            # no value for "a": nf5(*int x, string y) would take it by position, but has no parameters "a" and "b"
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "nf5\\(a: nothing, b: string\\)", \p.callFunction(), ("t", False));
         }
         {
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
@@ -82,12 +87,13 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         }
         {
             # a variant with variable arguments would take the argument at a position after its parameters by
-            # position
+            # position; it has no parameter "b", so the named call cannot select it
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-            assertThrows("NAMED-CALL-NOT-SUPPORTED", "but vb\\(int a, \\.\\.\\.\\)", \p.parse(),
-                ("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+            p.parse("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
                 "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
-                "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs"));
+                "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs");
+            assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "vb\\(a: integer, b: integer\\)", \p.callFunction(), ("t", 2));
         }
         {
             # the same call with an argument that has a value of the type of the parameter is bound to it
@@ -96,6 +102,19 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
                 "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
                 "string sub t(string x) { return vb(a: 1, b: x); }", "named-varargs-valid");
             assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+        }
+        {
+            # the variants that the names can be bound to give the return type of a call resolved at run time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p.parse(), (decl + "int sub t(auto x) { int i = "
+                "nf5(a: x, b: \"s\"); return i; }\n", "named-runtime-return-type"));
+        }
+        {
+            # arguments with values of known types that two variants match equally well are ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(),
+                ("string sub tie(int a, string b) { return \"1\"; } string sub tie(string b, int a) { return \"2\"; } "
+                "string sub t() { return tie(a: 1, b: \"s\"); }", "named-tie"));
         }
         {
             # an argument that always has a value is bound at parse time

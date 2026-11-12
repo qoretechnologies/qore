@@ -357,6 +357,13 @@ static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
 
 static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
+    // the binding of the arguments of a named call follows the name
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(name, named)) {
+        printd(0, "AOT EXPR_TREE: invalid named call arguments for function '%s'\n", name.c_str());
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     SimpleRefHolder<QoreParseListNode> pln;
     if (num_children > 0) {
@@ -370,6 +377,12 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
     if (!fe) {
+        // a deferred call is resolved and evaluated with its arguments by position
+        if (named.has_map || named.has_names) {
+            printd(0, "AOT EXPR_TREE: cannot resolve function '%s' of a named call\n", name.c_str());
+            ctx.failed = true;
+            return QoreValue();
+        }
         QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, name.c_str(), pln.release());
         if (!fallback.isNothing()) {
             return fallback;
@@ -380,6 +393,20 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln.release());
     fcn->resolveParseArgs();
+    // the binding has one entry for each argument
+    size_t nargs = fcn->getArgs() ? fcn->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        fcn->deref(nullptr);
+        printd(0, "AOT EXPR_TREE: named call arguments that do not match the arguments of '%s'\n", name.c_str());
+        ctx.failed = true;
+        return QoreValue();
+    }
+    if (named.has_names) {
+        fcn->setRuntimeArgNames(std::move(named.names));
+    } else if (named.has_map) {
+        fcn->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
+    }
     return QoreValue(fcn);
 }
 

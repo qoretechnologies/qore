@@ -239,6 +239,30 @@ struct QoreAOTMethodDispatchCache {
 };
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
+//! the binding of the arguments of a named function call, serialized after the signature of its variant
+/** "\nargmap:<result size>:<parameter position of each argument, comma-separated>" for a call bound at parse time,
+    "\nargnames:<count>" followed by one line per argument with its name ("" for a positional argument) for a call
+    resolved at run time by parameter name; names are identifiers and contain no newline
+*/
+struct QoreAOTNamedCallArgs {
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+    name_vec_t names;
+    bool has_map = false;
+    bool has_names = false;
+};
+
+class FunctionCallNode;
+
+//! returns the serialized binding of the arguments of a named function call ("" for any other call)
+/** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
+    arguments are written in source order); the arguments of a compiled call are passed at their positions
+*/
+DLLLOCAL std::string qore_aot_named_call_arg_suffix(const FunctionCallNode* call, bool with_map = true);
+
+//! removes the serialized binding of the arguments of a named function call from the reference; returns -1 if invalid
+DLLLOCAL int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs& named);
+
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -264,6 +288,8 @@ struct QoreAOTCallTarget {
     bool self_ns_single = false;           //!< unqualified self call; false for explicit base/namespace call
     bool self_is_copy = false;             //!< implicit self copy() call
     bool self_is_abstract = false;         //!< abstract self call requiring virtual dispatch
+    //! a named function call resolved at run time by parameter name: evaluated through its call node
+    bool runtime_arg_names = false;
 
     ~QoreAOTCallTarget() {
         delete object_member_descriptor.load(std::memory_order_relaxed);

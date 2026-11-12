@@ -14713,6 +14713,21 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (QoreIRValue hoisted = findLoopInvariantValue(expr); hoisted.isValid()) {
         return hoisted;
     }
+    // a named call resolved at run time by parameter name: its arguments are passed in source order to the call
+    // node, which binds them by name to the variant that it selects (FunctionCallNode::evalImpl()); no rewrite or
+    // direct call applies
+    if (call->getRuntimeArgNames()) {
+        std::vector<QoreIRValue> operands;
+        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    }
     const char* func_name = call->getName();
     // the rewrites below that are keyed on the name of a builtin apply only to a call of the Qore builtin, never to a
     // user or module function with the same name
