@@ -526,6 +526,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToStringChecked, {G::Base, G::Expr}, true},
     {O::ToIntChecked, {G::Base, G::Expr}, true},
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
+    {O::IteratorCreateSource, {G::IteratorCreate}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -3172,14 +3173,14 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // only runtime-relevant datum besides the statement pointer is the statement's source location, which the generic
 // base-instruction record already serializes from inst->loc (set to statement->loc by
 // QoreIRBuilder::createDebugStatement()).  So the statement is not written here, and the reader reconstructs the
-// instruction with a null statement pointer; from format version 25, the nesting of the statement is written (see
+// instruction with a null statement pointer; from format version 26, the nesting of the statement is written (see
 // writeDebugStatement()).  The IR interpreter's DebugStatement handler resolves the
 // statement from the instruction's source location at runtime when the raw pointer is null (see
 // QoreIRInterpreter.cpp), matching the step behavior of the AST and IR tiers for code whose statement index is
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
 static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
-    // from format version 25, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
+    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
     // instruction of a block
     auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);

@@ -18,7 +18,7 @@
 /** AOT-compiled code evaluates member initializers and default arguments as AST trees that it restores from its
     image; the call nodes of these trees had no location, and members none either, so the frame of a call in a member
     initializer and an exception in one had no line, and the frame of a call in a default argument had the line of
-    the caller.  The image records the locations of the calls (format version 25), and AOTSourceLocations.q gives the
+    the caller.  The image records the locations of the calls (format version 26), and AOTSourceLocations.q gives the
     output of the AST interpreter in every execution mode and compiled with qcc.
 */
 class AOTSourceLocationsTest inherits QUnit::Test {

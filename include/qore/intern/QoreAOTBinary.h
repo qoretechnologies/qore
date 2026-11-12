@@ -362,7 +362,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v25: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
 //!      module exports (a function can have public and private variants); an older function record has only the
 //!      function's public flag, which applies to all of its variants.
-//! v25: source locations (#5745): an inline expression of a call (a function, method, static method, self method,
+//! v26: source locations (#5745): an inline expression of a call (a function, method, static method, self method,
 //!      constructor or call reference call) that has a source location is preceded by AOTExprKind::SOURCE_LOCATION
 //!      and its location (qore_aot_write_source_location()), which the call node that is read gets, so that the
 //!      frame of the call and its exceptions have the lines of the call; a class member record ends with the
@@ -373,29 +373,28 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
 //!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
 //!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
-//! v25: a ListIndexSlice step of an lvalue path (in a function record and in serialized IR) has, after its operand ids,
+//! v27: a ListIndexSlice step of an lvalue path (in a function record and in serialized IR) has, after its operand ids,
 //!      one byte per selector: 1 if the selector is a range (LVPathStep::slice_ranges).  A v9-v24 step has no such
 //!      bytes; each of its selectors is taken as a range, which selects every index of a list value, as before.
-//! v25: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//! v28: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
 //!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
-//!      release_values).  A v9-v24 record has none.
+//!      release_values).  A v9-v27 record has none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
-//! the current format version: the newest feature version above
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_VARIANT_PUBLIC_VERSION;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
 //! Variant-flags bit of FUNCTIONS records (QORE_AOT_VARIANT_PUBLIC_VERSION): the variant is module-public
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
-//! First format version with source locations of calls, members and default arguments (see v25 above).
-constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 25;
-//! First format version whose ListIndexSlice steps record which selectors are ranges (see v25 above).
-constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 25;
-//! First format version whose IteratorNext records have release values (see v25 above); the newest format change
-//! (qore#5670), so that it is the current version: a merge with another format change takes the next version
-//! after the other's, here and in the history above
-constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 25;
+//! First format version with source locations of calls, members and default arguments (see v26 above).
+constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 26;
+//! First format version whose ListIndexSlice steps record which selectors are ranges (see v27 above).
+constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 27;
+//! First format version whose IteratorNext records have release values (see v28 above).
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
+//! The current format version: the newest feature version above (a merge with another format change takes the next
+//! version after the newest, here and in the history above)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_ITERATOR_RELEASES_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1626,7 +1625,7 @@ DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const 
 DLLLOCAL bool qore_aot_has_source_location(const QoreProgramLocation* loc);
 
 class UserClosureFunction;
-//! Returns the source location of a closure, which its record carries from format version 25 (#5816)
+//! Returns the source location of a closure, which its record carries from format version 26 (#5816)
 /** the location of the block of its code, which the debugger's events of the closure are given with; its signature
     when read from an AOT image gets it
 */
@@ -2207,7 +2206,7 @@ enum class AOTExprKind : uint8_t {
     XOR_EQ             = 119, //!< ^= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHL_EQ             = 120, //!< <<= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHR_EQ             = 121, //!< >>= operator: lvalue(AOTExprKind) + value(AOTExprKind)
-    //! the source location of the expression that follows (from format version 25): the location
+    //! the source location of the expression that follows (from format version 26): the location
     //! (qore_aot_write_source_location()) + the expression (AOTExprKind), which gets the location
     SOURCE_LOCATION    = 122,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
@@ -2944,7 +2943,7 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef type_path;
         uint8_t access;
         uint8_t flags = 0;  // bit 0 = transient
-        //! the location of the member's declaration (see v25), or nullptr
+        //! the location of the member's declaration (see v26), or nullptr
         const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! When set, the member init is a `Class(args)` call whose target
@@ -2991,7 +2990,7 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
         uint8_t access;
-        //! the location of the static variable's declaration (see v25), or nullptr
+        //! the location of the static variable's declaration (see v26), or nullptr
         const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
@@ -3145,7 +3144,7 @@ public:
         std::string method_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
-        //! the location of the call (see v25)
+        //! the location of the call (see v26)
         const QoreProgramLocation* loc = nullptr;
     };
 
@@ -3181,7 +3180,7 @@ public:
         std::string func_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
-        //! the location of the call (see v25)
+        //! the location of the call (see v26)
         const QoreProgramLocation* loc = nullptr;
     };
 

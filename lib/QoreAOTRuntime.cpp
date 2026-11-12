@@ -5572,7 +5572,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
                     native_body_key = reader.readStringRef(ptr);
                 }
-                // the location of the closure (see v25), which its signature gets
+                // the location of the closure (see v26), which its signature gets
                 const QoreProgramLocation* closure_loc = nullptr;
                 if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                     closure_loc = qore_aot_read_source_location(reader, ptr, pgm);

@@ -1449,7 +1449,7 @@ public:
     */
     uint16_t nest_depth = 0;
     //! QORE_IR_DEBUG_NEST_* flags; QORE_IR_DEBUG_NEST_VALID is not set if the nesting is not known (AOT debug IR
-    //! before format version 25)
+    //! before format version 26)
     uint8_t nest_flags = 0;
 };
 

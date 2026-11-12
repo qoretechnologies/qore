@@ -2530,7 +2530,7 @@ static bool dump_skip_pending_constant_parse_value(const QoreAOTBinaryReader& re
     return !present || dump_skip_serialized_value_no_summary(reader, p, end);
 }
 
-//! skips a source location written by qore_aot_write_source_location() (format version 25)
+//! skips a source location written by qore_aot_write_source_location() (format version 26)
 static bool dump_skip_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& p, const uint8_t* end) {
     return dump_skip_bytes(p, end, 2 * qore_aot_line_size(reader) + 8)
         && dump_skip_string_ref(reader, p, end)
@@ -2918,7 +2918,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {
-            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), location (v25), return type
+            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), location (v26), return type
             if (!dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)) {
                 return false;

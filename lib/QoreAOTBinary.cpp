@@ -10184,7 +10184,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         ? getNamespaceSymbolPath(dfe->getNamespace(), dfe->getName())
                         : std::string(fcn->getName());
                     writer.writeStringRef(default_fname.c_str());
-                    // the location of the call (see v25), for the frame of the call
+                    // the location of the call (see v26), for the frame of the call
                     qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr : fcn->loc);
                     continue;
                 }
@@ -10709,7 +10709,7 @@ static bool aotRecordAggregateDeclarationDigest(QoreAOTBinaryWriter& writer, con
         return true;
     }
     QoreAOTBinaryWriter digest_writer;
-    // a digest does not depend on the lines of the code or the path of its file (see v25 in QoreAOTBinary.h)
+    // a digest does not depend on the lines of the code or the path of its file (see v26 in QoreAOTBinary.h)
     digest_writer.omit_source_locations = true;
     digest_writer.const_reverse_map = writer.const_reverse_map;
     digest_writer.feature_flags = writer.feature_flags;
@@ -10914,7 +10914,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             } else {
                 writer.writeU8(0);
             }
-            // the location of the member's declaration (see v25), the runtime location of its initialization
+            // the location of the member's declaration (see v26), the runtime location of its initialization
             qore_aot_write_source_location(writer, mi.second->loc);
         }
 
@@ -10947,7 +10947,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             } else {
                 writer.writeU8(0);
             }
-            // the location of the static variable's declaration (see v25)
+            // the location of the static variable's declaration (see v26)
             qore_aot_write_source_location(writer, vi.second->loc);
         }
 
@@ -12364,7 +12364,7 @@ static const QoreProgramLocation* qore_aot_call_expr_location(const AbstractQore
     Handles function calls, method calls, variable refs, constants, and enums.
     Returns true on success, false if the expression cannot be classified.
 
-    A call with a source location is preceded by AOTExprKind::SOURCE_LOCATION and its location (format version 25),
+    A call with a source location is preceded by AOTExprKind::SOURCE_LOCATION and its location (format version 26),
     unless the payload is written for a digest (QoreAOTBinaryWriter::omit_source_locations) or the call is written
     as GENERIC_EVAL, which its readers recognize as the first byte of an expression.
 */
@@ -13627,7 +13627,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     // slot carries the native key when one is available.
                     writer.writeStringRef("");
                 }
-                // the location of the closure (see v25)
+                // the location of the closure (see v26)
                 qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr
                     : qore_aot_closure_location(ucf));
 
@@ -16637,7 +16637,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
             pim.default_val = default_val;
-            // the location of the member's declaration (see v25)
+            // the location of the member's declaration (see v26)
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 pim.loc = qore_aot_read_source_location(reader, ptr, class_already_existed ? nullptr : pgm);
             }
@@ -16680,7 +16680,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
             psm.default_val = default_val;
-            // the location of the static variable's declaration (see v25)
+            // the location of the static variable's declaration (see v26)
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 psm.loc = qore_aot_read_source_location(reader, ptr, class_already_existed ? nullptr : pgm);
             }
@@ -18927,7 +18927,7 @@ static bool readAndSetupVariantSignature(
             // The name is namespace-qualified; qore_aot_resolve_function_entry_for_slot()
             // handles the qualified, still-pending and legacy bare-identifier forms.
             const char* fname = reader.readStringRef(ptr);
-            // the location of the call (see v25)
+            // the location of the call (see v26)
             const QoreProgramLocation* call_loc = nullptr;
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 call_loc = qore_aot_read_source_location(reader, ptr, pgm);
@@ -18995,7 +18995,7 @@ static bool readAndSetupVariantSignature(
             // path in AbstractMethodCallNode::exec handles this case.
             const char* cfqn = reader.readStringRef(ptr);
             const char* mname = reader.readStringRef(ptr);
-            // the location of the call (see v25)
+            // the location of the call (see v26)
             const QoreProgramLocation* call_loc = nullptr;
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 call_loc = qore_aot_read_source_location(reader, ptr, pgm);
@@ -19024,7 +19024,7 @@ static bool readAndSetupVariantSignature(
             // through the normal AbstractFunctionCallNode dispatch.
             const char* class_path = reader.readStringRef(ptr);
             const char* mname = reader.readStringRef(ptr);
-            // the location of the call (see v25)
+            // the location of the call (see v26)
             const QoreProgramLocation* call_loc = nullptr;
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 call_loc = qore_aot_read_source_location(reader, ptr, pgm);
