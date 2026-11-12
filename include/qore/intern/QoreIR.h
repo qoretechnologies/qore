@@ -3826,6 +3826,15 @@ public:
     // selfid is handled separately since it's conditional on (self && selfid).
     mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
 
+    //! The locals whose values the native code of the AOT-compiled function keeps in native storage, with their
+    //! QORE_AOT_LOCAL_SLOT_NATIVE_* flags (see QoreAOTBinary.h)
+    /** Set when the standard entry of the function is lowered in AOT mode (QoreIRToLLVM::lowerFunction()), from the
+        locals that the lowering keeps out of the stack of local variables, and written to the function's local slot
+        records (extractAOTSlotIdentities()), so that get_local_vars() and set_local_var_value() can refuse them
+        (issue #5890); empty otherwise.
+    */
+    mutable std::unordered_map<const void*, uint8_t> aot_native_local_flags;
+
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
     const QoreTypeInfo* return_type_info = nullptr;

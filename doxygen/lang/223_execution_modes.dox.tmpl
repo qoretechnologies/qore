@@ -389,14 +389,27 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       frame before it, is such a call, instead of giving or setting the
       variables of another frame
     - a call made through a runtime helper or the function's tiered entry (as
-      with @ref Qore::call_function() "call_function()", or a call from
-      interpreted code) has a frame with the parameters and local variables,
-      but the native code keeps the values of some of them (the parameters and
-      \c int, \c float, \c bool and \c string locals, for example) in native
-      code only: these functions can give values that the code no longer uses,
-      and a value that they set may not be seen by the code; closure-bound
-      variables (also those passed by reference) are kept on the stack and are
-      read as in interpreted code
+      with @ref Qore::call_function() "call_function()", a call reference, or a
+      call from interpreted code) has a frame with the parameters and local
+      variables, but the native code keeps some of them in native code (the
+      parameters and \c int, \c float, \c bool and \c string locals, for
+      example), which @ref qcc_tool "qcc" records for each variable when it
+      compiles the function:
+      - such a variable has no value on the stack that is known to be its
+        value (the optimizer can also remove the stores of a variable whose
+        value it keeps in native code):
+        @ref Qore::get_local_vars() "get_local_vars()" gives it without a
+        \c "value" key and with \c "unavailable" set to @ref True, and does not
+        raise an exception, so that the other variables of the frame can be
+        read; only a parameter that the code does not assign is read, as its
+        value on the stack is the value that the call gave it
+      - such a variable, also a parameter that the code does not assign, cannot
+        be set: @ref Qore::set_local_var_value() "set_local_var_value()" raises
+        \c AOT-FRAME-ERROR for it instead of setting a value that the code does
+        not see
+      - closure-bound variables (also those passed by reference) and the other
+        variables that the native code keeps on the stack are read and set as in
+        interpreted code
 
     The frames are matched with the calls on the call stack of the thread up to
     the first frame of top-level code, the first call of a builtin function,
@@ -410,9 +423,19 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     from AOT-compiled code.
 
     When a debugger is attached to the Program, a call through the tiered entry
-    runs the function's debug IR in the IR interpreter, whose frame has all the
-    local variables; a call that native code makes directly runs native code
-    without a frame also then.
+    runs the function in the AST or IR interpreter (its debug IR), whose frame
+    has all the local variables, which are then read and set as in interpreted
+    code; a call that native code makes directly runs native code without a
+    frame also then.  These functions tell such a frame by the location where
+    it runs, which in native code is a location constant of the compiled image;
+    a frame whose location is not known (past the end of the matching
+    described above) is taken to run native code.
+
+    Where the AOT metadata does not tell which variables are kept in native
+    code (AOT binaries compiled before they were recorded, AOT binary format
+    version 25, and AOT-compiled functions whose context is built from their
+    source), every parameter and local variable of a function that is neither
+    closure-bound nor a reference is taken to be kept in native code.
 
     @subsection qcc_tool Qore Code Compiler (qcc)
 

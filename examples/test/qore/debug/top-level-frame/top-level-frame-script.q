@@ -203,6 +203,68 @@ sub bg_check() {
     cnt.waitForZero();
 }
 
+# a call made through call_function() or a call reference has a frame of its own, also in AOT-compiled code, whose
+# native code keeps some of the variables of the function in native code, as qcc records for each variable (#5890):
+# get_local_vars() gives such a variable (q, hi, s, hh, and x and y, whose stores the optimizer removes) without a
+# value and with "unavailable" set instead of a value that the code does not use, and set_local_var_value() raises
+# AOT-FRAME-ERROR for it (hi, hh, and the parameter p, which the code does not assign, so get_local_vars() reads it)
+# instead of setting a value that the code does not see; the closure-bound variable (cap) and the variable passed by
+# reference (rv) are read and set as in interpreted code, also in AOT-compiled code; in a frame that runs in the
+# interpreter, as AOT-compiled code does with a debugger attached, every variable is read and set
+sub fr_inc(reference<int> r) {
+    ++r;
+}
+
+# prints the variables of a frame, but the code, the label and argv, which only interpreted frames have
+sub fr_print(string label, hash<auto> lv) {
+    list<string> l = map sprintf("%s=%s", $1.key, $1.value.unavailable ? "unavailable" : sprintf("%y", $1.value.value)),
+        lv.pairIterator(), $1.key != "argv" && $1.key != "c" && $1.key != "label";
+    printf("%s: %s\n", label, sort(l).join(" "));
+}
+
+sub fr_get(string label, int p, int q) {
+    q += 1;
+    int hi = p * 3;
+    string s = "x" + p;
+    hash<auto> hh = {"a": p};
+    int cap = p + 10;
+    code c = int sub () { return cap; };
+    int rv = p;
+    fr_inc(\rv);
+    int x = p;
+    int y = p * 2;
+    if (p > 1) {
+        y = 7;
+    }
+    fr_print(label, get_local_vars(0));
+    printf("%s actual: x=%d y=%d\n", label, x, y);
+}
+
+sub fr_set(string label, int p) {
+    int hi = p * 3;
+    hash<auto> hh = {"a": p};
+    int cap = p + 10;
+    code c = int sub () { return cap; };
+    int rv = p;
+    fr_inc(\rv);
+    foreach hash<auto> i in ({"hi": 100, "p": 5, "hh": {"b": 1}, "cap": 77, "rv": 33}.pairIterator()) {
+        try {
+            set_local_var_value(0, i.key, i.value);
+            printf("%s set %s: ok\n", label, i.key);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s set %s: %s\n", label, i.key, ex.err);
+        }
+    }
+    printf("%s after set: hi=%d p=%d hh=%y cap=%d c=%d rv=%d\n", label, hi, p, hh, cap, c(), rv);
+}
+
+sub frame_checks(string label) {
+    call_function(\fr_get(), label + " call_function", 2, 4);
+    code cr = \fr_get();
+    cr(label + " call ref", 2, 4);
+    call_function(\fr_set(), label, 2);
+}
+
 # makes the calls directly, without a debugger, and prints the codes of the exceptions raised
 sub aot_checks() {
     try {
@@ -232,6 +294,9 @@ int ctop = 1;
 StepDebugger debugger();
 ProgramControl pgm = ProgramControl::getProgram();
 
+# the frames of the calls made through call_function() and a call reference (see frame_checks())
+frame_checks("frame");
+
 # the calls of the top-level code
 if (!aot) {
     g("top", 42);
@@ -253,6 +318,8 @@ if (!aot) {
 # the calls of the top-level code while the debugger is attached; called through call_function() so that an
 # AOT-compiled function is entered through its tiered entry, which runs it in the IR interpreter
 call_function("g", "ctop", 43);
+# the frames of the calls made while the debugger is attached, which run in the interpreter
+frame_checks("debugger frame");
 debugger.removeProgram(pgm);
 map printf("%s\n", $1), debugger.out;
 printf("dtop: %d\n", dtop);

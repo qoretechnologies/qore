@@ -2848,9 +2848,10 @@ void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo
 
 QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
+    bool aot_code;
+    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
     if (tlpd) {
-        tlpd->lvstack.getLocalVars(**rv, frame, xsink);
+        tlpd->lvstack.getLocalVars(**rv, frame, xsink, aot_code);
         if (*xsink)
             return nullptr;
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
@@ -2870,9 +2871,10 @@ int64 thread_get_local_var_count(ExceptionSink* xsink) {
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_local_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
-    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
+    bool aot_code;
+    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
     // a frame that cannot be accessed because of an exception is not looked up again for a closure-bound variable
-    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink) : (*xsink ? -1 : 1);
+    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink, aot_code) : (*xsink ? -1 : 1);
 }
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
@@ -4701,20 +4703,38 @@ bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const Thread
 
     The frames from there on are not checked.  The check is made here only, so that calls cost nothing for it.
 
+    The match also gives the location where the requested frame runs (\a frame_loc): that of the entry of the call
+    that the frame makes, or, for frame 0, that of the entry of the builtin function, or the runtime location if it
+    has none; it is not known (nullptr) for a frame past the end of the match.
+
     @param pgm the Program of the code that calls the builtin function
+    @param frame_loc set to the location where the frame runs, or nullptr if it is not known
 
     @return 0 if OK, -1 if an exception was raised
 */
-static int check_aot_native_frames(ThreadData* td, QoreProgram* pgm, int frame, ExceptionSink* xsink) {
+static int check_aot_native_frames(ThreadData* td, QoreProgram* pgm, int frame, ExceptionSink* xsink,
+        const QoreProgramLocation*& frame_loc) {
+    frame_loc = nullptr;
     const QoreStackLocation* loc = td->current_stack_location.load(std::memory_order_relaxed);
+    // the location where frame 0 runs: that of the call of the builtin function
+    const QoreProgramLocation* run_loc = td->runtime_loc;
     // the entry of the builtin function that looks up the frame
     if (loc && loc->getCallType() == CT_BUILTIN) {
         const std::string& name = loc->getCallName();
         if (name == "get_local_vars" || name == "set_local_var_value") {
+            run_loc = &loc->getLocation();
             loc = loc->getNext();
         }
     }
-    for (int i = 0; i <= frame && loc && loc->getCallType() == CT_USER; ++i, loc = loc->getNext()) {
+    for (int i = 0; i <= frame; ++i, loc = loc->getNext()) {
+        if (i == frame) {
+            frame_loc = run_loc;
+        }
+        if (!loc || loc->getCallType() != CT_USER) {
+            break;
+        }
+        // the location where the caller (frame i + 1) runs
+        run_loc = &loc->getLocation();
         if (qore_is_aot_native_call_frame(loc)) {
             if (i == frame) {
                 xsink->raiseException("AOT-FRAME-ERROR", "frame %d is a call of '%s' that AOT-compiled code made "
@@ -4739,7 +4759,8 @@ static int check_aot_native_frames(ThreadData* td, QoreProgram* pgm, int frame, 
    there is context stack where pgm/tlpd might repeat, in this case we need consider frame value when context
    started
 */
-ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& frame, ExceptionSink* xsink) {
+ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& frame, ExceptionSink* xsink,
+        bool* aot_code) {
     if (frame < 0)
         return nullptr;
 
@@ -4789,15 +4810,21 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         if (!tlpd || !pgm) {
             printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p\n",
                 frame, ch, tlpd);
-            check_aot_native_frames(td, current_pgm, requested_frame, xsink);
+            const QoreProgramLocation* frame_loc;
+            check_aot_native_frames(td, current_pgm, requested_frame, xsink, frame_loc);
             return nullptr;
         }
         printd(5, "ProgramThreadCountContextHelper::getContextFrame() L: frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
             "pgmid:" QLLD ", inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
             (int64)pgm->getProgramId(), tlpd->inst, ch ? ch->init_tlpd: -1);
     }
-    if (!pgm->checkAllowDebugging(xsink) || check_aot_native_frames(td, current_pgm, requested_frame, xsink)) {
+    const QoreProgramLocation* frame_loc;
+    if (!pgm->checkAllowDebugging(xsink)
+            || check_aot_native_frames(td, current_pgm, requested_frame, xsink, frame_loc)) {
         return nullptr;
+    }
+    if (aot_code) {
+        *aot_code = qore_is_aot_code_location(frame_loc);
     }
     /* now we know that desired frame should be in tlpd and we must add frame index to consider frames above */
     frame += tlpd->lvstack.getFrameCount() - frameCount;

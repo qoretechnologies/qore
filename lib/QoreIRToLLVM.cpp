@@ -2679,6 +2679,75 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     }
 }
 
+void QoreIRToLLVM::recordAOTNativeLocals(const QoreIRFunction& func) {
+    func.aot_native_local_flags.clear();
+    // the parameters, whose values the caller puts on the stack of local variables
+    std::unordered_set<const void*> params;
+    for (const auto& entry : func.param_local_vars) {
+        if (entry.second) {
+            params.insert(entry.second);
+        }
+    }
+    // the locals that the optimized IR writes; the IR optimizations replace the loads and stores of a local by its
+    // values (for the native scalar locals that they promote to SSA values, and for the fixed lists and hashes that
+    // they scalarize), so that a local written by the code can have no write left (qore#5890)
+    std::unordered_set<const void*> written;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            // an instantiation or uninstantiation gives a local no value that the stack does not have
+            if (inst->opcode == QoreIROpcode::InstantiateLocal || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                continue;
+            }
+            if (const LocalVar* lv = qore_ir_get_written_local(inst.get())) {
+                written.insert(lv);
+            }
+        }
+    }
+    // the locals that the IR wrote before it was optimized (QoreIRFunction::computeIROnlyLocals() runs before the
+    // optimizations of AOT compilation)
+    auto written_before = [&func](const void* key) -> bool {
+        return func.stored_locals.count(key) || func.cow_container_locals.count(key)
+            || func.lvalue_path_locals.count(key) || func.weak_store_locals.count(key)
+            || func.element_store_locals.count(key);
+    };
+    auto add = [&func](const void* key, uint8_t flags) {
+        func.aot_native_local_flags[key] |= flags;
+    };
+    constexpr uint8_t unavailable = QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE | QORE_AOT_LOCAL_SLOT_NATIVE_WRITES;
+    // a local of the original IR-only set is not read again from the stack of local variables after a call
+    // (reload_exempt_locals_set), so a value set there is not seen; its value on the stack is the value of the
+    // variable only for a parameter that the code never writes (the value that the call gave it): a local that is
+    // still IR-only once AOT body locals that need runtime ownership were removed from the set (ir_only_locals_set)
+    // is assigned without being stored on the stack, and the optimizations of IR-only locals can remove the stores of
+    // the others
+    if (reload_exempt_locals_set) {
+        for (const void* key : *reload_exempt_locals_set) {
+            add(key, params.count(key) && !written.count(key) && !written_before(key)
+                ? QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE : unavailable);
+        }
+    }
+    if (ir_only_locals_set) {
+        for (const void* key : *ir_only_locals_set) {
+            add(key, params.count(key) && !written.count(key) && !written_before(key)
+                ? QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE : unavailable);
+        }
+    }
+    // a local that the code wrote before the IR was optimized and that the optimized IR no longer writes has its
+    // value only in native code, which reads it from there (as a scalarized container that is not IR-only)
+    auto check_removed_writes = [&](const std::unordered_set<const void*>& keys) {
+        for (const void* key : keys) {
+            if (!written.count(key)) {
+                add(key, unavailable);
+            }
+        }
+    };
+    check_removed_writes(func.stored_locals);
+    check_removed_writes(func.cow_container_locals);
+    check_removed_writes(func.lvalue_path_locals);
+    check_removed_writes(func.weak_store_locals);
+    check_removed_writes(func.element_store_locals);
+}
+
 void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     // Only instantiate entry-block locals at function entry.
     // Non-entry-block locals are instantiated lazily on first store.
@@ -11834,6 +11903,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 ir_only_body_locals.insert(key);
             }
         }
+    }
+
+    if (aot_mode && fast_entry_name.empty()) {
+        recordAOTNativeLocals(func);
     }
 
     // Phase 3: Identify IR-only locals that can use native (unboxed) allocas.

@@ -1368,6 +1368,10 @@ private:
     // Collect all unique LocalVar* pointers from the IR function
     void collectLocals(const QoreIRFunction& func);
 
+    //! Records in QoreIRFunction::aot_native_local_flags the locals that the AOT-compiled standard entry of the
+    //! function keeps in native storage, once the IR-only sets of the lowering are final (issue #5890)
+    void recordAOTNativeLocals(const QoreIRFunction& func);
+
     // Emit qore_rt_instantiate_local calls for all function locals at current insert point
     void emitLocalInstantiation(llvm::Module& module);
 

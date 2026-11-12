@@ -67,6 +67,10 @@
 #include <set>
 #include <string>
 #include <typeinfo>
+#if defined(__linux__) || defined(__APPLE__)
+// dladdr() of the location of a frame; see qore_is_aot_code_location()
+#include <dlfcn.h>
+#endif
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
@@ -11477,6 +11481,25 @@ size_t qore_rt_native_call_frame_align() {
 
 bool qore_is_aot_native_call_frame(const QoreStackLocation* loc) {
     return dynamic_cast<const QoreAOTNativeCallStackLocation*>(loc) != nullptr;
+}
+
+bool qore_is_aot_code_location(const QoreProgramLocation* loc) {
+    // a location that is not known is taken to be one of AOT-compiled code
+    if (!loc) {
+        return true;
+    }
+    // the constant locations of AOT-compiled code have a line and no columns (QoreIRToLLVM::getAotLocationConstant())
+    if (loc->start_line <= 0 || loc->start_column >= 0 || loc->end_column >= 0) {
+        return false;
+    }
+#if defined(__linux__) || defined(__APPLE__)
+    // and are held by the image of the code; the locations that the runtime creates, also without columns (from the
+    // location tables of source-stripped AOT metadata, for the debug IR of AOT-compiled code), are allocated
+    Dl_info info;
+    return dladdr(loc, &info) != 0;
+#else
+    return true;
+#endif
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
