@@ -1,11 +1,25 @@
-map hash: {n0: null, x1: ["x"], n2: [<NULL>], 3: [0]}
-map list: [null, ["x"], [<NULL>], [0]]
-select: ["x", <NULL>, 0]
-select not nothing: ["x", <NULL>, 0]
-size: [0, 1, 1, 1]
+map hash: {n0: null, x1: ["x"], n2: [<NULL>], 3: [0], 4: [""], 5: [False]}
+map list: [null, ["x"], [<NULL>], [0], [""], [False]]
+select: ["x", <NULL>, 0, "", False]
+select not nothing: ["x", <NULL>, 0, "", False]
+size: [0, 1, 1, 1, 1, 1]
 fold: 2
 foldr: [2, null]
 fold first: null
+map in map: [[null, null], [["x"], null], [[0], null]]
+select and: ["x", 0]
+select or: [null, "x"]
+coalesce: ["none", ["x"], [0]]
+ternary: ["nothing", "list", "list"]
+method: ["null", "[\"x\"]", "[0]"]
+typed: [[1], [2]]
+typed select: [2]
+single value: null
+fold nothing first: 2
+fold nothing last: null
+release t0
+release t1
+caught none
 foreach: ["A", "B"]
 foreach no arguments: null
 loops: [3, 3, [7, 8, 9], [7, 8, 9], 7, 7]

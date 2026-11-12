@@ -1,5 +1,6 @@
 %modern
 %disable-warning unreferenced-variable
+%disable-warning invalid-operation
 
 # $$ (the list of the implicit arguments) in the contexts that set it, in every execution mode: the single element of
 # map, select and hash map, the two values of foldl and foldr, and the arguments of the function in a foreach body
@@ -25,7 +26,7 @@ string sub thrower(string s) {
 
 # an element with no value gives no list: $$ is NOTHING (qore#5804)
 sub nothingElement() {
-    list ul = (NOTHING, "x", NULL, 0);
+    list ul = (NOTHING, "x", NULL, 0, "", False);
     printf("map hash: %y\n", (map {($1 ?? "n") + $#: $$}, ul));
     printf("map list: %y\n", (map $$, ul));
     printf("select: %y\n", (select ul, $$.size() == 1));
@@ -34,6 +35,35 @@ sub nothingElement() {
     printf("fold: %y\n", (foldl $$.size(), (1, 2, 3)));
     printf("foldr: %y\n", (foldr $$, (NOTHING, 2)));
     printf("fold first: %y\n", (foldl $$[0], (NOTHING, 2, 3)));
+}
+
+# $$ in a nested context, in the operands of logical operators, in a method call and with an exception
+class ArgvHolder {
+    string describe(auto a) {
+        return sprintf("%y", a);
+    }
+}
+
+sub nestedAndLogical() {
+    list ul = (NOTHING, "x", 0);
+    printf("map in map: %y\n", (map (map $$, ($1, NOTHING)), ul));
+    printf("select and: %y\n", (select ul, $$ && $$.size() == 1));
+    printf("select or: %y\n", (select ul, !$$ || $$[0] == "x"));
+    printf("coalesce: %y\n", (map ($$ ?? "none"), ul));
+    printf("ternary: %y\n", (map ($$ ? "list" : "nothing"), ul));
+    ArgvHolder h();
+    printf("method: %y\n", (map h.describe($$), ul));
+    list<int> li = (1, 2);
+    printf("typed: %y\n", (map $$, li));
+    printf("typed select: %y\n", (select li, $$[0] == 2));
+    printf("single value: %y\n", (map $$, NOTHING));
+    printf("fold nothing first: %y\n", (foldl $$.size(), (NOTHING, 2)));
+    printf("fold nothing last: %y\n", (foldl $$[1], (1, NOTHING)));
+    try {
+        auto r = (map (new Tracked("t" + $#)).n + ($$ ? "" : thrower("none")), (1, NOTHING, 3));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.desc);
+    }
 }
 
 # $$ in a foreach or a for loop is the list of the function's arguments (qore#5807)
@@ -113,6 +143,7 @@ sub hashMapKeyRelease() {
 }
 
 nothingElement();
+nestedAndLogical();
 printf("foreach: %s\n", foreachArguments("A", "B"));
 printf("foreach no arguments: %s\n", foreachArguments());
 printf("loops: %y\n", loopArguments(7, 8, 9));
