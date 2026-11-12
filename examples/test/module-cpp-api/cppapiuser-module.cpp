@@ -39,6 +39,7 @@
 #include <cassert>
 #include <cstring>
 #include <mutex>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -178,15 +179,20 @@ static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
         xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
         return;
     }
-    std::string rec(cmd.c_str());
-    {
-        QoreSandboxManagerHelper sm(getProgram());
-        if (sm) {
-            rec += " [sandboxed]";
+    // no C++ exception may leave the module's C callback
+    try {
+        std::string rec(cmd.c_str());
+        {
+            QoreSandboxManagerHelper sm(getProgram());
+            if (sm) {
+                rec += " [sandboxed]";
+            }
         }
+        std::lock_guard<std::mutex> guard(module_cmd_lock);
+        module_cmds.push_back(std::move(rec));
+    } catch (const std::bad_alloc&) {
+        xsink->outOfMemory();
     }
-    std::lock_guard<std::mutex> guard(module_cmd_lock);
-    module_cmds.push_back(std::move(rec));
 }
 
 QoreListNode* cppapiuser_get_module_cmds() {

@@ -126,11 +126,6 @@ string sub own_cmd(string mod, string cmd) {
         mkdir(bin_dir);
         write(src_dir + "/ReplayProbe.qm", ModuleSource);
         write(dir.path + "/load.qr", LoaderSource);
-        string out = run(sprintf("%s -O0 -m %s -o %s", quote(qcc_bin), quote(src_dir + "/ReplayProbe.qm"),
-            quote(bin_dir + "/ReplayProbe.qmod")));
-        if (!is_file(bin_dir + "/ReplayProbe.qmod")) {
-            throw "TEST-SETUP-ERROR", sprintf("qcc did not compile the module: %s", out);
-        }
     }
 
     sourceTest() {
@@ -138,6 +133,12 @@ string sub own_cmd(string mod, string cmd) {
     }
 
     compiledTest() {
+        if (!is_executable(qcc_bin)) {
+            testSkip(sprintf("qcc is not available in %y; set QCC to test compiled modules", qcc_bin));
+        }
+        string out = run(sprintf("%s -O0 -m %s -o %s", quote(qcc_bin), quote(src_dir + "/ReplayProbe.qm"),
+            quote(bin_dir + "/ReplayProbe.qmod")));
+        assertTrue(is_file(bin_dir + "/ReplayProbe.qmod"), "qcc compiles the module: " + out);
         checkLoads(bin_dir, bin_dir + "/ReplayProbe.qmod");
     }
 

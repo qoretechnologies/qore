@@ -1607,11 +1607,12 @@
     - a sandboxed Program could not load a compiled (qcc) library module whose source has a
       \c %%module-cmd directive (\c MODULE-LOAD-ERROR: "AOT module-command replay error"), although it
       could load the module's source: the directive recorded in the compiled module was replayed in the module's
-      Program as a command from the sandboxed loader to another Program; it now runs in the module's Program as when
-      the source is parsed there, and sandboxed code still cannot issue a module command to another Program with
+      Program as a command from the sandboxed loader to another Program; it now runs in the module's Program, with
+      the sandbox that the module's Program gets from the loader, as when its source is parsed there, and sandboxed
+      code still cannot issue a module command to another Program with
       @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()" (issue #5905)
     - a compiled (qcc) module that sandboxed code loaded from outside the module path (by path, for example) ran
-      without the sandbox of that code, both its own code and the @c %%module-cmd directives replayed in its
+      without the sandbox of that code, both its own code and the \c %%module-cmd directives replayed in its
       Program, whereas the source module is governed by that sandbox; the compiled module's Program now gets the
       sandbox that its source module's Program gets (issue #5913)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
