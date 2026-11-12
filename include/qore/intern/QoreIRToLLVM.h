@@ -742,8 +742,34 @@ private:
         // survives basic-block reordering (e.g. short-circuit operators that
         // move a loop-body DiscardTemps after a sibling block's DiscardTemps).
         uint32_t scope_id = 0;
+        //! the number of iterator_cleanup_allocas when the mark was pushed
+        size_t iterator_count = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
+    //! the number of invoke_result_allocas when the mark of each temp scope was closed (see emitDiscardTemps())
+    std::unordered_map<uint32_t, size_t> temp_scope_end;
+
+    //! An exception check outside a try block whose edge to the error return is completed once the function has been
+    //! lowered (see finalizeOrderedErrorReturnEdges())
+    struct OrderedErrorReturnSite {
+        //! the conditional branch of the exception check
+        llvm::Instruction* check = nullptr;
+        //! the branch to the error return: the check, or the branch of its implicit context restore edge
+        llvm::Instruction* branch = nullptr;
+        //! the temp scope of the raising instruction
+        uint32_t scope_id = 0;
+        //! the statement's cleanup allocas registered before the check: invoke_result_allocas from start to count
+        size_t start = 0;
+        size_t count = 0;
+        //! the first of the cleanup allocas registered after the check (count, plus the SSA cleanups of enclosing
+        //! scopes that the check put in allocas)
+        size_t later_start = 0;
+        //! the iterators of the statement's functional operators: iterator_cleanup_allocas from iter_start to iter_end
+        size_t iter_start = 0;
+        size_t iter_end = 0;
+        llvm::DebugLoc loc;
+    };
+    std::vector<OrderedErrorReturnSite> ordered_error_return_sites;
 
     // Incremental block-level immediate-dominator map, populated as
     // blocks are entered during lowering.  Conservative approximation:
@@ -1527,7 +1553,8 @@ private:
     // the AST interpreter releases them when the statements unwind; the persistent cleanups follow in
     // emitInvokeCleanup()
     //! @param exception_exit true for an exit by an exception, whose release of the locals releases the iterators
-    //! that have a place among them (positioned_iterator_allocas)
+    //! that have a place among them (positioned_iterator_allocas), and which releases the other iterators (those of
+    //! functional operators) first, before the temporaries, as the AST interpreter unwinds the operators
     void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
@@ -1538,18 +1565,26 @@ private:
     llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* handler);
 
-    // Returns the block that an exception raised by \a inst outside a try block branches to on its way to the
-    // function's error return \a target: a block that first releases the temporaries of the raising statement whose
-    // release can run a destructor, in the order in which the AST interpreter unwinds them, if the error return's
-    // release (last registered first) gives another order; otherwise \a target itself
-    llvm::BasicBlock* getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst, llvm::BasicBlock* target);
+    // Returns the mark of the temp scope of \a inst if an exception that \a inst raises outside a try block can
+    // release the statement's temporaries in their own order on its way to the error return; nullptr if the
+    // instruction has no temp scope, its statement has pending SSA cleanups or too many temporaries
+    const TempCleanupMark* getOrderedErrorReturnMark(const QoreIRInstruction* inst) const;
 
-    // Gives in \a temps the cleanup allocas of the temporaries that getOrderedErrorReturnEdge() releases for \a inst,
-    // in their order; returns false if the error return's own release gives their order, or with too many of them
-    bool getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std::vector<llvm::Value*>& temps);
+    // Completes the edges of the exception checks outside a try block (ordered_error_return_sites) once every cleanup
+    // alloca of the function is known: an edge that releases the iterators of the statement's functional operators
+    // and then its temporaries in the order in which the AST interpreter unwinds them, on the way to the error
+    // return, where the error return's own release gives another order.  The temporaries are those registered before
+    // the check and, if the check is in a loop, those registered after it in the statement that the loop stores and
+    // does not release before it comes back to the check: a value of the previous element that such a temporary
+    // still holds was released before the others (qore#5884)
+    void finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::Function* llvm_func);
 
-    // Emits, at the insertion point, the release of \a temps (from getOrderedErrorReturnTemps()), in their order: a
+    // Emits the release of the iterators of functional operators (those without a place among the locals) of
+    // iterator_cleanup_allocas from \a start to \a end, last created first: an exception that leaves the function
+    // releases them before the statement's temporaries, as the AST interpreter unwinds the operators
+    void emitOperatorIteratorRelease(llvm::Module& module, size_t start, size_t end);
+
+    // Emits, at the insertion point, the release of \a temps (from orderExceptionTemps()), in their order: a
     // throw or a synthetic rethrow that leaves the function releases them so before the statement's exit cleanup,
     // as an exception check does on its edge
     void emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps);
@@ -1559,6 +1594,9 @@ private:
     // the reverse of the registration order.  \a observable_only leaves out the values whose release cannot run a
     // destructor
     bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps);
+    //! the same for the cleanup allocas of \a indices (positions in invoke_result_allocas, in increasing order)
+    bool orderExceptionTemps(const std::vector<size_t>& indices, bool observable_only,
+            std::vector<llvm::Value*>& temps);
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
