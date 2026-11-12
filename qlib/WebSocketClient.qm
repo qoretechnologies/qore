@@ -7995,9 +7995,9 @@ public class WebSocketClientHcioPollOp {
             if (answer) {
                 try {
                     # a close frame without a status code (1005) is answered with one without a status code: 1005 is
-                    # never sent (RFC 6455 section 7.4.1); the answer goes through the frame state, as the client's
-                    # own close (see sendCloseIntern())
-                    if (!stream.sendFrameStateClose(code)) {
+                    # never sent (RFC 6455 section 7.4.1); the frame state records it, as the client's own close (see
+                    # sendCloseIntern())
+                    if (stream.markFrameStateCloseSent() != 2) {
                         stream.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary()
                             : code.encodeMsb(2), WSOP_Close, True));
                     }
@@ -8215,10 +8215,11 @@ public class WebSocketClientHcioPollOp {
             logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
         }
         try {
-            # the close frame is sent through the stream's frame state, so that the frame state sends no second one
-            # when it fails the connection later with an error (RFC 6455 section 5.5.1)
-            if (stream.sendFrameStateClose(code, reason)) {
-                logDebug("sent the close frame: close code %d", code);
+            # the stream's frame state records that the client sends its close frame, so that it sends no second one
+            # when it fails the connection later with an error; if it failed it already, it sent the close frame
+            # (RFC 6455 section 5.5.1)
+            if (stream.markFrameStateCloseSent() == 2) {
+                logDebug("the frame state sent the close frame already; close code %d not sent", code);
                 return;
             }
             # Close frame body: 2-byte big-endian close code + optional reason text; 1005 and 1006 are never sent in

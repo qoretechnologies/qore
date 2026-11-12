@@ -171,6 +171,21 @@ public:
     */
     DLLLOCAL void sendClose(uint16_t code, const char* reason);
 
+    //! Records that the application sent its close frame on the stream itself
+    /** The frame state then sends no close frame of its own when it fails the connection later with an error (an
+        endpoint sends one close frame, RFC 6455 section 5.5.1).
+
+        @return true if the close is recorded now (the caller sends its close frame), false if the frame state sent
+        a close frame before (the caller sends none)
+    */
+    DLLLOCAL bool markCloseSent() {
+        if (close_sent) {
+            return false;
+        }
+        close_sent = true;
+        return true;
+    }
+
     //! Pushes a NOTHING sentinel to msg_queue to signal transport close
     /** Called from the transport layer (e.g. QuicSession::streamCloseCallback)
         when the underlying stream is torn down before a proper WebSocket

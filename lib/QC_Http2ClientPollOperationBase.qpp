@@ -1699,31 +1699,24 @@ void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const Binar
     sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
-bool Http2ClientPollOperationPriv::sendFrameStateClose(int32_t stream_id, uint16_t code, const char* reason,
-        ExceptionSink* xsink) {
+int Http2ClientPollOperationPriv::markFrameStateCloseSent(int32_t stream_id, ExceptionSink* xsink) {
     ChannelAction* ch_action = nullptr;
     std::string sid = std::to_string(stream_id);
     {
         AutoLocker al(stream_lock);
         auto it = stream_actions.find(sid);
         if (it == stream_actions.end()) {
-            return false;
+            return 0;
         }
         ch_action = dynamic_cast<ChannelAction*>(it->second);
         if (!ch_action) {
-            return false;
+            return 0;
         }
         ch_action->ref();
     }
-    // the reference is released also if the send throws
-    struct ActionRef {
-        ChannelAction* action;
-        ExceptionSink* xsink;
-        ~ActionRef() {
-            action->deref(xsink);
-        }
-    } action_ref{ch_action, xsink};
-    return ch_action->sendFrameStateClose(code, reason);
+    int rv = ch_action->markFrameStateCloseSent();
+    ch_action->deref(xsink);
+    return rv;
 }
 
 void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* msg_queue,
@@ -2527,36 +2520,19 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
 }
 
-//! Sends the application's WebSocket close frame through the stream's frame state
-/** When a frame state is installed on the stream (see installFrameState()), the close frame is sent through it, so
-    that the frame state sends no second close frame when it fails the connection later with an error (an endpoint
-    sends one close frame, RFC 6455 section 5.5.1); the frame is not refused for a full send buffer.
+//! Records on the stream's frame state that the application sends its WebSocket close frame itself
+/** When a frame state is installed on the stream (see installFrameState()), it then sends no close frame of its own
+    when it fails the connection later with an error (an endpoint sends one close frame, RFC 6455 section 5.5.1).
 
     @param stream_id the stream ID
-    @param code the close code; 0, 1005 and 1006 are sent as a close frame without a status code (RFC 6455
-    section 7.4.1)
-    @param reason the close reason, if any
 
-    @return @ref True if the stream's frame state took the close (sent now, or sent before), @ref False if the
-    stream has no frame state; the caller sends the close frame itself then
+    @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2 if
+    the frame state sent a close frame before (the caller sends none)
 
     @since %Qore 3.0
 */
-bool Http2ClientPollOperationBase::sendFrameStateClose(int stream_id, int code, *string reason) [flags=NAMED_ARGS] {
-    if (code < 0 || code > 0xffff) {
-        xsink->raiseException("WEBSOCKET-ERROR", "invalid close code %lld", code);
-        return false;
-    }
-    // no code: a close frame without a status code, as 1005 (RFC 6455 section 7.4.1)
-    if (!code) {
-        code = WSCC_NoStatusRcvd;
-    }
-    TempEncodingHelper treason;
-    if (reason && !treason.set(reason, QCS_UTF8, xsink)) {
-        return false;
-    }
-    return priv->sendFrameStateClose(static_cast<int32_t>(stream_id), static_cast<uint16_t>(code),
-        reason ? treason->c_str() : nullptr, xsink);
+int Http2ClientPollOperationBase::markFrameStateCloseSent(int stream_id) [flags=NAMED_ARGS] {
+    return priv->markFrameStateCloseSent(static_cast<int32_t>(stream_id), xsink);
 }
 
 //! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream
