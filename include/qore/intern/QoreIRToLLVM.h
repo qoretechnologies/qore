@@ -1489,6 +1489,13 @@ private:
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
 
+    //! Branches to a new block that runs only when handlers were registered after \a saved_count, and continues there
+    /** @return the block where the code continues after the handlers; endPendingHandlerRun() branches to it */
+    llvm::BasicBlock* beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count);
+
+    //! Ends the block started by beginPendingHandlerRun() and continues in \a done_bb
+    void endPendingHandlerRun(llvm::BasicBlock* done_bb);
+
     // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
     // point only when specialized tracking proves a runtime catch scope remains
     // active; no-op for functions without catch blocks.

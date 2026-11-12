@@ -13417,6 +13417,12 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
     if (jit_obe_handlers.size() <= start) {
         return;
     }
+    // handlers lowered inline (or discarded by a deopt) are only dropped: nothing runs, so no sink and no slot cache
+    // state are needed (qore#5927)
+    if (inline_lowered) {
+        jit_obe_handlers.resize(start);
+        return;
+    }
 
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
@@ -13460,8 +13466,9 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
         current_native_ir_slot_cache_active, saved_native_slot_cache_active,
         clear_stale_outer_slot_cache};
 
-    // Skip handler execution if handlers were already inlined; just clean up the vector
-    if (!inline_lowered) {
+    // run the handlers registered since saved_count (handlers lowered inline returned above)
+    assert(!inline_lowered);
+    {
         // Execute in reverse order (LIFO) — matching the AST's
         // StatementBlock::execIntern() semantics.
         for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
