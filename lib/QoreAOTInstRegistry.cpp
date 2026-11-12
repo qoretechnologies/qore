@@ -1298,6 +1298,47 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
+//! Returns a normal or static method of a class or of one of its base classes that is not committed yet, or nullptr
+static const QoreMethod* instRegistryFindPendingMethod(const qore_class_private& qcp, const char* method_name,
+        bool is_static) {
+    if (const QoreMethod* method = is_static ? qcp.parseFindLocalStaticMethod(method_name)
+            : qcp.parseFindLocalMethod(method_name)) {
+        return method;
+    }
+    if (qcp.scl) {
+        for (const BCNode* bc : *qcp.scl) {
+            if (bc && bc->sclass) {
+                if (const QoreMethod* method = instRegistryFindPendingMethod(*qore_class_private::get(*bc->sclass),
+                        method_name, is_static)) {
+                    return method;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+//! Returns the method of a direct method call, or nullptr if the class and its base classes have no such method
+/** A closure in a member initializer is read before the classes' methods are committed (see
+    QoreAOTBinaryDeserializer::resolveTypesAndMembers()), and a method that is not committed yet is not found by name
+    at run time: it is the method object of the class (or of a base class) that its variants are committed to (issue
+    #5901)
+*/
+static const QoreMethod* instRegistryFindDirectMethod(const QoreClass& qc, const char* method_name) {
+    if (const QoreMethod* method = qc.findMethod(method_name)) {
+        return method;
+    }
+    if (const QoreMethod* method = qc.findStaticMethod(method_name)) {
+        return method;
+    }
+    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed
+    const qore_class_private& qcp = *qore_class_private::get(qc);
+    if (const QoreMethod* method = instRegistryFindPendingMethod(qcp, method_name, false)) {
+        return method;
+    }
+    return instRegistryFindPendingMethod(qcp, method_name, true);
+}
+
 // ============================================================================
 // Group 11: CallMethodDirect - Direct method call
 // ============================================================================
@@ -1338,10 +1379,7 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
@@ -1407,10 +1445,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
