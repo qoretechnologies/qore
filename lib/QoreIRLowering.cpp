@@ -5919,7 +5919,16 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
                 }
                 // the context of a single element (map, select): an element with no value gives no list, so that $$
                 // is NOTHING, as the AST interpreter's SingleArgvContextHelper does (qore#5804); NULL is a value
-                // that gives [NULL]
+                // that gives [NULL]; an element that is known never to be NOTHING (an element of a typed list, a
+                // value of a known type) needs no test
+                const QoreIRValueFacts* element_facts = builder.getFunction()->getValueFacts(virtual_implicit.arg0);
+                if (never_nothing_values.count(virtual_implicit.arg0.id)
+                        || (element_facts && element_facts->assigned_state == QoreIRAssignedState::Assigned
+                            && element_facts->never_nothing)) {
+                    QoreIRValue argv_list = builder.createEmptyList(impl_arg->loc)->result;
+                    builder.createListAppend(argv_list, virtual_implicit.arg0, impl_arg->loc);
+                    return argv_list;
+                }
                 QoreIRValue nothing_value = builder.createConstNothing(impl_arg->loc)->result;
                 QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, virtual_implicit.arg0,
                     nothing_value, impl_arg->loc)->result;
@@ -18027,8 +18036,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue element_val;
         if (elem_is_int) {
             element_val = builder.createListGetInt(input_list, index_val, map->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else if (elem_is_float) {
             element_val = builder.createListGetFloat(input_list, index_val, map->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else {
             element_val = builder.createListGetValue(input_list, index_val, map->loc)->result;
         }
@@ -18540,8 +18551,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         QoreIRValue element_val;
         if (elem_is_int) {
             element_val = builder.createListGetInt(input_list, index_val, select->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else if (elem_is_float) {
             element_val = builder.createListGetFloat(input_list, index_val, select->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else {
             element_val = builder.createListGetValue(input_list, index_val, select->loc)->result;
         }
@@ -19573,8 +19586,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         QoreIRValue element_val;
         if (elem_is_int) {
             element_val = builder.createListGetInt(input_list, index_val, ms->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else if (elem_is_float) {
             element_val = builder.createListGetFloat(input_list, index_val, ms->loc)->result;
+            never_nothing_values.insert(element_val.id);
         } else {
             element_val = builder.createListGetValue(input_list, index_val, ms->loc)->result;
         }
