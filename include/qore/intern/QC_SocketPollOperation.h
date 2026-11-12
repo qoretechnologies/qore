@@ -1114,6 +1114,13 @@ private:
     // true while the response of a fast route to a request with Connection: close is sent: the operation then ends
     bool fast_close = false;
 
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+
+    //! true once the operation has sent a response (see enterIdle()): a draining server closes the connection if no
+    //! request has arrived after it; the first request of a new connection is served
+    bool responded = false;
+
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;
     }
@@ -1567,6 +1574,9 @@ private:
 
     // Idle + ReadHeader phases
     bool fused;
+
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
     int64 idle_timeout_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
@@ -2334,6 +2344,22 @@ private:
 
     //! Clean up closed sessions (called periodically, not every poll cycle)
     DLLLOCAL void cleanupClosedSessions();
+
+    //! Drains the sessions of a server that stops (qore#5899; called on the I/O thread with the socket lock held)
+    /** Sends each session the GOAWAY notice once, and closes (final GOAWAY, then CONNECTION_CLOSE) each session that
+        has no request left
+
+        @return true if every session is closed, in which case the operation ends (isDrained())
+    */
+    DLLLOCAL bool drainSessions();
+
+public:
+    //! Returns true if the operation ended because the server drained all its sessions
+    DLLLOCAL bool isDrained() const {
+        return qcs_state == QCS::CLOSED;
+    }
+
+private:
 
     //! Accumulate peer-reset and session-close events into the lifecycle buffers
     /** Iterates all sessions on the I/O thread (socket lock held), draining each

@@ -879,6 +879,21 @@ if (accepted) {
     */
     DLLLOCAL int sendHttp2ShutdownGoaway(ExceptionSink* xsink);
 
+    //! Starts a graceful drain of the socket's server HTTP/2 session (qore#5899)
+    /** Submits a GOAWAY like sendHttp2ShutdownGoaway(); the streams open then are served to their end, and the
+        connection's poll operation closes the connection when none is left.  Does nothing if the socket has no
+        server HTTP/2 session.  Run on the I/O thread of the socket like sendHttp2ShutdownGoaway()
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int startHttp2Drain(ExceptionSink* xsink);
+
+    //! Returns true if a drain of the socket's HTTP/2 session was started and it has no open stream and nothing to write
+    DLLLOCAL bool isHttp2DrainComplete() const;
+
+    //! Returns true if the server drains the socket's connection (see Socket::drainHttpConnection())
+    DLLLOCAL bool isHttpDraining() const;
+
     //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
     /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
     */

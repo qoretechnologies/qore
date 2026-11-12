@@ -162,6 +162,15 @@ public:
     */
     DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
 
+    //! Starts a graceful drain of the connection (qore#5899)
+    /** Sends a GOAWAY; the streams open then are served to their end, and the operation closes the connection when
+        none is left (see Http2Session::startDrain()).  Does nothing if the connection is closed.  Waits for the I/O
+        thread like sendShutdownGoaway(), so must not be called with @ref op_lock held.
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int startDrain(ExceptionSink* xsink);
+
     //! Returns true if the given stream can no longer carry data to the peer
     /** True when the peer reset the stream (RST_STREAM) or the whole connection
         is closed.  Used by long-lived stream owners (SSE response streams) that
@@ -408,6 +417,13 @@ private:
     //! The state; atomic: goalReached(), isClosed() and the other accessors read it without op_lock, from other
     //! threads too, while the I/O thread and abort() change it with op_lock held
     std::atomic<H2ServerState> h2_state;
+    //! set by startDrain(); read on every read cycle, so only the drain itself pays for the session check
+    std::atomic<bool> drain_requested{false};
+
+    //! Returns true if a drain was started and is complete; called on the I/O thread at the end of a read cycle
+    DLLLOCAL bool isDrainComplete() const {
+        return drain_requested.load(std::memory_order_acquire) && sock && sock->isHttp2DrainComplete();
+    }
     bool headers_only;                          //!< dispatch on HEADERS before END_STREAM
     mutable bool request_pending;               //!< set by continuePoll, cleared by getOutput
     bool keep_alive;                            //!< HTTP/2 connections are persistent by default

@@ -4839,6 +4839,20 @@ int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
     return 0;
 }
 
+int QuicSession::submitDrainNotice(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (drain_notice_sent_) {
+        return 0;
+    }
+    drain_notice_sent_ = true;
+    return submitShutdownNotice(xsink);
+}
+
+bool QuicSession::hasActiveApplicationStreams() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return hasActiveApplicationStreamsLocked();
+}
+
 int QuicSession::submitShutdown(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!h3_conn_) {

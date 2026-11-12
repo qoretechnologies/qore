@@ -343,6 +343,11 @@ log("started listener on %s", lh.desc);
       handler that never returns; the no-argument call is unchanged
     - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
       can report what is still in flight after a bounded wait times out
+    - @ref HttpServer::HttpServer::stop() "stop()" lets the requests in progress finish before it closes the
+      connections (HTTP/2 and HTTP/3 \c GOAWAY, HTTP/1.1 \c Connection: \c close), waiting at most the new
+      \c drain_timeout option (the \c quic_drain_timeout option is a deprecated alias);
+      @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" does the same in the background, and the new
+      @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once, as \c stop() did before
     - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
       connection option, or to a request with the \c close option (RFC 9112 section 9.3): a handler can close a
       connection, but a handler response can no longer keep open a connection that the request requires to close
@@ -797,18 +802,27 @@ public hashdecl HttpServerOptionInfo {
     */
     int alt_svc_max_age = 3600;
 
-    #! QUIC GOAWAY drain timeout — duration to wait for in-flight requests during graceful shutdown
-    /** Per RFC 9114 Section 5.2, the server sends a GOAWAY notice first, then waits
-        for in-flight requests to complete before sending the final GOAWAY.  This
-        timeout controls that waiting period.
+    #! The maximum time that @ref HttpServer::HttpServer::stop() "HttpServer::stop()" waits for the requests in progress to finish
+    /** When the server stops, it accepts no new connections and tells its clients that it is closing their
+        connections (HTTP/2 and HTTP/3: \c GOAWAY; HTTP/1.1: \c Connection: \c close), then waits at most this long
+        for the requests that it has accepted to be answered before it closes whatever is left (see
+        @ref HttpServer::HttpServer::stop() "HttpServer::stop()").
 
-        The default (5s) allows sufficient time for remote clients to receive the
-        GOAWAY notice and for in-flight requests to complete.  For localhost or
-        low-latency testing, a shorter value (e.g. 100ms) may be used.
+        The default is 5 seconds; zero or a negative value means that the server does not wait, as with
+        @ref HttpServer::HttpServer::stopImmediate() "HttpServer::stopImmediate()".
+
+        @since HttpServer 1.7
+    */
+    *timeout drain_timeout;
+
+    #! Deprecated: use \c drain_timeout instead
+    /** Used as the \c drain_timeout option when that option is not set.
+
+        @deprecated use \c drain_timeout, which applies to every HTTP version
 
         @since HttpServer 1.6
     */
-    timeout quic_drain_timeout = 5s;
+    *timeout quic_drain_timeout;
 
     #! The maximum time to wait for an HTTP/1.x client to close its side of the connection after the last response
     /** When the server closes an HTTP/1.x connection after a response, the client may still be sending data that
@@ -912,6 +926,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         const ReadTimeout = HttpServer::ReadTimeout;  # recvs timeout after 30 seconds
         #! default poll timeout in ms
         const PollTimeout = 250ms;
+
+        #! The default maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        /** @since HttpServer 1.7
+        */
+        const DefaultDrainTimeout = 5s;
 
         # logging options
         const LP_LOGPARAMS = HttpServer::LP_LOGPARAMS;
@@ -1057,6 +1076,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! True while stop() is in progress
         bool stopping = False;
+
+        #! Signaled with stop_m when a stop in progress has ended
+        Condition stop_cond();
+
+        #! The maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        timeout drain_timeout = DefaultDrainTimeout;
 
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
@@ -1348,8 +1373,10 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     }
 
     #! calls stop() and destroys the object
+    /** If a stop is in progress (for example one started with stopNoWait()), waits for it to end first
+    */
     destructor() {
-        stop();
+        stopIntern(True, True);
     }
 
     #! Returns default response headers
@@ -2045,31 +2072,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         return listeners.size();
     }
 
-    #! stops all listeners; does not wait for all connections on the listeners to close
+    #! Starts stopping the server in the background, as stop() does, and returns at once
+    /** The server stops accepting connections and drains the connections that it has, then closes whatever is
+        left, exactly as stop() does, in a thread of its own; use waitStop() to wait for the stop to end, with a
+        timeout to bound the wait.
+
+        @note before HttpServer 1.7, this method stopped the listeners without closing the connections that the server
+        had: they were served until the server was destroyed
+
+        @see
+        - stop()
+        - stopImmediate()
+        - waitStop()
+    */
     stopNoWait() {
-        # Wake dedicated persistent-handler threads (see HttpListener::handleQueuedPersistentConnection)
-        # so they return immediately instead of waiting up to their idle TTL in
-        # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
-        # below blocks for the full TTL even though all I/O is already async.
-        # (The synchronous HttpServer::stop() path does this via asyncIo.stop();
-        # stopNoWait() users must get the same fast-exit behaviour.)
-        if (asyncIo) {
+        # the stop is claimed here, so that a stop() or the destructor called while it runs does not start another
+        if (beginStop(False)) {
             try {
-                asyncIo.signalPersistentQueuesToClose();
-            } catch () {
-                # asyncIo may already be stopped; safe to ignore
+                background runStop(True);
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread could be started: the stop is not claimed any more
+                AutoLock al(stop_m);
+                stopping = False;
+                stop_cond.broadcast();
+                rethrow;
             }
         }
-
-        # stop all listeners
-        {
-            lm.enter();
-            on_exit lm.exit();
-
-            map $1.stopNoWait(), listeners.iterator();
-        }
-
-        threadPool.stop();
     }
 
     #! waits for all listeners to be stopped; call after calling HttpServer::stopNoWait()
@@ -2209,31 +2237,96 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         #printf("stopped %s c=%y\n", l.getAddress(), c.getCount());
     }
 
-    #! Stops the HTTP server and releases all resources
+    #! Stops the HTTP server and releases all resources, letting the requests in progress finish first
     /** Performs a synchronous, ordered shutdown:
+        -# Starts draining the connections: closes the listening sockets, and tells the clients that their connections
+           are closing: HTTP/2 and HTTP/3 connections are sent a \c GOAWAY frame with the last request that the server
+           processed, an idle HTTP/1.1 connection is closed, and a request in progress on an HTTP/1.1 connection is
+           answered with \c Connection: \c close; each connection is closed when it has answered its requests.  A
+           protocol upgrade or an event stream that a handler starts now is refused with a 503 response, and a
+           CONNECT tunnel is ended
         -# Closes the dedicated connections with their protocol's closing handshake, all at the same time: WebSocket
            connections are sent a close frame (code 1001, going away), and the server waits for the clients' close
            frames at most the close timeout of their handlers in total (see
            @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "WebSocketHandler::setCloseTimeout()")
         -# Signals streaming handlers (SSE, WebSocket) to stop
+        -# Waits for the drain to end, at most the \c drain_timeout option from the start of the stop (5 seconds by
+           default; see @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), woken by the last connection
+           that closes
         -# Stops the async I/O controller (cancels all accept, connection, and streaming
-           operations and waits for in-flight handler tasks to complete)
+           operations that are left and waits for in-flight handler tasks to complete)
         -# Cancels remaining ops by owner on the global async I/O controller
         -# Stops listeners and waits for all listener-stopped callbacks
         -# Flushes any remaining async callbacks and stops the internal thread pool
 
         This method blocks until all connections are closed and handler tasks complete.
 
-        @note HttpServer instances are not restartable after \c stop(). Create a new
-        HttpServer if a restart is needed.
+        @note
+        - HttpServer instances are not restartable after \c stop(). Create a new HttpServer if a restart is needed.
+        - if a stop is in progress (for example one started with stopNoWait()), this method returns at once; use
+          waitStop() to wait for it
+        - before HttpServer 1.7, this method did not wait for the requests in progress: it closed the connections at
+          once, as stopImmediate() does
+
+        @see
+        - stopImmediate()
+        - stopNoWait()
     */
     stop() {
-        {
-            AutoLock al(stop_m);
-            if (stopped || stopping) {
-                return;
+        stopIntern(True, False);
+    }
+
+    #! Stops the HTTP server and releases all resources without waiting for the requests in progress
+    /** Performs the same shutdown as stop() without draining the connections: HTTP/2 and HTTP/3 clients are sent a
+        \c GOAWAY frame, and all connections are closed at once.
+
+        This method blocks until all connections are closed and handler tasks complete.
+
+        @since HttpServer 1.7
+
+        @see
+        - stop()
+    */
+    stopImmediate() {
+        stopIntern(False, False);
+    }
+
+    #! Stops the server, draining the connections first if \a drain is @ref True
+    /** @param drain if @ref True, the connections are drained (see stop()) before the controller is stopped
+        @param wait_in_progress if @ref True and a stop is in progress, waits for it to end (used by the destructor,
+        which must not destroy the object under a stop that runs in another thread)
+    */
+    private stopIntern(bool drain, bool wait_in_progress) {
+        if (beginStop(wait_in_progress)) {
+            runStop(drain);
+        }
+    }
+
+    #! Claims the stop of the server; returns @ref True if the caller is to run it with runStop()
+    /** A stop that is in progress or done is not run again: the call returns @ref False at once, or, with
+        \a wait_in_progress, when the stop in progress has ended
+    */
+    private bool beginStop(bool wait_in_progress) {
+        AutoLock al(stop_m);
+        if (stopping && wait_in_progress) {
+            while (stopping) {
+                stop_cond.wait(stop_m);
             }
-            stopping = True;
+        }
+        if (stopped || stopping) {
+            return False;
+        }
+        stopping = True;
+        return True;
+    }
+
+    #! Runs a stop claimed with beginStop()
+    private runStop(bool drain) {
+        # the stop is ended (and waiting destructors woken) whatever happens below
+        on_exit {
+            AutoLock al(stop_m);
+            stopping = False;
+            stop_cond.broadcast();
         }
         # the global controller logs through this server's logger until the server has stopped
         on_exit restoreControllerLogger();
@@ -2244,10 +2337,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             callback_appender = NOTHING;
         }
+        # A drain starts first: the server accepts no new connection and takes no new long-lived stream, so that
+        # nothing new starts while the long-lived connections are closed below; a drain timeout of zero or less
+        # means no drain
+        bool do_drain = drain && asyncIo && drain_timeout > 0;
+        int drain_start_us = clock_getmicros();
+        if (do_drain) {
+            asyncIo.startDrain();
+        }
+
         # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
-        # first, while the I/O that the handshakes need still runs; all of them close at the same time, so this
+        # while the I/O that the handshakes need still runs; all of them close at the same time, so this
         # waits at most one handshake timeout in total
         closeDedicatedConnections();
+
+        # Wait for the requests in progress to be answered, at most what is left of the drain timeout; the other
+        # long-lived streams (SSE, persistent handler loops) are ended first, as they have no end that a drain could
+        # wait for
+        if (do_drain) {
+            signalStreamingHandlersToStop();
+            asyncIo.signalPersistentQueuesToClose();
+            int remaining_ms = drain_timeout - (clock_getmicros() - drain_start_us) / 1000;
+            if (remaining_ms <= 0 || !asyncIo.waitDrain(remaining_ms)) {
+                log("stop: the requests in progress did not finish in the drain timeout (%y); closing the connections "
+                    "that are left", drain_timeout);
+            }
+        }
 
         # Cancel operations owned by this server on the global controller FIRST
         # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
@@ -3432,6 +3547,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         # checked before anything is created
         compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
@@ -3486,7 +3602,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "max_handler_threads": opts.max_handler_threads,
             "min_idle_handler_threads": opts.min_idle_handler_threads,
             "max_idle_handler_threads": opts.max_idle_handler_threads,
-            "quic_drain_timeout": opts.quic_drain_timeout,
+            "quic_drain_timeout": drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
@@ -4970,6 +5086,21 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        # a stopping server takes no new long-lived connection, which would hold its drain until the drain timeout:
+        # a protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event
+        # stream is refused (qore#5899)
+        if (stopping && (rv."code" == 101 || hdr.method == "CONNECT"
+                || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))) {
+            listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
+                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
+                cx.handler_name);
+            cx.close = True;
+            rv = <HttpResponseInfo>{
+                "code": 503,
+                "body": "the server is stopping",
+                "hdr": {"Content-Type": "text/plain", "Connection": "close"},
+            };
+        }
         if (request_helper.log_info) {
             listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
                 rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
