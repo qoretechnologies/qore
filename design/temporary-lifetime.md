@@ -320,7 +320,12 @@ statement's temporaries in their order on the way to the error return is made on
 (`QoreIRToLLVM::finalizeOrderedErrorReturnEdges()`), and orders, with the temporaries registered before the check, those
 registered after it that a loop containing the check stores and does not release before it comes back to the check:
 the value that such a temporary holds from the previous element (the value of `??` in a map) was released before the
-element and the list (qore#5884).
+element and the list (qore#5884).  The function is not complete then (its error return block, among others, has no
+terminator yet), so the cycles of its control flow graph are found over the terminators of its blocks
+(`qoreFindBlockCycles()`, `qoreForEachSuccessor()`), never with LLVM's successor iterators or graph algorithms over a
+function (`llvm::successors()`, `succ_begin()`, `llvm::scc_iterator`), which LLVM 23 made require a terminator: they
+crashed qcc on every qlib module with the LLVM 23 of the macOS CI job
+(`examples/test/ir/unterminated-block-cfg/unterminated-block-cfg.qtest` guards the source).
 Native code raises an integer
 or float division by zero where it happens, on the path that only a zero divisor takes, and the exception of an
 operation through a runtime helper (an untyped division, modulo, addition, subtraction or multiplication, a number

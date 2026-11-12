@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the source guard reads the library's source in the test's own process
+# test-platform: macos - JIT and AOT code generation with the LLVM of the macOS job (LLVM 23)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class UnterminatedBlockCfgTest
+
+#! The control flow graph of a function that is being lowered to LLVM IR is never walked with LLVM's successor
+#! iterators
+/** While a function is lowered, some of its blocks have no terminator yet (the error return block among them).  The
+    release order of the temporaries of an exception that leaves a function (qore#5884) is decided once the body is
+    lowered, before the error return block is completed, from the cycles of the function's control flow graph; it
+    found them with llvm::scc_iterator and llvm::successors(), which LLVM 23 made require a terminator: qcc crashed on
+    every function with such an exception check (all qlib modules) with the LLVM 23 of the macOS CI job.
+
+    The script next to the test has such functions; it runs in every execution mode and as AOT executables, which
+    must give the output of the AST interpreter.  The source guard fails if the lowering uses LLVM's successor
+    iterators or graph algorithms over a function, which crash with LLVM 23 and pass with an older LLVM.
+*/
+class UnterminatedBlockCfgTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "loop-error-return";
+
+        #! the source files of the lowering to LLVM IR
+        const LoweringSources = ("lib/QoreIRToLLVM.cpp",);
+
+        #! the APIs that walk the successors of a block with LLVM's successor iterators, which require a terminator
+        #! in LLVM 23 (see qoreForEachSuccessor() in lib/QoreIRToLLVM.cpp)
+        const SuccessorIteratorApis = (
+            "llvm::successors(",
+            "succ_begin(",
+            "succ_end(",
+            "succ_size(",
+            "succ_empty(",
+            "scc_begin(",
+            "scc_iterator",
+            "SCCIterator.h",
+            "depth_first(",
+            "post_order(",
+            "ReversePostOrderTraversal",
+            "breadth_first(",
+            "GraphTraits<llvm::Function",
+            "GraphTraits<llvm::BasicBlock",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("unterminated block CFG", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the functions are compiled to native code before they run, not in the background
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir, libqore_dir);
+
+        addTestCase("source guard", \sourceGuardTest());
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! the lowering never walks the successors of a block with LLVM's iterators
+    private sourceGuardTest() {
+        # the guard itself: an API in code is found, one in a comment is not
+        string code = "x = 1; // llvm::successors(bb)\n/* scc_begin(f)\n */ for (auto* s : llvm::successors(b)) {}";
+        assertEq(("llvm::successors(",), UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
+            code), SuccessorIteratorApis));
+        assertEq((), UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
+            "// succ_begin(bb)\n/** depth_first(f) */ int x;"), SuccessorIteratorApis));
+
+        string root = get_script_dir() + "/../../../..";
+        foreach string rel in (LoweringSources) {
+            string path = root + "/" + rel;
+            if (!is_file(path)) {
+                testSkip(sprintf("the library's source is not available at %y", path));
+            }
+            list<string> found = UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
+                ReadOnlyFile::readTextFile(path)), SuccessorIteratorApis);
+            assertEq((), found, sprintf("%s walks the successors of a block with LLVM's iterators", rel));
+        }
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        assertEq(8, (select out.split("\n"), $1 =~ /^[a-z]+ [0-9]: /).size(), "cases");
+        assertTrue(out =~ /^for 2: f0 v0; released f0; f1 v1; released f1; released f2; catch STAGE: stop at 2\n/,
+            "the temporary of a for loop is released before the handler");
+        assertTrue(out =~ /\nwhile 2: released w0; w0\/v0; released w1; w1\/v1; released w2; catch STAGE: stop at 2\n/,
+            "the temporary of a while loop is released before the handler");
+        assertTrue(out =~ /\nnested 2: .*\["n00v1", "n01v1"\]; released n10; catch STAGE: stop at 2\n/,
+            "the temporaries of a map in nested loops are released before the handler");
+        assertTrue(out =~ /\ndo 9: d0v0; released d0; .*d3v3; released d3; no exception\n/,
+            "a do loop without an exception");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("unterminated-block-cfg-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+
+    #! returns C++ source without its comments (a comment marker in a string literal is not recognized: the
+    #! lowering's sources have none before code that matters here)
+    static string stripComments(string src) {
+        src = regex_subst(src, "/\\*.*?\\*/", "", RE_DotAll | RE_Global);
+        return regex_subst(src, "//[^\n]*", "", RE_Global);
+    }
+
+    #! returns the APIs of @p apis that @p src names
+    static list<string> findApis(string src, list<string> apis) {
+        return (select apis, src.find($1) >= 0) ?? ();
+    }
+}
