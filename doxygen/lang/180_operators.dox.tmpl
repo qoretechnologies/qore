@@ -2314,6 +2314,11 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
+    or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
+    program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
+    variable's own value and shows the changes later made through the variable; this is the same in every
+    @ref exec_mode_overview "execution mode".\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.

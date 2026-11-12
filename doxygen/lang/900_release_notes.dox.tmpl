@@ -1674,6 +1674,11 @@
     - the @ref logical_equality_operator "==" and @ref logical_inequality_operator "!=" operators compared an \c int or a
       \c bool with an or-nothing \c float or \c int (ex: \c *float) as an \c int or \c bool (ex: \c 2 \c == \c 2.5
       was @ref True; issue #5875)
+    - a weak assignment from a variable that holds a hash or a list shared with another owner (a literal of the
+      program, another variable) now gives the variable a copy of its own first, so that later changes made through
+      the variable are seen through the weak reference in every execution mode; previous releases shared the value,
+      and the weak reference then kept the old one; see the @ref weak_assignment_operator "weak assignment operator"
+
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

@@ -149,6 +149,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
+    { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
+    { "qore_rt_unique_local_aot", reinterpret_cast<void*>(&qore_rt_unique_local_aot) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -1018,6 +1020,12 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 }
 
 // --- Refcount helpers ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_unique_container(uint64_t val) {
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(fromBits(val), copied);
+    return copied ? toBits(unique) : val;
+}
 
 extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     QoreValue v = fromBits(val);
@@ -13948,6 +13956,30 @@ extern "C" DLLEXPORT LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_
     return ctx->locals[idx];
 }
 
+extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    if (!var || var->closureUse()) {
+        return;
+    }
+    // the variable of the frame: a local that is not a closure variable belongs to one thread, so no lock is needed
+    LocalVarValue* lvar = thread_try_find_lvar(var);
+    if (!lvar) {
+        return;
+    }
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(lvar->val.getValue(), copied);
+    if (!copied) {
+        return;
+    }
+    // the variable takes the copy; the container it held is shared, so releasing the variable's reference cannot
+    // destroy it
+    AbstractQoreNode* old = lvar->val.assign(unique);
+    if (old) {
+        old->deref(xsink);
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_clear_local(ctx->locals[idx], xsink);
@@ -16238,6 +16270,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
+                }
+                // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
+                // reference that the variable holds reads as its target
+                res = lvh.getReferencedValue();
+                switch (res.getType()) {
+                    case NT_WEAKREF:
+                    case NT_WEAKREF_HASH:
+                    case NT_WEAKREF_LIST: {
+                        ValueHolder weak_holder(res, xsink);
+                        res = (res.getType() == NT_WEAKREF
+                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get())
+                            : res.getType() == NT_WEAKREF_HASH
+                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->get())
+                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->get())).refSelf();
+                        break;
+                    }
+                    default:
+                        break;
                 }
                 break;
             case LVUnaryOp::Shift:
