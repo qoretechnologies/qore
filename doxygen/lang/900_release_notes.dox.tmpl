@@ -52,7 +52,18 @@
     - code that a sandbox governs is refused uncontrolled APIs (Java, Python, the debug hooks and the sandbox
       methods that mask its policy) at run time with \c INVALID-FUNCTION-ACCESS, as code restricted with
       \c PO_NO_UNCONTROLLED_APIS is, unless the sandbox allows them; a system-policy capability of trusted code is not
-      refused (see @ref sandbox_uncontrolled_api)
+      refused, a refused call evaluates none of its default arguments, and the %Qore methods of a class that inherits
+      a builtin class of the domain are not refused (only the builtin methods are); the sandbox introspection and
+      barrier methods (\c isGoverned(), \c getGoverningPolicies(), \c callWithSystemPolicy()) are judged by the
+      %Program of the code that calls them, so trusted code calls them for its sandboxed callers (see
+      @ref sandbox_uncontrolled_api)
+    - a DBI driver judges a datasource option by the code that set it, not by the code that opens the connection:
+      trusted code cannot be made to apply an option that sandboxed code set, and a trusted
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" that grows on a sandboxed caller's thread keeps its own
+      configuration (see @ref sandbox_datasource_options)
+    - a sandboxed %Program loads a compiled (\c qcc) module whose source has a \c %module-cmd directive as it loads
+      the module's source: the replayed command is the module's own, not a command that the loader issues to another
+      %Program
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a
@@ -859,6 +870,28 @@
     cleanly: @ref Qore::SQL::Datasource::close() "Datasource::close()" raises the error, or reports it as a warning
     event when the close cleans up after another error.  See @ref Qore::SQL::Datasource::close() "Datasource::close()"
     and the DBI driver page of the C++ API documentation.
+
+    @par C++ API: DBI Drivers Judge an Option by the Code That Set It
+    A datasource records the restrictions and the filesystem policy of the code that sets each of its options
+    (@ref Qore::SQL::Datasource::setOption() "Datasource::setOption()", the options of a constructor or a connection
+    string), and a @ref Qore::SQL::DatasourcePool "DatasourcePool" records those of the code that creates it for
+    every connection that it creates; copies keep them.  A driver reads them when it applies an option with the new
+    \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef() (feature macro
+    \c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS), so that whoever configures a datasource decides what its options
+    may do, not the code that happens to open a connection; see @ref sandbox_datasource_options
+    (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).  A driver checks the
+    restrictions first and refuses an option that they refuse whatever the policy is: the policy manager is missing
+    whenever no sandbox policy governed the setter, also inside a trusted
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.  An option's value
+    and its setter are kept together, so a copy of a datasource made while another thread sets an option pairs each
+    copied value with the code that set it.  A copy of a datasource with an open connection therefore takes the
+    option values that were set on it (as they were passed to \c setOption(), a constructor or a connection string)
+    instead of the values that the driver reports for them, and the values that the driver reports only for the
+    options that were never set: a driver that normalizes the value of an option it accepts hands the copy the value
+    as it was set, which the driver normalizes again when the copy opens its connection.  An option that has no stored
+    value and that is being set on the open connection at the moment of the copy (the driver is being given the
+    value) is not copied, as it has no setter yet; and a stored value of \c NOTHING or \c False is not copied even
+    if the driver reports a value for the option, as such a value counts as not set, as it did for copies before.
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's

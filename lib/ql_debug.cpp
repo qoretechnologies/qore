@@ -62,6 +62,7 @@
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/ManagedDatasource.h"
+#include "qore/intern/qore_ds_private.h"
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -9677,6 +9678,384 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     sandboxed->waitForTerminationAndDeref(&xsink);
     UT_ASSERT(c, !xsink, "the Program is destroyed");
 }
+
+//! qore#5741: inside a sandbox context continued for another thread, the context's manager and the managers of the
+//! Programs entered in its scope govern together (the continued-context branch of the walk of the thread's sandboxes)
+/** The uncontrolled-API policy is resolved without combining the managers (qore_sandbox_allows_uncontrolled_apis()),
+    and the manager is resolved by combining them (qore_dbg_find_thread_sandbox_manager_ref()); both must see the
+    context's manager and the inner Program's manager, whichever of them refuses
+*/
+static void ut_sandbox_context_continued_walk(UnitTestCounters& c, QoreProgram* parent) {
+    // context manager policy, inner Program manager policy (or no inner manager), expected result
+    struct Case {
+        //! the uncontrolled-API policy of the context's manager; no manager if the context has none
+        bool ctx_has_manager;
+        bool ctx_allows;
+        //! the uncontrolled-API policy of the inner Program's manager; no manager if it has none
+        bool inner_has_manager;
+        bool inner_allows;
+        const char* label;
+    };
+    static const Case cases[] = {
+        {true, true, true, false, "the context allows, the inner Program's sandbox refuses"},
+        {true, false, true, true, "the context refuses, the inner Program's sandbox allows"},
+        {true, true, true, true, "both allow"},
+        {true, false, true, false, "both refuse"},
+        {false, false, true, false, "a context without a sandbox, the inner Program's sandbox refuses"},
+        {true, false, false, false, "the context refuses, an inner Program without a sandbox"},
+        {true, true, false, false, "the context allows, an inner Program without a sandbox"},
+    };
+    for (const Case& t : cases) {
+        ExceptionSink xsink;
+        QoreProgram* inner = parent
+            ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+            : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+        if (t.inner_has_manager) {
+            QoreSandboxManager* sm = new QoreSandboxManager;
+            sm->setUncontrolledApiPolicy(t.inner_allows);
+            inner->setSandboxManager(sm);
+            sm->deref(nullptr);
+        }
+        const bool expected = (!t.ctx_has_manager || t.ctx_allows) && (!t.inner_has_manager || t.inner_allows);
+        {
+            QoreSandboxContext ctx;
+            if (t.ctx_has_manager) {
+                QoreSandboxManager* sm = new QoreSandboxManager;
+                sm->setUncontrolledApiPolicy(t.ctx_allows);
+                ut_set_sandbox_context(ctx, sm);
+                sm->deref(nullptr);
+            }
+            QoreSandboxContextHelper sch(ctx);
+            // the context alone governs before the inner Program is entered
+            UT_ASSERT_EQ(c, !t.ctx_has_manager || t.ctx_allows,
+                qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy),
+                (std::string(t.label) + ": the context alone (policy)").c_str());
+            {
+                ProgramThreadCountContextHelper tch(&xsink, inner, true);
+                UT_ASSERT(c, !xsink, "the inner Program is entered");
+                UT_ASSERT_EQ(c, expected, qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy),
+                    (std::string(t.label) + ": policy").c_str());
+                UT_ASSERT_EQ(c, expected, qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+                    (std::string(t.label) + ": all").c_str());
+                // the combined manager has the same policy
+                qore_program_id_t pgm_id = 0;
+                QoreSandboxManager* found = qore_dbg_find_thread_sandbox_manager_ref(&pgm_id);
+                UT_ASSERT_EQ(c, t.ctx_has_manager || t.inner_has_manager, found != nullptr,
+                    (std::string(t.label) + ": a manager governs").c_str());
+                if (found) {
+                    UT_ASSERT_EQ(c, expected, found->getUncontrolledApiPolicy(),
+                        (std::string(t.label) + ": the policy of the combined manager").c_str());
+                    found->deref(nullptr);
+                }
+            }
+        }
+        inner->waitForTerminationAndDeref(&xsink);
+        UT_ASSERT(c, !xsink, "the Program is destroyed");
+    }
+}
+
+namespace {
+//! the connection of the test-only unit-test DBI driver: the values of its options
+struct UtDsOptConnection {
+    ~UtDsOptConnection() {
+        for (auto& i : vals) {
+            i.second.discard(nullptr);
+        }
+    }
+
+    std::map<std::string, QoreValue> vals;
+};
+
+//! the number of times that the driver was given an option with no value (\c NOTHING)
+int ut_dsopt_nothing_sets = 0;
+//! the setter that the driver saw when it was last given the option "opt"
+std::shared_ptr<const qore_ds_option_setter> ut_dsopt_seen_setter;
+
+int ut_dsopt_open(Datasource* ds, ExceptionSink* xsink) {
+    ds->setPrivateData(new UtDsOptConnection);
+    return 0;
+}
+
+int ut_dsopt_close(Datasource* ds) {
+    delete ds->getPrivateData<UtDsOptConnection>();
+    ds->setPrivateData(nullptr);
+    return 0;
+}
+
+//! sets an option; the value "refuse" is refused
+int ut_dsopt_opt_set(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) {
+    UtDsOptConnection* conn = ds->getPrivateData<UtDsOptConnection>();
+    assert(conn);
+    if (val.isNothing()) {
+        ++ut_dsopt_nothing_sets;
+    }
+    if (!strcmp(opt, "opt")) {
+        // the setter that a driver judges the value by (Datasource::getOptionRestrictions())
+        ut_dsopt_seen_setter = qore_ds_private::get(*ds)->getOptionSetter(opt);
+    }
+    if (val.getType() == NT_STRING && !strcmp(val.get<const QoreStringNode>()->c_str(), "refuse")) {
+        xsink->raiseException("UT-DSOPT-REFUSED", "the unit-test driver refuses the value of option '%s'", opt);
+        return -1;
+    }
+    QoreValue& v = conn->vals[opt];
+    v.discard(xsink);
+    v = val.refSelf();
+    return 0;
+}
+
+QoreValue ut_dsopt_opt_get(const Datasource* ds, const char* opt) {
+    UtDsOptConnection* conn = ds->getPrivateData<UtDsOptConnection>();
+    if (!conn) {
+        return QoreValue();
+    }
+    auto i = conn->vals.find(opt);
+    return i == conn->vals.end() ? QoreValue() : i->second.refSelf();
+}
+
+//! the statements of the unit-test driver return nothing: the driver only has to be complete
+QoreValue ut_dsopt_select(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
+    return QoreValue();
+}
+
+int ut_dsopt_commit(Datasource* ds, ExceptionSink* xsink) {
+    return 0;
+}
+
+//! returns the test-only unit-test DBI driver "qore-ut-dsopt", registered on first use
+/** It connects to nothing and has the options "opt" and "opt2"; it is used only by the unit tests of this file, and
+    stays registered for the rest of the process, as drivers cannot be unregistered
+*/
+DBIDriver* ut_dsopt_driver() {
+    static DBIDriver* driver = []() {
+        qore_dbi_method_list methods;
+        methods.add(QDBI_METHOD_OPEN, ut_dsopt_open);
+        methods.add(QDBI_METHOD_CLOSE, ut_dsopt_close);
+        methods.add(QDBI_METHOD_SELECT, ut_dsopt_select);
+        methods.add(QDBI_METHOD_SELECT_ROWS, ut_dsopt_select);
+        methods.add(QDBI_METHOD_EXEC, ut_dsopt_select);
+        methods.add(QDBI_METHOD_COMMIT, ut_dsopt_commit);
+        methods.add(QDBI_METHOD_ROLLBACK, ut_dsopt_commit);
+        methods.add(QDBI_METHOD_OPT_SET, ut_dsopt_opt_set);
+        methods.add(QDBI_METHOD_OPT_GET, ut_dsopt_opt_get);
+        methods.registerOption("opt", "an option of the test-only unit-test driver", stringTypeInfo);
+        methods.registerOption("opt2", "an option of the test-only unit-test driver", stringTypeInfo);
+        methods.registerOption("opt3", "an option of the test-only unit-test driver that can be unset",
+            stringOrNothingTypeInfo);
+        return DBI.registerDriver("qore-ut-dsopt", methods, 0);
+    }();
+    return driver;
+}
+
+//! what the hook observes between the driver accepting a value and the value being kept
+struct UtDsOptWindow {
+    //! set by the test: the datasource, to reopen it in the window
+    Datasource* reopen = nullptr;
+
+    bool called = false;
+    //! the setter that the driver would see now
+    std::shared_ptr<const qore_ds_option_setter> visible_setter;
+    //! true if the option's entry is the placeholder of a new option
+    bool placeholder = false;
+    //! true if the option has an entry in the connect options
+    bool has_entry = false;
+    //! the value that a copy made now would copy, or empty if none
+    std::string copied_value;
+    bool value_copied = false;
+    //! the setter that a copy made now would copy
+    std::shared_ptr<const qore_ds_option_setter> copied_setter;
+    //! the options with no value given to the driver by a reconnect in the window
+    int reopen_nothing_sets = 0;
+    bool reopened = false;
+    //! the setter that the driver saw for "opt" when the connection was opened again in the window
+    std::shared_ptr<const qore_ds_option_setter> reopen_seen_setter;
+    //! the value of "opt" that the driver was given when the connection was opened again in the window
+    std::string reopen_value;
+    //! the setter that the driver would see after the connection was opened again in the window
+    std::shared_ptr<const qore_ds_option_setter> pending_after_reopen;
+};
+
+//! observes a datasource as a copy made by another thread would, after the driver accepted a value
+void ut_dsopt_window_hook(qore_ds_private& ds, const char* name, void* arg) {
+    UtDsOptWindow& w = *static_cast<UtDsOptWindow*>(arg);
+    w.called = true;
+    w.visible_setter = ds.getOptionSetter(name);
+    w.placeholder = ds.isOptionPlaceholder(name);
+    {
+        AutoLocker al(ds.m);
+        w.has_entry = ds.opt->existsKey(name);
+    }
+    qore_ds_option_snapshot snap = ds.getOptionSnapshot();
+    ReferenceHolder<QoreHashNode> opts(snap.releaseOptions(), nullptr);
+    w.value_copied = opts->existsKey(name);
+    if (w.value_copied) {
+        QoreStringValueHelper v(opts->getKeyValue(name));
+        w.copied_value = v->c_str();
+    }
+    auto i = snap.getSetters().find(name);
+    if (i != snap.getSetters().end()) {
+        w.copied_setter = i->second;
+    }
+    if (w.reopen) {
+        // a connection opened in the window, as a driver that reconnects from its option-setting function does
+        int before = ut_dsopt_nothing_sets;
+        ut_dsopt_seen_setter.reset();
+        w.reopen->close();
+        ExceptionSink xsink;
+        w.reopened = !w.reopen->open(&xsink) && !xsink;
+        w.reopen_nothing_sets = ut_dsopt_nothing_sets - before;
+        w.reopen_seen_setter = ut_dsopt_seen_setter;
+        // the setter of the value that is being set is visible again once the connection is open
+        w.pending_after_reopen = ds.getOptionSetter(name);
+        QoreValue v = ut_dsopt_opt_get(w.reopen, "opt");
+        ValueHolder holder(v, nullptr);
+        if (v.getType() == NT_STRING) {
+            w.reopen_value = v.get<const QoreStringNode>()->c_str();
+        }
+    }
+}
+
+//! sets the commit hook for the current scope
+class UtDsOptHookGuard {
+public:
+    UtDsOptHookGuard(UtDsOptWindow& w) {
+        qore_ds_private::setDbgOptionCommitHook(ut_dsopt_window_hook, &w);
+    }
+
+    ~UtDsOptHookGuard() {
+        qore_ds_private::setDbgOptionCommitHook(nullptr, nullptr);
+    }
+
+    UtDsOptHookGuard(const UtDsOptHookGuard&) = delete;
+    UtDsOptHookGuard& operator=(const UtDsOptHookGuard&) = delete;
+};
+
+//! sets an option on the datasource; returns the result of Datasource::setOption()
+int ut_dsopt_set(Datasource& ds, const char* opt, const char* val, ExceptionSink& xsink) {
+    SimpleRefHolder<QoreStringNode> v(new QoreStringNode(val));
+    return ds.setOption(opt, *v, &xsink);
+}
+
+//! returns the value that a copy would copy, or "<none>"
+std::string ut_dsopt_snapshot_value(qore_ds_private& priv, const char* opt,
+        std::shared_ptr<const qore_ds_option_setter>& setter) {
+    qore_ds_option_snapshot snap = priv.getOptionSnapshot();
+    ReferenceHolder<QoreHashNode> opts(snap.releaseOptions(), nullptr);
+    auto i = snap.getSetters().find(opt);
+    setter = i == snap.getSetters().end() ? std::shared_ptr<const qore_ds_option_setter>() : i->second;
+    if (!opts->existsKey(opt)) {
+        return "<none>";
+    }
+    QoreStringValueHelper v(opts->getKeyValue(opt));
+    return v->c_str();
+}
+}
+
+//! qore#5741: between the driver accepting a value on an open connection and the value being kept, the connection
+//! has the value: the setter stays visible (pending) until the value is kept with it, and a copy made in that window
+//! copies the previous state (no value for a new option, the previous value with its setter otherwise); once kept,
+//! a copy has the value and its setter.  A refused value leaves the previous state, and a connection opened in the
+//! window is not given the entry of a new option
+static void ut_datasource_option_commit_window(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    Datasource ds(ut_dsopt_driver());
+    UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the unit-test datasource opens");
+    if (xsink) {
+        return;
+    }
+    qore_ds_private* priv = qore_ds_private::get(ds);
+    std::shared_ptr<const qore_ds_option_setter> setter;
+
+    // a new option, with a connection opened in the window
+    {
+        UtDsOptWindow w;
+        w.reopen = &ds;
+        {
+            UtDsOptHookGuard guard(w);
+            UT_ASSERT_EQ(c, 0, ut_dsopt_set(ds, "opt", "value", xsink), "a new option is set");
+        }
+        UT_ASSERT(c, w.called, "new option: the window between the driver and the commit was observed");
+        UT_ASSERT(c, static_cast<bool>(w.visible_setter), "new option: the setter is pending until the value is kept");
+        UT_ASSERT(c, w.placeholder, "new option: its entry is a placeholder");
+        UT_ASSERT(c, w.has_entry, "new option: the placeholder is in the connect options");
+        UT_ASSERT(c, !w.value_copied, "new option: a copy in the window does not copy the value");
+        UT_ASSERT(c, !w.copied_setter, "new option: a copy in the window does not copy a setter");
+        UT_ASSERT(c, w.reopened, "new option: the connection is opened again in the window");
+        UT_ASSERT_EQ(c, 0, w.reopen_nothing_sets, "new option: the placeholder is not given to a new connection");
+        UT_ASSERT(c, !priv->isOptionPlaceholder("opt"), "new option: no placeholder once the value is kept");
+        {
+            AutoLocker al(priv->m);
+            UT_ASSERT(c, !priv->pending_opt_setter, "new option: the pending slot is cleared once the value is kept");
+        }
+        UT_ASSERT(c, ut_dsopt_snapshot_value(*priv, "opt", setter) == "value", "new option: a copy has the value");
+        UT_ASSERT(c, setter == w.visible_setter, "new option: a copy has the setter that set it");
+    }
+
+    // an option that already has a value, with a connection opened in the window
+    {
+        std::shared_ptr<const qore_ds_option_setter> old_setter = priv->getOptionSetter("opt");
+        UtDsOptWindow w;
+        w.reopen = &ds;
+        {
+            UtDsOptHookGuard guard(w);
+            UT_ASSERT_EQ(c, 0, ut_dsopt_set(ds, "opt", "value2", xsink), "an option with a value is set");
+        }
+        UT_ASSERT(c, w.called, "set again: the window was observed");
+        UT_ASSERT(c, w.visible_setter && w.visible_setter != old_setter, "set again: the new setter is pending");
+        UT_ASSERT(c, !w.placeholder, "set again: the entry is not a placeholder");
+        UT_ASSERT(c, w.value_copied && w.copied_value == "value", "set again: a copy in the window has the old value");
+        UT_ASSERT(c, w.copied_setter == old_setter, "set again: a copy in the window has the old setter");
+        UT_ASSERT(c, w.reopened, "set again: the connection is opened again in the window");
+        UT_ASSERT(c, w.reopen_value == "value", "set again: the new connection is given the stored value");
+        UT_ASSERT(c, w.reopen_seen_setter && w.reopen_seen_setter == old_setter,
+            "set again: the driver judges the stored value by its stored setter");
+        UT_ASSERT(c, w.pending_after_reopen && w.pending_after_reopen == w.visible_setter,
+            "set again: the pending setter is visible again after the reconnect");
+        // the reconnect gave the connection the stored value, and the new value is stored after it: that the
+        // connection then holds the old value is an artifact of where the test hook runs (after the driver accepted
+        // the new value); a driver that reconnects from its option-setting function applies the new value itself
+        UT_ASSERT(c, ut_dsopt_snapshot_value(*priv, "opt", setter) == "value2", "set again: a copy has the new value");
+        UT_ASSERT(c, setter == w.visible_setter, "set again: a copy has the new setter");
+    }
+
+    // a refused value, for an option that has a value and for a new option: nothing changes
+    {
+        std::shared_ptr<const qore_ds_option_setter> old_setter = priv->getOptionSetter("opt");
+        UtDsOptWindow w;
+        {
+            UtDsOptHookGuard guard(w);
+            UT_ASSERT_EQ(c, -1, ut_dsopt_set(ds, "opt", "refuse", xsink), "the driver refuses a value");
+            xsink.clear();
+            UT_ASSERT_EQ(c, -1, ut_dsopt_set(ds, "opt2", "refuse", xsink), "the driver refuses a new option");
+            xsink.clear();
+        }
+        UT_ASSERT(c, !w.called, "refused: there is no commit window");
+        UT_ASSERT(c, ut_dsopt_snapshot_value(*priv, "opt", setter) == "value2", "refused: the old value stays");
+        UT_ASSERT(c, setter == old_setter, "refused: the old setter stays");
+        UT_ASSERT(c, priv->getOptionSetter("opt") == old_setter, "refused: the setter that the driver sees stays");
+        UT_ASSERT(c, ut_dsopt_snapshot_value(*priv, "opt2", setter) == "<none>", "refused: the new option is not set");
+        UT_ASSERT(c, !setter, "refused: the new option has no setter");
+        UT_ASSERT(c, !priv->isOptionPlaceholder("opt2"), "refused: no placeholder is left");
+        UT_ASSERT(c, !ds.getConnectOptions()->existsKey("opt2"), "refused: the placeholder entry was removed");
+        AutoLocker al(priv->m);
+        UT_ASSERT(c, !priv->pending_opt_setter, "refused: the pending slot is cleared");
+    }
+
+    // an option whose stored value is NOTHING is a value: it is given to a new connection
+    {
+        UT_ASSERT_EQ(c, 0, ds.setOption("opt3", QoreValue(), &xsink), "an option is set to no value");
+        UT_ASSERT(c, ds.getConnectOptions()->existsKey("opt3"), "the option with no value is stored");
+        UT_ASSERT(c, !priv->isOptionPlaceholder("opt3"), "the option with no value is not a placeholder");
+        int before = ut_dsopt_nothing_sets;
+        ds.close();
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the connection is opened again");
+        UT_ASSERT_EQ(c, 1, ut_dsopt_nothing_sets - before, "the stored value NOTHING is given to the new connection");
+    }
+
+    ds.close();
+    UT_ASSERT(c, !xsink, "no exception");
+    xsink.clear();
+    ut_dsopt_seen_setter.reset();
+}
 #endif
 
 //! records the line of every statement step and raises an exception at the step of one line, once
@@ -17071,6 +17450,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
+    ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_datasource_option_commit_window(c);
 #endif
     return make_unit_test_result(c, xsink);
 }
@@ -17260,6 +17641,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
+    ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_datasource_option_commit_window(c);
 #endif
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);

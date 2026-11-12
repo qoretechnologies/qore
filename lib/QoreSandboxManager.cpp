@@ -1759,9 +1759,11 @@ QoreSandboxManagerHelper::QoreSandboxManagerHelper(Purpose purpose) {
 }
 
 bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose) {
-    // the resolved manager is the composition of every governing sandbox, which allows them only if every member does
-    QoreSandboxManagerHelper governing(purpose);
-    return !governing || governing->getUncontrolledApiPolicy();
+    // the governing managers are resolved as QoreSandboxManagerHelper(purpose) resolves them, without combining them
+    // (which would allocate a composition on every call of an uncontrolled API): the composition allows them only if
+    // every member does
+    assert(purpose == QoreSandboxManagerHelper::Policy || purpose == QoreSandboxManagerHelper::All);
+    return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {

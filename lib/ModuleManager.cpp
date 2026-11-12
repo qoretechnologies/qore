@@ -6215,8 +6215,13 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // a command issued to another Program runs there, and the module decides what it allows by that Program's
     // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
     // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
-    // own Program is not sandboxed and the target has every restriction that its code has
-    if (pgm && pgm != getProgram()) {
+    // own Program is not sandboxed and the target has every restriction that its code has.
+    // A replayed command is not one: it is a %module-cmd directive of the source of the target Program itself, which
+    // the compiled program recorded, replayed into that Program when it is loaded (the code that loads a compiled
+    // module is still running then, so getProgram() is the loader).  Its source issued it to its own Program, as the
+    // directive does when the module is loaded from its source, and it is judged as that directive is (see
+    // qore_get_command_restrictions())
+    if (pgm && pgm != getProgram() && origin != QoreModuleCommandContext::MC_REPLAY) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
         if (qore_program_is_sandboxed(getProgram())) {

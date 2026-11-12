@@ -1,0 +1,487 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "dsoptprobe" test module (datasource-option-setter/dsoptprobe-module.cpp) is built into the build tree by
+# examples/test/module-cpp-api/CMakeLists.txt and is not installed
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires dsoptprobe
+%requires QUnit
+%requires FsUtil
+
+%exec-class DatasourceOptionSetterTest
+
+#! Tests the setters of datasource options that a driver reads (qore#5741)
+/** A driver applies the options of a datasource when a connection is opened, which can happen on another thread and
+    for other code than the code that set them; it judges an option by the code that set it
+    (Datasource::getOptionRestrictions(), Datasource::getOptionPolicyManagerRef()): whoever configures a datasource
+    decides.  The "dsoptprobe" driver reports what it observes about the setter of each option (see
+    dsoptprobe-module.cpp).
+*/
+public class DatasourceOptionSetterTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs of the test: each function configures, copies or uses a datasource
+        const Source = "
+Datasource sub make_hash(hash<auto> opts) {
+    return new Datasource({\"type\": \"dsoptprobe\", \"db\": \"x\", \"options\": opts});
+}
+
+Datasource sub make_string(string str) {
+    return new Datasource(str);
+}
+
+Datasource sub make_args(hash<auto> opts) {
+    return new Datasource(\"dsoptprobe\", NOTHING, NOTHING, \"x\", NOTHING, NOTHING, NOTHING, opts);
+}
+
+nothing sub set_option(Datasource ds, string opt, string val) {
+    ds.setOption(opt, val);
+}
+
+# returns the error of a refused value, or \"ok\"
+string sub try_set_option(Datasource ds, string opt, string val) {
+    try {
+        ds.setOption(opt, val);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+Datasource sub copy_ds(Datasource ds) {
+    return ds.copy();
+}
+
+auto sub open_observe(Datasource ds, string opt) {
+    ds.open();
+    on_exit ds.close();
+    return ds.select(opt);
+}
+
+DatasourcePool sub make_pool(hash<auto> opts) {
+    return new DatasourcePool({\"type\": \"dsoptprobe\", \"db\": \"x\", \"options\": opts + {\"min\": 1, \"max\": 2}});
+}
+
+DatasourcePool sub make_pool_string(string str) {
+    return new DatasourcePool(str);
+}
+
+DatasourcePool sub copy_pool(DatasourcePool p) {
+    return p.copy();
+}
+
+auto sub pool_observe(DatasourcePool p, string opt) {
+    return p.select(opt);
+}
+";
+
+        #! a path that no sandbox of the test allows
+        const DeniedPath = "/nonexistent-qore-dsoptprobe-dir/driver.jar";
+    }
+
+    private {
+        #! the Programs of the test: trusted, sandboxed, no-filesystem and a trusted sandbox; see getPrograms()
+        hash<string, Program> pgms;
+
+        #! a path that the trusted sandbox allows
+        string allowed_path;
+    }
+
+    constructor() : Test("Datasource option setters", "1.0") {
+        addTestCase("Datasource::setOption() records its caller", \setOptionTest());
+        addTestCase("the options of a constructor record its caller", \constructorTest());
+        addTestCase("the options of a connection string record its caller", \connectionStringTest());
+        addTestCase("an option set on an open connection is judged by its setter", \openSetTest());
+        addTestCase("a refused value keeps the previous setter", \refusedTest());
+        addTestCase("a copy keeps the setters of the options that it copies", \copyTest());
+        addTestCase("a copy made while an option is set pairs each value with its setter", \copyRaceTest());
+        addTestCase("the connections of a pool carry the setter of the pool", \poolTest());
+        addTestCase("a copy of a pool keeps its setter", \poolCopyTest());
+        addTestCase("the filesystem policy of the setter is recorded", \policyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        allowed_path = make_tmp_dir();
+
+        # a sandbox that a host attaches to trusted code for its limits only: it allows uncontrolled APIs, and its
+        # filesystem policy allows only one directory
+        SandboxManager trusted_sm();
+        trusted_sm.setNetworkDefaultPolicy(True);
+        trusted_sm.setUncontrolledApiPolicy(True);
+        trusted_sm.addFilesystemAllowedPath(allowed_path, QSEC_READ);
+
+        pgms = {
+            "trusted": getProgram(),
+            "sandboxed": getProgram(NOTHING, new SandboxManager()),
+            "no-filesystem": getProgram(PO_NO_FILESYSTEM),
+            "trusted-sandbox": getProgram(NOTHING, trusted_sm),
+        };
+    }
+
+    globalTearDown() {
+        remove_tree(allowed_path);
+    }
+
+    #! returns a Program with the test code, the given extra parse options and sandbox
+    private static Program getProgram(*int po, *SandboxManager sm) {
+        Program p(PO_NEW_STYLE | (po ?? 0));
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "datasource-option-setter");
+        return p;
+    }
+
+    #! returns the observation of an option of a datasource that this trusted code opens
+    private static *hash<auto> observe(Datasource ds, string opt = "classpath") {
+        ds.open();
+        on_exit ds.close();
+        return ds.select(opt);
+    }
+
+    #! asserts that the observation is of a known setter of the given kind
+    private assertSetter(string kind, *hash<auto> obs, string msg) {
+        assertEq(True, obs.recorded, msg + ": recorded");
+        switch (kind) {
+            case "trusted":
+                assertEq(False, obs.sandboxed, msg + ": sandboxed");
+                assertEq(False, obs.restricted, msg + ": restricted");
+                assertEq(False, obs.policy, msg + ": policy");
+                break;
+            case "sandboxed":
+                assertEq(True, obs.sandboxed, msg + ": sandboxed");
+                assertEq(True, obs.restricted, msg + ": restricted");
+                assertEq(True, obs.policy, msg + ": policy");
+                break;
+            case "no-filesystem":
+                assertEq(False, obs.sandboxed, msg + ": sandboxed");
+                assertEq(True, obs.restricted, msg + ": restricted");
+                assertEq(True, obs.no_filesystem, msg + ": no_filesystem");
+                assertEq(False, obs.policy, msg + ": policy");
+                break;
+            case "trusted-sandbox":
+                # trusted with uncontrolled APIs, but with a filesystem policy
+                assertEq(False, obs.sandboxed, msg + ": sandboxed");
+                assertEq(False, obs.restricted, msg + ": restricted");
+                assertEq(True, obs.policy, msg + ": policy");
+                break;
+            default:
+                assertTrue(False, "unknown kind " + kind);
+        }
+    }
+
+    setOptionTest() {
+        foreach string kind in (keys pgms) {
+            # this trusted code creates the datasource, the code of the kind sets the option, and this code opens it
+            Datasource ds("dsoptprobe:u/p@x");
+            pgms{kind}.callFunction("set_option", ds, "classpath", DeniedPath);
+            assertSetter(kind, observe(ds), kind + ": set before the open");
+            # the setter of another option is its own
+            ds.setOption("other", "value");
+            assertSetter("trusted", observe(ds, "other"), kind + ": another option");
+            # the last setter of an option decides
+            ds.setOption("classpath", DeniedPath);
+            assertSetter("trusted", observe(ds), kind + ": set again by trusted code");
+            pgms{kind}.callFunction("set_option", ds, "classpath", DeniedPath);
+            assertSetter(kind, observe(ds), kind + ": set again by the code of the kind");
+        }
+    }
+
+    constructorTest() {
+        foreach string kind in (keys pgms) {
+            assertSetter(kind, observe(pgms{kind}.callFunction("make_hash", {"classpath": DeniedPath})),
+                kind + ": hash constructor");
+            assertSetter(kind, observe(pgms{kind}.callFunction("make_args", {"classpath": DeniedPath})),
+                kind + ": constructor with arguments");
+        }
+        # an option that is not set has no setter
+        Datasource ds("dsoptprobe:u/p@x");
+        assertNothing(observe(ds), "no option");
+    }
+
+    connectionStringTest() {
+        foreach string kind in (keys pgms) {
+            assertSetter(kind, observe(pgms{kind}.callFunction("make_string", "dsoptprobe:u/p@x{classpath="
+                + DeniedPath + "}")), kind + ": connection string");
+        }
+        # trusted code that parses the string itself configures the datasource
+        Datasource ds("dsoptprobe:u/p@x{classpath=" + DeniedPath + "}");
+        assertSetter("trusted", observe(ds), "trusted connection string");
+    }
+
+    openSetTest() {
+        foreach string kind in (keys pgms) {
+            # the option is set on an open connection: the driver sees the setter when it is called
+            Datasource ds("dsoptprobe:u/p@x");
+            ds.open();
+            *hash<auto> obs;
+            {
+                on_exit ds.close();
+                pgms{kind}.callFunction("set_option", ds, "other", "value");
+                obs = ds.select("other");
+            }
+            assertSetter(kind, obs, kind + ": set on an open connection");
+            # and the next connection as well
+            assertSetter(kind, observe(ds, "other"), kind + ": the next connection");
+        }
+    }
+
+    refusedTest() {
+        foreach string kind in (keys pgms) {
+            Datasource ds("dsoptprobe:u/p@x");
+            ds.setOption("other", "trusted value");
+            ds.open();
+            string err = pgms{kind}.callFunction("try_set_option", ds, "other", "refuse");
+            ds.close();
+            assertEq("DSOPTPROBE-REFUSED", err, kind + ": refused");
+            # the value and the setter are the previous ones, also on the next connection
+            ds.open();
+            on_exit ds.close();
+            assertEq("trusted value", ds.getOption("other"), kind + ": the previous value");
+            assertSetter("trusted", ds.select("other"), kind + ": the previous setter");
+        }
+    }
+
+    copyTest() {
+        foreach string kind in (keys pgms) {
+            # a copy that trusted code makes of a datasource that the code of the kind configured
+            Datasource configured = pgms{kind}.callFunction("make_hash", {"classpath": DeniedPath});
+            Datasource copy = configured.copy();
+            assertSetter(kind, observe(copy), kind + ": a trusted copy of a closed datasource");
+            # a copy of an open datasource copies the options of the connection
+            configured.open();
+            on_exit configured.close();
+            copy = configured.copy();
+            assertSetter(kind, observe(copy), kind + ": a trusted copy of an open datasource");
+
+            # a copy that the code of the kind makes of a datasource that trusted code configured
+            Datasource trusted("dsoptprobe:u/p@x{classpath=" + DeniedPath + "}");
+            copy = pgms{kind}.callFunction("copy_ds", trusted);
+            assertSetter("trusted", observe(copy), kind + ": a copy of a trusted datasource");
+        }
+    }
+
+    #! Copies a datasource on another thread, which is stopped after it read the values of the open connection; the
+    #! option is set by \a setter meanwhile.  Returns the copy
+    private Datasource copyWhileSet(Datasource ds, string setter, string opt, string val) {
+        DsOptProbe::blockGet(opt);
+        Queue q();
+        # the copy is made in a closure that the background operator runs; an exception of the copy is passed to this
+        # thread, so that the test fails with it
+        background (sub () {
+            try {
+                q.push(ds.copy());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        })();
+        # the copy has read the value of the option from the driver, and waits; if the copy failed before, this
+        # raises once the probe's wait limit is reached, and the error of the copy is raised instead
+        try {
+            DsOptProbe::waitBlocked();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stop that no thread reached is cancelled, so that it does not stop a later test
+            DsOptProbe::unblock();
+            auto rv = q.get();
+            if (rv.typeCode() == NT_HASH) {
+                throw rv.err, rv.desc, rv.arg;
+            }
+            rethrow;
+        }
+        {
+            on_exit DsOptProbe::release();
+            pgms{setter}.callFunction("set_option", ds, opt, val);
+        }
+        auto rv = q.get();
+        if (rv.typeCode() == NT_HASH) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    copyRaceTest() {
+        # the value that the copy read from the driver was replaced before the copy read the setters: the copy takes
+        # the value that was set with its setter, never the old value with the new setter
+        foreach list<string> order in (("sandboxed", "trusted"), ("trusted", "sandboxed")) {
+            string first = order[0];
+            string second = order[1];
+            string label = sprintf("%s value replaced by %s code during a copy", first, second);
+            Datasource ds("dsoptprobe:u/p@x");
+            ds.open();
+            on_exit ds.close();
+            pgms{first}.callFunction("set_option", ds, "other", first + " value");
+            Datasource copy = copyWhileSet(ds, second, "other", second + " value");
+            copy.open();
+            on_exit copy.close();
+            assertEq(second + " value", copy.getOption("other"), label + ": the value");
+            assertSetter(second, copy.select("other"), label + ": its setter");
+        }
+
+        foreach string kind in ("sandboxed", "trusted") {
+            # an option with no kept value is set while a copy reads the connection: the copy read the old state of
+            # the connection (no value), and the value was kept with its setter before the copy read the setters
+            {
+                string label = kind + ": an option that had no value, set during a copy";
+                Datasource ds("dsoptprobe:u/p@x");
+                ds.open();
+                on_exit ds.close();
+                Datasource copy = copyWhileSet(ds, kind, "other", kind + " value");
+                copy.open();
+                on_exit copy.close();
+                assertEq(kind + " value", copy.getOption("other"), label + ": the value");
+                assertSetter(kind, copy.select("other"), label + ": its setter");
+            }
+
+            # a copy is made while the connection already has the new value of an option with no kept value and the
+            # driver has not returned: the value is not copied without a setter
+            {
+                string label = kind + ": a copy made while the driver sets an option that had no value";
+                Datasource ds("dsoptprobe:u/p@x");
+                ds.open();
+                on_exit ds.close();
+                DsOptProbe::blockSet("other");
+                Queue q();
+                Program p = pgms{kind};
+                # an exception of the setter is passed to this thread, so that the test fails with it
+                background (sub () {
+                    try {
+                        q.push(p.callFunction("try_set_option", ds, "other", kind + " value"));
+                    } catch (hash<ExceptionInfo> ex) {
+                        q.push(ex);
+                    }
+                })();
+                # the connection has the value; the setter has not returned
+                try {
+                    DsOptProbe::waitBlocked();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the stop that no thread reached is cancelled, so that it does not stop a later test
+                    DsOptProbe::unblock();
+                    auto rv = q.get();
+                    if (rv.typeCode() == NT_HASH) {
+                        throw rv.err, rv.desc, rv.arg;
+                    }
+                    rethrow;
+                }
+                Datasource copy;
+                {
+                    on_exit DsOptProbe::release();
+                    copy = ds.copy();
+                }
+                auto rv = q.get();
+                if (rv.typeCode() == NT_HASH) {
+                    throw rv.err, rv.desc, rv.arg;
+                }
+                assertEq("ok", rv, label + ": the value was set");
+                copy.open();
+                on_exit copy.close();
+                assertNothing(copy.getOption("other"), label + ": the value was not copied");
+                assertNothing(copy.select("other"), label + ": no setter was copied");
+                # the value is kept with its setter once the driver returned: a copy made now has both
+                Datasource later = ds.copy();
+                later.open();
+                on_exit later.close();
+                assertEq(kind + " value", later.getOption("other"), label + ": a later copy has the value");
+                assertSetter(kind, later.select("other"), label + ": a later copy has its setter");
+            }
+        }
+    }
+
+    poolTest() {
+        foreach string kind in (keys pgms) {
+            # a trusted pool that grows on a thread that runs the code of the kind: the new connection carries the
+            # setter of the pool
+            DatasourcePool trusted_pool({"type": "dsoptprobe", "db": "x", "options": {"classpath": DeniedPath,
+                "min": 1, "max": 2}});
+            assertSetter("trusted", trusted_pool.select("classpath"), kind + ": the first connection");
+            hash<auto> grown = growPool(trusted_pool, kind);
+            assertSetter("trusted", grown.obs, kind + ": a connection created by the code of the kind");
+            assertNeq(gettid(), grown.obs.tid, kind + ": the connection was opened on the other thread");
+            assertEq(grown.tid, grown.obs.tid, kind + ": the connection was opened on the thread of the code");
+
+            # a pool that the code of the kind creates and trusted code grows
+            DatasourcePool pool = pgms{kind}.callFunction("make_pool", {"classpath": DeniedPath});
+            grown = growPool(pool);
+            assertSetter(kind, grown.obs, kind + ": a connection of its pool created by trusted code");
+            # from a connection string
+            pool = pgms{kind}.callFunction("make_pool_string", "dsoptprobe:u/p@x{classpath=" + DeniedPath
+                + ",min=1,max=2}");
+            grown = growPool(pool);
+            assertSetter(kind, grown.obs, kind + ": a connection of its pool from a connection string");
+        }
+    }
+
+    poolCopyTest() {
+        foreach string kind in (keys pgms) {
+            DatasourcePool pool = pgms{kind}.callFunction("make_pool", {"classpath": DeniedPath});
+            DatasourcePool copy = pool.copy();
+            assertSetter(kind, copy.select("classpath"), kind + ": a trusted copy of its pool");
+            assertSetter(kind, growPool(copy).obs, kind + ": a connection created later");
+
+            DatasourcePool trusted_pool({"type": "dsoptprobe", "db": "x", "options": {"classpath": DeniedPath,
+                "min": 1, "max": 2}});
+            copy = pgms{kind}.callFunction("copy_pool", trusted_pool);
+            assertSetter("trusted", copy.select("classpath"), kind + ": its copy of a trusted pool");
+        }
+    }
+
+    policyTest() {
+        # the policy is that of the setter: the trusted sandbox allows one directory only
+        Datasource ds = pgms."trusted-sandbox".callFunction("make_hash", {"classpath": DeniedPath});
+        hash<auto> obs = observe(ds);
+        assertSetter("trusted-sandbox", obs, "trusted sandbox");
+        assertFalse(obs.readable, "a path that the policy of the setter denies");
+        ds = pgms."trusted-sandbox".callFunction("make_hash", {"classpath": allowed_path});
+        obs = observe(ds);
+        assertTrue(obs.readable, "a path that the policy of the setter allows");
+
+        # the policy of the setter applies also when the datasource is opened by code with another policy
+        obs = pgms.sandboxed.callFunction("open_observe", ds, "classpath");
+        assertSetter("trusted-sandbox", obs, "opened by sandboxed code");
+        assertTrue(obs.readable, "opened by sandboxed code: the policy of the setter");
+
+        # sandboxed code: the default sandbox denies the filesystem
+        ds = pgms.sandboxed.callFunction("make_hash", {"classpath": allowed_path});
+        obs = observe(ds);
+        assertFalse(obs.readable, "a sandboxed setter: opened by trusted code");
+
+        # trusted code has no policy
+        ds = new Datasource({"type": "dsoptprobe", "db": "x", "options": {"classpath": DeniedPath}});
+        obs = observe(ds);
+        assertSetter("trusted", obs, "trusted");
+        assertTrue(obs.readable, "trusted: no policy");
+    }
+
+    #! makes a pool create a connection on another thread, while this thread holds the first one
+    /** @param pool the pool, which has one connection and can have two
+        @param kind the kind of the Program whose code uses the pool on the other thread, or NOTHING for this trusted
+        code
+
+        @return a hash with \c obs: the observation of the classpath option of the new connection, and \c tid: the
+        TID of the other thread
+    */
+    private hash<auto> growPool(DatasourcePool pool, *string kind) {
+        # this thread holds the first connection in a transaction, so the other thread needs a new one
+        pool.beginTransaction();
+        on_exit pool.rollback();
+        Queue q();
+        background sub () {
+            try {
+                *hash<auto> obs = kind
+                    ? pgms{kind}.callFunction("pool_observe", pool, "classpath")
+                    : pool.select("classpath");
+                q.push({"obs": obs, "tid": gettid()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc, "tid": gettid()});
+            }
+        }();
+        hash<auto> rv = q.get();
+        assertNothing(rv.err, sprintf("growing the pool: %y", rv));
+        return rv;
+    }
+}

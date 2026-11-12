@@ -180,7 +180,10 @@ extern "C" DLLEXPORT void CMDCTX_DESC_FUNC(QoreModuleInfo& mod_info) {
     mod_info.ns_init = cmdctx_module_ns_init;
     mod_info.del = cmdctx_module_delete;
     mod_info.parse_cmd = cmdctx_module_parse_cmd;
-    mod_info.cmd_caller_aware = CMDCTX_AWARE;
+    // the field exists only in a library that implements module API 2.1 (see QoreModuleInfo::cmd_caller_aware)
+    if (is_module_api_supported(2, 1)) {
+        mod_info.cmd_caller_aware = CMDCTX_AWARE;
+    }
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

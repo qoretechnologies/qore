@@ -255,6 +255,40 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
+
+    A DBI driver applies the options of a datasource when it opens a connection, which can happen long after the
+    options were set, on another thread and for other code: a @ref Qore::SQL::DatasourcePool "DatasourcePool" opens a
+    connection on the thread that first needs one, and code can open a
+    @ref Qore::SQL::Datasource "Datasource" that other code configured.  An option that does something that
+    restricted or sandboxed code must not do, such as the \c classpath option of the \c jdbc driver of the \c jni
+    module, which loads jars into a %Program's class loader, is therefore judged by the code that set it:
+    <b>whoever configures a datasource decides what its options may do</b>.
+
+    The restrictions (the sandbox and the restricting parse options) and the filesystem policy of the code that sets
+    an option are recorded with it by:
+    - @ref Qore::SQL::Datasource::setOption() "Datasource::setOption()", also on an open connection (a value that the
+      driver refuses keeps the previous setter)
+    - the options of a @ref Qore::SQL::Datasource "Datasource" constructor, also in a connection string
+    - a @ref Qore::SQL::DatasourcePool "DatasourcePool": the code that creates the pool is the setter of the options
+      of every connection of the pool, also of a connection that the pool creates later on the thread of other code
+
+    A copy of a datasource or of a pool keeps the setters of the options that it copies.  So:
+    - a datasource whose option sandboxed code set is refused the option when trusted code opens it (or a copy that
+      trusted code makes of it)
+    - a trusted pool or datasource keeps its configuration when a connection is opened on a sandboxed caller's
+      thread
+    - a configuration (a connection string, an option hash, serialized data) that trusted code itself turns into a
+      datasource is the trusted code's configuration: check where it came from before using it
+
+    A binary DBI driver reads the setter of an option with \c Datasource::getOptionRestrictions() and
+    \c Datasource::getOptionPolicyManagerRef() in the C++ API (\c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS); an option
+    with no recorded setter is judged by the code that is running.  The restrictions of the setter are checked first:
+    an option that they refuse (the setter was sandboxed or restricted) is refused whatever the policy is, because
+    the policy manager is missing whenever no sandbox policy governed the setter, also for sandboxed code that runs
+    inside a trusted @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.
+    Only an option that the restrictions allow is checked against the setter's policy.
+
     @subsection sandbox_module_state Module State
 
     The public variables of a module and the static members of its classes are shared by every Program that imports
@@ -739,6 +773,37 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     sandboxed code is refused as well: a module that makes such calls for its callers refuses them itself first with
     an error of its own (for example the data provider apps that declare
     @ref DataProvider::DataProviderAppInfo::external_io "external_io").
+
+    A refused call runs no code: the refusal comes once the variant of the call is known and before any of its
+    default arguments is evaluated.  The rule applies to builtin code (implemented in C++, such as the Java and Python
+    classes); the methods of a %Qore class that inherits a builtin class of the domain (a %Qore class that extends a
+    Java class, for example), its destructor included, are %Qore code and run for sandboxed code, while each builtin
+    method that they call, inherited or not, is refused.  The destructor of a builtin class is not refused: it only
+    releases what the object holds, and the object is destroyed in any case, so sandboxed code that deletes such an
+    object, or releases its last reference, does not get an error.  The exemption covers that destructor only: a
+    builtin method that a %Qore destructor calls, also on another object, is judged as any other call and refused.
+    Releasing what the object holds can run foreign code that the object refers to (the \c __del__() method of a
+    %Python object that is released, for example, or a Java finalizer or cleaner): that code runs when the last
+    reference to the foreign object is released, which happens whenever the object is destroyed (also at the end of
+    a scope, or when the %Program is deleted), so refusing the destructor would not prevent it; the code that created
+    the foreign object chose it.  For the authors of binary modules this means that the destructor of a builtin class
+    of the domain runs for code that a sandbox refusing uncontrolled APIs governs: it must only release what the
+    object holds, and must not do I/O or run code for the caller (see the C++ API documentation of binary modules).
+
+    The sandbox introspection and barrier methods
+    @ref Qore::SandboxManager::isGoverned() "SandboxManager::isGoverned()",
+    @ref Qore::SandboxManager::getGoverningPolicies() "SandboxManager::getGoverningPolicies()" and
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" exist for trusted code
+    acting for sandboxed code, so they are judged by the code that calls them, not by the whole call stack: the code of
+    a %Program that is not sandboxed (the host's code, a library module, a closure that such code created) calls them
+    for a sandboxed caller further down the call stack, for an object or callback created under a sandbox, and in a
+    thread that sandboxed code started; @ref Qore::SandboxManager::isGoverned() "isGoverned()" then returns
+    @ref True and @ref Qore::SandboxManager::getGoverningPolicies() "getGoverningPolicies()" lists the caller's
+    sandbox.  The code of a sandboxed %Program (one that has a sandbox, or that sandboxed code created or loaded by a
+    path of its own) is refused them as any uncontrolled API unless every sandbox that governs it allows uncontrolled
+    APIs, so sandboxed code cannot establish a policy barrier of its own.  A closure or a call reference is judged by
+    the %Program that created it, whoever calls it: one that sandboxed code created is refused also when trusted code
+    calls it, and one that trusted code created is allowed also when sandboxed code calls it, as a capability is.
 
     A host may attach a @ref Qore::SandboxManager "SandboxManager" to code that it trusts, only for its resource
     limits, interrupts and force-termination, or its I/O policy.  Such code is not sandboxed in the sense of the rules

@@ -100,6 +100,51 @@ foreach(_cmdctx_module cmdctxaware cmdctxlegacy)
     endif()
 endforeach()
 
+# --- the module with builtins of the uncontrolled-API functional domain (qore#5741) ----------------------------------
+# a builtin class that Qore code can inherit and builtins with a default argument whose evaluation is visible
+# (uncontrolled-api/uncontrolledprobe-module.cpp)
+
+add_library(uncontrolledprobe MODULE uncontrolled-api/uncontrolledprobe-module.cpp)
+add_dependencies(uncontrolledprobe libqore)
+target_include_directories(uncontrolledprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(uncontrolledprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(uncontrolledprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/uncontrolledprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(uncontrolledprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
+# --- the module with a DBI driver that reports the setters of its options (qore#5741) --------------------------------
+# (datasource-option-setter/dsoptprobe-module.cpp)
+
+add_library(dsoptprobe MODULE datasource-option-setter/dsoptprobe-module.cpp)
+add_dependencies(dsoptprobe libqore)
+target_include_directories(dsoptprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(dsoptprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(dsoptprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/dsoptprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(dsoptprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
 foreach(_forkexit_module forkexita forkexitb)
     add_library(${_forkexit_module} MODULE fork-exit/forkexit-module.cpp)
     add_dependencies(${_forkexit_module} libqore)

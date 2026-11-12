@@ -72,13 +72,9 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         establishes a barrier.
     */
     private testInheritedPolicyLifted() {
-        # qore#5741: code that a sandbox governs - also trusted code that inherits the sandbox of its caller - is
-        # refused callWithSystemPolicy() at run time unless the sandbox allows uncontrolled APIs; this case tests what
-        # the barrier lifts, so its sandbox allows them, and the default sandbox's refusal is asserted below
         Program p(PO_NEW_STYLE);
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
-        sm.setUncontrolledApiPolicy(True);
         p.setSandboxManager(sm);
         # the sandboxed program calls back out into trusted code
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-caller");
@@ -101,17 +97,6 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         };
         assertEq("barrier probe\n", p.callFunction("run", barriered, tmp_path),
             "the barrier stops the caller's policy from being inherited");
-
-        # qore#5741: under the default sandbox, which refuses uncontrolled APIs, trusted code that inherits the
-        # caller's sandbox cannot establish the barrier at all
-        Program deny(PO_NEW_STYLE);
-        SandboxManager deny_sm();
-        deny_sm.setFilesystemDefaultPolicy(False);
-        deny.setSandboxManager(deny_sm);
-        deny.parse("auto sub run(code c, string path) { return c(path); }", "barrier-caller-deny");
-        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy",
-            \deny.callFunction(), ("run", barriered, tmp_path),
-            "a sandbox that refuses uncontrolled APIs refuses the barrier to the code it governs");
     }
 
     #! The barrier must not override the policy of the program actually running the code
@@ -167,12 +152,9 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
 
     #! A barrier established inside a callback lifts the callback's policy for the trusted code it calls
     private testNestedBarrierInCallback() {
-        # qore#5741: the inner barrier is established by code that the callback's sandbox governs, which is refused
-        # uncontrolled APIs by default; this case tests barrier nesting, so its sandbox allows them
         Program p(PO_NEW_STYLE);
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
-        sm.setUncontrolledApiPolicy(True);
         p.setSandboxManager(sm);
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-nested");
 
@@ -236,16 +218,31 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
                         \\ReadOnlyFile::readTextFile(), path);
                 }
             ", "barrier-restricted-test"));
+
+        # at run time, the code of a sandboxed Program cannot establish a barrier of its own unless its sandbox allows
+        # uncontrolled APIs: the barrier is judged by the Program of the code that calls it (qore#5741); trusted code
+        # establishes it for its sandboxed callers (above)
+        Program s(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        s.setSandboxManager(sm);
+        s.parse("auto sub escape(string path) { return SandboxManager::callWithSystemPolicy("
+            "\\ReadOnlyFile::readTextFile(), path); }\n"
+            "code sub make_escape() { return auto sub (string path) { return SandboxManager::callWithSystemPolicy("
+            "\\ReadOnlyFile::readTextFile(), path); }; }", "barrier-restricted-runtime");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \s.callFunction(),
+            ("escape", tmp_path), "the sandboxed code's own barrier");
+        # a closure that the sandboxed code created is judged by its Program, also when trusted code calls it
+        code escape = s.callFunction("make_escape");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", escape, tmp_path,
+            "a closure of the sandboxed code called by trusted code");
     }
 
     #! The barrier is scoped strictly to the call
     private testNoLeak() {
-        # qore#5741: the barrier is established by code that the caller's sandbox governs, which is refused
-        # uncontrolled APIs by default; this case tests the scope of the barrier, so its sandbox allows them
         Program p(PO_NEW_STYLE);
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
-        sm.setUncontrolledApiPolicy(True);
         p.setSandboxManager(sm);
 
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-leak-run");

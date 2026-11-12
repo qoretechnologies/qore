@@ -108,6 +108,65 @@ class ModuleCommandContextTest inherits QUnit::Test {
         #! the lines of the replay programs
         const ReplayTrusted = "origin=2 po=none sandboxed=0 issuer_is_target=0 target_is_handler=1\n";
         const ReplayRestricted = "origin=2 po=restricted sandboxed=0 issuer_is_target=0 target_is_handler=1\n";
+
+        #! the program that a sandboxed Program loads modules with %module-cmd directives in: arguments are the
+        #! extension of the modules that it loads by path, and their directory
+        const LoadSandboxedScript = "%modern
+string sub history() {
+    try {
+        Program::issueModuleCmd(\"cmdctxaware\", \"log\");
+        return \"?\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"CMDCTX-LOG\" ? ((ex.desc =~ x/(po=\\w+ sandboxed=\\d)/)[0] ?? \"none\") : ex.err;
+    }
+}
+string sub load(string target) {
+    Program p(PO_NEW_STYLE);
+    SandboxManager sm();
+    # the loader may read the module that it chooses by path
+    sm.setFilesystemDefaultPolicy(True);
+    p.setSandboxManager(sm);
+    try {
+        p.parse(\"%requires \" + target + \"\\n\", \"load\");
+        return \"ok | \" + history();
+    } catch (hash<ExceptionInfo> ex) {
+        # the module's own refusal for sandboxed code: raised by the directive as the source is parsed, and the cause
+        # of the load error of a compiled module whose replayed command is refused
+        string err = (ex.err == \"CMDCTX-DENIED\" || (ex.err == \"MODULE-LOAD-ERROR\"
+            && ex.desc =~ /cannot path: the command was issued by sandboxed code/)) ? \"CMDCTX-DENIED\" : ex.err;
+        return err + \" | \" + history();
+    }
+}
+string ext = ARGV[0];
+string chosen = ARGV[1];
+printf(\"library, record: %s\\n\", load(\"CmdCtxDirectiveI\"));
+printf(\"library, path:   %s\\n\", load(\"CmdCtxDirectiveJ\"));
+printf(\"chosen, record:  %s\\n\", load(chosen + \"/CmdCtxDirectiveK.\" + ext));
+printf(\"chosen, path:    %s\\n\", load(chosen + \"/CmdCtxDirectiveL.\" + ext));
+# sandboxed code cannot issue a command to another Program at run time
+Program target(PO_NEW_STYLE);
+Program s(PO_NEW_STYLE);
+SandboxManager sm();
+s.setSandboxManager(sm);
+s.parse(\"sub issue_to(Program t) { t.issueModuleCmd(\\\"cmdctxaware\\\", \\\"record\\\"); }\", \"issue-to\");
+try {
+    s.callFunction(\"issue_to\", target);
+    printf(\"to another Program: ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"to another Program: %s | %s\\n\", ex.err, history());
+}
+";
+
+        #! the output of LoadSandboxedScript, from the source of the modules and compiled
+        /** a library module's own directive is library code, which is initialized outside the loader's sandbox (see
+            cmdctx-matrix.q, case 37), so it is not refused; a module that the sandboxed loader chose by path is judged
+            by the loader's sandbox
+        */
+        const LoadSandboxedExpected = "library, record: ok | po=none sandboxed=0\n"
+            + "library, path:   ok | none\n"
+            + "chosen, record:  ok | po=none sandboxed=1\n"
+            + "chosen, path:    CMDCTX-DENIED | none\n"
+            + "to another Program: RUNTIME-COMMAND-ERROR | none\n";
     }
 
     private {
@@ -134,6 +193,8 @@ class ModuleCommandContextTest inherits QUnit::Test {
         addTestCase("the matrix prints the same in every execution mode", \testModes());
         addTestCase("the matrix prints the same as a qcc executable", \testCompiled());
         addTestCase("a library module's own command is the same compiled and as source", \testLibraryModule());
+        addTestCase("a sandboxed Program loads a compiled module with a module command as it loads its source",
+            \testSandboxedLoaderReplay());
         addTestCase("a replayed command carries the restrictions of the loader and of the program", \testReplay());
         addTestCase("a restricted program cannot record a command for a module that does not declare support",
             \testReplayRefused());
@@ -221,6 +282,42 @@ class ModuleCommandContextTest inherits QUnit::Test {
                 True);
             assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
             assertEq("loaded\n", r.stdout, sprintf("%s: output", label));
+        }
+    }
+
+    #! a sandboxed Program loads modules whose source has a \c %module-cmd directive, from their source and compiled
+    /** The commands of a compiled module are replayed into the module's Program as it is loaded, while the sandboxed
+        loader is still running: a replayed command is the module's own directive, not a command that the loader issues
+        to another Program, so the compiled module loads as its source does, by name (library code, judged by the
+        sandbox) and by a path that the loader chose (judged by the loader's restrictions).  Sandboxed code still
+        cannot issue a command to another Program at run time.
+    */
+    testSandboxedLoaderReplay() {
+        skipWithoutModules();
+        string qmod_dir = tmp.path + "/qmod-sandboxed";
+        string chosen_qmod_dir = tmp.path + "/qmod-sandboxed-chosen";
+        mkdir(qmod_dir);
+        mkdir(chosen_qmod_dir);
+        string src_dir = realpath(get_script_dir() + "/module-command");
+        string chosen_dir = realpath(get_script_dir() + "/module-command-chosen");
+        foreach list<string> m in ((("CmdCtxDirectiveI", src_dir, qmod_dir), ("CmdCtxDirectiveJ", src_dir, qmod_dir),
+                ("CmdCtxDirectiveK", chosen_dir, chosen_qmod_dir),
+                ("CmdCtxDirectiveL", chosen_dir, chosen_qmod_dir))) {
+            string qmod = sprintf("%s/%s.qmod", m[2], m[0]);
+            string out = backquote(sprintf("%s %s -m -o %s %s/%s.qm 2>&1", env(), qcc_bin, qmod, m[1], m[0]));
+            if (!is_file(qmod)) {
+                testSkip("qcc is not available or cannot compile the module: " + out);
+            }
+        }
+        string script = write("load-sandboxed.q", LoadSandboxedScript);
+        foreach list<string> run in ((("source", "", "qm", chosen_dir),
+                ("compiled", qmod_dir + ":", "qmod", chosen_qmod_dir))) {
+            string label = run[0];
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "%s %s %s", replace(env(), "QORE_MODULE_DIR=", "QORE_MODULE_DIR=" + run[1]), qore_bin, script, run[2],
+                run[3]), True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+            assertEq(LoadSandboxedExpected, r.stdout, sprintf("%s: output", label));
         }
     }
 

@@ -160,20 +160,23 @@ object sub make_probe() {
 
     barrierTest() {
         Program deny = getProgram(False);
-        # a policy barrier of trusted code called by the restricted code: qore#5741: the trusted code inherits the
-        # refusing sandbox of its caller, so it is refused the barrier itself at run time
-        code barrier = auto sub () {
-            return SandboxManager::callWithSystemPolicy(auto sub () {
-                return {"restricted": SandboxManager::isRestricted(),
-                    "allowed": SandboxManager::isUncontrolledApiAllowed()};
-            });
+        # a policy barrier of trusted code called by the restricted code: the barrier is judged by the Program of the
+        # trusted code that establishes it, so it is established; isRestricted() sees the sandbox through it, and
+        # isUncontrolledApiAllowed() honours it (qore#5741); the call is created before the restricted code runs (a
+        # closure created while serving it carries its sandbox)
+        code system_call = auto sub () {
+            return {"restricted": SandboxManager::isRestricted(),
+                "allowed": SandboxManager::isUncontrolledApiAllowed()};
         };
-        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy",
-            \deny.callFunction(), ("through", barrier), "a barrier: refused to the restricted code");
-        # under a sandbox that allows uncontrolled APIs the same barrier is established, and the code is not
-        # restricted
+        code barrier = auto sub () {
+            return SandboxManager::callWithSystemPolicy(system_call);
+        };
+        hash<auto> h = deny.callFunction("through", barrier);
+        assertTrue(h.restricted, "a barrier of trusted code for the restricted code: still restricted");
+        assertTrue(h.allowed, "a barrier of trusted code for the restricted code: not governed by the caller's policy");
+        # under a sandbox that allows uncontrolled APIs, the code is not restricted
         Program allow = getProgram(True);
-        hash<auto> h = allow.callFunction("through", barrier);
+        h = allow.callFunction("through", barrier);
         assertFalse(h.restricted, "a barrier of trusted code: not restricted");
         assertTrue(h.allowed, "a barrier of trusted code: uncontrolled APIs allowed");
         # a system-policy capability of trusted code: as a barrier

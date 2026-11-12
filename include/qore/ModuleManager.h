@@ -179,6 +179,10 @@ struct QoreModuleInfo {
         \c RUNTIME-COMMAND-ERROR for a command issued at run time or replayed from a compiled program.  Code that is
         not restricted can issue commands to every module.
 
+        @warning the module API version is validated only after the description function has filled in the struct; a
+        library that implements only module API 2.0 creates a struct without this field, so a module that such a
+        library may load sets it only if is_module_api_supported(2, 1) is true
+
         @see QoreModuleCommandContext
 
         @since %Qore 3.0 (module API 2.1)

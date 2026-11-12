@@ -102,9 +102,9 @@ class SandboxProvenanceTest inherits QUnit::Test {
         Program program = sandbox(manager);
         object reader = program.callFunction("make", path);
         code tenant = \reader.read();
-        # qore#5741: a method of the sandbox-created object runs under its provenance, so the default sandbox, which
-        # refuses uncontrolled APIs, refuses it the barrier itself at run time
-        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \reader.barrierRead());
+        # the method is trusted module code: it establishes the barrier (judged by its own Program, qore#5741), which
+        # does not mask the object's provenance
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.barrierRead());
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
             \SandboxManager::callWithSystemPolicy(), tenant);
         assertEq("provenance fixture\n", program.callFunction("call", capability));
