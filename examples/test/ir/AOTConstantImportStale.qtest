@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc, which runs in a child process of its own
+# test-platform: macos - AOT code generation and linking, and the reader of the AOT image
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstantImportStaleTest
+
+#! a folded constant value is a dependency of the object that folded it (qore#5798)
+/** An object that folds the value of a constant of another source file (`DEFAULT_NAME` as a literal) imported
+    nothing for it, so linking it with a provider object whose value had changed was accepted and the aggregate kept
+    running with the old value, where a changed function signature or return type was refused as stale ("qo-link
+    hash mismatch").  The object now imports the constant with its value and declaration hashes, as the provider
+    publishes them.  The hash covers the whole value: two values that differ only after an embedded NUL differ.
+*/
+class AOTConstantImportStaleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTConstantImportStaleTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string module_dir = libqore_dir + "/modules/reflection";
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir, libqore_dir, module_dir);
+
+        addTestCase("an unchanged namespace constant links", \testUnchangedLinks());
+        addTestCase("a comment-only provider edit links", \testCommentOnlyEditLinks());
+        addTestCase("a changed namespace constant value is refused", \testChangedNamespaceConstant());
+        addTestCase("a changed class constant value is refused", \testChangedClassConstant());
+        addTestCase("values that differ only after an embedded NUL are refused", \testChangedAfterNul());
+        addTestCase("a changed hash constant value is refused", \testChangedHashConstant());
+        addTestCase("a constant of a nested namespace is imported by its full path", \testNestedNamespaceConstant());
+        addTestCase("a constant of a class in a namespace is imported by its full path", \testNamespacedClassConstant());
+        addTestCase("a changed function return type is still refused", \testChangedFunctionStillRefused());
+        addTestCase("a constant of an %include'd file does not make the link fail", \testIncludedConstantLinks());
+        addTestCase("a constant of a loaded module does not make the link fail", \testModuleConstantLinks());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! compiles the provider, the consumer (against the provider) and the provider again from the changed source,
+    #! then links the old consumer with the new provider; returns the output of the link, \a linked is set to
+    #! whether it produced the aggregate
+    private string scenario(TmpDir tmp, string provider_v1, string provider_v2, string consumer, reference<bool> linked) {
+        string dir = tmp.path;
+        mkdir(dir + "/lib");
+        string compile = sprintf("%s %s -c -L %s/lib --parse-option=PO_MODERN", env, qcc_bin, dir);
+        write(dir + "/pv.qc", "%new-style\n" + provider_v1);
+        write(dir + "/cons.qc", "%new-style\n" + consumer);
+        string out = run(sprintf("%s -o %s/lib/pv.qo %s/pv.qc", compile, dir, dir));
+        if (!is_file(dir + "/lib/pv.qo")) {
+            testSkip("qcc is not available or cannot compile the provider: " + out);
+        }
+        out = run(sprintf("%s -o %s/lib/cons.qo %s/cons.qc", compile, dir, dir));
+        if (!is_file(dir + "/lib/cons.qo")) {
+            testSkip("qcc cannot compile the consumer: " + out);
+        }
+        write(dir + "/pv.qc", "%new-style\n" + provider_v2);
+        out = run(sprintf("%s -o %s/lib/pv.qo %s/pv.qc", compile, dir, dir));
+        assertTrue(is_file(dir + "/lib/pv.qo"), "recompiled the provider: " + out);
+        string agg = dir + "/agg.qo";
+        string link_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CONST_STALE -o %s %s/lib/pv.qo "
+            "%s/lib/cons.qo", env, qcc_bin, agg, dir, dir));
+        linked = is_file(agg);
+        return link_out;
+    }
+
+    private checkRefused(string name, string link_out, bool linked, string symbol) {
+        assertFalse(linked, name + ": the stale object is not linked: " + link_out);
+        assertTrue(link_out.find("qo-link hash mismatch") != -1, name + ": reported as a hash mismatch: " + link_out);
+        assertTrue(link_out.find("symbol='" + symbol + "'") != -1, name + ": names the constant: " + link_out);
+    }
+
+    testUnchangedLinks() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public const PV = \"a\";\n", "public const PV = \"a\";\n",
+            "public class Cons { public static string get() { return PV; } }\n", \linked);
+        assertTrue(linked, "the unchanged provider links: " + out);
+    }
+
+    testCommentOnlyEditLinks() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public const PV = \"a\";\n", "public const PV = \"a\";\n# a comment\n",
+            "public class Cons { public static string get() { return PV; } }\n", \linked);
+        assertTrue(linked, "a comment-only edit does not make the consumer stale: " + out);
+    }
+
+    testChangedNamespaceConstant() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public const PV = \"a\";\n", "public const PV = \"b\";\n",
+            "public class Cons { public static string get() { return PV; } }\n", \linked);
+        checkRefused("namespace constant", out, linked, "PV");
+    }
+
+    testChangedClassConstant() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public class PC { public { const K = 1; } }\n",
+            "public class PC { public { const K = 2; } }\n",
+            "public class Cons { public static int get() { return PC::K; } }\n", \linked);
+        checkRefused("class constant", out, linked, "PC::K");
+    }
+
+    testChangedAfterNul() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public const PV = \"a\\x00b\";\n", "public const PV = \"a\\x00c\";\n",
+            "public class Cons { public static string get() { return PV; } }\n", \linked);
+        checkRefused("NUL constant", out, linked, "PV");
+    }
+
+    testChangedHashConstant() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public const PV = {\"k\": 1, \"l\": (1, 2)};\n",
+            "public const PV = {\"k\": 1, \"l\": (1, 3)};\n",
+            "public class Cons { public static int get() { return PV.k; } }\n", \linked);
+        checkRefused("hash constant", out, linked, "PV");
+    }
+
+    testNestedNamespaceConstant() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string v1 = "public namespace A { public namespace B { public const X = 1; } }\n";
+        string consumer = "public class Cons { public static int get() { return A::B::X; } }\n";
+        string out = scenario(tmp, v1, v1, consumer, \linked);
+        assertTrue(linked, "the unchanged nested constant links: " + out);
+        TmpDir tmp2("qore-aot-const-stale-");
+        out = scenario(tmp2, v1, "public namespace A { public namespace B { public const X = 2; } }\n", consumer,
+            \linked);
+        checkRefused("nested namespace constant", out, linked, "A::B::X");
+    }
+
+    testNamespacedClassConstant() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string v1 = "public namespace N { public class C { public { const K = 1; } } }\n";
+        string consumer = "public class Cons { public static int get() { return N::C::K; } }\n";
+        string out = scenario(tmp, v1, v1, consumer, \linked);
+        assertTrue(linked, "the unchanged class constant in a namespace links: " + out);
+        TmpDir tmp2("qore-aot-const-stale-");
+        out = scenario(tmp2, v1, "public namespace N { public class C { public { const K = 2; } } }\n", consumer,
+            \linked);
+        checkRefused("class constant in a namespace", out, linked, "N::C::K");
+    }
+
+    #! the constant of an %include'd file is part of the object that includes it: nothing else provides it, so
+    #! importing it would make the link fail
+    testIncludedConstantLinks() {
+        TmpDir tmp("qore-aot-const-stale-");
+        string dir = tmp.path;
+        mkdir(dir + "/lib");
+        write(dir + "/inc.qc", "%new-style\nconst INC = 11;\n");
+        write(dir + "/cons.qc", "%new-style\n%include inc.qc\npublic class Cons { public static int get() { return INC; } }\n");
+        string out = run(sprintf("%s %s -c -L %s/lib --parse-option=PO_MODERN -o %s/lib/cons.qo %s/cons.qc", env,
+            qcc_bin, dir, dir, dir));
+        if (!is_file(dir + "/lib/cons.qo")) {
+            testSkip("qcc cannot compile the consumer: " + out);
+        }
+        out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CONST_INCLUDED -o %s/agg.qo %s/lib/cons.qo", env,
+            qcc_bin, dir, dir));
+        assertTrue(is_file(dir + "/agg.qo"), "the object links: " + out);
+    }
+
+    #! the constant of a module is provided when the module is loaded, not by an object of the link
+    testModuleConstantLinks() {
+        TmpDir tmp("qore-aot-const-stale-");
+        string dir = tmp.path;
+        mkdir(dir + "/lib");
+        mkdir(dir + "/mods");
+        write(dir + "/mods/ConstStaleMod.qm", "%new-style\nmodule ConstStaleMod { version = \"1.0\"; desc = \"m\"; "
+            "author = \"t\"; url = \"u\"; }\npublic namespace ConstStaleMod { public const MC = 5; }\n");
+        string menv = env + " QORE_MODULE_DIR=" + dir + "/mods:" + libqore_dir + "/modules/reflection";
+        string out = run(sprintf("%s %s -m %s/mods/ConstStaleMod.qm -o %s/mods/ConstStaleMod.qmod", menv, qcc_bin, dir,
+            dir));
+        if (!is_file(dir + "/mods/ConstStaleMod.qmod")) {
+            testSkip("qcc cannot compile the module: " + out);
+        }
+        write(dir + "/cons.qc", "%new-style\n%requires ConstStaleMod\n"
+            "public class Cons { public static int get() { return ConstStaleMod::MC; } }\n");
+        out = run(sprintf("%s %s -c -L %s/lib --parse-option=PO_MODERN -o %s/lib/cons.qo %s/cons.qc", menv, qcc_bin,
+            dir, dir, dir));
+        if (!is_file(dir + "/lib/cons.qo")) {
+            testSkip("qcc cannot compile the consumer: " + out);
+        }
+        out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CONST_MODULE -o %s/agg.qo %s/lib/cons.qo", menv,
+            qcc_bin, dir, dir));
+        assertTrue(is_file(dir + "/agg.qo"), "the object links: " + out);
+    }
+
+    testChangedFunctionStillRefused() {
+        TmpDir tmp("qore-aot-const-stale-");
+        bool linked;
+        string out = scenario(tmp, "public int sub pf() { return 1; }\n", "public string sub pf() { return \"x\"; }\n",
+            "public class Cons { public static int get() { return pf() + 1; } }\n", \linked);
+        checkRefused("function", out, linked, "pf()");
+    }
+}

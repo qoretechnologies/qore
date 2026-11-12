@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class LvaluePathOrderTest
+
+#! issue #5753: the keys and indices of an lvalue path are evaluated from the root out in every execution mode
+/** The AST interpreter evaluated the keys and indices of an lvalue path of two or more steps from the last step to
+    the root (<tt>h.(k1()).(k2())[i()] = v</tt> evaluated i(), k2() and k1() in this order), while the other execution
+    modes evaluate them from the root out, as the expression as a value does.  Every mode now evaluates the path from
+    the root out, and the index of the last step after it, for assignments, compound assignments, ++ and --, remove,
+    delete, splice, extract, push, unshift and pop, references, and lvalues in map and foreach, on every kind of root.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class LvaluePathOrderTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "path-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("the keys of an lvalue path from the root out", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        list<string> lines = out.split("\n");
+        assertEq(37, (select lines, $1 =~ /^[a-z][a-z ]*:/).size(), "every case ran");
+        # the path from the root out, then the index of the last step; the value of an assignment comes first
+        assertTrue(out =~ /^assign: vr ka kb i0 = \[1, 9, 3\]\n/, "assign");
+        assertTrue(out =~ /\npreinc: ka kb i0 = /, "++");
+        assertTrue(out =~ /\nremove: ka kb i0 = /, "remove");
+        assertTrue(out =~ /\nremove key: ka kc = /, "remove of a key");
+        assertTrue(out =~ /\nremove list: ka kb i0 i1 = /, "remove of a list of selectors");
+        assertTrue(out =~ /\nsplice: i0 i1 ka kb = /, "splice");
+        assertTrue(out =~ /\nreference: ka kb i0 made = \[1, 5, 3\]\n/, "reference");
+        assertTrue(out =~ /\nthree keys: vr ka kx ky = /, "three keys");
+        assertTrue(out =~ /\nmap: vr ka kb i0 vr ka kb i0 = /, "map");
+        foreach string root in ("local", "member", "self member", "static", "thread local", "closure", "reference root") {
+            assertTrue(regex(out, "\\n" + root + ": vr ka kb i0 = \\[1, (9|7), 3\\]\\n"), root);
+        }
+        # a key that raises: the later keys are not evaluated and nothing is changed
+        assertTrue(out =~ /\nraise: vr ka throwb ! KEY-ERROR unchanged\n/, "raise");
+        assertTrue(out =~ /\nraise remove: ka throwb ! KEY-ERROR unchanged\n/, "raise in remove");
+        assertTrue(out =~ /\nraise remove key path: ka throwb ! KEY-ERROR unchanged\n/, "raise in the path of remove of a key");
+        assertTrue(out =~ /\nraise remove key: ka throwc ! KEY-ERROR unchanged\n/, "raise in the key of remove");
+        # a cast in the path, a reference parameter, a hash key of a member and a list of keys
+        assertTrue(out =~ /\ncast: vr ka ko kx i0 = /, "cast in the path");
+        # an earlier key keeps the value that it had when it was evaluated
+        assertTrue(out =~ /\nkey assigns earlier key: = \[\{"?a-key-long-enough-not-to-be-inline-1"?: \{b: 1\}\}, "b"\]\n/,
+            "a later key assigns the variable of an earlier key");
+        assertTrue(out =~ /\nkey changes earlier key by reference: = \[\{"?a-key-long-enough-not-to-be-inline-2"?: \{c: 1\}\}, "b"\]\n/,
+            "a later key changes the variable of an earlier key through a reference");
+        assertTrue(out =~ /\nreference parameter: ka kb i0 set = \[1, 6, 3\]\n/, "reference parameter");
+        assertTrue(out =~ /\nremove member key: ka kc = /, "remove of a member's key");
+        assertTrue(out =~ /\nremove keys: ka kb = /, "remove of a list of keys");
+        assertTrue(out =~ /\nlong path: k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17 k18 = 1\n/, "long path");
+        assertEq((), (select lines, $1 =~ / ! / && $1 !~ /^raise/), "no other case raised an exception");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("lvalue-path-order-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

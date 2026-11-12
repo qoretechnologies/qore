@@ -1664,14 +1664,11 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = "empty call reference function name";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 
@@ -1777,14 +1774,11 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
 
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 

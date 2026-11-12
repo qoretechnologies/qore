@@ -52,6 +52,8 @@ enum qore_var_t {
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <vector>
+#include <type_traits>
 #include <set>
 #include <string>
 
@@ -62,6 +64,8 @@ class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
 class RuntimeConfig;
+struct QoreLValuePathKeys;
+class QoreLValuePathKeyCache;
 
 union qore_gvar_ref_u {
     bool b;
@@ -840,6 +844,72 @@ private:
     int (*root_hook)(void*) = nullptr;
     //! the argument of root_hook
     void* root_hook_arg = nullptr;
+public:
+    //! a key or an index of the path to the root that evalPathKeys() evaluated
+    struct PathKey {
+        QoreValue value;
+        //! true if the helper owns a reference to the value
+        bool needs_deref = false;
+    };
+    //! the keys and indices of a path that evalPathKeys() evaluated, the one nearest the root first
+    /** The store lives in the frame of the outermost step of the path, only for a path whose keys are evaluated first
+        (qore#5753); a path of up to BufSize keys is held without an allocation.
+    */
+    struct PathKeyStore {
+        static constexpr size_t BufSize = 8;
+        //! the keys of a path of up to BufSize keys, constructed when they are written (the first count are valid)
+        alignas(PathKey) unsigned char buf[BufSize * sizeof(PathKey)];
+        std::vector<PathKey> more;
+        size_t count = 0;
+
+        DLLLOCAL PathKey* data() {
+            return more.empty() ? reinterpret_cast<PathKey*>(buf) : more.data();
+        }
+    };
+    static_assert(std::is_trivially_destructible<PathKey>::value, "the keys are not destroyed in the buffer");
+
+private:
+    //! the keys of the path being resolved, if they were evaluated first
+    PathKeyStore* path_keys = nullptr;
+
+    //! takes the key at the end of the evaluated keys of the path; returns false if there is none
+    DLLLOCAL bool takePathKey(ValueOptionalRefHolder& holder) {
+        if (!path_keys || !path_keys->count) {
+            return false;
+        }
+        PathKey& key = path_keys->data()[--path_keys->count];
+        holder.setValue(key.value, key.needs_deref);
+        return true;
+    }
+
+    //! releases the evaluated keys of the path that no step took
+    DLLLOCAL void clearPathKeys();
+
+    //! returns the keys of the lvalue path \a n, the one nearest the root first, if they are evaluated before it is
+    //! resolved: at least two of them need an evaluation, so that their order can be observed; cached in \a cache,
+    //! the cache of the last step of the path
+    DLLLOCAL static const QoreLValuePathKeys* getPathKeys(QoreLValuePathKeyCache& cache, const QoreValue& n);
+
+    //! evaluates the keys of the path \a n, whose last step's key cache is \a cache, from the root out if it needs
+    //! it, and then resolves the step with \a step; returns -1 on error
+    /** Out of line, so that a path that does not need it costs nothing more than the test of its cache
+    */
+    template <typename Step>
+    DLLLOCAL int doStepWithPathKeys(const QoreValue& n, QoreLValuePathKeyCache& cache, Step step);
+
+    //! the evaluation of the keys of the path at its outermost step, and the release of the keys left
+    class PathKeyScope;
+    friend class PathKeyScope;
+
+    //! evaluates the keys and indices of the path \a n to the root, from the root out, into path_keys
+    /** As the other execution modes and the expression as a value do: <tt>h.(k1()).(k2())[i()] = v</tt> evaluates
+        k1(), k2() and i() in this order.  Nothing is evaluated unless at least two keys need an evaluation, as the
+        order cannot be observed otherwise; each key is a statement of its own, whose temporaries are released when
+        it has been evaluated.
+
+        @return -1 if a key raised an exception, 0 if not
+    */
+    DLLLOCAL int evalPathKeys(const QoreLValuePathKeys& keys);
 
     //! runs the root hook once, if any; returns its return value, or 0 if there is no hook
     DLLLOCAL int runRootHook() {

@@ -1549,12 +1549,6 @@ try {
         }
         DebuggedProgram p(dpc, "%modern\nour Mutex m;\nm.lock();\n");
         on_exit p.cleanup();
-        # the thread reaches isTerminating() through the debugger's exception callback for its cancellation, which the
-        # other execution modes do not call for an exception that a builtin raises in top-level code
-        # (https://github.com/qoretechnologies/qore/issues/5795)
-        if (p.pgm.getExecMode() != EM_AST) {
-            testSkip("the exception callback is called in the AST interpreter only (issue 5795)");
-        }
         # the program waits for a lock that this thread holds
         Mutex m();
         m.lock();

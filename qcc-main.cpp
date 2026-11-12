@@ -2513,6 +2513,23 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
 static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end);
 
+//! skips the compile-time value that AOT format v15 and later write after the value of a pending constant
+/** the writer (writePendingConstantParseValue()) writes a presence byte and, when it is set, a serialized value;
+    the loader reads it for every pending constant of a v15 or later image, so the scanners must too, or they
+    read the next entry from the middle of it
+*/
+static bool dump_skip_pending_constant_parse_value(const QoreAOTBinaryReader& reader, const uint8_t*& p,
+        const uint8_t* end, bool pending) {
+    if (!pending || reader.getHeader().version < QORE_AOT_CONST_PARSE_VALUE_VERSION) {
+        return true;
+    }
+    uint8_t present = 0;
+    if (!dump_read_u8(p, end, present)) {
+        return false;
+    }
+    return !present || dump_skip_serialized_value_no_summary(reader, p, end);
+}
+
 static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
         AOTSlotMapDumpSummary& summary, const std::string& func_name,
@@ -3586,8 +3603,13 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 error = "truncated class constant entry";
                 return false;
             }
+            const bool pending = has_const_pending_flag && *(p - 1);
             if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                     "class constant", owner, dump_owner_name(cname, nullptr))) {
+                return false;
+            }
+            if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+                error = "truncated class constant compile-time value";
                 return false;
             }
         }
@@ -3720,8 +3742,13 @@ static bool dump_scan_constant_defaults(const QoreAOTBinaryReader& reader,
             error = "truncated constant entry";
             return false;
         }
+        const bool pending = *(p - 1) != 0;
         if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                 "constant", "", dump_owner_name(name, nullptr))) {
+            return false;
+        }
+        if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+            error = "truncated constant compile-time value";
             return false;
         }
     }
@@ -9686,6 +9713,13 @@ static int link_script_objects_to_executable(const std::string& output,
                 po_error.c_str());
             return 1;
         }
+        // objects compiled before issue #5682 can store %modern with a compatibility option that it does not allow;
+        // the executable could not create its Program
+        if (!qore_check_modern_parse_options(link_po, po_error)) {
+            fprintf(stderr, "error: %s link failed for output '%s': %s; rebuild the objects with this version of "
+                "Qore\n", mode_label, output.c_str(), po_error.c_str());
+            return 1;
+        }
     }
 
     FILE* glue = fopen(glue_path.c_str(), "w");
@@ -9722,7 +9756,8 @@ static int link_script_objects_to_executable(const std::string& output,
         "    QoreProgram* pgm = qore_create_program_ext(\n"
         "        (int64_t)0x%016llxULL, (int64_t)0x%016llxULL);\n"
         "    if (!pgm) {\n"
-        "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
+        "        const char* err = qore_last_error(nullptr);\n"
+        "        fprintf(stderr, \"qore_create_program failed: %%s\\n\", err ? err : \"unknown error\");\n"
         "        qore_cleanup();\n"
         "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
@@ -11380,6 +11415,12 @@ int main(int argc, char** argv) {
     int rc = 0;
     QoreParseOptions compile_po = PO_DEFAULT;
     if (!apply_parse_option_flags(compile_po, error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        qore_cleanup();
+        return 1;
+    }
+    // %modern cannot be given with a compatibility option that it does not allow (issue #5682)
+    if (!qore_check_modern_parse_options(compile_po, error)) {
         fprintf(stderr, "error: %s\n", error.c_str());
         qore_cleanup();
         return 1;

@@ -8027,6 +8027,33 @@ nothing Socket::resetHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     return QoreValue();
 }
 
+//! Sets the limit of the data of an HTTP/2 stream that is buffered for sending
+/** By default, @ref sendHttp2StreamData() raises \c HTTP2-FLOW-CONTROL once more than 1 MiB of the stream's data is
+    buffered, waiting for the peer's flow-control window.  With a limit, a send that would make the buffered data
+    exceed the limit raises \c HTTP2-FLOW-CONTROL instead, unless nothing is buffered, so that one send larger than
+    the limit can still be made.  Data that the peer's flow-control window has accepted is no longer buffered.  The
+    limit ends with the stream.
+
+    Server-Sent Events streams use it to bound the data buffered for a client that does not read (see
+    @ref HttpServerAsyncIo::Http2SseStream "Http2SseStream").
+
+    @par Example:
+    @code{.py}
+sock.setHttp2StreamSendLimit(stream_id, 256 * 1024);
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID
+    @param limit the limit in bytes; must be > 0
+
+    @throw HTTP2-ERROR no HTTP/2 session is active, the limit is not positive, or the stream is not open
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttp2StreamSendLimit(int stream_id, int limit) [flags=NAMED_ARGS] {
+    s->setHttp2StreamSendLimit((int32_t)stream_id, limit, xsink);
+    return QoreValue();
+}
+
 //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
 /** Handler thread calls this and returns immediately. The I/O thread reads from the
     InputStream and sends DATA frames incrementally.
@@ -9749,6 +9776,43 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS
         return QoreValue();
     }
     s->resetQuicStream(session_id, stream_id, xsink);
+}
+
+//! Sets the limit of the data of an HTTP/3 streaming response that is staged for sending
+/** By default, @ref submitQuicStreamData() returns 1 (the send buffer is full) once more than 1 MiB of the stream's
+    data is staged, waiting for the peer's flow-control credit.  With a limit, a send that would make the staged data
+    exceed the limit returns 1 instead, unless nothing is staged, so that one send larger than the limit can still be
+    made.  Data handed to the transport within the peer's flow-control credit is no longer staged.  The limit ends
+    with the stream.
+
+    Server-Sent Events streams use it to bound the data staged for a client that does not read (see
+    @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream").
+
+    @par Example:
+    @code{.py}
+sock.setQuicStreamSendLimit(session_id, stream_id, 256 * 1024);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID of a streaming response (see @ref submitQuicResponseStreaming())
+    @param limit the limit in bytes; must be > 0
+
+    @throw QUIC-ERROR the session ID or stream ID is invalid, or no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR the limit is not positive, or the stream has no streaming response
+
+    @since %Qore 3.0
+*/
+nothing Socket::setQuicStreamSendLimit(int session_id, int stream_id, int limit) [flags=NAMED_ARGS] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->setQuicStreamSendLimit(session_id, stream_id, limit, xsink);
+    return QoreValue();
 }
 
 //! Send a QUIC DATAGRAM frame associated with an HTTP/3 stream (RFC 9221/9297)

@@ -19,7 +19,8 @@
 /** `NS::mk<number>()` and `\\mk0<string>()` were parsed with their explicit type arguments and ran with them
     ignored in every mode (the result was list<auto>): the conversion of the static-call form to the function call
     dropped them, and a call reference did not keep them.  A call reference with explicit type arguments to a
-    function (also `\\NS::f<T>()`) now instantiates the function when it is called; one to a method is a parse error
+    function (also `\\NS::f<T>()`) now instantiates the function when it is called, also in a qcc executable, whose
+    AOT image carries the type arguments with the name of the referenced function; one to a method is a parse error
     (it would be ignored).
 
     The programs are in \c generic-call-reference-explicit-type-args/.
@@ -30,10 +31,9 @@ class GenericCallReferenceExplicitTypeArgsTest inherits QUnit::Test {
         string dir = get_script_dir() + "/generic-call-reference-explicit-type-args";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        #! the programs that every mode runs; the call references are not compiled by qcc yet
         const Programs = ("namespace-calls", "call-references");
         #! the programs that qcc compiles
-        const CompiledPrograms = ("namespace-calls",);
+        const CompiledPrograms = Programs;
     }
 
     constructor() : QUnit::Test("GenericCallReferenceExplicitTypeArgsTest", "1.0", \ARGV) {

@@ -39,6 +39,8 @@ static void mongodb_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
 static void mongodb_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void mongodb_module_delete();
 
+extern QoreNamespace MongoDBNS;
+
 extern "C" DLLEXPORT void mongodb_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "mongodb";
     mod_info.version = PACKAGE_VERSION;
@@ -50,6 +52,8 @@ extern "C" DLLEXPORT void mongodb_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = mongodb_module_init;
     mod_info.ns_init = mongodb_module_ns_init;
     mod_info.del = mongodb_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &MongoDBNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

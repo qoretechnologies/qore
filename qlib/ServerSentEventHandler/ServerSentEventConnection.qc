@@ -142,14 +142,44 @@ public class ServerSentEventConnection {
         return sse_conn ? sse_conn.getQueueSize() : 0;
     }
 
+    #! Returns @ref True if the stream of the connection is open (or not set up yet)
+    /** @since %ServerSentEventHandler 1.2
+    */
+    bool isStreamOpen() {
+        return sse_conn ? sse_conn.isOpen() : True;
+    }
+
     #! Pushes an already-encoded message for sending via the async I/O controller
+    /** Never waits for the client.
+
+        @throw SSE-CLIENT-OVERFLOW the message would take the data held for the client over its bound; the message
+        is not sent, and the client has been dropped and deregistered: its close hooks (@ref connectionClosed())
+        run on the calling thread (see
+        @ref ServerSentEventHandler::ServerSentEventHandler::setSseMaxBufferSize() "ServerSentEventHandler::setSseMaxBufferSize()")
+    */
     sendEncoded(string msg) {
         if (sse_conn) {
-            sse_conn.queueRawString(msg);
+            try {
+                sse_conn.queueRawString(msg);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == HttpServerAsyncIo::SseClientOverflowErr) {
+                    # the client has been dropped: the connection is deregistered now, on every HTTP version (an
+                    # HTTP/1.x stream reports its end later, from the I/O controller; a connection already
+                    # deregistered is ignored)
+                    handler.deregisterConnection(cid);
+                }
+                rethrow;
+            }
         }
     }
 
     #! Encodes and queues an SSE message for sending
+    /** Never waits for the client.
+
+        @throw SSE-CLIENT-OVERFLOW the message would take the data held for the client over its bound; the message
+        is not sent, and the client has been dropped (see
+        @ref ServerSentEventHandler::ServerSentEventHandler::setSseMaxBufferSize() "ServerSentEventHandler::setSseMaxBufferSize()")
+    */
     send(hash<SseMessageInfo> msg) {
         msg = validateOutgoingEvent(msg);
         sendEncoded(handler.encodeMessage(msg));

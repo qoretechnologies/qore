@@ -195,6 +195,11 @@ public:
         ref_waiting = 0,    // the number of threads waiting on a dereference action to complete
         rref_waiting = 0;   // the number of threads waiting on an rset invalidation to complete
 
+#ifdef DEBUG
+    //! the number of deleting dereferences waiting for other dereferences to complete; see derefDone()
+    int dbg_del_waiting = 0;
+#endif
+
     //! Whether the last scan rooted at this object had to assign a recursive set
     /** Chooses the mode of the next scan started here.  A scan that changes nothing can share the rsection of
         every object it enters with other scans, but a scan that finds it has to change a set has to walk the

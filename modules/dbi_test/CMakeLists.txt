@@ -25,6 +25,7 @@ target_compile_definitions(${dbi_test_module_name} PRIVATE
 set_target_properties(${dbi_test_module_name} PROPERTIES
     PREFIX ""
     SUFFIX "-api-${QORE_API_VERSION}.qmod")
+qore_remove_stale_module_api_files(${dbi_test_module_name})
 
 # modules resolve libqore symbols dynamically; do not link against the library
 if (APPLE)

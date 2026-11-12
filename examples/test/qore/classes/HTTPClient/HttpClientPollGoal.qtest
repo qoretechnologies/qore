@@ -81,6 +81,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         addTestCase("an answered request has reached its goal", \testSuccess());
         addTestCase("a request whose connection the server closed before it was submitted fails in its poll operation",
             \testCloseBeforeSubmit());
+        addTestCase("a request on a connection whose poll operation failed before the connection was marked closed "
+            "fails in its poll operation", \testFailedBeforeMarkedClosed());
         set_return_value(main());
     }
 
@@ -148,6 +150,35 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         assertEq(0, closed.getCount(), "the connection was closed before the request was submitted");
         hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
         assertTrue(exists result.ex, "the request fails");
+        assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
+    }
+
+    #! The server closes a pooled keep-alive connection, and the request is submitted after the connection's poll
+    #! operation published the failure and before the connection is marked closed (the window in which a server that
+    #! closes at once can fail a new connection): the error is reported by the poll operation, as when the connection
+    #! is found closed, and not raised by startPollSendRecv()
+    testFailedBeforeMarkedClosed() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that defers marking a failed connection closed is only in debug builds");
+        }
+        OneShotServer srv("keep");
+        on_exit srv.stop();
+        on_exit if (srv.close_now.getCount()) {
+            srv.close_now.dec();
+        }
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        # the first request leaves a ready keep-alive connection in the pool
+        assertEq(200, hc.send(NOTHING, "GET", "/first").status_code);
+        # the poll operation of the connection publishes the failure when the server closes it, and the connection is
+        # left looking open (and reusable) until the hook is released
+        Counter deferred(1);
+        call_function("dbg_defer_http1_connection_close", deferred);
+        on_exit call_function("dbg_release_http1_connection_close");
+        srv.close_now.dec();
+        assertEq(0, deferred.waitForZero(HangGuard), "the connection's poll operation failed");
+        AbstractPollOperation spop = hc.startPollSendRecv("POST", "/failed", "body");
+        hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+        assertEq("HTTP1-CONNECTION-CLOSED", result.ex.err, "the request fails with the connection's error");
         assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
     }
 
