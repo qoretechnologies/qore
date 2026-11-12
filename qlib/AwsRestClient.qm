@@ -529,7 +529,13 @@ public class AwsRestClientBase {
             throw "AWSRESTCLIENT-STS-ERROR",
                 sprintf("AssumeRole call to %y failed: %s", url, ex.desc), ex;
         }
-        return AwsRestClientBase::parseAssumeRoleResponse(resp.body);
+        try {
+            return AwsRestClientBase::parseAssumeRoleResponse(resp.body);
+        } catch (hash<ExceptionInfo> ex) {
+            # the content type tells a reply from another server (a proxy's HTML page) from a broken STS reply; the
+            # body is not given, as it can hold credentials
+            throw ex.err, sprintf("%s (response from %y with content type %y)", ex.desc, url, resp.content_type);
+        }
     }
 
     #! Parses an STS AssumeRole response body
@@ -540,6 +546,9 @@ public class AwsRestClientBase {
         @param raw the response body (hash, binary, or string)
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
+
+        @throw AWSRESTCLIENT-STS-ERROR the response is missing \c AccessKeyId, \c SecretAccessKey or
+        \c SessionToken, or has an unexpected type
     */
     static hash<auto> parseAssumeRoleResponse(auto raw) {
         *hash<auto> creds_hash;
@@ -571,6 +580,11 @@ public class AwsRestClientBase {
             throw "AWSRESTCLIENT-STS-ERROR",
                 "AssumeRole response is missing AccessKeyId or SecretAccessKey";
         }
+        # AssumeRole always returns a session token; a reply without one is incomplete (a truncated body read without
+        # the xml module), and its credentials would only fail later
+        if (!creds_hash.SessionToken.val()) {
+            throw "AWSRESTCLIENT-STS-ERROR", "AssumeRole response is missing SessionToken";
+        }
         date expires = creds_hash.Expiration.val()
             ? date(creds_hash.Expiration)
             : now_us() + 1h;
@@ -579,9 +593,7 @@ public class AwsRestClientBase {
             "aws_secret": creds_hash.SecretAccessKey,
             "expires": expires,
         };
-        if (creds_hash.SessionToken.val()) {
-            rv.aws_token = creds_hash.SessionToken;
-        }
+        rv.aws_token = creds_hash.SessionToken;
         return rv;
     }
 

@@ -91,6 +91,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("STS XML response parse", \stsParseTest());
         addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
         addTestCase("STS AssumeRole without the xml module", \stsAssumeRoleWithoutXmlTest());
+        addTestCase("STS AssumeRole rejects an incomplete reply", \stsIncompleteReplyTest());
         addTestCase("IMDS credentials body parse", \imdsParseTest());
         addTestCase("credential failures do not disclose values", \credentialPrivacyTest());
         addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
@@ -326,6 +327,7 @@ class AwsTest inherits QUnit::Test {
         assertRegex("(?m)^keyid=FAKE-ASIA-KEY secret=fake-secret-456 token=fake-session-token-xyz expires=2099-12-31$",
             out, out);
         assertEq("AssumeRole", sts_handler.params.Action);
+        assertNRegex("(?m)^error=", out, out);
 
         # an error response is reported as such without the xml module too
         sts_handler.status = 403;
@@ -333,6 +335,40 @@ class AwsTest inherits QUnit::Test {
         out = backquote(cmd, \rc);
         assertEq(0, rc, out);
         assertRegex("(?m)^error=AWSRESTCLIENT-STS-ERROR$", out, out);
+    }
+
+    #! Checks that an incomplete or foreign 200 reply fails AssumeRole at once, without disclosing the credentials
+    stsIncompleteReplyTest() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeStsHandler sts_handler();
+        sts_http.setDefaultHandler("sts", sts_handler);
+        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        on_exit delete sts_http;
+        hash<auto> opts = {
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        };
+
+        # a truncated reply: the xml module cannot parse it, and the regular expressions find no session token
+        sts_handler.body = "<AssumeRoleResponse><AssumeRoleResult><Credentials><AccessKeyId>FAKE-ASIA-KEY</AccessKeyId>"
+            "<SecretAccessKey>fake-secret-456</SecretAccessKey><Sess";
+        try {
+            AwsRestClientBase::assumeRole(opts);
+            assertTrue(False, "a truncated reply is accepted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("AWSRESTCLIENT-STS-ERROR", ex.err);
+            assertRegex("missing SessionToken.*content type \"text/xml", ex.desc);
+            assertNRegex("fake-secret-456", ex.desc);
+        }
+
+        # an HTML page of a proxy
+        sts_handler.body = "<html><body>proxy login</body></html>";
+        sts_handler.content_type = "text/html";
+        assertThrows("AWSRESTCLIENT-STS-ERROR", "missing AccessKeyId or SecretAccessKey.*content type \"text/html",
+            \AwsRestClientBase::assumeRole(), opts);
     }
 
     #! Returns the string quoted for the shell
@@ -698,6 +734,9 @@ class FakeStsHandler inherits AbstractHttpRequestHandler {
         int requests;
         #! the status code to return; errors are returned without credentials
         int status = 200;
+        #! a body and content type to return instead of the credentials, if set
+        *string body;
+        *string content_type;
     }
 
     hash handleRequest(hash cx, hash hdr, *data body) {
@@ -706,6 +745,9 @@ class FakeStsHandler inherits AbstractHttpRequestHandler {
         if (status != 200) {
             return makeResponse({"Content-Type": "text/xml"}, status, "<ErrorResponse><Error><Code>AccessDenied"
                 "</Code></Error></ErrorResponse>");
+        }
+        if (exists self.body) {
+            return makeResponse({"Content-Type": content_type ?? "text/xml"}, 200, self.body);
         }
         # parse form-encoded body
         string body_str;
