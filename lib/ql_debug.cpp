@@ -15568,6 +15568,45 @@ static QoreValue f_dbg_socket_wait_controller_op(const QoreListNode* params, Run
         static_cast<int>(get_param_value(params, 1).getAsBigInt()));
 }
 
+//! Debug-only: returns the number of onComplete() calls that the global async I/O controller has dispatched
+/** A test sees with it whether the completion of an operation has been dispatched at a given point, such as while
+    the operation's abort() runs, which no Qore code can see otherwise
+*/
+static QoreValue f_dbg_async_io_on_complete_dispatched(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgOnCompleteDispatched();
+}
+
+//! Debug-only: sets or clears the shutdown mark of an owner in the global async I/O controller's dispatcher
+/** As flushCallbacksByOwner() does around its wait; a test holds the mark with it to check what happens to the work
+    of an owner that is shutting down
+*/
+static QoreValue f_dbg_async_io_mark_owner_shutting_down(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* owner = get_param_value(params, 0).get<const QoreStringNode>();
+    bool mark = HARD_QORE_VALUE_BOOL(params, 1);
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgSetOwnerShuttingDown(owner->c_str(), mark);
+    return QoreValue();
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -21616,6 +21655,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_on_complete_dispatched", f_dbg_async_io_on_complete_dispatched,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_mark_owner_shutting_down", f_dbg_async_io_mark_owner_shutting_down,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
