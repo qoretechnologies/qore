@@ -6880,6 +6880,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     }
     uint8_t group_byte = QoreAOTBinaryReader::readU8(ptr);
     auto group = static_cast<QoreIRInstGroup>(group_byte);
+    if (!qore_aot_validate_ir_layout(opcode_raw, group_byte, error)) {
+        return nullptr;
+    }
 
     // Read base fields: result, operands, exception_target
     if (!need(4, "result id")) {
@@ -6898,6 +6901,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
         num_operands = QoreAOTBinaryReader::readU8(ptr);
     }
+    if (!qore_aot_validate_ir_operands(opcode_raw, num_operands, result_id != 0, error)) {
+        return nullptr;
+    }
     if (num_operands > 0 && !need(static_cast<size_t>(num_operands) * 4, "operands")) {
         return nullptr;
     }
@@ -6905,6 +6911,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     operands.reserve(num_operands);
     for (uint32_t j = 0; j < num_operands; ++j) {
         uint32_t op_id = QoreAOTBinaryReader::readU32(ptr);
+        if (!QoreIRValue(op_id).isValid()) {
+            error = "invalid AOT IR operand value id";
+            return nullptr;
+        }
         operands.push_back(QoreIRValue(op_id));
     }
     if (!need(2, "exception target")) {
