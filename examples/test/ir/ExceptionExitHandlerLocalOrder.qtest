@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ExceptionExitHandlerLocalOrderTest
+
+#! Regression test: a function with handlers left by an exception releases its locals last declared first
+/** After the handlers of a scope ran, the IR interpreter released every local slot in slot order, including the
+    slots of IR-only locals, which hold the only reference to their values: a function with an on_exit or on_error
+    handler that was left by an exception destroyed its IR-only locals first declared first (<tt>a b c</tt>) in the
+    IR, JIT and tiered execution modes, where the AST interpreter and AOT code destroy them last declared first
+    (<tt>c b a</tt>).  The slots of IR-only locals are now left to the release of the frame's locals at its exit.
+    The script runs every case twice, in every execution mode, on the IR tier of tiered execution and as qcc
+    executables compiled at -O0 and -O3 (see ExecModeOutputTest).
+*/
+class ExceptionExitHandlerLocalOrderTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a function with handlers left by an exception releases its locals last declared first
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+sub touch() {
+}
+# the locals are used in reverse declaration order before the exception
+sub reverseUse() {
+    T a("a");
+    on_exit { printf("on_exit\n"); }
+    T b("b");
+    T c("c");
+    printf("%s%s%s\n", c.n, b.n, a.n);
+    touch();
+    throw "X";
+}
+# untyped locals and an on_error handler that reads one of them
+sub autoLocals() {
+    auto a = new T("aa");
+    on_error { printf("on_error %s\n", a.n); }
+    auto b = new T("ab");
+    auto c = new T("ac");
+    printf("%s%s%s\n", c.n, b.n, a.n);
+    throw "Y";
+}
+# a block with a handler left by the exception inside the function
+sub inner() {
+    T a("ia");
+    on_exit { printf("outer on_exit\n"); }
+    T b("ib");
+    {
+        T c("ic");
+        on_exit { printf("inner on_exit\n"); }
+        T d("id");
+        printf("%s%s%s%s\n", d.n, c.n, b.n, a.n);
+        throw "Z";
+    }
+}
+# a loop whose body has a handler, left by the exception in its second iteration
+sub loop() {
+    T a("la");
+    T b("lb");
+    for (int i = 0; i < 2; ++i) {
+        on_exit { printf("loop on_exit %d\n", i); }
+        T e("le" + i);
+        printf("%s%s%s\n", b.n, e.n, a.n);
+        if (i == 1) {
+            throw "L";
+        }
+    }
+}
+# a function with a handler left normally
+sub normal() {
+    T a("na");
+    on_exit { printf("on_exit\n"); }
+    T b("nb");
+    T c("nc");
+    printf("%s%s%s\n", c.n, b.n, a.n);
+    touch();
+}
+for (int i = 0; i < 2; ++i) {
+    try { reverseUse(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { autoLocals(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { inner(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { loop(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    normal();
+    printf("done\n");
+}
+';
+
+        #! the AST interpreter's output of one iteration of the script's loop
+        const ExpectedOnce = (
+            "cba",
+            "on_exit",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "caught X",
+            "acabaa",
+            "on_error aa",
+            "dtor ac",
+            "dtor ab",
+            "dtor aa",
+            "caught Y",
+            "idicibia",
+            "inner on_exit",
+            "dtor id",
+            "dtor ic",
+            "outer on_exit",
+            "dtor ib",
+            "dtor ia",
+            "caught Z",
+            "lble0la",
+            "loop on_exit 0",
+            "dtor le0",
+            "lble1la",
+            "loop on_exit 1",
+            "dtor le1",
+            "dtor lb",
+            "dtor la",
+            "caught L",
+            "ncnbna",
+            "on_exit",
+            "dtor nc",
+            "dtor nb",
+            "dtor na",
+            "done",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ExceptionExitHandlerLocalOrder", Script,
+            (map $1 + "\n", ExpectedOnce + ExpectedOnce).join(""),
+            "releases the locals of a function with handlers left by an exception in the order of the AST "
+            "interpreter", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+}
