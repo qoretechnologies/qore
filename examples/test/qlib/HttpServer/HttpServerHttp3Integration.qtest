@@ -835,6 +835,9 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
+                # a request is not sent again on a fresh connection, which would reach whatever listens on the port
+                # then (qore#5812)
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -846,18 +849,31 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Delete the server
         delete server;
 
-        # Second request should fail gracefully (no crash/hang)
-        bool got_error = False;
+        # the server's UDP socket is closed when the server is deleted: its port can be bound at once; the test holds
+        # it, so that nothing else can answer on it (qore#5812)
+        Socket udp();
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            udp.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
         } catch (hash<ExceptionInfo> ex) {
-            got_error = True;
+            fail(sprintf("the port of the deleted server is still bound (or another process took it): %s: %s",
+                ex.err, ex.desc));
+        }
+        on_exit udp.close();
+
+        # the deleted server's sessions are gone and nothing answers on its port, which the test holds: the request gets
+        # no answer and fails (it times out)
+        *hash<auto> late;
+        *string err;
+        try {
+            late = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
             if (m_options.verbose > 1) {
-                printf("testServerShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
+                printf("testServerShutdown: got expected error: %s\n", err);
             }
         }
-        # After server deletion, the request should fail with an error
-        assertTrue(got_error, "request after server shutdown should fail gracefully");
+        assertEq(NOTHING, late, "no response after the server was deleted");
+        assertTrue(exists err, "the request after the server was deleted fails");
     }
 
     testGoawayGracefulShutdown() {
