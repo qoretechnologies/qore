@@ -23752,11 +23752,19 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     @param po the parse options of the code once its source is parsed
     @param source the source file or label, for the diagnostic
     @param error set to the diagnostic if the code is rejected
+    @param pgm the parsed Program, including the lexical eligibility of all its bodies and initializers
 
     @return true if the code may be compiled, false if not, in which case @a error is set
 */
-static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error) {
+static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error,
+        QoreProgram* pgm) {
+    const QoreNativeParseInfo& info = qore_program_private::get(*pgm)->native_parse_info;
     if (qore_parse_options_support_ir(po)) {
+        if (info.legacy_location) {
+            error = (source.empty() ? std::string("<unknown source>") : source)
+                + ": AOT compilation: " + info.describe();
+            return false;
+        }
         return true;
     }
     error = (source.empty() ? std::string("<unknown source>") : source)
@@ -23781,7 +23789,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         error = "no Program to compile";
         return false;
     }
-    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error, pgm)) {
         return false;
     }
 
@@ -26452,7 +26460,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         error = "module parsing failed";
         return false;
     }
-    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error, *qpgm)) {
         return false;
     }
 
@@ -26853,7 +26861,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -26910,7 +26918,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -28838,7 +28846,7 @@ bool QoreAOT::compileScriptFilesBatch(
             error = "parse error in target file: " + e.canon;
             return false;
         }
-        if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+        if (!qore_aot_check_parse_options(file_po, e.canon, error, *qpgm)) {
             return false;
         }
         e.module_cmd_end = batch_pp->module_parse_commands.size();
@@ -29552,7 +29560,7 @@ bool QoreAOT::compileScriptAggregate(
                 error = "parse error in target file: " + e.canon;
                 return false;
             }
-            if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+            if (!qore_aot_check_parse_options(file_po, e.canon, error, qpgm)) {
                 return false;
             }
         }
@@ -30202,7 +30210,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         error = "parse commit failed: " + target_canon;
         return false;
     }
-    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error)) {
+    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error, *qpgm)) {
         return false;
     }
 
@@ -30716,7 +30724,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -30784,7 +30792,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "parse error in component file: " + file_path;
                 return false;
             }
-            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                 mod_ctx.close();
                 return false;
             }
@@ -31285,7 +31293,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31334,7 +31342,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -31838,7 +31846,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31887,7 +31895,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }

@@ -1999,8 +1999,10 @@ DLLLOCAL extern ParseOptionMaps pomaps;
     QoreParseOptions::NO_SUMMARIZE, but that bit is set whenever all of the bits above are (see
     qore_program_private::applyParseOptionImplications()), so it is not tested separately.
 
-    Other options, including the \c PO_BROKEN_* compatibility options, do not affect acceptance.  Code whose final
-    parse options lack any of these bits (for example a <tt>.q</tt> file without \c %modern, code with only
+    The option-setting APIs also forbid incompatible compatibility bits while %modern is in effect. Native
+    lowering checks the lexical context of every statement and expression with QoreNativeParseInfo, rather than
+    relying on the first statement or the Program's final options alone. Code whose final parse options lack any
+    of these bits (for example a <tt>.q</tt> file without \c %modern, code with only
     \c %new-style, or \c %modern code in which a later \c %old-style, \c %require-dollar, \c %assume-global or
     \c %loose-args directive disabled one of them) is executed by the AST interpreter only.
 */

@@ -163,6 +163,13 @@ VariableBlockHelper::~VariableBlockHelper() {
    //printd(5, "VariableBlockHelper::~VariableBlockHelper() this=%p got %p\n", this, vnode->lvar);
 }
 
+std::string QoreNativeParseInfo::describe() const {
+    assert(legacy_location);
+    return std::string("native execution requires every statement and expression to use %modern; ")
+        + (directive ? directive : "non-%modern parse options") + " at " + legacy_location->getFile()
+        + " line " + std::to_string(legacy_location->start_line) + " requires the AST tier";
+}
+
 StatementBlock::StatementBlock(qore_program_private_base* p) : AbstractStatement(p) {
 }
 
@@ -769,6 +776,7 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
         start++;
     }
     hwm = statement_list.last();
+    committed_native_parse_info = native_parse_info;
 }
 
 TopLevelStatementBlock::~TopLevelStatementBlock() {
@@ -1010,7 +1018,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             // falling back to AST.  This path runs only under %modern
             // (ensureIrExecMode guarantees it), so any lowering gap is a
             // bug in the IR implementation that must surface.
-            if (toplevel_ir_failed) {
+            if (toplevel_ir_failed
+                    && !(exec_mode == QEM_TIERED && native_parse_info.legacy_location)) {
                 xsink->raiseException("IR-COMPILATION-ERROR",
                     "IR lowering of top-level code failed: %s (silent AST fallback "
                     "disabled)", toplevel_ir_fail_reason.c_str());

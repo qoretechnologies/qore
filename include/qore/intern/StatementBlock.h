@@ -33,6 +33,7 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
@@ -125,6 +126,9 @@ class qore_program_private_base;
 class StatementBlock : public AbstractStatement {
 public:
     typedef safe_dslist<AbstractStatement*> statement_list_t;
+
+    //! Parse-only eligibility of the complete body (including its signature defaults).
+    QoreNativeParseInfo native_parse_info;
 
     //! Metadata-only block with an explicit program-owned location.
     DLLLOCAL StatementBlock(qore_program_private_base* p, const QoreProgramLocation* loc);
@@ -270,6 +274,7 @@ public:
         }
 
         statement_list.erase_to_end(hwm);
+        native_parse_info = committed_native_parse_info;
     }
 
     // local vars are not instantiated here because they are instantiated by the QoreProgram object
@@ -303,6 +308,7 @@ public:
     }
 
 protected:
+    QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
     // iterator to last executed element in statement list (for REPARSE mode execution)

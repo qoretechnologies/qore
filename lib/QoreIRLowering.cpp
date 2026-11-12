@@ -3930,6 +3930,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         error = "null statement block for IR lowering";
         return false;
     }
+    if (block->native_parse_info.legacy_location) {
+        error = block->native_parse_info.describe();
+        return false;
+    }
     if (!ensureBuilderContext(error)) {
         return false;
     }

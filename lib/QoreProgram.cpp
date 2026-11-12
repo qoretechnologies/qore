@@ -1818,6 +1818,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
     // delete pending statements
     sb.parseRollback();
+    native_parse_info = committed_native_parse_info;
 
     // free temporary data structures
     str_set.clear();
@@ -2234,6 +2235,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 
             // commit pending statements
             sb.parseCommit(pgm);
+            committed_native_parse_info = native_parse_info;
 
             initDeferredCode();
             assert(dset.empty());
@@ -2299,7 +2301,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     return rc;
 }
 
-void qore_program_private::addStatement(AbstractStatement* s) {
+void qore_program_private::addStatement(AbstractStatement* s, const QoreNativeParseInfo& info) {
     if (expression_mode) {
         if (new_expression) {
             parse_error(*s->loc, "invalid expression; only a single expression can be parsed");
@@ -2315,6 +2317,7 @@ void qore_program_private::addStatement(AbstractStatement* s) {
 
         std::unique_ptr<StatementBlock> block(new StatementBlock(0, 0));
         block->addStatement(exp);
+        block->native_parse_info = info;
 
         // initialize expression
         QoreParseContext parse_context;
@@ -2336,6 +2339,8 @@ void qore_program_private::addStatement(AbstractStatement* s) {
         delete s;
     } else {
         sb.addStatement(s);
+        sb.native_parse_info.merge(info);
+        recordNativeParseInfo(info);
     }
 }
 
