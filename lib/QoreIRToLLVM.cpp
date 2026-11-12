@@ -33440,8 +33440,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             QoreValue call_val = static_cast<const QoreIRExprInstruction*>(inst)->expr;
             uint64_t call_bits;
             std::memcpy(&call_bits, &call_val, sizeof(call_bits));
+            // the common case, a method call on an object that has not been deleted, is decided first; the check
+            // and its exception routing are made only otherwise
+            llvm::Value* no_check;
+            int32_t slot = -1;
             if (aot_mode) {
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(call_bits);
+                slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(call_bits);
+                auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check_aot",
+                    llvm::FunctionType::get(i1_type, {ptr_type, i32_type, i64_type}, false));
+                no_check = builder->CreateCall(fast, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed});
+            } else {
+                auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check",
+                    llvm::FunctionType::get(i1_type, {i64_type, i64_type}, false));
+                no_check = builder->CreateCall(fast, {llvm::ConstantInt::get(i64_type, call_bits), boxed});
+            }
+            // a boxed big int or colliding double is a new node, released on both paths
+            auto release_boxed = [&]() {
+                if (boxed_temp) {
+                    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                    builder->CreateCall(decref_nothrow, {boxed});
+                }
+            };
+            llvm::BasicBlock* fast_block = llvm::BasicBlock::Create(ctx, "check.call.target.ok", llvm_func);
+            llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "check.call.target", llvm_func);
+            llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx, "check.call.target.cont", llvm_func);
+            builder->CreateCondBr(no_check, fast_block, check_block);
+            builder->SetInsertPoint(fast_block);
+            release_boxed();
+            builder->CreateBr(cont_block);
+            builder->SetInsertPoint(check_block);
+            if (aot_mode) {
                 auto helper = module.getOrInsertFunction("qore_rt_check_call_target_aot",
                     llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                 builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed,
@@ -33451,13 +33480,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
                 builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), boxed, xsink_arg});
             }
-            if (boxed_temp) {
-                // a boxed big int or colliding double is a new node
-                auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
-                    llvm::FunctionType::get(void_type, {i64_type}, false));
-                builder->CreateCall(decref_nothrow, {boxed});
-            }
+            release_boxed();
             emitExceptionCheck(module, llvm_func, inst);
+            builder->CreateBr(cont_block);
+            builder->SetInsertPoint(cont_block);
             return true;
         }
         case QoreIROpcode::CheckReturnValue: {

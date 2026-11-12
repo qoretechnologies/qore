@@ -185,6 +185,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
+    { "qore_rt_call_target_needs_no_check", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check) },
+    { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
     { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
     { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
@@ -1628,8 +1630,6 @@ extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeI
 }
 
 //! Returns true if @a target is an object that has not been deleted (issue #5784)
-/** With the inline accessors of the value: the check is made for every call that it is emitted for.
-*/
 static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
     if (!target.isPointer()) {
         return false;
@@ -1638,11 +1638,23 @@ static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
     return n && n->getType() == NT_OBJECT && static_cast<const QoreObject*>(n)->isValid();
 }
 
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits) {
+    return qore_call_target_needs_no_check(fromBits(call_bits), fromBits(target_bits));
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t target_bits) {
+    // a slot without an expression is a direct method call (AOTExprKind::DOT_EVAL_TARGET)
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        return qore_call_target_is_valid_object(fromBits(target_bits));
+    }
+    return qore_call_target_needs_no_check(fromBits(ctx->exprs[slot]), fromBits(target_bits));
+}
+
 int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
     const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
-    // the common case first: a method call (not a call through a call reference, which an object is not) on an
-    // object that has not been deleted has nothing to check
-    if (node && node->getType() != NT_FUNCREFCALL && qore_call_target_is_valid_object(target)) {
+    // the common case first: see qore_call_target_needs_no_check()
+    if (qore_call_target_needs_no_check(call, target)) {
         return 0;
     }
     if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {

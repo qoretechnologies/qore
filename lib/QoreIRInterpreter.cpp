@@ -14375,6 +14375,8 @@ load_local_done:
                 // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
                 // it (issue #5784)
                 const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
+                // qore_check_call_target() decides the common case (a method call on an object that has not been
+                // deleted) first; testing it inline here measured the same
                 if (qore_check_call_target(ei->expr, getIRValue(values, inst->operands.front()), xsink)) {
                     if (inst->exception_target) {
                         // the handler is in this frame: only the raising statement's temps are dead there

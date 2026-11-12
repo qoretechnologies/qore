@@ -324,6 +324,26 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 */
 DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
 
+//! Returns true if the call @a call needs no check of its target @a target: a method call (not a call through a
+//! call reference) on an object that has not been deleted, the common case (QoreIROpcode::CheckCallTarget)
+/** With the inline accessors of the values only; qore_check_call_target() makes the check otherwise.
+*/
+static inline bool qore_call_target_needs_no_check(const QoreValue& call, const QoreValue& target) {
+    if (!target.isPointer() || !call.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* target_node = target.getPtr();
+    const AbstractQoreNode* call_node = call.getPtr();
+    return target_node && call_node && target_node->getType() == NT_OBJECT && call_node->getType() != NT_FUNCREFCALL
+        && static_cast<const QoreObject*>(target_node)->isValid();
+}
+
+//! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
+bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
+
+//! The AOT counterpart of qore_rt_call_target_needs_no_check(), with the call identified by its expression slot
+bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits);
+
 //! The JIT helper of QoreIROpcode::CheckCallTarget: qore_check_call_target() with the NaN-boxed call and target
 void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
 
