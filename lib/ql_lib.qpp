@@ -502,6 +502,14 @@ hashdecl ExceptionInfo {
     //! call stack backtrace information
     list<hash<CallStackInfo>> callstack;
 
+    //! the ID of the exception, only in the exception that a debugger's @ref Qore::DebugProgram::onException() "DebugProgram::onException()" gets
+    /** The ID is the same in each exception event of the exception, also after a @ref rethrow "rethrow" of it, and a
+        new exception has a new one, so that a debugger can tell an exception that it already stopped at
+
+        @since %Qore 3.0
+    */
+    *int debug_id;
+
     //! this key is populated with the value of the first expression of the @ref throw "throw statement". For system exceptions, this is a string giving the exception code.
     auto err;
 

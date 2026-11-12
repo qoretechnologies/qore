@@ -49,6 +49,9 @@ struct QoreExceptionBase {
     qore_call_t type;
     QoreListNode* callStack = new QoreListNode(autoTypeInfo);
     QoreValue err, desc, arg;
+    //! the ID of the exception for a debugger, given when a debugger's exception event first reports it, or 0; a
+    //! rethrow keeps it (see QoreException::getDebugId())
+    int64 debug_id = 0;
 
     DLLLOCAL QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg = QoreValue(),
         qore_call_t n_type = CT_BUILTIN);
@@ -56,7 +59,7 @@ struct QoreExceptionBase {
     DLLLOCAL QoreExceptionBase(const QoreExceptionBase& old) :
         type(old.type), callStack(old.callStack->copy()),
         err(old.err.refSelf()), desc(old.desc.refSelf()),
-        arg(old.arg.refSelf()) {
+        arg(old.arg.refSelf()), debug_id(old.debug_id) {
     }
 
     DLLLOCAL ~QoreExceptionBase() {
@@ -226,6 +229,12 @@ public:
     DLLLOCAL void del(ExceptionSink *xsink);
 
     DLLLOCAL QoreException* rethrow();
+
+    //! Returns the ID of the exception for a debugger, which is given when it is first called (#5906)
+    /** The ID is unique in the process; a rethrow of the exception keeps it, as the rethrown exception is a copy.  It
+        is given only when a debugger's exception event reports the exception, so raising an exception costs nothing.
+    */
+    DLLLOCAL int64 getDebugId();
 
 protected:
     DLLLOCAL ~QoreException() {

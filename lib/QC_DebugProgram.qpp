@@ -241,10 +241,14 @@ abstract nothing DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] progr
 abstract nothing DebugProgram::onFunctionExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when an exception is raised.
-/**
+/** The method is called for each statement that the exception leaves, from the statement that raised it to the
+    statement that catches it, if any; the exception hash has the same \c debug_id key in each call for the exception,
+    also after a @ref rethrow "rethrow" of it, and a new exception has a new one, so that a debugger can stop at an
+    exception once
+
     @param program the program being debugged
     @param statement_id the statement ID where the exception was raised
-    @param exception the exception hash
+    @param exception the exception hash, with the \c debug_id key (see @ref Qore::ExceptionInfo "ExceptionInfo")
     @param dismiss a reference to the flag indicating if the exception should be dismissed
     @param run_state a reference to the run state to return to the program
     @param run_to_statement_id a reference to the statement ID to run to
