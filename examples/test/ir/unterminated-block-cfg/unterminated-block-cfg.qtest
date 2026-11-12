@@ -30,26 +30,28 @@ class UnterminatedBlockCfgTest inherits QUnit::Test {
         #! the script
         const Script = "loop-error-return";
 
-        #! the source files of the lowering to LLVM IR
-        const LoweringSources = ("lib/QoreIRToLLVM.cpp",);
+        #! the source files of the lowering to LLVM IR and of the JIT and AOT compilers that drive it
+        const LoweringSources = ("lib/QoreIRToLLVM.cpp", "lib/QoreJIT.cpp", "lib/QoreAOT.cpp");
 
         #! the APIs that walk the successors of a block with LLVM's successor iterators, which require a terminator
-        #! in LLVM 23 (see qoreForEachSuccessor() in lib/QoreIRToLLVM.cpp)
+        #! in LLVM 23 (see qoreForEachSuccessor() in lib/QoreIRToLLVM.cpp); each one is matched as a whole identifier
         const SuccessorIteratorApis = (
-            "llvm::successors(",
-            "succ_begin(",
-            "succ_end(",
-            "succ_size(",
-            "succ_empty(",
-            "scc_begin(",
+            "llvm::successors",
+            "succ_begin",
+            "succ_end",
+            "succ_size",
+            "succ_empty",
+            "getSingleSuccessor",
+            "getUniqueSuccessor",
+            "scc_begin",
             "scc_iterator",
-            "SCCIterator.h",
-            "depth_first(",
-            "post_order(",
+            "SCCIterator",
+            "depth_first",
+            "depth_first_ext",
+            "post_order",
             "ReversePostOrderTraversal",
-            "breadth_first(",
-            "GraphTraits<llvm::Function",
-            "GraphTraits<llvm::BasicBlock",
+            "breadth_first",
+            "GraphTraits",
         );
     }
 
@@ -77,12 +79,20 @@ class UnterminatedBlockCfgTest inherits QUnit::Test {
 
     #! the lowering never walks the successors of a block with LLVM's iterators
     private sourceGuardTest() {
-        # the guard itself: an API in code is found, one in a comment is not
+        # the guard itself: an API in code is found, one in a comment is not, and only whole identifiers match
         string code = "x = 1; // llvm::successors(bb)\n/* scc_begin(f)\n */ for (auto* s : llvm::successors(b)) {}";
-        assertEq(("llvm::successors(",), UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
+        assertEq(("llvm::successors",), UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
             code), SuccessorIteratorApis));
         assertEq((), UnterminatedBlockCfgTest::findApis(UnterminatedBlockCfgTest::stripComments(
             "// succ_begin(bb)\n/** depth_first(f) */ int x;"), SuccessorIteratorApis));
+        assertEq((), UnterminatedBlockCfgTest::findApis("foo_succ_size(x); my_post_order_list; successors.push_back(b);",
+            SuccessorIteratorApis), "identifiers that contain an API name");
+        assertEq(("getSingleSuccessor", "getUniqueSuccessor"), UnterminatedBlockCfgTest::findApis(
+            "a = bb->getSingleSuccessor(); b = bb.getUniqueSuccessor();", SuccessorIteratorApis));
+        assertEq(("SCCIterator",), UnterminatedBlockCfgTest::findApis("#include <llvm/ADT/SCCIterator.h>",
+            SuccessorIteratorApis));
+        # the APIs are matched as regular expressions: each one must be a plain (qualified) identifier
+        assertEq((), (select SuccessorIteratorApis, $1 !~ /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$/));
 
         string root = get_script_dir() + "/../../../..";
         foreach string rel in (LoweringSources) {
@@ -156,8 +166,9 @@ class UnterminatedBlockCfgTest inherits QUnit::Test {
         return regex_subst(src, "//[^\n]*", "", RE_Global);
     }
 
-    #! returns the APIs of @p apis that @p src names
+    #! returns the APIs of @p apis that @p src names as whole identifiers (an API is an identifier, maybe qualified,
+    #! so it has no regular expression metacharacters)
     static list<string> findApis(string src, list<string> apis) {
-        return (select apis, src.find($1) >= 0) ?? ();
+        return (select apis, regex(src, "(?<![A-Za-z0-9_])" + $1 + "(?![A-Za-z0-9_])")) ?? ();
     }
 }

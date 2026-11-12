@@ -462,8 +462,6 @@ static bool isFastMethodCallEligible(
 #include <cstdio>
 #include <cstring>
 
-// LLVM 23 made getTerminator() assert that the block is already well formed;
-// getTerminatorOrNull() preserves the nullable contract used while lowering.
 //! Returns the runtime helper that a store to a local calls: for the assignment of an element to the variable of a
 //! foreach loop, the variant of a helper that checks the value's type which describes a type error as the AST
 //! interpreter does ("<foreach lvalue assignment>"); the description is given to the store's own type check only,
@@ -491,6 +489,8 @@ static std::string qore_store_helper_name(const char* name, bool foreach_assignm
     return name;
 }
 
+// LLVM 23 made getTerminator() assert that the block is already well formed;
+// getTerminatorOrNull() preserves the nullable contract used while lowering.
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 #if LLVM_VERSION_MAJOR >= 23
     return block->getTerminatorOrNull();
