@@ -2313,10 +2313,9 @@ protected:
     unsigned saved_defer;
     unsigned saved_dtor_defer;
     bool restore = false;
+    //! true if set() created the thread's local data of the Program, or if the context runs the top-level code of the
+    //! Program in the thread's first entry into it (setTopLevel()): the context's bottom frame has no frame boundary
     bool init_tlpd = false;
-    //! true if the context runs the top-level code of the Program in the thread's first entry into it; see
-    //! setTopLevel()
-    bool top_level = false;
     bool thread_count_incremented = false;
     //! true if the context entered a Program with module lifetime without its thread count; see
     //! qore_module_uncounted_entry()
