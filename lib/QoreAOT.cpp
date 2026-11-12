@@ -23923,6 +23923,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     {
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
+        // The IR is also serialized as the top-level code's source-stripped debug IR, which runs in the IR interpreter
+        // while a debugger is attached (TopLevelStatementBlock::execImpl()), as that of a function does: in a Program
+        // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
+        // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
+        ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -24006,6 +24011,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
+                    // the debug IR of the top-level code (qore#5851): the IR interpreter needs the slot IDs and the
+                    // IR of the handlers, which are made after the native code, which does not use them; if the
+                    // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
+                    // as native code while a debugger is attached, as before
+                    if (ir_func->emit_debug_statements) {
+                        ir_func->computeSlotIdsAndEmbed();
+                        std::string handler_error;
+                        if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+                            printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
+                                handler_error.c_str());
+                        } else {
+                            cf.debug_ir.reset(ir_func);
+                            ir_func = nullptr;
+                        }
+                    }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;

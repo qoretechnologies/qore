@@ -329,6 +329,18 @@ protected:
     using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
     mutable AotFunctionPtr cached_toplevel_aot_fn = nullptr;
     mutable QoreAOTContext* cached_toplevel_aot_ctx = nullptr;
+    //! the debug IR of top-level code compiled ahead of time, which runs while a debugger is attached (qore#5851)
+    mutable QoreIRFunction* cached_toplevel_aot_debug_ir = nullptr;
+    mutable std::mutex toplevel_aot_debug_ir_mutex;
+
+    //! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
+    DLLLOCAL int execIR(QoreIRFunction* ir_func, bool use_jit, const QoreParseOptions& runtime_parse_options,
+            QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink);
+
+    //! Returns the debug IR of top-level code compiled ahead of time, made from its image on first use (qore#5851)
+    /** @return the debug IR, or nullptr with an exception in \a xsink
+    */
+    DLLLOCAL QoreIRFunction* getAOTDebugIR(ExceptionSink* xsink) const;
 
 public:
     //! Register a pre-compiled AOT function pointer for top-level code

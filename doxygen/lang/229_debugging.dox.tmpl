@@ -79,12 +79,12 @@
     tree runs on the AST interpreter while a debugger is attached, its top-level code too.
 
     @anchor debugger_aot_exception_events
-    An AOT-compiled function or closure runs its debug IR while a debugger is attached, which records the nesting of
-    its statements, so that it gets the same events.  The events and dismissals differ in the following code:
-    - in an AOT-compiled function or closure, a debugger that dismisses an exception ends the function, which returns
-      no value, instead of continuing after the statement; this is temporary (see
+    AOT-compiled code (a function, a closure or the top-level code of a program) runs its debug IR while a debugger is
+    attached, which records the nesting of its statements, so that it gets the same events.  The events and dismissals
+    differ in the following code:
+    - in AOT-compiled code, a debugger that dismisses an exception ends the function or the top-level code, which
+      returns no value, instead of continuing after the statement; this is temporary (see
       <a href="https://github.com/qoretechnologies/qore/issues/5825">issue 5825</a>)
-    - the top-level code of an AOT-compiled program that has no parse tree runs as native code and gets no event
     - code that was already running when the debugger attached keeps running as it did until it returns: on the IR
       interpreter, it gets the events of its statements from its next statement on, but not of the statements that
       contain them and that started before the debugger attached, an exception in the condition of a loop gets an
