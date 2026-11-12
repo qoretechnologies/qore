@@ -128,13 +128,26 @@ DLLLOCAL inline QoreHashNode* qore_http_client_finish_read_pass(QoreHashNode* po
     if (poll_info && remaining) {
         poll_info->setKeyValue("poll_timeout_ms", 0, xsink);
     }
-#ifdef DEBUG
-    // a test checks that no pass leaves responses without a re-poll; a pass without a poll info ended in an error
-    if (remaining && poll_info && poll_info->getKeyValue("poll_timeout_ms").getAsBigInt() != 0) {
-        QoreHttpClientDrainDebug::get().stranded_passes.fetch_add(1, std::memory_order_relaxed);
-    }
-#endif
     return poll_info;
 }
+
+#ifdef DEBUG
+//! Counts a read pass that returned with responses left and no immediate re-poll (issue #5839)
+/** Called with the poll info that a client read pass returned, where all its returns meet; a pass without a poll
+    info ended in an error.  A poll info without \c poll_timeout_ms waits for the socket without a timeout.
+
+    @param poll_info the poll info that the pass returned
+    @param remaining true if the operation still has responses that it has not dispatched
+*/
+DLLLOCAL inline void qore_dbg_http_client_check_read_pass(const QoreHashNode* poll_info, bool remaining) {
+    if (!remaining || !poll_info) {
+        return;
+    }
+    QoreValue timeout = poll_info->getKeyValue("poll_timeout_ms");
+    if (timeout.isNothing() || timeout.getAsBigInt() != 0) {
+        QoreHttpClientDrainDebug::get().stranded_passes.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+#endif
 
 #endif

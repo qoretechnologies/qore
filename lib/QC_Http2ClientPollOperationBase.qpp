@@ -301,9 +301,14 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H2State::PROXY_CONNECT_RECV:
                 return clampConnectDeadline(handleProxyConnectRecv(xsink), xsink);
 
-            case H2State::READING:
+            case H2State::READING: {
                 // an h2c connection is not ready until the peer has answered the preface
-                return clampConnectDeadline(handleReading(xsink), xsink);
+                QoreHashNode* rv = clampConnectDeadline(handleReading(xsink), xsink);
+#ifdef DEBUG
+                dbgCheckReadPass(rv);
+#endif
+                return rv;
+            }
 
             case H2State::WAIT_READ:
                 setStateUnlessClosed(H2State::READING, "cycle-start");
@@ -681,16 +686,26 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // registers the returned stream id.  If that handoff is active, do not
     // let the multiplex reader drain a fast response with no action; also do
     // not block the I/O thread, since it may need to run the submit exec.
+    // the flag is set before the lock is tried: when the lock is held, the submitter sees the flag once it has
+    // released the lock and wakes the operation, so that this pass runs again (issue #5839)
+    read_pass_skipped.store(true, std::memory_order_seq_cst);
+    // the store is ordered before the lock's load, as the submitter's unlock is before its exchange of the flag
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+#ifdef DEBUG
+    // the debug check of the pass sees the state of this pass, not the shared flag, which the submitter clears
+    dbg_read_pass_exempt = true;
+#endif
     if (submission_lock.trylock() != 0) {
-        // the responses that an earlier pass left are dispatched by a pass that runs at once (issue #5839)
-        const bool remaining
-            = static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount() > 0;
         op->deref(xsink);
         setStateUnlessClosed(H2State::WAIT_READ, "submission-busy");
-        return qore_http_client_finish_read_pass(applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink),
-            remaining, xsink);
+        return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
     }
+    read_pass_skipped.store(false, std::memory_order_relaxed);
     AutoLocker submission_al(submission_lock, true);
+#ifdef DEBUG
+    // the hold is read once per pass: the test can release it while the pass runs
+    dbg_read_pass_exempt = QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire);
+#endif
 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = op->continuePoll(&poll_xsink);
@@ -770,7 +785,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
 #ifdef DEBUG
     // a test can hold the completed responses, which then accumulate in the operation (issue #5839)
-    if (QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire)) {
+    if (dbg_read_pass_exempt) {
         QoreHttpClientDrainDebug::get().recordHeld(
             static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount());
         setStateUnlessClosed(H2State::WAIT_READ, "dbg-hold-outputs");
@@ -946,7 +961,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
     // responses left in the operation are not an end of the connection (see goalReached() below)
     if (dispatched || remaining) {
-        setStateUnlessClosed(H2State::WAIT_READ, "response-dispatched");
+        setStateUnlessClosed(H2State::WAIT_READ, dispatched ? "response-dispatched" : "responses-left");
         // Use C++ events when available — they include SOCK_POLLOUT if there
         // are pending sends (e.g., WINDOW_UPDATE after receiving data)
         if (!poll_info) {
@@ -1021,6 +1036,24 @@ int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
     setError("HTTP2-CONNECT-TIMEOUT", desc.c_str(), xsink);
     return -1;
 }
+
+#ifdef DEBUG
+void Http2ClientPollOperationPriv::dbgCheckReadPass(const QoreHashNode* poll_info) {
+    // a pass that found the submission lock held is run again by the submitter's wake
+    if (!poll_info || dbg_read_pass_exempt) {
+        return;
+    }
+    SocketPollOperationBase* op = refCurrentOp();
+    if (!op) {
+        return;
+    }
+    ExceptionSink xs;
+    SocketHttp2ClientMultiplexPollOperation* mop = dynamic_cast<SocketHttp2ClientMultiplexPollOperation*>(op);
+    bool remaining = mop && mop->completedResponseCount() > 0;
+    op->deref(&xs);
+    qore_dbg_http_client_check_read_pass(poll_info, remaining);
+}
+#endif
 
 QoreHashNode* Http2ClientPollOperationPriv::clampConnectDeadline(QoreHashNode* poll_info,
         ExceptionSink* xsink) {
@@ -1553,6 +1586,22 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         return -1;
     }
 
+    // a read pass that found the lock held runs again once the lock is released, on every exit (issue #5839); this
+    // is declared before the lock so that it runs after the lock has been released
+    struct SkippedReadPassWake {
+        Http2ClientPollOperationPriv* priv;
+        ~SkippedReadPassWake() {
+            // a destructor must not throw: a failed wake leaves the pass to the next socket event
+            try {
+                if (priv->read_pass_skipped.exchange(false, std::memory_order_seq_cst)) {
+                    ExceptionSink wake_xsink;
+                    priv->wakeIoThread(&wake_xsink);
+                    wake_xsink.clear();
+                }
+            } catch (...) {
+            }
+        }
+    } skipped_read_pass_wake{this};
     AutoLocker submission_al(submission_lock);
 
     bool reserved_stream_slot = false;
@@ -1670,6 +1719,8 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         reserved_stream_slot = false;
     }
 
+    // a read pass that this wake starts while the lock is still held is skipped and run again by the wake when the
+    // lock is released (skipped_read_pass_wake; issue #5839)
     wakeIoThread(xsink);
     if (*xsink) {
         AbstractAsyncAction* registered_action = nullptr;
