@@ -75,7 +75,7 @@ auto FunctionVariant::call(...) {
     }
 
     // the variant ptr must be valid; the variant is checked against the caller and the function's Program
-    return v->f->evalFunction(v->variant, args, v->pgm, caller, xsink);
+    return v->f->evalFunction(v->variant, args, v->pgm, v->ns, caller, xsink);
 }
 
 //! calls the given function variant and returns the value returned by the function
@@ -105,5 +105,5 @@ auto FunctionVariant::callArgs(*softlist<auto> argv) {
     }
 
     // the variant ptr must be valid; the variant is checked against the caller and the function's Program
-    return v->f->evalFunction(v->variant, argv, v->pgm, caller, xsink);
+    return v->f->evalFunction(v->variant, argv, v->pgm, v->ns, caller, xsink);
 }

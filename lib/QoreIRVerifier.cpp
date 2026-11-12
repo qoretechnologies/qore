@@ -413,7 +413,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
                     || inst->opcode == QoreIROpcode::IteratorCreateIterate
-                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (!iter || !iter->iterable.isValid()) {
                     error = "iterator.create missing iterable";
@@ -2852,6 +2853,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
             if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
                     || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource
                     || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
                 interpreter_iterator_slot_boundary[inst.get()] = seen_slots;
                 pending_iterator = inst.get();

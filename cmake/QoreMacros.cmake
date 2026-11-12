@@ -2136,6 +2136,10 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN)
 
 MACRO (QORE_BINARY_MODULE_QORE _module_name _version _install_suffix)
     QORE_BINARY_MODULE_INTERN2(${_module_name} ${_version} "${_install_suffix}" 1 ${ARGN})
+    # the in-tree binary modules, which the qore-bootstrap component builds and installs: the top-level CMakeLists.txt
+    # makes the qore-bootstrap target's module list and the module path of the metadata extraction from them
+    set_property(GLOBAL APPEND PROPERTY QORE_INTREE_BINARY_MODULE_TARGETS ${_module_name})
+    set_property(GLOBAL APPEND PROPERTY QORE_INTREE_BINARY_MODULE_DIRS ${CMAKE_CURRENT_BINARY_DIR})
     # a module of Qore must load only Qore's OpenSSL if it links OpenSSL itself (see QoreCheckSslConsumers.cmake);
     # checked at the end of the module's directory, where its imported library targets are visible, after all its
     # libraries are linked

@@ -2789,6 +2789,9 @@ public:
     DLLLOCAL func_vec_t runtimeFindAllFunctionsRegex(const QoreString& pattern, int re_opts,
             ExceptionSink* xsink) const;
 
+    DLLLOCAL func_ns_vec_t runtimeFindAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL ns_vec_t runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts,
             ExceptionSink* xsink) const;
 

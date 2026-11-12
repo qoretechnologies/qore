@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A call reference to a builtin method of an object runs as a direct call of the method in the Program that created
+# the reference, not in the Program of the object.  A builtin object belongs to the Program that it was created for
+# (a reflection handle to the Program that it describes, a File to the Program that created it), so a reference
+# that a restricted or sandboxed Program creates to a method of such an object would otherwise run with that
+# Program's parse options and as its code, past every check that a direct call makes.  A reference that a
+# privileged Program creates and hands to a restricted one keeps running with the creator's privileges.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires QUnit
+%requires FsUtil
+%requires reflection
+
+%exec-class CallRefBuiltinMethodProgramTest
+
+class ParentStatic {
+    public {
+        static int s = 1;
+    }
+}
+
+class CallRefBuiltinMethodProgramTest inherits QUnit::Test {
+    public {
+        const FileCode = "
+auto sub run(string op, object o) {
+    switch (op) {
+        case 'direct': return o.write('d');
+        case 'ref': { code c = \\o.write(); return c('r'); }
+    }
+}
+auto sub call(code c) { return c('p'); }
+";
+
+        const ReflectionCode = "%requires reflection
+auto sub run(string op, object o) {
+    Class cl = Class::getClass(o);
+    switch (op) {
+        case 'direct': cl.getStaticMember('s').setValue(9); return 'set';
+        case 'ref': { auto m = cl.getStaticMember('s'); code c = \\m.setValue(); c(9); return 'set'; }
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("call references to builtin methods", "1.0") {
+        addTestCase("functional domains", \domainTest());
+        addTestCase("reflection", \reflectionTest());
+        set_return_value(main());
+    }
+
+    domainTest() {
+        TmpDir tmp("qore-callref-builtin-");
+        string path = tmp.path + DirSep + "f.txt";
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_PROCESS_CONTROL);
+        p.parse(FileCode, "file-code");
+        foreach string op in ("direct", "ref") {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            assertThrows("INVALID-FUNCTION-ACCESS", \p.callFunction(), ("run", op, f), op);
+        }
+        # a capability handed out by privileged code keeps its creator's privileges
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        assertEq(1, p.callFunction("call", \f.write()));
+    }
+
+    reflectionTest() {
+        foreach string kind in ("sandbox", "restricted") {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | (kind == "restricted" ? PO_NO_PROCESS_CONTROL : 0));
+            p.parse(ReflectionCode, "reflection-code");
+            if (kind == "sandbox") {
+                p.setSandboxManager(new SandboxManager());
+            }
+            foreach string op in ("direct", "ref") {
+                ParentStatic::s = 1;
+                assertThrows("REFLECTION-ACCESS-ERROR", \p.callFunction(), ("run", op, new ParentStatic()),
+                    kind + "-" + op);
+                assertEq(1, ParentStatic::s, kind + "-" + op);
+            }
+        }
+        # trusted code may write it either way
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(ReflectionCode, "reflection-code");
+        foreach string op in ("direct", "ref") {
+            ParentStatic::s = 1;
+            assertEq("set", p.callFunction("run", op, new ParentStatic()), op);
+            assertEq(9, ParentStatic::s, op);
+        }
+    }
+}

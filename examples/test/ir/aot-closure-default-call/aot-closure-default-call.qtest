@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking, and the loading of the closures of an AOT executable
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AOTClosureDefaultCallTest
+
+#! The default arguments of closures that call a function in AOT-compiled code (#5827)
+/** An AOT executable reads the parameters of a closure when it registers the function that creates it, and a default
+    argument that is an expression, such as a call of a function of the Program, is resolved in the Program that the
+    value reader takes from the thread; the closure record set it only after the parameters, so the executable
+    crashed at load.  AOTClosureDefaultCall.q has closures with such defaults in functions, nested closures, methods,
+    member, static member, hashdecl member, constant and global variable initializers, a default argument and top-level
+    code, calling functions, static methods and namespace functions declared before and after them and using constants,
+    a class and a hashdecl of the Program; it gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
+*/
+class AOTClosureDefaultCallTest inherits QUnit::Test {
+    public {
+        #! the output of AOTClosureDefaultCall.q with the AST interpreter
+        const Expected = "z=1 y=2
+z=11 z=5
+z=4
+z=101
+z=1002
+z=9
+z=4
+z=3
+z=41 v=5 a=6
+sc z=202
+m z=1011
+hd z=302
+const z=402
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOTClosureDefaultCallTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AOTClosureDefaultCall.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": closure defaults that call functions", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: closure defaults that call functions", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-closure-default-call-");
+        string exe = tmp.path + DirSep + "closure-default-call";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

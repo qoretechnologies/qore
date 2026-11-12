@@ -73,6 +73,18 @@ public:
             const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
             bool negative_offsets, ExceptionSink* xsink);
 
+    //! Returns the iterator of the slice of the evaluated sequence \a seq with the evaluated indices
+    /** As the AST interpreter iterates the operator (getFunctionalIteratorImpl()): a list or a binary is iterated
+        lazily by an iterator that keeps the sequence, unless the range is empty; the slice of any other sequence is
+        made first.  The IR tiers create the iterator of a foreach statement with it (QoreIROpcode::IteratorCreateSource).
+
+        @param seq the sequence; an iterator that keeps it takes it from the holder, with its reference if it is a
+        temporary
+        @param po the parse options of the code (PO_BROKEN_LIST_RANGE, PO_NEGATIVE_OFFSETS, PO_BROKEN_RANGE)
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getSliceIterator(ValueEvalRefHolder& seq, const QoreValue start_index,
+            const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type, ExceptionSink* xsink);
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
 
@@ -97,8 +109,8 @@ protected:
     DLLLOCAL void holdBorrowedSequence(ValueEvalRefHolder& seq) const;
 
     //! Returns the value of the expression from its evaluated operands: the sequence, and the start and the end
-    DLLLOCAL QoreValue slice(const QoreValue& seq, const QoreValue& start_index, const QoreValue& stop_index,
-        bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const;
+    DLLLOCAL static QoreValue slice(const QoreValue& seq, const QoreValue& start_index, const QoreValue& stop_index,
+        bool broken_list_range, bool negative_offsets, ExceptionSink* xsink);
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

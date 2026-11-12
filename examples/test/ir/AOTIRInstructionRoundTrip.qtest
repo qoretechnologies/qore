@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native AOT instruction decoding and debugger execution of compiled forms
+# test-exec-mode: children - all checks run in child processes selecting their execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTIRInstructionRoundTripTest
+
+class AOTIRInstructionRoundTripTest inherits QUnit::Test {
+    private {
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qcc = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE ?? dirname(QORE_ARGV[0]) + "/qcc";
+        string worker = get_script_dir() + "/aot-ir-instruction-worker.q";
+        string prefix;
+    }
+
+    constructor() : Test("AOT IR instruction round trip", "1.0", \ARGV) {
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + quote(ENV{name}) + " ";
+            }
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + " instruction round trip", \sourceMode(), (mode,));
+        }
+        addTestCase("AOT instruction round trip", \aotMode(), (False,));
+        addTestCase("source-stripped AOT instruction round trip", \aotMode(), (True,));
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static string expected(bool debugging) {
+        return "12|12|12.0|12|012|001,002,003|12|string|1,2,3|3 exceptions=0\n";
+    }
+
+    private sourceMode(string mode) {
+        foreach bool debugging in ((True, False)) {
+            string output = ExecModeHarness::run(prefix + quote(qore) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker) + (debugging ? " debug" : " native"),
+                debugging ? ExecModeHarness::NativeCheck::None : ExecModeHarness::NativeCheck::JitAndTiered);
+            assertEq(expected(debugging), output);
+        }
+    }
+
+    private aotMode(bool strip) {
+        TmpDir tmp("qore-ir-instruction-");
+        string exe = tmp.path + "/worker";
+        ExecModeHarness::run_any(prefix + quote(qcc) + " -O2" + (strip ? " --strip-source" : "")
+            + " -o " + quote(exe) + " " + quote(worker));
+        foreach bool debugging in ((True, False)) {
+            assertEq(expected(debugging), ExecModeHarness::run_any(prefix + quote(exe)
+                + " -b --enable-debug" + (debugging ? " debug" : " native")));
+        }
+    }
+}

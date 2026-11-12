@@ -442,9 +442,20 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+#ifdef DEBUG
+size_t qore_program_private::dbgGetLiveProgramCount() {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    return qore_program_set.size();
+}
+#endif
+
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
+    // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
+    // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
+    // its locks protect, which fork() handles alike (see design/fork-handlers.md)
+    new (&user_variant_lock) std::mutex();
     // the thread counts keep only the forking thread
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
@@ -733,6 +744,8 @@ void qore_program_private::registerProgram() {
 }
 
 qore_program_private::~qore_program_private() {
+    // each user variant of the Program's code holds a dependency reference to it until it unregisters
+    assert(!user_variants);
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
@@ -1930,6 +1943,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+        // the fast paths that run the code of its variants without entering it take the call path from now on,
+        // which refuses the calls of other threads and of other Programs (qore#5822)
+        markUserVariantsDeleted();
 #ifdef DEBUG
         if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
             hook(pgm, DbgTeardownPoint::BeforeFinalWait);
@@ -3093,6 +3109,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // delete all root code
     // method call can be repeated
     sb.del();
+    // and the code compiled from it, which refers to the closures that it creates (qore#5822)
+    sb.delCompiledCode();
 
     // clear expressions
     for (auto& i : exp_set) {
@@ -3581,6 +3599,11 @@ void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, Qo
 }
 
 void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, ExceptionSink* xsink) {
+    // A sink can request thread exit without holding an exception. Only real exceptions have an
+    // exception object for the debugger callback; non-exception unwinds preserve the current run state.
+    if (!xsink || !xsink->isException()) {
+        return;
+    }
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         checkAttach(xsink);
@@ -3653,7 +3676,11 @@ void QoreProgram::deref() {
     printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(),
         reference_count() - 1);
     if (priv->derefUnregister()) {
-        delete this;
+        // the Program's own dependency reference is released, as clear() does, so that the Program is destroyed once
+        // nothing refers to it (the user variants of its code, for example; qore#5822); its code is not deleted here,
+        // so a Program that was never cleared stays allocated with its code (its owner is expected to clear it first
+        // with waitForTerminationAndDeref())
+        priv->depDeref();
     }
 }
 
@@ -4228,6 +4255,8 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    // the frame of the top-level code is a frame of this context (see getContextFrame())
+    tch.setTopLevel();
 
     // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
     // builtin Program::run() method, has the Program object and class and the calling Program as its context, which
@@ -5352,6 +5381,21 @@ const_vec_t QoreProgram::findAllNamespaceConstantsRegex(const QoreString& patter
 const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
     const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
     return reinterpret_cast<const QoreExternalFunction*>(fe ? fe->getFunction() : nullptr);
+}
+
+const QoreExternalFunction* QoreProgram::findFunction(const char* path, const QoreNamespace*& pns) const {
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
+    if (!fe) {
+        pns = nullptr;
+        return nullptr;
+    }
+    pns = fe->getNamespace()->ns;
+    return reinterpret_cast<const QoreExternalFunction*>(fe->getFunction());
+}
+
+func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
 }
 
 const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {

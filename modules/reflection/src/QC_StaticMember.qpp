@@ -64,6 +64,10 @@ auto StaticMember::getValue() [flags=RET_VALUE_ONLY] {
     if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
         return QoreValue();
     }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
     // the member's access, as the language applies it, for code that a sandbox governs or that is restricted
     if (caller.checkClassElementAccess(m->cls, m->getAccess(), "static member", m->name.c_str(), xsink)) {
         return QoreValue();
@@ -99,6 +103,10 @@ nothing StaticMember::setValue(auto val) {
         return QoreValue();
     }
     if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->cls, m->pgm, xsink)) {
         return QoreValue();
     }
     // the member's access, as the language applies it, for code that a sandbox governs or that is restricted

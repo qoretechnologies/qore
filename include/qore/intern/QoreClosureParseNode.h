@@ -109,6 +109,15 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
+    //! returns true if the closure is in generic code: a function with type parameters or a method of a generic class
+    /** Only such a closure is created with the type arguments and the receiver type of the code that creates it
+        (qore#5733)
+    */
+    DLLLOCAL bool needsTypeContext() const { return needs_type_context; }
+
+    //! sets the flag of needsTypeContext() for a closure read from compiled code
+    DLLLOCAL void setNeedsTypeContext(bool n) { needs_type_context = n; }
+
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
@@ -137,7 +146,9 @@ private:
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
     bool lambda, in_method,
-        is_deferred = false;
+        is_deferred = false,
+        //! true if the closure is in generic code, whose type arguments it is created with (qore#5733)
+        needs_type_context = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 

@@ -3748,6 +3748,7 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
         case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource:
             // IteratorCreateReverse carries its iterable in operands (above)
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
@@ -23930,6 +23931,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     {
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
+        // The IR is also serialized as the top-level code's source-stripped debug IR, which runs in the IR interpreter
+        // while a debugger is attached (TopLevelStatementBlock::execImpl()), as that of a function does: in a Program
+        // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
+        // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
+        ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -24013,6 +24019,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
+                    // the debug IR of the top-level code (qore#5851): the IR interpreter needs the slot IDs and the
+                    // IR of the handlers, which are made after the native code, which does not use them; if the
+                    // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
+                    // as native code while a debugger is attached, as before
+                    if (ir_func->emit_debug_statements) {
+                        ir_func->computeSlotIdsAndEmbed();
+                        std::string handler_error;
+                        if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+                            printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
+                                handler_error.c_str());
+                        } else {
+                            cf.debug_ir.reset(ir_func);
+                            ir_func = nullptr;
+                        }
+                    }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
@@ -35238,8 +35259,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         const AbstractQoreFunctionVariant* call_variant = call->getVariant();
+        // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo());
+            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
@@ -35468,9 +35490,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         id.kind = AOTExprKind::CLOSURE_CREATE;
         UserClosureFunction* ucf = closure->getFunction();
-        // ref1 = flags: "lambda,in_method" (comma-separated booleans)
+        // ref1 = flags: "lambda,in_method,type_context" (comma-separated booleans; type_context: the closure is in
+        // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
-                + (closure->isInMethod() ? "1" : "0");
+                + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {
@@ -36814,6 +36837,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             }
             lvid.steps.push_back(std::move(sid));
         }
+        lvid.slice_ranges = pi->slice_ranges;
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);

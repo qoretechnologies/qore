@@ -31,6 +31,7 @@
 #include "qore_reflection.h"
 #include "QC_Class.h"
 #include "QC_AbstractMember.h"
+#include "QC_TypedHashMember.h"
 #include "QC_AbstractClassMember.h"
 #include "QC_TypedHashMember.h"
 #include "QC_Type.h"
@@ -121,7 +122,10 @@ auto v = m.getDefaultValue();
 auto AbstractMember::getDefaultValue() {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
+    // the default of a typed hash member is evaluated if the caller could name the typed hash itself (checked below);
+    // otherwise the caller must have access to the Program of the handle
+    const QoreReflectionHashDeclMember* hdm = dynamic_cast<const QoreReflectionHashDeclMember*>(m);
+    if (!hdm && caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
             QoreReflectionCaller::Access::MemberDefault, xsink)) {
         return QoreValue();
     }
@@ -131,12 +135,24 @@ auto AbstractMember::getDefaultValue() {
                 cm->name.c_str(), xsink)) {
             return QoreValue();
         }
+        // the initializers of a class that a user module does not export cannot be evaluated by a caller its export
+        // boundary applies to
+        if (reflection_check_class_export(caller, cm->cls, m->pgm, xsink)) {
+            return QoreValue();
+        }
+    } else if (const QoreReflectionHashDeclMember* hm = dynamic_cast<const QoreReflectionHashDeclMember*>(m)) {
+        // nor can those of a typed hash that a user module does not export
+        if (reflection_check_typed_hash_init(caller, m->pgm, hm->th, xsink)) {
+            return QoreValue();
+        }
     }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the default runs under the calling code's restrictions, as when the caller creates the value itself
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
 
     // the initializer is code of the Program that declared the class or hashdecl, which can have been deleted while
     // the class or hashdecl is still reachable from the reflection object's Program (an inherited or imported

@@ -80,12 +80,12 @@ namespace Priv {
 
         constructor() {
             pgm = new Program(PO_NEW_STYLE);
-            pgm.parse("%requires CleanupMod\nint sub run() { return CleanupMod::f(1); }", "cleanup-entry-check");
+            pgm.parse("%requires CleanupMod\nint sub enter_module() { return CleanupMod::f(1); }", "cleanup-entry-check");
         }
 
         destructor() {
             stdout.printf("another thread while the module's data is cleared: %y\n",
-                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("run")));
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("enter_module")));
             stdout.printf("the cleanup thread while the module's data is cleared: %y\n", CleanupMod::f(1));
             stdout.sync();
         }

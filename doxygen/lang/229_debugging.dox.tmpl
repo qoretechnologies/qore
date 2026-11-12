@@ -79,17 +79,18 @@
     tree runs on the AST interpreter while a debugger is attached, its top-level code too.
 
     @anchor debugger_aot_exception_events
-    These events differ in the following code:
-    - an AOT-compiled function or closure, which runs its debug IR while a debugger is attached: the statement that
-      raised the exception and the statements of its callers get an event, but not the statements that contain it
-      (an if, loop or try statement of the function); a debugger that dismisses an exception where the debug IR
-      cannot continue after the statement, as with an exception of an operator, ends the function, which returns no
-      value; and the events of a closure itself, as its exit event, have no source location (the closures of a
-      program share one statement for them)
-    - the top-level code of an AOT-compiled program that has no parse tree runs as native code and gets no event
+    AOT-compiled code (a function, a closure or the top-level code of a program) runs its debug IR while a debugger is
+    attached, which records the nesting of its statements, so that it gets the same events.  The events and dismissals
+    differ in the following code:
+    - in AOT-compiled code, a debugger that dismisses an exception ends the function or the top-level code, which
+      returns no value, instead of continuing after the statement; this is temporary (see
+      <a href="https://github.com/qoretechnologies/qore/issues/5825">issue 5825</a>)
     - code that was already running when the debugger attached keeps running as it did until it returns: on the IR
-      interpreter, it gets the events of an AOT-compiled function from its next statement on; as native code, it gets
-      no event
+      interpreter, it gets the events of its statements from its next statement on, but not of the statements that
+      contain them and that started before the debugger attached, an exception in the condition of a loop gets an
+      event for the last statement of its body too, and after a debugger dismisses an exception, the
+      function can end there, with no value, instead of continuing after the statement; as native code, it gets no
+      event
 
     An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
     but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg

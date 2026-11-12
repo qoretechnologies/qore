@@ -172,7 +172,9 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
                 # first)
                 "reflection-" + ctx + ".obj-static-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
                 "reflection-" + ctx + ".obj-global-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
-                "reflection-" + ctx + ".obj-private-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                # a variable that the module does not export is not found by a sandboxed caller, which could not
+                # name it (qore#5692), so it cannot be written either (see ".state")
+                "reflection-" + ctx + ".obj-private-set": ctx == "sandbox" ? "UNKNOWN-GLOBAL-VAR" : ReflAccessErr,
                 "reflection-" + ctx + ".obj-global-get": ctx == "sandbox" ? "1" : ReflAccessErr,
                 "reflection-" + ctx + ".state": ModVarForms::InitialState + ":0",
             };
