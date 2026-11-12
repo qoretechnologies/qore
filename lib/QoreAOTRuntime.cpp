@@ -11320,7 +11320,9 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
 
         ExceptionSink xsink;
         QoreString qcmd(command.command.c_str());
-        int rc = MM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink);
+        // the command is the Program's own recorded `%module-cmd` directive, not one from the loading code to
+        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905)
+        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCmdOrigin::OwnDirective);
         if (rc < 0 || xsink.isException()) {
             error = "AOT module command failed";
             if (label && *label) {

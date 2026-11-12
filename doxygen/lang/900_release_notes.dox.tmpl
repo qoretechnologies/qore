@@ -1604,6 +1604,12 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a sandboxed Program could not load a compiled (qcc) library module whose source has a
+      \c %%module-cmd directive (\c MODULE-LOAD-ERROR: "AOT module-command replay error"), although it
+      could load the module's source: the directive recorded in the compiled module was replayed in the module's
+      Program as a command from the sandboxed loader to another Program; it now runs in the module's Program as when
+      the source is parsed there, and sandboxed code still cannot issue a module command to another Program with
+      @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()" (issue #5905)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

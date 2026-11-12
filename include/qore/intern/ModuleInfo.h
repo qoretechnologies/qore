@@ -644,6 +644,17 @@ struct DLHelper {
 class ModuleLoadMapHelper;
 struct QoreAOTModuleFileInfo;
 
+//! Where a module command issued with QoreModuleManager::issueRuntimeCmd() comes from
+enum class QoreModuleCmdOrigin {
+    //! A command issued by the calling code at run time (Program::issueModuleCmd()); a command for another Program
+    //! is checked against the calling code's sandbox and restrictions
+    Caller,
+    //! The target Program's own `%module-cmd` directive, replayed from its compiled (AOT) metadata when the Program
+    //! is created, as the directive runs when the Program's source is parsed in it: it is not a command from the
+    //! calling code to another Program
+    OwnDirective,
+};
+
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
@@ -666,7 +677,12 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
+    //! Issues a module command to \a pgm at run time, loading the module in \a pgm if necessary
+    /** @param origin whether the command is issued by the calling code or is \a pgm's own replayed directive; only
+        a command issued by the calling code to another Program is checked as a cross-Program command
+    */
+    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
+            QoreModuleCmdOrigin origin = QoreModuleCmdOrigin::Caller);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see

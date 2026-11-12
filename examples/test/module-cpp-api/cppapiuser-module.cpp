@@ -37,10 +37,14 @@
 
 #include <cassert>
 #include <cstring>
+#include <mutex>
+#include <string>
+#include <vector>
 
 static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void cppapiuser_module_delete();
+static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 
 extern "C" DLLEXPORT void cppapiuser_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "cppapiuser";
@@ -53,6 +57,7 @@ extern "C" DLLEXPORT void cppapiuser_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.init = cppapiuser_module_init;
     mod_info.ns_init = cppapiuser_module_ns_init;
     mod_info.del = cppapiuser_module_delete;
+    mod_info.parse_cmd = cppapiuser_parse_cmd;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
@@ -156,4 +161,29 @@ static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Ex
 }
 
 static void cppapiuser_module_delete() {
+}
+
+// the module commands received (%module-cmd(cppapiuser) and Program::issueModuleCmd()), for the tests of how they
+// reach the module (issue #5905)
+static std::mutex module_cmd_lock;
+static std::vector<std::string> module_cmds;
+
+// records the command; the command "fail" raises an exception instead
+static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    assert(xsink);
+    if (cmd == "fail") {
+        xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
+        return;
+    }
+    std::lock_guard<std::mutex> guard(module_cmd_lock);
+    module_cmds.emplace_back(cmd.c_str());
+}
+
+QoreListNode* cppapiuser_get_module_cmds() {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), nullptr);
+    std::lock_guard<std::mutex> guard(module_cmd_lock);
+    for (const std::string& cmd : module_cmds) {
+        rv->push(new QoreStringNode(cmd), nullptr);
+    }
+    return rv.release();
 }

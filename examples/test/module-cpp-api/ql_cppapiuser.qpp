@@ -394,6 +394,16 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
     return api->counter_live_count();
 }
 
+//! returns the module commands that the module has received, in the order received
+/** The module records each module command that it receives (\c \%module-cmd(cppapiuser) and
+    Program::issueModuleCmd()); the command \c "fail" raises \c CPPAPIUSER-COMMAND-ERROR instead and is not recorded
+
+    @return the commands received so far in the process
+*/
+list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_get_module_cmds();
+}
+
 //! adds a namespace to the root namespace of a loaded user module's Program, as a binary module does at runtime
 /** Takes the module Program's parse ownership, as module-jni does when it attaches its \c Jni namespace to a Program
     the first time the Program's Java classes are used, and adds a new namespace through the public

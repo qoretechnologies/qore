@@ -6091,7 +6091,9 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreModuleCmdOrigin origin) {
+    // a replayed directive is always issued to the Program whose directive it is
+    assert(origin == QoreModuleCmdOrigin::Caller || pgm);
     // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
     // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
     QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -6102,8 +6104,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // a command issued to another Program runs there, and the module decides what it allows by that Program's
     // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
     // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
-    // own Program is not sandboxed and the target has every restriction that its code has
-    if (pgm && pgm != getProgram()) {
+    // own Program is not sandboxed and the target has every restriction that its code has.  A Program's own
+    // directive replayed from its compiled metadata is not such a command: it runs in its Program as when the
+    // Program's source is parsed there (see issueParseCmd()), whatever code loads the Program
+    if (origin == QoreModuleCmdOrigin::Caller && pgm && pgm != getProgram()) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
         if (qore_program_is_sandboxed(getProgram())) {
