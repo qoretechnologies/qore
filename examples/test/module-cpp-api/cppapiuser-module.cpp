@@ -34,6 +34,7 @@
 */
 
 #include "cppapiuser-module.h"
+#include <qore/QoreSandboxManager.h>
 
 #include <cassert>
 #include <cstring>
@@ -168,15 +169,24 @@ static void cppapiuser_module_delete() {
 static std::mutex module_cmd_lock;
 static std::vector<std::string> module_cmds;
 
-// records the command; the command "fail" raises an exception instead
+// records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
+// (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
+// command "fail" raises an exception instead
 static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     assert(xsink);
     if (cmd == "fail") {
         xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
         return;
     }
+    std::string rec(cmd.c_str());
+    {
+        QoreSandboxManagerHelper sm(getProgram());
+        if (sm) {
+            rec += " [sandboxed]";
+        }
+    }
     std::lock_guard<std::mutex> guard(module_cmd_lock);
-    module_cmds.emplace_back(cmd.c_str());
+    module_cmds.push_back(std::move(rec));
 }
 
 QoreListNode* cppapiuser_get_module_cmds() {

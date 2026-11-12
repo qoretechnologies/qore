@@ -3681,6 +3681,15 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     }
 }
 
+void QoreModuleManager::inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm,
+        const char* feature, const char* path) const {
+    // whether the module is library code was decided when its load started, as for a source module; a module
+    // initialized with no load of it in progress in this thread is judged by its file, as in addModule()
+    const QoreModuleLoadFrame* f = module_load_frame;
+    const bool trusted = (f && feature && !strcmp(f->feature, feature)) ? f->trusted : isTrustedModulePath(path);
+    inherit_module_sandbox_manager(module_pgm, loader_pgm, trusted);
+}
+
 //! Returns the parse options of the Program loading a user module that the module inherits
 /** A module is parsed with the restrictions and permissions of the Program loading it, but not with the options that
     only select language behavior (QoreParseOptions::FREE_OPTIONS), which would change what the module's own code

@@ -8,9 +8,14 @@
 # from the loading code to another Program.  Sandboxed code still cannot issue a module command to another Program
 # at run time (Program::issueModuleCmd(), issue #5659).
 #
+# The compiled module's Program gets the sandbox that its source module's Program gets (issue #5913): a module that
+# is not library code (one loaded by path from outside the module path) is governed by the sandbox of the code that
+# loads it, both its own code and the module commands that run in its Program; library code (a module loaded by name
+# from the module path) is not.
+#
 # The module command goes to the cppapiuser test module, which records the commands it receives
-# (cpp_api_module_cmds()).  Each load runs in a process of its own, in every execution mode, so that each loads the
-# module afresh.
+# (cpp_api_module_cmds()) and whether the Program they run in has a sandbox.  Each load runs in a process of its own,
+# in every execution mode, so that each loads the module afresh.
 
 %modern
 %no-child-restrictions
@@ -42,6 +47,11 @@ public namespace ReplayProbe {
 public string sub probe() {
     return \"probe\";
 }
+
+#! returns whether the module's own Program has a sandbox, which governs the module's code
+public bool sub has_sandbox() {
+    return cpp_api_program_has_sandbox();
+}
 }
 ";
 
@@ -55,8 +65,10 @@ Program p(PO_NEW_STYLE);
 p.setSandboxManager(sm);
 try {
     p.loadModule(ARGV[0]);
-    p.parse(\"%modern\\nstring sub get() { return ReplayProbe::probe(); }\\n\", \"get\");
-    printf(\"loaded %s %y\\n\", p.callFunction(\"get\"), cpp_api_module_cmds());
+    p.parse(\"%modern\\nstring sub get() { return ReplayProbe::probe(); }\\n\"
+        + \"bool sub has_sandbox() { return ReplayProbe::has_sandbox(); }\\n\", \"get\");
+    printf(\"loaded %s module sandbox: %y commands: %y\\n\", p.callFunction(\"get\"),
+        p.callFunction(\"has_sandbox\"), cpp_api_module_cmds());
 } catch (hash<ExceptionInfo> ex) {
     printf(\"%s: %s\\n\", ex.err, ex.desc);
 }
@@ -82,8 +94,10 @@ string sub own_cmd(string mod, string cmd) {
 }
 ";
 
-        #! the output of a load of the module
-        const Expected = "loaded probe [\"replay-probe\"]\n";
+        #! the output of a load of the module by name from the module path: library code, which has no sandbox
+        const ExpectedByName = "loaded probe module sandbox: False commands: [\"replay-probe\"]\n";
+        #! the output of a load of the module by path from outside the module path: governed by the loader's sandbox
+        const ExpectedByPath = "loaded probe module sandbox: True commands: [\"replay-probe [sandboxed]\"]\n";
 
         #! the execution modes that the loads run in
         const ExecModes = ("ast", "ir", "jit", "tiered");
@@ -140,19 +154,19 @@ string sub own_cmd(string mod, string cmd) {
         assertEq(before, cpp_api_module_cmds());
         # the sandboxed code can issue a command to its own Program, which reaches the module
         assertEq("issued", s.callFunction("own_cmd", "cppapiuser", "own"));
-        assertEq(before + ("own",), cpp_api_module_cmds());
+        assertEq(before + ("own [sandboxed]",), cpp_api_module_cmds());
         # a command that the module refuses fails as before
         assertRegex("^CPPAPIUSER-COMMAND-ERROR", s.callFunction("own_cmd", "cppapiuser", "fail"));
         # trusted code can issue a command to another Program
         assertEq("issued", module_cmd(t, "cppapiuser", "trusted"));
-        assertEq(before + ("own", "trusted"), cpp_api_module_cmds());
+        assertEq(before + ("own [sandboxed]", "trusted"), cpp_api_module_cmds());
     }
 
     #! loads the module by name from \a module_dir and by path, in a process of its own in every execution mode
     private checkLoads(string module_dir, string path) {
         foreach string mode in (ExecModes) {
-            assertEq(Expected, load(mode, module_dir, "ReplayProbe"), mode + " by name");
-            assertEq(Expected, load(mode, NOTHING, path), mode + " by path");
+            assertEq(ExpectedByName, load(mode, module_dir, "ReplayProbe"), mode + " by name");
+            assertEq(ExpectedByPath, load(mode, NOTHING, path), mode + " by path");
         }
     }
 

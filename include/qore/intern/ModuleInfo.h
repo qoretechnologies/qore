@@ -834,6 +834,20 @@ public:
     */
     DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
 
+    //! Gives the Program of an AOT module being initialized the sandbox that the Program of its source module gets
+    /** As for a source module (see loadSeparatedModule()), a module that is not library code (see
+        isTrustedModulePath()) is governed by the sandbox of the Program loading it, or of the sandboxed code that
+        chose it; it must be called before any of the module's code runs and before its recorded module commands are
+        replayed in its Program (issue #5913)
+
+        @param module_pgm the AOT module's new Program
+        @param loader_pgm the Program loading the module, if any
+        @param feature the module's feature name
+        @param path the path of the module's file, if known
+    */
+    DLLLOCAL void inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm, const char* feature,
+            const char* path) const;
+
     //! Returns the path of a module with the name given in a directory of library code, or an empty string
     /** Looks in each directory of library code (see isTrustedModulePath()) for every form that the module search
         loads a module from: binary modules for the active API versions and AOT modules, flat and in a split module

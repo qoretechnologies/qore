@@ -13639,6 +13639,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // source is parsed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, label);
 
     // Set JIT execution mode so functions without pre-compiled code will JIT on demand
     local_pgm->setExecMode(QEM_JIT);
@@ -14262,6 +14266,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // recorded module commands are replayed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, label);
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
@@ -16055,6 +16063,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // recorded module commands are replayed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, module_context_path);
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
