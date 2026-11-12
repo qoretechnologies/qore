@@ -2092,6 +2092,38 @@ public:
     DLLLOCAL static int64_t dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
         ExceptionSink* xsink);
 
+    //! Debug-only: the points after which a delivery can pause; see dbgPauseAfterDelivery()
+    enum DbgPausePoint {
+        //! an I/O thread pushes an operation's result to its result Queue, or dispatches the callback of a fired
+        //! timer (see deliverResult())
+        DBG_PAUSE_DELIVERY,
+        //! a callback worker sends the result of a continuePoll() step to the I/O thread
+        DBG_PAUSE_STEP_RESULT,
+    };
+
+    //! Debug-only: makes the next delivery at @p point wait after the delivery until this is called with
+    //! @p pause = false
+    /** Called by the dbg_async_io_pause_after_delivery() and dbg_async_io_pause_after_step_result() test hooks, so
+        that a test can check what a thread that receives an operation's result, or sees a timer callback's work
+        done, observes before the thread that delivered it does anything after the delivery.  The pause is taken by
+        the next delivery at @p point only, and it is taken before the delivery, so that a thread that sees the
+        delivery also sees that it was taken.
+
+        @param point the point to pause after
+        @param pause true to pause the next delivery, false to end a pause (and to cancel one not taken yet)
+
+        @return with @p pause = false: true if a delivery took the pause since it was requested; false otherwise
+    */
+    DLLLOCAL static bool dbgPauseAfterDelivery(DbgPausePoint point, bool pause);
+
+    //! Debug-only: returns true if a pause after a delivery at @p point was requested (dbgPauseAfterDelivery()) and
+    //! the calling thread (an I/O thread, or a callback worker for DBG_PAUSE_STEP_RESULT) has taken it; the caller
+    //! then calls dbgWaitAfterDelivery() after the delivery
+    DLLLOCAL static bool dbgTakeDeliveryPause(DbgPausePoint point);
+
+    //! Debug-only: waits until the pause taken by dbgTakeDeliveryPause() is ended
+    DLLLOCAL static void dbgWaitAfterDelivery(DbgPausePoint point);
+
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer
         that fired before the timer's owner stopped it, after the owner has stopped it (see
