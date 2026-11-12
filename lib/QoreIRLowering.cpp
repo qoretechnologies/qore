@@ -5906,16 +5906,44 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
             if (offset == 1 && virtual_implicit.arg1.isValid()) {
                 return virtual_implicit.arg1;
             }
-            if (offset == -1) {
-                // $argv - build list from virtual values on the fly
-                QoreIRValue argv_list = builder.createEmptyList(impl_arg->loc)->result;
-                if (virtual_implicit.arg0.isValid()) {
-                    builder.createListAppend(argv_list, virtual_implicit.arg0, impl_arg->loc);
-                }
+            if (offset == -1 && virtual_implicit.arg0.isValid()) {
+                // $$ - the list of the context's values, built from the virtual values on the fly; a context
+                // with no values (the body of a foreach loop, which has only an element) has no list of its own, and
+                // $$ is the list of the function's arguments, loaded below (qore#5807)
                 if (virtual_implicit.arg1.isValid()) {
+                    // foldl and foldr: the list of the two values, whatever they are
+                    QoreIRValue argv_list = builder.createEmptyList(impl_arg->loc)->result;
+                    builder.createListAppend(argv_list, virtual_implicit.arg0, impl_arg->loc);
                     builder.createListAppend(argv_list, virtual_implicit.arg1, impl_arg->loc);
+                    return argv_list;
                 }
-                return argv_list;
+                // the context of a single element (map, select): an element with no value gives no list, so that $$
+                // is NOTHING, as the AST interpreter's SingleArgvContextHelper does (qore#5804); NULL is a value
+                // that gives [NULL]
+                QoreIRValue nothing_value = builder.createConstNothing(impl_arg->loc)->result;
+                QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, virtual_implicit.arg0,
+                    nothing_value, impl_arg->loc)->result;
+                QoreIRBasicBlock* list_block = createBlock("implicit.argv.list");
+                QoreIRBasicBlock* nothing_block = createBlock("implicit.argv.nothing");
+                QoreIRBasicBlock* merge_block = createBlock("implicit.argv.merge");
+                if (!list_block || !nothing_block || !merge_block) {
+                    error = "IR builder failed to create blocks for $$";
+                    return QoreIRValue();
+                }
+                builder.createBranchIf(is_nothing, nothing_block, list_block);
+                builder.setBlock(list_block);
+                QoreIRValue argv_list = builder.createEmptyList(impl_arg->loc)->result;
+                builder.createListAppend(argv_list, virtual_implicit.arg0, impl_arg->loc);
+                builder.createBranch(merge_block);
+                builder.setBlock(nothing_block);
+                QoreIRValue no_list = builder.createConstNothing(impl_arg->loc)->result;
+                builder.createBranch(merge_block);
+                builder.setBlock(merge_block);
+                std::vector<QoreIRPhiIncoming> incoming = {
+                    {argv_list, list_block},
+                    {no_list, nothing_block},
+                };
+                return builder.createPhi(incoming)->result;
             }
         }
         if (offset == -1) {

@@ -1,0 +1,41 @@
+map hash: {n0: null, x1: ["x"], n2: [<NULL>], 3: [0]}
+map list: [null, ["x"], [<NULL>], [0]]
+select: ["x", <NULL>, 0]
+select not nothing: ["x", <NULL>, 0]
+size: [0, 1, 1, 1]
+fold: 2
+foldr: [2, null]
+fold first: null
+foreach: ["A", "B"]
+foreach no arguments: null
+loops: [3, 3, [7, 8, 9], [7, 8, 9], 7, 7]
+map in loop: [[[1], null, [3]], ["p", "q"]]
+{a: 0, b: 1}
+10
+[1, 1, 1]
+fold literal:
+release f1f2
+release f1
+release f2
+release f3
+release f1f2f3
+foldr literal:
+release r3r2
+release r1
+release r2
+release r3
+release r3r2r1
+hash map key:
+release e1
+release e2
+caught x
+hash map key, tracked elements:
+release k1
+release k2
+release k3
+caught y
+hash map value:
+release w1
+release w2
+release w3
+caught z
