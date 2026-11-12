@@ -3798,7 +3798,10 @@ string get_ex_pos(hash<auto> exception_info) [flags=CONSTANT,NAMED_ARGS] {
 hash<auto> h = get_local_vars(0);
     @endcode
 
-    @param frame the stack frame where 0 is the current stack frame
+    @param frame the stack frame where 0 is the current stack frame; the frame of the top-level code of a
+    @ref Qore::Program "Program", including the main Program of a script, follows the frames of the calls that it
+    makes, and the frames of the code of a Program are followed by those of the code that called it in the thread, also
+    in another Program, such as the code that runs a child Program with @ref Qore::Program::run() "Program::run()"
 
     @return a hash of local variables for the given stack frame; if the stack frame is invalid, an empty hash is returned; hash keys are variable names; hash values are hashes with the following keys:
     - \c "type": can be either "local" or "closure" for closure-bound local variables
@@ -3808,6 +3811,8 @@ hash<auto> h = get_local_vars(0);
       that was declared but not assigned (see @ref pitfalls_declaration); missing otherwise (since %Qore 3.0)
 
     @throw CIRCULAR-REFERENCE-ERROR circular reference found when retrieving local variable values
+    @throw DEBUGGING the frame is in, or past the frames of, a Program that does not allow debugging (see
+    @ref Qore::PO_NO_DEBUGGING "PO_NO_DEBUGGING")
 
     @since %Qore 0.8.13
  */
@@ -3821,7 +3826,8 @@ hash<auto> get_local_vars(int frame) [dom=DEBUGGER;flags=RET_VALUE_ONLY,NAMED_AR
 set_local_var_value(0, "var", 1);
     @endcode
 
-    @param frame the stack frame where 0 is the current or highest stack frame
+    @param frame the stack frame where 0 is the current or highest stack frame; the frames are those of
+    @ref Qore::get_local_vars() "get_local_vars()"
     @param name the name of the local variable
     @param value the value to assign
 
