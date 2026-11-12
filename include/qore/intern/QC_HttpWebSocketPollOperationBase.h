@@ -424,6 +424,9 @@ private:
 
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
+    //! the size of the fragments received of the message being reassembled, checked against the maximum frame size
+    //! as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
 
     //! Current send inner operation (nullptr when not sending); guarded by @ref m
     SocketSendPollOperation* send_op = nullptr;

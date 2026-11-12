@@ -329,6 +329,9 @@ private:
 
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
+    //! the size of the fragments received of the message being reassembled, checked against the maximum frame size
+    //! as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
 
     //! Current send inner operation (nullptr when not sending)
     SocketSendPollOperation* send_op = nullptr;
@@ -371,6 +374,9 @@ private:
     */
     DLLLOCAL void setCloseInfo(uint16_t code, const char* reason, bool final = false);
     bool close_initiated = false;           //!< true if we initiated the close handshake
+    //! true if the operation started the close itself because of an error (for example a message that is too big),
+    //! not because the application asked for it (issue #5861)
+    bool close_for_error = false;
     //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
     //! When a close started by the client stops waiting for the server's close frame (monotonic ms, 0 = never)

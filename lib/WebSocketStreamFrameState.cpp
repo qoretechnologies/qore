@@ -84,14 +84,14 @@ int WebSocketStreamFrameState::processFrames() {
             break;
         }
 
-        // Enforce per-message size limit against decoded frame size before
-        // handing off to the reassembler (reassembler checks post-merge size
-        // at every append, but this guards the single-frame fast-path too)
+        // Enforce the per-message size limit against the decoded frame size before handing it to the reassembler;
+        // the fragments of a message are checked as they arrive (handleFrame())
         if (frame.payload && frame.payload->size() > max_message_size) {
             ExceptionSink dx;
             frame.payload->deref(&dx);
             dx.clear();
-            setError("WebSocket frame exceeds max message size", WSCC_MessageTooBig);
+            setError("WebSocket frame exceeds the maximum message size of " + std::to_string(max_message_size)
+                + " bytes", WSCC_MessageTooBig);
             break;
         }
 
@@ -168,6 +168,19 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
         return;
     }
 
+    // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
+    if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
+        size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
+            + (frame.payload ? frame.payload->size() : 0);
+        if (total > max_message_size) {
+            fragment_bytes = 0;
+            setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+                + " bytes", WSCC_MessageTooBig);
+            return;
+        }
+        fragment_bytes = frame.fin ? 0 : total;
+    }
+
     // Data frames — feed to reassembler for fragmentation support
     ExceptionSink xs;
     bool complete = reassembler.processFrame(frame, &xs);
@@ -202,7 +215,8 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
     }
 
     if (payload && payload->size() > max_message_size) {
-        setError("WebSocket message exceeds max message size", WSCC_MessageTooBig);
+        setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+            + " bytes", WSCC_MessageTooBig);
         return;
     }
 

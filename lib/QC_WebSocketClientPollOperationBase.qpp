@@ -519,6 +519,16 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
                     }
                 }
 
+                // the close code and reason are the server's (RFC 6455 sections 7.1.5 and 7.1.6); when the server
+                // answers a close that the operation started because of an error (for example 1009 for a message
+                // that is too big) with the same code and no reason, that close's reason is kept, so the
+                // application learns why (issue #5861)
+                if (close_for_error && reason.empty()) {
+                    AutoLocker al(close_lock);
+                    if (close_code == code) {
+                        reason = close_reason;
+                    }
+                }
                 setCloseInfo(code, reason.c_str());
 
                 // Push close frame to recv_queue
@@ -559,6 +569,24 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
         // RSV bits set but no extensions — protocol error
         queueSendClose(WSCC_ProtocolError, "RSV bits set without extensions", xsink);
         return;
+    }
+
+    // data frames received after the operation closed the connection because of an error (for example a message
+    // that is too big) are discarded: the application gets no more messages (issue #5861)
+    if (close_for_error) {
+        return;
+    }
+
+    // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
+    if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
+        size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
+            + (frame.payload ? frame.payload->size() : 0);
+        if (total > max_frame_size) {
+            fragment_bytes = 0;
+            queueSendClose(WSCC_MessageTooBig, "Message too big", xsink);
+            return;
+        }
+        fragment_bytes = frame.fin ? 0 : total;
     }
 
     // Data frames: use reassembler for fragmentation support
@@ -684,6 +712,8 @@ void WebSocketClientPollOperationPriv::queueSendClose(uint16_t code, const char*
     );
     send_queue->push(xsink, frame.release());
     if (!*xsink) {
+        // the close is the operation's own, because of an error (issue #5861)
+        close_for_error = true;
         setWsStateValue(WsState::CLOSING);
     }
 }

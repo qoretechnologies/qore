@@ -138,6 +138,14 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - a connection closed because a message was larger than the maximum message size is reported with its close code
+      1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
+      @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
+      @ref WebSocketHandler::WebSocketConnection::getCloseReason() "WebSocketConnection::getCloseReason()", which
+      return the close's status code and reason, also in
+      @ref WebSocketHandler::WebSocketConnection::connectionClosed() "connectionClosed()"; a fragmented message is
+      checked against the limit as its fragments arrive; the \c max_message_size option is documented as it applies
+      (0 means the built-in limit of 16 MiB, which HTTP/2 and HTTP/3 connections always use) (issue #5861)
     - added @ref WebSocketHandler::WebSocketHandler::messageReceived() "WebSocketHandler::messageReceived()", a hook
       called once for each inbound message, before the connection's
       @ref WebSocketHandler::WebSocketConnection::gotMessage() "gotMessage()", so a handler can meter messages; an
@@ -469,6 +477,13 @@ public class WebSocketConnection {
     private:internal {
         #! The socket used by the server for this connection
         Socket sock;
+
+        #! the status code with which the connection was closed; 0 if not closed (issue #5861)
+        int close_code = 0;
+        #! the reason with which the connection was closed (issue #5861)
+        string close_reason = "";
+        #! protects @ref close_code and @ref close_reason
+        Mutex close_info_lock();
 
         #! Frames that couldn't be sent due to backpressure, awaiting retry
         /** @since WebSocketHandler 2.5
@@ -999,11 +1014,56 @@ public class WebSocketConnection {
     }
 
     #! This method is called when the connection is closed
-    /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"
+    /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"; getCloseCode() and getCloseReason()
+        return the status code and reason with which the connection was closed
 
         The implementation in this class is empty; implement this method in a subclass to provide custom behavior
     */
     connectionClosed() {
+    }
+
+    #! Returns the status code with which the connection was closed (RFC 6455 section 7.4)
+    /** On HTTP/2 and HTTP/3, the code of the first close of the connection: that of the close frame received from the
+        client, or of the close that the server started; on HTTP/1.1, the code of the close frame received from the
+        client (which answers a close that the server started with the same code as a rule), or
+        @ref WebSocketUtil::WSCC_AbnormalClosure "WSCC_AbnormalClosure" (1006) when the client did not answer.  For
+        example @ref WebSocketUtil::WSCC_MessageTooBig "WSCC_MessageTooBig" (1009) when a message was larger than the
+        maximum message size, whether the server or the client received it.  Can be called in connectionClosed().
+
+        @return the close status code; 0 if the connection has not been closed or no code is known
+
+        @since WebSocketHandler 2.8
+    */
+    int getCloseCode() {
+        AutoLock al(close_info_lock);
+        return close_code;
+    }
+
+    #! Returns the reason with which the connection was closed
+    /** The reason of the first close of the connection (on HTTP/1.1, of the close frame received from the client; when
+        it answers a close that the server started with the same code and no reason, the server's), or a description
+        of the error that closed the connection; see getCloseCode().  Can be called in connectionClosed().
+
+        @return the close reason; an empty string if none
+
+        @since WebSocketHandler 2.8
+    */
+    string getCloseReason() {
+        AutoLock al(close_info_lock);
+        return close_reason;
+    }
+
+    #! Records the status code and reason with which the connection was closed; the first close recorded is kept
+    /** @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    setCloseInfo(int code, *string reason) {
+        AutoLock al(close_info_lock);
+        if (!close_code && code) {
+            close_code = code;
+            close_reason = reason ?? "";
+        }
     }
 
     #! Returns @ref True if the connection is closing or closed: no message can be sent on it any more
@@ -1060,6 +1120,8 @@ public class WebSocketConnection {
         }
         flushBufferedFramesLocked();
         close_frame_queued = True;
+        # the server starts the close: its code is the connection's close code (issue #5861)
+        setCloseInfo(code, reason);
         *WebSocketStreamProcessor proc = stream_processor;
         if (proc) {
             proc.startClose(code, reason);
@@ -1937,6 +1999,9 @@ class WebSocketStreamProcessor {
                     # (RFC 6455 section 5.5.1); either way both close frames have then been exchanged, and the
                     # server closes the connection at once, which ends the stream (RFC 8441 section 5, RFC 9220
                     # section 3)
+                    # the client starts the close, or answers the server's: the first close recorded is the
+                    # connection's (issue #5861)
+                    wsc.setCloseInfo(frame.code ?? WSCC_NoStatusRcvd, frame.reason);
                     bool answer;
                     {
                         AutoLock cl(close_lock);
@@ -1961,6 +2026,9 @@ class WebSocketStreamProcessor {
                     handler.logError("H2/H3 WebSocket frame-state error: %y: %y",
                         frame.code ?? WSCC_ProtocolError,
                         frame.reason ?? "");
+                    # the frame state closed the connection with this code, for example 1009 for a message that is
+                    # too big; the application reads it in connectionClosed() (issue #5861)
+                    wsc.setCloseInfo(frame.code ?? WSCC_ProtocolError, frame.reason);
                     markClosedOnce();
                     return;
                 }
@@ -2329,12 +2397,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         */
         date close_timeout = DefaultCloseTimeout;
 
-        #! Maximum WebSocket message size in bytes (0 = unlimited)
-        /** Messages (including fragmented message accumulation) exceeding this limit will
-            cause the connection to be closed with status code 1009 (Message Too Big).  The limit also applies to
-            a message after it is decompressed by the permessage-deflate extension; when it is not set, the
-            decompressed size is limited by
-            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "PerMessageDeflateExtension::DefaultMaxMessageSize".
+        #! Maximum WebSocket message size in bytes (0 = the built-in limits)
+        /** Limits the size of a frame (with HTTP/1.1, also of the fragments of a message as they arrive) and of a
+            message after it is decompressed by the permessage-deflate extension; 0 (the default) means the built-in
+            limit of 16 MiB for frames, and
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "DefaultMaxMessageSize" for
+            decompressed messages.  HTTP/2 and HTTP/3 connections always limit a message to 16 MiB.  A message
+            over the limit closes the connection with status code 1009 (Message Too Big), which
+            @ref WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" returns in
+            @ref WebSocketConnection::connectionClosed() "connectionClosed()"
 
             @since WebSocketHandler 2.5
         */
@@ -2485,7 +2556,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     max_message_size = int(h.value);
                     if (max_message_size < 0) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %d is negative; expecting "
-                            "non-negative value (0 = unlimited)", h.key, max_message_size);
+                            "non-negative value (0 = the built-in limits)", h.key, max_message_size);
                     }
                     break;
                 }
@@ -2570,8 +2641,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         heartbeat = seconds;
     }
 
-    #! Returns the maximum WebSocket message size in bytes (0 = unlimited)
-    /** @return the maximum message size in bytes; 0 means unlimited
+    #! Returns the maximum WebSocket message size in bytes (0 = the built-in limits)
+    /** See the \c max_message_size option of the handler
+
+        @return the maximum message size in bytes; 0 means the built-in limits (16 MiB for frames)
 
         @since WebSocketHandler 2.5
     */
@@ -2579,8 +2652,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         return max_message_size;
     }
 
-    #! Sets the maximum WebSocket message size in bytes (0 = unlimited)
-    /** @param size the maximum message size in bytes; 0 means unlimited
+    #! Sets the maximum WebSocket message size in bytes (0 = the built-in limits)
+    /** See the \c max_message_size option of the handler
+
+        @param size the maximum message size in bytes; 0 means the built-in limits (16 MiB for frames)
 
         @since WebSocketHandler 2.5
     */
@@ -3266,6 +3341,12 @@ handler.setCloseTimeout(2s);
             string cid) {
         # Clear async WebSocket poll op resources
         if (ws_poll_op) {
+            # the connection's close code and reason, for connectionClosed() (issue #5861)
+            try {
+                wsc.setCloseInfo(ws_poll_op.getCloseCode(), ws_poll_op.getCloseReason());
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception reading the WebSocket close code: %s", get_exception_string(ex));
+            }
             try {
                 wsc.setWsPollOp();
             } catch (hash<ExceptionInfo> ex) {

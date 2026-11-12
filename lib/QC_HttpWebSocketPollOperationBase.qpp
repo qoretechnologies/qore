@@ -492,9 +492,13 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 }
                 close_received = true;
                 // the close code and reason are those of the client's close frame (RFC 6455 sections 7.1.5 and
-                // 7.1.6), also after a close the server started
+                // 7.1.6), also after a close the server started; when the client answers the server's close with
+                // the same code and no reason, the server's reason is kept, so that a close for an error (for
+                // example 1009 for a message that is too big) keeps its description (issue #5861)
+                if (!(close_sent && reason.empty() && code == close_code)) {
+                    close_reason = reason;
+                }
                 close_code = code;
-                close_reason = reason;
 
                 // Push close frame to recv_queue
                 pushRecvCloseFrame(code, reason.c_str(), xsink);
@@ -521,6 +525,18 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
     // the connection's handler gets no more messages
     if (close_sent) {
         return;
+    }
+
+    // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
+    if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
+        size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
+            + (frame.payload ? frame.payload->size() : 0);
+        if (total > max_frame_size) {
+            fragment_bytes = 0;
+            queueSendClose(WSCC_MessageTooBig, "Message too big", xsink);
+            return;
+        }
+        fragment_bytes = frame.fin ? 0 : total;
     }
 
     // Data frames: use reassembler for fragmentation support
@@ -1124,8 +1140,9 @@ nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason
 }
 
 //! Sets the maximum frame/message size in bytes
-/** Frames larger than this are rejected with close code 1009 (Message Too Big).
-    @param max_frame_size the maximum size in bytes (0 = unlimited, default = 16MB)
+/** Frames larger than this, and fragmented messages whose fragments together exceed it, are rejected with close code
+    1009 (Message Too Big).
+    @param max_frame_size the maximum size in bytes; 0 or less means the default of 16 MiB
     @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int max_frame_size) [flags=NAMED_ARGS] {

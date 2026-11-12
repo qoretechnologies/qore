@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/1.1, HTTP/2 and HTTP/3 (QUIC), and their close
+
+/*  WebSocketMessageTooBig.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5861: a WebSocket message larger than the maximum message size (16 MiB) closed the connection, but neither
+    the client nor the server's handler could tell why: the close status code 1009 (Message Too Big, RFC 6455
+    section 7.4.1) only reached the logs.  Both sides now report the code and reason of the close
+    (WebSocketClient::getCloseCode() and the close event, WebSocketConnection::getCloseCode() in
+    connectionClosed()), and a fragmented message is checked as its fragments arrive.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketMessageTooBigTest
+
+#! larger than the maximum message size (16 MiB)
+const Big = 17 * 1024 * 1024;
+
+#! the size of each fragment of a fragmented message: under the maximum message size, together over it
+const Fragment = 6 * 1024 * 1024;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+class TestConnection inherits WebSocketConnection {
+    public {
+        #! the events of the connection: received messages and the close
+        Queue events;
+    }
+
+    constructor(WebSocketHandler handler, Queue events) : WebSocketConnection(handler) {
+        self.events = events;
+    }
+
+    gotMessage(binary msg) {
+        events.push({"got": msg.size()});
+        # the client asks for a message that is too big
+        if (msg == binary("big")) {
+            send(binary(strmul("s", Big)));
+        } else if (msg == binary("fragments")) {
+            send(binary(strmul("a", Fragment)), WSOP_Binary, False);
+            send(binary(strmul("b", Fragment)), WSOP_Continuation, False);
+            send(binary(strmul("c", Fragment)), WSOP_Continuation, True);
+        }
+    }
+
+    gotMessage(string msg) {
+        gotMessage(binary(msg));
+    }
+
+    connectionClosed() {
+        events.push({"closed": getCloseCode(), "reason": getCloseReason()});
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    public {
+        Queue events();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestConnection(self, events);
+    }
+}
+
+class WebSocketMessageTooBigTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TestHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketMessageTooBig", "1.0") {
+        foreach string ver in (("1.1", "2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: the client sends a message that is too big", ver), \testTooBig(),
+                (ver, "client"));
+            # the HTTP/2 client can raise HTTP2-FLOW-CONTROL when it sends several large messages or fragments in a
+            # row before the stream's send buffer drains (the HTTP/3 client waits for it), so this case does not run
+            # on HTTP/2
+            if (ver != "2.0") {
+                addTestCase(sprintf("HTTP/%s: the client sends a fragmented message that is too big", ver),
+                    \testTooBig(), (ver, "client-fragments"));
+            }
+            addTestCase(sprintf("HTTP/%s: the server sends a message that is too big", ver), \testTooBig(),
+                (ver, "big"));
+            addTestCase(sprintf("HTTP/%s: the server sends a fragmented message that is too big", ver),
+                \testTooBig(), (ver, "fragments"));
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! A message that is too big closes the connection with 1009, which both sides report
+    /** @param ver the HTTP version
+        @param what \c "client": the client sends the message; \c "client-fragments": the client sends it in
+        fragments that are each under the limit; \c "big": the server sends it; \c "fragments": the server sends it
+        in fragments
+    */
+    testTooBig(string ver, string what) {
+        # the server's events of an earlier case are not this case's
+        handler.events.clear();
+        Queue client_events();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                client_events.push({"got": msg.size()});
+            } else {
+                # the close is reported with its status code and reason
+                client_events.push({"closed": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+
+        if (what == "client") {
+            wsc.send(binary(strmul("c", Big)));
+        } else if (what == "client-fragments") {
+            wsc.send(binary(strmul("a", Fragment)), WSOP_Binary, False);
+            wsc.send(binary(strmul("b", Fragment)), WSOP_Continuation, False);
+            wsc.send(binary(strmul("c", Fragment)), WSOP_Continuation, True);
+        } else {
+            wsc.send(binary(what));
+        }
+
+        # the client is told the connection closed, with 1009; it never gets the message that is too big
+        hash<auto> client_close = getClose(client_events, "client");
+        assertEq(WSCC_MessageTooBig, client_close.closed, "the client reports the close code 1009");
+        assertNeq("", client_close.reason, "the client reports the close reason");
+        # so is the server's handler
+        hash<auto> server_close = getClose(handler.events, "server");
+        assertEq(WSCC_MessageTooBig, server_close.closed, "the server reports the close code 1009");
+        assertNeq("", server_close.reason, "the server reports the close reason");
+    }
+
+    #! Returns the close event of a side, after checking that no message that is too big was delivered
+    private hash<auto> getClose(Queue events, string side) {
+        while (True) {
+            hash<auto> e = events.get(HangGuard);
+            if (e.hasKey("closed")) {
+                return e;
+            }
+            assertLt(Fragment, e.got, side + ": no message that is too big is delivered");
+        }
+    }
+}
