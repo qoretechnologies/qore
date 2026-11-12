@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/2 to a node server, and their close
+
+/*  WebSocketFirstCloseWins.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5880: in the HTTP/2 and HTTP/3 WebSocket client, a close frame from the server overwrote the close code and
+    reason before the client checked whether the connection was closed already, so a close frame that arrived after
+    the connection closed changed what getCloseCode() and getCloseReason() returned.  The first close now wins.  The
+    server (node) sends two close frames in one write; the client logs that it ignores the second one, which the test
+    waits for: without the fix that line is never logged, and the close code becomes the second frame's.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires FsUtil
+%requires WebSocketUtil
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class WebSocketFirstCloseWinsTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! pushes each message that the client logs about a late close frame
+class LateCloseCapture inherits LoggerAppenderWithLayout {
+    public {
+        Queue lines();
+    }
+
+    constructor() : LoggerAppenderWithLayout("late-close", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /ignoring a close frame/) {
+            lines.push(params);
+        }
+    }
+}
+
+class WebSocketFirstCloseWinsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("WebSocketFirstCloseWins", "1.0") {
+        addTestCase("HTTP/2: a close frame after the first one does not change the close code", \testSecondClose());
+        set_return_value(main());
+    }
+
+%ifdef NoProcess
+    testSecondClose() {
+        testSkip("the process module is not available");
+    }
+%else
+    testSecondClose() {
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -e \"process.exit(require('http2').constants.NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL "
+                "? 0 : 1)\" > /dev/null 2>&1")) {
+            testSkip("node with RFC 8441 extended CONNECT support is not available");
+        }
+        TmpDir dir("ws-first-close-wins-");
+        foreach hash<auto> i in ({"cert.pem": CertPem, "key.pem": KeyPem}.pairIterator()) {
+            File f();
+            f.open2(dir.path + "/" + i.key, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+        Process p(node_bin, (get_script_dir() + "/http2-ws-paused-server.js", "0", dir.path + "/cert.pem",
+            dir.path + "/key.pem"));
+        on_exit {
+            if (p.running()) {
+                p.terminate();
+            }
+            p.wait();
+        }
+        string buf = "";
+        string line = readLine(p, \buf);
+        *string port = (line =~ x/^READY ([0-9]+)$/)[0];
+        assertTrue(exists port, "the server reports its port");
+
+        LateCloseCapture capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push(True);
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%s/ws", port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "logger": logger,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+
+        # two close frames in one write: the first closes the connection, the second arrives after it is closed
+        p.write("close 1000:first,4001:late\n");
+        assertEq("SENT CLOSE 1000:first,4001:late", readLine(p, \buf), "the server sent both close frames");
+        assertTrue(closed.get(HangGuard), "the client reports the close");
+        string msg = capture.lines.get(HangGuard);
+        assertRegex("code 4001", msg, "the client ignores the second close frame");
+        assertEq(WSCC_NormalClosure, wsc.getCloseCode(), "the close code is the first close frame's");
+        assertEq("first", wsc.getCloseReason(), "the close reason is the first close frame's");
+    }
+
+    #! Returns the next line that the server printed
+    private string readLine(Process p, reference<string> buf) {
+        while (buf !~ /\n/) {
+            *string s = p.readStdout(4096, HangGuard);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server printed no line: %s", p.readStderr(4096, 0) ?? "");
+            }
+            buf += s;
+        }
+        int i = buf.find("\n");
+        string line = buf.substr(0, i);
+        buf = buf.substr(i + 1);
+        return line;
+    }
+%endif
+}

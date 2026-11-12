@@ -6,7 +6,8 @@
 //
 // Usage: http2-ws-paused-server.js <port> <cert.pem> <key.pem>
 // - prints "READY <port>" once listening
-// - a line "release" on stdin resumes reading the WebSocket streams
+// - a line "release" on stdin resumes reading the WebSocket streams; a line "close <code>[:<reason>][,...]" writes a
+//   close frame for each code (with its reason) in one write
 // - prints "MSG <size> <first byte> <last byte>" for each message received, and "CLOSE <code>" for a close frame,
 //   which it answers
 
@@ -109,11 +110,32 @@ const streams = [];
 let released = false;
 
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
-  if (line.trim() === 'release') {
+  const cmd = line.trim().split(' ');
+  if (cmd[0] === 'release') {
     released = true;
     for (const s of streams) {
       s.resume();
     }
+  } else if (cmd[0] === 'close' && cmd[1]) {
+    // writes a close frame for each "<code>[:<reason>]" given (comma-separated) in one write
+    const frames = [];
+    for (const item of cmd[1].split(',')) {
+      const [code, reason] = item.split(':');
+      const n = Number(code);
+      if (!Number.isInteger(n) || n < 0 || n > 65535) {
+        console.log('BAD CLOSE ' + item);
+        return;
+      }
+      const p = Buffer.alloc(2);
+      p.writeUInt16BE(n);
+      frames.push(encodeFrame(0x8, Buffer.concat([p, Buffer.from(reason || '', 'utf8')])));
+    }
+    for (const s of streams) {
+      if (!s.destroyed && s.writable) {
+        s.write(Buffer.concat(frames));
+      }
+    }
+    console.log('SENT CLOSE ' + cmd[1]);
   }
 });
 

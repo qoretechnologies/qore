@@ -7726,10 +7726,11 @@ public class WebSocketClientHcioPollOp {
         #! True when WS close handshake is complete
         bool ws_close_sent = False;
 
-        #! Close code
+        #! Close code; set only by markClosedAndEnqueue(), when the connection is marked closed; protected by
+        #! heartbeat_mutex
         int close_code = 0;
 
-        #! Close reason
+        #! Close reason; set only with close_code; protected by heartbeat_mutex
         string close_reason = "";
 
         #! True if extensions are active
@@ -7907,10 +7908,9 @@ public class WebSocketClientHcioPollOp {
             }
             auto entry = wrap.value;
             if (!exists entry) {
-                # NOTHING sentinel from FrameStateAction::complete/executeError
-                int close_c = close_code ? close_code : WSCC_AbnormalClosure;
-                string close_r = close_reason != "" ? close_reason : "stream ended";
-                markClosedAndEnqueue(close_c, close_r);
+                # NOTHING sentinel from FrameStateAction::complete/executeError: the stream ended without a close
+                # frame; a connection that was closed already keeps its close code and reason (issue #5880)
+                markClosedAndEnqueue(WSCC_AbnormalClosure, "stream ended");
                 processed = True;
                 break;
             }
@@ -7932,8 +7932,15 @@ public class WebSocketClientHcioPollOp {
         string t = h.type ?? "";
 
         if (t == "close") {
-            close_code = h.code ?? WSCC_NormalClosure;
-            close_reason = h.reason ?? "";
+            int code = h.code ?? WSCC_NormalClosure;
+            string reason = h.reason ?? "";
+            # a close frame that arrives after the connection was closed (for example with 1006 after the close
+            # handshake timed out) changes nothing: the first close wins, and the close code and reason are set only
+            # with the connection's closed state, in markClosedAndEnqueue() (issue #5880)
+            if (isClosed()) {
+                logDebug("ignoring a close frame (code %d) received after the connection was closed", code);
+                return;
+            }
             # Frame state does NOT auto-echo close on the client — we must
             # send our side of the close handshake before marking closed; the answer echoes the server's code
             # (RFC 6455 section 5.5.1).  After a close the client started, this is the server's answer, which ends
@@ -7944,8 +7951,8 @@ public class WebSocketClientHcioPollOp {
                 try {
                     # a close frame without a status code (1005) is answered with one without a status code: 1005 is
                     # never sent (RFC 6455 section 7.4.1)
-                    stream.sendData(ws_encode_message(close_code == WSCC_NoStatusRcvd ? binary()
-                        : close_code.encodeMsb(2), WSOP_Close, True));
+                    stream.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary()
+                        : code.encodeMsb(2), WSOP_Close, True));
                 } catch (hash<ExceptionInfo> ex) {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
                 }
@@ -7953,7 +7960,7 @@ public class WebSocketClientHcioPollOp {
                 AutoLock al(heartbeat_mutex);
                 cause = pending_close_cause;
             }
-            markClosedAndEnqueue(close_code, close_reason, cause.val() ? cause : NOTHING);
+            markClosedAndEnqueue(code, reason, cause.val() ? cause : NOTHING);
             return;
         }
 
@@ -8189,10 +8196,12 @@ public class WebSocketClientHcioPollOp {
     }
 
     int getCloseCode() {
+        AutoLock al(heartbeat_mutex);
         return close_code;
     }
 
     string getCloseReason() {
+        AutoLock al(heartbeat_mutex);
         return close_reason;
     }
 
@@ -8358,6 +8367,12 @@ public class WebSocketClientHcioPollOp {
     private logError(string fmt, ...) {
         if (logger) {
             logger.log(LoggerLevel::ERROR, "%s", "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
+        }
+    }
+
+    private logDebug(string fmt, ...) {
+        if (logger) {
+            logger.log(LoggerLevel::DEBUG, "%s", "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
         }
     }
 
