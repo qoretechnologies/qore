@@ -15921,7 +15921,8 @@ load_local_done:
                         bool no_vivify = (path_inst->unary_op == LVUnaryOp::Pop
                             || path_inst->unary_op == LVUnaryOp::Shift
                             || path_inst->unary_op == LVUnaryOp::Trim
-                            || path_inst->unary_op == LVUnaryOp::Chomp);
+                            || path_inst->unary_op == LVUnaryOp::Chomp
+                            || path_inst->unary_op == LVUnaryOp::EnsureUnique);
                         LValueHelper lvh(xsink);
                         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                             if (no_vivify && !*xsink) {
@@ -15980,6 +15981,15 @@ load_local_done:
                                     res = lvh.postDecrementFloat();
                                 } else {
                                     res = lvh.postDecrementBigInt();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::EnsureUnique: {
+                                // the container of a variable that a weak reference is taken of (qore#5756); a weak
+                                // reference held by the variable and a value of another type are left as they are
+                                qore_type_t t = lvh.getType();
+                                if (t == NT_HASH || t == NT_LIST) {
+                                    lvh.ensureUnique();
                                 }
                                 break;
                             }

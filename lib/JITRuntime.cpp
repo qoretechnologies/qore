@@ -15892,7 +15892,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         bool no_vivify = (inst->unary_op == LVUnaryOp::Pop
             || inst->unary_op == LVUnaryOp::Shift
             || inst->unary_op == LVUnaryOp::Trim
-            || inst->unary_op == LVUnaryOp::Chomp);
+            || inst->unary_op == LVUnaryOp::Chomp
+            || inst->unary_op == LVUnaryOp::EnsureUnique);
         LValueHelper lvh(xsink);
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
             return toBits(QoreValue());
@@ -15950,6 +15951,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             }
+            case LVUnaryOp::EnsureUnique:
+                // the container of a variable that a weak reference is taken of (qore#5756)
+                if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
+                    lvh.ensureUnique();
+                }
+                break;
             case LVUnaryOp::Shift:
                 if (lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
