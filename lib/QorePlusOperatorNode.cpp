@@ -363,9 +363,11 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 list_type_from_values = true;
             }
         } else {
-            // prependElement() gives list<auto> for a value that is not a list (and not NOTHING)
-            if (qore_plus_element_value_type(leftTypeInfo)) {
-                returnTypeInfo = autoListTypeInfo;
+            // prependElement() gives the type that concatenateElement() gives (qore#5936)
+            const QoreTypeInfo* value_ti = qore_plus_element_value_type(leftTypeInfo);
+            if (value_ti) {
+                returnTypeInfo = qore_plus_list_add_type(QoreTypeInfo::getElementType(rightTypeInfo), value_ti,
+                    list_type_from_values);
             } else {
                 list_type_from_values = true;
             }

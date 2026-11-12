@@ -64,13 +64,14 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "list<int> + list<int>": "[[1, 2, 5, 6], [3, 5, 6]] list<list<int>> list<int>",
             "list<int> + list<string>": "[[1, 2, \"a\"], [3, \"a\"]] list<list<auto>> list<auto>",
             # a soft list type of an operand is not the type of the result, which is the type of the list that the
-            # runtime gives (the common type of the element types; int + list<int> gives list<auto>)
+            # runtime gives (the common type of the element types)
             "softlist<int> + softlist<int>": "[[1, 1]] list<list<int>> list<int>",
             "softlist<int> + int": "[[1, 2]] list<list<int>> list<int>",
             "list<int> + list<int> (literal)": "[[1, 2]] list<list<int>> list<int>",
             "list<int> + list<string> (literal)": "[[1, \"a\"]] list<list<auto>> list<auto>",
             "list<*int> + int (literal)": "[[1, 2]] list<list<*int>> list<*int>",
-            "int + list<int> (literal)": "[[2, 1]] list<list<auto>> list<auto>",
+            "int + list<int> (literal)": "[[2, 1]] list<list<int>> list<int>",
+            "int + list<int>": "[[4, 1, 2], [4, 3]] list<list<int>> list<int>",
             "softlist<int> + softlist<int> (element assignment)": "RUNTIME-TYPE-ERROR",
             "softlist<int> + int (element assignment)": "RUNTIME-TYPE-ERROR",
             "hash<D> + hash<D>": "[{x: 3, s: \"a\"}, {x: 3, s: \"a\"}] list<hash<D>> hash<D>",
@@ -104,7 +105,12 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "list + list ((1,), (1,))": "[[1, 1]] list<list> list",
             "list<auto> + list<int> ((), (1,))": "[[1]] list<list<int>> list<int>",
             "list + int ((1,), 2)": "[[1, 2]] list<list<auto>> list<auto>",
-            "int + list<int> (2, (1,))": "[[2, 1]] list<list<auto>> list<auto>",
+            # element + list keeps the type of the list as list + element does (qore#5936)
+            "int + list<int> (2, (1,))": "[[2, 1]] list<list<int>> list<int>",
+            "int + list<*int> (2, (1,))": "[[2, 1]] list<list<*int>> list<*int>",
+            "int + list<auto> (2, (1, \"a\"))": "[[2, 1, \"a\"]] list<list<auto>> list<auto>",
+            "int + list<auto> (2, ())": "[[2]] list<list<int>> list<int>",
+            "string + list<int> (\"s\", (1,))": "[[\"s\", 1]] list<list<auto>> list<auto>",
             "list<*int> + int ((1,), 2)": "[[1, 2]] list<list<*int>> list<*int>",
         };
     }
