@@ -15907,6 +15907,34 @@ static QoreValue f_dbg_async_io_dispatch_held_releases(const QoreListNode* param
         get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
+//! Debug-only: makes the next async I/O thread that delivers work (pushes an operation's result to its result Queue,
+//! or dispatches the callback of a fired timer) wait after the delivery, or ends that wait
+/** Tests use this to check what a thread that has received an operation's result, or has seen a timer callback's
+    work done, observes before the I/O thread does anything after the delivery, deterministically.  With @a pause
+    true, the next delivery pauses (the pause is taken before the delivery); with @a pause false, the pause is ended
+    (or cancelled if not taken yet), and the function returns True if a delivery took it.  A test must end the pause
+    (also when it fails), or the I/O thread waits until the process exits.
+ */
+static QoreValue f_dbg_async_io_pause_after_delivery(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgPauseAfterDelivery(AsyncIoControllerPriv::DBG_PAUSE_DELIVERY,
+        get_param_value(params, 0).getAsBool());
+}
+
+//! Debug-only: makes the next callback worker that sends the result of a continuePoll() step of an async I/O
+//! operation to the I/O thread wait after sending it, or ends that wait
+/** Tests use this to check what a thread that has received an operation's result observes before the callback
+    worker that ran the operation's last step does anything after sending the step's result, deterministically.
+    With @a pause true, the next step result pauses (the pause is taken before the result is sent); with @a pause
+    false, the pause is ended (or cancelled if not taken yet), and the function returns True if a step result took
+    it.  A test must end the pause (also when it fails), or the worker waits until the process exits.
+ */
+static QoreValue f_dbg_async_io_pause_after_step_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgPauseAfterDelivery(AsyncIoControllerPriv::DBG_PAUSE_STEP_RESULT,
+        get_param_value(params, 0).getAsBool());
+}
+
 //! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
 /** This reproduces, deterministically and without a race, the exact object state behind the AsyncIoController
     I/O-thread spin: an abrupt transport drop (a client that dropped TCP without a WebSocket close frame) tore the
@@ -21492,6 +21520,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_pause_after_delivery", f_dbg_async_io_pause_after_delivery,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_async_io_pause_after_step_result", f_dbg_async_io_pause_after_step_result,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
