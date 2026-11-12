@@ -69,6 +69,7 @@ public class HttpServerQuicKeepAliveTest inherits QUnit::Test {
         qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
 
         addTestCase("the keep-alive interval policy", \testNativePolicy());
+        addTestCase("the poll timeout policy honours every QUIC timer", \testNativePollTimeout());
         addTestCase("an HTTP/3 request PINGs every 15 s, within a 30 s NAT timeout", \testDefaultIdleCapped());
         addTestCase("an HTTP/3 request with a short idle timeout PINGs at half of it", \testShortIdleHalved());
 
@@ -129,9 +130,24 @@ public class HttpServerQuicKeepAliveTest inherits QUnit::Test {
 
     #! The policy itself, in the native test next to the qore binary (qore-quic-keep-alive-test)
     testNativePolicy() {
-        string native = ENV.QORE_QUIC_KEEP_ALIVE_TEST ?? dirname(qore_exe) + "/qore-quic-keep-alive-test";
+        runNativeTest(ENV.QORE_QUIC_KEEP_ALIVE_TEST ?? dirname(qore_exe) + "/qore-quic-keep-alive-test",
+            "keep-alive");
+    }
+
+    #! The poll timeout policy, in the native test next to the qore binary (qore-quic-poll-timeout-test)
+    /** Every timer of a connection is honoured, however close or late: replacing the pacing timer due microseconds
+        after a send, or a timer that came due while the I/O thread was descheduled, with the 1 s fallback delayed
+        the acknowledgement of a keep-alive PING by a second, which put the next PING at the idle deadline.
+    */
+    testNativePollTimeout() {
+        runNativeTest(ENV.QORE_QUIC_POLL_TIMEOUT_TEST ?? dirname(qore_exe) + "/qore-quic-poll-timeout-test",
+            "poll timeout");
+    }
+
+    #! Runs a native test executable and checks that all of its cases pass
+    private runNativeTest(string native, string what) {
         if (!is_file(native)) {
-            testSkip("the native QUIC keep-alive test executable is not available");
+            testSkip(sprintf("the native QUIC %s test executable is not available", what));
             return;
         }
         int rc;
