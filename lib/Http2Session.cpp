@@ -2618,9 +2618,15 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
                     NGHTTP2_REFUSED_STREAM);
                 stream->body.clear();
-                // the discarded data is credited; data credited on consumption before is settled with the stream
-                if (len && !h2->is_server) {
-                    h2->consumeReceivedData(stream_id, len);
+                // the discarded chunk is credited here on both sides: the server credits arriving data below, which
+                // this return skips, so its connection window lost the chunk with every oversized tunnel (issue
+                // #5841); data that the client credits on consumption is settled with the stream
+                if (len) {
+                    int rv = h2->consumeReceivedData(stream_id, len);
+                    if (rv) {
+                        printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len,
+                            stream_id, nghttp2_strerror(rv));
+                    }
                 }
                 return 0;
             }
