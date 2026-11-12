@@ -63,6 +63,14 @@ const MaxWindow = 16 * 1024 * 1024;
 #! The initial stream window of the HTTP/2 client (SETTINGS_INITIAL_WINDOW_SIZE)
 const H2Window = 1024 * 1024;
 
+#! A bound on the HTTP/3 framing in the QUIC stream window of a response
+/** The QUIC stream window counts all the bytes of the stream: the HEADERS frame and the header of each DATA frame
+    (a type and a length of up to 9 bytes) as well as the data, so a client that does not read receives less data than
+    its window.  Even with one DATA frame for each QUIC packet (about 14000 frames in 16 MiB), the framing is less than
+    this.
+*/
+const H3FramingSlack = 256 * 1024;
+
 #! The size of the plain response returned whole
 const PlainSize = 8 * 1024 * 1024;
 const RandomSize = 256 * 1024;
@@ -395,9 +403,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
     #! Fills a stream that the client does not read: the server writes until its send buffer for the stream is full
     /** The server's buffer is also full while the server has not sent the data yet: its I/O thread sends the data
         asynchronously (under load, after the buffer has filled), and an HTTP/3 server sends it more slowly than it
-        takes it.  Of the data that the server took, the client's stream window admits all of it up to the window, and
-        no more while the client does not read, so in debug builds the client's receipt of that much is waited for
-        before this returns.
+        takes it.  Of the data that the server took, the client's stream window admits all of it up to the window (less
+        the HTTP/3 framing), and no more while the client does not read, so in debug builds the client's receipt of
+        that much is waited for before this returns.
 
         @param proto the protocol of the stream
         @param w the stream's writer; nothing may have been written to the stream yet
@@ -414,7 +422,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         int taken = w.writeUntilFull();
         assertGt(0, taken + 1, sprintf("the server's buffer is full before %d bytes", MaxBytes));
         if (before) {
-            int admitted = min(taken, getStreamWindow(proto));
+            # the HTTP/2 window counts only the data; the HTTP/3 window also counts the framing, so of a window's worth
+            # of data or more, the client receives the window less the framing (see H3FramingSlack)
+            int admitted = min(taken, proto == "h3" ? MaxWindow - H3FramingSlack : H2Window);
             assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + admitted,
                 HangGuard), "the client receives the data that its stream window admits");
         }
