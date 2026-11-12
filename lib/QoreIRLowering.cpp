@@ -13457,8 +13457,39 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     // the receiver is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
-    // (issue #5784)
-    if (m && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
+    // (issue #5784); a pseudo-method resolved at parse time is checked only for a receiver with no value
+    // (qore_check_method_call_receiver()), so a receiver whose type excludes no value needs no check (and the call
+    // stays fused with the operation that gives its receiver, as value.lwr().contains(...))
+    // the declared type is not enough: a value of a type that excludes no value can still have none (an unassigned
+    // local or member declared "string"); the parse analysis of the receiver tells that it has one, as for the
+    // string case transform of a switch statement
+    bool pseudo_receiver_has_value = false;
+    if (m && m->isPseudo() && m->getMethod()) {
+        QoreParseAnalysis receiver_analysis;
+        if (getAnalysis(op->getExpression(), receiver_analysis)) {
+            const QoreTypeInfo* receiver_type = receiver_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                ? selectAnalysisType(receiver_analysis) : nullptr;
+            pseudo_receiver_has_value = receiver_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || (receiver_type && receiver_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                    && QoreTypeInfo::hasType(receiver_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING));
+        }
+        // the result of a call that cannot be overridden has the call's return type, which is enforced when the
+        // call returns: a return type that excludes no value gives a value (value.lwr().contains(...)); a pseudo-
+        // method, a function and a static method are not overridden, while a method of an object can be overridden
+        // in a subclass with a return type that accepts no value (*string m())
+        if (!pseudo_receiver_has_value) {
+            const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
+            const QoreDotEvalOperatorNode* receiver_dot = dynamic_cast<const QoreDotEvalOperatorNode*>(receiver);
+            bool not_overridden = receiver_dot
+                ? receiver_dot->getMethodCall() && receiver_dot->getMethodCall()->isPseudo()
+                : receiver && (receiver->getType() == NT_FUNCTION_CALL || receiver->getType() == NT_STATIC_METHOD_CALL);
+            const QoreTypeInfo* receiver_type = m->getSourceType();
+            pseudo_receiver_has_value = not_overridden && QoreTypeInfo::hasType(receiver_type)
+                && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
+        }
+    }
+    if (m && !pseudo_receiver_has_value && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
         builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
     }
 

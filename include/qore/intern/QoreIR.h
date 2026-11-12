@@ -1333,7 +1333,8 @@ struct QoreIRPhiIncoming;
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
     MethodCall,     //!< the call is a method call: a valid object needs no other check
-    Other,          //!< the call is a call through a call reference or of a value: always the full check
+    CallReference,  //!< the call is a call through a call reference: a closure needs no other check
+    Other,          //!< any other call: always the full check
 };
 
 class QoreIRInstruction {

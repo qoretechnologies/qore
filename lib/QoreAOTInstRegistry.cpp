@@ -41,6 +41,8 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/QoreTimeZoneManager.h"
@@ -1552,9 +1554,53 @@ static std::unique_ptr<QoreIRInstruction> readLValue(
 // Group 9: Expr - General expression instruction
 // ============================================================================
 
+//! Writes the call of a check of its target (QoreIROpcode::CheckCallTarget, issue #5784) without its arguments
+/** The check needs only what identifies the call: the method of a method call (whose receiver is the check's operand),
+    and the kind of a call through a call reference (whose callable is the operand); the arguments, which the call
+    evaluates after the check, can hold expressions that have no serialized form of their own.
+*/
+static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        if (const MethodCallNode* mc = dot->getMethodCall()) {
+            // the inline form of a method call (AOTExprKind::DOT_EVAL_TARGET): class, method (with its variant),
+            // pseudo flag, receiver (none: it is the operand) and no arguments
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
+            std::string class_path = instRegistryGetClassPath(mc->getClass(), mc->isPseudo());
+            ctx.writer.writeStringRef(class_path.c_str());
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            instRegistryAppendMethodVariantRef(method_ref, mc->getVariant(), mc->isPseudo());
+            ctx.writer.writeStringRef(method_ref.c_str());
+            ctx.writer.writeU8(mc->isPseudo() ? 1 : 0);
+            if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+                return false;
+            }
+            ctx.writer.writeU8(0);
+            return true;
+        }
+    }
+    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // a call through a call reference (AOTExprKind::CALLREF_CALL): no callable (it is the operand) and no
+        // arguments
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+            return false;
+        }
+        ctx.writer.writeU8(0);
+        return true;
+    }
+    return instRegistryWriteCallTargetExpr(ctx, expr);
+}
+
 static bool writeExpr(AOTInstWriteCtx& ctx) {
     auto* ei = static_cast<const QoreIRExprInstruction*>(ctx.inst);
     bool expr_written = false;
+    if (ei->opcode == QoreIROpcode::CheckCallTarget) {
+        if (!instRegistryWriteCheckCallTargetExpr(ctx, ei->expr)) {
+            return false;
+        }
+        expr_written = true;
+    }
     if ((ei->opcode == QoreIROpcode::Call
             || ei->opcode == QoreIROpcode::CallMethod
             || ei->opcode == QoreIROpcode::CallStatic)
