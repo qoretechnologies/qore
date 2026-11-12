@@ -107,6 +107,18 @@ int reflection_check_method_access(const QoreReflectionCaller& caller, const Qor
     return 0;
 }
 
+//! returns the functional domains of \a dom that the caller or the target Program does not allow
+static int64 reflection_denied_domains(const QoreReflectionCaller& caller, int64 dom, const QoreProgram* target) {
+    int64 denied = 0;
+    for (int i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(1ULL << i);
+        if ((dom & bit) && !caller.allowsDomain(bit, target)) {
+            denied |= bit;
+        }
+    }
+    return denied;
+}
+
 int reflection_check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* variant,
         const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink) {
     // a method variant that is not public, used by a caller to which member access applies
@@ -124,7 +136,7 @@ int reflection_check_variant_call(const QoreReflectionCaller& caller, const Qore
     xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'; functional domain: "
         "%s", caller_refused ? "parse options" : "the parse options of the Program it was found in",
         cname ? "method" : "function", cname ? cname : "", cname ? "::" : "", fname, variant->getSignatureText(),
-        q_describe_functional_domains(variant->getDomain()).c_str());
+        q_describe_functional_domains(reflection_denied_domains(caller, variant->getDomain(), target)).c_str());
     return -1;
 }
 

@@ -464,6 +464,18 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     );
 }
 
+//! returns the functional domains of \a dom that the caller or the target Program does not allow
+static int64 qore_reflection_denied_domains(const QoreReflectionCaller& caller, int64 dom, const QoreProgram* target) {
+    int64 denied = 0;
+    for (int i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(1ULL << i);
+        if ((dom & bit) && !caller.allowsDomain(bit, target)) {
+            denied |= bit;
+        }
+    }
+    return denied;
+}
+
 QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
         QoreProgram* pgm, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
     const QoreFunction* f = reinterpret_cast<const QoreFunction*>(this);
@@ -479,7 +491,7 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
         xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'; "
             "functional domain: %s", caller_refused ? "parse options" : "the parse options of the Program it was "
             "found in", getName(), variant ? variant->getSignatureText() : "...",
-            qore_describe_source_domains(dom).c_str());
+            qore_describe_source_domains(qore_reflection_denied_domains(caller, dom, pgm)).c_str());
         return QoreValue();
     }
     // Builtins can enter user code or construct Programs as well (for example create_object()), so every call

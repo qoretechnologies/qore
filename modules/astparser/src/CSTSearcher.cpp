@@ -2547,7 +2547,7 @@ std::string CSTSearcher::buildFunctionSignature(TSNode node, const AstParseResul
         ss << " const";
     }
 
-    // the attribute list (ex: [dom=PROCESS]), which declares the functional domains of the code
+    // the attribute list (ex: [dom=PROCESS_CONTROL]), which declares the functional domains of the code
     TSNode attrs = cst_find_named_child(node, "callable_attributes", cancel);
     if (!ts_node_is_null(attrs)) {
         ss << " " << result->getNodeText(attrs);

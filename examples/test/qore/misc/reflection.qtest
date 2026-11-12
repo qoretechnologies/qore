@@ -3719,6 +3719,21 @@ auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").g
             assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to .*; functional domain: PROCESS_CONTROL "
                 "\\(restricted by PO_NO_PROCESS_CONTROL\\)$", \p.callFunction(), fn, fn);
         }
+
+        # of the declared domains, only those that are restricted are named
+        Program p2(PO_NEW_STYLE | PO_NO_NETWORK);
+        p2.parse("%requires reflection
+int sub tagged() [dom=NETWORK,FILESYSTEM] { return 1; }
+class T { int m() [dom=NETWORK,FILESYSTEM] { return 2; } }
+auto sub fcall() { return Function::forName(\"tagged\").call(); }
+auto sub vcall() { return Function::forName(\"tagged\").getVariants()[0].call(); }
+auto sub mcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").call(t); }
+auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").getVariants()[0].call(t); }
+", "reflect2");
+        foreach string fn in ("fcall", "vcall", "mcall", "mvcall") {
+            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to .*; functional domain: NETWORK "
+                "\\(restricted by PO_NO_NETWORK\\)$", \p2.callFunction(), fn, fn);
+        }
     }
 
     staticVariantTests() {
