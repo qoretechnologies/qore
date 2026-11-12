@@ -559,6 +559,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return response.trailers;
     }
 
+    #! Sends the application's WebSocket close frame through the stream's frame state
+    /** See @ref HttpClientStreamHandle::sendFrameStateClose()
+    */
+    bool sendFrameStateClose(int code, *string reason) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming || !exists stream_id) {
+                return False;
+            }
+            sid = stream_id;
+        }
+        return h2conn.sendFrameStateClose(sid, code, reason);
+    }
+
     #! Installs a WebSocket frame-state decoder for this H2 CONNECT stream
     /** After this call, WS DATA chunks are decoded in pure C++ and pushed
         as typed frame hashes to @a msg_queue; raw response hashes no

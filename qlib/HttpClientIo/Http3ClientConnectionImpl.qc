@@ -241,6 +241,17 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.registerStreamNotifyAndListener(stream_id, listener);
     }
 
+    #! Sends the application's WebSocket close frame through the stream's frame state
+    /** See @ref Qore::Http3ClientPollOperationBase::sendFrameStateClose() "Http3ClientPollOperationBase::sendFrameStateClose()"
+
+        @return @ref True if the stream's frame state took the close, @ref False if the stream has none
+
+        @since HttpClientIo 1.0
+    */
+    bool sendFrameStateClose(int stream_id, int code, *string reason) {
+        return poll_op.sendFrameStateClose(stream_id, code, reason);
+    }
+
     #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
     /** @param stream_id the QUIC stream ID
         @param msg_queue Queue to receive typed frame hashes

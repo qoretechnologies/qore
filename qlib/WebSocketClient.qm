@@ -7995,9 +7995,12 @@ public class WebSocketClientHcioPollOp {
             if (answer) {
                 try {
                     # a close frame without a status code (1005) is answered with one without a status code: 1005 is
-                    # never sent (RFC 6455 section 7.4.1)
-                    stream.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary()
-                        : code.encodeMsb(2), WSOP_Close, True));
+                    # never sent (RFC 6455 section 7.4.1); the answer goes through the frame state, as the client's
+                    # own close (see sendCloseIntern())
+                    if (!stream.sendFrameStateClose(code)) {
+                        stream.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary()
+                            : code.encodeMsb(2), WSOP_Close, True));
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
                 }
@@ -8212,6 +8215,12 @@ public class WebSocketClientHcioPollOp {
             logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
         }
         try {
+            # the close frame is sent through the stream's frame state, so that the frame state sends no second one
+            # when it fails the connection later with an error (RFC 6455 section 5.5.1)
+            if (stream.sendFrameStateClose(code, reason)) {
+                logDebug("sent the close frame: close code %d", code);
+                return;
+            }
             # Close frame body: 2-byte big-endian close code + optional reason text; 1005 and 1006 are never sent in
             # a close frame (RFC 6455 section 7.4.1), so the frame has no status code then
             binary close_body = binary();
@@ -8222,6 +8231,7 @@ public class WebSocketClientHcioPollOp {
                 }
             }
             stream.sendData(ws_encode_message(close_body, WSOP_Close, True));
+            logDebug("sent the close frame: close code %d", code);
         } catch (hash<ExceptionInfo> ex) {
             logError("close send error: %s: %s", ex.err, ex.desc);
         }
