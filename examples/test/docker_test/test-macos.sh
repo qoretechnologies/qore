@@ -278,6 +278,8 @@ qore_ci_resource_report "before the tests"
 TEST_RC=0
 ./run_tests.sh || TEST_RC=$?
 qore_ci_resource_report "after the tests"
+# the native modules whose tests were skipped under QORE_CI_NATIVE_MODULE_API_TRANSITION=1, in the job's summary
+qore_ci_native_module_notice
 if [ "${TEST_RC}" != "0" ]; then
     exit ${TEST_RC}
 fi
