@@ -1,7 +1,7 @@
 # HttpServer graceful drain on stop (qore#5899)
 
-Status: proposal. The public API (stop() / stopNoWait() / startDrain()) is waiting on David's decision. Everything
-below applies to whichever API is chosen; only the entry points differ.
+Status: implemented (branch feat/5899-stop-drain); David chose option A (see "Decision" below). The sections before
+"Refined mechanism" are the original proposal; "Refined mechanism" and "Implementation notes" describe the code.
 
 ## Goal
 
@@ -173,3 +173,21 @@ So the drain counts with deterministic objects instead:
   read cycle and touches the session only during a drain.
 - **HTTP/3:** one entry per listener, so its token is released when the listener operation ends, after its last
   session drains (the shutdown rework).
+
+## Implementation notes (after the reviews)
+
+- Every write of a connection's entry is `connections{uh} @= (draining ? withDrainToken(uh, ci) : ci)`:
+  withDrainToken() keeps the token of the entry it replaces, or creates one, and sets the socket's drain flag on a
+  connection that carries requests. A server that does not drain pays only the test of the flag.
+- HTTP/1.1 close: while draining, the header of a request is marked close (`info.close`), so a handler's own
+  response says `Connection: close` too; handleRequestResult() makes every result that would return the connection
+  to idle close it, and sets the header of a response that it sends. Fast routes do not answer a draining connection,
+  so its requests are answered on this path.
+- Idle connections: a keep-alive or fused operation closes a draining connection only when no request bytes have
+  arrived; a read-header operation that has received no byte ends, and the controller closes the connection.
+- The end of a dispatch is called on each exit of the dispatch functions (an on_exit block cost every request
+  ~146k instructions in the AOT module, qore#5927).
+- HttpServer refuses, with 503 and `Connection: close`, a protocol upgrade, a CONNECT (tunnel or extended CONNECT)
+  or an event stream that a handler starts while the server stops.
+- Measured cost (design/benchmarks/5587, release): +0.8% per keep-alive request, +0.7% per new connection; accepted
+  by David.

@@ -2088,7 +2088,15 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     stopNoWait() {
         # the stop is claimed here, so that a stop() or the destructor called while it runs does not start another
         if (beginStop(False)) {
-            background runStop(True);
+            try {
+                background runStop(True);
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread could be started: the stop is not claimed any more
+                AutoLock al(stop_m);
+                stopping = False;
+                stop_cond.broadcast();
+                rethrow;
+            }
         }
     }
 
@@ -5079,11 +5087,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # a stopping server takes no new long-lived connection, which would hold its drain until the drain timeout:
-        # a protocol upgrade or an event stream is refused (qore#5899)
-        if (stopping && (rv."code" == 101
+        # a protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event
+        # stream is refused (qore#5899)
+        if (stopping && (rv."code" == 101 || hdr.method == "CONNECT"
                 || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))) {
             listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
-                rv."code" == 101 ? "a protocol upgrade" : "an event stream", cx.handler_name);
+                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
+                cx.handler_name);
             cx.close = True;
             rv = <HttpResponseInfo>{
                 "code": 503,

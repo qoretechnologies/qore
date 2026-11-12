@@ -284,6 +284,12 @@ public class HttpAsyncSocketIoController {
     start() {
         {
             AutoWriteLock al(m);
+            # a restarted controller counts its drains from zero: a stop leaves no dispatch or connection of the
+            # previous run, but a handler task that the stop canceled before it ran never ended its dispatch
+            if (has_been_stopped) {
+                drain_conns = new Counter();
+                dispatch_count = new Counter();
+            }
             has_been_stopped = False;
             # Recreate handler pool if it was stopped (stop() doesn't recreate to avoid
             # leaving worker threads running that would block process exit)
@@ -377,8 +383,9 @@ public class HttpAsyncSocketIoController {
         - HTTP/2: a \c GOAWAY frame tells the client the last stream that the server processed; the connection is
           closed when its open streams have ended
 
-        Long-lived connections (WebSocket, SSE) are closed by the server before it drains.  Use waitDrain() to wait
-        for the drain to end, and stop() afterwards to stop the controller, which closes whatever is left.
+        Long-lived connections (WebSocket, SSE) are closed by the server after the drain starts, with their
+        protocol's close; a CONNECT tunnel is ended.  Use waitDrain() to wait for the drain to end, and stop()
+        afterwards to stop the controller, which closes whatever is left.
 
         Does nothing if a drain was started already or the controller is stopping.
 
@@ -437,6 +444,7 @@ public class HttpAsyncSocketIoController {
                 if (ci.state == HttpConnectionState::Idle) {
                     push idle_socks, ci.sock;
                 } else if (ci.state == HttpConnectionState::KeepAlive
+                        || ci.state == HttpConnectionState::ReadHeader
                         || ci.state == HttpConnectionState::SendAndReadHeader
                         || ci.state == HttpConnectionState::SendStreamAndReadHeader) {
                     # an operation that waits for a request is woken to see the drain: it closes the connection if no
@@ -566,6 +574,23 @@ public class HttpAsyncSocketIoController {
         @return the entry to write
     */
     private hash<HttpActiveConnectionInfo> withDrainToken(string uh, hash<HttpActiveConnectionInfo> ci) {
+        switch (ci.state) {
+            # an HTTP/3 listener's entry is counted by the listener's token (see h3_drain_tokens)
+            case HttpConnectionState::Http3:
+            case HttpConnectionState::Http3Sending:
+                return ci;
+            # an HTTP/1.1 connection that carries requests and was written after the drain started: its keep-alive
+            # operation must end after its response too (see startDrain())
+            case HttpConnectionState::KeepAlive:
+            case HttpConnectionState::ReadHeader:
+            case HttpConnectionState::ReadBody:
+            case HttpConnectionState::SendAndReadHeader:
+            case HttpConnectionState::SendStreamAndReadHeader:
+            case HttpConnectionState::ResponseDelay:
+            case HttpConnectionState::SslHandshake:
+                ci.sock.drainHttpConnection();
+                break;
+        }
         if (!ci.drain_token) {
             ci.drain_token = connections{uh}.drain_token ?? new HttpDrainToken(drain_conns);
         }
@@ -3306,7 +3331,13 @@ public class HttpAsyncSocketIoController {
                 break;
             }
             case HttpConnectionState::ReadHeader: {
-                hash<auto> output = result.spop.getOutput();
+                *hash<auto> output = result.spop.getOutput();
+                # no header: the operation ended without a request, as for a connection that a draining server closes
+                # because it has not sent a byte of a request (qore#5899)
+                if (!output) {
+                    handleConnectionClosed(uh, cinfo);
+                    break;
+                }
                 handleHeaderComplete(uh, cinfo, output);
                 break;
             }
@@ -3423,6 +3454,8 @@ public class HttpAsyncSocketIoController {
                         AutoWriteLock al(m);
                         remove connections{uh};
                     }
+                    # the operation of a draining listener has ended (qore#5899)
+                    endH3Drain(cinfo.sock.uniqueHash());
                 }
                 break;
             }
@@ -3719,6 +3752,11 @@ public class HttpAsyncSocketIoController {
 
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
+        # a draining server answers the request and closes the connection: the handler's own response (one that it
+        # sends itself, too) says so (RFC 9112 section 9.6)
+        if (draining) {
+            output.info.close = True;
+        }
         string dispatch_uh = uh;
         Socket dispatch_sock = cinfo.sock;
         HttpAsyncTarget dispatch_target = cinfo.target;
@@ -3817,17 +3855,13 @@ public class HttpAsyncSocketIoController {
         # Try lightweight inline path first (no body, handler opts in via canHandleInline).
         # This runs directly on the call_dispatcher worker — no handler_pool thread hop.
         # The inline path skips context setup, auth, and logging for maximum throughput.
+        bool handled1;
         try {
             *hash<HttpRequestResultInfo> inline_result = dispatch_target.tryInlineRequest(conn_info);
             if (inline_result) {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
                     inline_result, dispatch_target);
-                if (draining) {
-                    endDispatch(dispatch_uh);
-                } else {
-                    dispatch_count.dec();
-                }
-                return;
+                handled1 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
@@ -3845,20 +3879,25 @@ public class HttpAsyncSocketIoController {
             }
             return;
         }
+        # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
+        if (handled1) {
+            if (draining) {
+                endDispatch(dispatch_uh);
+            } else {
+                dispatch_count.dec();
+            }
+            return;
+        }
 
         # Give the target a protocol-independent admission point before the shared handler queue.
+        bool handled2;
         try {
             *hash<HttpRequestResultInfo> prepared_result =
                 dispatch_target.prepareHttpRequest(conn_info);
             if (prepared_result) {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
                     prepared_result, dispatch_target);
-                if (draining) {
-                    endDispatch(dispatch_uh);
-                } else {
-                    dispatch_count.dec();
-                }
-                return;
+                handled2 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
@@ -3874,6 +3913,15 @@ public class HttpAsyncSocketIoController {
             if (dispatch_state != HttpConnectionState::Http3
                     && dispatch_state != HttpConnectionState::Http3Sending) {
                 try { dispatch_sock.close(); } catch () {}
+            }
+            return;
+        }
+        # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
+        if (handled2) {
+            if (draining) {
+                endDispatch(dispatch_uh);
+            } else {
+                dispatch_count.dec();
             }
             return;
         }
@@ -3945,6 +3993,10 @@ public class HttpAsyncSocketIoController {
         @param body_data the body data read by the I/O controller (may be NOTHING for empty body)
     */
     private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
+        # a draining server answers the request and closes the connection (see handleHeaderComplete())
+        if (draining) {
+            cinfo.pending_header_info.close = True;
+        }
         string dispatch_uh = uh;
         Socket dispatch_sock = cinfo.sock;
         HttpAsyncTarget dispatch_target = cinfo.target;
@@ -4005,18 +4057,14 @@ public class HttpAsyncSocketIoController {
         # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
 
         # Give the target the same pre-dispatch admission point as a bodyless request.
+        bool handled3;
         try {
             *hash<HttpRequestResultInfo> prepared_result =
                 dispatch_target.prepareHttpRequest(conn_info);
             if (prepared_result) {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
                     prepared_result, dispatch_target);
-                if (draining) {
-                    endDispatch(dispatch_uh);
-                } else {
-                    dispatch_count.dec();
-                }
-                return;
+                handled3 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
@@ -4030,6 +4078,15 @@ public class HttpAsyncSocketIoController {
             dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
                 dispatch_cx, dispatch_uh, "request preparation after body read");
             try { dispatch_sock.close(); } catch () {}
+            return;
+        }
+        # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
+        if (handled3) {
+            if (draining) {
+                endDispatch(dispatch_uh);
+            } else {
+                dispatch_count.dec();
+            }
             return;
         }
 

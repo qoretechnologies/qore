@@ -6867,9 +6867,12 @@ bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
 //! Makes the HTTP keep-alive poll operations of the socket close the connection instead of waiting for another request
 /** Used by an HTTP server that drains its connections before it stops: an operation started with
     @ref startPollSendHttpResponseAndReadHeader(), @ref startPollIdleAndReadHttpHeader() or the streaming variant
-    of the former ends after the response that it sends, or at once if it is waiting for a request, in a state that
-    tells the server to close the connection.  An operation that is waiting must be woken to see the change (see
-    @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").
+    of the former ends after the response that it sends, in a state that tells the server to close the connection,
+    unless a request has arrived, which is read and answered on the server's ordinary path (no fast route answers
+    it); an operation that waits for a request ends at once if none has arrived, as does an operation started with
+    @ref startPollReadHttpHeader() that has received no byte of a request.  An operation that is waiting must be
+    woken to see the change (see @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").  On
+    the UDP socket of an HTTP/3 listener, the change makes the server's QUIC operation drain its sessions.
 
     The change cannot be undone.
 

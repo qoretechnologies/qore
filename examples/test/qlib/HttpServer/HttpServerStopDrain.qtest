@@ -139,6 +139,7 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         addTestCase("stopImmediate() does not wait for a request in progress", \testStopImmediate());
         addTestCase("stop() answers a request whose body is still arriving", \testBodyInProgress());
         addTestCase("stop() refuses an event stream that a handler starts during the drain", \testStreamRefused());
+        addTestCase("stop() closes a connection that has sent no request", \testPreconnectClosed());
         set_return_value(main());
     }
 
@@ -372,6 +373,41 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         assertEq(503, resp.status_code, "an event stream started during the drain is refused");
         assertEq("close", resp.connection, "the response closes the connection");
         assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the request is answered");
+        assertFalse(appender.seen("did not finish"), "the drain did not time out");
+    }
+
+    testPreconnectClosed() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        # a connection that sends nothing (a browser's preconnect, for example), accepted before the request below
+        Socket pre();
+        pre.connect(sprintf("127.0.0.1:%d", setup.port), 10s);
+        on_exit pre.close();
+
+        # a request in progress keeps the drain going
+        Socket busy = sendRequest(setup.port, "block");
+        on_exit busy.close();
+        assertEq("block", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        appender.waitFor("drain started");
+
+        # the connection without a request is closed when the drain starts, not when its read times out
+        assertEq("SOCKET-CLOSED", readEnd(pre), "the connection without a request is closed");
+        handler.releaseAll();
+        assertEq(200, readResponse(busy).status_code, "the request in progress is answered");
+        assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends");
         assertFalse(appender.seen("did not finish"), "the drain did not time out");
     }
 

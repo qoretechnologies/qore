@@ -18390,6 +18390,14 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
 
 QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
     QoreHashNode* rv = SocketRecvPollOperationBase::continuePoll(xsink);
+    // a draining server closes a connection that has not sent a byte of a request (a connection that was opened just
+    // before the drain started, for example): the operation ends without a header, as when the peer closes it; a
+    // request that has started to arrive is read and answered (qore#5899)
+    if (rv && sock->priv->http_draining.load(std::memory_order_acquire) && (!poll_state
+            || !reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived())) {
+        rv->deref(xsink);
+        return nullptr;
+    }
     if (rv || !data) {
         return rv;
     }
@@ -19591,6 +19599,11 @@ static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::st
 
 int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
         ExceptionSink* xsink) {
+    // a draining server answers the request on the ordinary path, which closes the connection after the response
+    // (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        return 0;
+    }
     qore_socket_private* sp = sock->priv->socket->priv;
     std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
     if (!fast_ctx) {
@@ -19642,6 +19655,11 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
 
 int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
         ExceptionSink* xsink) {
+    // a draining server answers the request on the ordinary path, which closes the connection after the response
+    // (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        return 0;
+    }
     qore_socket_private* sp = sock->priv->socket->priv;
     std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
     if (!fast_ctx) {

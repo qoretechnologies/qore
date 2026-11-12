@@ -883,6 +883,14 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
         response_send_results.emplace_back(*it, false);
         it = response_send_watches.erase(it);
     }
+    // the tunnel keys of the session are not needed any more
+    for (auto it = tunnel_stream_keys.begin(); it != tunnel_stream_keys.end();) {
+        if (it->compare(0, prefix.size(), prefix) == 0) {
+            it = tunnel_stream_keys.erase(it);
+        } else {
+            ++it;
+        }
+    }
     for (auto it = stream_queues.begin(); it != stream_queues.end();) {
         if (it->first.compare(0, prefix.size(), prefix) != 0) {
             ++it;
