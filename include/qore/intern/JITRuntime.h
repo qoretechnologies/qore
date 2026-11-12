@@ -174,6 +174,12 @@ int64_t qore_rt_is_null_or_nothing(uint64_t val);
 */
 uint64_t qore_rt_unique_container(uint64_t val);
 
+//! Makes the hash or list that an AOT body local holds unique (qore#5847)
+/** The unique step of a weak assignment from an AOT body local, which the program publishes to the runtime stack: a
+    shared container is replaced by a copy in the variable of the slot; a value of another type is left as it is
+*/
+void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Increment reference count if value is a pointer type
 void qore_rt_incref(uint64_t val);
 

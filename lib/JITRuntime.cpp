@@ -145,6 +145,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
     { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
+    { "qore_rt_unique_local_aot", reinterpret_cast<void*>(&qore_rt_unique_local_aot) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -13680,6 +13681,30 @@ extern "C" DLLEXPORT void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int
 extern "C" DLLEXPORT LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return ctx->locals[idx];
+}
+
+extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    if (!var || var->closureUse()) {
+        return;
+    }
+    // the variable of the frame: a local that is not a closure variable belongs to one thread, so no lock is needed
+    LocalVarValue* lvar = thread_try_find_lvar(var);
+    if (!lvar) {
+        return;
+    }
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(lvar->val.getValue(), copied);
+    if (!copied) {
+        return;
+    }
+    // the variable takes the copy; the container it held is shared, so releasing the variable's reference cannot
+    // destroy it
+    AbstractQoreNode* old = lvar->val.assign(unique);
+    if (old) {
+        old->deref(xsink);
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

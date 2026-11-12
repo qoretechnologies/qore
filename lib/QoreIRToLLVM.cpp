@@ -34589,6 +34589,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
+            // the same step for an AOT body local, which the program publishes to the runtime stack: the helper makes
+            // the variable's container unique without the navigation of a path, and the cache is reloaded from the
+            // variable as after any lvalue operation
+            if (inst->opcode == QoreIROpcode::LValuePathUnary && path_inst->unary_op == LVUnaryOp::EnsureUnique
+                    && aot_mode && aot_slots && local_key && !direct_self_mutation && path_inst->path.size() == 1
+                    && path_inst->path[0].kind == LVPathStepKind::LocalVar
+                    && current_ir_func->hasIRStorage(local_key) && aot_body_locals.count(local_key)
+                    && !native_int_locals.count(local_key) && !native_float_locals.count(local_key)
+                    && !native_bool_locals.count(local_key)) {
+                auto unique_local_fn = module.getOrInsertFunction("qore_rt_unique_local_aot",
+                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                int32_t unique_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local_key);
+                builder->CreateCall(unique_local_fn,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, unique_slot), xsink_arg});
+                if (canReloadLocalFromRuntime(local_key, false)) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func, false);
+                } else {
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+                if (inst->result.isValid()) {
+                    values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    nanboxed_values.insert(inst->result.id);
+                }
+                return true;
+            }
+
             // Pre-decref old result if result is used
             if (inst->result.isValid()) {
                 // Create or reuse cleanup alloca
