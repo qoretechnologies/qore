@@ -338,6 +338,16 @@ struct qore_es_private {
         return xsink.priv;
     }
 
+    //! clears the exceptions of a sink whose exception an on_error handler rethrew, which replaces it (#5904)
+    /** A thread exit that is pending in the sink, which another handler of the block raised, stays pending, as
+        ExceptionSink::clear() would also clear it.
+    */
+    DLLLOCAL static void clearForRethrow(ExceptionSink& xsink) {
+        bool thread_exit = xsink.priv->thread_exit;
+        xsink.clear();
+        xsink.priv->thread_exit = thread_exit;
+    }
+
     DLLLOCAL static void addStackInfo(ExceptionSink& xsink, qore_call_t type, const char* class_name,
         const char* code, const QoreProgramLocation& loc) {
         xsink.priv->addStackInfo(type, class_name, code, loc);

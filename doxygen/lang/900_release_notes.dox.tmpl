@@ -1604,6 +1604,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref rethrow "rethrow" in an @ref on_error "on_error" handler discarded a pending
+      @ref thread_exit "thread_exit" that another handler had executed, so the thread continued
+      (<a href="https://github.com/qoretechnologies/qore/issues/5904">issue 5904</a>)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
