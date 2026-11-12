@@ -15046,6 +15046,15 @@ load_local_done:
                 if (xsink) {
                     xsink->raiseThreadExit();
                 }
+                // in a try statement: its landing pad runs the handlers of the scopes left (qore#5912); the
+                // statement's temporaries are released first, as for a throw
+                if (inst->exception_target && xsink) {
+                    cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
+                    prev_block = block;
+                    block = inst->exception_target;
+                    ip = 0;
+                    break;
+                }
                 unwindForException();
                 cleanupLocalCaches();
                 return exitAfterUnwind();

@@ -316,7 +316,10 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRThrowInstruction* createRethrow(QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
+    //! Emit a thread_exit statement; \a exception_target is the handler of a try statement that it leaves, whose
+    //! landing pad runs the handlers of the scopes left (qore#5912)
+    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr,
+        QoreIRBasicBlock* exception_target = nullptr);
     QoreIRLandingPadInstruction* createLandingPad(size_t scope_depth, uint32_t try_scope_id = 0,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
