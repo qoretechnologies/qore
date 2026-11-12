@@ -20,6 +20,7 @@ import contextlib
 import importlib.util
 import io
 from pathlib import Path
+import os
 import platform
 import re
 import shutil
@@ -130,6 +131,31 @@ ARM64_HARDENING = {
     "aarch64-linux-gnu": "_FORTIFY_SOURCE=3 __SSP_STRONG__=3",
     "aarch64-alpine-linux-musl": "_FORTIFY_SOURCE=2 __SSP_STRONG__=3",
 }
+
+
+def gnu_toolchain():
+    """Returns (True, "") if g++ is GCC and objdump and c++filt are GNU binutils, which the tests of object code need
+    (GCC's records and clones, GNU objdump's output), else (False, the reason); on macOS, g++ is Apple clang and
+    objdump is llvm-objdump"""
+    for tool in ("g++", "objdump", "c++filt"):
+        if not shutil.which(tool):
+            return False, "%s is not available" % tool
+    try:
+        macros = subprocess.run(["g++", "-dM", "-E", "-x", "c++", os.devnull], stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, universal_newlines=True).stdout
+        if "__GNUC__" not in macros or "__clang__" in macros:
+            return False, "g++ is not GCC"
+        for tool in ("objdump", "c++filt"):
+            version = subprocess.run([tool, "--version"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                universal_newlines=True).stdout
+            if not version or "GNU" not in version.splitlines()[0]:
+                return False, "%s is not GNU binutils" % tool
+    except OSError as e:
+        return False, "cannot run the toolchain: %s" % e
+    return True, ""
+
+
+GNU_TOOLCHAIN = gnu_toolchain()
 
 
 class RepositoryBudgetsTest(unittest.TestCase):
@@ -312,15 +338,19 @@ class CheckTest(unittest.TestCase):
 
     def test_other_build_skipped(self):
         for compiler, build_type, target in (("Clang", "Release", "x86_64-linux-gnu"),
-                ("GNU", "Debug", "x86_64-linux-gnu"), ("GNU", "Release", "x86_64-alpine-linux-musl")):
+                ("GNU", "Debug", "x86_64-linux-gnu"), ("GNU", "RelWithDebInfo", "x86_64-linux-gnu"),
+                ("GNU", "MinSizeRel", "x86_64-linux-gnu"), ("GNU", "release", "x86_64-alpine-linux-musl")):
             with build_dir(GCC_SU, compiler, build_type, target=target) as d:
                 b = write_budgets(d, "1 UserVariantBase::eval\n")
                 rc, out, _ = run(["--budgets", b, str(d)])
                 self.assertEqual(0, rc, out)
                 self.assertIn("SKIPPED", out)
-                if build_type == "Debug":
-                    self.assertIn("SKIPPED: frame budgets are calibrated for Release builds only; per-level growth "
-                        "in debug builds is covered by recursion-frame-budget.qtest (build type Debug)", out)
+                if build_type.lower() != "release":
+                    self.assertIn("SKIPPED: not a Release build (build type %s): frame budgets are calibrated for "
+                        "Release builds only; per-level growth in debug builds is covered by "
+                        "recursion-frame-budget.qtest" % build_type, out)
+                else:
+                    self.assertNotIn("not a Release build", out)
                 # --force checks it anyway
                 rc, out, _ = run(["--budgets", b, "--force", str(d)])
                 self.assertEqual(1, rc, out)
@@ -400,8 +430,29 @@ class CheckTest(unittest.TestCase):
             self.assertEqual(1, rc, out)
             self.assertIn("MISSING", out)
 
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "needs g++ and objdump")
+    def test_dynamic_records(self):
+        # "dynamic,bounded" includes the allocation; "dynamic" does not; a function with any "dynamic" record fails
+        su = ("/src/lib/a.cpp:1:1:int f(int)\t32\tdynamic\n/src/lib/a.cpp:2:1:int g(int)\t96\tdynamic,bounded\n"
+            "/src/lib/a.cpp:3:1:int h(int)\t96\tstatic\n/src/lib/a.cpp:4:1:int h(double)\t16\tdynamic\n")
+        self.assertTrue(csu.su_line_dynamic(su.splitlines()[0]))
+        self.assertFalse(csu.su_line_dynamic(su.splitlines()[1]))
+        self.assertFalse(csu.su_line_dynamic(su.splitlines()[2]))
+        self.assertFalse(csu.su_line_dynamic("a.cpp:1:1:int f(int)\t32"))
+        results = {r[0]: r for r in csu.check([("f", 100, 1), ("g", 100, 1), ("h", 100, 1)], frames_of(su))}
+        self.assertEqual("DYNAMIC", results["f"][5][0])
+        self.assertIsNone(results["g"][5])
+        self.assertEqual(96, results["g"][2])
+        self.assertEqual("DYNAMIC", results["h"][5][0])
+        self.assertIn("int h(double)", results["h"][5][1])
+        with build_dir(su) as tmp:
+            budgets = write_budgets(tmp, "100 f\n100 g\n100 h\n")
+            code, out, err = run(["--budgets", str(budgets), str(tmp)])
+            self.assertEqual(1, code, out + err)
+            self.assertRegex(out, r"DYNAMIC +f ")
+            self.assertRegex(out, r"OK +g ")
+            self.assertRegex(out, r"DYNAMIC +h ")
+
+    @unittest.skipUnless(*GNU_TOOLCHAIN)
     def test_samples_with_gcc(self):
         # GCC's clones in the samples (examples/test/cmake/stack-usage-samples), compiled with g++ -O3 for the host:
         # the check's result for each function must agree with what the compiler's own output shows, found here
@@ -464,6 +515,8 @@ class CheckTest(unittest.TestCase):
                     self.assertEqual(oracle.status(func), problem[0] if problem else None, label)
                     if calibrated:
                         self.assertEqual(shape == split, bool(parts), label)
+                        # none of the samples is meant to be FOLDED, DYNAMIC or have an OVERLOAD-CALL
+                        self.assertIsNone(problem, label)
 
 
 # markers of a branch target and padding, which are not part of what a function does
@@ -541,11 +594,12 @@ class SampleOracle:
         overloads = self.functions(func)
         for mangled, _, size in overloads:
             insns = self.instructions(mangled)
-            if size <= 16 and len(insns) == 1 and insns[0][0] in ("jmp", "b"):
+            if size <= 16 and len(insns) == 1 and insns[0][0] in ("jmp", "jmpq", "b"):
                 return "FOLDED"
         names = set(m for m, _, _ in overloads)
         for mangled, _, _ in overloads:
-            if any(i[0] in ("call", "bl") and i[2] in names and i[2] != mangled for i in self.instructions(mangled)):
+            if any(i[0] in ("call", "callq", "bl") and i[2] in names and i[2] != mangled
+                    for i in self.instructions(mangled)):
                 return "OVERLOAD-CALL"
         return None
 
@@ -602,7 +656,7 @@ int K::g(int x) { return g((double)(x + 1)); }
 """
 
 
-@unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "needs g++ and objdump")
+@unittest.skipUnless(*GNU_TOOLCHAIN)
 class ObjectCodeTest(unittest.TestCase):
     """Functions compiled with g++ -O3 whose records do not show their stack use"""
 
@@ -672,28 +726,6 @@ class ObjectCodeTest(unittest.TestCase):
             self.assertEqual("DYNAMIC", results[func][5][0], results[func])
             self.assertIn("known only at run time", results[func][5][1])
         self.assertIsNone(results["fixed"][5], results["fixed"])
-
-    def test_dynamic_records(self):
-        # "dynamic,bounded" includes the allocation; "dynamic" does not; a function with any "dynamic" record fails
-        su = ("/src/lib/a.cpp:1:1:int f(int)\t32\tdynamic\n/src/lib/a.cpp:2:1:int g(int)\t96\tdynamic,bounded\n"
-            "/src/lib/a.cpp:3:1:int h(int)\t96\tstatic\n/src/lib/a.cpp:4:1:int h(double)\t16\tdynamic\n")
-        self.assertTrue(csu.su_line_dynamic(su.splitlines()[0]))
-        self.assertFalse(csu.su_line_dynamic(su.splitlines()[1]))
-        self.assertFalse(csu.su_line_dynamic(su.splitlines()[2]))
-        self.assertFalse(csu.su_line_dynamic("a.cpp:1:1:int f(int)\t32"))
-        results = {r[0]: r for r in csu.check([("f", 100, 1), ("g", 100, 1), ("h", 100, 1)], frames_of(su))}
-        self.assertEqual("DYNAMIC", results["f"][5][0])
-        self.assertIsNone(results["g"][5])
-        self.assertEqual(96, results["g"][2])
-        self.assertEqual("DYNAMIC", results["h"][5][0])
-        self.assertIn("int h(double)", results["h"][5][1])
-        with build_dir(su) as tmp:
-            budgets = write_budgets(tmp, "100 f\n100 g\n100 h\n")
-            code, out, err = run(["--budgets", str(budgets), str(tmp)])
-            self.assertEqual(1, code, out + err)
-            self.assertRegex(out, r"DYNAMIC +f ")
-            self.assertRegex(out, r"OK +g ")
-            self.assertRegex(out, r"DYNAMIC +h ")
 
     @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64", "aarch64", "arm64"), "x86_64 and aarch64 calls")
     def test_overload_call(self):

@@ -579,8 +579,9 @@ def main(argv=None):
         mismatch = calibration_mismatch(settings, config)
         if mismatch:
             if build_type.lower() != "release" and not args.force:
-                print("stack usage: SKIPPED: frame budgets are calibrated for Release builds only; per-level growth in "
-                    "debug builds is covered by recursion-frame-budget.qtest (build type %s)" % build_type)
+                print("stack usage: SKIPPED: not a Release build (build type %s): frame budgets are calibrated for "
+                    "Release builds only; per-level growth in debug builds is covered by recursion-frame-budget.qtest"
+                    % build_type)
                 return 0
             if not args.force:
                 print("stack usage: SKIPPED: the budgets are not calibrated for this build: %s (use --force to check "
