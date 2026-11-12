@@ -14521,6 +14521,23 @@ bool QoreIRLowering::markReferenceArgumentAssignmentsUnknown(
     return true;
 }
 
+//! Returns true if no value of the type can be a reference (issue #5784)
+/** A type without a type (auto, any) can hold one, and so can a reference type (reference, *reference,
+    reference<T>, *reference<T>): each of their values is returned as one of the type's return specs.
+*/
+static bool qore_ir_type_cannot_hold_reference(const QoreTypeInfo* type) {
+    if (!QoreTypeInfo::hasType(type) || type == autoTypeInfo || type == anyTypeInfo) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        qore_type_t t = ret.spec.getType();
+        if (t == NT_REFERENCE || t == NT_ALL || ret.spec.getComplexReference()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const {
     // every argument, in any order: named and mapped arguments are evaluated all the same
     size_t count = parse_args ? parse_args->size() : (args ? args->size() : 0);
@@ -14537,10 +14554,7 @@ bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_a
         // effect; the read of a reference (a parameter declared as a reference, or a local of a type that can hold
         // one, such as auto) gives the referenced value, which can run code (memberGate())
         if (LocalVar* local = getLocalVarFromValue(arg)) {
-            const QoreTypeInfo* type = local->getTypeInfo();
-            if (QoreTypeInfo::hasType(type) && type != autoTypeInfo && type != anyTypeInfo
-                    && !QoreTypeInfo::getReferenceTarget(type)
-                    && QoreTypeInfo::parseReturns(type, NT_REFERENCE) == QTI_NOT_EQUAL) {
+            if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
                 continue;
             }
         }
