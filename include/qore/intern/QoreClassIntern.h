@@ -429,6 +429,10 @@ public:
         // parseResolve and push current return type on stack
         ParseCodeInfoHelper rtih(mf->getName(), signature.getReturnTypeInfo());
 
+        // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+        // them is noted (qore#5805)
+        ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
+
         int err = 0;
 
         // For AOT-compiled methods, statements is null (pre-compiled code)
@@ -524,6 +528,10 @@ public:
 
         // push return type on stack (no return value can be used)
         ParseCodeInfoHelper rtih("destructor", nothingTypeInfo);
+
+        // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+        // them is noted (qore#5805)
+        ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
         // For AOT-compiled methods, statements is null (pre-compiled code)
         if (statements) {

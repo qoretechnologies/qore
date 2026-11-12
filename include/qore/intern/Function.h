@@ -1343,6 +1343,11 @@ protected:
     // that sees them instead of the values of a body published at the same time only instantiates more.
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     mutable std::atomic<bool> all_body_locals_ir_only{false};
+    //! True if the body reads the implicit arguments ($1, $$) of its own call outside any operator that sets them
+    /** such a variant is not called through the fast, inlined or native entries, which set no implicit arguments for
+        it (qore#5805); set by the parse of the body
+    */
+    bool reads_implicit_args = false;
     //! True if argv is actually referenced in the function body
     mutable std::atomic<bool> uses_argv{true};
     //! True if self is actually referenced in the function body
@@ -1763,7 +1768,7 @@ public:
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
-        if (isSynchronized()) {
+        if (isSynchronized() || reads_implicit_args) {
             return false;
         }
         if (!allow_type_parameters && signature.hasTypeParameters()) {
