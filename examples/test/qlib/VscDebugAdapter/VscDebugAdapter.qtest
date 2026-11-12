@@ -87,14 +87,15 @@ class DapClient {
                 return (extract backlog, i, 1)[0];
             }
         }
-        date deadline = now_us() + milliseconds(timeout_ms);
+        # on the monotonic clock, in microseconds
+        int deadline = clock_getmicros() + timeout_ms * 1000;
         while (True) {
             *hash<auto> msg = readMessage(deadline);
             if (!msg) {
                 throw "DAP-ERROR", sprintf("no %s from the adapter %s; the messages received and not taken: %y; "
                     "stray output: %y; adapter stderr: %y", what,
                     proc.running() ? sprintf("within %y", milliseconds(timeout_ms)) : "before it ended",
-                    summarizeBacklog(), stray, readStderr());
+                    summarizeBacklog(), stray.size() > 20 ? stray[stray.size() - 20..] : stray, readStderr());
             }
             if (pred(msg)) {
                 return msg;
@@ -121,7 +122,7 @@ class DapClient {
     }
 
     #! Reads the next message; returns NOTHING if the adapter does not send one before the deadline
-    private *hash<auto> readMessage(date deadline) {
+    private *hash<auto> readMessage(int deadline) {
         while (True) {
             int end = buf.find(<0d0a0d0a>);
             if (end >= 0) {
@@ -154,27 +155,30 @@ class DapClient {
     }
 
     #! Reads more output of the adapter; returns False when the adapter's stdout is at end of file or at the deadline
-    /** readStdoutBinary() returns nothing both at end of file and when nothing arrives within the timeout, and a
-        read can return early, so it is repeated until data arrives, the adapter has exited (then readStdoutBinary()
-        returns nothing at once, so this does not spin) or the deadline passes: an adapter that keeps running without
-        sending the message fails the test case instead of blocking it (qore#5834)
+    /** readStdoutBinary() returns nothing either when nothing arrives within the timeout, which is the deadline, or
+        at once at the end of the adapter's output; an adapter that keeps running without sending the message fails
+        the test case at the deadline instead of blocking it (qore#5834), and at the end of its output, the adapter is
+        given until the deadline to exit, so that a reader does not spin while it ends
+
+        @param deadline the time on the monotonic clock (clock_getmicros()) at which the wait fails
     */
-    private bool fill(date deadline) {
-        while (True) {
-            int remaining_us = (deadline - now_us()).durationMicroseconds();
-            if (remaining_us <= 0) {
-                return False;
-            }
-            # rounded up, so that the wait does not end before the deadline
-            *binary data = proc.readStdoutBinary(65536, (remaining_us + 999) / 1000);
-            if (data) {
-                buf += data;
-                return True;
-            }
-            if (!proc.running()) {
-                return False;
-            }
+    private bool fill(int deadline) {
+        int remaining_us = deadline - clock_getmicros();
+        if (remaining_us <= 0) {
+            return False;
         }
+        # rounded up, so that the wait does not end before the deadline
+        *binary data = proc.readStdoutBinary(65536, (remaining_us + 999) / 1000);
+        if (data) {
+            buf += data;
+            return True;
+        }
+        # the deadline passed, or the output ended: then the adapter ends or has ended
+        remaining_us = deadline - clock_getmicros();
+        if (remaining_us > 0 && proc.running()) {
+            proc.wait((remaining_us + 999) / 1000);
+        }
+        return False;
     }
 
     #! Returns the messages received and not taken, for the message of a failure; repeated messages are counted
@@ -851,7 +855,6 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq(0, proc.exitCode());
     }
 
-    # with the "uncaught" filter, only an exception that no try statement catches stops the thread
     #! a running adapter that does not send the message fails the wait in time, with what it did send (qore#5834)
     missingMessageTest() {
         Process proc = startAdapter();
@@ -877,6 +880,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(proc.wait(30s), "the adapter ends");
     }
 
+    # with the "uncaught" filter, only an exception that no try statement catches stops the thread
     uncaughtExceptionTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, UncaughtProgram);
