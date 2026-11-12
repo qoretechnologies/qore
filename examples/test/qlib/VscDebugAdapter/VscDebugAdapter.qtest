@@ -38,6 +38,7 @@
 
 %exec-class VscDebugAdapterTest
 
+%ifndef NoProcess
 #! A client of the Debug Adapter Protocol for an adapter process
 class DapClient {
     public {
@@ -163,6 +164,7 @@ class DapClient {
         }
     }
 }
+%endif
 
 public class VscDebugAdapterTest inherits QUnit::Test {
     private {
@@ -333,6 +335,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     constructor() : Test("VscDebugAdapter", "1.0", \ARGV) {
+%ifndef NoProcess
         addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
         addTestCase("stopOnEntry false: the first stop is a breakpoint", \noStopOnEntryTest());
         addTestCase("stopOnEntry false: a breakpoint on the first statement stops", \firstStatementBreakpointTest());
@@ -342,7 +345,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("exception breakpoints", \exceptionTest());
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
         addTestCase("uncaught exceptions", \uncaughtExceptionTest());
+%endif
+        # needs no adapter process
         addTestCase("the exception filters that stop a thread", \exceptionFilterTest());
+%ifndef NoProcess
         addTestCase("threads started by the program", \threadTest());
         addTestCase("pausing a running program", \pauseTest());
         addTestCase("structured variables are shown as trees", \variablesTest());
@@ -361,7 +367,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
+%endif
+        # needs no adapter process
         addTestCase("names of threads", \threadNameTest());
+%ifndef NoProcess
         addTestCase("all threads stop and continue together", \stopAllThreadsTest());
         addTestCase("output written before a stop is sent before it", \outputOrderTest());
         addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
@@ -374,6 +383,12 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the restart request launches the program again", \restartTest());
         addTestCase("integers in hexadecimal", \hexFormatTest());
         addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
+%else
+        # every other case runs the adapter in a process
+        addTestCase("the cases that run the adapter in a process", sub () {
+            testSkip("no process module 2.2 or later");
+        });
+%endif
         set_return_value(main());
     }
 
@@ -395,127 +410,6 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         throw "TEST-SETUP-ERROR", sprintf("cannot locate Qore executable %y", name);
     }
 
-%ifdef NoProcess
-    sessionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    endOfInputTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    noStopOnEntryTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    defaultStopOnEntryTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    firstStatementBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    functionBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    unverifiedBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    exceptionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    exceptionNoFilterTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    uncaughtExceptionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    trapHintTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    threadTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    pauseTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    variablesTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    setVariableTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    evaluateTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    conditionalBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    hitConditionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    logpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    conditionalStepTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    socketTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    logTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    childProcessTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    attachTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    noServerTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    serverClosedTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    stopAllThreadsTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    stopOneThreadTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    outputOrderTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    sourceModeTest() {
-        testSkip("no process module 2.2 or later");
-    }
-%endif
 
     # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions are
     exceptionFilterTest() {

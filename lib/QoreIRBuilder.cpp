@@ -1680,6 +1680,10 @@ uint32_t QoreIRBuilder::getExceptionTempScopeId() const {
     return exception_temp_scope_id;
 }
 
+uint32_t QoreIRBuilder::allocateUnmarkedTempScopeId() {
+    return next_temp_scope_id++;
+}
+
 void QoreIRBuilder::abandonTempScope() {
     if (!temp_scope_id_stack.empty()) {
         temp_scope_id_stack.pop_back();

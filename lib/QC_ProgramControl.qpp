@@ -174,6 +174,8 @@ auto v = pgm.callFunction("eval");
     @endcode
 
     @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
+    @throw OPTION-ERROR the new Program would have @ref modern "%modern" and a compatibility option that it does not
+    allow, given or from this Program (see @ref modern_option_consistency)
     @throw PROGRAM-ERROR this Program is being parsed, or has been deleted
 
     @since %Qore 3.0
@@ -189,6 +191,12 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     // (see qore_program_private::EvalCopyHolder)
     qore_program_private::EvalCopyHolder copy_holder(*p, xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // the new Program has this Program's options too: %modern cannot be in effect with a compatibility option that it
+    // does not allow, given or inherited (issue #5682)
+    if (qore_program_private::checkNewProgramModernOptions(p, parse_options, xsink,
+            "ProgramControl::createEvalProgram()")) {
         return QoreValue();
     }
     QoreProgram* pgm;

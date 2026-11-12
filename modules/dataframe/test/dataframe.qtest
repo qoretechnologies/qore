@@ -3257,7 +3257,16 @@ sub invalid_dataframe_api() {
         }
 
         # Test with a simple query
-        Datasource ds(connstr);
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded: it is not installed, or it was built for another module API
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+            testSkip(sprintf("driver module unavailable: %s: %s", ex.err, ex.desc));
+        }
         ds.open();
         on_exit {
             ds.close();

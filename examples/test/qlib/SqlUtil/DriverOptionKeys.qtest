@@ -20,6 +20,11 @@
 %define NoSqlite3
 %endtry
 
+# the datasources that do not connect use the jdbc driver
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class DriverOptionKeysTest
 
 #! A datasource of the sqlite3 driver that is a generic driver, and counts the calls of getDriverRealName()
@@ -87,6 +92,9 @@ class DriverOptionKeysTest inherits QUnit::Test {
     }
 
     private driverKeys() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
         hash<string, list<auto>> cases = {
             "oracle": ("oracle", "oracle", ("oracle",)),
             "pgsql": ("pgsql", "pgsql", ("pgsql",)),
@@ -176,6 +184,9 @@ class DriverOptionKeysTest inherits QUnit::Test {
     #! a table created on a jdbc connection takes the column default under the native key, and a size under "jdbc"
     #! over the size of the description
     private jdbcTables() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
         int found = 0;
         foreach hash<auto> i in ({
                 "QORE_DB_CONNSTR_JDBC_ORACLE": "oracle",

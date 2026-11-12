@@ -531,6 +531,8 @@ extern "C" DLLEXPORT void linenoise_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = linenoise_module_init;
     mod_info.ns_init = linenoise_module_ns_init;
     mod_info.del = linenoise_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &LinenoiseNS;
     mod_info.license = QL_LGPL;
     mod_info.license_str = "LGPL";
 }

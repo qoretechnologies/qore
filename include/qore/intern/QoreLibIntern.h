@@ -212,6 +212,15 @@ struct QoreParseContext {
     //!
     //! Motivation + scope: see `design/parser-lvalue-type-propagation.md`.
     const QoreTypeInfo* expected_type_info = nullptr;
+    //! The expression whose value is stored in a value of type @ref target_type, if any (issue #5782)
+    /** Unlike @ref expected_type_info, a hint that the operands of the expression also see, this names the one
+        expression whose value is assigned (the right-hand side of an assignment, the initializer of a typed
+        constant, or a value of a list or hash literal that is itself such an expression): a list or hash literal
+        checks its values against the value type of @ref target_type only when it is this expression.
+    */
+    const AbstractQoreNode* target_value = nullptr;
+    //! The type of the value that @ref target_value is stored in (issue #5782)
+    const QoreTypeInfo* target_type = nullptr;
     //! True when parse initialization of the current expression saw a qcc
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
@@ -290,6 +299,28 @@ struct QoreParseContext {
     DLLLOCAL void markExpressionMayBeNothing() {
         analysis.flags &= ~QoreParseAnalysis::NeverNothing;
     }
+};
+
+//! Sets the expression whose value is stored in a value of a type for the parse initialization of the expression,
+//! and restores the previous one (see QoreParseContext::target_value; issue #5782)
+class QoreParseTargetHelper {
+public:
+    DLLLOCAL QoreParseTargetHelper(QoreParseContext& parse_context, const QoreValue& value,
+            const QoreTypeInfo* type) : parse_context(parse_context), old_value(parse_context.target_value),
+            old_type(parse_context.target_type) {
+        parse_context.target_value = value.hasNode() ? value.getInternalNode() : nullptr;
+        parse_context.target_type = type;
+    }
+
+    DLLLOCAL ~QoreParseTargetHelper() {
+        parse_context.target_value = old_value;
+        parse_context.target_type = old_type;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    const AbstractQoreNode* old_value;
+    const QoreTypeInfo* old_type;
 };
 
 class QoreParseContextFlagHelper {
@@ -1256,6 +1287,14 @@ public:
 DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+//! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
+DLLLOCAL extern std::atomic<bool> qore_types_deleted;
+
+//! returns the number of module namespaces with static storage duration that still hold Qore values and are not
+//! registered with QoreModuleInfo::ns: they are released by their C++ static destructors, after qore_cleanup()
+/** Counted in debug builds only; always 0 otherwise.  If \a report is true, each one is named on stderr.
+*/
+DLLLOCAL unsigned qore_count_late_module_namespaces(bool report);
 
 #ifdef DEBUG
 //! Asserts that a hash, list or object being freed is not registered as the target of an opaque reference

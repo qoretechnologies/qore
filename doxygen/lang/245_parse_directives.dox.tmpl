@@ -508,7 +508,7 @@
     compatibility.  New code should use \c cast<hash>(...) / \c cast<list>(...) for hard container
     assertions instead.  Not included in @ref modern "%modern".
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @since %Qore 3.0
 
@@ -527,7 +527,7 @@
     @par Description:
     Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-cast "%correct-cast"
 
@@ -548,7 +548,7 @@
     @par Description:
     Use old pre-0.8.12 broken @ref int_type "int" and @ref softint_type "softint" runtime handling where type errors were ignored at runtime.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-int-assignments "%correct-int-assignments"
 
@@ -569,7 +569,7 @@
     @par Description:
     Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-list-parsing "%correct-list-parsing"
 
@@ -591,7 +591,7 @@
     Use old pre-2.0 broken list range operator where out-of-range values would result in returning @ref NOTHING
     values, breaking strongly-typed lists and contrary to the behavior of the same operator on a string
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-list-range "%correct-list-range"
 
@@ -627,7 +627,7 @@
     1 \| 2 ^ 3 & 5 = 3
     @endcode
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-logic-precedence "%correct-logic-precedence"
 
@@ -649,7 +649,7 @@
     Enables legacy namespace resolution behavior where symbol resolution prefers the shortest path and can
     allow user-defined symbols to shadow symbols in the @ref Qore "Qore" namespace.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-namespace-resolution "%correct-namespace-resolution"
 
@@ -671,7 +671,7 @@
     Use old pre-0.8.13 handling of break/continue: continue statements in a switch behave like a break statement,
     both @ref break "break" and @ref continue "continue" behave like @ref return "return" when used outside of a loop.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13
 
@@ -695,7 +695,7 @@
     This option is provided for backwards compatibility with code that relies on the old behavior where
     \c auto variables could be assigned values of different types without parse-time errors.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @par Example:
     Without this option, the following code would fail at parse time:
@@ -753,7 +753,7 @@ i+ =4;
     @endcode
     When this parse directive is set; the above code is accepted.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-operators "%correct-operators"
 
@@ -774,7 +774,7 @@ i+ =4;
     @par Description:
     Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with %Qore before 0.9.5
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-range "%correct-range"
 
@@ -795,7 +795,7 @@ i+ =4;
     @par Description:
     Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13; when this option is in effect, the @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions are ignored and have no type restrictions.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.3
 
@@ -821,7 +821,7 @@ i+ =4;
     as @ref softint_or_nothing_type "*softint") accept \c NULL as @ref nothing "NOTHING" with or without this option,
     and @ref softlist_type "softlist" converts it to an empty list.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-soft-types "%correct-soft-types"
 
@@ -842,7 +842,7 @@ i+ =4;
     @par Description:
     Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-sprintf "%correct-sprintf"
 
@@ -864,7 +864,7 @@ i+ =4;
     Use pre-1.17 varargs handling where varargs are detected based on the function or method body, and the vararg flag
     is set by default on all @ref abstract "abstract" methods.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @see @ref correct-varargs "%correct-varargs"
 
@@ -1634,7 +1634,7 @@ sub validate_input(int value, int max_value) {
     - the compatibility options that change the meaning of code cannot be set: @ref broken-cast "%broken-cast", @ref broken-int-assignments "%broken-int-assignments", @ref broken-list-parsing "%broken-list-parsing", @ref broken-list-range "%broken-list-range", @ref broken-logic-precedence "%broken-logic-precedence", @ref broken-loop-statement "%broken-loop-statement", @ref broken-namespace-resolution "%broken-namespace-resolution", @ref broken-narrowed-types "%broken-narrowed-types", @ref broken-operators "%broken-operators", @ref broken-range "%broken-range", @ref broken-references "%broken-references", @ref broken-sprintf "%broken-sprintf", @ref broken-varargs "%broken-varargs", @ref broken-soft-types "%broken-soft-types", @ref broken-auto-cast "%broken-auto-cast", @ref strict-bool-eval "%strict-bool-eval" and @ref no-string-index-char "%no-string-index-char"
     - the options that it implies cannot be disabled while it stays in effect: @ref no-negative-offsets "%no-negative-offsets", and disabling @ref no-summarize "%no-summarize" or @ref streaming-any "%streaming-any" through the API
 
-    Such a parse directive raises a \c PARSE-OPTION-ERROR parse exception, and such a call of Program::setParseOptions(), Program::disableParseOptions(), Program::replaceParseOptions() or of the Program constructor (also for a child Program that has \c %%modern from its parent) raises an \c OPTION-ERROR exception.  When \c %%modern takes effect after such an option was set, the option is suspended: it has no effect while \c %%modern is in effect, and takes effect again when \c %%modern is turned off in the same Program.  This applies however \c %%modern takes effect: a \c %%modern directive after the option, a file parsed in \c %%modern mode by its extension, the <tt>-M</tt> command-line option, @ref Qore::PO_MODERN given with Program::setParseOptions() or with Program::applySourceDefaults(), or a child Program created with @ref Qore::PO_MODERN whose parent has the option; so an option given for legacy code, for example with <tt>-p</tt> on the command line, applies to a file that opts out of \c %%modern.  A suspended option that the code disables (ex: @ref correct-range "%correct-range") does not take effect again; @ref push-parse-options "%push-parse-options" saves and restores the suspended options with the others; get_parse_options() and Program::getParseOptions() give the options in effect, without the suspended ones.  Giving \c %%modern and such an option together (Program::setParseOptions(), Program::replaceParseOptions(), the Program constructor) raises the \c OPTION-ERROR exception.  Disabling one of the options that make up \c %%modern (@ref old-style "%old-style", @ref loose-args "%loose-args", @ref require-dollar "%require-dollar", @ref assume-global "%assume-global") turns \c %%modern off for the rest of the parse context, after which the compatibility options can be used; this is how legacy code in a file that is parsed in \c %%modern mode by its extension opts out.  Options that do not change the meaning of code, such as warnings, restrictions and keyword opt-outs, can be set as before.
+    Such a parse directive raises a \c PARSE-OPTION-ERROR parse exception, and such a call of Program::setParseOptions(), Program::disableParseOptions(), Program::replaceParseOptions() or of the Program constructor (also for a child Program that has \c %%modern from its parent) raises an \c OPTION-ERROR exception.  Nor can \c %%modern be set while such an option is in effect, however it would take effect: a \c %%modern directive after the option, a file parsed in \c %%modern mode by its extension (a \c PARSE-OPTION-ERROR that names the file and the option), the <tt>-M</tt> command-line option with the option given with <tt>-p</tt>, @ref Qore::PO_MODERN given with Program::setParseOptions() or with Program::applySourceDefaults(), or a child Program created with @ref Qore::PO_MODERN whose parent has the option (the exception names the option); so an option given for legacy code, for example with <tt>-p</tt> on the command line, applies only to code that is not parsed in \c %%modern mode, such as a <tt>.q</tt> file, and an independent child Program or a module (which never inherit such options) can have \c %%modern.  The same applies to ProgramControl::createEvalProgram(), to a module parse option mask (\c MODULE-PARSE-OPTION-MASK-ERROR), to the C++ API's \c QoreProgramHelper, and to qcc and AOT artifacts: an executable, module or object compiled before this rule with both is refused when it is loaded, run or linked, with an error that says to rebuild it.  Giving \c %%modern and such an option together (Program::setParseOptions(), Program::replaceParseOptions(), the Program constructor) raises the \c OPTION-ERROR exception.  Disabling one of the options that make up \c %%modern (@ref old-style "%old-style", @ref loose-args "%loose-args", @ref require-dollar "%require-dollar", @ref assume-global "%assume-global") turns \c %%modern off for the rest of the parse context, after which the compatibility options can be used; this is how legacy code in a file that is parsed in \c %%modern mode by its extension opts out.  Options that do not change the meaning of code, such as warnings, restrictions and keyword opt-outs, can be set as before.
 
     @par File Extension:
     Starting with %Qore 3.0, files with any extension except <tt>.q</tt> automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>, as well as files with no extension at all. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default, preserving backward compatibility for existing scripts.
@@ -2345,7 +2345,7 @@ string value = c("legacy");
     @par Description:
     Preserves the historical single-index string behavior where \c string[i] returns \c *string. Without this option, \c string[i] returns \c *char while string ranges and list indexes still return strings.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @par Example:
     @code{.py}
@@ -2975,7 +2975,7 @@ if (str)
     If <tt>%%strict-bool-eval</tt> is set, then %Qore's boolean evaluation will evaluate \c "hello" in a strict mathematical sense and convert it to 0, which is @ref False "False", so nothing would be printed out, but when <tt>%%perl-bool-eval</tt> is enabled, this will be @ref True "True" (following the rules for <string>::val()).\n\n
     %Qore's strict mathematical boolean evaluation was the default prior to %Qore 0.8.6, however it was considered non-intuitive and a design bug, and therefore the default behavior of the language was changed to a more intuitive form of boolean evaluation as documented in @ref perl-bool-eval "%perl-bool-eval".
 
-    This option cannot be set while @ref modern "%modern" is in effect, and is suspended while @ref modern "%modern" is in effect when it was set before (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
 
     @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 

@@ -293,6 +293,9 @@ public:
     //! sets the explicit type arguments of the reference (\f<T>()), which instantiate the function when it is called
     DLLLOCAL void setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args);
 
+    //! binds a type parameter of the code that creates the reference, in the explicit type arguments, to the instantiation that is running
+    DLLLOCAL void bindExplicitTypeArgs();
+
     //! returns the explicit type-parameter instantiation of the reference, or nullptr
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
         return explicit_inst.get();

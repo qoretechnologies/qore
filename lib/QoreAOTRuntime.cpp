@@ -41,6 +41,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/qore_program_private.h"
@@ -1060,11 +1061,11 @@ std::string qore_aot_get_function_identity_name(const FunctionEntry* fe) {
     return qualified;
 }
 
-std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {
-    const QoreFunction* f = fcr ? fcr->getFunction() : nullptr;
-    if (!f) {
-        return std::string();
-    }
+static constexpr const char* aot_ref_type_arg_marker = "\ntypeargs:";
+
+// the name of the function of a call reference without the explicit type arguments
+static std::string getAOTFunctionRefBaseName(const LocalFunctionCallReferenceNode* fcr) {
+    const QoreFunction* f = fcr->getFunction();
     // the bare name of a function of the root namespace would find the builtin of that name when the reference is
     // loaded
     const FunctionEntry* fe = fcr->getFunctionEntry();
@@ -1076,6 +1077,92 @@ std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode*
         }
     }
     return f->getName();
+}
+
+std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {
+    if (!fcr || !fcr->getFunction()) {
+        return std::string();
+    }
+    std::string name = getAOTFunctionRefBaseName(fcr);
+    // the explicit type arguments (\f<T>()) follow the name: "\ntypeargs:N\n<type path>..."
+    if (const QoreTypeParamInstantiation* inst = fcr->getExplicitTypeParamInstantiation()) {
+        name += aot_ref_type_arg_marker;
+        name += std::to_string(inst->type_args.size());
+        for (const QoreTypeInfo* type_arg : inst->type_args) {
+            name += "\n";
+            name += qore_get_aot_serializable_type_path(type_arg);
+        }
+    }
+    return name;
+}
+
+const FunctionEntry* qore_aot_resolve_function_ref(QoreProgram* pgm, const char* encoded,
+        const UserSignature* containing_signature, std::vector<const QoreTypeInfo*>& type_args) {
+    type_args.clear();
+    if (!pgm || !encoded || !*encoded) {
+        return nullptr;
+    }
+    const char* marker = strstr(encoded, aot_ref_type_arg_marker);
+    if (!marker) {
+        return qore_aot_resolve_function_entry_for_slot(pgm, encoded);
+    }
+    const std::string name(encoded, marker - encoded);
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, name.c_str());
+    if (!fe) {
+        return nullptr;
+    }
+    // a named string: count_tail points into it and is read after strtoul() returns
+    const std::string rest(marker + strlen(aot_ref_type_arg_marker));
+    const size_t count_end = rest.find('\n');
+    const std::string count_text = rest.substr(0, count_end);
+    char* count_tail = nullptr;
+    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
+    if (!count_tail || *count_tail || !count) {
+        return nullptr;
+    }
+    QoreAOTTypeResolver type_resolver(pgm);
+    size_t path_start = count_end;
+    std::vector<const QoreTypeInfo*> resolved;
+    for (unsigned long i = 0; i < count; ++i) {
+        if (path_start == std::string::npos) {
+            return nullptr;
+        }
+        ++path_start;
+        const size_t path_end = rest.find('\n', path_start);
+        const std::string path = rest.substr(path_start,
+            path_end == std::string::npos ? std::string::npos : path_end - path_start);
+        std::string type_error;
+        const QoreTypeInfo* type_arg = containing_signature
+            ? type_resolver.resolveForSignature(path.c_str(), type_error, containing_signature)
+            : type_resolver.resolve(path.c_str(), type_error);
+        if (!type_arg || !type_error.empty()) {
+            // a type parameter of a generic function cannot be resolved without the signature of that function,
+            // which the loader of a nested expression does not have: the reference is made without the explicit type
+            // arguments (as the AOT image did before they were recorded) rather than failing to load
+            if (!containing_signature && qore_aot_type_path_has_signature_type_param(path.c_str())) {
+                return fe;
+            }
+            return nullptr;
+        }
+        resolved.push_back(type_arg);
+        path_start = path_end;
+    }
+    type_args = std::move(resolved);
+    return fe;
+}
+
+LocalFunctionCallReferenceNode* qore_aot_make_function_ref(QoreProgram* pgm, const char* encoded,
+        const UserSignature* containing_signature) {
+    std::vector<const QoreTypeInfo*> type_args;
+    const FunctionEntry* fe = qore_aot_resolve_function_ref(pgm, encoded, containing_signature, type_args);
+    QoreFunction* f = fe ? fe->getFunction() : nullptr;
+    if (!f) {
+        return nullptr;
+    }
+    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
+    fcr->setFunctionEntry(fe);
+    fcr->setExplicitTypeArgs(std::move(type_args));
+    return fcr;
 }
 
 static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
@@ -1206,9 +1293,11 @@ static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
     const AbstractQoreFunctionVariant* variant = call.getVariant();
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* callee_signature = uvb ? uvb->getUserSignature() : nullptr;
-    if (!method_ref.explicit_type_args_valid || !callee_signature
-            || method_ref.explicit_type_arg_paths.size()
-                != callee_signature->getTypeParameterCount()) {
+    // a call whose variant is chosen at run time has no signature here; its type arguments are checked against the
+    // variant chosen then, as for the parsed call, which has no owner either (qore#5791)
+    if (!method_ref.explicit_type_args_valid || (callee_signature
+            && method_ref.explicit_type_arg_paths.size()
+                != callee_signature->getTypeParameterCount())) {
         return false;
     }
     QoreTypeParamInstantiation inst;
@@ -1394,8 +1483,10 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     ? variant->getUserVariantBase() : nullptr;
                 const UserSignature* callee_signature = uvb
                     ? uvb->getUserSignature() : nullptr;
-                if (!count_tail || *count_tail || !callee_signature
-                        || count != callee_signature->getTypeParameterCount()) {
+                // a call whose variant is chosen at run time has no signature here; its type arguments are checked
+                // against the variant chosen then, as for the parsed call, which has no owner either (qore#5791)
+                if (!count_tail || *count_tail || (callee_signature
+                        && count != callee_signature->getTypeParameterCount())) {
                     delete fcn;
                     return 0;
                 }
@@ -4405,15 +4496,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Function call reference: resolve function by name
                 ref1 = reader.readStringRef(ptr);   // function_name
                 if (ref1 && *ref1) {
-                    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
-                    if (fe) {
-                        QoreFunction* f = fe->getFunction();
-                        if (f) {
-                            LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-                            fcr->setFunctionEntry(fe);
-                            ctx->exprs[i] = toBitsNB(QoreValue(fcr));
-                            continue;
-                        }
+                    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(pgm, ref1,
+                            uvb ? uvb->getUserSignature() : nullptr)) {
+                        ctx->exprs[i] = toBitsNB(QoreValue(fcr));
+                        continue;
                     }
                 }
                 printd(0, "AOT v2: cannot resolve function ref '%s'\n",
@@ -10980,6 +11066,16 @@ extern "C" DLLEXPORT int qore_aot_run(
         ExceptionSink xsink;
         ExceptionSink wsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -11389,6 +11485,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -13134,6 +13240,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     do {
         ExceptionSink xsink;
 
+        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
+        // allow
+        {
+            std::string po_error;
+            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
@@ -13506,6 +13622,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // Use a local variable for the program being created.  Loading dependencies
     // via runTimeLoadModule() can trigger nested calls to qore_aot_module_init()
     // for other AOT modules, which would overwrite the global aot_module_pgm.
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
@@ -14121,6 +14245,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
@@ -15905,6 +16037,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
+    // a module compiled before issue #5682 can have %modern and a compatibility option that it does not allow
+    {
+        std::string po_error;
+        if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
+            return new QoreStringNodeMaker("AOT module init error: module '%s': %s; rebuild the module with this "
+                "version of Qore", mod_name ? mod_name : "<unknown>", po_error.c_str());
+        }
+    }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
     qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
