@@ -306,6 +306,9 @@ public:
    // try to allow the signal to be managed externally (by a module)
    // sig = signal number, name = name of module to manage signal
    // returns 0 for OK, or an error string on error
+    //! Returns true if the signal can have a handler: it is within the handler table and the platform has it
+    DLLLOCAL static bool isValidSignal(int sig);
+
    DLLLOCAL QoreStringNode* reassignSignal(int sig, const char* name, bool reuse_sys = false);
 
    // 0 = OK, -1 = no signals allocated (all or nothing)

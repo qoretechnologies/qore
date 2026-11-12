@@ -783,6 +783,7 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 }
 
 int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::setHandler(sig: %d fr: %p) pgm: %p\n", sig, fr, getProgram());
     // the code of a Program whose data is being destroyed (a destructor, for example) sets no handler: it could never
     // run, and the values that its closure captures would be released only after the Program's data (issue #5766)
@@ -875,6 +876,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 }
 
 int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::removeHandler(sig: %d)\n", sig);
     CodePgm old;
 
@@ -1030,8 +1032,22 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
     }
 }
 
+bool QoreSignalManager::isValidSignal(int sig) {
+    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG on
+    // Linux) can never be delivered
+    if (sig <= 0 || sig >= QORE_SIGNAL_MAX) {
+        return false;
+    }
+    sigset_t s;
+    sigemptyset(&s);
+    return !sigaddset(&s, sig);
+}
+
 QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, bool reuse_sys) {
-    assert(sig > 0);
+    if (!isValidSignal(sig)) {
+        return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+            name);
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
@@ -1074,6 +1090,12 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
 }
 
 QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, const char* name, bool reuse_sys) {
+    for (int sig : sig_vec) {
+        if (!isValidSignal(sig)) {
+            return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+                name);
+        }
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
