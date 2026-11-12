@@ -1023,7 +1023,8 @@ released the base weak reference; the deletion then raised the count from zero w
 release released the base weak reference a second time. The object's memory was freed while other weak references
 to it were held. A crash of `RestClientIoResend.qtest` in the CI has this signature: the async I/O controller
 released an HTTP/2 client poll operation's private data last, and the release of its self reference
-(`SocketPollOperationBase::self`) used the poll operation's object, which a cycle collection had freed. A release made while the deciding dereference was still in progress waited for it,
+(`SocketPollOperationBase::self`) used the poll operation's object, which a cycle collection had freed. A release
+made while the deciding dereference was still in progress waited for it,
 and the deletion failed the assertion "ref_inprogress || !del" in `RObject::derefDone()` instead.
 
 The deciding dereference now takes the deletion's reference in the critical section that marks the object
@@ -1037,9 +1038,18 @@ as any reference taken when the count is zero does (`qore_object_private::custom
 Debug builds count the weak references that dereferences to zero may release
 (`qore_object_private::dbg_zero_count_weak_refs`: the base weak reference, plus one for each reference taken when the
 count was zero) and assert that none releases one beyond them (`dbgReleaseZeroCountWeakRef()`).
+
+A dereference that releases the last reference before the object is marked, and takes the object's lock after the
+marking, hands the deletion off and waits in `RObject::derefDone()` for the deciding dereference to complete before
+it releases the base weak reference (`wait_only`). The deciding dereference can then complete while it waits; this is
+safe, as the deletion holds its own reference with its own weak reference, and the assertion in `derefDone()` only
+rejects a deleting dereference that completes while another deleting dereference waits for it
+(`RObject::dbg_del_waiting` in debug builds).
+
 `examples/test/qore/misc/dgc-collect-weak-release-race.qtest` releases the last reference through a weak reference
-while the collector is held after it has marked the object (`dbg_hold_deref_marked()`) and after its dereference has
-completed (`dbg_hold_deref_delete()`).
+while the collector is held after it has marked the object (`dbg_hold_deref_marked()`), after its dereference has
+completed (`dbg_hold_deref_delete()`), and before it marks the object, holding the release before it takes the
+object's lock (`dbg_hold_deref_collect()` and `dbg_hold_deref_last()`).
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 

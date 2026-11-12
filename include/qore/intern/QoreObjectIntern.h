@@ -556,7 +556,7 @@ public:
         @param refs_remained true if references remained when the dereference decided to delete the object
     */
     DLLLOCAL void takeDeleteReference(bool refs_remained) {
-        // no lock: the count is atomic, as in customRefIntern()
+        // no rlck: the count is atomic, as in customRefIntern(); the object's lock is held exclusively
         if (!references.fetch_add(1, std::memory_order_acq_rel) && refs_remained) {
             tRef();
 #ifdef DEBUG

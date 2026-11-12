@@ -18903,6 +18903,8 @@ DerefPointHold deref_decide_hold;
 DerefPointHold deref_marked_hold;
 //! the hold of dbg_hold_deref_delete()
 DerefPointHold deref_delete_hold;
+//! the hold of dbg_hold_deref_last()
+DerefPointHold deref_last_hold;
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -18942,6 +18944,10 @@ void dbg_hold_deref_marked_hook(const char* class_name) {
 
 void dbg_hold_deref_delete_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, class_name, "dbg_hold_deref_delete");
+}
+
+void dbg_hold_deref_last_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
 }
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
@@ -19020,6 +19026,23 @@ static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, dbg_hold_deref_delete_hook,
         params, xsink);
+}
+
+//! holds the next dereference that releases the last reference to an object of the given class
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has released the last
+    reference to the object (one that has no collection to decide), and before it takes the object's lock to delete
+    the object or to hand its deletion off; another dereference can mark the object as being destroyed meanwhile, and
+    tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
+        xsink);
 }
 
 namespace {
@@ -19156,6 +19179,26 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     h.waiting = waiting.release();
     qore_dbg_deref_wait_hook.store(dbg_deref_wait_notify_hook);
     return QoreValue();
+}
+
+//! disarms the notification of dbg_deref_wait_notify(), if it has not been made
+/** A test disarms it when the wait it was armed for did not happen.
+
+    @return true if a notification was armed
+*/
+static QoreValue f_dbg_deref_wait_notify_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DerefWaitNotify& h = deref_wait_notify;
+    ReferenceHolder<Counter> waiting(xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.waiting) {
+            return false;
+        }
+        waiting = h.waiting;
+        h.waiting = nullptr;
+        qore_dbg_deref_wait_hook.store(nullptr);
+    }
+    return true;
 }
 
 namespace {
@@ -21225,6 +21268,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -21236,6 +21283,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_deref_wait_notify_clear", f_dbg_deref_wait_notify_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_fd_wait_notify", f_dbg_fd_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo,
         3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_QUEUE->getTypeInfo(), QORE_PARAM_NO_ARG, "queue",
         autoTypeInfo, QORE_PARAM_NO_ARG, "value");

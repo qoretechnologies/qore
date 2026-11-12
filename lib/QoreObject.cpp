@@ -1550,9 +1550,12 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
     printd(5, "qore_object_private::doDeleteIntern() execing destructor() obj: %p\n", obj);
 
     // increment reference count temporarily for destructor, unless the dereference that decided to delete the object
-    // has taken it while marking the object (takeDeleteReference())
+    // has taken it while marking the object (takeDeleteReference()); an explicit deletion's caller holds a reference,
+    // so the count is not zero here: an increment from zero would take no weak reference for the release that takes
+    // the count to zero again (see takeDeleteReference())
     if (!ref_taken) {
         AutoLocker slr(rlck);
+        assert(obj->references > 0);
         ++obj->references;
     }
 
@@ -1646,6 +1649,7 @@ void qore_object_private::unsetRealReference() {
 std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook{nullptr};
 std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
 std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook{nullptr};
+std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
 
@@ -1840,6 +1844,12 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // deleting the object in between; tests hold this thread here to make that deterministic
         if (rrf) {
             if (qore_dbg_deref_collect_hook_t hook = qore_dbg_deref_collect_hook.load()) {
+                hook(getClassName());
+            }
+        } else if (!qodh.getRefs()) {
+            // a dereference that released the last reference takes the lock only now as well, so another one can
+            // mark the object as being destroyed in between
+            if (qore_dbg_deref_last_hook_t hook = qore_dbg_deref_last_hook.load()) {
                 hook(getClassName());
             }
         }
