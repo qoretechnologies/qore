@@ -502,6 +502,14 @@ hashdecl ExceptionInfo {
     //! call stack backtrace information
     list<hash<CallStackInfo>> callstack;
 
+    //! the ID of the exception, only in the exception that a debugger's @ref Qore::DebugProgram::onException() "DebugProgram::onException()" gets
+    /** The ID is the same in each exception event of the exception, also after a @ref rethrow "rethrow" of it, and a
+        new exception has a new one, so that a debugger can tell an exception that it already stopped at
+
+        @since %Qore 3.0
+    */
+    *int debug_id;
+
     //! this key is populated with the value of the first expression of the @ref throw "throw statement". For system exceptions, this is a string giving the exception code.
     auto err;
 
@@ -541,7 +549,20 @@ hashdecl ExceptionInfo {
  */
 ///@{
 //! Exits the program with the return code passed (this function does not return)
-/** @param status the return code for the process (0 = no error; success)
+/** The process ends where exit() is called: the code that called it is not left normally, so its
+    @ref on_exit "on_exit" blocks and the destructors of its local objects are not run, and the state of the
+    %Qore runtime (programs, modules, and the system namespace and its constants) is not released; the operating
+    system reclaims the process's memory.  If other threads are running, the process ends at once; otherwise the
+    standard I/O streams are flushed first.
+
+    @anchor exit_leak_checks
+    @note A memory checker such as \c valgrind reports the memory that the runtime still uses when exit() is called
+    as leaked, much of it as "definitely lost" (a %Qore value refers to its data with a pointer that such a checker
+    does not recognize); this memory is not leaked while the process runs.  A script whose leak report should mean
+    something must end normally instead of calling exit(), for example by returning from its top-level code (see
+    also the valgrind note in @ref signal_handling).
+
+    @param status the return code for the process (0 = no error; success)
 
     @par Example:
     @code{.py}

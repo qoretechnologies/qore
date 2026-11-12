@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class UnionMemberTypesTest
+
+#! issue #5857: a value of a union type is read as it is, not as the union's first member type
+/** A union's member return types were exact, so QoreTypeInfo::parseReturns() reported <tt>union<int, float></tt> as
+    returning only an int (QTI_IDENT), and code specialized for an int was chosen for a value of the union: IR, JIT and
+    AOT code read a complex hash member of such a type with an int access, so a float value read as its integer part,
+    a string as 0 and a list as 0.  A union with more than one value type now returns its member types inexactly, as
+    the builtin multi-type types do.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class UnionMemberTypesTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "union-member-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("a value of a union type is read as it is", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        addTestCase("IR lowering", \loweringTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        list<string> lines = select astOutput().split("\n"), $1 =~ / => /;
+        assertEq(34, lines.size(), "every case ran");
+        hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
+        # the value of every case as the AST interpreter gives it
+        hash<string, string> expected = {
+            "hash const key float": "2.5 float",
+            "hash const key int": "3 integer",
+            "hash init float": "2.5 float",
+            "hash or-nothing float": "2.5 float",
+            "hash or-nothing missing": "null nothing",
+            "hash string member": "\"abc\" string",
+            "hash bool member": "True bool",
+            "hash list member": "[1, 2] list",
+            "hash float first": "2.0 float",
+            "hash dynamic key": "2.5 float",
+            "hash member arithmetic": "3.5 float",
+            "hash member compare": "True bool",
+            "hash member string concat": "\"ab\" string",
+            "hash or-nothing int missing": "null nothing",
+            "list element float": "2.5 float",
+            "list element string": "\"abc\" string",
+            "hashdecl member float": "2.5 float",
+            "hashdecl member string": "\"abc\" string",
+            "class member float": "2.5 float",
+            "class member string": "\"abc\" string",
+            "local arithmetic": "3.5 float",
+            "local string": "\"abc\" string",
+            "local compare": "True bool",
+            "hash member -=": "1.5 float",
+            "hash member *=": "5.0 float",
+            "hash member ++": "3.5 float",
+            "hash date member": "2026-01-01 00:00:00.000000 +00:00 date",
+            "hash number member": "2.5 number",
+            "hash nested union member": "\"s\" string",
+            "map list elements": "[0, 2] list",
+            "foldl list elements": "\"a12\" string",
+            "select list elements": "[2.5, 3] list",
+            "one value type in two members": "2 integer",
+            "or-nothing single union": "2 integer",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, res{i.key}, i.key);
+        }
+        assertEq((), (select lines, $1 =~ / => [A-Z][A-Z-]+$/), "no case raised an exception");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("union-member-types-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    #! a member of a union that returns only an int is read with an int access, any other union member is not
+    private loweringTest() {
+        string out = ExecModeHarness::run_any(sprintf("%s %s --exec-mode=ir --ir-dump %s/union-member-lowering.q", env,
+            qore_bin, get_script_dir()));
+        list<string> accesses = select out.split("\n"), $1 =~ /hash\.key\.access/;
+        assertEq(2, accesses.size(), out);
+        assertRegex("hash\\.key\\.access\\.int \\.x", accesses[0], "union<int, *int>: int access");
+        assertFalse(accesses[1] =~ /hash\.key\.access\.int/, "union<int, float>: no int access");
+        assertTrue(out =~ /\n2\n2\.5(\n|$)/, "values");
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

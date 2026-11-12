@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ProgramGetCallReferenceTest
+
+#! Program::getCallReference() resolves a name in the Program in every mode (qore#5863)
+/** The name was resolved as a method of the Program object first, so a function of the Program with the name of a
+    method of the Program class (ex: \\c run()) could not be referenced: the reference was one to the method.  The
+    probes (program-get-call-reference/probes.q: functions with the names of Program methods, a static method by its
+    class path, a missing name, from top-level code and from a method of a class with a method of the same name) run
+    in each execution mode in a child process and as qcc-compiled executables (-O0, -O3).
+*/
+class ProgramGetCallReferenceTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "run: 1 1; getScriptName: 2 2; callFunction: 3 3; other: 4 4; T::t: 5 5; missing: "
+            "CALL-REFERENCE-ERROR CALL-REFERENCE-ERROR; \n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("ProgramGetCallReference", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("Program::getCallReference() resolves a name in the Program in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-program-get-call-reference-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "program-get-call-reference" + DirSep
+            + "probes.q") + "\nprint(probes());\n");
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc " + opt);
+        }
+    }
+}

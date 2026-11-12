@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 429,
+static_assert(QORE_IR_MAX_OPCODE == 430,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -3863,6 +3863,164 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
     auto saved_ip = builder->GetInsertPoint();
     llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "implicit_context_restore", llvm_func);
     builder->SetInsertPoint(edge);
+    emitImplicitContextRestore(module, inst);
+    builder->CreateBr(target);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitAnyDivModFastPath(bool modulo, const QoreIRInstruction* inst, llvm::Value* lhs,
+        llvm::Value* rhs, llvm::Function* llvm_func, llvm::Module& module) {
+    llvm::BasicBlock* int_check_bb = llvm::BasicBlock::Create(ctx, "divmod_int_check", llvm_func);
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "divmod_fast_int", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "divmod_check_float", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "divmod_slow", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "divmod_merge", llvm_func);
+    llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+
+    llvm::Value* both_int = builder->CreateAnd(emitIsBoxedInt48(lhs), emitIsBoxedInt48(rhs));
+    builder->CreateCondBr(both_int, int_check_bb, check_float_bb);
+
+    // two integers (48-bit, so that neither the quotient nor INT64_MIN / -1 overflows) and a divisor that is not
+    // zero: the AST interpreter's integer division and modulo (qore_int_div(), qore_int_mod())
+    builder->SetInsertPoint(int_check_bb);
+    llvm::Value* l_int = unboxInt(lhs);
+    llvm::Value* r_int = unboxInt(rhs);
+    builder->CreateCondBr(builder->CreateICmpNE(r_int, zero), fast_int_bb, slow_bb);
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* int_result = modulo ? builder->CreateSRem(l_int, r_int) : builder->CreateSDiv(l_int, r_int);
+    llvm::Value* int_boxed = boxIntInline(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // two floats and a divisor that is not zero (a division only: the modulo of floats is the modulo of their
+    // integer values, which the helper computes)
+    builder->SetInsertPoint(check_float_bb);
+    llvm::Value* float_boxed = nullptr;
+    llvm::BasicBlock* fast_float_end = nullptr;
+    if (!modulo) {
+        llvm::BasicBlock* float_check_bb = llvm::BasicBlock::Create(ctx, "divmod_float_check", llvm_func);
+        llvm::BasicBlock* fast_float_bb = llvm::BasicBlock::Create(ctx, "divmod_fast_float", llvm_func);
+        llvm::Value* both_float = builder->CreateAnd(emitIsBoxedFloat(lhs), emitIsBoxedFloat(rhs));
+        builder->CreateCondBr(both_float, float_check_bb, slow_bb);
+        builder->SetInsertPoint(float_check_bb);
+        llvm::Value* l_float = unboxFloat(lhs);
+        llvm::Value* r_float = unboxFloat(rhs);
+        builder->CreateCondBr(builder->CreateFCmpUNE(r_float, llvm::ConstantFP::get(double_type, 0.0)),
+            fast_float_bb, slow_bb);
+        builder->SetInsertPoint(fast_float_bb);
+        float_boxed = boxFloat(builder->CreateFDiv(l_float, r_float));
+        builder->CreateBr(merge_bb);
+        fast_float_end = builder->GetInsertBlock();
+    } else {
+        builder->CreateBr(slow_bb);
+    }
+
+    // the helper, which raises a division by zero and returns NOTHING then; the exception raises where it happens
+    // (see emitExceptionCheckIfNothing())
+    builder->SetInsertPoint(slow_bb);
+    auto helper = module.getOrInsertFunction(modulo ? "qore_rt_mod_any" : "qore_rt_div_any",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+    emitExceptionCheckIfNothing(module, llvm_func, inst, slow_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, fast_float_end ? 3 : 2);
+    phi->addIncoming(int_boxed, fast_int_end);
+    if (fast_float_end) {
+        phi->addIncoming(float_boxed, fast_float_end);
+    }
+    phi->addIncoming(slow_result, slow_end);
+    return phi;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitExceptionCheckIfNothing(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, llvm::Value* result) {
+    // the result comes from a plain call: a skip flag left by another call's invoke would drop this check
+    skip_next_exception_check = false;
+    llvm::BasicBlock* check_bb = llvm::BasicBlock::Create(ctx, "nothing_exception_check", llvm_func);
+    llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "nothing_exception_check_cont", llvm_func);
+    llvm::Value* is_nothing = builder->CreateICmpEQ(result, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    builder->CreateCondBr(is_nothing, check_bb, cont_bb);
+    builder->SetInsertPoint(check_bb);
+    emitExceptionCheck(module, llvm_func, inst);
+    builder->CreateBr(cont_bb);
+    builder->SetInsertPoint(cont_bb);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeIteratorReleases(llvm::Module& module, llvm::Function* llvm_func) {
+    if (pending_iterator_releases.empty()) {
+        return;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (auto& [element_release, ids] : pending_iterator_releases) {
+        for (auto it = ids.rbegin(); it != ids.rend(); ++it) {
+            // the slot of the value, as ReleaseOwnedTemp finds it
+            llvm::Value* slot = nullptr;
+            auto element_it = iterator_element_allocas.find(*it);
+            if (element_it != iterator_element_allocas.end()) {
+                slot = element_it->second;
+            } else {
+                auto alloca_it = invoke_alloca_map.find(*it);
+                if (alloca_it == invoke_alloca_map.end() || !alloca_it->second || !nanboxed_values.count(*it)
+                        || weak_load_result_ids.count(*it)) {
+                    continue;
+                }
+                slot = alloca_it->second;
+            }
+            // each value is inserted right after the release of the element, so the values, inserted last first,
+            // are released in their order
+            llvm::Instruction* anchor = element_release->getNextNode();
+            assert(anchor);
+            llvm::BasicBlock* bb = element_release->getParent();
+            builder->SetInsertPoint(anchor);
+            builder->SetCurrentDebugLocation(element_release->getDebugLoc());
+            llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+            // only a value that holds a reference is released (see ReleaseOwnedTemp)
+            llvm::Value* tag16 = builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 48));
+            llvm::Value* is_pointer = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFA));
+            llvm::Value* is_enum = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFD));
+            llvm::Value* is_opaque = builder->CreateICmpEQ(
+                builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 52)),
+                llvm::ConstantInt::get(i64_type, 0xFFD));
+            llvm::Value* needs_ref = builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
+            llvm::Instruction* split_at = llvm::cast<llvm::Instruction>(needs_ref)->getNextNode();
+            assert(split_at == anchor);
+            llvm::BasicBlock* rest = bb->splitBasicBlock(split_at, "iter_release_cont");
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "iter_release", llvm_func, rest);
+            // replace the branch that the split added
+            bb->getTerminator()->eraseFromParent();
+            builder->SetInsertPoint(bb);
+            builder->CreateCondBr(needs_ref, release_bb, rest);
+            builder->SetInsertPoint(release_bb);
+            builder->SetCurrentDebugLocation(element_release->getDebugLoc());
+            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            builder->CreateBr(rest);
+            // the next value goes in before this one, after the release of the element
+            (void)split_at;
+        }
+    }
+    pending_iterator_releases.clear();
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst) {
+    auto open_it = inst ? open_implicit_contexts.find(inst) : open_implicit_contexts.end();
+    if (open_it == open_implicit_contexts.end()) {
+        return;
+    }
     const std::vector<const QoreIRInstruction*>& pushes = open_it->second;
     for (size_t i = pushes.size(); i > 0; --i) {
         const QoreIRInstruction* push = pushes[i - 1];
@@ -3881,9 +4039,6 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
             builder->CreateCall(pop_fn, {val_it->second});
         }
     }
-    builder->CreateBr(target);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
 }
 
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
@@ -4034,8 +4189,35 @@ bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::
 
 llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, llvm::BasicBlock* target) {
-    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+    std::vector<llvm::Value*> temps;
+    if (!getOrderedErrorReturnTemps(inst, temps)) {
         return target;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+    builder->SetInsertPoint(edge);
+    emitOrderedErrorReturnTemps(module, temps);
+    builder->CreateBr(target);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (llvm::Value* alloca_ptr : temps) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std::vector<llvm::Value*>& temps) {
+    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+        return false;
     }
     const TempCleanupMark* mark = nullptr;
     for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
@@ -4050,26 +4232,9 @@ llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, 
     // (a generated literal of thousands of calls) keeps the error return's order rather than take compile time
     // quadratic in its size
     static constexpr size_t MaxOrderedErrorReturnTemps = 256;
-    std::vector<llvm::Value*> temps;
-    if (!mark || pending_ssa_cleanup.size() > mark->pending_ssa_count
-            || invoke_result_allocas.size() - mark->invoke_alloca_count > MaxOrderedErrorReturnTemps
-            || !orderExceptionTemps(mark->invoke_alloca_count, true, temps)) {
-        return target;
-    }
-    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
-    auto saved_ip = builder->GetInsertPoint();
-    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
-    builder->SetInsertPoint(edge);
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    for (llvm::Value* alloca_ptr : temps) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
-    builder->CreateBr(target);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
+    return mark && pending_ssa_cleanup.size() <= mark->pending_ssa_count
+        && invoke_result_allocas.size() - mark->invoke_alloca_count <= MaxOrderedErrorReturnTemps
+        && orderExceptionTemps(mark->invoke_alloca_count, true, temps);
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
@@ -5105,14 +5270,14 @@ bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* targ
     return false;
 }
 
-void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
-        llvm::Function* llvm_func) {
+bool QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
+        llvm::Function* llvm_func, llvm::BasicBlock* defer_to) {
     const QoreIRValueFacts* facts = current_ir_func
         ? current_ir_func->getValueFacts(QoreIRValue(result_id)) : nullptr;
     if (!q_env_is_set("QORE_DISABLE_AOT_REFERENCE_FREE_CLEANUP_ELISION")
             && facts
             && facts->ownership == QoreIRValueOwnership::ReferenceFree) {
-        return;
+        return false;
     }
 
     // Phase 2B — SSA-direct path: when the just-emitted call went through
@@ -5127,7 +5292,7 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
         // result's alloca to clear it (DotEval base release, StoreLocal
         // tracking).  Use nullptr to signal "SSA-direct, no alloca".
         invoke_alloca_map[result_id] = nullptr;
-        return;
+        return false;
     }
 
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
@@ -5140,14 +5305,81 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     // Decref previous value before overwriting.  This is required even when
     // exception checks are deferred: ordinary AOT functions can contain loops,
     // so the same cleanup alloca may be reused many times before function exit.
-    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
-    builder->CreateStore(result, cleanup_alloca);
-    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    // The result of an IR invoke replaces the previous value on the invoke's normal edge only (see
+    // getInvokeResultDeferBlock()): the continuation is not lowered yet, so the instructions go at its start
+    {
+        llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+        if (defer_to) {
+            builder->SetInsertPoint(defer_to);
+        }
+        auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
+        builder->CreateStore(result, cleanup_alloca);
+        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    }
 
     registerInvokeCleanupAlloca(cleanup_alloca);
     setInvokeAlloca(result_id, cleanup_alloca);
+    return defer_to != nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock* normal_target,
+        const QoreIRBasicBlock* exception_target) {
+    auto bb_it = block_map.find(normal_target);
+    // a continuation that is also the exception target would release the result on the exception edge and store it
+    // at its start
+    if (!normal_target || normal_target == exception_target || !current_ir_func || bb_it == block_map.end()
+            || !bb_it->second
+            || !bb_it->second->empty()
+            || (!normal_target->instructions.empty()
+                && normal_target->instructions.front()->opcode == QoreIROpcode::Phi)) {
+        return nullptr;
+    }
+    if (!ir_block_predecessor_counts_valid) {
+        ir_block_predecessor_counts_valid = true;
+        std::unordered_set<const QoreIRBasicBlock*> targets;
+        for (const auto& block : current_ir_func->blocks) {
+            targets.clear();
+            for (const auto& inst : block->instructions) {
+                if (!inst) {
+                    continue;
+                }
+                if (inst->exception_target) {
+                    targets.insert(inst->exception_target);
+                }
+                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                    if (throw_inst->exception_target) {
+                        targets.insert(throw_inst->exception_target);
+                    }
+                }
+            }
+            if (!block->instructions.empty() && block->instructions.back()) {
+                qore_ir_visit_successors(*block->instructions.back(),
+                    [&targets](QoreIRBasicBlock* target) { targets.insert(target); });
+            }
+            for (const QoreIRBasicBlock* target : targets) {
+                ++ir_block_predecessor_counts[target];
+            }
+        }
+    }
+    auto count_it = ir_block_predecessor_counts.find(normal_target);
+    return count_it != ir_block_predecessor_counts.end() && count_it->second == 1 ? bb_it->second : nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDiscardEdge(llvm::Module& module, llvm::Function* llvm_func,
+        llvm::Value* result, llvm::BasicBlock* target) {
+    llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "invoke_result_discard", llvm_func);
+    builder->SetInsertPoint(edge);
+    // a value that the call gave although it raised is owned and is not used, as in the IR interpreter
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(decref_fn, {result, xsink_arg});
+    builder->CreateBr(target);
+    return edge;
 }
 
 // Walk a lvalue AST expression to find the root LocalVar* key (for alloca lookup).
@@ -12165,6 +12397,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_result_allocas.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
+    ir_block_predecessor_counts.clear();
+    ir_block_predecessor_counts_valid = false;
     boxed_exit_cleanup_array = nullptr;
     boxed_exit_cleanup_array_count = 0;
     iterator_cleanup_array = nullptr;
@@ -12182,6 +12416,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_alloca_map.clear();
     cleanup_alloca_value_ids.clear();
     iterator_element_allocas.clear();
+    pending_iterator_releases.clear();
     selector_segment_states.clear();
     lowered_selector_iterators.clear();
     iterator_cleanup_allocas.clear();
@@ -13081,16 +13316,54 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     // the Phis whose incoming values are used by the Phi once, and otherwise only in the block that defines them,
     // before the Phi (new T() ?? x tests the temporary first), which can take their references over (see
-    // consumable_phis); a value with more than one use is consumed by no other instruction
+    // consumable_phis); a value with more than one use is consumed by no other instruction.  The block of an IR
+    // invoke's value (a call in a try block) ends with the invoke: its normal continuation is the defining block too,
+    // as for the plain call outside a try block, or the slot of the Phi's value, the incoming value's, was released as
+    // one of the statement's own temporaries, before the operator's values, where the IR interpreter releases the
+    // Phi's as an operand that the statement holds (qore#5830)
     {
         std::unordered_map<uint32_t, uint32_t> phi_uses;
         std::unordered_set<uint32_t> used_elsewhere;
         std::vector<const QoreIRPhiInstruction*> phis;
+        // the normal continuation of an IR invoke (in a try block), which ends its block: the code after the call,
+        // such as the test of ??, is there, which is the defining block for this purpose
+        std::unordered_map<uint32_t, const QoreIRBasicBlock*> invoke_continuations;
+        for (const auto& block : func.blocks) {
+            const QoreIRInstruction* last = block->instructions.empty() ? nullptr : block->instructions.back().get();
+            if (!last || !last->result.isValid()) {
+                continue;
+            }
+            const QoreIRBasicBlock* normal_target = nullptr;
+            switch (last->opcode) {
+                case QoreIROpcode::Invoke:
+                    normal_target = static_cast<const QoreIRInvokeInstruction*>(last)->normal_target;
+                    break;
+                case QoreIROpcode::InvokeMethodDirect:
+                    normal_target = static_cast<const QoreIRInvokeMethodDirectInstruction*>(last)->normal_target;
+                    break;
+                case QoreIROpcode::InvokeDotEvalMethodDirect:
+                    normal_target = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(last)
+                        ->normal_target;
+                    break;
+                default:
+                    break;
+            }
+            if (normal_target && normal_target != block.get()) {
+                invoke_continuations.emplace(last->result.id, normal_target);
+            }
+        }
+        // the releases of a functional operator's exception cleanup do not keep a Phi from taking its incoming
+        // values over (see qore_ir_is_exception_only_release()): with the releases of a fold's accumulator and
+        // element counted, the accumulator's Phi lost its cleanup slot, and the next IteratorNext released the
+        // element that it borrowed (qore#5830)
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 bool phi_inst = inst_ptr->opcode == QoreIROpcode::Phi;
                 if (phi_inst && inst_ptr->result.isValid()) {
                     phis.push_back(static_cast<const QoreIRPhiInstruction*>(inst_ptr.get()));
+                }
+                if (qore_ir_is_exception_only_release(*inst_ptr)) {
+                    continue;
                 }
                 qore_ir_visit_value_operands(*inst_ptr, [&](QoreIRValue operand) {
                     if (phi_inst) {
@@ -13098,7 +13371,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         return;
                     }
                     auto def_it = value_def_block.find(operand.id);
-                    if (def_it == value_def_block.end() || def_it->second != block.get()) {
+                    if (def_it != value_def_block.end() && def_it->second == block.get()) {
+                        return;
+                    }
+                    auto cont_it = invoke_continuations.find(operand.id);
+                    if (cont_it == invoke_continuations.end() || cont_it->second != block.get()) {
                         used_elsewhere.insert(operand.id);
                     }
                 });
@@ -14082,6 +14359,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     + "', which is not a predecessor";
                 return false;
             }
+            // a Phi that takes its incoming values over does so on its own edge: a predecessor with other successors
+            // (the header of a loop, whose exit block has the Phi of the loop's value) gets a block of its own on the
+            // edge, or the reference moved on every edge, and the loop's accumulator left its slot for the exit Phi's
+            // at each element, which released it after the exception cleanup of the loop (qore#5830)
+            if (phi_temp_cleanup) {
+                llvm::Instruction* pred_term = qoreGetTerminator(bb);
+                if (pred_term && pred_term->getNumSuccessors() > 1) {
+                    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "phi_takeover_edge", llvm_func);
+                    llvm::IRBuilder<> eb(edge);
+                    eb.CreateBr(phi_bb);
+                    pred_term->replaceSuccessorWith(phi_bb, edge);
+                    for (llvm::PHINode& pn : phi_bb->phis()) {
+                        pn.replaceIncomingBlockWith(bb, edge);
+                    }
+                    edge_block_map[{inc.block, phi_ir_block}] = edge;
+                    bb = edge;
+                }
+            }
             // Match incoming values to the PHI representation. QoreValue PHIs
             // need boxed i64 operands; native scalar PHIs keep values out of
             // the QoreValue/reference domain.
@@ -14157,12 +14452,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // of its statement left in the slot is released first
                 llvm::Value* owned;
                 auto alloca_it = invoke_alloca_map.find(inc.value.id);
+                // the element that an iterator gives owns its output slot, which the Phi takes over too: the first
+                // element of a fold over an iterator, its initial accumulator, is then released when the accumulator
+                // is replaced, as the AST interpreter's fold releases it, and not when the frame ends (qore#5830)
+                auto element_it = iterator_element_allocas.find(inc.value.id);
                 if (alloca_it != invoke_alloca_map.end() && alloca_it->second
                         && llvm::isa<llvm::AllocaInst>(alloca_it->second)
                         && nanboxed_values.count(inc.value.id) && !weak_load_result_ids.count(inc.value.id)) {
                     llvm::Value* inc_cleanup = alloca_it->second;
                     owned = builder->CreateLoad(i64_type, inc_cleanup);
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), inc_cleanup);
+                } else if (element_it != iterator_element_allocas.end() && element_it->second) {
+                    owned = builder->CreateLoad(i64_type, element_it->second);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), element_it->second);
                 } else if (nanboxed_values.count(inc.value.id)) {
                     owned = emitHelperRef(module, val);
                 } else {
@@ -14345,6 +14647,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         error = "cancelled during LLVM native handler slot cache setup";
         return false;
     }
+
+    finalizeIteratorReleases(module, llvm_func);
 
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {
@@ -14919,6 +15223,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // a division by zero raises here, on the path that only a zero (or overflowing) divisor takes: to the
+            // instruction's handler in this frame or out of the function, before the code after it runs, as the AST
+            // interpreter raises it (see DivAssignInt); an exception left pending ran the code after it, and a
+            // functional operator's next() then took it for its own (qore#5670)
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* div_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(div_merge_bb);
 
             // Normal path: native division
@@ -14929,7 +15239,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(div_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "div_result");
-            phi->addIncoming(exc_result, div_zero_bb);
+            phi->addIncoming(exc_result, div_zero_end_bb);
             phi->addIncoming(div_result, div_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -14961,6 +15271,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_mod_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // as for DivInt
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* mod_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(mod_merge_bb);
 
             // Normal path: native modulo
@@ -14971,7 +15284,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(mod_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "mod_result");
-            phi->addIncoming(exc_result, mod_zero_bb);
+            phi->addIncoming(exc_result, mod_zero_end_bb);
             phi->addIncoming(mod_result, mod_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -15027,6 +15340,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_float",
                     llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_float, r_float, xsink_arg});
+            // as for DivInt
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* fdiv_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(fdiv_merge_bb);
 
             // Normal path: native division
@@ -15037,7 +15353,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(fdiv_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(double_type, 2, "fdiv_result");
-            phi->addIncoming(exc_result, fdiv_zero_bb);
+            phi->addIncoming(exc_result, fdiv_zero_end_bb);
             phi->addIncoming(div_result, fdiv_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -15075,6 +15391,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // an encoding conversion error raises where it happens (see emitExceptionCheckIfNothing())
+            emitExceptionCheckIfNothing(module, llvm_func, inst, result);
             return true;
         }
         case QoreIROpcode::AppendStringCow: {
@@ -15168,6 +15486,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // an encoding conversion error raises where it happens (see emitExceptionCheckIfNothing())
+            emitExceptionCheckIfNothing(module, llvm_func, inst, result);
             return true;
         }
         case QoreIROpcode::SubAny: {
@@ -15225,11 +15545,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            const char* helper_name = (inst->opcode == QoreIROpcode::DivAny)
-                ? "qore_rt_div_any" : "qore_rt_mod_any";
-            auto helper = module.getOrInsertFunction(helper_name,
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            // two integers with a divisor that is not zero (and two floats for a division) are divided inline; the
+            // other operands go to the helper, whose exception raises where it happens (see emitAnyDivModFastPath())
+            llvm::Value* result = emitAnyDivModFastPath(inst->opcode == QoreIROpcode::ModAny, inst, lhs_boxed,
+                rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -15260,6 +15579,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // a division by zero raises where it happens (see emitExceptionCheckIfNothing()); the other number
+            // operations raise nothing
+            if (inst->opcode == QoreIROpcode::DivNumber) {
+                emitExceptionCheckIfNothing(module, llvm_func, inst, result);
+            }
             return true;
         }
 
@@ -15744,6 +16068,66 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && (!QoreTypeInfo::hasType(linst->local->getTypeInfo())
                     || QoreTypeInfo::isReference(linst->local->getTypeInfo()));
 
+            // A load that asks for no reference (auto_ref == false) is the load of a container that a store changes in
+            // place (HashKeyStore, ListIndexStore, ...): the store decides by the container's references whether it is
+            // shared and must be copied, so the load must not add one.  A local that is read through the runtime stack
+            // (a closure-bound local, a variable of an enclosing scope, one that an earlier store copied, one that holds
+            // a reference) is loaded as the load of a weak-assigned local is: a borrow of the value the variable holds,
+            // or an owned value if the variable does not hold one directly.  An owned load made the container look
+            // shared, the store copied it although the variable was its only owner, and a weak reference to the
+            // variable was left with the container the variable no longer held (qore#5832).
+            const bool borrowed_load = linst->local && !linst->auto_ref && !weak_assigned_locals.count(key);
+            auto emitBorrowedLoad = [&]() -> bool {
+                llvm::Value* result;
+                llvm::AllocaInst* owned_flag = nullptr;
+                {
+                    llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                    llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+                    llvm::IRBuilder<> alloca_builder(entry_bb, entry_bb->begin());
+                    owned_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "borrowed_load_owned");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), owned_flag);
+                }
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), owned_flag, xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, owned_flag, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                // the cleanup slot holds the value only if it is owned: the release of a borrow is a no-op (as for
+                // the load of a weak-assigned local, which see)
+                auto alloca_it = invoke_alloca_map.find(inst->result.id);
+                if (alloca_it != invoke_alloca_map.end()) {
+                    llvm::Value* cleanup_alloca = alloca_it->second
+                        ? alloca_it->second
+                        : promoteSsaEntryToAlloca(inst->result.id, module, llvm_func);
+                    if (cleanup_alloca) {
+                        llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                        llvm::Value* owned = builder->CreateLoad(i8_type, owned_flag);
+                        llvm::Value* is_owned = builder->CreateICmpNE(owned,
+                            llvm::ConstantInt::get(i8_type, 0));
+                        llvm::Value* cleanup_val = builder->CreateSelect(is_owned, result,
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                        builder->CreateStore(cleanup_val, cleanup_alloca);
+                    }
+                }
+                weak_load_result_ids.insert(inst->result.id);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
+                return true;
+            };
+
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
             // The alloca cache becomes stale after any call that may invoke a closure.
@@ -15756,6 +16140,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // it until function exit can run the referent's destructor before on_exit
             // cleanup in the same frame.
             if (linst->local && linst->local->closureUse()) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15882,6 +16269,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !pre_instantiated_locals->count(key)
                     && !current_body_locals.count(key)
                     && !block_scoped_locals.count(key)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15910,6 +16300,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // If this local underwent COW, reload fresh from runtime stack instead of
             // using cached alloca, which may have the old pre-COW value.
             if (linst->local && cow_modified_locals.count(linst->local)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15943,6 +16336,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // store, would hold the value the reference had then, while the referenced lvalue can change without a
             // store to the local (see readsThroughReference())
             if (readsThroughReference(linst->local)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -20756,11 +21152,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = result;
+            // set on the normal edge only when the call can raise (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             // RefForeachInit returns an opaque state handle — not a nanboxed QoreValue
             if (inv->invoke_opcode != QoreIROpcode::RefForeachInit
                     && invoke_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                trackResultForCleanup(result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
+                    result_proven_nothrow ? nullptr
+                        : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
             } else if (invoke_return_kind != BatchCalleeReturnKind::Boxed) {
                 native_call_result_kinds.emplace(
                     inst->result.id, invoke_return_kind);
@@ -20801,8 +21201,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
@@ -20891,6 +21297,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // No exception target: execute on_block_exit, uninstantiate locals and return NOTHING
+            // the implicit arguments that the throw leaves are restored first (see getImplicitContextRestoreEdge()),
+            // and the statement's temporaries are released in the order of an exception check's exit (see
+            // getOrderedErrorReturnEdge())
+            emitImplicitContextRestore(module, inst);
+            {
+                std::vector<llvm::Value*> temps;
+                if (getOrderedErrorReturnTemps(inst, temps)) {
+                    emitOrderedErrorReturnTemps(module, temps);
+                }
+            }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
@@ -20947,6 +21363,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // No outer handler: return from function; caller sees exception in xsink
+            // the implicit arguments that the exception leaves are restored first (see getImplicitContextRestoreEdge()),
+            // and the statement's temporaries are released as for a throw
+            emitImplicitContextRestore(module, inst);
+            {
+                std::vector<llvm::Value*> temps;
+                if (getOrderedErrorReturnTemps(inst, temps)) {
+                    emitOrderedErrorReturnTemps(module, temps);
+                }
+            }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
@@ -23347,9 +23772,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
+            // set on the normal edge only (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(call_result, inst->result.id, llvm_func,
+                    getInvokeResultDeferBlock(invoke_inst->normal_target, invoke_inst->exception_target));
             } else {
                 native_call_result_kinds.emplace(
                     inst->result.id, call_return_kind);
@@ -23383,8 +23811,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, call_result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
@@ -25456,9 +25890,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
             }
+            // set on the normal edge only when the call can raise (see getInvokeResultDeferBlock())
+            bool result_deferred = false;
             if (result_needs_cleanup
                     && call_return_kind == BatchCalleeReturnKind::Boxed) {
-                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+                result_deferred = trackResultForCleanup(call_result, inst->result.id, llvm_func,
+                    call_may_throw
+                        ? getInvokeResultDeferBlock(invoke_inst->normal_target, invoke_inst->exception_target)
+                        : nullptr);
             }
             const BatchCalleeInfo* object_summary = aot_object_compound_get
                 ? aot_object_compound_get : aot_object_set_get
@@ -25496,8 +25935,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
-            builder->CreateCondBr(has_exception,
-                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
+            {
+                llvm::BasicBlock* exception_edge = getExceptionEdgeTarget(module, llvm_func, inst,
+                    except_it->second);
+                if (result_deferred) {
+                    exception_edge = getInvokeResultDiscardEdge(module, llvm_func, call_result, exception_edge);
+                }
+                builder->CreateCondBr(has_exception, exception_edge, normal_it->second);
+            }
             return true;
         }
 
@@ -33531,11 +33976,48 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            // the value that the release keeps (a second operand: the value of a fused pipeline's map stage, which
+            // the stage's input is released for, see QoreIRBuilder::createReleaseStageInput()): its own slot holds it
+            llvm::Value* kept = nullptr;
+            if (inst->operands.size() > 1) {
+                llvm::Value* kept_val = getVal(inst->operands[1].id, error);
+                if (!kept_val) {
+                    return false;
+                }
+                kept = boxValue(kept_val, inst->operands[1].id);
+            }
             llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
-            builder->CreateCall(decref_fn, {old_val, xsink_arg});
-            // no exception check: the instruction also runs on the path of an exception, which stays raised (see
-            // the interpreter)
+            // only a value that holds a reference is released (QoreValue::needsRef(): a pointer, an opaque reference
+            // or an enum value), so that the release of a scalar, as of a fused pipeline's stage value for each
+            // element, costs no call; a value that is the kept value stays in its slot
+            {
+                llvm::Value* tag16 = builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 48));
+                llvm::Value* is_pointer = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFA));
+                llvm::Value* is_enum = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFD));
+                llvm::Value* is_opaque = builder->CreateICmpEQ(
+                    builder->CreateLShr(old_val, llvm::ConstantInt::get(i64_type, 52)),
+                    llvm::ConstantInt::get(i64_type, 0xFFD));
+                llvm::Value* needs_ref = builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
+                if (kept) {
+                    needs_ref = builder->CreateAnd(needs_ref, builder->CreateICmpNE(old_val, kept));
+                }
+                llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp", llvm_func);
+                llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp_cont", llvm_func);
+                builder->CreateCondBr(needs_ref, release_bb, cont_bb);
+                builder->SetInsertPoint(release_bb);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                // the release of a fused pipeline's stage input runs on the normal path only: an exception that a
+                // destructor raises leaves the pipeline there (see the interpreter); only a release checks
+                if (kept) {
+                    skip_next_exception_check = false;
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
+                builder->CreateBr(cont_bb);
+                builder->SetInsertPoint(cont_bb);
+            }
+            // no exception check otherwise: the instruction also runs on the path of an exception, which stays
+            // raised (see the interpreter)
             return true;
         }
         case QoreIROpcode::UnwindTemps: {
@@ -33704,7 +34186,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Iterator operations ===
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
-        case QoreIROpcode::IteratorCreateSelectors: {
+        case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource: {
             const auto* iter_inst = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
             // Get the iterable value (NaN-boxed)
             auto* iterable_val = getVal(iter_inst->iterable.id, error);
@@ -33766,6 +34249,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, 0), state.selector);
                     selector_segment_states[inst->result.id] = state;
                 }
+            } else if (inst->opcode == QoreIROpcode::IteratorCreateSource) {
+                // operands[0] = the kind; operands[1] = the flags (native ints); operands[2] and operands[3] = the
+                // indices, boxed
+                if (inst->operands.size() < 4) {
+                    error = "IteratorCreateSource: missing operands";
+                    return false;
+                }
+                auto* kind = getVal(inst->operands[0].id, error);
+                auto* flags = getVal(inst->operands[1].id, error);
+                if (!kind || !flags) {
+                    return false;
+                }
+                llvm::Value* kind_int = ensureIntTypeInline(kind, inst->operands[0].id);
+                llvm::Value* flags_int = ensureIntTypeInline(flags, inst->operands[1].id);
+                auto* first_val = getVal(inst->operands[2].id, error);
+                auto* second_val = first_val ? getVal(inst->operands[3].id, error) : nullptr;
+                if (!second_val) {
+                    return false;
+                }
+                llvm::Value* first = boxValue(first_val, inst->operands[2].id);
+                llvm::Value* second = boxValue(second_val, inst->operands[3].id);
+                auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, i64_type, i64_type, i64_type,
+                    ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_source", ft);
+                auto helper_throwing = module.getOrInsertFunction("qore_rt_iterator_create_source_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {iterable_boxed, kind_int, flags_int, first, second, xsink_arg}, module, llvm_func, inst);
             } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);
@@ -33979,7 +34489,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             llvm::Value* old_iter_val = builder->CreateLoad(i64_type, out_val_ptr, "old_iter_val");
-            builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
+            // the slot is not cleared: the helper below writes it on every path (the next value, or NOTHING when the
+            // iterator is done or raises), and nothing between the release and the helper reads it or leaves the
+            // code (the releases of finalizeIteratorReleases() have no exception edge), so the per-element store
+            // would be dead; a release value that is the element itself is dropped below
+            llvm::CallInst* element_release = builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
+            // the values that the loop derived from the previous element follow it (see finalizeIteratorReleases());
+            // the element is never one of them (the analysis drops a value that an optimization made the element,
+            // see QoreIRIteratorNextInstruction::release_values), and it is skipped here too, as its slot is the
+            // one that the element's release does not clear
+            if (!iter_inst->release_values.empty()) {
+                std::vector<uint32_t> ids;
+                ids.reserve(iter_inst->release_values.size());
+                for (const QoreIRValue& rv : iter_inst->release_values) {
+                    if (rv.id != iter_inst->result.id) {
+                        ids.push_back(rv.id);
+                    }
+                }
+                pending_iterator_releases.emplace_back(element_release, std::move(ids));
+            }
             // Null out the iterator cleanup alloca BEFORE the call.
             // qore_rt_iterator_next deletes the iterator on done/exception;
             // nulling first ensures emitIteratorCleanup won't double-delete
@@ -35092,6 +35620,13 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
     auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {lhs, rhs, xsink_arg}, module, llvm_func, inst);
+    // an exception that the operation raises leaves the code where it is raised (see emitExceptionCheckIfNothing());
+    // the throwing helper of an invoke leaves none pending
+    if (llvm::isa<llvm::InvokeInst>(slow_result)) {
+        skip_next_exception_check = false;
+    } else if (inst) {
+        emitExceptionCheckIfNothing(module, llvm_func, inst, slow_result);
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -35258,6 +35793,12 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     auto ca_helper_throwing = module.getOrInsertFunction(ca_throwing_name, ca_ft);
     llvm::Value* slow_result_val = emitMaybeInvoke(ca_helper, ca_helper_throwing,
             {lhs, rhs, xsink_arg}, module, llvm_func, inst);
+    // as in emitAnyArithFastPath(): the exception raises here, and an invoke's skip flag stays with this call
+    if (llvm::isa<llvm::InvokeInst>(slow_result_val)) {
+        skip_next_exception_check = false;
+    } else if (inst) {
+        emitExceptionCheckIfNothing(module, llvm_func, inst, slow_result_val);
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 

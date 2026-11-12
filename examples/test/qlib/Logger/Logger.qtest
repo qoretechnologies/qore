@@ -67,6 +67,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerAppenderFileArchive", \testLoggerAppenderFileArchive());
         addTestCase("LoggerAppenderFile lifecycle markers", \testLifecycleMarkers());
         addTestCase("LoggerSearchUtil", \testLoggerSearchUtil());
+        addTestCase("LoggerSearchUtil scan budget", \testLoggerSearchScanBudget());
         addTestCase("Logger", \testLogger());
         set_return_value(main());
     }
@@ -1004,6 +1005,184 @@ class Test inherits QUnit::Test {
         foreach string patt in (keys errs) {
             la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn, patt);
             assertThrows("LOGGER-ERROR", errs{patt}, \la.archive());
+        }
+    }
+
+    #! follows next_cursor from a first search until the search ends, checking that every call scans within the
+    #! budget and gets further; returns the entries found and the bytes scanned
+    private hash<auto> followSearch(LoggerAppender la, hash<auto> request, int budget, int max_calls) {
+        list<hash<auto>> entries = ();
+        int scanned = 0;
+        int calls = 0;
+        *string cursor;
+        while (True) {
+            hash<auto> req = request + {"max_scanned_bytes": budget};
+            if (cursor) {
+                req.cursor = cursor;
+            }
+            hash<auto> res = LoggerSearchUtil::searchRenderedEvents(la, req);
+            ++calls;
+            assertTrue(res.status == "ok" || res.status == "partial", sprintf("call %d: %y", calls, res.reason));
+            entries += res.entries;
+            scanned += res.scanned_bytes;
+            if (!res.next_cursor) {
+                assertEq("ok", res.status);
+                break;
+            }
+            # a call that ends at the budget or at the limit scans something and moves the cursor
+            assertTrue(res.reason == "max-scanned-bytes" || res.reason == "limit",
+                sprintf("call %d: %y", calls, res.reason));
+            assertTrue(res.scanned_bytes > 0, sprintf("call %d scanned bytes", calls));
+            assertNeq(cursor, res.next_cursor, sprintf("call %d cursor", calls));
+            cursor = res.next_cursor;
+            if (calls >= max_calls) {
+                assertTrue(False, sprintf("the search did not end in %d calls", max_calls));
+                break;
+            }
+        }
+        return {"entries": entries, "scanned": scanned, "calls": calls};
+    }
+
+    #! issue #5817: a file larger than max_scanned_bytes is searched within the budget, and next_cursor gets further
+    testLoggerSearchScanBudget() {
+        string fn = tmp_location() + DirSep + unique_name + "-search-budget.log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile la("BUDGET", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SearchBudgetTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(la);
+        la.open();
+        for (int i = 0; i < 500; ++i) {
+            logger.info(sprintf("line %04d: %s%s", i, strmul("x", 30), i == 5 ? " JI 42: run" : ""));
+        }
+        logger.info("JI 7: last run");
+        la.close();
+        int size = hstat(fn).size;
+        assertTrue(size > 20000);
+
+        # the first call scans the newest lines within the budget, finds nothing yet and points further back
+        hash<auto> res = LoggerSearchUtil::searchRenderedEvents(la, {"text": "JI 42:", "max_scanned_bytes": 2048});
+        assertEq("partial", res.status);
+        assertEq("max-scanned-bytes", res.reason);
+        assertEq(0, res.result_count);
+        assertTrue(res.scanned_bytes > 2000 && res.scanned_bytes <= 2048, sprintf("%d", res.scanned_bytes));
+        assertTrue(res.next_cursor instanceof string);
+        # the next call gets further back
+        hash<auto> res2 = LoggerSearchUtil::searchRenderedEvents(la,
+            {"text": "JI 42:", "max_scanned_bytes": 2048, "cursor": res.next_cursor});
+        assertTrue(res2.scanned_bytes > 0);
+        assertNeq(res.next_cursor, res2.next_cursor);
+
+        # following the cursor backward finds the match, and every byte of the file is scanned exactly once
+        hash<auto> r = followSearch(la, {"text": "JI 42:"}, 2048, 20);
+        assertEq(1, r.entries.size());
+        assertEq(6, r.entries[0].line);
+        assertTrue(r.entries[0].message =~ /^line 0005: x+ JI 42: run$/);
+        assertEq(size, r.scanned);
+        assertTrue(r.calls >= 10, sprintf("%d calls", r.calls));
+
+        # forward: the newest line is found at the end of the chain
+        r = followSearch(la, {"text": "JI 7:", "direction": "forward"}, 2048, 20);
+        assertEq(1, r.entries.size());
+        assertEq("JI 7: last run", r.entries[0].message);
+        assertEq(size, r.scanned);
+
+        # a budget smaller than one line still scans a line per call
+        r = followSearch(la, {"text": "JI 42:", "limit": 1}, 1, 600);
+        assertEq(1, r.entries.size());
+        assertEq(6, r.entries[0].line);
+
+        # no limit: one call scans the whole file
+        res = LoggerSearchUtil::searchRenderedEvents(la,
+            {"text": "JI 42:", "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes});
+        assertEq("ok", res.status);
+        assertEq(1, res.result_count);
+        assertEq(size, res.scanned_bytes);
+
+        # a rotated file: the cursor goes from the active file to the rotated one
+        string rfn = tmp_location() + DirSep + unique_name + "-search-budget-rotate.log";
+        LoggerAppenderFileRotate ra("BUDGETROT", new LoggerLayoutPattern("%m%n"), rfn, 3);
+        list<string> files = map ra.getArchiveFileName($1), xrange(1, 3);
+        on_exit {
+            unlink(rfn);
+            map unlink($1), files;
+        }
+        Logger rlogger("SearchBudgetRotateTest", LoggerLevel::getLevelDebug());
+        rlogger.addAppender(ra);
+        ra.open();
+        for (int i = 0; i < 200; ++i) {
+            rlogger.info(sprintf("old %04d: %s%s", i, strmul("y", 30), i == 3 ? " JI 99: rotated" : ""));
+        }
+        ra.rotate();
+        for (int i = 0; i < 200; ++i) {
+            rlogger.info(sprintf("new %04d: %s", i, strmul("z", 30)));
+        }
+        ra.close();
+        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(ra, {});
+        assertEq(2, sources.size());
+        int total = foldl $1 + $2, (map hstat($1.path).size, sources);
+        r = followSearch(ra, {"text": "JI 99:"}, 2048, 20);
+        assertEq(1, r.entries.size());
+        assertEq(sources[1].path, r.entries[0].source_path);
+        assertTrue(r.entries[0].message =~ /^old 0003: y+ JI 99: rotated$/);
+        assertEq(total, r.scanned);
+
+        # a budget used up exactly by the active file points at the rotated one without reading it
+        int active_size = hstat(sources[0].path).size;
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "JI 99:", "max_scanned_bytes": active_size});
+        assertEq("partial", res.status);
+        assertEq("max-scanned-bytes", res.reason);
+        assertEq(active_size, res.scanned_bytes);
+        assertEq(0, res.result_count);
+        assertTrue(res.next_cursor =~ /^v2:1:-1:backward:/, res.next_cursor);
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "JI 99:", "max_scanned_bytes": active_size,
+            "cursor": res.next_cursor});
+        assertEq(1, res.result_count);
+        # forward, the rotated file comes first, and a budget used up by it points at the first line of the active one
+        # (forward, the cursor is the same whether the active file is read or not; backward above shows that it is
+        # not read)
+        list<hash<auto>> fsources = LoggerSearchUtil::getAppenderSearchSources(ra, {"direction": "forward"});
+        assertEq(sources[1].path, fsources[0].path);
+        int rotated_size = hstat(fsources[0].path).size;
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "new 0199", "direction": "forward",
+            "max_scanned_bytes": rotated_size});
+        assertEq("partial", res.status);
+        assertEq("max-scanned-bytes", res.reason);
+        assertEq(0, res.result_count);
+        assertEq(rotated_size, res.scanned_bytes);
+        assertTrue(res.next_cursor =~ /^v2:1:0:forward:/, res.next_cursor);
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "new 0199", "direction": "forward",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes, "cursor": res.next_cursor});
+        assertEq(1, res.result_count);
+        assertEq(fsources[1].path, res.entries[0].source_path);
+
+        # bytes, not characters, with CRLF line ends, an empty line and no final line terminator
+        string raw_fn = tmp_location() + DirSep + unique_name + "-search-budget-raw.log";
+        on_exit unlink(raw_fn);
+        string raw = "first\r\nh\u00e9\u00e9 \u00df\u00df\r\n\nmiddle needle\r\nlast";
+        {
+            File f();
+            f.open2(raw_fn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(raw);
+        }
+        assertEq(raw.size(), hstat(raw_fn).size);
+        LoggerAppenderFile raw_la("RAW", new LoggerLayoutPattern("%m%n"), raw_fn);
+        foreach string dir in ("backward", "forward") {
+            r = followSearch(raw_la, {"text": "needle", "direction": dir}, 5, 10);
+            assertEq(1, r.entries.size(), dir);
+            assertEq(4, r.entries[0].line, dir);
+            assertEq(raw.size(), r.scanned, dir);
+        }
+        # context lines are returned with a match and are not counted in the budget
+        r = followSearch(raw_la, {"text": "needle", "context_before": 1, "context_after": 1}, 5, 10);
+        assertEq(("before", "match", "after"), (map $1.context, r.entries));
+        assertEq(raw.size(), r.scanned);
+        # a budget of 0 or a negative one other than UnlimitedScannedBytes scans one line per call
+        foreach int budget in (0, -5) {
+            r = followSearch(raw_la, {"text": "needle"}, budget, 10);
+            assertEq(5, r.calls, sprintf("budget %d", budget));
+            assertEq(raw.size(), r.scanned, sprintf("budget %d", budget));
         }
     }
 

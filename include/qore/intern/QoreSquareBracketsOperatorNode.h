@@ -59,6 +59,19 @@ public:
     DLLLOCAL static QoreValue doSquareBrackets(const QoreValue l, const QoreValue r, bool list_ok,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
 
+    //! Returns the iterator of the evaluated sequence \a lhs with the evaluated selectors \a rhs (no range)
+    /** As the AST interpreter iterates the operator (getFunctionalIteratorImpl()): a list with a list of indices is
+        iterated lazily by an iterator that keeps both, which it takes from the holders (with their references if they
+        are temporaries, or with references of its own); any other value is made first.  The IR tiers create the
+        iterator of a foreach statement with it (QoreIROpcode::IteratorCreateSource).
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getIndexesIterator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
+            bool string_index_char, bool negative_offsets, FunctionalValueType& value_type, ExceptionSink* xsink);
+
+    //! Returns the iterator of the value \a res of the operator, which it takes: nullptr for NOTHING
+    DLLLOCAL static FunctionalOperatorInterface* getResultIterator(ValueHolder& res, FunctionalValueType& value_type,
+            ExceptionSink* xsink);
+
     //! Returns true if the RHS is a list with a range (e.g., list[1..3])
     DLLLOCAL bool hasRhsListRange() const {
         return rhs_list_range;

@@ -28,12 +28,6 @@
 */
 class CallSiteFrames {
     public {
-        #! the frames that AOT-compiled code gives with other lines (issue 5745; see getExpectedAot())
-        const AotKnownDifferences = {
-            "member initializer: mi 20-20 22-26": "member initializer: mi -1--1 22-26",
-            "default argument: da 15-15 28-32": "default argument: da 44-44 28-32",
-        };
-
         #! the name of the script
         const Script = "call-site-frames-script.q";
 
@@ -80,12 +74,11 @@ class CallSiteFrames {
     }
 
     #! returns the frames expected from AOT-compiled code, whose locations have no columns
-    /** Known differences (https://github.com/qoretechnologies/qore/issues/5745): the call nodes of the expressions
-        that AOT-compiled code evaluates as AST trees restored from its image have no location, and its members
-        none either, so the call of a member initializer has no line and the call of a default argument is located
-        at the caller's line
+    /** The lines are those of the AST interpreter, also of the calls in member initializers and default arguments,
+        which AOT-compiled code evaluates as AST trees restored from its image with the locations of their calls
+        (https://github.com/qoretechnologies/qore/issues/5745)
     */
     static list<string> getExpectedAot() {
-        return map regex_subst(AotKnownDifferences{$1} ?? $1, "[-0-9]+-[-0-9]+$", "-1--1"), Expected;
+        return map regex_subst($1, "[-0-9]+-[-0-9]+$", "-1--1"), Expected;
     }
 }

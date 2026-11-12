@@ -593,6 +593,16 @@ public:
 
     // weak reference dependency counter, when this hits zero, the object is deleted
     QoreReferenceCounter dc;
+    //! protects the list of the user variants of the Program's code (user_variants), which the Program marks when its
+    //! deletion starts (see markUserVariantsDeleted())
+    std::mutex user_variant_lock;
+    //! the first registered variant, linked through UserVariantBase::uv_next; protected by user_variant_lock
+    /** An intrusive list, so that registering and unregistering a variant allocate nothing and cannot fail
+    */
+    const UserVariantBase* user_variants = nullptr;
+    //! true once the deletion of the Program has started (markUserVariantsDeleted()); a variant registered later is
+    //! marked when it registers; protected by user_variant_lock
+    bool user_variants_deleted = false;
     ExceptionSink* parseSink = nullptr,
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
@@ -607,6 +617,16 @@ public:
 
     // top level statements
     TopLevelStatementBlock sb;
+    //! AOT checks every source body and initializer, including code that fragment emission does not lower.
+    QoreNativeParseInfo native_parse_info;
+    QoreNativeParseInfo committed_native_parse_info;
+
+    DLLLOCAL void recordNativeParseInfo(const QoreNativeParseInfo& info) {
+        // Debugger expressions have their own block; declaration-only stubs generate no executable code.
+        if (!expression_mode && !parsing_stub_declarations) {
+            native_parse_info.merge(info);
+        }
+    }
 
     // bit field flags
     // written only by the thread that holds the parse lock, or before the Program can be reached by other threads;
@@ -1659,6 +1679,24 @@ public:
     DLLLOCAL ~qore_program_private();
 
     DLLLOCAL void registerProgram();
+
+    //! Registers a user variant of the Program's code; see UserVariantBase::setProgram()
+    DLLLOCAL void registerUserVariant(const UserVariantBase* v);
+
+    //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
+    DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
+
+#ifdef DEBUG
+    //! For tests: the number of Program objects that exist (created and not yet destroyed)
+    DLLLOCAL static size_t dbgGetLiveProgramCount();
+#endif
+
+    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
+    /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
+        fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,
+        so that the call path refuses the call with PROGRAM-ERROR, as for the AST interpreter (qore#5822)
+    */
+    DLLLOCAL void markUserVariantsDeleted();
 
     DLLLOCAL void depRef() {
         printd(QPP_DBG_LVL, "qore_program_private::depRef() this: %p pgm: %p %d->%d\n", this, pgm,
@@ -3785,7 +3823,7 @@ public:
         i->second->clearTZ();
     }
 
-    DLLLOCAL void addStatement(AbstractStatement* s);
+    DLLLOCAL void addStatement(AbstractStatement* s, const QoreNativeParseInfo& info = {});
 
     DLLLOCAL q_exp_t createExpression(const QoreStringNode& source, const QoreStringNode& label,
             ExceptionSink* xsink) {
@@ -4236,8 +4274,9 @@ public:
         return pgm.priv->constructed;
     }
 
-    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s) {
-        pgm.priv->addStatement(s);
+    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s,
+            const QoreNativeParseInfo& native_parse_info = {}) {
+        pgm.priv->addStatement(s, native_parse_info);
     }
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {

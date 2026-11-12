@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -26,12 +27,19 @@ BUILD = Path(os.environ.get("QORE_TEST_BUILD_DIR", ROOT / "build")).resolve()
 CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 # the install component of the binary modules built with Qore (QORE_INSTALL_COMPONENT_BOOTSTRAP in CMakeLists.txt)
 BOOTSTRAP_COMPONENT = "qore-bootstrap"
+# the binary modules that are always built with Qore
+ALWAYS_BUILT = ("linenoise", "krb5", "json", "yaml")
 
 
 def qpp_modules():
     """returns the names of the module directories under modules/ whose binary module has qpp sources"""
     return sorted(path.parent.name for path in (ROOT / "modules").glob("*/CMakeLists.txt")
                   if "qore_wrap_qpp_value(" in strip_comments(path.read_text()))
+
+
+def module_built(module_build):
+    """returns True if the module directory of a build holds the built binary module"""
+    return any(module_build.glob("*.qmod"))
 
 
 def strip_comments(text):
@@ -67,15 +75,22 @@ class ModuleQppMetadataInstallTest(unittest.TestCase):
     def test_build_installs_module_metadata(self):
         if not (BUILD / "CMakeCache.txt").is_file():
             self.skipTest("no build with a CMake cache; set QORE_TEST_BUILD_DIR")
+        if not any(module_built(BUILD / "modules" / name) for name in ALWAYS_BUILT):
+            # a build tree that is configured but whose binary modules were not built, such as one used only to
+            # build the library
+            self.skipTest(f"the binary modules of {BUILD} were not built; build them or set QORE_TEST_BUILD_DIR to "
+                          "a full build")
         checked = []
         for name in qpp_modules():
             module_build = BUILD / "modules" / name
-            generated = sorted(path.name for path in module_build.glob("*.meta.json"))
-            if not (module_build / "cmake_install.cmake").is_file() or not generated:
+            if not (module_build / "cmake_install.cmake").is_file() or not module_built(module_build):
                 # an optional module that this build did not make (such as mongodb without libmongoc)
                 continue
+            generated = sorted(path.name for path in module_build.glob("*.meta.json"))
             checked.append(name)
             with self.subTest(module=name):
+                # a built module generates the metadata of its qpp sources
+                self.assertTrue(generated, f"{name} was built but generated no qpp metadata")
                 with tempfile.TemporaryDirectory(prefix="qore-qpp-metadata-") as destdir:
                     env = dict(os.environ, DESTDIR=destdir)
                     result = subprocess.run(
@@ -91,8 +106,43 @@ class ModuleQppMetadataInstallTest(unittest.TestCase):
                     self.assertEqual(name, directory)
                     self.assertEqual(generated, sorted(files))
         # the modules that are always built with Qore were checked
-        for name in ("linenoise", "krb5", "json", "yaml"):
+        for name in ALWAYS_BUILT:
             self.assertIn(name, checked)
+
+
+class BuildStateTest(unittest.TestCase):
+    """Runs the build test against stand-in build trees with QORE_TEST_BUILD_DIR"""
+
+    def run_build_test(self, build):
+        env = dict(os.environ, QORE_TEST_BUILD_DIR=str(build))
+        return subprocess.run(
+            [sys.executable, "-B", "-W", "error", "-m", "unittest", "-v",
+             f"{Path(__file__).stem}.ModuleQppMetadataInstallTest.test_build_installs_module_metadata"],
+            cwd=Path(__file__).parent, capture_output=True, text=True, timeout=120, env=env)
+
+    def make_build(self, root, built):
+        """creates a configured build tree; with built, linenoise's binary module is there but no metadata"""
+        (root / "CMakeCache.txt").touch()
+        module_build = root / "modules" / "linenoise"
+        module_build.mkdir(parents=True)
+        (module_build / "cmake_install.cmake").write_text("")
+        if built:
+            (module_build / "linenoise-api-2.0.qmod").touch()
+
+    def test_unbuilt_modules_skip(self):
+        with tempfile.TemporaryDirectory(prefix="qore-qpp-build-") as directory:
+            self.make_build(Path(directory), built=False)
+            result = self.run_build_test(directory)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("binary modules of", result.stderr)
+            self.assertIn("were not built", result.stderr)
+
+    def test_built_module_without_metadata_fails(self):
+        with tempfile.TemporaryDirectory(prefix="qore-qpp-build-") as directory:
+            self.make_build(Path(directory), built=True)
+            result = self.run_build_test(directory)
+            self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("linenoise was built but generated no qpp metadata", result.stderr)
 
 
 if __name__ == "__main__":

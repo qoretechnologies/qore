@@ -39,6 +39,7 @@
 #define HE_TAG_SCOPED_CONST 2
 
 #include <cstring>
+#include "qore/intern/QoreNativeParseInfo.h"
 
 class QoreParserLocation {
 public:
@@ -52,6 +53,8 @@ public:
 
    //! the nesting depth of the rule in the parse tree; 0 for a token
    unsigned depth = 0;
+
+   QoreNativeParseInfo native_parse_info;
 
    DLLLOCAL void saveFirst() {
       //printd(0, "QoreParserLocation::setFirst: current: %d:%d - %d:%d\n", first_line, first_col, last_line, last_col);
@@ -132,6 +135,8 @@ struct QoreParseState {
    bool stop = false;
    //! true if the scanner has ended the input
    bool ended = false;
+   //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
+   QoreNativeParseInfo native_parse_info;
 };
 
 // private interface to bison/flex parser/scanner

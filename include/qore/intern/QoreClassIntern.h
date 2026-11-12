@@ -429,6 +429,10 @@ public:
         // parseResolve and push current return type on stack
         ParseCodeInfoHelper rtih(mf->getName(), signature.getReturnTypeInfo());
 
+        // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+        // them is noted (qore#5805)
+        ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
+
         int err = 0;
 
         // For AOT-compiled methods, statements is null (pre-compiled code)
@@ -451,6 +455,14 @@ public:
     }
 
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const override;
+
+private:
+    //! evaluates a synchronized method: holds the object's (or the class's) gate during the call
+    /** Outlined from evalMethod(), so that the lock helper is not in the frame that every call of a method that is
+        not synchronized puts on the stack (issue #5852)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+            ExceptionSink* xsink) const;
 };
 
 #define UMV(f) (reinterpret_cast<UserMethodVariant*>(f))
@@ -524,6 +536,10 @@ public:
 
         // push return type on stack (no return value can be used)
         ParseCodeInfoHelper rtih("destructor", nothingTypeInfo);
+
+        // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+        // them is noted (qore#5805)
+        ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
         // For AOT-compiled methods, statements is null (pre-compiled code)
         if (statements) {
@@ -3547,12 +3563,17 @@ public:
         return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
     }
 
-    DLLLOCAL void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo, QoreValue initial_value) {
+    //! adds a member
+    /** @param loc the location of its declaration, if known (code read from an AOT image)
+    */
+    DLLLOCAL void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo, QoreValue initial_value,
+            const QoreProgramLocation* loc = nullptr) {
         assert(!members.inList(mem));
         if (!has_sig_changes) {
             has_sig_changes = true;
         }
-        members.addNoCheck(strdup(mem), new QoreMemberInfo(&loc_builtin, n_typeinfo, nullptr, initial_value, access, this));
+        members.addNoCheck(strdup(mem), new QoreMemberInfo(loc ? loc : &loc_builtin, n_typeinfo, nullptr,
+            initial_value, access, this));
         if (access == Public && !has_public_memdecl) {
             has_public_memdecl = true;
         }
@@ -4037,9 +4058,15 @@ public:
     DLLLOCAL void generateBuiltinSignature(const char* nspath);
     DLLLOCAL void initializeBuiltin();
 
+    //! calls the named method of the object, resolved at run time
+    /** @param pgm_ctx the Program that the call runs in, if not the current Program: a call reference created in
+        another Program runs as a direct call there does (see RunTimeObjectMethodReferenceNode::execValue()); a user
+        method runs in the Program that defines its class in any case
+    */
     DLLLOCAL QoreValue evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
             const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreProgram* pgm_ctx = nullptr) const;
 
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 

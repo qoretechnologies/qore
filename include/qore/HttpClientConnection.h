@@ -678,6 +678,15 @@ public:
     */
     DLLEXPORT uint32_t markInvalidated();
 
+    //! Returns @c true once @ref markInvalidated has been called: the connection is being closed or destroyed
+    /** New calls on the connection are refused from then on, before @ref isClosed reports the close.
+
+        @since %Qore 3.0
+    */
+    bool isInvalidated() const {
+        return lifetime_state_.load(std::memory_order_acquire) & INVALIDATED_BIT;
+    }
+
     //! Blocks until every in-flight @ref MethodGuard has released.
     /** Must be called AFTER @ref markInvalidated (otherwise new guards
         would keep acquiring while the caller waits).  Returns promptly

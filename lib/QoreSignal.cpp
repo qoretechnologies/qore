@@ -139,7 +139,7 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     }
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
-        fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
+        fmap[QORE_STATUS_SIGNAL] = QORE_STATUS_SIGNAL_DESC;
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
         fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
@@ -276,8 +276,28 @@ void QoreSignalManager::reload() {
 // Must be called with mutex held. A security policy can deny even a signal sent to another thread of this
 // process. The command is already recorded under the lock; a timed wait lets the receiver observe it without
 // relying on that signal. On platforms without timed signal waits, report the fatal failure instead of hanging.
+#if defined(__linux__) && defined(SIGRTMIN)
+int qore_get_status_signal() {
+    // determined once: SIGRTMIN can rise after the start of the process if the C library hands out real-time
+    // signals, and the signal thread must keep waiting for the signal that is sent
+    static const int status_signal = SIGRTMIN + 1;
+    return status_signal;
+}
+#endif
+
 void QoreSignalManager::wake_signal_thread_unlocked() {
     int rc = pthread_kill(ptid, QORE_STATUS_SIGNAL);
+#if defined(__linux__) && defined(SIGRTMIN) && defined(HAVE_SIGTIMEDWAIT)
+    // the wake-up is a real-time signal, which is queued: EAGAIN means that the process's queue of pending real-time
+    // signals is full (RLIMIT_SIGPENDING); the command is recorded under the lock, and the timed signal wait of the
+    // signal thread (below) sees it without the signal, so it is not reported
+    if (rc == EAGAIN) {
+        // every change of signal handling waits for the signal thread's timed wait then; noted in debug builds
+        printd(1, "QoreSignalManager::wake_signal_thread_unlocked(): the real-time signal queue is full (EAGAIN); "
+            "the signal thread sees the command at its next timed wait\n");
+        return;
+    }
+#endif
     if (rc) {
 #ifdef HAVE_SIGTIMEDWAIT
         fprintf(stderr, "Qore signal manager: internal wakeup failed: %s; using timed signal wait\n", strerror(rc));
@@ -763,6 +783,7 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 }
 
 int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::setHandler(sig: %d fr: %p) pgm: %p\n", sig, fr, getProgram());
     // the code of a Program whose data is being destroyed (a destructor, for example) sets no handler: it could never
     // run, and the values that its closure captures would be released only after the Program's data (issue #5766)
@@ -855,6 +876,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 }
 
 int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::removeHandler(sig: %d)\n", sig);
     CodePgm old;
 
@@ -1010,8 +1032,29 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
     }
 }
 
+// the number of signals of the platform: its signals are 1 .. QORE_PLATFORM_NSIG - 1
+#if defined(NSIG)
+#define QORE_PLATFORM_NSIG NSIG
+#elif defined(_NSIG)
+#define QORE_PLATFORM_NSIG _NSIG
+#elif defined(__DARWIN_NSIG)
+#define QORE_PLATFORM_NSIG __DARWIN_NSIG
+#else
+#define QORE_PLATFORM_NSIG QORE_SIGNAL_MAX
+#endif
+
+bool QoreSignalManager::isValidSignal(int sig) {
+    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG and
+    // above) can never be delivered; the range is checked against NSIG itself: sigaddset() is no check of it, as
+    // macOS accepts NSIG
+    return sig > 0 && sig < QORE_SIGNAL_MAX && sig < QORE_PLATFORM_NSIG;
+}
+
 QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, bool reuse_sys) {
-    assert(sig > 0);
+    if (!isValidSignal(sig)) {
+        return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+            name);
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
@@ -1054,6 +1097,12 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
 }
 
 QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, const char* name, bool reuse_sys) {
+    for (int sig : sig_vec) {
+        if (!isValidSignal(sig)) {
+            return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+                name);
+        }
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;

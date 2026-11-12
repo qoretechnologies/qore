@@ -107,6 +107,7 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
 // the nesting depth of a rule is one more than that of its deepest symbol
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
     do {                                                        \
+        (Current).native_parse_info = {};                        \
         if (N) {                                                \
             (Current).first_line = YYRHSLOC(Rhs, 1).first_line; \
             (Current).first_col  = YYRHSLOC(Rhs, 1).first_col;  \
@@ -114,6 +115,7 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
             (Current).last_col   = YYRHSLOC(Rhs, N).last_col;   \
             unsigned yydepth = 0;                               \
             for (int yyi = 1; yyi <= (N); ++yyi) {              \
+                (Current).native_parse_info.merge(YYRHSLOC(Rhs, yyi).native_parse_info); \
                 if (YYRHSLOC(Rhs, yyi).depth > yydepth) {       \
                     yydepth = YYRHSLOC(Rhs, yyi).depth;         \
                 }                                               \
@@ -3040,13 +3042,13 @@ top_level_command:
             if ($1->isParseDeclaration())
                 delete $1;
             else
-                qore_program_private::addStatement(*(getProgram()), $1);
+                qore_program_private::addStatement(*(getProgram()), $1, @1.native_parse_info);
         }
     }
     | '{' '}'
     | '{' statements '}' {
         $2->finalizeBlock(@1.first_line, @2.last_line);
-        qore_program_private::addStatement(*(getProgram()), $2);
+        qore_program_private::addStatement(*(getProgram()), $2, @2.native_parse_info);
     }
     | top_namespace_decl {
         if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
@@ -3083,7 +3085,7 @@ top_level_command:
         } else {
             VarRefTryModuleErrorNode* left = new VarRefTryModuleErrorNode(loc, $1->takeName());
             QoreAssignmentOperatorNode* exp = new QoreAssignmentOperatorNode(loc, left, $1->takeExceptionHash());
-            qore_program_private::addStatement(*(getProgram()), new ExpressionStatement(loc, exp));
+            qore_program_private::addStatement(*(getProgram()), new ExpressionStatement(loc, exp), @1.native_parse_info);
         }
         delete $1;
     }
@@ -3348,17 +3350,21 @@ namespace_decl:
 
 unscoped_const_decl:
     TOK_CONST identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $2, $4);
     }
     | TOK_CONST uncqtypedef identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3,
             $5, false, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
         delete $2;
     }
     | TOK_PUBLIC TOK_CONST identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3, $5, true);
     }
     | TOK_PUBLIC TOK_CONST uncqtypedef identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col), $4,
             $6, true, ParserTypeStruct::getTypeInfo($3), ParserTypeStruct::getParseTypeInfo($3));
         delete $3;
@@ -3367,17 +3373,21 @@ unscoped_const_decl:
 
 scoped_const_decl:
     TOK_CONST SCOPED_REF '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $2, $4);
     }
     | TOK_CONST uncqtypedef SCOPED_REF '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col),
             new NamedScope($3), $5, false, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
         delete $2;
     }
     | TOK_PUBLIC TOK_CONST SCOPED_REF '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3, $5, true);
     }
     | TOK_PUBLIC TOK_CONST uncqtypedef SCOPED_REF '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col),
             new NamedScope($4), $6, true, ParserTypeStruct::getTypeInfo($3), ParserTypeStruct::getParseTypeInfo($3));
         delete $3;
@@ -3422,18 +3432,21 @@ block:
     '{' statements '}'
     {
         $$ = $2;
+        @$.native_parse_info = @2.native_parse_info;
+        $$->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         // the block ends with its closing brace, where a function returns; it starts with its first statement, so
         // that the statements of a line are found as before
         $$->finalizeBlock($$->loc->start_line, @3.last_line);
     }
     |
     '{' /* NOTHING */ '}'
-    { $$ = new StatementBlock(@1.first_line, @2.last_line); }
+    { $$ = new StatementBlock(@1.first_line, @2.last_line); @$.native_parse_info = {}; }
     ;
 
 statement_or_block:
     statement
-    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); }
+    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info; }
     |
     block
     { $$ = $1; }
@@ -3441,13 +3454,13 @@ statement_or_block:
 
 statements:
     statement
-    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); }
+    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info; }
     | block
-    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); }
+    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info; }
     | statements block
-    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; }
+    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; $$->native_parse_info = @$.native_parse_info; }
     | statements statement
-    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; }
+    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; $$->native_parse_info = @$.native_parse_info; }
     ;
 
 optname:
@@ -3998,10 +4011,12 @@ enum_members:
 
 enum_member:
     identifier {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new EnumMemberInfo(loc, $1);
     }
     | identifier '=' exp {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new EnumMemberInfo(loc, $1, $3);
     }
@@ -4245,16 +4260,19 @@ hashdecl_attrs:
 
 hashdecl_member:
     uncqtypedef identifier ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
     }
     | uncqtypedef identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
     }
     | uncqtypedef identifier '(' call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
@@ -4278,6 +4296,7 @@ hashdecl_member:
         delete $1;
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
             $1 ? @1.first_line : @2.first_line, @5.last_line, 
             $1 ? @1.first_col : @2.first_col, @5.last_col);
@@ -4463,15 +4482,18 @@ public_member_list
 
 classvardecl:
     TOK_STATIC uncqtypedef identifier ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new ClassVarInfo($3, new QoreVarInfo(loc, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2)));
         delete $2;
     }
     | TOK_STATIC identifier ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new ClassVarInfo($2, new QoreVarInfo(loc));
     }
     | TOK_STATIC uncqtypedef identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         $$ = new ClassVarInfo($3,
             new QoreVarInfo(loc, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2), $5));
@@ -4479,10 +4501,12 @@ classvardecl:
         delete $2;
     }
     | TOK_STATIC identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new ClassVarInfo($2, new QoreVarInfo(loc, nullptr, nullptr, $4));
     }
     | TOK_STATIC uncqtypedef identifier '(' call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($2);
         AbstractQoreNode* new_call = nullptr;
@@ -4502,6 +4526,7 @@ classvardecl:
         delete $2;
     }
     | TOK_STATIC uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
             @6.last_line, @1.first_col,
             @6.last_col);
@@ -4526,6 +4551,7 @@ classvardecl:
 
 member2:
     qtypedef SELF_REF ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line, $1 ? @1.first_col : @2.first_col, @2.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
@@ -4534,6 +4560,7 @@ member2:
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $2);
     }
     | qtypedef SELF_REF '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
@@ -4542,6 +4569,7 @@ member2:
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $2);
     }
     | qtypedef SELF_REF '(' call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
@@ -4566,6 +4594,7 @@ member2:
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $2);
     }
     | uncqtypedef identifier ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
@@ -4573,6 +4602,7 @@ member2:
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | uncqtypedef identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
@@ -4580,6 +4610,7 @@ member2:
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | uncqtypedef identifier '(' call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
@@ -4603,6 +4634,7 @@ member2:
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
             @5.last_line, @1.first_col,
             @5.last_col);
@@ -4629,21 +4661,25 @@ member2:
                 $2);
     }
     | identifier ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc));
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $1);
     }
     | identifier '=' exp ';' {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc, nullptr, nullptr, $3));
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $1);
     }
     | classvardecl {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = $1;
     }
     | unscoped_const_decl {
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
@@ -4753,6 +4789,8 @@ inline_methoddef:
         std::vector<QoreGenericTypeParam> type_params;
         char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
         check_method(loc, name, $6, $7);
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @3.first_line, @3.last_line, $3, $6, $7, $8);
         apply_callable_type_params(mv->getUserVariantBase(), type_params);
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
@@ -4774,6 +4812,8 @@ inline_methoddef:
         char* name = parse_generic_callable_decl_name(loc, $3, type_params, "method");
         check_method(loc, name, $7, rt);
 
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @4.first_line, @4.last_line, $4, $7, rt, $8);
         apply_callable_type_params(mv->getUserVariantBase(), type_params);
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
@@ -4787,6 +4827,7 @@ inline_methoddef:
         std::vector<QoreGenericTypeParam> type_params;
         char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
         check_method(loc, name, $6, $7);
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @3.first_line, @3.last_line, $3, $6, $7, 0);
         apply_callable_type_params(mv->getUserVariantBase(), type_params);
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
@@ -4804,6 +4845,7 @@ inline_methoddef:
         char* name = parse_generic_callable_decl_name(loc, $3, type_params, "method");
         check_method(loc, name, $7, rt);
 
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         MethodVariantBase* mv = new_method_variant(loc, name, mod, @4.first_line, @4.last_line, $4, $7, rt, 0);
         apply_callable_type_params(mv->getUserVariantBase(), type_params);
         $$ = new MethodNode(name, mv, mod & OFM_STATIC);
@@ -4829,6 +4871,8 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $9->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
@@ -4843,6 +4887,8 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $9->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, $9);
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list block {
@@ -4859,6 +4905,8 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $9->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list block {
@@ -4875,6 +4923,8 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $9->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, $9);
     }
     | method_modifiers SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
@@ -4885,6 +4935,7 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
@@ -4895,6 +4946,7 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $2, @4.first_line, @4.last_line, $4, $7, $8, 0);
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list ';' {
@@ -4907,6 +4959,7 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list ';' {
@@ -4919,6 +4972,7 @@ outofline_methoddef:
         if ($5 && $5->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
     }
     | SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value block {
@@ -4926,6 +4980,8 @@ outofline_methoddef:
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, $5, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
     }
     | ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
@@ -4933,6 +4989,8 @@ outofline_methoddef:
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, $5, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
     }
     | uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list block {
@@ -4943,6 +5001,8 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, $6, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
     }
     | uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list block {
@@ -4953,6 +5013,8 @@ outofline_methoddef:
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new MethodDef(loc, $6, $2, @4.first_line, @4.last_line, $4, $7, rt, $8);
     }
     ;
@@ -5056,6 +5118,8 @@ sub_def:
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
+        $6->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseUserFunction(loc, $2, new UserFunctionVariant($6, @3.first_line, @3.last_line, $3, $5, false, flags));
     }
     | uncqtypedef TOK_SUB ident_openparen myexp ')' block {
@@ -5066,6 +5130,8 @@ sub_def:
         delete $1;
 
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
+        $6->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseUserFunction(loc, $3, new UserFunctionVariant($6, @4.first_line, @4.last_line, $4, rt, false, flags));
     }
     | method_modifiers TOK_SUB ident_openparen myexp ')' return_value block {
@@ -5076,6 +5142,8 @@ sub_def:
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
 
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseUserFunction(loc, $3, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
@@ -5091,6 +5159,8 @@ sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseUserFunction(loc, $4, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
@@ -5106,6 +5176,8 @@ scoped_sub_def:
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseScopedUserFunction(loc, $2, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, false, flags));
     }
     | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
@@ -5116,6 +5188,8 @@ scoped_sub_def:
         delete $1;
 
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, false, flags));
     }
     | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
@@ -5126,6 +5200,8 @@ scoped_sub_def:
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
 
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, $7, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
@@ -5141,6 +5217,8 @@ scoped_sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
+        $8->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = new ParseScopedUserFunction(loc, $4, new UserFunctionVariant($8, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
@@ -5910,6 +5988,8 @@ exp_c:
     | TOK_SUB '(' myexp ')' return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         int ar = get_pop_argv_ref();
+        $6->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @3.first_line, @3.last_line, $3, $5, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
     }
     | uncqtypedef TOK_SUB '(' myexp ')' block {
@@ -5918,6 +5998,8 @@ exp_c:
         delete $1;
 
         int ar = get_pop_argv_ref();
+        $6->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @4.first_line, @4.last_line, $4, rt, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
     }
     | method_modifiers TOK_SUB '(' myexp ')' return_value block {
@@ -5927,6 +6009,8 @@ exp_c:
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($7, @4.first_line, @4.last_line, $4, $6, $1 | OFM_SYNCED, flags)));
     }
     | method_modifiers uncqtypedef TOK_SUB '(' myexp ')' block {
@@ -5940,6 +6024,8 @@ exp_c:
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
+        $7->native_parse_info = @$.native_parse_info;
+        qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($7, @5.first_line, @5.last_line, $5, rt, $1 | OFM_SYNCED, flags)));
     }
     | IMPLICIT_ARG_REF {

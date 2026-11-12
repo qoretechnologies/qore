@@ -119,12 +119,35 @@ public:
     }
 };
 
+//! the type arguments and the receiver type of the generic code that created a closure (qore#5733)
+struct QoreClosureTypeContext {
+    //! a copy of the type arguments of the creating code's call; empty if it had none
+    QoreTypeParamInstantiation inst;
+    //! the receiver type of the creating code if it is a generic class, or nullptr
+    const QoreTypeInfo* receiver_type_info = nullptr;
+};
+
 class QoreClosureBase : public ResolvedCallReferenceNode {
 protected:
     const QoreClosureParseNode* closure;
     mutable ThreadSafeLocalVarRuntimeEnvironment closure_env;
     cvv_vec_t* cvec;
     const qore_class_private* class_ctx;
+    //! the type arguments and the receiver type of the generic code that created the closure, if any (qore#5733)
+    /** Allocated only for a closure in generic code that was created with either; deleted with the closure.  One
+        pointer, so that the creation, the call and the destruction of any other closure only test it
+    */
+    QoreClosureTypeContext* type_context = nullptr;
+
+    //! copies the type arguments and the receiver type of the code that creates the closure
+    DLLLOCAL void captureTypeContext();
+
+    //! sets the receiver type of the closure's type context if none was current when it was created
+    /** For a closure created in a method with the method's object: the object's class binds the type parameters of
+        its (base) classes, as the receiver type of a call of the method does (code that binds them statically, such
+        as an IR function, does not make the receiver type current)
+    */
+    DLLLOCAL void captureObjectReceiver(const QoreObject* obj);
 
     DLLLOCAL void del(ExceptionSink* xsink) {
         // cvec and closure_env both reference ClosureVarValues captured by the closure;
@@ -156,6 +179,9 @@ public:
             closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
         //printd(5, "QoreClosureBase::QoreClosureBase() this: %p closure: %p\n", this, closure);
         closure->ref();
+        if (closure->needsTypeContext()) {
+            captureTypeContext();
+        }
         // thread_get_closure_vars_for_vlist() ref'd every CVV in cv; closure_env
         // additionally ref'd each CVV that's in its cmap (subset of cv).
         // That duplicate ref on cmap-members masks cycles from the rsection
@@ -172,6 +198,7 @@ public:
 
     DLLLOCAL ~QoreClosureBase() {
         //printd(5, "QoreClosureBase::~QoreClosureBase() this: %p closure: %p\n", this, closure);
+        delete type_context;
         const_cast<QoreClosureParseNode*>(closure)->deref();
         assert(!cvec);
     }
@@ -227,6 +254,39 @@ public:
 
     //! Returns the full typed code type info (e.g., code<int(string)>) from the closure's signature
     DLLLOCAL const QoreTypeInfo* getCallTypeInfo() const;
+
+    //! returns the type arguments and the receiver type of the code that created the closure, if any
+    DLLLOCAL const QoreClosureTypeContext* getTypeContext() const {
+        return type_context;
+    }
+};
+
+//! makes the type arguments and the receiver type of the code that created a closure current while it is called
+/** (qore#5733); the closure's own call, which has no type parameters, does not change them
+*/
+class QoreClosureTypeContextHelper {
+public:
+    DLLLOCAL QoreClosureTypeContextHelper(const QoreClosureBase* cb) : ctx(cb ? cb->getTypeContext() : nullptr) {
+        if (ctx) {
+            set();
+        }
+    }
+
+    DLLLOCAL ~QoreClosureTypeContextHelper() {
+        if (ctx) {
+            restore();
+        }
+    }
+
+private:
+    const QoreClosureTypeContext* ctx;
+    // set by set(), read only by restore(): not initialized, so that a closure created with no type context only
+    // tests ctx
+    const QoreTypeParamInstantiation* old_inst;
+    const QoreTypeInfo* old_receiver_type_info;
+
+    DLLLOCAL void set();
+    DLLLOCAL void restore();
 };
 
 class QoreClosureNode : public QoreClosureBase {
@@ -294,6 +354,9 @@ public:
             : QoreClosureBase(n_closure, cv, c_ctx),
                 obj(n_obj) {
         obj->tRef();
+        if (closure->needsTypeContext()) {
+            captureObjectReceiver(obj);
+        }
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {

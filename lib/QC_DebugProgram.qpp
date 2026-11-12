@@ -85,6 +85,17 @@ const DebugFlowContinue = RC_CONTINUE;
 
     The debugger should probably handle control in separate thread.
 
+    The notification methods run with the cancellation of the thread deferred (see @ref Qore::defer_thread_cancel()
+    "defer_thread_cancel()"), so that the code of the debugger always completes and the debugged code is cancelled
+    where it would be without the debugger: a cancellation point in the debugger's code, such as a loop, a lock or a
+    wait for a client while the thread is stopped, does not raise a cancellation, which is raised when the method
+    returns if it arrived while the method ran, and otherwise where the debugged code raises it.  A thread that is
+    cancelled while it is stopped therefore stays stopped until the debugger resumes it: @ref Qore::cancel_thread()
+    "cancel_thread()" and @ref Qore::Program::cancelThreads() "Program::cancelThreads()" do not end a stopped thread,
+    and a %Program interrupt or a sandbox limit is likewise raised only when the debugged code runs again.  The
+    methods of a debugger object of a sandboxed %Program run without the deferral, as sandboxed code never runs with
+    it.
+
     The DebugProgram class defines the interface and the real functionality should be implemented in a child class.
 
     @par Example:
@@ -195,7 +206,8 @@ abstract nothing DebugProgram::onDetach(ProgramControl[QoreProgram] program, ref
 //! Executed when step is performed
 /**
     @param program the program being debugged
-    @param block_statement_id the statement ID for the current statement block
+    @param block_statement_id the statement ID for the current statement block; 0 for the block of the top-level code,
+    which has no statement ID (ProgramControl::getStatementIdInfo() does not resolve it)
     @param statement_id the statement ID for the current statement, if available
     @param breakpoint_id the breakpoint ID, if a breakpoint triggered the callback
     @param flow a reference to the flow-control action to return to the program
@@ -230,10 +242,14 @@ abstract nothing DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] progr
 abstract nothing DebugProgram::onFunctionExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when an exception is raised.
-/**
+/** The method is called for each statement that the exception leaves, from the statement that raised it to the
+    statement that catches it, if any; the exception hash has the same \c debug_id key in each call for the exception,
+    also after a @ref rethrow "rethrow" of it, and a new exception has a new one, so that a debugger can stop at an
+    exception once
+
     @param program the program being debugged
     @param statement_id the statement ID where the exception was raised
-    @param exception the exception hash
+    @param exception the exception hash, with the \c debug_id key (see @ref Qore::ExceptionInfo "ExceptionInfo")
     @param dismiss a reference to the flag indicating if the exception should be dismissed
     @param run_state a reference to the run state to return to the program
     @param run_to_statement_id a reference to the statement ID to run to

@@ -1107,6 +1107,16 @@ void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsi
 void* qore_rt_iterator_create_iterate(uint64_t iterable_bits, ExceptionSink* xsink);
 void* qore_rt_iterator_create_iterate_throwing(uint64_t iterable_bits, ExceptionSink* xsink);
 
+//! Create the iterator of a foreach statement over keys, a slice or a list of indices (QoreIROpcode::IteratorCreateSource)
+/** @param kind the QoreIRIteratorSourceKind
+    @param flags the QoreIRListSelectorFlag flags of a list of indices
+    @return the opaque iterator pointer, or nullptr if there is nothing to iterate or an exception was raised
+*/
+void* qore_rt_iterator_create_source(uint64_t operand_bits, int64_t kind, int64_t flags, uint64_t first_bits,
+    uint64_t second_bits, ExceptionSink* xsink);
+void* qore_rt_iterator_create_source_throwing(uint64_t operand_bits, int64_t kind, int64_t flags,
+    uint64_t first_bits, uint64_t second_bits, ExceptionSink* xsink);
+
 //! Evaluate `iterate <source>` as an AbstractIterator object.
 uint64_t qore_rt_iterate_value(uint64_t source_bits, ExceptionSink* xsink);
 uint64_t qore_rt_iterate_value_throwing(uint64_t source_bits, ExceptionSink* xsink);

@@ -827,6 +827,18 @@ DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg2_type_info();
 
+//! sets the number of operators that set the implicit arguments around the code that is parsed; returns the old number
+DLLLOCAL unsigned parse_set_implicit_arg_ctx_depth(unsigned depth);
+
+//! sets where the parse of a function or closure body notes that it reads the implicit arguments of its own call
+DLLLOCAL bool* parse_set_function_reads_implicit_args(bool* reads);
+
+//! notes that the code that is parsed reads the implicit arguments ($1, $$)
+/** if no operator that sets them is around the code, they are the implicit arguments of the call of the function or
+    closure that the code is the body of (qore#5805)
+*/
+DLLLOCAL void parse_note_implicit_arg_use();
+
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
@@ -983,6 +995,15 @@ public:
     //! returns true if the override has been set
     DLLLOCAL bool isSet() const {
         return active;
+    }
+
+    //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
+    //! without one, so that it can be set again
+    DLLLOCAL void reset() {
+        if (active) {
+            restore();
+            active = false;
+        }
     }
 
 private:
@@ -1684,23 +1705,55 @@ private:
    void* operator new(size_t) = delete;
 };
 
-// allows for implicit argument types to be set at parse time: the type of $1 and, for the code of foldl and foldr,
-// which get the next element as $2, the type of $2; every other implicit argument has no parse-time type, and code
-// that sets $1 alone unsets the type of $2 of an enclosing fold
+// allows for implicit argument types to be set at parse time, for the code of an operator that sets the implicit
+// arguments for it: the type of $1 and, for the code of foldl and foldr, which get the next element as $2, the type of
+// $2; every other implicit argument has no parse-time type, and code that sets $1 alone unsets the type of $2 of an
+// enclosing fold
 class ParseImplicitArgTypeHelper {
 public:
-   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti, const QoreTypeInfo* ti2 = nullptr)
-         : ati(parse_set_implicit_arg_type_info(ti)), ati2(parse_set_implicit_arg2_type_info(ti2)) {
+   //! \a sets_implicit_args is false for a block whose code runs with the implicit arguments of the enclosing code
+   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti, const QoreTypeInfo* ti2 = nullptr,
+         bool sets_implicit_args = true)
+         : ati(parse_set_implicit_arg_type_info(ti)), ati2(parse_set_implicit_arg2_type_info(ti2)),
+           depth(parse_set_implicit_arg_ctx_depth(0)) {
+      parse_set_implicit_arg_ctx_depth(depth + (sets_implicit_args ? 1 : 0));
    }
 
    DLLLOCAL ~ParseImplicitArgTypeHelper() {
       parse_set_implicit_arg2_type_info(ati2);
       parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
    }
 
 private:
    const QoreTypeInfo* ati;
    const QoreTypeInfo* ati2;
+   unsigned depth;
+};
+
+// parse of the body of a function or a closure: the implicit arguments are those of its own call, so neither $1 nor
+// $2 has the parse-time type of an enclosing operator's element, and a read of them that is not inside an operator
+// that sets them is noted in \a reads (qore#5805)
+class ParseFunctionBodyImplicitArgHelper {
+public:
+   DLLLOCAL ParseFunctionBodyImplicitArgHelper(bool& reads) : ati(parse_set_implicit_arg_type_info(nullptr)),
+         ati2(parse_set_implicit_arg2_type_info(nullptr)), depth(parse_set_implicit_arg_ctx_depth(0)),
+         old_reads(parse_set_function_reads_implicit_args(&reads)) {
+      reads = false;
+   }
+
+   DLLLOCAL ~ParseFunctionBodyImplicitArgHelper() {
+      parse_set_implicit_arg2_type_info(ati2);
+      parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
+      parse_set_function_reads_implicit_args(old_reads);
+   }
+
+private:
+   const QoreTypeInfo* ati;
+   const QoreTypeInfo* ati2;
+   unsigned depth;
+   bool* old_reads;
 };
 
 // acquires a TID and thread entry, returns -1 if not successful
@@ -1837,6 +1890,8 @@ DLLLOCAL const qore_class_private* runtime_get_class();
 */
 DLLLOCAL const qore_class_private* runtime_get_caller_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
+//! returns the current Program and class context with one thread-local lookup
+DLLLOCAL void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc);
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
 DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
@@ -2166,6 +2221,14 @@ public:
         return restore || entry_frame.isActive();
     }
 
+    //! marks the context as the one that runs the top-level code of the Program
+    /** The top-level code has no frame boundary: its frame is the bottom of the thread's local variable stack in the
+        Program, below the frames of the calls it makes (see getContextFrame()); when the Program is already on the
+        thread's stack (its top-level code runs again in a call that it makes), that bottom belongs to the first entry
+        into the Program, and the frame of the top-level code is that of the call
+    */
+    DLLLOCAL void setTopLevel();
+
     //! returns the program active before this context was entered
     DLLLOCAL QoreProgram* getOldProgram() const {
         return old_pgm;
@@ -2250,6 +2313,8 @@ protected:
     unsigned saved_defer;
     unsigned saved_dtor_defer;
     bool restore = false;
+    //! true if set() created the thread's local data of the Program, or if the context runs the top-level code of the
+    //! Program in the thread's first entry into it (setTopLevel()): the context's bottom frame has no frame boundary
     bool init_tlpd = false;
     bool thread_count_incremented = false;
     //! true if the context entered a Program with module lifetime without its thread count; see

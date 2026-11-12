@@ -224,7 +224,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
     #! Registers a Queue for async stream data delivery
     /** @param stream_id the HTTP/2 stream ID
-        @param queue the unlimited Queue for data delivery
+        @param queue the Queue for data delivery; a Queue with a maximum size is supported (the I/O thread never
+        waits for room in it; the data that it has no room for stays in the stream)
     */
     registerStreamQueue(int stream_id, Queue queue) {
         poll_op.registerStreamQueue(stream_id, queue);

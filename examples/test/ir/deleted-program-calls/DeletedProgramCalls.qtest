@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT calls into the code of a deleted Program, with background JIT compiles
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class DeletedProgramCallsTest
+
+#! issue #5822: code of another Program that calls the code of a deleted Program is refused before that code runs
+/** A Program calls functions and a class (a method, a static method, a method of an object created before) that
+    another Program exported to it, closures (one whose body is a native leaf, one created in a method, one whose
+    parameter has the type of a class of the other Program) and a call reference that the other Program created, and
+    code that is compiled in the background while the other Program is deleted; once that Program is deleted, every
+    call raises PROGRAM-ERROR, as with the AST interpreter.  The thread that deletes the other Program is not refused
+    when code of the calling Program that the teardown runs (a destructor), run while the other Program lived, calls
+    the other Program's code, as with the AST interpreter.  Before, the fast call paths of the IR interpreter and of
+    native code read the deleted Program (whether a debugger is attached to it), and the inlined call of a function
+    compiled it, which read its deleted data.
+
+    DeletedProgramCalls.qr prints the outcome of each call; the AST interpreter's output must be the expected one, and
+    every other execution mode, with synchronous and with background compiles, the IR tier and AOT executables
+    compiled with -O0 and -O3 must give the same.  The script needs library debugging (dbg_hold_bg_compile()).
+*/
+class DeletedProgramCallsTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = (
+            "call_f: PROGRAM-ERROR",
+            "call_add: PROGRAM-ERROR",
+            "call_method: PROGRAM-ERROR",
+            "call_closure: PROGRAM-ERROR",
+            "call_ref: PROGRAM-ERROR",
+            "call_leaf: PROGRAM-ERROR",
+            "call_obj_method: PROGRAM-ERROR",
+            "call_static: PROGRAM-ERROR",
+            "call_mclosure: PROGRAM-ERROR",
+            "call_typed: PROGRAM-ERROR",
+            "teardown hook: 104",
+            "teardown ran the defining Program's code: 1",
+            "bg_target: PROGRAM-ERROR",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("calls into deleted Programs", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/DeletedProgramCalls.qr";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! skips the test case without library debugging, which the script needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_bg_compile() requires library debugging");
+        }
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        checkDebugging();
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the script in every execution mode, with synchronous compiles, and on the IR tier
+    private modesTest() {
+        checkDebugging();
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! runs the script with background compiles: with tiered execution, the code of the calling Program is compiled
+    #! while the defining Program is deleted
+    private backgroundTest() {
+        checkDebugging();
+        string exp = ast();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            string cmd = sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s 2>&1", env, qore_bin, mode, script);
+            assertEq(exp, backquote(cmd), mode + " with background compiles");
+        }
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        checkDebugging();
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("deleted-program-calls-aot-");
+        string exe = dir.path + "/deleted-program-calls";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

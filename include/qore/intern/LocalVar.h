@@ -690,6 +690,23 @@ public:
         return weak_assigned;
     }
 
+    //! Records that a weak assignment takes a weak reference to the variable's container (\c w := variable)
+    /** An operator that changes such a variable must change the container the variable holds, as the AST interpreter
+        does (+= appends to the list in place), not give it a new one: the weak reference designates the container the
+        variable held, so a new one leaves it with a container that nothing owns (it reads as empty).  IR lowering
+        therefore changes such a variable through its lvalue, as for a variable assigned with := or @= (see
+        parseWeakAssigned()); the parse of the assignment anywhere in the code records it, so lowering knows it before
+        it lowers the code that changes the variable (qore#5846).
+    */
+    DLLLOCAL void parseWeakSource() {
+        weak_source = true;
+    }
+
+    //! Returns whether a weak assignment takes a weak reference to the variable's container; see parseWeakSource()
+    DLLLOCAL bool isWeakSource() const {
+        return weak_source;
+    }
+
     //! Preserves the definite-assignment state the variable had when it left the parse stack.
     /** Signature parameters are popped with the flag reset, because the same LocalVar is re-pushed
         for the next parse of the same signature and must not inherit this one's state.  IR lowering
@@ -1214,6 +1231,8 @@ private:
         read_only = false,
         //! assigned with := or @=; see parseWeakAssigned()
         weak_assigned = false,
+        //! the source of a weak assignment (w := variable); see parseWeakSource()
+        weak_source = false,
         //! the operand of delete or remove; see parseDeleted()
         ever_deleted = false;
     const QoreTypeInfo* typeInfo = nullptr;
