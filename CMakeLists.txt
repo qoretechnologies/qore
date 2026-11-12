@@ -3642,6 +3642,7 @@ set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/tokenizer
     ${CMAKE_BINARY_DIR}/modules/ocr
     ${CMAKE_BINARY_DIR}/modules/dataframe
+    ${CMAKE_BINARY_DIR}/modules/sshutil
     ${CMAKE_BINARY_DIR}/modules/protobuf)
 string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
 set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
@@ -3693,11 +3694,34 @@ if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
 endif()
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser avro json yaml reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser avro json yaml reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe sshutil protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
 endforeach()
+# every in-tree binary module (QORE_BINARY_MODULE_QORE) installs its qmod with the qore-bootstrap component, so it must
+# be built by the qore-bootstrap target and be on the module path of the metadata extraction; a module missing from the
+# lists above failed only at install time ("file INSTALL cannot find ...-api-<x>.qmod")
+get_property(_qore_intree_binary_modules GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_TARGETS)
+get_property(_qore_intree_binary_module_dirs GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
+foreach(_qore_intree_binary_module ${_qore_intree_binary_modules})
+    list(FIND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_intree_binary_module} _qore_intree_found)
+    if (_qore_intree_found EQUAL -1)
+        message(FATAL_ERROR "the in-tree binary module '${_qore_intree_binary_module}' is not in the module list of "
+            "QORE_AOT_BINARY_MODULE_TARGETS in CMakeLists.txt, so the qore-bootstrap target would not build the qmod "
+            "that its install rule installs")
+    endif()
+endforeach()
+foreach(_qore_intree_binary_module_dir ${_qore_intree_binary_module_dirs})
+    list(FIND QORE_QM_METADATA_MODULE_DIRS ${_qore_intree_binary_module_dir} _qore_intree_found)
+    if (_qore_intree_found EQUAL -1)
+        message(FATAL_ERROR "the build directory of the in-tree binary module '${_qore_intree_binary_module_dir}' is "
+            "not in QORE_QM_METADATA_MODULE_DIRS in CMakeLists.txt")
+    endif()
+endforeach()
+unset(_qore_intree_found)
+unset(_qore_intree_binary_modules)
+unset(_qore_intree_binary_module_dirs)
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 
 # QM metadata extraction is unconditional: json is built from this tree and is guaranteed to
