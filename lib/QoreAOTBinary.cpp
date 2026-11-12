@@ -13410,8 +13410,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     + (closure->isInMethod() ? "1" : "0");
                 writer.writeStringRef(flags.c_str());
 
-                // Write class type path (ref2)
+                // Write class type path (ref2); for a closure that is not in a method, the class that it runs in
+                // (issue #5907)
                 const QoreTypeInfo* cti = ucf->getClassType();
+                if (!cti && !closure->isInMethod() && closure->getStaticClass()) {
+                    cti = closure->getStaticClass()->getTypeInfo();
+                }
                 writeTypePathRef(writer, cti);
 
                 if ((writer.feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {

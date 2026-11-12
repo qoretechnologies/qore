@@ -35463,8 +35463,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // ref1 = flags: "lambda,in_method" (comma-separated booleans)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
                 + (closure->isInMethod() ? "1" : "0");
-        // ref2 = class type path (empty if no class context)
+        // ref2 = class type path (empty if no class context); for a closure that is not in a method, the class that
+        // it runs in (issue #5907)
         const QoreTypeInfo* cti = ucf->getClassType();
+        if (!cti && !closure->isInMethod() && closure->getStaticClass()) {
+            cti = closure->getStaticClass()->getTypeInfo();
+        }
         if (cti) {
             id.ref2 = getSlotTypePath(cti);
         }

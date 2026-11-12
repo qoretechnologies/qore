@@ -106,6 +106,15 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
+    //! Returns the class that a closure without an object context was parsed in, if any
+    /** A closure in a static method or in its default values, or in a static member initializer, runs in the class
+        context of its class, also when it is created by a call's default value in the caller's context (issue #5907)
+    */
+    DLLLOCAL const qore_class_private* getStaticClass() const { return static_class; }
+
+    //! Sets the class that a closure without an object context runs in (from an AOT image)
+    DLLLOCAL void setStaticClass(const qore_class_private* qc) { static_class = qc; }
+
     //! returns the class of the method that the closure is in, or nullptr
     DLLLOCAL const qore_class_private* getMethodClass() const { return method_class; }
 
@@ -136,6 +145,8 @@ private:
     UserClosureFunction* uf;
     //! the class of the method that the closure is in, whose class context the closure runs in (issue #5898)
     const qore_class_private* method_class = nullptr;
+    //! the class that a closure without an object context was parsed in (see getStaticClass())
+    const qore_class_private* static_class = nullptr;
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
     bool lambda, in_method,
