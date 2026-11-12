@@ -131,10 +131,8 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
-//! returns the iterator of the keys of the evaluated operand \a marg, or nullptr if it has no keys
-static FunctionalOperatorInterface* qore_keys_iterator(ValueOptionalRefHolder& marg,
-        FunctionalOperator::FunctionalValueType& value_type,
-        ExceptionSink* xsink) {
+FunctionalOperatorInterface* QoreKeysOperatorNode::getKeysIterator(ValueOptionalRefHolder& marg,
+        FunctionalValueType& value_type, ExceptionSink* xsink) {
     qore_type_t t = marg->getType();
     if (t == NT_HASH) {
         value_type = FunctionalOperator::list;
@@ -158,7 +156,7 @@ QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return QoreValue();
     }
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(qore_keys_iterator(marg, value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getKeysIterator(marg, value_type, xsink));
     if ((xsink && *xsink) || value_type != FunctionalOperator::list || !ref_rv)
         return QoreValue();
 
@@ -185,7 +183,7 @@ FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(Fun
     QoreOperandEvalHolder marg(exp, xsink);
     if (xsink && *xsink)
         return nullptr;
-    return qore_keys_iterator(marg, value_type, xsink);
+    return getKeysIterator(marg, value_type, xsink);
 }
 
 bool QoreFunctionalKeysOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {

@@ -2256,6 +2256,7 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
         case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource:
             return visit(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::IteratorNextSelectors:
@@ -3078,6 +3079,7 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
         case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
             break;
         case QoreIROpcode::IteratorNext:

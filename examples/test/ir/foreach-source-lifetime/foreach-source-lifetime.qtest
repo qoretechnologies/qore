@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - JIT and AOT code generation and linking of the iterator of a foreach statement's list
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ForeachSourceLifetimeTest
+
+#! issue #5770: the lifetime of the operand of keys, a slice or a list of indices that is the list of a foreach statement
+/** The AST interpreter iterates keys, a slice and a list of indices with the iterator of the operator, which keeps the
+    hash, or the list sequence, until the loop ends; the IR interpreter and native code built the list first and
+    released the operand with the other temporaries of the list expression, before the body ran, so that an object in
+    a temporary hash was destroyed before the first iteration.  The AST's iterator of a slice also borrowed a list read
+    from a variable when the indices needed no evaluation, and read it after the body had removed the variable.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output,
+    which shows each destruction, must be that of the AST interpreter.
+*/
+class ForeachSourceLifetimeTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "foreach-source-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("foreach source lifetime", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        assertEq(27, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertTrue(out =~ /^keys hash:\n  body "a"\n  body "b"\n  dtor kh\n  end\n/, "keys of a hash");
+        assertTrue(out =~ /\nkeys local removed:\n  body "a"\n  body "b"\n  dtor kl\n/, "keys of a removed local");
+        assertTrue(out =~ /\nslice:\n  body 1\n  body 2\n  dtor sl\n/, "slice");
+        assertTrue(out =~ /\nindices:\n  body 1\n  body 2\n  dtor ix\n/, "list of indices");
+        assertTrue(out =~ /\nslice local removed:\n  body 1\n  body 2\n  dtor slr\n/, "slice of a removed local");
+        assertTrue(out =~ /\nindices local removed:\n  body 1\n  body 2\n  dtor ilr\n/,
+            "list of indices of a removed local");
+        assertTrue(out =~ /\nslice empty:\n  dtor se\n  end\n/, "empty slice");
+        assertTrue(out =~ /\none index:\n  dtor oi\n  body 1\n/, "one index");
+        assertTrue(out =~ /\nhash key:\n  dtor hk\n  body 1\n/, "key of a hash");
+        assertTrue(out =~ /\nkeys break:\n  body "a"\n  dtor kb\n  after\n/, "break");
+        assertTrue(out =~ /\nkeys return:\n  body "a"\n  dtor kr\n  on_exit\n/, "return");
+        assertTrue(out =~ /\nkeys exception:\n  body "a"\n  dtor kx\n  catch X\n/, "exception");
+        assertTrue(out =~ /\nkeys exception out:\n  body "a"\n  dtor ky\n  on_exit\n  ! Y\n/,
+            "exception that leaves the function");
+        assertTrue(out =~ /\nmap keys:\n  body "a"\n  body "b"\n  dtor mk\n/, "map over keys");
+        assertTrue(out =~ /\nkeys destructor exception:\n  dtor kd\n  catch D\n/,
+            "an exception raised by the release of the temporaries");
+        assertTrue(out =~ /\nslice index exception:\n  dtor sx\n  catch I\n/, "an index raises");
+        assertTrue(out =~ /\ntake keys:\n  body "a"\n  dtor tk\n/, "take over keys");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("foreach-source-lifetime-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

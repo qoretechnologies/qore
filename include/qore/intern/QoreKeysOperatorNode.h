@@ -54,6 +54,14 @@ protected:
             ExceptionSink* xsink) const;
 
 public:
+    //! Returns the iterator of the keys of the evaluated operand \a marg, or nullptr if it has no keys
+    /** The iterator of a hash keeps the hash, which it takes from the holder (with its reference if it is a
+        temporary); the keys of an object are copied first.  The IR tiers create the iterator of a foreach statement
+        with it (QoreIROpcode::IteratorCreateSource).
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getKeysIterator(ValueOptionalRefHolder& marg,
+            FunctionalValueType& value_type, ExceptionSink* xsink);
+
     DLLLOCAL QoreKeysOperatorNode(const QoreProgramLocation* loc, QoreValue exp)
             : QoreSingleExpressionOperatorNode<QoreOperatorNode>(loc, exp), returnTypeInfo(nullptr) {
     }

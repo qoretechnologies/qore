@@ -1010,7 +1010,18 @@ enum class QoreIROpcode : uint16_t {
     ToIntChecked = 428,
     ToFloatChecked = 429,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (430, 431, ...)
+    //! Create the iterator of a foreach statement whose list is an operator that the AST interpreter iterates lazily
+    //!
+    //! A QoreIRIteratorCreateInstruction whose iterable is the evaluated operand of the operator: the hash or object
+    //! of keys, or the sequence of a slice or of a list of indices.  operands[0] = the QoreIRIteratorSourceKind
+    //! (native int); operands[1] = the QoreIRListSelectorFlag flags (native int: StringIndexChar, NegativeOffsets);
+    //! operands[2] and operands[3] = the start and the end of a slice, or the list of indices and NOTHING.  The
+    //! iterator is the one that the AST interpreter's ForEachStatement gets from the operator, and it keeps what the
+    //! AST's keeps: the hash, or a list or binary sequence, for the whole loop, while the other temporaries of the
+    //! list expression are released before the body runs (qore#5770).
+    IteratorCreateSource = 430,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (431, 432, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1019,8 +1030,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
-static_assert(QORE_IR_MAX_OPCODE == 429, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::IteratorCreateSource);
+static_assert(QORE_IR_MAX_OPCODE == 430, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -1042,6 +1053,16 @@ enum class QoreIRListSelectorFlag : int64_t {
     //! the sequence is a list whose values hold no reference (int, float or bool values); IteratorCreateSelectors
     //! only: native code iterates it with the selector-segment loop (qore#5711)
     Segment = 1 << 5,
+};
+
+//! The operator of QoreIROpcode::IteratorCreateSource (operands[0])
+enum class QoreIRIteratorSourceKind : int64_t {
+    //! keys: QoreKeysOperatorNode::getKeysIterator()
+    Keys = 0,
+    //! a slice (seq[start..end]): QoreSquareBracketsRangeOperatorNode::getSliceIterator()
+    Slice = 1,
+    //! a list of indices without a range (seq[i, j]): QoreSquareBracketsOperatorNode::getIndexesIterator()
+    Indexes = 2,
 };
 
 //! The largest number of selectors of one QoreIROpcode::ListSelectorStep (QoreIRListSelectorFlag::RangeShift)

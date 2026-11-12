@@ -2579,8 +2579,23 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 || (element_type == floatTypeInfo && foreach_var_type == floatTypeInfo)
                 || (element_type == boolTypeInfo && foreach_var_type == boolTypeInfo)
                 || (element_type == stringTypeInfo && foreach_var_type == stringTypeInfo));
-        QoreIRValue list_val;
+        // keys, a slice or a list of indices whose operand can hold an object is iterated with the iterator that the
+        // AST interpreter gets from the operator, which keeps the hash or the sequence for the whole loop (qore#5770)
+        ForeachSourceOperator source;
         if (list_expr && !list_expr.isNothing()) {
+            getForeachSource(list_expr, source);
+        }
+        if (source) {
+            direct_typed_list = false;
+        }
+        QoreIRValue list_val;
+        QoreIRValue iter_val;
+        if (source) {
+            iter_val = lowerForeachSourceIterator(source, stmt->loc, error);
+            if (!iter_val.isValid()) {
+                return false;
+            }
+        } else if (list_expr && !list_expr.isNothing()) {
             // only the value iterated is kept while the body runs, as in the AST
             list_val = lowerExpressionInTempScope(list_expr, stmt->loc, error, true);
             if (!list_val.isValid()) {
@@ -2592,9 +2607,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         QoreIRValue retained_list;
-        QoreIRValue iter_val;
         bool guard_typed_list = direct_typed_list;
-        if (direct_typed_list) {
+        if (source) {
+            // the iterator keeps what the loop needs; the list expression has no value of its own
+        } else if (direct_typed_list) {
             const QoreIRValueFacts* facts = builder.getFunction()->getValueFacts(list_val);
             guard_typed_list = !facts
                 || facts->assigned_state != QoreIRAssignedState::Assigned
@@ -2730,7 +2746,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Break and continue do not visit them (ft.cleanup_stack_depth is captured above them): the loop exit
         // releases the iterator and the variables, and the temp scope of the statement the list.
         size_t foreach_source_entries = 0;
-        if (!direct_typed_list && iter_val.isValid() && qore_ir_type_may_hold_object(element_type)) {
+        // the iterator of keys, a slice or a list of indices keeps a hash or a sequence that can hold an object
+        if (!direct_typed_list && iter_val.isValid() && (source || qore_ir_type_may_hold_object(element_type))) {
             if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
                 BlockCleanupEntry lvars_entry;
                 lvars_entry.type = BlockCleanupEntry::Lvars;
@@ -2922,7 +2939,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 builder.createReleaseOwnedTemp(value_val, stmt->loc);
             }
             builder.createIteratorRelease(iter_val, stmt->loc);
-            builder.createReleaseOwnedTemp(list_val, stmt->loc);
+            if (list_val.isValid()) {
+                builder.createReleaseOwnedTemp(list_val, stmt->loc);
+            }
         }
 
         // Foreach loop variables live for the duration of the foreach
@@ -11160,6 +11179,104 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
     return iterate
         ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))->result
         : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc))->result;
+}
+
+bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperator& src) {
+    if (q_env_is_set("QORE_DISABLE_IR_FOREACH_SOURCE_ITERATOR")) {
+        return false;
+    }
+    const AbstractQoreNode* node = list.getInternalNode();
+    if (auto* op = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
+        src.kind = QoreIRIteratorSourceKind::Keys;
+        src.operand = op->getExp();
+    } else if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        src.kind = QoreIRIteratorSourceKind::Slice;
+        src.operand = op->get(0);
+        src.first = op->get(1);
+        src.second = op->get(2);
+    } else if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        // a list of selectors with a range is iterated with IteratorCreateSelectors, or built first if its
+        // evaluation cannot be observed (decideLazySelectorSource())
+        if (op->hasRhsListRange()) {
+            return false;
+        }
+        src.kind = QoreIRIteratorSourceKind::Indexes;
+        src.operand = op->getLeft();
+        src.first = op->getRight();
+        if (op->hasStringIndexChar()) {
+            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+        }
+        if (op->hasNegativeOffsets()) {
+            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+        }
+    } else {
+        return false;
+    }
+    // an operand that cannot hold an object cannot show when it is released
+    if (!qore_ir_type_may_hold_object(getExprTypeInfo(src.operand))) {
+        return false;
+    }
+    src.valid = true;
+    return true;
+}
+
+QoreIRValue QoreIRLowering::lowerForeachSourceIterator(const ForeachSourceOperator& src,
+        const QoreProgramLocation* loc, std::string& error) {
+    // as in ForEachStatement::execImpl(): the operator's operands are evaluated in a temp scope that ends once the
+    // iterator is made, which keeps the hash or the sequence that it iterates with a reference of its own
+    bool scoped = builder.getExceptionTempScopeId() != 0;
+    if (scoped) {
+        // no location: the mark is not a statement boundary (see lowerExpressionInTempScope())
+        builder.createPushTempMark(nullptr);
+    }
+    auto abandon = [&]() {
+        if (scoped) {
+            builder.abandonTempScope();
+        }
+        return QoreIRValue();
+    };
+    QoreIRValue operand = lowerExpression(src.operand, error);
+    if (!operand.isValid()) {
+        return abandon();
+    }
+    // the indices of a slice, or the list of indices, are evaluated after the sequence
+    QoreIRValue first, second;
+    if (src.kind != QoreIRIteratorSourceKind::Keys) {
+        first = lowerExpression(src.first, error);
+        if (!first.isValid()) {
+            return abandon();
+        }
+    }
+    if (src.kind == QoreIRIteratorSourceKind::Slice) {
+        second = lowerExpression(src.second, error);
+        if (!second.isValid()) {
+            return abandon();
+        }
+    }
+    QoreIRValue iter = withExceptionTarget(builder.createIteratorCreateSource(operand, src.kind, src.flags, first,
+        second, loc))->result;
+    if (scoped) {
+        if (blockHasTerminator(builder.getBlock())) {
+            builder.abandonTempScope();
+        } else {
+            QoreIRInstruction* discard = createDiscardTemps(loc);
+            // a destructor that the release of the operand's temporaries runs can raise: the iterator is released
+            // before a handler of this function runs, as the AST's foreach statement destroys its iterator when it
+            // returns with the exception
+            if (QoreIRBasicBlock* outer = discard->exception_target) {
+                QoreIRBasicBlock* cleanup = createBlock("foreach.source.exception.cleanup");
+                if (!cleanup) {
+                    error = "IR builder failed to create the foreach source exception cleanup block";
+                    return QoreIRValue();
+                }
+                discard->exception_target = cleanup;
+                QoreIRBasicBlock* current = builder.getBlock();
+                emitForeachExceptionCleanup(cleanup, outer, iter, QoreIRValue(), QoreIRValue(), nullptr, loc);
+                builder.setBlock(current);
+            }
+        }
+    }
+    return iter;
 }
 
 bool QoreIRLowering::useSelectorSegmentLoop(const LazySelectorSource& src) const {
@@ -21663,9 +21780,17 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     // selectors with ranges is iterated lazily (qore#5675)
     LazySelectorSource selector_source;
     getLazySelectorSource(base_source, selector_source);
+    // keys, a slice or a list of indices is iterated with the AST interpreter's iterator of the operator, which keeps
+    // the hash or the sequence (qore#5770); the source then has no value of its own.  A streaming operator iterates
+    // such a source with its iterator too (QoreStreamingOperatorNode), not with the semantics of iterate
+    ForeachSourceOperator source_op;
+    if (!selector_source) {
+        getForeachSource(base_source, source_op);
+    }
     QoreIRValue source;
-    QoreIRValue iter_val = lowerSourceIterator(base_source, selector_source, source_uses_iterate, true, loc, source,
-        error);
+    QoreIRValue iter_val = source_op
+        ? lowerForeachSourceIterator(source_op, loc, error)
+        : lowerSourceIterator(base_source, selector_source, source_uses_iterate, true, loc, source, error);
     if (!iter_val.isValid()) {
         return false;
     }
@@ -21674,7 +21799,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     // source and the loop variables first, as the AST interpreter unwinds the foreach statement before the handler
     // runs (qore#5655).  It matters only when one of them can hold an object: the base source, a value that a map
     // stage computes (from a source that holds no objects), or the loop variable
-    bool foreach_may_hold_object = qore_ir_type_may_hold_object(getExprTypeInfo(base_source));
+    bool foreach_may_hold_object = static_cast<bool>(source_op)
+        || qore_ir_type_may_hold_object(getExprTypeInfo(base_source));
     for (const LazyPipelineStage& stage : stages) {
         if (stage.kind == LazyPipelineStage::Map || stage.kind == LazyPipelineStage::MapSelect) {
             foreach_may_hold_object = true;
@@ -22186,7 +22312,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         // functional iterator releases it before the source (an exhausted loop has no element)
         builder.createReleaseOwnedTemp(next_inst->result, loc);
         builder.createIteratorRelease(iter_val, loc);
-        builder.createReleaseOwnedTemp(source, loc);
+        if (source.isValid()) {
+            builder.createReleaseOwnedTemp(source, loc);
+        }
     }
 
     if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
@@ -22251,7 +22379,10 @@ void QoreIRLowering::emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block
     if (iterator.isValid()) {
         builder.createIteratorRelease(iterator, loc);
     }
-    builder.createReleaseOwnedTemp(list, loc);
+    // a foreach over the iterator of a lazily iterated operator keeps no list (qore#5770)
+    if (list.isValid()) {
+        builder.createReleaseOwnedTemp(list, loc);
+    }
     if (lvars) {
         for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
             auto* ui = builder.createUninstantiateLocal(lvars->lv[i], loc);
