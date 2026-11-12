@@ -3021,6 +3021,9 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
         flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
@@ -3031,10 +3034,13 @@ ws.setEventQueue();
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendText(str);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendText(str);
+        wakeAsyncIo();
     }
 
     #! Sends binary data over the web socket with timeout specified in options; if any errors occur, an exception is thrown
@@ -3048,6 +3054,9 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
         flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
@@ -3058,10 +3067,13 @@ ws.setEventQueue();
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendBinary(bin);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendBinary(bin);
+        wakeAsyncIo();
     }
 
     #! pushes an unencoded message on the connection's message queue
@@ -3072,6 +3084,9 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
 
         @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
         flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
@@ -3083,10 +3098,13 @@ ws.setEventQueue();
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendRaw(msg, op, fin);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendRaw(msg, op, fin);
+        wakeAsyncIo();
     }
 
     #! Starts a non-blocking send operation for string data
@@ -3097,6 +3115,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3112,6 +3131,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3129,6 +3149,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3147,6 +3168,10 @@ ws.setEventQueue();
             *object op_obj = poll_op ?? closing_op;
             if (op_obj) {
                 op_obj.checkDataSend();
+            } else {
+                # as send(): without a connection the message cannot be sent (issue #5894)
+                throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                    "connected to %y (the connection was closed or was never opened)", url);
             }
         }
         int rsv_bits = 0;
@@ -5745,6 +5770,9 @@ class MyObserver inherits Observer {
         @param value The value to serialize and send over the WebSocket
 
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
+
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
+        @throw WEBSOCKET-CLOSING-ERROR the close handshake of the connection started (see @ref send())
     */
     sendData(auto value) {
         hash<auto> headers = {};
