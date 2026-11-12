@@ -2903,6 +2903,19 @@ QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QorePr
     return v;
 }
 
+//! Marks a parameter or local variable of an AOT-compiled function as kept in native storage when the AOT metadata
+//! does not tell whether it is (issue #5890)
+/** A closure-bound variable is on the closure variable stack, and a reference variable reads and writes the lvalue
+    that it refers to, so neither is marked; get_local_vars() then gives the others in a frame that runs native code
+    as unavailable, and set_local_var_value() refuses them, instead of a value that the code does not use
+*/
+static void qore_aot_mark_unknown_native_local(LocalVar* lv) {
+    if (lv && !lv->closureUse() && !lv->isTopLevel() && !lv->isSelf()
+            && !QoreTypeInfo::isReference(lv->getTypeInfo())) {
+        lv->setAOTNativeStorage(LocalVar::AOT_NATIVE_STORAGE | LocalVar::AOT_NATIVE_WRITES);
+    }
+}
+
 // Forward declaration for hybrid closure resolution
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func);
@@ -3453,6 +3466,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     // From QORE_AOT_LOCAL_BINDING_VERSION, a slot bound to a top-level local is flagged as one; before it, a
     // top-level local is recognized as a slot that is neither a parameter nor a body local
     const bool has_local_binding = reader.getHeader().version >= QORE_AOT_LOCAL_BINDING_VERSION;
+    // From QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION, the records flag the variables kept in native storage
+    const bool has_native_local_flags = reader.getHeader().version >= QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION;
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
@@ -3554,6 +3569,23 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             if ((lflags & 0x10) && !lv->isReadOnly()) {
                 lv->setReadOnly();
+            }
+            // a parameter or local variable that the native code keeps in native storage, which get_local_vars()
+            // and set_local_var_value() refuse (issue #5890); a record of an older format does not tell, so every
+            // parameter and local variable of the function is taken to be one (qore_aot_mark_unknown_native_local())
+            if (has_native_local_flags) {
+                uint8_t native = 0;
+                if (lflags & QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE) {
+                    native |= LocalVar::AOT_NATIVE_STORAGE;
+                }
+                if (lflags & QORE_AOT_LOCAL_SLOT_NATIVE_WRITES) {
+                    native |= LocalVar::AOT_NATIVE_WRITES;
+                }
+                if (native) {
+                    lv->setAOTNativeStorage(native);
+                }
+            } else if (!(lflags & (0x04 | 0x08 | QORE_AOT_LOCAL_SLOT_TOP_LEVEL))) {
+                qore_aot_mark_unknown_native_local(lv);
             }
             ctx->locals[i] = lv;
             if (trace_slot_reg) {
@@ -8795,6 +8827,16 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
         ctx->pgm = pgm;
         ctx->uses_argv = qore_aot_func_uses_argv(aot_func);
         ctx->uses_self = qore_aot_func_uses_self(aot_func);
+        // the variables that the native code keeps in native storage are not known for a context built from the
+        // source: every parameter and local variable of the function is taken to be one (issue #5890)
+        if (sig) {
+            for (unsigned i = 0; i < sig->numParams() && i < sig->lv.size(); ++i) {
+                qore_aot_mark_unknown_native_local(sig->lv[i]);
+            }
+        }
+        for (LocalVar* lv : ir_func->all_body_locals) {
+            qore_aot_mark_unknown_native_local(lv);
+        }
     }
     if (ctx && ctx->num_lv_path_insts > 0) {
         // Keep IR function alive — LValuePath instructions reference path data in it

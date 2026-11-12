@@ -419,6 +419,17 @@ DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_d
 //! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
 DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc);
+//! Returns true if the location is the call stack frame of a call that AOT-compiled code makes directly to native code
+/** Such a call has no frame on the stack of local variables (see ProgramThreadCountContextHelper::getContextFrame())
+*/
+DLLLOCAL bool qore_is_aot_native_call_frame(const QoreStackLocation* loc);
+//! Returns true if the location is one where AOT-compiled native code runs, or if it is not known
+/** The location of a frame where code runs is one of AOT-compiled native code when the code runs as such, and one of
+    the AST or the IR interpreter when the code runs there, as AOT-compiled code does with a debugger attached; the
+    variables that AOT-compiled code keeps in native storage are on the stack of local variables only in the latter
+    (see LocalVar::getAOTNativeStorage())
+*/
+DLLLOCAL bool qore_is_aot_code_location(const QoreProgramLocation* loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 //! Sets the runtime statement, location and parse options of the current thread, and returns the previous ones
@@ -2211,7 +2222,17 @@ public:
 
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
-    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink);
+    //! Returns the data of the thread in the Program of the given frame and the index of the frame there
+    /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
+        on the stack of local variables of the data returned
+        @param xsink for an exception
+        @param aot_code if not null, set to true if the frame runs AOT-compiled native code, or if it is not known
+        whether it does (see qore_is_aot_code_location()), false if it runs in the AST or the IR interpreter
+
+        @return the data, or nullptr if the frame cannot be accessed or does not exist
+    */
+    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink,
+            bool* aot_code = nullptr);
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
 

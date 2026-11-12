@@ -64,7 +64,7 @@ int ThreadLocalVariableData::getFrame(int frame, Block*& w, int& p) {
     return -1;
 }
 
-void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink) {
+void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink, bool aot_code) {
     Block* w;
     int p;
     if (getFrame(frame, w, p))
@@ -84,6 +84,17 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
 
             ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
             v->setKeyValue("type", new QoreStringNode("local"), xsink);
+            // a variable that AOT-compiled native code assigns in its own storage has no value on the stack
+            if (aot_code && var.local_var && (static_cast<const LocalVar*>(var.local_var)->getAOTNativeStorage()
+                    & LocalVar::AOT_NATIVE_WRITES)) {
+                v->setKeyValue("unavailable", true, xsink);
+                const QoreTypeInfo* typeInfo = static_cast<const LocalVar*>(var.local_var)->getTypeInfo();
+                if (QoreTypeInfo::hasType(typeInfo)) {
+                    v->setKeyValue("declaredType", new QoreStringNode(QoreTypeInfo::getName(typeInfo)), xsink);
+                }
+                h.setKeyValue(var.id, v.release(), xsink);
+                continue;
+            }
             v->setKeyValue("value", var.eval(xsink), xsink);
             if (var.local_var) {
                 qore_set_local_var_debug_type(**v, static_cast<const LocalVar*>(var.local_var)->getTypeInfo(),
@@ -99,7 +110,8 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
 }
 
 // returns 0 = OK, 1 = no such variable, -1 exception setting variable
-int ThreadLocalVariableData::setVarValue(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
+int ThreadLocalVariableData::setVarValue(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink,
+        bool aot_code) {
     Block* w;
     int p;
     if (getFrame(frame, w, p))
@@ -116,6 +128,13 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
             }
 
             if (!strcmp(var.id, name)) {
+                // AOT-compiled native code that keeps the variable in its own storage would not see the value
+                if (aot_code && var.local_var && (static_cast<const LocalVar*>(var.local_var)->getAOTNativeStorage()
+                        & LocalVar::AOT_NATIVE_STORAGE)) {
+                    xsink->raiseException("AOT-FRAME-ERROR", "local variable '%s' cannot be set: the AOT-compiled "
+                        "code of its frame keeps it in native code, which would not see the value", name);
+                    return -1;
+                }
                 LValueHelper lvh(xsink);
                 // the value is assigned as an assignment in the code assigns it: converted to the type of the
                 // variable, or refused, as is a read-only variable

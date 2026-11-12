@@ -638,10 +638,35 @@ public:
             weak_assigned(old.weak_assigned), ever_deleted(old.ever_deleted),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
-            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
+            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution),
+            aot_native_storage(old.aot_native_storage.load(std::memory_order_relaxed)) {
     }
 
     DLLLOCAL ~LocalVar() {
+    }
+
+    //! LocalVar::getAOTNativeStorage() flag: the AOT-compiled function that declares the variable keeps it in native
+    //! storage and does not read it again from the stack of local variables, so a value set there is not seen
+    static constexpr uint8_t AOT_NATIVE_STORAGE = 1;
+    //! LocalVar::getAOTNativeStorage() flag: that function also assigns the variable in native storage only, so the
+    //! value on the stack of local variables is not the value of the variable
+    static constexpr uint8_t AOT_NATIVE_WRITES = 2;
+
+    //! Records how the AOT-compiled function that declares the variable keeps it in native storage (issue #5890)
+    /** Set when the AOT context of the function is built, from the flags of its local slot record, before the
+        function runs; read by get_local_vars() and set_local_var_value() only (see
+        ThreadLocalVariableData::getLocalVars()), so that a call costs nothing for it
+
+        @param flags a combination of AOT_NATIVE_STORAGE and AOT_NATIVE_WRITES
+    */
+    DLLLOCAL void setAOTNativeStorage(uint8_t flags) {
+        aot_native_storage.fetch_or(flags, std::memory_order_relaxed);
+    }
+
+    //! Returns how the AOT-compiled function that declares the variable keeps it in native storage; see
+    //! setAOTNativeStorage()
+    DLLLOCAL uint8_t getAOTNativeStorage() const {
+        return aot_native_storage.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL void parseAssigned() {
@@ -1241,6 +1266,8 @@ private:
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
     bool type_info_needs_substitution = false;
     bool ref_type_info_needs_substitution = false;
+    //! how the AOT-compiled function that declares the variable keeps it in native storage; see setAOTNativeStorage()
+    std::atomic<uint8_t> aot_native_storage{0};
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_try_find_lvar(this);

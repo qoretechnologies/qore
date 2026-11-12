@@ -424,6 +424,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v28: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
 //!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
 //!      release_values).  A v9-v27 record has none.
+//! v29: the flags of a local slot record of a function record mark the parameters and local variables of the function
+//!      whose values its native code keeps in native storage (QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE and
+//!      QORE_AOT_LOCAL_SLOT_NATIVE_WRITES), which get_local_vars() and set_local_var_value() refuse (issue #5890).  A
+//!      v9-v28 record has no such flags: every parameter and local variable of the function that is neither
+//!      closure-bound nor a reference is taken to have both.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -437,9 +442,11 @@ constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 26;
 constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 27;
 //! First format version whose IteratorNext records have release values (see v28 above).
 constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
+//! First format version whose local slot records flag the variables kept in native storage (see v29 above).
+constexpr uint16_t QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION = 29;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_ITERATOR_RELEASES_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -2436,12 +2443,32 @@ enum class AOTExprNodeKind : uint8_t {
 */
 constexpr uint8_t QORE_AOT_LOCAL_SLOT_TOP_LEVEL = 0x20;
 
+//! AOT context local slot flag: the native code keeps the variable in native storage (from
+//! QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION)
+/** Set for a parameter or a local variable of the function whose value the native code of the function's standard
+    entry keeps in its own storage and does not read again from the stack of local variables, where a call with a
+    frame has the variable too: a value set there, as by set_local_var_value(), is not seen by the code, which
+    set_local_var_value() therefore refuses (issue #5890).  Never set for a closure-bound variable, \c self or
+    \c argv.
+*/
+constexpr uint8_t QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE = 0x40;
+//! AOT context local slot flag: the value of the variable on the stack of local variables is not known to be its
+//! value (from QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION)
+/** Set with QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE for every such variable but a parameter that the code never writes
+    (before or after the IR is optimized), and for a variable whose writes the IR optimizations removed: the native
+    code assigns it in native storage only, or the optimizations replace its stores by its values, so that
+    get_local_vars() does not give the value on the stack.  A parameter that has only
+    QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE keeps the value that the call gave it on the stack.
+*/
+constexpr uint8_t QORE_AOT_LOCAL_SLOT_NATIVE_WRITES = 0x80;
+
 //! Identity for a local variable slot
 struct AOTLocalSlotId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
     //! bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only,
-    //! bit 5: top-level local (QORE_AOT_LOCAL_SLOT_TOP_LEVEL)
+    //! bit 5: top-level local (QORE_AOT_LOCAL_SLOT_TOP_LEVEL), bit 6: native storage
+    //! (QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE), bit 7: native writes (QORE_AOT_LOCAL_SLOT_NATIVE_WRITES)
     uint8_t flags = 0;
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
     uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
