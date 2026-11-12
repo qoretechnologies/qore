@@ -326,7 +326,9 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                     // that all on_(exit|error) statements are executed even if exceptions are thrown
                     if (obe_xsink) {
                         xsink->assimilate(obe_xsink);
-                        if (!error)
+                        // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
+                        // when the block raises it itself (#5893)
+                        if (!error && xsink->isException())
                             error = true;
                     }
                 }
