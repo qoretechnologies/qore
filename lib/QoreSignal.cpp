@@ -1032,15 +1032,22 @@ void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& p
     }
 }
 
+// the number of signals of the platform: its signals are 1 .. QORE_PLATFORM_NSIG - 1
+#if defined(NSIG)
+#define QORE_PLATFORM_NSIG NSIG
+#elif defined(_NSIG)
+#define QORE_PLATFORM_NSIG _NSIG
+#elif defined(__DARWIN_NSIG)
+#define QORE_PLATFORM_NSIG __DARWIN_NSIG
+#else
+#define QORE_PLATFORM_NSIG QORE_SIGNAL_MAX
+#endif
+
 bool QoreSignalManager::isValidSignal(int sig) {
-    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG on
-    // Linux) can never be delivered
-    if (sig <= 0 || sig >= QORE_SIGNAL_MAX) {
-        return false;
-    }
-    sigset_t s;
-    sigemptyset(&s);
-    return !sigaddset(&s, sig);
+    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG and
+    // above) can never be delivered; the range is checked against NSIG itself: sigaddset() is no check of it, as
+    // macOS accepts NSIG
+    return sig > 0 && sig < QORE_SIGNAL_MAX && sig < QORE_PLATFORM_NSIG;
 }
 
 QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, bool reuse_sys) {
