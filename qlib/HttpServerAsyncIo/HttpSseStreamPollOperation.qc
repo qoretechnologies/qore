@@ -181,7 +181,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the callback invoked when the stream has ended and clears it, so that it is called at most once
     /** The async I/O controller takes the callback on every path that ends the stream: a disconnect, a connection
-        error, and the removal of the listener or a stop of the controller.
+        error, and the removal of the listener or a stop of the controller; a stream whose client is dropped for its
+        bound takes it itself, before it ends, and runs it on the thread that queued the data.
     */
     *code<nothing()> takeCloseCallback() {
         lockState("takeCloseCallback");
@@ -491,24 +492,32 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         # controller could still be running then)
         *code<nothing()> end_cb;
         try {
-            end_cb = takeCloseCallback();
+            # the callback is taken and the stream ended in one locked section (as abort() does)
+            lockState("queueIntern");
+            on_exit m.unlock();
+            end_cb = remove close_callback;
+            state = STATE_DISCONNECTED;
+            notifier.notify();
         } catch (hash<ExceptionInfo> ex) {
             # the state lock could not be taken: the controller reports the end
         }
-        # the socket is closed even if the state lock cannot be taken, so that the client is dropped in any case
+        # the socket is closed even if the state lock could not be taken, so that the client is dropped in any case
         try {
-            abort();
-        } catch (hash<ExceptionInfo> ex) {
-            try {
-                sock.close();
-            } catch () {
-            }
+            sock.close();
+        } catch () {
         }
         if (end_cb) {
             try {
                 end_cb();
             } catch (hash<ExceptionInfo> ex) {
-                # the end of the stream is reported; the exception raised is the overflow
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                if (cb) {
+                    try {
+                        cb(sprintf("http1 SSE stream: the close callback of the dropped client raised %s: %s",
+                            ex.err, ex.desc));
+                    } catch () {
+                    }
+                }
             }
         }
         throw SseClientOverflowErr, msg;

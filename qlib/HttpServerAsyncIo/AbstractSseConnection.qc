@@ -274,7 +274,13 @@ public class AbstractSseConnection {
             # the stream has already ended
         }
         if (cb) {
-            cb();
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                warn(sprintf("%s SSE stream: the peer-close callback of the dropped client raised %s: %s",
+                    getProtocol(), ex.err, ex.desc));
+            }
         }
         throw SseClientOverflowErr, msg;
     }
