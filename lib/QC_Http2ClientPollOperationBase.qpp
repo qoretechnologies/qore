@@ -1669,7 +1669,7 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // after it is released (issue #5859); declared before the lock guard, so that it runs after the lock is released
     struct StreamQueueRoomRewake {
         Http2ClientPollOperationPriv* priv;
-        DLLLOCAL ~StreamQueueRoomRewake() {
+        ~StreamQueueRoomRewake() {
             // sequentially consistent with the listener's store: a failed trylock() of the submission lock gives no
             // ordering between the I/O thread and this thread, and the fence orders the load after the unlock
             std::atomic_thread_fence(std::memory_order_seq_cst);
