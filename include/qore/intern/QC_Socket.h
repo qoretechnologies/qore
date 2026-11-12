@@ -95,6 +95,9 @@ public:
     std::string ssl_cipher_name_cache;
     std::string ssl_cipher_version_cache;
     unsigned non_block_flags = 0;
+    //! set when the server drains the connection (Socket::drainHttpConnection()): a keep-alive operation ends after
+    //! the response that it sends instead of waiting for the next request (qore#5899)
+    std::atomic<bool> http_draining{false};
     int non_block_accept_count = 0;
     //! true if Socket::accept() and Socket::acceptSSL() resolve the peer's hostname for the accepted socket's
     //! \c source_host member (see Socket::setSourceHostLookup())

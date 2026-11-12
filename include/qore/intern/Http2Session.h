@@ -384,6 +384,18 @@ public:
     */
     DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
 
+    //! Starts a graceful drain of a server session: submits the GOAWAY with submitShutdownGoaway() (qore#5899)
+    /** The streams open at that point are served to their end; the client opens no new ones (nghttp2 refuses
+        streams above the last stream ID in the GOAWAY).  The connection's poll operation closes the connection once
+        isDrainComplete() returns true.  Performs no socket I/O.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int startDrain(ExceptionSink* xsink);
+
+    //! Returns true if a drain was started and the session has no open streams and nothing left to write
+    DLLLOCAL bool isDrainComplete() const;
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
@@ -1081,6 +1093,8 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
+    //! true once startDrain() was called; protected by m
+    bool draining = false;
     int32_t last_stream_id = 0;
 
     // Request body data for callbacks - owns the data

@@ -1114,6 +1114,9 @@ private:
     // true while the response of a fast route to a request with Connection: close is sent: the operation then ends
     bool fast_close = false;
 
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;
     }
@@ -1567,6 +1570,9 @@ private:
 
     // Idle + ReadHeader phases
     bool fused;
+
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
     int64 idle_timeout_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 

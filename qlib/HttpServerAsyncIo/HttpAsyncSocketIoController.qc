@@ -167,6 +167,16 @@ public class HttpAsyncSocketIoController {
         #! True if the handler pool has been stopped and needs recreation in start()
         bool pool_stopped = False;
 
+        #! True from startDrain() until the controller stops: no new connection or request is taken, and each
+        #! connection closes when it has answered the requests that it has (see design/http-server-drain.md)
+        bool draining = False;
+
+        #! Counts the connections that a drain waits for: one per live drain token (see HttpDrainToken)
+        Counter drain_conns();
+
+        #! Counts the HTTP/1.1 requests dispatched to a handler; such a connection has no entry until its result
+        Counter dispatch_count();
+
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
 
@@ -355,6 +365,153 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Starts draining the server's connections before a stop; returns at once
+    /** No new connection is accepted and no new request is taken, and each connection is closed when it has answered
+        the requests that it has:
+        - HTTP/1.1: an idle keep-alive connection is closed at once; a request in progress is answered with
+          \c Connection: \c close and the connection is closed after the response
+        - HTTP/2: a \c GOAWAY frame tells the client the last stream that the server processed; the connection is
+          closed when its open streams have ended
+
+        Long-lived connections (WebSocket, SSE) are closed by the server before it drains.  Use waitDrain() to wait
+        for the drain to end, and stop() afterwards to stop the controller, which closes whatever is left.
+
+        Does nothing if a drain was started already or the controller is stopping.
+
+        @since HttpServerAsyncIo 1.0
+    */
+    startDrain() {
+        list<string> accept_owners = ();
+        list<Http2PollOperation> h2ops = ();
+        list<Socket> idle_socks = ();
+        list<Socket> fused_socks = ();
+        {
+            AutoWriteLock al(m);
+            if (draining || stopping) {
+                return;
+            }
+            draining = True;
+            foreach hash<auto> i in (listeners.pairIterator()) {
+                if (i.value.http_version != HttpVersionMode::H3) {
+                    push accept_owners, i.key;
+                }
+            }
+            foreach string uh in (keys connections) {
+                hash<HttpActiveConnectionInfo> ci = connections{uh};
+                if (ci.state == HttpConnectionState::Http3 || ci.state == HttpConnectionState::Http3Sending) {
+                    continue;
+                }
+                if (!ci.drain_token) {
+                    ci.drain_token = new HttpDrainToken(drain_conns);
+                    connections{uh} @= ci;
+                }
+                if (ci.stream_op instanceof Http2PollOperation) {
+                    push h2ops, cast<Http2PollOperation>(ci.stream_op);
+                    continue;
+                }
+                # an HTTP/1.1 keep-alive operation ends after the response that it sends instead of waiting for
+                # another request
+                ci.sock.drainHttpConnection();
+                if (ci.state == HttpConnectionState::KeepAlive || ci.state == HttpConnectionState::Idle) {
+                    push idle_socks, ci.sock;
+                } else if (ci.state == HttpConnectionState::SendAndReadHeader
+                        || ci.state == HttpConnectionState::SendStreamAndReadHeader) {
+                    # an operation that waits for a request is woken to see the drain
+                    push fused_socks, ci.sock;
+                }
+            }
+        }
+        log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle",
+            drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size());
+        # stop accepting: the accept operations of the TCP listeners are canceled, and none is submitted again
+        foreach string owner in (accept_owners) {
+            try {
+                controller.cancelByOwner(owner);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("canceling the accept operations of listener " + owner, ex);
+            }
+        }
+        foreach Http2PollOperation h2op in (h2ops) {
+            try {
+                h2op.startDrain();
+            } catch (hash<ExceptionInfo> ex) {
+                # a connection that is gone already needs no drain
+                if (ex.err =~ /^SOCKET-/) {
+                    log(LoggerLevel::DEBUG, "Async HTTP drain: HTTP/2 connection closed already: %s: %s", ex.err,
+                        ex.desc);
+                } else {
+                    logShutdownException("starting the drain of an HTTP/2 connection", ex);
+                }
+            }
+        }
+        foreach Socket sock in (fused_socks) {
+            wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
+        }
+        foreach Socket sock in (idle_socks) {
+            try {
+                controller.cancelAndClose(sock);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("closing idle connection " + sock.uniqueHash(), ex);
+            }
+        }
+    }
+
+    #! Waits for a drain started with startDrain() to end
+    /** The drain ends when every request dispatched to a handler has been answered and every connection that the
+        drain counts has been closed; the wait is woken by the last of these events
+
+        @param timeout_ms the maximum time to wait; 0 or a negative value waits indefinitely
+
+        @return @ref True if the drain ended, @ref False if the timeout expired first or no drain was started
+
+        @since HttpServerAsyncIo 1.0
+    */
+    bool waitDrain(timeout timeout_ms) {
+        if (!draining) {
+            return False;
+        }
+        if (timeout_ms <= 0) {
+            dispatch_count.waitForZero();
+            drain_conns.waitForZero();
+            return True;
+        }
+        int deadline = clock_getmicros() + timeout_ms * 1000;
+        # the requests in handlers first: a connection that has one has no entry, and so no drain token, until its
+        # dispatch ends, which gives it one
+        if (dispatch_count.waitForZero(timeout_ms)) {
+            return False;
+        }
+        int remaining_ms = (deadline - clock_getmicros()) / 1000;
+        if (remaining_ms <= 0) {
+            return !drain_conns.getCount();
+        }
+        return !drain_conns.waitForZero(remaining_ms);
+    }
+
+    #! Returns @ref True if a drain was started (see startDrain())
+    /** @since HttpServerAsyncIo 1.0
+    */
+    bool isDraining() {
+        return draining;
+    }
+
+    #! Ends the dispatch of an HTTP/1.1 request to a handler (see dispatch_count)
+    /** Called after the result has been handled, when the connection has its entry again or is closed: while
+        draining, the entry gets a drain token first, so that the drain counts the connection before the dispatch
+        stops counting it
+    */
+    private endDispatch(string uh) {
+        if (draining) {
+            AutoWriteLock al(m);
+            *hash<HttpActiveConnectionInfo> ci = connections{uh};
+            if (ci && !ci.drain_token) {
+                ci.drain_token = new HttpDrainToken(drain_conns);
+                connections{uh} @= ci;
+            }
+        }
+        dispatch_count.dec();
+    }
+
     stop() {
         try {
             stopIntern();
@@ -365,6 +522,7 @@ public class HttpAsyncSocketIoController {
         try {
             AutoWriteLock al(m);
             stopping = False;
+            draining = False;
         } catch (hash<ExceptionInfo> ex) {
             logShutdownException("resetting shutdown flag", ex);
         }
@@ -438,6 +596,7 @@ public class HttpAsyncSocketIoController {
             connections = {};
             accept_counts = {};
         }
+        log(LoggerLevel::INFO, "Async HTTP controller stopping: closing %d connection(s)", conn_keys.size());
         foreach int timer_id in (delayed_response_timer_ids) {
             try {
                 controller.cancelTimer(timer_id);
@@ -1247,7 +1406,8 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
-            if (stopping) {
+            # a draining server closes a connection when it has no request left
+            if (stopping || draining) {
                 try { sock.close(); } catch () {}
                 return;
             }
@@ -1455,7 +1615,8 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             has_listener = exists listeners{owner};
             cnt_check = accept_counts{owner} ?? 0;
-            if (has_listener) {
+            # a draining server accepts no new connections
+            if (has_listener && !draining) {
                 if (cnt_check < DefaultAcceptOps) {
                     do_replenish = True;
                 }
@@ -1578,10 +1739,10 @@ public class HttpAsyncSocketIoController {
             try { sock.close(); } catch () {}
         }
 
-        # Check stopping flag — reject new connections during shutdown
+        # Check stopping flag — reject new connections during shutdown or a drain
         {
             AutoReadLock al(m);
-            if (stopping) {
+            if (stopping || draining) {
                 try { sock.close(); } catch () {}
                 return;
             }
@@ -3452,6 +3613,10 @@ public class HttpAsyncSocketIoController {
 
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
+        # a draining server answers the request and closes the connection
+        if (draining) {
+            output.info.close = True;
+        }
         string dispatch_uh = uh;
         Socket dispatch_sock = cinfo.sock;
         HttpAsyncTarget dispatch_target = cinfo.target;
@@ -3463,6 +3628,7 @@ public class HttpAsyncSocketIoController {
         *HttpKeepAlivePollOperation dispatch_keep_alive_op = cinfo.keep_alive_op;
         hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
             "sock": dispatch_sock,
+            "drain_token": cinfo.drain_token,
             "listener": dispatch_listener,
             "cx": dispatch_cx,
             "target": dispatch_target,
@@ -3532,10 +3698,16 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Remove from our tracking
+        # Remove from our tracking; the dispatch is counted until it ends (see endDispatch())
         {
             AutoWriteLock al(m);
             remove connections{dispatch_uh};
+            dispatch_count.inc();
+        }
+        # set while a handler-pool task owns the end of the dispatch
+        bool dispatch_async;
+        on_exit if (!dispatch_async) {
+            endDispatch(dispatch_uh);
         }
 
         # Try lightweight inline path first (no body, handler opts in via canHandleInline).
@@ -3585,6 +3757,7 @@ public class HttpAsyncSocketIoController {
         # block while waiting for controller-backed socket I/O, so it must run
         # on a handler thread, not the call_dispatcher worker.
         code<nothing()> request_handler = sub () {
+            on_exit endDispatch(dispatch_uh);
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
@@ -3601,9 +3774,12 @@ public class HttpAsyncSocketIoController {
             }
         };
 
+        # the task ends the dispatch once it is submitted
+        dispatch_async = True;
         try {
             submitToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
+            dispatch_async = False;
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
             try {
@@ -3628,6 +3804,10 @@ public class HttpAsyncSocketIoController {
         @param body_data the body data read by the I/O controller (may be NOTHING for empty body)
     */
     private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
+        # a draining server answers the request and closes the connection
+        if (draining) {
+            cinfo.pending_header_info.close = True;
+        }
         string dispatch_uh = uh;
         Socket dispatch_sock = cinfo.sock;
         HttpAsyncTarget dispatch_target = cinfo.target;
@@ -3639,6 +3819,7 @@ public class HttpAsyncSocketIoController {
         *HttpKeepAlivePollOperation dispatch_keep_alive_op = cinfo.keep_alive_op;
         hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
             "sock": dispatch_sock,
+            "drain_token": cinfo.drain_token,
             "listener": dispatch_listener,
             "cx": dispatch_cx,
             "target": dispatch_target,
@@ -3671,10 +3852,17 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Remove from our tracking — handler thread owns the socket now
+        # Remove from our tracking — handler thread owns the socket now; the dispatch is counted until it ends (see
+        # endDispatch())
         {
             AutoWriteLock al(m);
             remove connections{dispatch_uh};
+            dispatch_count.inc();
+        }
+        # set while a handler-pool task owns the end of the dispatch
+        bool dispatch_async;
+        on_exit if (!dispatch_async) {
+            endDispatch(dispatch_uh);
         }
 
         # Give the target the same pre-dispatch admission point as a bodyless request.
@@ -3697,6 +3885,7 @@ public class HttpAsyncSocketIoController {
 
         # Dispatch to handler pool (same as handleHeaderComplete)
         code<nothing()> request_handler = sub () {
+            on_exit endDispatch(dispatch_uh);
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
@@ -3710,9 +3899,12 @@ public class HttpAsyncSocketIoController {
             }
         };
 
+        # the task ends the dispatch once it is submitted
+        dispatch_async = True;
         try {
             submitToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
+            dispatch_async = False;
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
             try {
@@ -3732,6 +3924,14 @@ public class HttpAsyncSocketIoController {
     private handleRequestResult(Socket sock, auto linfo, hash<auto> cx,
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
+        # a draining server closes the connection after the response, and says so in it (RFC 9112 section 9.6); the
+        # response of a request dispatched before the drain started was made for a persistent connection
+        if (draining) {
+            result.close = True;
+            if (result.code) {
+                result.hdr.Connection = "close";
+            }
+        }
 
         timeout response_delay = result.response_delay ?? 0ms;
         remove result.response_delay;
@@ -3749,6 +3949,7 @@ public class HttpAsyncSocketIoController {
                 }
                 connections{uh} @= <HttpActiveConnectionInfo>{
                     "sock": sock,
+                    "drain_token": linfo.drain_token,
                     "listener": linfo.listener,
                     "cx": cx,
                     "target": target,
@@ -3834,6 +4035,7 @@ public class HttpAsyncSocketIoController {
                         result.input_stream, int(result.hdr."Content-Length"), ttl);
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
+                    "drain_token": linfo.drain_token,
                     "listener": linfo.listener,
                     "cx": cx,
                     "target": target,
@@ -3874,6 +4076,7 @@ public class HttpAsyncSocketIoController {
                 }
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
+                    "drain_token": linfo.drain_token,
                     "listener": linfo.listener,
                     "cx": cx,
                     "target": target,
@@ -3914,6 +4117,7 @@ public class HttpAsyncSocketIoController {
                     result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl, result.head);
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
+                    "drain_token": linfo.drain_token,
                     "listener": linfo.listener,
                     "cx": cx,
                     "target": target,
@@ -3950,6 +4154,7 @@ public class HttpAsyncSocketIoController {
                         result.input_stream, ttl);
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
+                    "drain_token": linfo.drain_token,
                     "listener": linfo.listener,
                     "cx": cx,
                     "target": target,
@@ -4002,6 +4207,7 @@ public class HttpAsyncSocketIoController {
                         result.body, result.head);
                     hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                         "sock": sock,
+                        "drain_token": linfo.drain_token,
                         "listener": linfo.listener,
                         "cx": cx,
                         "target": target,
@@ -4051,6 +4257,7 @@ public class HttpAsyncSocketIoController {
                         AutoWriteLock al(m);
                         cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                             "sock": sock,
+                            "drain_token": linfo.drain_token,
                             "listener": linfo.listener,
                             "cx": cx,
                             "target": target,
@@ -4077,6 +4284,7 @@ public class HttpAsyncSocketIoController {
                     AutoWriteLock al(m);
                     cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                         "sock": sock,
+                        "drain_token": linfo.drain_token,
                         "listener": linfo.listener,
                         "cx": cx,
                         "target": target,
@@ -5303,6 +5511,25 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
+#! Counts one connection for a drain (see design/http-server-drain.md)
+/** The token is carried in the connection's entry (HttpActiveConnectionInfo), which every state change of the
+    connection copies, so it is released, and the drain's Counter decremented, when the connection is gone
+*/
+class HttpDrainToken {
+    private {
+        Counter c;
+    }
+
+    constructor(Counter c) {
+        self.c = c;
+        c.inc();
+    }
+
+    destructor() {
+        c.dec();
+    }
+}
+
 
 #! Internal hashdecl for listener info
 hashdecl HttpListenerInfo {
@@ -5354,6 +5581,9 @@ hashdecl HttpListenerInfo {
 hashdecl HttpActiveConnectionInfo {
     #! The socket
     Socket sock;
+
+    #! Set while the server drains: counts the connection until its last copy of this entry is released
+    *HttpDrainToken drain_token;
 
     #! The listener interface for handler dispatch and logging
     *HttpServer::HttpListenerInterface listener;

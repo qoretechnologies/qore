@@ -19446,12 +19446,17 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            phase = Phase::Idle;
-            // Return POLLIN to wait for incoming data
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            return enterIdle(xsink);
         }
 
         case Phase::Idle: {
+            // a draining server closes the connection instead of waiting for another request (qore#5899)
+            if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                phase = Phase::Closed;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
             // Check idle timeout
             int us;
             int64 now_s = q_epoch_us(us);
@@ -19720,9 +19725,21 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
         info = nullptr;
         return 1;
     }
-    phase = Phase::Idle;
-    info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    info = enterIdle(xsink);
     return 1;
+}
+
+QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // the response was sent: a draining server closes the connection instead of waiting for another request; the
+    // controller closes it when the operation completes in this phase (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        phase = Phase::Closed;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return nullptr;
+    }
+    phase = Phase::Idle;
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
@@ -19783,6 +19800,19 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
         case Phase::Error: return "error";
         default: return "unknown";
     }
+}
+
+QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // the response was sent: a draining server closes the connection instead of waiting for another request; the
+    // controller closes it when the operation completes in this phase (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        phase = Phase::Closed;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return nullptr;
+    }
+    phase = Phase::Idle;
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -19877,8 +19907,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                         input_stream = nullptr;
                     }
                     if (fused) {
-                        phase = Phase::Idle;
-                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        return enterIdle(xsink);
                     }
                     // Non-fused: complete
                     sock->priv->clearNonBlock();
@@ -19946,8 +19975,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                             }
                             // bytes_sent == content_length: normal completion
                             if (fused) {
-                                phase = Phase::Idle;
-                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                                return enterIdle(xsink);
                             }
                             sock->priv->clearNonBlock();
                             set_non_block = false;
@@ -20000,8 +20028,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                             }
                             // bytes_sent == content_length: normal completion
                             if (fused) {
-                                phase = Phase::Idle;
-                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                                return enterIdle(xsink);
                             }
                             sock->priv->clearNonBlock();
                             set_non_block = false;
@@ -20034,6 +20061,13 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
             }
 
             case Phase::Idle: {
+                // a draining server closes the connection instead of waiting for another request (qore#5899)
+                if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                    phase = Phase::Closed;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
                 // Check idle timeout
                 int us;
                 int64 now_s = q_epoch_us(us);

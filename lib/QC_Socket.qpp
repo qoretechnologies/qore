@@ -6864,6 +6864,27 @@ bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
     return (bool)qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getFastRoutes();
 }
 
+//! Makes the HTTP keep-alive poll operations of the socket close the connection instead of waiting for another request
+/** Used by an HTTP server that drains its connections before it stops: an operation started with
+    @ref startPollSendHttpResponseAndReadHeader(), @ref startPollIdleAndReadHttpHeader() or the streaming variant
+    of the former ends after the response that it sends, or at once if it is waiting for a request, in a state that
+    tells the server to close the connection.  An operation that is waiting must be woken to see the change (see
+    @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").
+
+    The change cannot be undone.
+
+    @par Example:
+    @code{.py}
+sock.drainHttpConnection();
+controller.wakeSocket(sock);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::drainHttpConnection() [flags=CONSTANT] {
+    my_socket_priv::getPriv(*s)->http_draining.store(true, std::memory_order_release);
+}
+
 //! Starts a poll operation that waits for the first HTTP request of a connection and reads its header
 /** This is the fused send, idle wait and header read operation of
     @ref startPollSendHttpResponseAndReadHeader() without the response to send: it waits for data, reads the request

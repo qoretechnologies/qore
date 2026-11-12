@@ -1,0 +1,312 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 connection draining and closing over sockets on HttpServer stop
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpServer::stop() drains HTTP/1.1 connections (qore#5899): the server accepts no new connection, closes idle
+    keep-alive connections at once, answers the requests in progress with "Connection: close" and closes their
+    connections after the response, waiting at most the drain_timeout option; stopNoWait() does the same in the
+    background (bounded by waitStop()), and stopImmediate() does not wait for the requests in progress.
+
+    The tests speak raw HTTP/1.1 so that they see the response headers and the closing of each connection, and they
+    synchronize on the server's log messages and on the handler, never on time.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerStopDrainTest
+
+#! a handler that blocks until it is released, and answers at once on any other path
+class DrainHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the path of each blocking request as it enters the handler
+        Queue entered();
+
+        #! blocking requests return when this reaches zero
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block") {
+            entered.push(hdr.path);
+            release.waitForZero();
+            return makeResponse(200, "released", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+
+    #! releases every blocked request; safe to call more than once
+    releaseAll() {
+        if (release.getCount()) {
+            release.dec();
+        }
+    }
+}
+
+#! pushes the server's drain and stop log messages to a Queue
+class DrainLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    private {
+        Mutex lck();
+        list<string> all = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("drain-log", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /(drain|controller stopping)/) {
+            {
+                AutoLock al(lck);
+                all += params;
+            }
+            messages.push(params);
+        }
+    }
+
+    #! returns True if a message matching the given pattern was logged
+    bool seen(string pattern) {
+        AutoLock al(lck);
+        return boolean(select all, $1.regex(pattern));
+    }
+
+    #! waits for a message matching the given pattern and returns it
+    string waitFor(string pattern) {
+        while (True) {
+            string msg = messages.get(30s);
+            if (msg.regex(pattern)) {
+                return msg;
+            }
+        }
+    }
+}
+
+class HttpServerStopDrainTest inherits QUnit::Test {
+    private {
+        #! an upper bound for waits that must succeed
+        const StopTimeout = 30s;
+
+        #! a drain timeout that a correct drain never reaches
+        const LongDrain = 60s;
+    }
+
+    constructor() : Test("HttpServerStopDrainTest", "1.0") {
+        addTestCase("stop() lets a request in progress finish and closes idle connections",
+            \testInFlightRequestFinishes());
+        addTestCase("stopNoWait() drains in the background, bounded by waitStop()", \testStopNoWaitDrains());
+        addTestCase("stop() stops waiting at the drain timeout (quic_drain_timeout alias)",
+            \testDrainTimeout());
+        addTestCase("stopImmediate() does not wait for a request in progress", \testStopImmediate());
+        set_return_value(main());
+    }
+
+    #! returns a started server with a drain handler
+    private hash<auto> startServer(DrainHandler handler, DrainLogAppender appender, *hash<auto> opts) {
+        Logger logger("stop-drain-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        HttpServer server(cast<hash<HttpServerOptionInfo>>({"logger": logger} + opts));
+        server.setHandler("drain", "", NOTHING, handler);
+        server.setDefaultHandler("drain", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return {"server": server, "port": port};
+    }
+
+    #! connects and sends a request
+    private Socket sendRequest(int port, string path) {
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        s.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\n\r\n", path));
+        return s;
+    }
+
+    #! reads a response with a Content-Length body
+    private hash<auto> readResponse(Socket s) {
+        hash<auto> h = s.readHTTPHeader(StopTimeout);
+        int len = h."content-length".toInt();
+        h.body = len ? s.recv(len, StopTimeout) : "";
+        return h;
+    }
+
+    #! returns the error with which a read on the socket ends, or NOTHING if data arrived
+    private *string readEnd(Socket s) {
+        try {
+            s.recvBinary(1, StopTimeout);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    testInFlightRequestFinishes() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        # an idle keep-alive connection
+        Socket idle = sendRequest(setup.port, "quick");
+        on_exit idle.close();
+        hash<auto> resp = readResponse(idle);
+        assertEq(200, resp.status_code, "the quick request is answered");
+
+        # a request in progress
+        Socket busy = sendRequest(setup.port, "block");
+        on_exit busy.close();
+        assertEq("block", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        appender.waitFor("drain started");
+
+        # the idle connection is closed at once, while the request in progress is still being handled
+        assertEq("SOCKET-CLOSED", readEnd(idle), "the idle connection is closed when the drain starts");
+        assertEq(1, stopped.getCount(), "stop() waits for the request in progress");
+
+        # a connection made during the drain is not served
+        Socket late = sendRequest(setup.port, "quick");
+        on_exit late.close();
+
+        handler.releaseAll();
+        resp = readResponse(busy);
+        assertEq(200, resp.status_code, "the request in progress is answered");
+        assertEq("released", resp.body);
+        assertEq("close", resp.connection, "the response closes the connection");
+        assertEq("SOCKET-CLOSED", readEnd(busy), "the connection is closed after the response");
+
+        assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the request is answered");
+        assertFalse(appender.seen("did not finish"), "the drain did not time out");
+        assertNeq(NOTHING, readEnd(late), "a connection made during the drain gets no response");
+    }
+
+    testStopNoWaitDrains() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        Socket busy = sendRequest(setup.port, "block");
+        on_exit busy.close();
+        assertEq("block", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        # the shutdown sequence of a Qorus server: stopNoWait(), then a bounded waitStop()
+        server.stopNoWait();
+        appender.waitFor("drain started");
+        assertEq(-1, server.waitStop(100ms), "waitStop() times out while the request is in progress");
+
+        handler.releaseAll();
+        hash<auto> resp = readResponse(busy);
+        assertEq(200, resp.status_code, "the request in progress is answered");
+        assertEq("close", resp.connection, "the response closes the connection");
+        assertEq(0, server.waitStop(StopTimeout), "waitStop() succeeds once the request is answered");
+        assertEq(0, server.getRunningListenerCount());
+    }
+
+    testDrainTimeout() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        # the deprecated option name sets the drain timeout when drain_timeout is not set
+        hash<auto> setup = startServer(handler, appender, {"quic_drain_timeout": 100ms});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        Socket busy = sendRequest(setup.port, "block");
+        on_exit busy.close();
+        assertEq("block", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        assertRegex("did not finish", appender.waitFor("did not finish"), "the drain stops waiting at its timeout");
+        appender.waitFor("controller stopping");
+        handler.releaseAll();
+        assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the handler returns");
+    }
+
+    testStopImmediate() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        Socket busy = sendRequest(setup.port, "block");
+        on_exit busy.close();
+        assertEq("block", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stopImmediate();
+        }();
+        appender.waitFor("controller stopping");
+        handler.releaseAll();
+        assertEq(0, stopped.waitForZero(StopTimeout), "stopImmediate() ends once the handler returns");
+        # the response of a request in progress is not sent: the connection is closed
+        try {
+            hash<auto> h = s_readHeader(busy);
+            fail(sprintf("no response was expected: %y", h));
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^SOCKET-", ex.err, "the connection is closed without a response");
+        }
+        assertFalse(appender.seen("drain started"), "no drain was started");
+    }
+
+    #! reads a response header, raising an exception if the connection is closed
+    private hash<auto> s_readHeader(Socket s) {
+        auto h = s.readHTTPHeader(StopTimeout);
+        if (h.typeCode() != NT_HASH) {
+            throw "SOCKET-CLOSED", sprintf("no header: %y", h);
+        }
+        return h;
+    }
+}
