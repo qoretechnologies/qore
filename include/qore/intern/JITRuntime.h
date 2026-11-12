@@ -382,10 +382,8 @@ void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t t
 //! Returns the current object, as a call through self takes it (QoreIROpcode::CheckCallTarget with no operand)
 QoreValue qore_rt_current_self_value();
 
-
 //! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
 uint64_t qore_rt_current_self_bits();
-
 
 //! Checks the value of a return statement against the declared return type as the AST interpreter checks it in the
 //! return statement, without changing the value (QoreIROpcode::CheckReturnValue)

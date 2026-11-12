@@ -51,6 +51,16 @@ final class F {
     selfCall(Token t) {
         background (t.get(), kill(), self.m(side("self")));
     }
+
+    #! a call through self on an object that is not deleted, the only use of self in the expression
+    validSelfCall(Token t) {
+        background (t.get(), self.m(side("valid self")));
+    }
+
+    #! an unqualified call on an object that is not deleted
+    validPlain(Token t) {
+        background (t.get(), m(side("valid plain")));
+    }
 }
 
 #! runs a case and waits for its background thread to end
@@ -66,4 +76,6 @@ for (int i = 0; i < 3; ++i) {
     printf("round %d\n", i);
     run("unqualified call", sub (Token t) { F f(); f.plain(t); });
     run("call through self", sub (Token t) { F f(); f.selfCall(t); });
+    run("valid call through self", sub (Token t) { F f(); f.validSelfCall(t); });
+    run("valid unqualified call", sub (Token t) { F f(); f.validPlain(t); });
 }

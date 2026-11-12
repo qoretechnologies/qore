@@ -15325,6 +15325,11 @@ void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QorePr
     }
     // the check takes the current object itself: a load of self would make a method ineligible for the fast entries
     // that have no self (isAOTImplicitSelfFastEntryEligible())
+    if (bg_helper) {
+        // a background expression with a call through self runs in the new thread with the object as its current
+        // object, as the AST interpreter runs it
+        bg_helper->uses_self = true;
+    }
     builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc);
 }
 
