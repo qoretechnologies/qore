@@ -1,0 +1,397 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of lists of selectors of every step size
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires FsUtil
+%requires ExecModeHarness
+
+%exec-class SelectorStepSizesTest
+
+#! lists of selectors give the same result with every number of selector values in a step
+/** A list of selectors (l[f()..1, 2, 3..4]) is applied in steps (QoreIROpcode::ListSelectorStep): a step applies a
+    selector that can have side effects and the selectors after it that cannot, up to QORE_IR_LIST_SELECTOR_STEP_MAX
+    selectors, each of which has one value (an index) or two (a range).  Compiled code passes the values of a step to
+    the runtime in an array; the IR interpreter passes the slots of its values instead, as an array of the maximum
+    size of a step in QoreIRInterpreter::execute() would be in the frame of every interpreted call, and so in the
+    stack that each level of a recursion of interpreted Qore code uses.
+
+    The script that the test writes has:
+    - steps with numbers of values up to and beyond the maximum of a step, of indexes and of ranges, applied to a list
+      and to a string
+    - steps that mix indexes (positive, negative and out of range) and ranges (ascending, descending, with negative
+      bounds, with bounds of both signs and out of range), applied to a list, a string and a binary object, with
+      numbers of selectors and of values around the limits of a step (54 to 112 values, and lists that take two and
+      three steps)
+    - steps that raise an exception (RANGE-ERROR for a NOTHING bound of a range in a step), in the first step and in a
+      later one, for a list of objects whose destructors count that every object is released once, and for which the
+      variable assigned the result keeps its value
+
+    It runs in every execution mode, on the IR tier and as an AOT executable, and its output must be the result that
+    the test computes from the selectors.
+*/
+class SelectorStepSizesTest inherits QUnit::Test {
+    public {
+        #! the numbers of selectors after the first selector of a step, which has side effects
+        /** At least one, as a single selector is a plain index or range, not a list of selectors.  A step has the
+            first selector and up to QORE_IR_LIST_SELECTOR_STEP_MAX - 1 (54) selectors after it: 54 indexes or ranges
+            after the first fill a step, of 55 values or of 110, the most that a step has, and 55 take two steps
+        */
+        const SelectorCounts = (1, 3, 4, 5, 7, 8, 9, 15, 16, 31, 53, 54, 55, 56, 70, 110, 111);
+
+        #! the length of the sequences, which every selector selects from
+        const SeqLen = 128;
+
+        #! the cases of steps that mix indexes and ranges: the number of selectors and the number of them that are
+        #! ranges
+        /** A step has at most QORE_IR_LIST_SELECTOR_STEP_MAX (55) selectors, and as many values as it has selectors
+            and ranges: 54 and 55 selectors without ranges have 54 and 55 values, 55 with 1 range 56; 55 with 54 and 55
+            ranges 109 and 110, the most that a step has; 56 and 57 selectors take two steps (55 + 1 and 55 + 2
+            selectors), with 111 and 112 values or more; 110 and 111 selectors take two and three steps
+        */
+        const MixedCases = (
+            (54, 0), (55, 0), (55, 1), (56, 1), (30, 15), (55, 54), (55, 55), (56, 55), (56, 56), (57, 56),
+            (110, 55), (111, 60),
+        );
+
+        #! the length of the sequences of the mixed cases, which their negative offsets and ranges select from
+        const MixedLen = 16;
+
+        #! the lines that the exception cases print, in every iteration
+        const ExceptionLines = (
+            "list start: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "list start result: \"unchanged\"",
+            "string end: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "string end result: \"unchanged\"",
+            "binary start: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "binary start result: \"unchanged\"",
+            "objects first step: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "objects first step result: \"unchanged\"",
+            "objects first step destroyed: 8",
+            "objects later step: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "objects later step result: \"unchanged\"",
+            "objects later step destroyed: 8",
+        );
+
+        #! the scripts print their lines this many times, so that tiered execution compiles their functions
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        TmpDir dir("selector-step-sizes-");
+        string script;
+    }
+
+    constructor() : QUnit::Test("selector step sizes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        script = dir.path + "/steps.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(scriptSource());
+        f.close();
+
+        addTestCase("expected results", \expectedTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the expected results themselves: each case selects its own selector values, in order
+    private expectedTest() {
+        list<string> lines = expectedLines();
+        assertEq(SelectorCounts.size() * 4, lines.size());
+        # the list case with 8 indexes after the first selects 0 .. 8, the one with 4 ranges after the first 0 .. 9
+        assertEq("list idx 8: [0, 1, 2, 3, 4, 5, 6, 7, 8]", lines[5 * 4]);
+        assertEq("list rng 4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]", lines[2 * 4 + 1]);
+        assertEq("string idx 1: \"AB\"", lines[2]);
+        assertEq(SelectorCounts.size() * 4 + MixedCases.size() * 3 + ExceptionLines.size(),
+            (expectedLines() + mixedLines() + ExceptionLines).size());
+
+        # the selectors of a mixed case, and what they select, as the AST interpreter selects it: negative offsets
+        # count from the end, an offset out of range selects NOTHING from a list and nothing from a string or a
+        # binary object, and a range selects every offset from its start to its end, also when it is descending
+        hash<auto> h = mixedSelectors(5, 2);
+        assertEq("f(0), -(2), -(3)..-(6), -(18), 17..15", h.text);
+        # -18 resolves to -2, before the start; 17..15 starts after the end
+        assertEq((0, 14, 13, 12, 11, 10, -2, 17, 16, 15), mixedOffsets(h.sel));
+        list<string> mixed = mixedLines();
+        # (54, 0): 54 indexes in one step
+        assertEq(54, mixedSelectors(54, 0).text.split(", ").size());
+        # (55, 55): every selector is a range, the first of them with a call
+        assertEq("f(0)..2", mixedSelectors(55, 55).text.split(", ")[0]);
+        assertTrue(mixed[0] =~ /^list mixed 54\/0: \[0, /);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the expected output
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exe = dir.path + "/steps";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! the selector text and the offsets that a case selects
+    /** @param ranges true for ranges of two offsets each (2*i..2*i+1), false for indexes
+        @param n the number of selectors after the first, which is f(0) or f(0)..1
+    */
+    private static hash<auto> selectors(bool ranges, int n) {
+        list<string> sel;
+        list<int> offsets;
+        if (ranges) {
+            sel = ("f(0)..1",);
+            offsets = (0, 1);
+            foreach int i in (xrange(1, n + 1)) {
+                int start = (2 * i) % SeqLen;
+                sel += sprintf("%d..%d", start, start + 1);
+                offsets += (start, start + 1);
+            }
+        } else {
+            sel = ("f(0)",);
+            offsets = (0,);
+            foreach int i in (xrange(1, n + 1)) {
+                int off = i % SeqLen;
+                sel += string(off);
+                offsets += off;
+            }
+        }
+        return {"text": sel.join(", "), "offsets": offsets};
+    }
+
+    #! the value of a selector that is an index in a mixed case
+    /** Positive, negative, out of range after the end, and out of range before the start, in turn
+    */
+    private static int mixedIndex(int j) {
+        switch (j % 4) {
+            case 0: return (j * 7) % MixedLen;
+            case 1: return -(1 + j % MixedLen);
+            case 2: return MixedLen + j % 3;
+        }
+        return -(MixedLen + 1 + j % 2);
+    }
+
+    #! the bounds of a selector that is a range in a mixed case
+    /** Ascending (and out of range at its end for the last offsets), descending, with negative bounds, with bounds of
+        both signs, and out of range, in turn; no bound is before the start once negative offsets are resolved
+    */
+    private static list<int> mixedRange(int j) {
+        switch (j % 5) {
+            case 0: {
+                int a = (j * 3) % MixedLen;
+                return (a, a + 2);
+            }
+            case 1: {
+                int a = 2 + (j * 5) % (MixedLen - 2);
+                return (a, a - 2);
+            }
+            case 2: return (-(1 + j % 6), -(1 + (j + 3) % 6));
+            case 3: return (j % 4, -(1 + j % 4));
+        }
+        return (j % 2) ? (MixedLen - 1, MixedLen + 1) : (MixedLen + 1, MixedLen - 1);
+    }
+
+    #! the source text of an integer in a list of selectors
+    private static string intText(int i) {
+        return i < 0 ? sprintf("-(%d)", -i) : string(i);
+    }
+
+    #! the selector text and the selectors of a mixed case: the first selector calls f(), the others are inert
+    /** @param n the number of selectors
+        @param r the number of them that are ranges, which are distributed among the indexes
+
+        @return a hash with \c text, the list of selectors, and \c sel, a list with an int for each index and a list
+        of its bounds for each range
+    */
+    private static hash<auto> mixedSelectors(int n, int r) {
+        list<string> text;
+        list<auto> sel;
+        for (int j = 0; j < n; ++j) {
+            bool is_range = ((j + 1) * r) / n > (j * r) / n;
+            string t;
+            if (is_range) {
+                list<int> b = mixedRange(j);
+                sel += (b,);
+                t = j ? sprintf("%s..%s", intText(b[0]), intText(b[1]))
+                    : sprintf("f(%d)..%s", b[0], intText(b[1]));
+            } else {
+                int i = mixedIndex(j);
+                sel += i;
+                t = j ? intText(i) : sprintf("f(%d)", i);
+            }
+            text += t;
+        }
+        return {"text": text.join(", "), "sel": sel};
+    }
+
+    #! the offsets that the selectors of a mixed case select, in order, with negative offsets resolved
+    private static list<int> mixedOffsets(list<auto> sel) {
+        list<int> rv;
+        foreach auto v in (sel) {
+            if (v.typeCode() == NT_INT) {
+                rv += v < 0 ? v + MixedLen : v;
+                continue;
+            }
+            int a = v[0] < 0 ? v[0] + MixedLen : v[0];
+            int b = v[1] < 0 ? v[1] + MixedLen : v[1];
+            int step = a <= b ? 1 : -1;
+            for (int o = a; ; o += step) {
+                rv += o;
+                if (o == b) {
+                    break;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! the sequences of the mixed cases in the script and in the test
+    private static string mixedString() {
+        return (foldl $1 + $2, (map chr(97 + $1), xrange(MixedLen))) ?? "";
+    }
+
+    #! the lines that the mixed cases print, in every iteration
+    private list<string> mixedLines() {
+        list<int> l = map $1, xrange(MixedLen);
+        string s = mixedString();
+        list<string> lines;
+        foreach list<int> c in (MixedCases) {
+            list<int> offsets = mixedOffsets(mixedSelectors(c[0], c[1]).sel);
+            list<auto> lv = map ($1 >= 0 && $1 < MixedLen) ? l[$1] : NOTHING, offsets;
+            string sv = (foldl $1 + $2, (map s.substr($1, 1), (select offsets, $1 >= 0 && $1 < MixedLen))) ?? "";
+            lines += sprintf("list mixed %d/%d: %y", c[0], c[1], lv);
+            lines += sprintf("string mixed %d/%d: %y", c[0], c[1], sv);
+            lines += sprintf("binary mixed %d/%d: %y", c[0], c[1], binary(sv));
+        }
+        return lines;
+    }
+
+    #! the source of the exception cases: steps that raise RANGE-ERROR for a NOTHING bound of a range
+    /** The object cases count the destructors of the objects of the sequence: every object is released once, also
+        when a later step raises after the first one has added objects to the result
+    */
+    private static string exceptionSource() {
+        list<string> later = map string($1), xrange(1, 60);
+        return "int destroyed = 0;\n"
+            "class T { destructor() { ++destroyed; } }\n"
+            "sub e(string name, code<auto(*int)> c) {\n"
+            "    auto r = \"unchanged\";\n"
+            "    try {\n"
+            "        r = c(NOTHING);\n"
+            "        printf(\"%s: no exception: %y\\n\", name, r);\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        printf(\"%s: %s: %s\\n\", name, ex.err, ex.desc);\n"
+            "    }\n"
+            "    printf(\"%s result: %y\\n\", name, r);\n"
+            "}\n"
+            "sub eo(string name, code<auto(list<T>, *int)> c) {\n"
+            "    destroyed = 0;\n"
+            "    {\n"
+            "        list<T> lo = map new T(), xrange(8);\n"
+            "        e(name, auto sub (*int k) { return c(lo, k); });\n"
+            "    }\n"
+            "    printf(\"%s destroyed: %d\\n\", name, destroyed);\n"
+            "}\n"
+            "sub exceptions() {\n"
+            "    e(\"list start\", auto sub (*int k) { return l[f(0), 1, k..3, 2]; });\n"
+            "    e(\"string end\", auto sub (*int k) { return s[f(0), 1..2, 3..k, 2]; });\n"
+            "    e(\"binary start\", auto sub (*int k) { return b[f(1), -(1), k..2]; });\n"
+            "    eo(\"objects first step\", auto sub (list<T> lo, *int k) { return lo[f(0), 1..2, 3..k, 4]; });\n"
+            + sprintf("    eo(\"objects later step\", auto sub (list<T> lo, *int k) { return lo[f(0), %s, k..2]; "
+                "});\n", (map string($1 % 8), xrange(1, 60)).join(", "))
+            + "}\n";
+    }
+
+    #! the script: one function per case, each applying one list of selectors to a list or a string
+    private string scriptSource() {
+        string src = "%modern\n"
+            "# written by selector-step-sizes.qtest\n"
+            "int sub f(int i) { return i; }\n"
+            + sprintf("list<int> l = map $1, xrange(%d);\n", SeqLen)
+            + sprintf("string s = (foldl $1 + $2, (map chr(65 + ($1 %% 58)), xrange(%d))) ?? \"\";\n", SeqLen);
+        list<string> calls;
+        int fn = 0;
+        foreach int n in (SelectorCounts) {
+            foreach bool ranges in ((False, True)) {
+                hash<auto> h = selectors(ranges, n);
+                string kind = ranges ? "rng" : "idx";
+                src += sprintf("auto sub c%d() { return l[%s]; }\n", fn, h.text);
+                calls += sprintf("printf(\"list %s %d: %%y\\n\", c%d());", kind, n, fn);
+                ++fn;
+                src += sprintf("auto sub c%d() { return s[%s]; }\n", fn, h.text);
+                calls += sprintf("printf(\"string %s %d: %%y\\n\", c%d());", kind, n, fn);
+                ++fn;
+            }
+        }
+        # the lines in the order of expectedLines(): for each count, the list and string cases of indexes, then of
+        # ranges, are grouped as list idx, list rng, string idx, string rng
+        list<string> ordered;
+        for (int i = 0; i < calls.size(); i += 4) {
+            ordered += (calls[i], calls[i + 2], calls[i + 1], calls[i + 3]);
+        }
+        src += sprintf("list<int> l%d = map $1, xrange(%d);\n", MixedLen, MixedLen)
+            + sprintf("string s%d = %y;\n", MixedLen, mixedString())
+            + sprintf("binary b%d = binary(s%d);\n", MixedLen, MixedLen)
+            + "binary b = binary(s);\n";
+        foreach list<int> c in (MixedCases) {
+            hash<auto> h = mixedSelectors(c[0], c[1]);
+            foreach string seq in (("list", "string", "binary")) {
+                src += sprintf("auto sub c%d() { return %s%d[%s]; }\n", fn, seq[0], MixedLen, h.text);
+                ordered += sprintf("printf(\"%s mixed %d/%d: %%y\\n\", c%d());", seq, c[0], c[1], fn);
+                ++fn;
+            }
+        }
+        src += exceptionSource();
+        ordered += "exceptions();";
+        src += sprintf("sub main() {\n    for (int i = 0; i < %d; ++i) {\n        %s\n    }\n}\nmain();\n",
+            Iterations, ordered.join("\n        "));
+        return src;
+    }
+
+    #! the lines of one iteration of the script's output
+    private list<string> expectedLines() {
+        list<int> l = map $1, xrange(SeqLen);
+        string s = (foldl $1 + $2, (map chr(65 + ($1 % 58)), xrange(SeqLen))) ?? "";
+        list<string> lines;
+        foreach int n in (SelectorCounts) {
+            hash<auto> idx = selectors(False, n);
+            hash<auto> rng = selectors(True, n);
+            lines += sprintf("list idx %d: %y", n, (map l[$1], idx.offsets));
+            lines += sprintf("list rng %d: %y", n, (map l[$1], rng.offsets));
+            lines += sprintf("string idx %d: %y", n, (foldl $1 + $2, (map s.substr($1, 1), idx.offsets)) ?? "");
+            lines += sprintf("string rng %d: %y", n, (foldl $1 + $2, (map s.substr($1, 1), rng.offsets)) ?? "");
+        }
+        return lines;
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, (expectedLines() + mixedLines() + ExceptionLines)) + "\n", Iterations);
+    }
+}

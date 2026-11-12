@@ -1,28 +1,24 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the AOTSmoke-<n>.qtest tests: each runs one part of them, so that each takes a short time (all of them
+# took 121 s in a debug build, and more than the 300 s limit of run_tests.sh beside other tests), and together they
+# run every case (see addPartCase())
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-
-%exec-class AOTSmokeTest
-
-class AOTSmokeTest inherits QUnit::Test {
+class AOTSmokeBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string qcc_bin;
         string timeout_cmd;
         string libqore_dir;
     }
 
-    constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         # Determine the directory containing libqore (for compile/link)
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -44,394 +40,401 @@ class AOTSmokeTest inherits QUnit::Test {
                 timeout_cmd += " -e 'alarm shift; exec @ARGV'";
             }
         }
-        addTestCase("AOT hello world", \testHelloWorld());
-        addTestCase("AOT arithmetic", \testArithmetic());
-        addTestCase("AOT number literal arithmetic", \testNumberLiteralArithmetic());
-        addTestCase("AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
-        addTestCase("AOT control flow", \testControlFlow());
-        addTestCase("AOT functions", \testFunctions());
-        addTestCase("AOT inline NULL semantics", \testInlineNullSemantics());
-        addTestCase("AOT map lvalue-key short-circuit cleanup",
+        addPartCase(1, "AOT hello world", \testHelloWorld());
+        addPartCase(1, "AOT arithmetic", \testArithmetic());
+        addPartCase(1, "AOT number literal arithmetic", \testNumberLiteralArithmetic());
+        addPartCase(1, "AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
+        addPartCase(1, "AOT control flow", \testControlFlow());
+        addPartCase(1, "AOT functions", \testFunctions());
+        addPartCase(1, "AOT inline NULL semantics", \testInlineNullSemantics());
+        addPartCase(1, "AOT map lvalue-key short-circuit cleanup",
             \testMapLValueKeyShortCircuitCleanup());
-        addTestCase("AOT top-level locals visible to functions",
+        addPartCase(1, "AOT top-level locals visible to functions",
             \testTopLevelLocalsVisibleToFunctions());
-        addTestCase("AOT top-level local controls function exception",
+        addPartCase(1, "AOT top-level local controls function exception",
             \testTopLevelLocalControlsFunctionException());
-        addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
-        addTestCase("AOT parse reference map selector uses inner implicit index",
+        addPartCase(1, "AOT reference arg local reload", \testReferenceArgLocalReload());
+        addPartCase(1, "AOT parse reference map selector uses inner implicit index",
             \testParseRefMapSelectorUsesInnerImplicitIndex());
-        addTestCase("AOT foreach implicit index survives callee early return",
+        addPartCase(1, "AOT foreach implicit index survives callee early return",
             \testForeachImplicitIndexSurvivesCalleeEarlyReturn());
-        addTestCase("AOT inline closure-call iterable is not discarded",
+        addPartCase(1, "AOT inline closure-call iterable is not discarded",
             \testInlineClosureCallIterableNotDiscarded());
-        addTestCase("AOT closure-use reference params teardown",
+        addPartCase(1, "AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
-        addTestCase("AOT stale closure self member access fails",
+        addPartCase(1, "AOT stale closure self member access fails",
             \testStaleClosureSelfMemberAccessFails());
-        addTestCase("AOT weak local assignment releases RHS",
+        addPartCase(1, "AOT weak local assignment releases RHS",
             \testWeakLocalAssignmentReleasesRhs());
-        addTestCase("AOT weak hash element assignment releases RHS",
+        addPartCase(1, "AOT weak hash element assignment releases RHS",
             \testWeakHashElementAssignmentReleasesRhs());
-        addTestCase("AOT weak diagnostic hash assignment releases object",
+        addPartCase(1, "AOT weak diagnostic hash assignment releases object",
             \testWeakDiagnosticHashAssignmentReleasesObject());
-        addTestCase("AOT weak assignment preserves non-weak node values",
+        addPartCase(1, "AOT weak assignment preserves non-weak node values",
             \testWeakAssignmentPreservesNonWeakNodeValues());
-        addTestCase("AOT weak call argument releases RHS",
+        addPartCase(1, "AOT weak call argument releases RHS",
             \testWeakCallArgumentReleasesRhs());
-        addTestCase("AOT static method remove argument releases RHS",
+        addPartCase(1, "AOT static method remove argument releases RHS",
             \testStaticMethodRemoveArgumentReleasesRhs());
-        addTestCase("AOT typed local initializer condition keeps RHS",
+        addPartCase(1, "AOT typed local initializer condition keeps RHS",
             \testTypedLocalInitializerConditionKeepsRhs());
-        addTestCase("AOT weak branch condition releases temp",
+        addPartCase(1, "AOT weak branch condition releases temp",
             \testWeakBranchConditionReleasesTemp());
-        addTestCase("AOT weak dot-eval invoke releases base",
+        addPartCase(1, "AOT weak dot-eval invoke releases base",
             \testWeakDotEvalInvokeReleasesBase());
-        addTestCase("AOT object member assignment releases values",
+        addPartCase(1, "AOT object member assignment releases values",
             \testObjectMemberAssignmentReleasesValues());
-        addTestCase("AOT object member assignment with remove argument releases value",
+        addPartCase(1, "AOT object member assignment with remove argument releases value",
             \testObjectMemberAssignmentWithRemoveArgumentReleasesValue());
-        addTestCase("AOT self member remove detaches member value",
+        addPartCase(1, "AOT self member remove detaches member value",
             \testSelfMemberRemoveDetachesMemberValue());
-        addTestCase("AOT object remove list-valued dynamic key",
+        addPartCase(1, "AOT object remove list-valued dynamic key",
             \testObjectRemoveListValuedDynamicKey());
-        addTestCase("AOT constructor argument releases temporary value",
+        addPartCase(1, "AOT constructor argument releases temporary value",
             \testConstructorArgumentReleasesTemporaryValue());
-        addTestCase("AOT inherited object member assignment releases value",
+        addPartCase(1, "AOT inherited object member assignment releases value",
             \testInheritedObjectMemberAssignmentReleasesValue());
-        addTestCase("AOT object member call argument releases value",
+        addPartCase(1, "AOT object member call argument releases value",
             \testObjectMemberCallArgumentReleasesValue());
-        addTestCase("AOT base-typed object member optional call argument releases value",
+        addPartCase(1, "AOT base-typed object member optional call argument releases value",
             \testBaseTypedObjectMemberOptionalCallArgumentReleasesValue());
-        addTestCase("AOT qorus library loader call releases action member argument",
+        addPartCase(1, "AOT qorus library loader call releases action member argument",
             \testQorusLibraryLoaderCallReleasesActionMemberArgument());
-        addTestCase("AOT derived base-constructor action argument releases context",
+        addPartCase(1, "AOT derived base-constructor action argument releases context",
             \testDerivedBaseConstructorActionArgumentReleasesContext());
-        addTestCase("AOT direct method member argument releases value",
+        addPartCase(1, "AOT direct method member argument releases value",
             \testDirectMethodMemberArgumentReleasesValue());
-        addTestCase("AOT return wrapper releases context object",
+        addPartCase(1, "AOT return wrapper releases context object",
             \testReturnWrapperReleasesContextObject());
-        addTestCase("AOT static return wrapper releases context object",
+        addPartCase(1, "AOT static return wrapper releases context object",
             \testStaticReturnWrapperReleasesContextObject());
-        addTestCase("AOT typed REST response wrapper releases context object",
+        addPartCase(1, "AOT typed REST response wrapper releases context object",
             \testTypedRestResponseWrapperReleasesContextObject());
-        addTestCase("AOT REST dispatch response subhashes release context object",
+        addPartCase(1, "AOT REST dispatch response subhashes release context object",
             \testRestDispatchResponseSubhashesReleaseContextObject());
-        addTestCase("AOT Qorus-style REST update releases weak-registered context",
+        addPartCase(1, "AOT Qorus-style REST update releases weak-registered context",
             \testQorusStyleRestUpdateReleasesWeakRegisteredContext());
-        addTestCase("AOT Qorus RBAC delta releases forwarded optional helper",
+        addPartCase(1, "AOT Qorus RBAC delta releases forwarded optional helper",
             \testQorusRbacDeltaReleasesForwardedOptionalHelper());
-        addTestCase("AOT return wrapper exception releases context object",
+        addPartCase(1, "AOT return wrapper exception releases context object",
             \testReturnWrapperExceptionReleasesContextObject());
-        addTestCase("AOT direct method exception releases self and caller locals",
+        addPartCase(1, "AOT direct method exception releases self and caller locals",
             \testDirectMethodExceptionReleasesSelfAndCallerLocals());
-        addTestCase("AOT dynamic method call releases callee locals",
+        addPartCase(1, "AOT dynamic method call releases callee locals",
             \testDynamicMethodCallReleasesCalleeLocals());
-        addTestCase("AOT switch case break releases block locals",
+        addPartCase(1, "AOT switch case break releases block locals",
             \testSwitchCaseBreakReleasesBlockLocals());
-        addTestCase("AOT switch case immediate break releases ignored method result",
+        addPartCase(1, "AOT switch case immediate break releases ignored method result",
             \testSwitchCaseImmediateBreakReleasesIgnoredMethodResult());
-        addTestCase("AOT sibling switch duplicate local names release block locals",
+        addPartCase(1, "AOT sibling switch duplicate local names release block locals",
             \testSiblingSwitchDuplicateLocalNamesReleaseBlockLocals());
-        addTestCase("AOT sibling switch duplicate typed locals release exact active local",
+        addPartCase(1, "AOT sibling switch duplicate typed locals release exact active local",
             \testSiblingSwitchDuplicateTypedLocalsReleaseExactActiveLocal());
-        addTestCase("AOT try switch case break releases block locals",
+        addPartCase(1, "AOT try switch case break releases block locals",
             \testTrySwitchCaseBreakReleasesBlockLocals());
-        addTestCase("AOT metadata-style ignored update releases context",
+        addPartCase(1, "AOT metadata-style ignored update releases context",
             \testMetadataStyleIgnoredUpdateReleasesContext());
-        addTestCase("AOT switch context with reporter self releases locals",
+        addPartCase(1, "AOT switch context with reporter self releases locals",
             \testSwitchContextWithReporterSelfReleasesLocals());
-        addTestCase("AOT ignored self-returning method result releases locals",
+        addPartCase(1, "AOT ignored self-returning method result releases locals",
             \testIgnoredSelfReturningMethodResultReleasesLocals());
-        addTestCase("AOT background self call releases self",
+        addPartCase(1, "AOT background self call releases self",
             \testBackgroundSelfCallReleasesSelf());
-        addTestCase("AOT background self call dispatches to derived private method",
+        addPartCase(1, "AOT background self call dispatches to derived private method",
             \testBackgroundSelfCallDispatchesDerivedPrivateMethod());
-        addTestCase("AOT background self call releases self argument",
+        addPartCase(1, "AOT background self call releases self argument",
             \testBackgroundSelfCallReleasesSelfArgument());
-        addTestCase("AOT background argv releases object member argument",
+        addPartCase(1, "AOT background argv releases object member argument",
             \testBackgroundArgvReleasesObjectMemberArgument());
-        addTestCase("AOT background call_function_args releases object member argument",
+        addPartCase(1, "AOT background call_function_args releases object member argument",
             \testBackgroundCallFunctionArgsReleasesObjectMemberArgument());
-        addTestCase("AOT background self argv call_function_args releases self argument",
+        addPartCase(1, "AOT background self argv call_function_args releases self argument",
             \testBackgroundSelfArgvCallFunctionArgsReleasesSelfArgument());
-        addTestCase("AOT map self argument releases context",
+        addPartCase(1, "AOT map self argument releases context",
             \testMapSelfArgumentReleasesContext());
-        addTestCase("AOT map object method self argument releases context",
+        addPartCase(1, "AOT map object method self argument releases context",
             \testMapObjectMethodSelfArgumentReleasesContext());
-        addTestCase("AOT ignored map object method self argument releases context",
+        addPartCase(1, "AOT ignored map object method self argument releases context",
             \testIgnoredMapObjectMethodSelfArgumentReleasesContext());
-        addTestCase("AOT metadata prepare self call releases action context",
+        addPartCase(1, "AOT metadata prepare self call releases action context",
             \testMetadataPrepareSelfCallReleasesActionContext());
-        addTestCase("AOT IR-only local cache releases object on return",
+        addPartCase(1, "AOT IR-only local cache releases object on return",
             \testIrOnlyLocalCacheReleasesObjectOnReturn());
-        addTestCase("AOT dot-eval memberGate base",
+        addPartCase(1, "AOT dot-eval memberGate base",
             \testDotEvalMemberGateBase());
-        addTestCase("AOT string operations", \testStringOps());
-        addTestCase("AOT soft string switch case", \testSoftStringSwitchCase());
-        addTestCase("AOT regex switch", \testSwitchRegex());
-        addTestCase("AOT .qo debugger regex extract keeps global flag",
+        addPartCase(1, "AOT string operations", \testStringOps());
+        addPartCase(1, "AOT soft string switch case", \testSoftStringSwitchCase());
+        addPartCase(1, "AOT regex switch", \testSwitchRegex());
+        addPartCase(1, "AOT .qo debugger regex extract keeps global flag",
             \testQoDebuggerRegexExtractGlobal());
-        addTestCase("AOT stripped debugger statement locations",
+        addPartCase(1, "AOT stripped debugger statement locations",
             \testStrippedDebuggerStatementLocations());
-        addTestCase("AOT batch --parse-option=PO_ENABLE_DEBUG enables @assert",
+        addPartCase(1, "AOT batch --parse-option=PO_ENABLE_DEBUG enables @assert",
             \testQoBatchParseOptionEnableDebug());
-        addTestCase("AOT exit code", \testExitCode());
-        addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
-        addTestCase("AOT error handling", \testErrorHandling());
-        addTestCase("AOT exception stops method execution", \testExceptionStopsMethodExecution());
-        addTestCase("AOT compile missing file", \testCompileMissingFile());
-        addTestCase("AOT compile default output", \testCompileDefaultOutput());
+        addPartCase(1, "AOT exit code", \testExitCode());
+        addPartCase(1, "AOT ARGV passthrough", \testArgvPassthrough());
+        addPartCase(1, "AOT error handling", \testErrorHandling());
+        addPartCase(2, "AOT exception stops method execution", \testExceptionStopsMethodExecution());
+        addPartCase(2, "AOT compile missing file", \testCompileMissingFile());
+        addPartCase(2, "AOT compile default output", \testCompileDefaultOutput());
         # Phase 7b: pointer indirection tests
-        addTestCase("AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
-        addTestCase("AOT local variable scoping", \testLocalVariableScoping());
-        addTestCase("AOT nested duplicate local names", \testNestedDuplicateLocalNames());
-        addTestCase("AOT lvalue operations", \testLvalueOps());
-        addTestCase("AOT multiple user functions", \testMultipleUserFunctions());
-        addTestCase("AOT method calls", \testMethodCalls());
-        addTestCase("AOT inherited overload dot-eval dispatch",
+        addPartCase(2, "AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
+        addPartCase(2, "AOT local variable scoping", \testLocalVariableScoping());
+        addPartCase(2, "AOT nested duplicate local names", \testNestedDuplicateLocalNames());
+        addPartCase(2, "AOT lvalue operations", \testLvalueOps());
+        addPartCase(2, "AOT multiple user functions", \testMultipleUserFunctions());
+        addPartCase(2, "AOT method calls", \testMethodCalls());
+        addPartCase(2, "AOT inherited overload dot-eval dispatch",
             \testInheritedOverloadDotEvalDispatch());
-        addTestCase("AOT inherited method private internal context",
+        addPartCase(2, "AOT inherited method private internal context",
             \testInheritedMethodPrivateInternalContext());
-        addTestCase("AOT optional val guard overload dispatch",
+        addPartCase(2, "AOT optional val guard overload dispatch",
             \testOptionalValGuardOverloadDispatch());
-        addTestCase("AOT qmod nullable static overload dispatch",
+        addPartCase(2, "AOT qmod nullable static overload dispatch",
             \testQmodNullableStaticOverloadDispatch());
-        addTestCase("AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
-        addTestCase("AOT abstract sibling private:internal member context",
+        addPartCase(2, "AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
+        addPartCase(2, "AOT abstract sibling private:internal member context",
             \testAbstractSiblingPrivateInternalMemberContext());
-        addTestCase("AOT abstract sibling inherited overload dispatch",
+        addPartCase(2, "AOT abstract sibling inherited overload dispatch",
             \testAbstractSiblingInheritedOverloadDispatch());
-        addTestCase("AOT object member store private access checks",
+        addPartCase(2, "AOT object member store private access checks",
             \testObjectMemberStorePrivateAccessChecks());
-        addTestCase("AOT hash operations", \testHashOps());
-        addTestCase("AOT narrowed container COW store", \testNarrowedContainerCowStore());
-        addTestCase("AOT list operations", \testListOps());
-        addTestCase("AOT nested function calls", \testNestedFunctionCalls());
-        addTestCase("AOT on_exit blocks", \testOnExitBlocks());
-        addTestCase("AOT handler re-inlining cycle guard",
+        addPartCase(2, "AOT hash operations", \testHashOps());
+        addPartCase(2, "AOT narrowed container COW store", \testNarrowedContainerCowStore());
+        addPartCase(2, "AOT list operations", \testListOps());
+        addPartCase(2, "AOT nested function calls", \testNestedFunctionCalls());
+        addPartCase(2, "AOT on_exit blocks", \testOnExitBlocks());
+        addPartCase(2, "AOT handler re-inlining cycle guard",
             \testHandlerRecursionGuard());
-        addTestCase("AOT on_exit return fires once",
+        addPartCase(2, "AOT on_exit return fires once",
             \testOnExitReturnFiresOnce());
-        addTestCase("AOT cross-module same-name dispatch",
+        addPartCase(2, "AOT cross-module same-name dispatch",
             \testCrossModuleSameName());
-        addTestCase("AOT qcc stub external constants",
+        addPartCase(2, "AOT qcc stub external constants",
             \testQccStubExternalConstants());
-        addTestCase("AOT qcc script define excludes inactive branches",
+        addPartCase(2, "AOT qcc script define excludes inactive branches",
             \testQccScriptDefineExcludesInactiveBranches());
-        addTestCase("AOT linked .qo replays module commands",
+        addPartCase(2, "AOT linked .qo replays module commands",
             \testAOTLinkedQoModuleCommands());
-        addTestCase("AOT qmod dependency honors prepend module path",
+        addPartCase(2, "AOT qmod dependency honors prepend module path",
             \testAOTModuleDependencyPrependPath());
-        addTestCase("AOT qmod try-module dependency metadata",
+        addPartCase(2, "AOT qmod try-module dependency metadata",
             \testAOTModuleTryModuleDependencyMetadata());
-        addTestCase("AOT qmod builtin features are not module dependencies",
+        addPartCase(2, "AOT qmod builtin features are not module dependencies",
             \testAOTModuleBuiltinFeaturesNotDependencies());
-        addTestCase("AOT ref foreach ParseNode pointer",
+        addPartCase(2, "AOT ref foreach ParseNode pointer",
             \testRefForeachParseNode());
-        addTestCase("AOT ref foreach narrowed element type",
+        addPartCase(2, "AOT ref foreach narrowed element type",
             \testRefForeachNarrowedElement());
-        addTestCase("AOT type conversions", \testTypeConversions());
+        addPartCase(2, "AOT type conversions", \testTypeConversions());
         # AOT opt-level, cross-compilation, and static linking tests
-        addTestCase("AOT optimization levels", \testAOTOptLevels());
-        addTestCase("AOT target triple", \testAOTTargetTriple());
-        addTestCase("AOT static linking", \testAOTStaticLink());
-        addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
+        addPartCase(2, "AOT optimization levels", \testAOTOptLevels());
+        addPartCase(2, "AOT target triple", \testAOTTargetTriple());
+        addPartCase(2, "AOT static linking", \testAOTStaticLink());
+        addPartCase(2, "AOT static link not built", \testAOTStaticLinkNotBuilt());
         # Module compilation tests
-        addTestCase("AOT module compile", \testAOTModuleCompile());
-        addTestCase("AOT module preserves variant parse options",
+        addPartCase(2, "AOT module compile", \testAOTModuleCompile());
+        addPartCase(2, "AOT module preserves variant parse options",
             \testAOTModuleVariantParseOptions());
-        addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
-        addTestCase("AOT module no-narrow reference signatures",
+        addPartCase(2, "AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addPartCase(2, "AOT module no-narrow reference signatures",
             \testAOTModuleNoNarrowReferenceSignatures());
-        addTestCase("AOT module no-narrow shared param COW store",
+        addPartCase(2, "AOT module no-narrow shared param COW store",
             \testAOTModuleNoNarrowParamCowStore());
-        addTestCase("AOT module SSO values avoid numeric fast paths",
+        addPartCase(2, "AOT module SSO values avoid numeric fast paths",
             \testAOTModuleSsoAvoidsNumericFastPaths());
-        addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
-        addTestCase("AOT module IR-only local owns invoke result",
+        addPartCase(2, "AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
+        addPartCase(2, "AOT module IR-only local owns invoke result",
             \testAOTModuleIrOnlyLocalOwnsInvokeResult());
-        addTestCase("AOT module weak diagnostic hashes release objects",
+        addPartCase(2, "AOT module weak diagnostic hashes release objects",
             \testAOTModuleWeakDiagnosticHashesReleaseObjects());
-        addTestCase("AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
-        addTestCase("AOT module hashdecl member compound lvalue",
+        addPartCase(2, "AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
+        addPartCase(2, "AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
-        addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
-        addTestCase("AOT module namespace constant refs",
+        addPartCase(2, "AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addPartCase(2, "AOT module namespace constant refs",
             \testAOTModuleNamespaceConstantRefs());
-        addTestCase("AOT module nested class constant refs",
+        addPartCase(2, "AOT module nested class constant refs",
             \testAOTModuleNestedClassConstantRefs());
-        addTestCase("AOT module BCA hashdecl class constants",
+        addPartCase(2, "AOT module BCA hashdecl class constants",
             \testAOTModuleBcaHashdeclClassConstants());
-        addTestCase("AOT module computed member defaults",
+        addPartCase(2, "AOT module computed member defaults",
             \testAOTModuleComputedMemberDefaults());
-        addTestCase("AOT module unary minus hashdecl init",
+        addPartCase(2, "AOT module unary minus hashdecl init",
             \testAOTModuleUnaryMinusHashdeclInit());
-        addTestCase("AOT module closure-captured loop condition",
+        addPartCase(2, "AOT module closure-captured loop condition",
             \testAOTModuleClosureCapturedLoopCondition());
-        addTestCase("AOT module recursive closure local frame isolation",
+        addPartCase(2, "AOT module recursive closure local frame isolation",
             \testAOTModuleRecursiveClosureLocalFrameIsolation());
-        addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
-        addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
-        addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
-        addTestCase("AOT module compile error", \testAOTModuleCompileError());
-        addTestCase("AOT module nested namespace paths", \testAOTModuleNestedNamespacePaths());
+        addPartCase(2, "AOT module default object args", \testAOTModuleDefaultObjectArgs());
+        addPartCase(2, "AOT module compile custom output", \testAOTModuleCompileCustomOutput());
+        addPartCase(2, "AOT module compile opt levels", \testAOTModuleCompileOptLevels());
+        addPartCase(2, "AOT module compile error", \testAOTModuleCompileError());
+        addPartCase(2, "AOT module nested namespace paths", \testAOTModuleNestedNamespacePaths());
         # Split module tests
-        addTestCase("AOT split module basic", \testAOTSplitModuleBasic());
-        addTestCase("AOT split module nested hash constant init",
+        addPartCase(2, "AOT split module basic", \testAOTSplitModuleBasic());
+        addPartCase(2, "AOT split module nested hash constant init",
             \testAOTSplitModuleNestedHashConstantInit());
-        addTestCase("AOT split module qm only", \testAOTSplitModuleQmOnly());
-        addTestCase("AOT split module missing qm", \testAOTSplitModuleMissingQm());
-        addTestCase("AOT split module auto detect", \testAOTSplitModuleAutoDetect());
-        addTestCase("AOT split module trailing slash", \testAOTSplitModuleTrailingSlash());
+        addPartCase(2, "AOT split module qm only", \testAOTSplitModuleQmOnly());
+        addPartCase(2, "AOT split module missing qm", \testAOTSplitModuleMissingQm());
+        addPartCase(2, "AOT split module auto detect", \testAOTSplitModuleAutoDetect());
+        addPartCase(2, "AOT split module trailing slash", \testAOTSplitModuleTrailingSlash());
         # Source stripping tests (Phase 8)
-        addTestCase("AOT strip source basic", \testStripSourceBasic());
-        addTestCase("AOT strip source arithmetic", \testStripSourceArithmetic());
-        addTestCase("AOT strip source strings", \testStripSourceStrings());
-        addTestCase("AOT strip source multiple functions", \testStripSourceMultipleFunctions());
-        addTestCase("AOT strip source binary size", \testStripSourceBinarySize());
-        addTestCase("AOT strip source backward compat", \testStripSourceBackwardCompat());
-        addTestCase("AOT strip source compile output", \testStripSourceCompileOutput());
-        addTestCase("AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
+        addPartCase(2, "AOT strip source basic", \testStripSourceBasic());
+        addPartCase(2, "AOT strip source arithmetic", \testStripSourceArithmetic());
+        addPartCase(2, "AOT strip source strings", \testStripSourceStrings());
+        addPartCase(2, "AOT strip source multiple functions", \testStripSourceMultipleFunctions());
+        addPartCase(2, "AOT strip source binary size", \testStripSourceBinarySize());
+        addPartCase(2, "AOT strip source backward compat", \testStripSourceBackwardCompat());
+        addPartCase(2, "AOT strip source compile output", \testStripSourceCompileOutput());
+        addPartCase(2, "AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
         # Strip source type export tests (Phase 9)
-        addTestCase("AOT strip source hashdecl", \testStripSourceHashDecl());
-        addTestCase("AOT strip source generic hashdecl", \testStripSourceGenericHashDecl());
-        addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
-        addTestCase("AOT strip source enum", \testStripSourceEnum());
-        addTestCase("AOT enum member returned through a context-independent fast entry",
+        addPartCase(2, "AOT strip source hashdecl", \testStripSourceHashDecl());
+        addPartCase(2, "AOT strip source generic hashdecl", \testStripSourceGenericHashDecl());
+        addPartCase(2, "AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
+        addPartCase(2, "AOT strip source enum", \testStripSourceEnum());
+        addPartCase(2, "AOT enum member returned through a context-independent fast entry",
             \testEnumMemberFastEntryContext());
-        addTestCase("AOT strip source hashdecl enum member type",
+        addPartCase(2, "AOT strip source hashdecl enum member type",
             \testStripSourceHashdeclEnumMemberType());
-        addTestCase("AOT strip source nested object complex member type",
+        addPartCase(2, "AOT strip source nested object complex member type",
             \testStripSourceNestedObjectComplexMemberType());
-        addTestCase("AOT strip source module dependency", \testStripSourceModuleDependency());
+        addPartCase(2, "AOT strip source module dependency", \testStripSourceModuleDependency());
         # Class inheritance and static member tests
-        addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
-        addTestCase("AOT strip source static members", \testStripSourceStaticMembers());
-        addTestCase("AOT strip source member default function call",
+        addPartCase(2, "AOT strip source class inheritance", \testStripSourceClassInheritance());
+        addPartCase(2, "AOT strip source static members", \testStripSourceStaticMembers());
+        addPartCase(2, "AOT strip source member default function call",
             \testStripSourceMemberDefaultFunctionCall());
         # Map optimization opcodes
-        addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
-        addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
-        addTestCase("AOT typed map assigned-state guards", \testAOTTypedMapAssignedState());
-        addTestCase("AOT reference-output assigned-state guards",
+        addPartCase(2, "AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
+        addPartCase(2, "AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
+        addPartCase(3, "AOT typed map assigned-state guards", \testAOTTypedMapAssignedState());
+        addPartCase(3, "AOT reference-output assigned-state guards",
             \testAOTReferenceOutputAssignedState());
-        addTestCase("AOT direct-index map-select implicit arg cleanup",
+        addPartCase(3, "AOT direct-index map-select implicit arg cleanup",
             \testAOTDirectIndexMapSelectImplicitArgCleanup());
-        addTestCase("AOT typed scalar select construction",
+        addPartCase(3, "AOT typed scalar select construction",
             \testAOTTypedScalarSelectConstruction());
-        addTestCase("AOT typed scalar map-select construction",
+        addPartCase(3, "AOT typed scalar map-select construction",
             \testAOTTypedScalarMapSelectConstruction());
         # AOT Binary Format v1 tests
-        addTestCase("AOT v1 version field", \testVersionField());
-        addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
-        addTestCase("AOT binary records no source modification time", \testNoSourceStatFingerprint());
-        addTestCase("AOT module bytes do not depend on the source modification time",
+        addPartCase(3, "AOT v1 version field", \testVersionField());
+        addPartCase(3, "AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
+        addPartCase(3, "AOT binary records no source modification time", \testNoSourceStatFingerprint());
+        addPartCase(3, "AOT module bytes do not depend on the source modification time",
             \testModuleBytesIndependentOfSourceMtime());
-        addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
-        addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
-        addTestCase("AOT hash compound native", \testHashCompoundNative());
-        addTestCase("AOT thread-local vars", \testThreadLocalVars());
+        addPartCase(3, "AOT v1 feature flags", \testFeatureFlagsNonZero());
+        addPartCase(3, "AOT subscript compound assign", \testSubscriptCompoundAssign());
+        addPartCase(3, "AOT hash compound native", \testHashCompoundNative());
+        addPartCase(3, "AOT thread-local vars", \testThreadLocalVars());
         # Strip source: global variable initialization
-        addTestCase("AOT strip source global var init", \testStripSourceGlobalVarInit());
+        addPartCase(3, "AOT strip source global var init", \testStripSourceGlobalVarInit());
         # Strip source: complex hash/list construction via new
-        addTestCase("AOT strip source complex type new", \testStripSourceComplexTypeNew());
-        addTestCase("AOT strip source typed list preserves hashdecl element type",
+        addPartCase(3, "AOT strip source complex type new", \testStripSourceComplexTypeNew());
+        addPartCase(3, "AOT strip source typed list preserves hashdecl element type",
             \testStripSourceTypedListHashdeclElement());
         # Strip source: runtime constant resolution
-        addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
-        addTestCase("AOT constant reverse map honors namespace constant order",
+        addPartCase(3, "AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
+        addPartCase(3, "AOT constant reverse map honors namespace constant order",
             \testNamespaceConstantReverseMapOrder());
-        addTestCase("AOT qcc one-shot multi-source executable",
+        addPartCase(3, "AOT qcc one-shot multi-source executable",
             \testQccOneShotMultiSourceExecutable());
-        addTestCase("AOT standalone top-level static fast entry",
+        addPartCase(3, "AOT standalone top-level static fast entry",
             \testStandaloneTopLevelStaticFastEntry());
-        addTestCase("AOT batch fragments avoid forward constant refs",
+        addPartCase(3, "AOT batch fragments avoid forward constant refs",
             \testBatchFragmentConstantReverseMapOrder());
-        addTestCase("AOT batch fragments defer class constant refs",
+        addPartCase(3, "AOT batch fragments defer class constant refs",
             \testBatchFragmentDeferredClassConstantRefs());
-        addTestCase("AOT batch fragments filter statement locations",
+        addPartCase(3, "AOT batch fragments filter statement locations",
             \testBatchFragmentStatementLocFilter());
-        addTestCase("AOT qcc dump modern slot expressions",
+        addPartCase(3, "AOT qcc dump modern slot expressions",
             \testQccDumpModernSlotExprKinds());
-        addTestCase("AOT qcc dump assignment, absolute comparison and streaming slot expressions",
+        addPartCase(3, "AOT qcc dump assignment, absolute comparison and streaming slot expressions",
             \testQccDumpCompoundSlotExprKinds());
-        addTestCase("AOT qcc dump names every section", \testQccDumpSectionNames());
-        addTestCase("AOT qcc dump class injection metadata",
+        addPartCase(3, "AOT qcc dump names every section", \testQccDumpSectionNames());
+        addPartCase(3, "AOT qcc dump class injection metadata",
             \testQccDumpClassInjectionMetadata());
         # Strip source: static class variable access (module)
-        addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
-        addTestCase("AOT strip source module init function ref",
+        addPartCase(3, "AOT strip source static varref module", \testStripSourceStaticVarrefModule());
+        addPartCase(3, "AOT strip source module init function ref",
             \testStripSourceModuleInitFunctionRef());
         # Strip source: on_exit/on_success handler IR
-        addTestCase("AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
-        addTestCase("AOT strip source on_exit builtin class", \testStripSourceOnExitBuiltinClass());
-        addTestCase("AOT strip source constructor args", \testStripSourceConstructorArgs());
-        addTestCase("AOT strip source default args", \testStripSourceDefaultArgs());
-        addTestCase("AOT strip source cast parse hash", \testStripSourceCastParseHash());
-        addTestCase("AOT strip source dynamic hash-key parse reference",
+        addPartCase(3, "AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
+        addPartCase(3, "AOT strip source on_exit builtin class", \testStripSourceOnExitBuiltinClass());
+        addPartCase(3, "AOT strip source constructor args", \testStripSourceConstructorArgs());
+        addPartCase(3, "AOT strip source default args", \testStripSourceDefaultArgs());
+        addPartCase(3, "AOT strip source cast parse hash", \testStripSourceCastParseHash());
+        addPartCase(3, "AOT strip source dynamic hash-key parse reference",
             \testStripSourceDynamicHashKeyParseReference());
-        addTestCase("AOT strip source reference member parse reference",
+        addPartCase(3, "AOT strip source reference member parse reference",
             \testStripSourceReferenceMemberParseReference());
-        addTestCase("AOT strip source cleanup exception catch",
+        addPartCase(3, "AOT strip source cleanup exception catch",
             \testStripSourceCleanupExceptionCatch());
-        addTestCase("AOT block local exception cleanup before catch",
+        addPartCase(3, "AOT block local exception cleanup before catch",
             \testBlockLocalExceptionCleanupBeforeCatch());
-        addTestCase("AOT on_exit exception cleanup before catch",
+        addPartCase(3, "AOT on_exit exception cleanup before catch",
             \testOnExitExceptionCleanupBeforeCatch());
         # Closure and regex handler serialization tests
-        addTestCase("AOT closure in function", \testClosureInFunction());
-        addTestCase("AOT closure lambda", \testClosureLambda());
-        addTestCase("AOT closure typed params defaults", \testClosureTypedParamsDefaults());
-        addTestCase("AOT closure multi capture", \testClosureMultiCapture());
-        addTestCase("AOT closure strip source", \testClosureStripSource());
-        addTestCase("AOT closure strip source ListIndexStore COW",
+        addPartCase(3, "AOT closure in function", \testClosureInFunction());
+        addPartCase(3, "AOT closure lambda", \testClosureLambda());
+        addPartCase(3, "AOT closure typed params defaults", \testClosureTypedParamsDefaults());
+        addPartCase(3, "AOT closure multi capture", \testClosureMultiCapture());
+        addPartCase(3, "AOT closure strip source", \testClosureStripSource());
+        addPartCase(3, "AOT closure strip source ListIndexStore COW",
             \testClosureStripSourceListIndexStoreCow());
-        addTestCase("AOT closure strip source captured local return",
+        addPartCase(3, "AOT closure strip source captured local return",
             \testClosureStripSourceCapturedLocalReturn());
-        addTestCase("AOT closure strip source regex substitution",
+        addPartCase(3, "AOT closure strip source regex substitution",
             \testClosureStripSourceRegexSubst());
-        addTestCase("AOT closure strip source date literal",
+        addPartCase(3, "AOT closure strip source date literal",
             \testClosureStripSourceDateLiteral());
-        addTestCase("AOT UTC date literal zone", \testUTCDateLiteralZone());
-        addTestCase("AOT fixed-offset date literal zone", \testFixedOffsetDateLiteralZone());
-        addTestCase("AOT strip source class cast lvalue",
+        addPartCase(3, "AOT UTC date literal zone", \testUTCDateLiteralZone());
+        addPartCase(3, "AOT fixed-offset date literal zone", \testFixedOffsetDateLiteralZone());
+        addPartCase(3, "AOT strip source class cast lvalue",
             \testStripSourceClassCastLValue());
-        addTestCase("AOT closure strip source logical and/or",
+        addPartCase(3, "AOT closure strip source logical and/or",
             \testClosureStripSourceLogicalAndOr());
-        addTestCase("AOT closure strip source call reference call",
+        addPartCase(3, "AOT closure strip source call reference call",
             \testClosureStripSourceCallRefCall());
-        addTestCase("AOT method closure param", \testAOTMethodClosureParam());
-        addTestCase("AOT method closure thread init self",
+        addPartCase(3, "AOT method closure param", \testAOTMethodClosureParam());
+        addPartCase(3, "AOT method closure thread init self",
             \testAOTMethodClosureThreadInitSelf());
-        addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
-        addTestCase("AOT nested on_exit", \testNestedOnExit());
+        addPartCase(3, "AOT regex switch in on_exit", \testRegexSwitchInOnExit());
+        addPartCase(3, "AOT nested on_exit", \testNestedOnExit());
         # Closure default value serialization tests
-        addTestCase("AOT closure default int", \testClosureDefaultInt());
-        addTestCase("AOT closure default bool", \testClosureDefaultBool());
-        addTestCase("AOT closure default float", \testClosureDefaultFloat());
-        addTestCase("AOT closure default multiple", \testClosureDefaultMultiple());
-        addTestCase("AOT closure default strip source", \testClosureDefaultStripSource());
+        addPartCase(3, "AOT closure default int", \testClosureDefaultInt());
+        addPartCase(3, "AOT closure default bool", \testClosureDefaultBool());
+        addPartCase(3, "AOT closure default float", \testClosureDefaultFloat());
+        addPartCase(3, "AOT closure default multiple", \testClosureDefaultMultiple());
+        addPartCase(3, "AOT closure default strip source", \testClosureDefaultStripSource());
         # Operator expression coverage tests (select, keys, instanceof, map)
-        addTestCase("AOT operator select standalone", \testOperatorSelectStandalone());
-        addTestCase("AOT operator select as argument", \testOperatorSelectAsArgument());
-        addTestCase("AOT operator keys", \testOperatorKeys());
-        addTestCase("AOT operator instanceof", \testOperatorInstanceof());
-        addTestCase("AOT operator map optimized", \testOperatorMapOptimized());
-        addTestCase("AOT operator map range type info", \testOperatorMapRangeTypeInfo());
-        addTestCase("AOT context row expression", \testContextRowExpression());
+        addPartCase(3, "AOT operator select standalone", \testOperatorSelectStandalone());
+        addPartCase(3, "AOT operator select as argument", \testOperatorSelectAsArgument());
+        addPartCase(3, "AOT operator keys", \testOperatorKeys());
+        addPartCase(3, "AOT operator instanceof", \testOperatorInstanceof());
+        addPartCase(3, "AOT operator map optimized", \testOperatorMapOptimized());
+        addPartCase(3, "AOT operator map range type info", \testOperatorMapRangeTypeInfo());
+        addPartCase(3, "AOT context row expression", \testContextRowExpression());
         # Closure exception safety tests
-        addTestCase("AOT closure exception safety", \testClosureExceptionSafety());
-        addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
+        addPartCase(3, "AOT closure exception safety", \testClosureExceptionSafety());
+        addPartCase(3, "AOT closure exception outer", \testClosureExceptionOuter());
         # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
-        addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
-        addTestCase("AOT corrupt qmod reported rather than fatal when checking is on",
+        addPartCase(3, "AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        addPartCase(3, "AOT corrupt qmod reported rather than fatal when checking is on",
             \testCorruptQmodSignatureCheck());
-        addTestCase("AOT overload default-arg specificity",
+        addPartCase(3, "AOT overload default-arg specificity",
             \testAOTOverloadDefaultArgSpecificity());
         # Regression: exceptions escaping catch blocks must unwind catch scopes
         # (leaked caught-exception trees + stale td->catchException before the fix)
-        addTestCase("AOT exception escaping catch block", \testExceptionEscapingCatchBlock());
+        addPartCase(3, "AOT exception escaping catch block", \testExceptionEscapingCatchBlock());
         set_return_value(main());
+    }
+
+    #! adds the case \a name if it is in the part \a case_part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! Write code to a temp .qr file and return {src_path, out_path}

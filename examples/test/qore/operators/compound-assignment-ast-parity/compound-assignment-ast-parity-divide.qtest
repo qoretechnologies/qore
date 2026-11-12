@@ -13,10 +13,10 @@
 
 %include compound-assignment-ast-parity.qc
 
-%exec-class CompoundAssignmentAstParityMultiplyDivideTest
+%exec-class CompoundAssignmentAstParityDivideTest
 
-#! Checks \c *= and \c /= in every execution mode against the AST interpreter; see CompoundAssignmentAstParityBase
-class CompoundAssignmentAstParityMultiplyDivideTest inherits CompoundAssignmentAstParityBase {
-    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityMultiplyDivide", ("*=", "/=")) {
+#! Checks \c /= in every execution mode against the AST interpreter; see CompoundAssignmentAstParityBase
+class CompoundAssignmentAstParityDivideTest inherits CompoundAssignmentAstParityBase {
+    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityDivide", ("/=",)) {
     }
 }

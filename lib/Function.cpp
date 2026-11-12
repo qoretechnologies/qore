@@ -3866,11 +3866,27 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant);
 }
 
+//! Returns the return type of the chosen variant of a call that is resolved at run time, for the union of the return
+//! types of the variants that it can be resolved to (QoreFunction::parseOtherVariantMayMatch())
+/** The type parameters of a generic variant are substituted with the instantiation of the call and its receiver,
+    which the deferred call does not keep; a return type with a type parameter that cannot be substituted gives no type
+*/
+static const QoreTypeInfo* qore_deferred_chosen_return_type(const AbstractQoreFunctionVariant* chosen,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    const QoreTypeInfo* rt = chosen->parseGetReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt)) {
+        return rt;
+    }
+    rt = qore_substitute_type_params_if_needed(rt, receiver_type_info, type_param_inst);
+    return qore_type_contains_type_parameter(rt) ? nullptr : rt;
+}
+
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
         int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
-        const arg_value_vec_t* args_with_value) const {
+        const arg_value_vec_t* args_with_value,
+        const QoreTypeInfo** deferred_rt) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -4331,9 +4347,15 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         binding.variant = variant;
         // a variant is committed only when no other variant with the same parameter names could be resolved at run
         // time (see parseFindVariant())
-        if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied)) {
+        const QoreTypeInfo* union_rt = deferred_rt
+            ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
+        if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied,
+                deferred_rt ? &union_rt : nullptr)) {
             printd(5, "QoreFunction::parseFindVariantNamed() %s(): another variant could match at run time\n",
                 getName());
+            if (deferred_rt) {
+                *deferred_rt = union_rt;
+            }
             variant = nullptr;
             if (type_param_inst) {
                 type_param_inst->clear();
@@ -4659,9 +4681,38 @@ static bool qore_param_names_match_at(const AbstractFunctionSignature* a, const 
     return true;
 }
 
+//! Returns the type that covers a value of either type for the cases below, or nullptr for any other combination
+/** The types are the return types of the variants that a call can be resolved to at run time: equal types, or one
+    type and no value (\c nothing or the or-nothing type of the other: a variant for no value), give a type; any other
+    combination gives none
+*/
+static const QoreTypeInfo* qore_union_return_type(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    if (!QoreTypeInfo::hasType(a) || !QoreTypeInfo::hasType(b)) {
+        return nullptr;
+    }
+    if (QoreTypeInfo::equal(a, b)) {
+        return a;
+    }
+    if (b == nothingTypeInfo) {
+        return get_or_nothing_type_check(a);
+    }
+    if (a == nothingTypeInfo) {
+        return get_or_nothing_type_check(b);
+    }
+    if (QoreTypeInfo::equal(get_or_nothing_type_check(a), b)) {
+        return b;
+    }
+    if (QoreTypeInfo::equal(get_or_nothing_type_check(b), a)) {
+        return a;
+    }
+    return nullptr;
+}
+
 bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, QoreParseOptions po, const arg_value_vec_t* args_with_value,
-        const std::vector<bool>* named_positions) const {
+        const std::vector<bool>* named_positions, const QoreTypeInfo** union_rt) const {
+    // *union_rt starts as the return type of the chosen variant (qore_deferred_chosen_return_type())
+    bool found = false;
     unsigned num_args = argTypeInfo.size();
     AbstractFunctionSignature* chosen_sig = chosen->getSignature();
     // true if the chosen variant accepts no value for the given parameter
@@ -4696,8 +4747,11 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
             if (named_positions && !qore_param_names_match_at(chosen_sig, sig, *named_positions)) {
                 continue;
             }
-            // a variant with type parameters is taken as a possible match
+            // a variant with type parameters is taken as a possible match, with any return type
             if (sig->needsTypeParameterSubstitution()) {
+                if (union_rt) {
+                    *union_rt = nullptr;
+                }
                 return true;
             }
             if (sig->numParams() < num_args && !v->hasVarargs() && strict_args
@@ -4729,14 +4783,21 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
                 break;
             }
             if (may_match && takes_nothing_instead) {
-                return true;
+                if (!union_rt) {
+                    return true;
+                }
+                found = true;
+                *union_rt = qore_union_return_type(*union_rt, v->parseGetReturnTypeInfo());
+                if (!*union_rt) {
+                    return true;
+                }
             }
         }
         if (stop) {
             break;
         }
     }
-    return false;
+    return found;
 }
 
 const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
@@ -4802,6 +4863,18 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
             }
             AbstractFunctionSignature* sig = v->getSignature();
             if (qore_param_names_match_at(bind_sig, sig, supplied)) {
+                continue;
+            }
+            // a variant whose parameters at the positions of the arguments only accept no value (type nothing) is
+            // given no value by the call however they are named, so passing the arguments by position gives it the
+            // same arguments as binding them by name (ex: length(nothing str) for length(bin: b) with a *binary b)
+            bool nothing_only = true;
+            for (size_t p = 0, e = supplied.size(); nothing_only && p < e; ++p) {
+                if (supplied[p]) {
+                    nothing_only = p < sig->numParams() && sig->getParamTypeInfo(p) == nothingTypeInfo;
+                }
+            }
+            if (nothing_only) {
                 continue;
             }
             // run-time resolution passes the arguments by position: can the variant accept them?
@@ -4875,7 +4948,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
-        const type_vec_t* explicit_type_args, const arg_value_vec_t* args_with_value) const {
+        const type_vec_t* explicit_type_args, const arg_value_vec_t* args_with_value,
+        const QoreTypeInfo** deferred_rt) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -5184,8 +5258,15 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     }
     // a variant is committed only when no other variant could be resolved at run time; an argument can have no
     // value then whatever its type (issue #5686)
-    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value)) {
+    const QoreTypeInfo* union_rt = deferred_rt && variant
+        ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
+    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value,
+            nullptr, deferred_rt ? &union_rt : nullptr)) {
         printd(5, "QoreFunction::parseFindVariant() %s(): another variant could match at run time\n", getName());
+        // the call has the type of a value of any of the variants that could be resolved (issue #5686)
+        if (deferred_rt) {
+            *deferred_rt = union_rt;
+        }
         variant = nullptr;
         runtime_match = true;
         if (type_param_inst) {
@@ -5439,7 +5520,7 @@ QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc,
 }
 
 QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
     // see evalFunction()
@@ -5455,8 +5536,9 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         return QoreValue();
     }
     ProgramCallContextHelper pcch(pgm);
+    // the explicit type arguments of the call select the variant, as for a parsed call (see evalFunction())
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        exec_pgm);
+        exec_pgm, nullptr, explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
     }
@@ -5720,8 +5802,10 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
-                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
-                if (bi->helper_ir) {
+                // a background call of a function, of a closure or of a resolved self or static method is an
+                // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
+                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
                     qore_mark_specialization_helpers(*bi->helper_ir, s);
                 }
@@ -5765,6 +5849,13 @@ void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
     assert(!statements);
     delete aot_entry_statement;
     aot_entry_statement = b;
+}
+
+StatementBlock* UserVariantBase::getAOTClosureDebugBlock() const {
+    if (!pgm || !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return nullptr;
+    }
+    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
@@ -7492,6 +7583,12 @@ static void qore_trace_ast_tier(const char* name) {
     }
 }
 
+//! Returns true if QORE_IR_TEST_PROMOTE_IN_CALL is set: see the AST tier of UserVariantBase::evalTiered()
+static bool qore_ir_test_promote_in_call() {
+    static constinit QoreEnvFlag promote_in_call("QORE_IR_TEST_PROMOTE_IN_CALL");
+    return promote_in_call.get();
+}
+
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
@@ -7504,7 +7601,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // assert(statements);
     QoreParseOptions po = getParseOptions(pgm->getParseOptions());
 
-    ExecutionTier tier = current_tier.load(std::memory_order_acquire);
+    // the tier that this call found: a call that found the function on the AST tier promotes it (see below)
+    const ExecutionTier entry_tier = current_tier.load(std::memory_order_acquire);
+    ExecutionTier tier = entry_tier;
 
     // Native JIT/AOT code has no Qore DebugProgram hooks.  Keep the native tier
     // for programs that merely allow debugger attachment, and switch to AST/IR
@@ -7782,7 +7881,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
-                StatementBlock* debug_statements = statements ? statements : aot_entry_statement;
+                StatementBlock* debug_statements = getDebugEntryStatementBlock();
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, excluded_selfid, debug_statements, pgm);
 
@@ -7888,10 +7987,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
 
-    // Check for IR promotion
-    // whether this call promotes the function from the AST tier: it then runs on the IR tier itself (below)
-    const bool promotable = current_tier.load(std::memory_order_acquire) == TIER_AST;
-    if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
+    // promotes the function to the IR tier
+    auto promote_to_ir = [this, name]() {
         // Re-read rather than reuse the entry-time value: another thread may have
         // published a body since this call started, and that body must promote the tier.
         if (getCachedIR()) {
@@ -7904,13 +8001,31 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 attemptIRLowering(name);
             });
         }
+    };
+
+    // test hook: promote the function to the IR tier here, whatever the IR threshold, after this call found it on the
+    // AST tier and before it decides whether it is promotable, as another thread running a call of the function at
+    // the same time can, so that a test can run that interleaving deterministically in one thread
+    if (entry_tier == TIER_AST && !ir_lower_failed && qore_ir_test_promote_in_call()) {
+        promote_to_ir();
     }
-    // the call that promotes the function to the IR tier runs on it, as the following calls do: a function that is
-    // not lowered when its Program is committed (ex: a closure) would otherwise run its first call on the AST tier
-    // with an IR threshold of 1; the call is counted once.  A call that runs on the AST tier for another reason (an
-    // attached debugger, a generic specialization that is not available) finds the function promoted already and
-    // stays here
-    if (promotable && current_tier.load(std::memory_order_acquire) == TIER_IR) {
+
+    // Check for IR promotion
+    // A call that found the function on the AST tier on entry promotes it and then runs on the IR tier itself, as the
+    // following calls do: a function that is not lowered when its Program is committed (ex: a closure) would
+    // otherwise run its first call on the AST tier with an IR threshold of 1; the call is counted once.  Whether the
+    // call is promotable is the tier that it found on entry, not a new load: another thread can promote the function
+    // between the entry load and here (ex: the first calls of a closure run concurrently in several threads), and the
+    // call must then still run on the tier that the function has now.  A call that found the function above the AST
+    // tier and runs here for another reason (an attached debugger, a generic specialization that is not available)
+    // is not promotable and stays here
+    const bool promotable = entry_tier == TIER_AST;
+    if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
+        promote_to_ir();
+    }
+    // the tier never returns to the AST tier, and the function can be on the JIT tier already when another thread
+    // promoted it further in the meantime: the call then runs on the tier that the function has
+    if (promotable && current_tier.load(std::memory_order_acquire) != TIER_AST) {
         exec_count.fetch_sub(1, std::memory_order_relaxed);
         return evalTiered(name, argv, self, xsink, caller_has_frame_boundary);
     }

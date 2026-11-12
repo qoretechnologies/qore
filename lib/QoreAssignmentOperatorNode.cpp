@@ -241,8 +241,12 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
     parse_context.expected_type_info = ti;
     QoreParseAnalysis right_analysis;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        // the right-hand side is the value stored in the lvalue (issue #5782)
+        QoreParseTargetHelper target(parse_context, right, ti);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
     }
     parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;

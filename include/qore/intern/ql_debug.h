@@ -79,6 +79,18 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_
 typedef void (*qore_dbg_deref_marked_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook;
 
+//! called by qore_object_private::customDeref() when the dereference that marked the object as being destroyed has
+//! completed (RObject::derefDone()), before the deletion starts; called with no lock held; set by
+//! dbg_hold_deref_delete()
+typedef void (*qore_dbg_deref_delete_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook;
+
+//! called by qore_object_private::customDeref() when a dereference has released the last reference to the object
+//! and has no collection to decide, before it takes the object's lock to delete it or hand its deletion off; called
+//! with no lock held; set by dbg_hold_deref_last()
+typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -117,6 +129,10 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure
 //! set by dbg_count_closure_var_collections()
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
+
+//! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
+//! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
+DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
 
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference

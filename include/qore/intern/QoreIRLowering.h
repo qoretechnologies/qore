@@ -346,6 +346,17 @@ public:
             std::string& error, F&& lower);
     //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
     void setFunctionalBaseSource(const QoreValue& base_source);
+    //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
+    class FunctionalLoopExceptionCleanup;
+    //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
+    //! are restored on every path, also when the code raises an exception (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
+            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
+    //! Lowers code that runs with the implicit argument list (arg0) or (arg0, arg1) (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitArgs(QoreIRValue arg0, QoreIRValue arg1, QoreIRValue index,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -393,9 +404,6 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         const QoreTypeInfo* element_type, std::string& error);
-    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
-    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
-        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
@@ -470,7 +478,8 @@ private:
     //! The decisions of decideLazySelectorSource(), by list of selectors
     std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
 
-    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+    //! Lowers a pipeline stage with virtual $1/$# values, and with the element as the implicit argument list also at
+    //! run time when the stage needs it (see the definition)
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
         QoreIRValue element, QoreIRValue index, std::string& error);
 
@@ -849,12 +858,16 @@ private:
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
-    /** Releases the iterator, the list and the loop variables, as the AST's foreach statement does when an exception
-        unwinds it, before the handler of the enclosing try block or block with handlers runs.
+    /** Releases the element (if valid), the value that a map expression gave last (if valid: the list holds a
+        reference of its own), the partial result (if valid: the list that a functional operator built so far), the
+        iterator (if valid), the list and the loop variables, in this order, as the AST's foreach statement and
+        functional operators do when an exception unwinds them, before the handler of the enclosing try block or block
+        with handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
     */
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
-            const QoreProgramLocation* loc);
+            const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
+            QoreIRValue element_value = QoreIRValue());
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
@@ -937,6 +950,8 @@ private:
         QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
         QoreIRValue element;   //!< virtual $# value
         bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
     };
     VirtualImplicitContext virtual_implicit;
 

@@ -134,6 +134,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added the \c sse_max_buffer_size listener option
+      (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
+      the bound of the data held for the client of each Server-Sent Events stream
     - added \c sse_source to @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
       @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" for Server-Sent Events responses whose
       events are pushed when they occur, so that open streams do not hold the threads of the handler pool
@@ -936,6 +939,19 @@ public hashdecl HttpListenerOptionInfo {
     */
     int max_decoded_body_size = 0;
 
+    #! The bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
+    /** The data held for a client is the data queued but not yet written to the socket (HTTP/1.x), or buffered for
+        the stream beyond what the client's flow-control window has accepted (HTTP/2 and HTTP/3; the data within the
+        window is held by the transport, up to the window that the client grants).  Queueing an event
+        never waits for the client; an event that would take the data held over the bound, when it is not the only
+        data held, drops the client (see @ref httpserverasyncio_sse_buffer).  Must be > 0; the default is 1 MiB
+        (@ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize").  A \c ServerSentEventHandler
+        can override it for its streams with its option of the same name.
+
+        @since HttpServerUtil 1.6
+    */
+    int sse_max_buffer_size = 1048576;
+
     #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
     /** @since HttpServer 1.6
     */
@@ -1196,6 +1212,14 @@ public string sub mask_sensitive_url_query_values(string path) {
     return rv.join("");
 }
 
+# the labels of the canonical names of the usual encodings, as http_get_charset_label() computes them
+const hash<string, string> HttpCharsetLabels = {
+    "UTF-8": "utf-8",
+    "utf-8": "utf-8",
+    "ISO-8859-1": "iso-8859-1",
+    "iso-8859-1": "iso-8859-1",
+};
+
 #! Returns response headers where the names of the fields managed by the HTTP server have their canonical case
 /** Header field names are case-insensitive, but hash keys are not.  The HTTP server checks, sets, and removes the
     header fields in @ref HttpServerManagedHeaderNames by name; without this conversion a handler that returns one
@@ -1252,7 +1276,9 @@ string content_type = MimeTypeXml + ";charset=" + http_get_charset_label(cx."res
     @since HttpServerUtil 1.6
 */
 public string sub http_get_charset_label(string encoding) {
-    return force_encoding("", encoding).encoding().lwr();
+    # this is called for every response with a string body: the canonical names of the usual encodings are looked up
+    # without converting a string
+    return HttpCharsetLabels{encoding} ?? force_encoding("", encoding).encoding().lwr();
 }
 
 #! helper function for setting HTTP response headers

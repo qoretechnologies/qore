@@ -338,6 +338,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
         # disable the heartbeat so the only frames on the wire are the ones we queue
         op.setHeartbeat(0);
+        # the stream holds both frames: the bound of the queued data (qore#5792) is not what this case tests
+        op.setMaxBufferSize(64 * 1024 * 1024);
 
         # A frame far larger than any socket send/receive buffer: with the client
         # not yet reading, the first continuePoll() can only send part of it, so it

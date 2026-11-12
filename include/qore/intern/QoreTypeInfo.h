@@ -798,13 +798,49 @@ public:
         values of the types it accepts: a date value must still be checked for a date<absolute> parameter.
     */
     DLLLOCAL static bool acceptsInputUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        // the same type, the common case, is decided where the function is called; the other cases are compared out
+        // of line, as the comparison of container value types recurses (issue #5782)
         if (target == source) {
             return true;
         }
+        return acceptsInputUncheckedDifferent(target, source);
+    }
+
+    //! Compares two different types for acceptsInputUnchecked() (issue #5782)
+    DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
+            const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
             return false;
         }
-        return !target || !target->validatesInputImpl();
+        if (!target) {
+            return true;
+        }
+        if (target->validatesInputImpl()) {
+            return false;
+        }
+        // a container accepts the values of another one unchecked only if its value type accepts the other's: a
+        // list<date> must still be checked for list<date<absolute>> (issue #5782)
+        return acceptsValuesUnchecked(target, source);
+    }
+
+    //! Returns true if the values of the container type @a source are accepted unchecked by the container type
+    //! @a target, or if @a target is not a hash, list or softlist type (issue #5782)
+    /** Called only for two types with the same signature (see acceptsInputUnchecked()).
+    */
+    DLLLOCAL static bool acceptsValuesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        const QoreTypeInfo* target_value = getReturnComplexHashOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexHashOrNothing(source));
+        }
+        target_value = getReturnComplexListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexListOrNothing(source));
+        }
+        target_value = getReturnComplexSoftListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexSoftListOrNothing(source));
+        }
+        return true;
     }
 
     // static version of method, checking for null pointer

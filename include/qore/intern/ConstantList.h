@@ -411,9 +411,14 @@ public:
         // defining file changes (the folded literal leaves no trace in the
         // emitted `.qo`).  No-op unless an AOT dependency sink is active.
         qore_aot_note_referenced_decl(this->loc, loc);
+        qore_aot_record_folded_constant_import(loc, this, ptr);
 
         constantTypeInfo = getParseTypeInfo();
         return getParseValue();
+    }
+
+    DLLLOCAL const QoreProgramLocation* getLocation() const {
+        return loc;
     }
 
     DLLLOCAL const char* getName() const {
