@@ -56,11 +56,18 @@ public namespace NestedLoader {
 
     public sub tagged() [dom=PROCESS] {
     }
+
+    # calls the module's own tagged code at run time: allowed for a sandboxed restricted caller only if the module
+    # declares the domain, which a nested Program's domains key must not do
+    public string sub callTagged() {
+        call_function(\"NestedLoader::tagged\");
+        return \"called\";
+    }
 }
 ";
 
-    # the loading module declares no domain: a restricted Program cannot load a module that calls its own tagged code
-    # in its init, so the module's options are checked through the restricted Program's parse of a call
+    # the loading module declares no domain: its own call of its tagged code, resolved at run time for a sandboxed
+    # restricted caller, is refused; it would be allowed if the nested Program's domains key had reached the module
     const ScriptSource = "%modern
 %requires NestedLoader
 printf(\"nested: %s\\n\", trim(NestedLoader::getResult()));
@@ -72,11 +79,18 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     printf(\"restricted call: %s\\n\", ex.err);
 }
+Program sp(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+SandboxManager mgr();
+sp.setSandboxManager(mgr);
+sp.parse(\"%requires NestedLoader\\nstring sub t() { try { return NestedLoader::callTagged(); } \"
+    \"catch (hash<ExceptionInfo> ex) { return ex.err; } }\", \"sandboxed\");
+printf(\"module's own run-time call: %s\\n\", sp.callFunction(\"t\"));
 ";
 
     const Expected = "nested: 1 True; 1 True; 1 True;
 version: 1.0
 restricted call: PARSE-EXCEPTION
+module's own run-time call: INVALID-FUNCTION-ACCESS
 ";
 
     constructor() : QUnit::Test("NestedModuleParseTest", "1.0", \ARGV) {

@@ -89,18 +89,25 @@ rest (class domain, builtins) is checked as before.
   untyped calls and references of its tagged code; the caller's closure run on a module thread stays refused; an
   untagged method using `thread_yield()` works for the restricted caller by every route).  Review fixes: the
   iterator helper of `foreach` (`AbstractIteratorHelper::getCheckVariant()`), the type-based lookups
-  (`checkVariantDomain()`: reflection, AOT load-time binding) and `runtimeGetCallVariants()` pass the current
-  Program, which is the calling code's there (no switch); the creator relief tests `::getProgram()`, the Program
+  (`checkVariantDomain()`) and `runtimeGetCallVariants()` pass the current Program, which is the calling code's
+  there (no switch).  Only the variant lookup of reflection is relieved: its own call check
+  (`QoreReflectionCaller::allowsDomain()`, `reflection_check_variant_call()`) is not, so a module's reflection call of
+  its own declared code is still refused for a sandboxed caller (it fails closed).  An AOT image binds variants at
+  load time without a domain check (`qore_aot_resolve_variant_from_arg_type_signature()` falls back to
+  `parseFindVariantNoDiagnostics()`); the image-level `FUNCTIONAL_DOMAIN` check governs there, so the current Program
+  passed by `checkVariantDomain()` does not matter for it; the creator relief tests `::getProgram()`, the Program
   running the code, not the reference's `getProgram()` (the object's Program for a method reference: a module's
   `\o.m()` on an object of a caller subclass was refused).  Implicit base class constructors stay checked against
-  the code running `new` (no module code runs: a module subclass without its own constructor); an explicit base
-  constructor list in the module is module code.  A module that hands out a generic dispatcher (`\call_function()`
+  the code running `new` (see below: no module code runs for a module subclass without its own constructor); an
+  explicit base constructor list in the module is module code.  A module that hands out a generic dispatcher (`\call_function()`
   or a `call_object_method()` wrapper that it creates) lets its callers reach its declared code through it.
 - The thread's module definition context (`ThreadData::qmd`) applies only while its module's Program is parsed
   (`QoreModuleDefContext::getDefinitionProgram()`, `get_module_def_context()`): a Program that a module's `init`
   closure parses applied its own `module` block to the loading module (qore#5938: a nested `version` key raised
   "given multiple times", a nested `url` key asserted, and a nested `domains` key would have added domains to the
-  loading module); test `nested-module-parse.qtest`.
+  loading module); test `nested-module-parse.qtest`.  A `%try-child-module` in such a Program is ignored (the
+  thread's module context name is still set, as for the re-parse of an AOT module), where it used to add a child
+  to the loading module.
 - Implicit base class constructors are resolved at run time and checked against the code running `new`.
 - No-domain fast path: `qore_get_variant_denied_domains()` returns at once for functionality 0.
 
