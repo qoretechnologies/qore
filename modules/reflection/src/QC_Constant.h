@@ -50,7 +50,7 @@ public:
         return ns;
     }
 
-    DLLLOCAL virtual const QoreClass* getClass() const {
+    DLLLOCAL virtual const QoreClass* getClass() const override {
         return nullptr;
     }
 };

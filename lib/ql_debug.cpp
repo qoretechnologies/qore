@@ -20446,7 +20446,7 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     } else if (!strcmp(name->c_str(), "close")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
     } else {
-        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point %y", name->c_str());
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
     }
     ReferenceHolder<Counter> reached(get_counter_arg(params, 1, xsink), xsink);
@@ -20460,7 +20460,7 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
     DbgHttpHold& h = dbg_http_holds[point];
     if (h.reached) {
-        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): point %y is already armed",
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): point '%s' is already armed",
             name->c_str());
         return QoreValue();
     }
