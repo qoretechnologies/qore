@@ -194,6 +194,10 @@ public:
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
+    //! Records on the stream's frame state that the application sends its close frame itself; see
+    //! ChannelAction::markFrameStateCloseSent()
+    DLLLOCAL int markFrameStateCloseSent(int64_t stream_id, ExceptionSink* xsink);
+
     //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
     /** Attaches a WebSocketStreamFrameState to the ChannelAction already
         registered for @a stream_id.  The install drains items buffered in

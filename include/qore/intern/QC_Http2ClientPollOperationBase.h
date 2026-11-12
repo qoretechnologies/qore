@@ -208,6 +208,10 @@ public:
     DLLLOCAL void sendStreamData(int64_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Records on the stream's frame state that the application sends its close frame itself; see
+    //! ChannelAction::markFrameStateCloseSent()
+    DLLLOCAL int markFrameStateCloseSent(int32_t stream_id, ExceptionSink* xsink);
+
     //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
     /** Attaches a WebSocketStreamFrameState to the ChannelAction already
         registered for @a stream_id.  After this call, body bytes from H2

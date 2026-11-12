@@ -1277,6 +1277,26 @@ void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
     --stream_blocked_waiters;
 }
 
+int Http3ClientPollOperationPriv::markFrameStateCloseSent(int64_t stream_id, ExceptionSink* xsink) {
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            return 0;
+        }
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            return 0;
+        }
+        ch_action->ref();
+    }
+    int rv = ch_action->markFrameStateCloseSent();
+    ch_action->deref(xsink);
+    return rv;
+}
+
 void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* msg_queue,
         QoreValue initial, ExceptionSink* xsink) {
     ValueHolder initial_holder(initial, xsink);
@@ -2305,6 +2325,21 @@ Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
 */
 nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags=NAMED_ARGS] {
     priv->registerStreamNotify(stream_id);
+}
+
+//! Records on the stream's frame state that the application sends its WebSocket close frame itself
+/** When a frame state is installed on the stream (see installFrameState()), it then sends no close frame of its own
+    when it fails the connection later with an error (an endpoint sends one close frame, RFC 6455 section 5.5.1).
+
+    @param stream_id the stream ID
+
+    @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2 if
+    the frame state sent a close frame before (the caller sends none)
+
+    @since %Qore 3.0
+*/
+int Http3ClientPollOperationBase::markFrameStateCloseSent(int stream_id) [flags=NAMED_ARGS] {
+    return priv->markFrameStateCloseSent(static_cast<int64_t>(stream_id), xsink);
 }
 
 //! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream

@@ -9,7 +9,7 @@
 // - a line "release" on stdin resumes reading the WebSocket streams; a line "close <code>[:<reason>][,...]" writes a
 //   close frame for each code (with its reason) in one write; a line "ping <payload>[,...]" writes a ping frame for
 //   each payload in one write; a line "big-header" writes the header of a binary frame announcing 1 GiB
-// - prints "PONG <payload>" for each pong received
+// - prints "PONG <payload>" for each pong received, and "END" when the client ends its side of the stream
 // - prints "MSG <size> <first byte> <last byte>" for each message received, and "CLOSE <code>" for a close frame,
 //   which it answers
 
@@ -215,6 +215,10 @@ server.on('stream', (stream, headers) => {
     });
   });
   stream.on('error', () => {});
+  // the end of the client's side of the stream, after all its frames
+  stream.on('end', () => {
+    console.log('END');
+  });
 });
 
 server.listen(port, '127.0.0.1', () => {
