@@ -5411,6 +5411,18 @@ static QoreValue qore_ir_uninstantiate_scan_value(ClosureVarValue& cvv, Exceptio
 std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses{0};
 #endif
 
+//! Gives the parameter type error of an inlined closure call the outcome of the AST interpreter
+/** RUNTIME-OVERLOAD-ERROR when the closure's signature does not accept the arguments (issues #5686, #5864); raised in
+    the caller's frame, as the AST interpreter raises it before it calls the closure: the frame of the inlined call is
+    taken off the call stack meanwhile (it is linked to the caller's frame, as RuntimeConfigStackHelper restores one)
+*/
+static __attribute__((noinline, cold)) void qore_ir_inline_closure_param_mismatch(const QoreFunction* func,
+        QoreStackLocation& stack_loc, unsigned nargs, const uint64_t* args, ExceptionSink* xsink) {
+    update_runtime_stack_location(stack_loc.getNext());
+    qore_ir_fast_call_param_mismatch(func, nullptr, nargs, args, xsink);
+    update_runtime_stack_location(&stack_loc);
+}
+
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -5581,10 +5593,15 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
 
     bool use_direct_params = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(num_params);
-    if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr) < 0) {
-        result = QoreValue();
-        return true;
+    if (!use_direct_params) {
+        int bind_rc = instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr);
+        if (bind_rc < 0) {
+            if (bind_rc == QORE_IR_FAST_CALL_PARAM_MISMATCH) {
+                qore_ir_inline_closure_param_mismatch(uf, stack_loc, num_params, args, xsink);
+            }
+            result = QoreValue();
+            return true;
+        }
     }
     std::optional<InterpreterFastCallParamScope> param_scope;
     if (!use_direct_params) {
