@@ -41,6 +41,7 @@ DLLLOCAL QoreClass *initDebugProgramClass(QoreNamespace& ns);
 #include <qore/ReferenceArgumentHelper.h>
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 
 // class needed to handle calls from C++ to Qore script instance
 class QoreDebugProgramWithQoreObject: public QoreDebugProgram {
@@ -187,7 +188,12 @@ public:
          printd(5, "QoreDebugProgramWithCoreObject::onException::statement:%s:%d-%d:%s\n", statement->loc.getFile(), statement->loc.start_line, statement->loc.end_line, typeid(statement).name());
       */
       QoreException* except = xsink->getException();
-      params[1] = except->makeExceptionObject();
+      {
+         QoreHashNode* h = except->makeExceptionObject();
+         // the ID of the exception, which is the same in each event of the exception, also after a rethrow (#5906)
+         qore_hash_private::get(*h)->setKeyValueIntern("debug_id", except->getDebugId());
+         params[1] = h;
+      }
       // LocalVar will sanitize and discard non-node values so we cannot use the ReferenceHolder
       ReferenceArgumentHelper rah(QoreValue(false), &xsink2);
       params[2] = rah.getArg(); // caller owns ref

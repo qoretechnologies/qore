@@ -125,6 +125,33 @@ try { c(); } catch () {}
 fail(\"UNCAUGHT\");
 ";
 
+#! a program whose exceptions leave several statements: the thread stops once for each exception (#5906)
+const ExceptionOnceScript = "%modern
+sub f() {
+    *int src;
+    if (True) {
+        int count = src;
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    try {
+        if (True) {
+            throw \"LOOP\", i;
+        }
+    } catch () {
+    }
+}
+try {
+    try {
+        throw \"RE\";
+    } catch () {
+        rethrow;
+    }
+} catch () {
+}
+f();
+";
+
 #! a program with an overloaded function
 const OverloadScript = "%modern
 int sub f(int i) {
@@ -449,6 +476,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         addTestCase("the stop at the start of a program", \attachStopTest());
         addTestCase("the exceptions that stop threads", \exceptionFilterTest());
+        addTestCase("a thread stops once for each exception", \exceptionOnceTest());
         addTestCase("the threads continue when the last client disconnects", \lastClientTest());
         addTestCase("steps stop at statements, and a pause also in an empty loop", \stepStopTest());
         addTestCase("a thread that starts in a program that has started", \threadStartEventTest());
@@ -1402,6 +1430,38 @@ try {
         }
         dpc.go(p.tid);
         return rv;
+    }
+
+    #! runs ExceptionOnceScript with the given exception filters of the client and returns the stops of its
+    #! exceptions, by code
+    private hash<string, int> getExceptionStops(*list<string> filters) {
+        if (exists filters) {
+            dpc.command("exception/filter/set", {"value": filters});
+        }
+        on_exit dpc.command("exception/filter/set", {"value": ("user", "system", "uncaught")});
+        DebuggedProgram p(dpc, ExceptionOnceScript);
+        on_exit p.cleanup();
+        hash<string, int> rv = {};
+        dpc.go(p.tid);
+        while (True) {
+            hash<auto> e = dpc.getInterrupt(p.pgmId);
+            if (e.func == "detach") {
+                break;
+            }
+            if (e.func == "exception") {
+                ++rv{e.exception.err};
+            }
+            dpc.go(e.tid);
+        }
+        dpc.go(p.tid);
+        return rv;
+    }
+
+    # an exception stops a thread once, at the statement that raised it, and not at the statements that it leaves
+    # then, also after a rethrow of it, while each exception that a statement raises again stops it (#5906)
+    exceptionOnceTest() {
+        assertEq({"LOOP": 2, "RE": 1, "RUNTIME-TYPE-ERROR": 1}, getExceptionStops());
+        assertEq({"RUNTIME-TYPE-ERROR": 1}, getExceptionStops(("uncaught",)));
     }
 
     exceptionFilterTest() {
