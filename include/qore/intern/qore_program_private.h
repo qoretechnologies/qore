@@ -434,6 +434,26 @@ struct pgmloc_vec_t : public std::vector<QoreProgramLocation*> {
 
 class qore_program_private;
 
+#ifdef DEBUG
+//! test hook: called with the Program's lock held when its teardown waits for a batch JIT compile's hold (qore#5874)
+DLLLOCAL void qore_program_dbg_teardown_waits_for_compile_hold();
+//! test hook: holds the next batch collection or effect analysis of the named root function after it has held a
+//! Program other than the root function's (qore#5874); "collection" below means either
+DLLLOCAL void qore_dbg_hold_batch_collection(const char* func);
+//! test hook: waits until the armed batch collection is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_batch_collection_held(int64 timeout_ms);
+//! test hook: waits until a Program's teardown waits for a batch collection's hold; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_teardown_compile_hold(int64 timeout_ms);
+//! test hook: lets the held batch collection continue; returns false if it did not continue before the timeout
+DLLLOCAL bool qore_dbg_continue_batch_collection(int64 timeout_ms);
+//! test hook: counts the holds refused to the collections of the named root function until the count is read
+DLLLOCAL void qore_dbg_count_batch_collection_refusals(const char* func);
+//! test hook: returns the number of holds refused since qore_dbg_count_batch_collection_refusals() and disarms it
+DLLLOCAL int64 qore_dbg_get_batch_collection_refusals();
+//! test hook: records a hold refused to the collection of \a root (a function name with its unique suffix)
+DLLLOCAL void qore_dbg_batch_collection_refused(const std::string& root);
+#endif
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -505,6 +525,8 @@ public:
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
+    //! batch JIT compiles that read the Program's code (see tryHoldForCompile()); protected by plock
+    unsigned compile_holds = 0;
     unsigned parse_count = 0;    // recursive parse count
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
     // while lockParsing()/unlockParsing() write it under plock
@@ -2268,10 +2290,48 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
-        while ((thread_count - adj) || parse_count) {
+        // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
+        while ((thread_count - adj) || parse_count || compile_holds) {
             ++thread_waiting;
+#ifdef DEBUG
+            if (compile_holds) {
+                qore_program_dbg_teardown_waits_for_compile_hold();
+            }
+#endif
             pcond.wait(plock);
             --thread_waiting;
+        }
+    }
+
+    //! Keeps the Program's teardown from freeing its code while a batch JIT compile or effect analysis reads it
+    /** A batch compile of a function collects the code of the functions that it calls (collectBatchCallees()), and
+        the IR interpreter's effect analysis walks the same code (refineInterpreterEffectSummary()), without running it
+        (qore#5874); see QoreProgramCodeHolds.  The hold makes the teardown wait (waitForAllThreadsToTerminateIntern())
+        until the batch is queued or the analysis is done; the teardown then drains or detaches a queued batch
+        (QoreJIT::waitForBgCompileQueue()).
+        Unlike entering the Program, the hold is not visible to its code: it is not a thread of the Program (no thread
+        map entry, thread count or activity event), so neither the Program's threads nor its debugger see it.  A thread
+        must therefore never start the teardown of a Program that it holds: unlike its own thread count, its hold is not
+        discounted, and the teardown would wait for itself (a holder runs no Qore code while it holds).
+
+        @return true if the hold was taken, false if its teardown has marked the Program (ptid): its code is not read
+        then; until then, the teardown waits for a hold taken (its first wait and the cleanup callback come before)
+    */
+    DLLLOCAL bool tryHoldForCompile() {
+        AutoLocker al(plock);
+        if (ptid) {
+            return false;
+        }
+        ++compile_holds;
+        return true;
+    }
+
+    //! Releases a hold taken with tryHoldForCompile()
+    DLLLOCAL void releaseCompileHold() {
+        AutoLocker al(plock);
+        assert(compile_holds);
+        if (!--compile_holds && thread_waiting) {
+            pcond.broadcast();
         }
     }
 

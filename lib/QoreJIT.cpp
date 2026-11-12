@@ -2652,7 +2652,7 @@ void QoreJIT::bgCompileThreadLoop() {
 
 void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees,
-        std::shared_ptr<QoreIRFunction> owned_ir_func) {
+        std::shared_ptr<QoreIRFunction> owned_ir_func, const std::function<void()>& queued) {
     // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
     // so we do NOT re-check here — the state is already 1 when we're called.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -2792,6 +2792,11 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 
     if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] enqueued compilation of '%s'\n", ir_func->name.c_str());
+    }
+
+    // the teardown of the work's Programs drains or detaches it from now on
+    if (queued) {
+        queued();
     }
 
     // The work stays on the dedicated compiler thread even in synchronous mode: it owns the LLVM

@@ -17694,6 +17694,12 @@ static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, Run
     ProgramTeardownHold& h = program_teardown_hold();
     std::unique_lock<std::mutex> l(h.m);
     if (!h.pgm || !h.held) {
+        // an armed hold that no teardown has reached is disarmed, so that a teardown that reaches it later continues
+        if (h.pgm) {
+            h.pgm = nullptr;
+            h.released = true;
+            h.cond.notify_all();
+        }
         xsink->raiseException("DBG-ARGUMENT-ERROR", "no Program teardown is held");
         return QoreValue();
     }
@@ -18277,6 +18283,45 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
+}
+
+//! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
+static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_hold_batch_collection(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! waits until the armed batch collection is held; returns False on timeout
+static QoreValue f_dbg_wait_batch_collection_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_batch_collection_held(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until a Program's teardown waits for a batch collection's hold; returns False on timeout
+static QoreValue f_dbg_wait_teardown_compile_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_teardown_compile_hold(get_param_value(params, 0).getAsBigInt());
+}
+
+//! counts the holds refused to the batch collections and effect analyses of the named root function (qore#5874)
+static QoreValue f_dbg_count_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_count_batch_collection_refusals(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! returns the number of holds refused since dbg_count_batch_collection_refusals()
+static QoreValue f_dbg_get_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_get_batch_collection_refusals();
+}
+
+//! lets the held batch collection continue; returns False if it did not continue before the timeout
+static QoreValue f_dbg_continue_batch_collection(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_continue_batch_collection(get_param_value(params, 0).getAsBigInt());
 }
 
 //! returns the number of hashes and lists copied in the current thread
@@ -21048,6 +21093,18 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_teardown_compile_hold", f_dbg_wait_teardown_compile_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_batch_collection", f_dbg_continue_batch_collection, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_count_batch_collection_refusals", f_dbg_count_batch_collection_refusals,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

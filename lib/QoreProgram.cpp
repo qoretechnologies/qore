@@ -467,6 +467,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
+    // the holds of the parent's other threads, which do not exist in the child
+    compile_holds = 0;
     // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
     // while it was being constructed, after it was registered, has no hub yet
     if (thread_hub) {
@@ -3022,14 +3024,16 @@ void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
 void qore_program_private::del(ExceptionSink* xsink) {
     printd(5, "qore_program_private::del() pgm: %p (base_object: %d)\n", pgm, base_object);
 
-    // Idempotent guard: del() may be called twice — once from ModuleManager at
-    // shutdown to break cross-program Type strong refs (issue #4816), and
-    // again from ~qore_program_private() if refcount eventually reaches 0.
-    // RootNS is set to nullptr at the end of del() so this flag detects the
-    // second call and short-circuits.
+    // Idempotent guard: del() is called only from waitForTerminationAndClear(), which can run twice: once from
+    // ModuleManager at shutdown to break cross-program Type strong refs (issue #4816), and again when the reference
+    // count reaches 0.  RootNS is set to nullptr at the end of del() so this flag detects the second call and
+    // short-circuits.
     if (!RootNS) {
         return;
     }
+    // waitForTerminationAndClear() waited for the batch JIT compiles that read the Program's code, after it had set
+    // ptid, which refuses new ones (qore#5874)
+    assert(!compile_holds);
 
     // dereference all external data, once no child Program copies it
     {

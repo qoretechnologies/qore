@@ -126,6 +126,26 @@ printf(\"held=%y waiting=%y\\n\", held, waiting);
         assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
         assertRegex("second=DBG-ARGUMENT-ERROR", r.output, sprintf("a second hold is refused: %s", r.output));
         assertRegex("held=True waiting=True", r.output, sprintf("the armed hold held the teardown: %s", r.output));
+
+        # continuing a hold that no teardown has reached disarms it: a teardown that reaches it later is not held
+        r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+call_function(\"dbg_hold_program_teardown\", t);
+try {
+    call_function(\"dbg_continue_program_teardown\", 100);
+    printf(\"continue=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"continue=%s\\n\", ex.err);
+}
+# before, the teardown blocked in the hold, so the child never got here
+delete t;
+printf(\"deleted=True\\n\");
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("continue=DBG-ARGUMENT-ERROR", r.output, sprintf("no teardown is held: %s", r.output));
+        assertRegex("deleted=True", r.output, sprintf("the disarmed hold does not hold the teardown: %s", r.output));
     }
 
     #! once a Program waits for the background compiles of its code, a compile of its code is refused

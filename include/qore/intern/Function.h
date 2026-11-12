@@ -2480,6 +2480,57 @@ protected:
         const AbstractQoreFunctionVariant* variant) const;
 };
 
+//! Holds the Programs whose code is read without running it, so that their teardowns do not free it meanwhile
+/** A batch JIT compile collects the code of the root function's callees and of their callees
+    (collectBatchCallees()), and the IR interpreter's effect analysis walks the same callees
+    (refineInterpreterEffectSummary()); their Programs free that code with their namespaces when they are deleted, also
+    while another thread reads it.  Each Program reached is held (qore_program_private::tryHoldForCompile()), which its
+    teardown waits for without the hold being visible to its code (qore#5874).  A Program that its teardown has marked
+    (UserVariantBase::pgm_deleted, or qore_program_private::ptid, which refuses the hold) is not held, and its code is
+    not read: the function is called through the call path, which refuses the call (qore#5822).  The root function's
+    Program is held as well (holdRoot()): the thread that reads its code need not be counted in it (the fast call path
+    can run code of the current Program without entering it).  The holds are released with release() or when the
+    object is destroyed.
+*/
+class QoreProgramCodeHolds {
+public:
+    //! @param hook_name the name of the root function, for a test hook (debug builds), or nullptr
+    DLLLOCAL QoreProgramCodeHolds(const std::string* hook_name = nullptr) : hook_name(hook_name) {
+    }
+
+    DLLLOCAL ~QoreProgramCodeHolds();
+
+    //! Holds \a p; returns false if its teardown has marked it (its code must not be read then)
+    /** In debug builds, the test hook (see qore_dbg_hold_batch_collection()) runs after a hold is taken
+    */
+    DLLLOCAL bool hold(QoreProgram* p) {
+        return holdIntern(p, true);
+    }
+
+    //! Holds the Program of the root function, without the test hook; returns false if its teardown has marked it
+    DLLLOCAL bool holdRoot(QoreProgram* p) {
+        return holdIntern(p, false);
+    }
+
+    //! Holds the Program of \a variant; returns false if its teardown has marked it
+    /** The variant must be allocated: it belongs to code whose Program is held or that the caller runs
+    */
+    DLLLOCAL bool holdVariant(const AbstractQoreFunctionVariant* variant);
+
+    //! Releases the holds
+    DLLLOCAL void release() noexcept;
+
+    QoreProgramCodeHolds(const QoreProgramCodeHolds&) = delete;
+    QoreProgramCodeHolds& operator=(const QoreProgramCodeHolds&) = delete;
+
+private:
+    const std::string* hook_name;
+    //! the Programs held, each once
+    std::vector<QoreProgram*> held;
+
+    DLLLOCAL bool holdIntern(QoreProgram* p, bool hook);
+};
+
 class QoreFunctionIterator {
 public:
     DLLLOCAL QoreFunctionIterator(const QoreFunction& f) : f(f) {
