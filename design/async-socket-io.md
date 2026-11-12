@@ -1697,7 +1697,8 @@ follows at once fail with `SOCKET-NON-BLOCK-ERROR`, depending on that worker's t
   Phase 3 for an operation ended by the descriptor check.  It cannot release its claim in
   `handleCompletion()`, which is called for every completion: its `abort()` decides whether the
   socket is closed, and an `abort()` dispatched to a callback worker (a %Qore subclass that
-  overrides it) runs after `handleCompletion()`
+  overrides it) runs after `handleCompletion()` (the result is delivered after that `abort()`; see
+  "The result of an aborted operation follows its abort()")
 - the operations whose `abort()` only releases their claim (the readiness wait of
   `Socket::isWriteFinished()` and its C++ counterpart in `QoreSocketObject.cpp`, and the accept
   operations) release it in `handleCompletion()`
@@ -1972,6 +1973,37 @@ hook fires exactly once.  The Qore-side `onComplete` dispatch is still triggered
 controller's own cache cleanup independently of the hook, so there is no duplicate
 notification — the Qore manager sees `onComplete`, the C++ manager (when present) sees
 `onClosedHook`, and a connection is owned by exactly one of them at a time.
+
+### The result of an aborted operation follows its abort()
+
+A canceled operation, and one that times out, is aborted before its result is delivered, so that the receiver of the
+result (the waiter on its result queue, or its `onComplete()`) sees it aborted: an HTTP/2 SSE stream's
+`SseStreamCloseNotifier` acts on the end of the connection only when `Http2PollOperation::isStreamPeerClosed()` is
+true, which `abort()` makes it.  An `abort()` that runs on a callback worker (one implemented in %Qore, or a C++
+operation's that `needsWorkerDispatch()`) was dispatched as a work item of its own, and the result was delivered on
+the I/O thread at the same time (pushed to the result queue, or `onComplete()` dispatched as another work item), so
+the result could be handled before, or while, `abort()` ran: a removal of a listener then left the SSE stream of an
+HTTP/2 connection running, as its notifier saw the connection open.
+
+The result is now delivered by `AsyncIoControllerPriv::AbortThenDeliverTask`, which `doCancelIntern()` and Phase 3
+(for a timeout, after the operation's last state event and its removal from the cache) hand to the `DT_ABORT` item:
+
+- the worker runs the task after `abort()` returns, in the same item, after ending a cancellation aimed at `abort()`
+  and clearing the thread-local data that it set, as between two items: the task pushes the result to the result
+  queue and calls `onComplete()` itself, so a stop of the dispatcher, which waits for the item, waits for it too
+- unless the operation's Program or owner has begun to shut down while `abort()` ran: the task is then discarded, as
+  an `onComplete()` queued as an item of its own would have been
+- a discarded task (the item is discarded at `enqueue()`, drained by `markOwnerShuttingDown()`, skipped by the worker,
+  or left at a stop of the dispatcher) pushes the result to the result queue only; at `enqueue()` on the I/O thread
+  it is discarded there, so the result does not wait for a worker
+
+So an `abort()` that runs on a worker must not wait for the receiver of its result, and a synchronous `exec()` of a
+C++ operation whose abort `needsWorkerDispatch()` gets its timeout result only when a worker has run the abort.  The
+ordering is checked by `qore/classes/AsyncIoController/asyncio_abort_before_result.qtest` (with the debug hook
+`dbg_async_io_on_complete_dispatched()`), and the discarded deliveries by `asyncio_abort_discard.qtest` there, which
+runs the dispatcher with a single worker held by a blocked `abort()` and marks an owner as shutting down with the debug
+hook `dbg_async_io_mark_owner_shutting_down()`.  The discard at a program shutdown has no test of its own: it takes the
+same path as an owner's, from a check of `shutting_down_programs` beside that of `shutting_down_owners`.
 
 ### QoreCallDispatcher Worker Loop Ordering Contract
 

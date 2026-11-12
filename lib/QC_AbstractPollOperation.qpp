@@ -91,6 +91,16 @@ abstract *hash<SocketPollInfo> AbstractPollOperation::continuePoll();
 
 //! Aborts any asynchroous operation in progress and closes the connected object
 /** Reimplement in child classes to abort the operation
+
+    The async I/O controller calls it when it cancels the operation or the operation times out, before it delivers
+    the operation's result: the result (in the result queue, or passed to @ref onComplete()) is delivered once this
+    method has returned, so its receiver sees the operation aborted.
+
+    @note An implementation in %Qore is called on a callback worker of the controller, and the result is delivered
+    after it returns: it must therefore not wait for the receiver of the result (such as a thread that waits for the
+    result on the operation's result queue, or something that the operation's @ref onComplete() does).  The same
+    holds for an operation implemented in C++ whose abort is run on a callback worker; for one, a synchronous caller
+    waiting for the operation's timeout result gets it only when a callback worker has run its abort.
 */
 nothing AbstractPollOperation::abort() {
 }
@@ -101,6 +111,11 @@ nothing AbstractPollOperation::abort() {
     Called asynchronously on a worker thread after the operation finishes.
     The poll operation object is kept alive (ref'd) for the duration of this call,
     so any strong references stored as members remain valid.
+
+    For an operation that is canceled or times out, it is called after @ref abort() has returned.  It is not called
+    when the operation's Program or owner is shutting down (see
+    @ref Qore::AsyncIoController::flushCallbacksByOwner() "AsyncIoController::flushCallbacksByOwner()"); a result
+    queue still gets the result then.
 
     @param result the operation result hash; see @ref SocketPollResultInfo for the hash format
 

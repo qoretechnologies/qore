@@ -346,6 +346,9 @@ public:
         bool read_state = false;
         //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
         uint64_t op_id = 0;
+        //! For DT_ABORT: the task in native_task delivers the result after abort() (see
+        //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
+        bool after_abort_on_complete = false;
     };
 
     //! Creates the dispatcher
@@ -361,12 +364,14 @@ public:
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param owner optional owner identifier for per-owner flush tracking
         @param sandbox_ctx the sandbox of the operation's submitter
-        @param after_abort a task that the worker runs after abort() returns (ownership transferred), or nullptr; if
-        the item is not run, the task is discarded (AsyncIoNativeTask::discard())
+        @param after_abort a task that delivers the operation's result after abort() returns (ownership transferred),
+        or nullptr: the worker runs it after abort() unless the operation's Program or owner has begun to shut down
+        in the meantime, and discards it (AsyncIoNativeTask::discard()) otherwise, and also if the item is not run
+        @param after_abort_on_complete true if @a after_abort calls the operation's onComplete() when it is run
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoNativeTask* after_abort = nullptr);
+        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false);
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -484,11 +489,6 @@ public:
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
-    }
-
-    //! Debug-only: counts an onComplete() call that a worker makes itself (see AbortThenDeliverTask)
-    DLLLOCAL void dbgCountOnComplete() {
-        dbg_on_complete_dispatched.fetch_add(1, std::memory_order_acq_rel);
     }
 #endif
 
@@ -879,6 +879,11 @@ public:
 
     //! Debug-only: the number of onComplete() calls dispatched so far; 0 if no dispatcher has been created
     DLLLOCAL int64_t dbgOnCompleteDispatched();
+
+    //! Debug-only: sets or clears the shutdown mark of an owner, as flushCallbacksByOwner() does around its wait
+    /** For tests of the work of an owner that is shutting down, which cannot otherwise hold the mark at a given point
+    */
+    DLLLOCAL void dbgSetOwnerShuttingDown(const std::string& owner, bool mark);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -1422,10 +1427,16 @@ private:
         result could be handled on another worker before, or while, abort() runs.
 
         Run on the worker, the task pushes the result to the operation's result queue and calls its onComplete()
-        itself, in the work item of abort() (under the same Program, sandbox and owner), so that a stop of the
-        dispatcher, which waits for the item, also waits for onComplete().  A task that is not run (the dispatcher is
-        stopping, or the operation's Program or owner is shutting down) pushes the result to the result queue only:
-        an onComplete() dispatched at that point would be discarded as well.
+        itself, in the work item of abort() (under the same Program, sandbox and owner, after the cancellation and the
+        thread-local data of abort() have been cleared, as between two items), so that a stop of the dispatcher, which
+        waits for the item, also waits for onComplete().  A task that is not run pushes the result to the result
+        queue only, as onComplete() would be discarded as a work item of its own: when the item itself is discarded
+        (the dispatcher is stopping, or the operation's Program or owner is shutting down; on the I/O thread, the
+        task is discarded there, so the result does not wait for a worker), and when the operation's Program or
+        owner has begun to shut down while abort() ran.
+
+        As the result is delivered only once abort() has returned, an abort() run on a worker must not wait for the
+        receiver of the result (see AbstractPollOperation::abort()).
     */
     class AbortThenDeliverTask : public AsyncIoNativeTask {
     public:
@@ -1465,6 +1476,7 @@ private:
         std::string owner;                  //!< Owner identifier for per-owner flush tracking
         AsyncIoSandboxContext sandbox_ctx;  //!< The submitter's sandbox context
         AsyncIoNativeTask* after_abort;     //!< Owned, or nullptr
+        bool after_abort_on_complete;       //!< True if after_abort calls onComplete() when it is run
     };
 
     //! Timer info stored under lock
@@ -2139,11 +2151,6 @@ private:
 
     //! Delivers a deferred result and releases the references of @a dd
     DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);
-
-#ifdef DEBUG
-    //! Debug-only: counts an onComplete() call made by AbortThenDeliverTask in the current dispatcher
-    DLLLOCAL void dbgCountOnComplete();
-#endif
 
     //! Returns a deferred delivery of @a result (referenced; ownership transferred) to the receivers of @a pinfo
     DLLLOCAL DeferredDelivery makeDeferredDelivery(const std::string& key, PollInfo& pinfo, QoreHashNode* result);
