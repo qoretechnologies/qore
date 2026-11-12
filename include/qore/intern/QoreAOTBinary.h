@@ -47,6 +47,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <qore/QoreEncoding.h>
+#include <qore/QoreStringNode.h>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
 #include <qore/QoreParseOptions.h>

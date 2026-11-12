@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRTierPromotionDuringCallTest
+
+#! Regression test: a call that finds a function on the AST tier runs on the IR tier when another call promotes the function first
+/** With tiered execution, the call that promotes a function from the AST tier to the IR tier runs on the IR tier
+    itself, as the following calls do.  Whether a call promotes the function was decided by loading the function's
+    tier again after the call had loaded it on entry: when another thread promoted the function between the two loads,
+    as the concurrent first calls of a closure in several threads can (ReferenceReadParity.qtest, CI pipeline 64243 on
+    Alpine arm64), the second load found it promoted, and the call ran on the AST tier although nothing kept it there.
+    The call is now promotable if it found the function on the AST tier on entry.
+
+    The interleaving is run deterministically in one thread with the test hook \c QORE_IR_TEST_PROMOTE_IN_CALL, which
+    promotes the function in the call after the call's entry, where the other thread did; before the fix, every first
+    call of a closure ran on the AST tier with it.  The concurrent first calls of closures are run as well, without the
+    hook: before the fix, some of them ran on the AST tier in some runs, depending on the load of the machine, while
+    the deterministic case failed in every run.
+
+    Every script is run in every execution mode and on the IR tier (ExecModeHarness::run_ir_tier(), which fails a run
+    that ran any call on the AST tier), and must give the output of the AST interpreter.
+*/
+class IRTierPromotionDuringCallTest inherits QUnit::Test {
+    public {
+        #! the number of closures, each a function of its own, that the concurrent script calls
+        const Closures = 100;
+
+        #! the number of threads that run the first calls of each closure at the same time
+        const Threads = 16;
+
+        #! a script whose closures, each a function of its own, are lowered to IR at their first call
+        const PromotionScript = "%modern
+class C {
+    int m(int x) {
+        code c = int sub (int y) { return y * 3; };
+        return c(x);
+    }
+}
+int sub f(int x) {
+    code c = int sub (int y) { return y + 1; };
+    return c(x);
+}
+code top = int sub (int x) { return x - 1; };
+code nested = code sub (int x) { return int sub (int y) { return x * y; }; };
+for (int i = 0; i < 2; ++i) {
+    printf(\"round %d: f %d method %d top %d nested %d\\n\", i, f(i), new C().m(i), top(i), nested(i + 2)(3));
+}
+";
+
+        #! the output of PromotionScript
+        const PromotionOutput = "round 0: f 1 method 0 top -1 nested 6\nround 1: f 2 method 3 top 0 nested 9\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRTierPromotionDuringCallTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("a function promoted during a call that found it on the AST tier runs that call on the IR tier",
+            \testPromotionDuringCall());
+        addTestCase("the concurrent first calls of closures in several threads run on the IR tier",
+            \testConcurrentFirstCalls());
+        set_return_value(main());
+    }
+
+    #! runs the promotion script with the hook that promotes a function in the call after the call's entry
+    testPromotionDuringCall() {
+        checkScript("promotion-during-call", PromotionScript, PromotionOutput, "QORE_IR_TEST_PROMOTE_IN_CALL=1");
+    }
+
+    #! runs the concurrent script, whose closures' first calls run in several threads at the same time
+    testConcurrentFirstCalls() {
+        checkScript("concurrent-first-calls", getConcurrentScript(), getConcurrentOutput());
+    }
+
+    #! runs a script in every execution mode and on the IR tier, and checks that every run gives the output expected
+    /** @param name the name of the script file
+        @param script the script
+        @param expected the output of the script
+        @param env environment variables to set for the runs, as \c NAME=value pairs separated by spaces
+    */
+    private checkScript(string name, string script, string expected, *string env) {
+        TmpDir tmp("qore-ir-tier-promotion-");
+        string path = tmp.path + DirSep + name + ".qr";
+        {
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            on_exit f.close();
+            f.write(script);
+        }
+        hash<string, string> wrong = {};
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                env ?? "", libqore_dir, libqore_dir, qore_bin, ir_tier ? "tiered" : mode, path);
+            # run_ir_tier() throws EXEC-MODE-IR-ERROR for a run that ran a call on the AST tier
+            string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
+            if (actual != expected) {
+                wrong{mode} = actual;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the concurrent script
+    /** Each closure is a function of its own, so that each one's first calls race to promote it; the threads that
+        call a closure are released at once and the script waits for them before the next closure
+    */
+    private static string getConcurrentScript() {
+        string script = "%modern\nlist<code> closures = (\n";
+        for (int i = 0; i < Closures; ++i) {
+            script += sprintf("    int sub (int x) { return x + %d; },\n", i);
+        }
+        script += sprintf(");
+our int total = 0;
+our Mutex m();
+for (int k = 0; k < closures.size(); ++k) {
+    Counter start(1);
+    Counter done();
+    code c = closures[k];
+    for (int t = 0; t < %d; ++t) {
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            start.waitForZero();
+            int v = c(1);
+            m.lock();
+            on_exit m.unlock();
+            total += v;
+        }();
+    }
+    start.dec();
+    done.waitForZero();
+}
+printf(\"total %%d\\n\", total);
+", Threads);
+        return script;
+    }
+
+    #! returns the output of the concurrent script: every thread adds 1 + k for closure k
+    private static string getConcurrentOutput() {
+        int total = Threads * (Closures + Closures * (Closures - 1) / 2);
+        return sprintf("total %d\n", total);
+    }
+}

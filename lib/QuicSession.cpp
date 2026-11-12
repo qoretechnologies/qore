@@ -49,6 +49,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/ql_debug.h"
 
 #include <unordered_set>
 #include <set>
@@ -3509,7 +3510,11 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     // Skip backpressure for FIN-only submissions (no data to append) — rejecting
     // the FIN when the buffer is transiently above the threshold would leave the
     // stream open forever if the caller has no retry loop for the FIN.
-    if (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0)) {
+    // a stream with its own limit (setStreamSendLimit()) refuses data that would take the staged data over it
+    bool over_limit = sbd.send_limit
+        ? (data && len > 0 && !sbd.data.empty() && sbd.data.size() + len > sbd.send_limit)
+        : (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0));
+    if (over_limit) {
         ASYNC_IO_TRACE("QuicSession::sendStreamData BACKPRESSURE session=%lld stream_id=%lld len=%zu pending=%zu sent_bufs=%zu\n",
             (long long)getSessionId(), (long long)stream_id, len,
             sbd.data.size(), sbd.sent_bufs.size());
@@ -3552,6 +3557,23 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 #ifdef DEBUG
     connect_response_hold_until_ = 0;
 #endif
+    return 0;
+}
+
+int QuicSession::setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    if (limit <= 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "invalid send limit %lld for stream %" PRId64 ": must be > 0",
+            (long long)limit, stream_id);
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end()) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "cannot set the send limit of stream %" PRId64 ": no streaming "
+            "response", stream_id);
+        return -1;
+    }
+    it->second.send_limit = (size_t)limit;
     return 0;
 }
 
@@ -6229,6 +6251,13 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     auto sit = session->streaming_body_data_.find(stream_id);
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
+#ifdef DEBUG
+        // tests hold the staged data back, as a client that grants no flow-control credit does
+        if (!sbd.eof && qore_dbg_quic_stream_data_held(session->getSessionId(), stream_id)) {
+            sbd.deferred = true;
+            return NGHTTP3_ERR_WOULDBLOCK;
+        }
+#endif
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
                 // Move staging data into sent_bufs for stable pointer lifetime.

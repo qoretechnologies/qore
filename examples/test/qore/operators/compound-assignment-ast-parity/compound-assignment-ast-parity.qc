@@ -27,7 +27,8 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         const OperatorFamilies = (
             ("+=",),
             ("-=",),
-            ("*=", "/="),
+            ("*=",),
+            ("/=",),
             ("%=", "|="),
             ("&=", "^="),
             ("<<=", ">>="),

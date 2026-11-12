@@ -80,6 +80,7 @@ std::atomic<bool> qore_initialized = {false};
 
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
+std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag
 std::atomic<bool> qore_exiting = {false};
@@ -385,6 +386,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 #endif
 
     // set initialized flag for external modules
+    qore_types_deleted.store(false, std::memory_order_relaxed);
     qore_initialized.store(true, std::memory_order_relaxed);
 }
 
@@ -502,8 +504,24 @@ void qore_cleanup() {
     staticSystemNamespace = nullptr;
 #endif
 
+    // Module-owned Qore state has been released when the modules were deleted above (see QoreModuleInfo::ns and
+    // QoreNamespace::purge()); a module namespace with static storage duration that was not registered still holds
+    // its values, which its C++ static destructor releases after the types are freed (or never, if the process ends
+    // with _exit()).  Debug builds count them; QORE_TEARDOWN_REPORT names them on stderr.
+#ifdef DEBUG
+    {
+        bool report = q_env_is_set("QORE_TEARDOWN_REPORT");
+        unsigned late = qore_count_late_module_namespaces(report);
+        if (report) {
+            fprintf(stderr, "[TEARDOWN] module namespaces released after qore_cleanup(): %u\n", late);
+        }
+    }
+#endif
+
     // delete default type values
     delete_qore_types();
+    // Qore values released from here on are released after their types (see qore_ns_private::~qore_ns_private())
+    qore_types_deleted.store(true, std::memory_order_release);
 
     // delete threading infrastructure
     delete_qore_threads();

@@ -191,7 +191,10 @@ public:
 
     //! creates the object and sets the parse options
     /**
-        @param parse_options the parse options mask for the QoreProgram object
+        @param parse_options the parse options mask for the QoreProgram object; it must not have %modern
+        (\c PO_MODERN) with a compatibility option that %modern does not allow (ex: \c PO_BROKEN_RANGE): this
+        constructor has no exception sink to refuse them; QoreProgramHelper refuses them with an \c OPTION-ERROR
+        exception (since %Qore 3.0)
     */
     DLLEXPORT QoreProgram(const QoreParseOptions& parse_options);
 
@@ -200,7 +203,8 @@ public:
         Kept exported for binary module compatibility with modules built before
         QoreParseOptions replaced raw int64 parse-option bitfields.
 
-        @param parse_options the legacy int64 parse options mask for the QoreProgram object
+        @param parse_options the legacy int64 parse options mask for the QoreProgram object; see
+        QoreProgram(const QoreParseOptions&) for the options it must not have together
     */
     DLLEXPORT QoreProgram(int64 parse_options);
 

@@ -115,6 +115,8 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <set>
 
 namespace {
 class ParseCommitRuntimeInitFlagHelper {
@@ -339,7 +341,34 @@ void GVEntryBase::clear() {
     }
 }
 
+#ifdef DEBUG
+namespace {
+//! the namespaces created with QoreNamespace(const char*) that exist; see qore_count_late_module_namespaces()
+/** The registry is never destroyed: the C++ static destructors of module namespaces can run after those of this
+    library
+*/
+struct NamedNamespaceRegistry {
+    std::mutex m;
+    std::set<const QoreNamespace*> set;
+};
+
+NamedNamespaceRegistry& named_ns_registry() {
+    static NamedNamespaceRegistry* reg = new NamedNamespaceRegistry;
+    return *reg;
+}
+}
+#endif
+
 QoreNamespace::QoreNamespace(const char* n) : priv(new qore_ns_private(this, n)) {
+#ifdef DEBUG
+    try {
+        NamedNamespaceRegistry& reg = named_ns_registry();
+        std::lock_guard<std::mutex> lock(reg.m);
+        reg.set.insert(this);
+    } catch (...) {
+        // the namespace is only left out of the debug count
+    }
+#endif
 }
 
 QoreNamespace::QoreNamespace(const QoreNamespace& old, const QoreParseOptions& po) : priv(new qore_ns_private(*old.priv, po, this)) {
@@ -352,7 +381,45 @@ QoreNamespace::QoreNamespace(qore_ns_private* p) : priv(p) {
 }
 
 QoreNamespace::~QoreNamespace() {
+#ifdef DEBUG
+    try {
+        NamedNamespaceRegistry& reg = named_ns_registry();
+        std::lock_guard<std::mutex> lock(reg.m);
+        reg.set.erase(this);
+    } catch (...) {
+        // locking failed; a destructor cannot throw, and the registry only serves the debug count
+        assert(false);
+    }
+#endif
     delete priv;
+}
+
+unsigned qore_count_late_module_namespaces(bool report) {
+    unsigned count = 0;
+#ifdef DEBUG
+    NamedNamespaceRegistry& reg = named_ns_registry();
+    std::unique_lock<std::mutex> lock(reg.m, std::try_to_lock);
+    if (!lock) {
+        // qore_cleanup() runs in the last thread; another thread holding the lock now is a bug
+        assert(false);
+        return count;
+    }
+    for (const QoreNamespace* ns : reg.set) {
+        const qore_ns_private* p = qore_ns_private::get(*ns);
+        // an attached namespace is released with its parent, and a registered one when its module is deleted
+        if (p->parent || p->root || p->module_owned || p->isReleased()) {
+            continue;
+        }
+        ++count;
+        if (report) {
+            fprintf(stderr, "[TEARDOWN] namespace '%s' is not registered with QoreModuleInfo::ns; its C++ static "
+                "destructor releases it after qore_cleanup()\n", p->path.c_str());
+        }
+    }
+#else
+    (void)report;
+#endif
+    return count;
 }
 
 QoreProgram* QoreNamespace::getProgram() const {
@@ -516,6 +583,9 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
 }
 
 qore_ns_private::~qore_ns_private() {
+    // the namespace of a module is purged when the module is deleted, before the types are freed; one destroyed
+    // afterwards with content (by its C++ static destructor) would release Qore values after their types
+    assert(!module_owned || !qore_types_deleted.load(std::memory_order_acquire) || isReleased());
     purge();
 
     // Clean up typedef entries
@@ -948,6 +1018,42 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
     priv->clearConstants(**l);
     priv->clearData(xsink);
     priv->deleteData(xsink);
+}
+
+void qore_ns_set_module_owned(QoreNamespace& ns) {
+    qore_ns_private::get(ns)->module_owned = true;
+}
+
+void QoreNamespace::purge(ExceptionSink* xsink) {
+    // a namespace in a tree (a subnamespace or a root namespace) is indexed by its root, whose indexes would refer to
+    // what is released here; only an unattached namespace, such as a module's namespace, can be purged
+    if (priv->parent || priv->root) {
+        assert(false);
+        if (xsink) {
+            xsink->raiseException("NAMESPACE-PURGE-ERROR", "cannot purge namespace '%s': it is attached to a "
+                "namespace tree; only an unattached namespace can be purged", priv->path.c_str());
+        }
+        return;
+    }
+    priv->purgeAll(xsink);
+}
+
+void qore_ns_private::purgeAll(ExceptionSink* xsink) {
+    {
+        // the values of the constants are released when the list goes out of scope, while the classes still exist
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+        clearConstants(**l);
+        clearData(xsink);
+        deleteData(xsink);
+    }
+    // the classes, hashdecls, enums and subnamespaces
+    purge();
+    for (auto& i : typedefMap) {
+        delete i.second;
+    }
+    typedefMap.clear();
+    class_handler = nullptr;
+    assert(isReleased());
 }
 
 QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {

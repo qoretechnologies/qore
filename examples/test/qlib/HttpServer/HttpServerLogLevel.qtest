@@ -72,6 +72,17 @@ class QuickHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a handler whose first request makes the connection persistent: the later requests of the connection are queued to
+#! the persistent session
+class PersistentHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (!isPersistent()) {
+            setPersistent(True);
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
 class HttpServerLogLevelTest inherits QUnit::Test {
     constructor() : Test("HttpServerLogLevelTest", "1.0", \ARGV) {
         addTestCase("messages at an enabled level are logged", \testEnabled());
@@ -81,6 +92,8 @@ class HttpServerLogLevelTest inherits QUnit::Test {
             \testListenerWithoutLogger());
         addTestCase("a server without a logger that reimplements log() gets the listener's messages",
             \testServerReimplementsLog());
+        addTestCase("a change of the log level applies from the next request of a persistent session",
+            \testPersistentLevelChange());
         set_return_value(main());
     }
 
@@ -149,6 +162,41 @@ class HttpServerLogLevelTest inherits QUnit::Test {
     #! a server without a logger can reimplement log(): it gets every message of the listener
     testServerReimplementsLog() {
         list<string> messages = runLoggingServer();
+        assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
+    }
+
+    testPersistentLevelChange() {
+        Logger logger("log-level-test", LoggerLevel::getLevelError());
+        CaptureAppender appender();
+        logger.addAppender(appender);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        PersistentHandler handler();
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        # three requests on one connection; the first makes it persistent, the level is raised after it is answered
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+        for (int i = 0; i < 3; ++i) {
+            if (i == 1) {
+                assertEq(0, elements appender.take(), "nothing is logged at the ERROR level");
+                logger.setLevel(LoggerLevel::getLevelInfo());
+            }
+            s.send(sprintf("GET /x%d HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", i));
+            hash<auto> hdr = s.readHTTPHeader(10s);
+            assertEq(200, hdr.status_code);
+            assertEq("ok", s.recv(int(hdr."content-length"), 10s));
+        }
+        list<string> messages = appender.take();
+        # each request of the persistent session decides for itself
+        assertEq(2, count(messages, ": GET /x[12] HTTP/1\\.1"), "the request lines: " + messages.join("\n"));
         assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
     }
 

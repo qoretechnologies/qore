@@ -139,6 +139,10 @@ find . -name "*.o" -delete 2>/dev/null || true
     if [ -x "${QORE_SRC_DIR}/build/qore" ]; then
         echo
         echo "[built-qore-version]"
-        "${QORE_SRC_DIR}/build/qore" -V 2>&1 || true
+        # the built qore with the built libqore, as the tests run it: the image's LD_LIBRARY_PATH names the library
+        # directory of the image's Qore installation, which is searched before the build's run path and holds an older
+        # libqore
+        LD_LIBRARY_PATH="${QORE_SRC_DIR}/build${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+            "${QORE_SRC_DIR}/build/qore" -V 2>&1 || true
     fi
 } > "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info"

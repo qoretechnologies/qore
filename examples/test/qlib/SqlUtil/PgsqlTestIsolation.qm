@@ -171,11 +171,13 @@ public class PgsqlRunSchema {
         The run has one schema; a second call for the same database returns it, and a call for another database
         creates it there too.
 
-        @param connstr the datasource string of the test's database; nothing is done when it is not set or not for
-        a PostgreSQL database
+        @param connstr the datasource string of the test's database; nothing is done when it is not set, not for
+        a PostgreSQL database, or when the module of its driver cannot be loaded (it is not installed, or it was
+        built for another module API), as the test then finds that it cannot connect, and reports or skips it
         @param suite the name of the test, used in the name of the schema
 
-        @return the name of the run's schema, or @ref nothing if the connection is not a PostgreSQL connection
+        @return the name of the run's schema, or @ref nothing if the connection is not a PostgreSQL connection or
+        the module of its driver cannot be loaded
     */
     static *string setup(*string connstr, string suite) {
         if (!connstr) {
@@ -193,7 +195,17 @@ public class PgsqlRunSchema {
         }
 
         # the connection that creates and drops the schema keeps the database's search_path
-        Datasource ds(connstr);
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module
+            # API): nothing is set up; the test finds it so when it connects, and reports or skips it
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                return;
+            }
+            rethrow;
+        }
         ds.open();
         PgsqlRunSchema::dropLeftovers(ds);
 

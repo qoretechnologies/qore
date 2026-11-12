@@ -31,6 +31,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test re-serialization of parsed messages", \testParsedRoundTrip(), NOTHING);
         addTestCase("Test read receipt header parsing", \testReadReceipt(), NOTHING);
         addTestCase("Test character encoding of serialized messages", \testEncoding(), NOTHING);
+        addTestCase("Test names of unnamed attachments", \testUnnamedAttachmentNames(), NOTHING);
 
         set_return_value(main());
     }
@@ -412,6 +413,25 @@ lorem ipsum\r
             assertTrue(recipients.contains("another@example.com"), "getRecipients() contains second TO address");
             assertTrue(recipients.contains("cc@example.com"), "getRecipients() contains CC address");
         }
+    }
+
+    # an attachment without a filename is named after its index in the list of parts that holds it, also in a nested
+    # multipart part (qore#5690: the index is passed to the code that names it, as $# is unset in a called method)
+    testUnnamedAttachmentNames() {
+        string msg = "From: a@example.com\r\nTo: b@example.com\r\nSubject: t\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: multipart/mixed; boundary=\"OUT\"\r\n\r\n"
+            "--OUT\r\nContent-Type: text/plain\r\n\r\nbody\r\n"
+            "--OUT\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment\r\n\r\nfirst\r\n"
+            "--OUT\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment\r\n\r\nsecond\r\n"
+            "--OUT\r\nContent-Type: multipart/mixed; boundary=\"IN\"\r\n\r\n"
+            "--IN\r\nContent-Type: text/plain\r\n\r\ninner body\r\n"
+            "--IN\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment\r\n\r\nthird\r\n"
+            "--IN--\r\n"
+            "--OUT--\r\n";
+        Message parsed(msg);
+        list<auto> names = map ($1.getName(), $1.getData().toString()), parsed.getAttachments();
+        assertEq((("unnamed-attachment-1", "first"), ("unnamed-attachment-2", "second"),
+            ("unnamed-attachment-1", "third")), names);
     }
 
     # Test comprehensive attachment handling
