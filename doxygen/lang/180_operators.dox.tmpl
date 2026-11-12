@@ -1430,6 +1430,28 @@ foreach string key in (keys hash)
     |@ref int_type "int"|Gives the result of adding its arguments
     |@ref hash_type "hash"|Gives the result of concatenating/merging its arguments. Any common keys will be overwritten by the values in the second hash (\a expression2)
 
+    @par Lists
+    A list that \c + gives keeps the type of a typed list where it can:
+    - a value added at either end of a list gives a list of the common type of the list's element type and the type
+      of the value (ex: \c list&lt;int&gt; for <tt>l + 1</tt> and for <tt>1 + l</tt>, if \c l is a
+      \c list&lt;int&gt;; \c list&lt;*int&gt; for a \c list&lt;*int&gt;), or \c list&lt;auto&gt; if they have none;
+      an empty \c list&lt;auto&gt; takes the type of the value, and a plain list (with no element type) gives a
+      \c list&lt;auto&gt;
+    - two lists give a list of the common type of their element types, or \c list&lt;auto&gt; if they have none
+      (also for a plain list and a typed list); two plain lists give a plain list, and an empty \c list&lt;auto&gt; on
+      the left takes the type of the list on the right
+    @par
+    As these types are those of the values at runtime, the result has a type at parse time only when it does not
+    depend on them: when a value of type \c int, \c float, \c number, \c string, \c bool or \c binary is added to a
+    plain list or to a list whose element type is \c int, \c float, \c number, \c string, \c bool, \c binary,
+    \c *bool or \c *binary.  Otherwise the result has no parse-time type, and an error in its use is raised at
+    runtime, in every execution mode:
+    @code{.py}
+list<softint> l = (1, 2);
+# raises RUNTIME-TYPE-ERROR when executed: the result is a list
+int x = l + 1;
+    @endcode
+
     This operator does not throw any exceptions.
 
     <hr>
