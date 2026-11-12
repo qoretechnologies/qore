@@ -1012,6 +1012,13 @@ struct IRScopeEntry {
     overwritten (see setValueSlot()) or the function's values are cleaned up.
     The value cannot have a destructor, so the longer life is not observable.
  */
+//! The flags of QoreIRFunction::interpreter_slot_owned_values: the slot owns its value
+#define QORE_IR_SLOT_OWNED 1
+//! The flags of QoreIRFunction::interpreter_slot_owned_values: a Return gives the value of the slot, which an exception
+//! that interrupts the return keeps until the locals of the frame are released, as the AST interpreter keeps the value
+//! of a return until the function ends (#5920)
+#define QORE_IR_SLOT_RETURN 2
+
 class IRCleanupSlots {
 public:
     //! clears all entries and resizes the per-slot counts to the value pool size
@@ -1183,8 +1190,21 @@ private:
     //! the slots that own their value, indexed by value id; null if none
     const std::vector<uint8_t>* slot_owned = nullptr;
 
+public:
+    //! Returns true if the slot is one whose value a Return gives (see QORE_IR_SLOT_RETURN)
+    bool isReturnSlot(uint32_t id) const {
+        return slot_owned && id < slot_owned->size() && ((*slot_owned)[id] & QORE_IR_SLOT_RETURN);
+    }
+
+    //! Returns the number of slots of the slot table, if any
+    size_t slotTableSize() const {
+        return slot_owned ? slot_owned->size() : 0;
+    }
+
+private:
+
     bool isSlotOwned(uint32_t id) const {
-        return slot_owned && id < slot_owned->size() && (*slot_owned)[id];
+        return slot_owned && id < slot_owned->size() && ((*slot_owned)[id] & QORE_IR_SLOT_OWNED);
     }
 
     void eraseEntry(uint32_t id) {
@@ -1256,6 +1276,19 @@ public:
         real_slots = real;
     }
 
+    //! Keeps a reference to the value of a return that an exception interrupted until releaseHeldReturns() (#5920)
+    DLLLOCAL void holdReturn(QoreValue v) {
+        held_returns.push_back(v);
+    }
+
+    //! Releases the values that holdReturn() keeps, after the locals of the frame
+    DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
+        for (QoreValue& v : held_returns) {
+            v.discard(xsink);
+        }
+        held_returns.clear();
+    }
+
     //! Releases the values of every slot, last slot first, and resets them
     DLLLOCAL void releaseAll(ExceptionSink* xsink) {
         for (size_t i = slots.size(); i; --i) {
@@ -1296,6 +1329,8 @@ private:
     std::vector<QoreValue> slots;
     //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
     std::vector<uint8_t> real_slots;
+    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
+    std::vector<QoreValue> held_returns;
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -3209,6 +3244,11 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         QoreIRValueRepresentation representation = func.value_facts[id].representation;
         slot_owned_values[id] = representation == QoreIRValueRepresentation::NativeInt
             || representation == QoreIRValueRepresentation::NativeFloat;
+    }
+    for (uint32_t id : return_value_slot_ids) {
+        if (id < slot_owned_values.size()) {
+            slot_owned_values[id] |= QORE_IR_SLOT_RETURN;
+        }
     }
     func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
@@ -8241,6 +8281,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
             }
             releaseActiveIteratorsFrom(iters, 0);
+            // the value of a return that an exception interrupted, after the locals of the frame (#5920)
+            cache.releaseHeldReturns(xsink);
         }
     } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
         instantiated_locals, pre_instantiated, active_iterators};
@@ -8994,6 +9036,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto unwindForException = [&func, &block, &ip, &values, &frame, &scope_stack, &releaseScopeTemps, &fireScopeExits,
             &dbgReportException, &dbgReportEnclosing, &dbgHandlerStatements, &dbgHandlerProgram, &dbgFunctionExit,
             xsink, cleanup_log]() QORE_IR_LAMBDA_NOINLINE {
+        // the value of a return that the exception interrupted is kept until the locals of the frame are released
+        // (SlotCacheCleanup), as the AST interpreter keeps the value of a return until the function ends; taken before
+        // the temps of any scope are released, which hold it (#5920)
+        for (size_t id = 0, e = std::min(frame.cleanup.slotTableSize(), values.size()); id < e; ++id) {
+            if (frame.cleanup.isReturnSlot(static_cast<uint32_t>(id)) && values[id].hasNode()) {
+                frame.locals_slot_cache.holdReturn(values[id].refSelf());
+            }
+        }
         dbgReportException();
         if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
             restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
