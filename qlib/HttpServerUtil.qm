@@ -196,7 +196,8 @@ module HttpServerUtil {
       @ref HttpServer::HttpServerManagedHeaderNames "HttpServerManagedHeaderNames";
       @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" now recognizes the header fields that it
       checks, sets, and removes in any case, so it no longer adds a second \c Connection, \c Date, or \c Server
-      field for a response with a field such as \c "date"
+      field for a response with a field such as \c "date"; its \c canonical_names argument skips the conversion for
+      headers whose names are already canonical
     - fixed listener lifecycle accounting for dedicated socket handlers so normally managed connections release their
       listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
       callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
@@ -1283,16 +1284,28 @@ public string sub http_get_charset_label(string encoding) {
 
 #! helper function for setting HTTP response headers
 /** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
-    case with http_canonicalize_reply_header_names() before they are checked
+    case with http_canonicalize_reply_header_names() before they are checked, unless \a canonical_names is
+    @ref True
 
     Unless \a rv already has a \c Connection header, a \c "Connection: close" header is set if either \a rv or
     \a cx has a true \c close key, and \c "Connection: Keep-Alive" otherwise; \c cx.close is set for requests that
     require the connection to be closed after the response (see @ref httpserverutil_request_context)
+
+    @param s the socket of the connection
+    @param cx the request context
+    @param rv the response, whose \c hdr key is set to the response headers
+    @param server_string the value of the \c Server header, if the response has none; if not given,
+    @ref HttpServerString is used
+    @param canonical_names @ref True if the names of the fields in @ref HttpServerManagedHeaderNames in the headers
+    of \a rv already have their canonical case, for example because they were returned by
+    http_canonicalize_reply_header_names(), so that they are not converted again; with a name in another case, the
+    field is not recognized, and a second field of the same name can be added
 */
-public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
+public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string,
+        bool canonical_names = False) {
     # the headers are set in an "auto!" local, since a caller's header hash may be narrowed (e.g. hash<string, int>
     # for {"X-Api-Version": 2}) and would reject the string headers added here
-    *hash<auto!> hdr = http_canonicalize_reply_header_names(rv.hdr);
+    *hash<auto!> hdr = canonical_names ? rv.hdr : http_canonicalize_reply_header_names(rv.hdr);
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!hdr.Connection) {
@@ -1355,8 +1368,9 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
     }
 
     # a caller's literal response may be narrowed too (e.g. hash<string, int> for {"code": 204}) and would reject the
-    # "hdr" key; the response hashdecls declare the key, and keep their type
-    if (rv instanceof hash<HttpHandlerResponseInfo> || rv instanceof hash<HttpResponseInfo>) {
+    # "hdr" key; the response hashdecls declare the key, and keep their type; the response of the HTTP server, the
+    # most frequent caller, is a hash<HttpResponseInfo>, so it is checked first
+    if (rv instanceof hash<HttpResponseInfo> || rv instanceof hash<HttpHandlerResponseInfo>) {
         rv.hdr = hdr;
     } else {
         *hash<auto!> response = rv;
@@ -2648,7 +2662,7 @@ public class AbstractStreamRequest {
         # for HTTP/2
         rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
         bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
-        http_set_reply_headers(s, cx, \rv);
+        http_set_reply_headers(s, cx, \rv, NOTHING, True);
 
         # issue #4109: do not start async I/O with a HEAD request
         if (!chunked || hdr.method == "HEAD") {
