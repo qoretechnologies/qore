@@ -88,6 +88,16 @@ class TestHandler inherits WebSocketHandler {
         call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
         return new TestConnection(self, events);
     }
+
+    #! Reports when the connection is set up: its messages are written straight to the stream from then on
+    /** Before that, a message sent is buffered and written once the setup is complete, so a pong of the frame state
+        could be written ahead of it
+    */
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        bool rv = WebSocketHandler::startImpl(lid, cx, hdr, sock);
+        events.push("started");
+        return rv;
+    }
 }
 
 #! Pushes the client's message about the start of an error close, so that a test can wait for it
@@ -176,6 +186,9 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
         }
         wsc.connect();
         assertTrue(wsc.isHttp3(), "the connection uses HTTP/3");
+        # the client's connect() returns when it gets the response to its CONNECT request, which the server sends
+        # before it sets up the connection
+        assertEq("started", handler.events.get(HangGuard), "the server set up the connection");
         # the server stages a message over the staged data's limit, which is held back from the transport
         wsc.send("big");
         assertEq("big", handler.events.get(HangGuard), "the server staged the large message");
