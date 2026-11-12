@@ -36829,6 +36829,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             }
             lvid.steps.push_back(std::move(sid));
         }
+        lvid.slice_ranges = pi->slice_ranges;
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);

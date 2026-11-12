@@ -15195,9 +15195,13 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    // a single key whose value is a list (a HashKey step) is a slice: each element is a key; in a list of keys (a
+    // HashKeySlice step) each value is one key, even if it is a list, as in the AST interpreter (LValueRemoveHelper::
+    // doRemove() converts each element of the evaluated list with QoreHashKeyHelper; qore#5736)
+    const bool single_slice = last_step.kind != LVPathStepKind::HashKeySlice;
     auto for_each_key = [&](auto&& cb) -> bool {
         for (const QoreValue& operand : last_step.slice_values) {
-            if (operand.getType() == NT_LIST) {
+            if (single_slice && operand.getType() == NT_LIST) {
                 ConstListIterator li(operand.get<const QoreListNode>());
                 while (li.next()) {
                     if (cb(li.getValue())) {
@@ -15300,7 +15304,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
 // Returns the aggregated removed-content collection for Remove, or
 // NOTHING for Delete.
 QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
-        const LVPathStep& last_step, LVUnaryOp unary_op,
+        const LVPathStep& last_step, const std::vector<bool>& slice_ranges, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
@@ -15313,11 +15317,21 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return negative_offsets_state != 0;
     };
 
-    // Helper: push an int operand OR iterate a list operand (range-produced)
-    // pushing its entries onto the caller-provided ind-collector.  Matches
-    // the AST path's treatment of range operators inside slice lists.
-    auto each_index = [&](const QoreValue& operand, auto&& cb) -> bool {
-        if (operand.getType() == NT_LIST) {
+    // Helper: gives the indexes that the selector \a i selects to \a cb: a range selects each index of its value,
+    // and any other selector of a list of selectors is one index, even if its value is a list (qore#5736), as in the
+    // AST interpreter (LValueRemoveHelper::doRemove()); a single index whose value is a list (a ListIndex step) is a
+    // slice: each element is an index
+    const bool single_slice = last_step.kind == LVPathStepKind::ListIndex;
+    // lowering and every AOT reader give one flag per selector (an image older than QORE_AOT_SLICE_RANGES_VERSION:
+    // each true); the check keeps a release build from reading past the flags if that were ever not so
+    assert(single_slice || slice_ranges.size() == last_step.slice_values.size());
+    if (!single_slice && slice_ranges.size() != last_step.slice_values.size()) {
+        xsink->raiseException("IR-EXEC-ERROR", "ListIndexSlice remove has %d selectors but %d range flags",
+            static_cast<int>(last_step.slice_values.size()), static_cast<int>(slice_ranges.size()));
+        return QoreValue();
+    }
+    auto each_index = [&](size_t i, const QoreValue& operand, auto&& cb) -> bool {
+        if (operand.getType() == NT_LIST && (single_slice || slice_ranges[i])) {
             ConstListIterator li(operand.get<const QoreListNode>());
             while (li.next()) {
                 if (cb(li.getValue().getAsBigInt(), true)) {
@@ -15342,8 +15356,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         // Reverse-sorted set of indexes to remove (matches AST path).
         std::set<int64_t, std::greater<int64_t>> iset;
         size_t iter_i = 0;
-        for (const QoreValue& operand : last_step.slice_values) {
-            if (each_index(operand, [&](int64_t ind, bool is_range) -> bool {
+        for (size_t sel_i = 0; sel_i < last_step.slice_values.size(); ++sel_i) {
+            const QoreValue& operand = last_step.slice_values[sel_i];
+            if (each_index(sel_i, operand, [&](int64_t ind, bool is_range) -> bool {
                 QoreValue p{};
                 bool push;
                 if (ind < 0 && negative_offsets()) {
@@ -15415,9 +15430,10 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
         size_t len = str->length();
         std::set<int64_t, std::greater<int64_t>> iset;
-        for (const QoreValue& operand : last_step.slice_values) {
+        for (size_t sel_i = 0; sel_i < last_step.slice_values.size(); ++sel_i) {
+            const QoreValue& operand = last_step.slice_values[sel_i];
             bool had_error = false;
-            if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
+            if (each_index(sel_i, operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (had_error) return true;
                 if (ind < 0 && negative_offsets()) {
                     ind += static_cast<int64_t>(len);
@@ -15468,8 +15484,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         }
         SimpleRefHolder<BinaryNode> v(new BinaryNode);
         std::set<int64_t, std::greater<int64_t>> iset;
-        for (const QoreValue& operand : last_step.slice_values) {
-            if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
+        for (size_t sel_i = 0; sel_i < last_step.slice_values.size(); ++sel_i) {
+            const QoreValue& operand = last_step.slice_values[sel_i];
+            if (each_index(sel_i, operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (ind < 0 && negative_offsets()) {
                     ind += static_cast<int64_t>(bin->size());
                 }
@@ -15741,7 +15758,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
-            } else if (last_is_list && !last_is_list_slice && ct != NT_NOTHING) {
+            } else if (last_is_list && ct != NT_NOTHING
+                    && !(last_is_list_slice && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY))) {
+                // a list-valued index selects a slice only of a list, a string or a binary object; any other value is
+                // removed itself, as with the AST and IR interpreters
                 // as the remove operator does: an element of a list, a character of a string or a byte of a
                 // binary object, and any other value is removed itself; res holds the value removed: it is the
                 // caller's result for "remove", and for "delete" it keeps the value alive until the destructor
@@ -15756,11 +15776,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             } else if (last_is_list_slice
                     && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                 res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                        inst->unary_op, xsink);
+                        inst->slice_ranges, inst->unary_op, xsink);
                 pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
-            } else if (last_is_list_range
-                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+            } else if (last_is_list_range) {
+                // a range on any value: the AST interpreter raises ILLEGAL-EXPRESSION for a value that is not a list,
+                // a string, a binary or a buffer, and removes nothing from a buffer (qore#5777)
                 res = executeLVListRangeSliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
                 pending_delete_finish = pending_delete_direct_list = true;

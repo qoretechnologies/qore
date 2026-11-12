@@ -16031,7 +16031,7 @@ load_local_done:
                                         && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                                     // a list of indexes, given in the code or by the value of the index expression
                                     res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                                            path_inst->unary_op, xsink);
+                                            path_inst->slice_ranges, path_inst->unary_op, xsink);
                                     pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListIndex && ct != NT_NOTHING) {
                                     // as the remove operator does: an element of a list, a character of a string
@@ -16045,8 +16045,10 @@ load_local_done:
                                         && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
-                                } else if (last_step.kind == LVPathStepKind::ListRangeSlice
-                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                } else if (last_step.kind == LVPathStepKind::ListRangeSlice) {
+                                    // a range on any value: the AST interpreter raises ILLEGAL-EXPRESSION for a value
+                                    // that is not a list, a string, a binary or a buffer, and removes nothing from a
+                                    // buffer (qore#5777)
                                     res = executeLVListRangeSliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
                                     pending_delete_finish = pending_delete_direct_list = true;

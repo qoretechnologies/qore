@@ -339,8 +339,10 @@ public:
     //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
     //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
     //! (LValueRemoveHelper::doRemove()); see tryEmitLValuePathOp()
+    //! (\a slice_ranges: the selectors of the path that are ranges, QoreIRLValuePathInstruction::slice_ranges)
     void emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
-        const std::vector<QoreIRValue>& dyn_vals, size_t selector_count, AssignmentMode mode,
+        const std::vector<bool>& slice_ranges, const std::vector<QoreIRValue>& dyn_vals, size_t selector_count,
+        AssignmentMode mode,
         const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
@@ -1043,8 +1045,10 @@ private:
         holds in a parameter: the new thread has no object context (issue #5723: <tt>background (o.x = 1)</tt> in a
         method of a class with an object member \c o raised "no object context for self member access")
     */
+    //! (\a slice_ranges: required with \a allow_slice; see QoreIRLValuePathInstruction::slice_ranges)
     bool extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
-            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false);
+            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false,
+            std::vector<bool>* slice_ranges = nullptr);
 
     //! Lowers a background expression to a helper function and the instruction starting the thread with it
     /** See QoreIRBackgroundInstruction.

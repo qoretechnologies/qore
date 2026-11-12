@@ -6411,6 +6411,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                         step.slice_operand_ids.push_back(
                                 QoreAOTBinaryReader::readU32(ptr));
                     }
+                    // which selectors of a list of selectors are ranges (qore#5736, QORE_AOT_SLICE_RANGES_VERSION); an
+                    // older step takes each as a range, as before
+                    if (step.kind == LVPathStepKind::ListIndexSlice) {
+                        pi->slice_ranges.clear();
+                        if (reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                            pi->slice_ranges.reserve(num_slice_ops);
+                            for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                                pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ptr) != 0);
+                            }
+                        } else {
+                            pi->slice_ranges.assign(num_slice_ops, true);
+                        }
+                    }
                 }
                 // Resolve ref_ptr from context locals/globals
                 if ((step.kind == LVPathStepKind::LocalVar
@@ -7576,6 +7589,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     for (uint32_t k = 0; k < num_slice_ops; ++k) {
                         step.slice_operand_ids.push_back(
                                 QoreAOTBinaryReader::readU32(ptr));
+                    }
+                    // which selectors of a list of selectors are ranges (qore#5736, QORE_AOT_SLICE_RANGES_VERSION); an
+                    // older step takes each as a range, as before
+                    if (step.kind == LVPathStepKind::ListIndexSlice) {
+                        pi->slice_ranges.clear();
+                        if (reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                            pi->slice_ranges.reserve(num_slice_ops);
+                            for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                                pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ptr) != 0);
+                            }
+                        } else {
+                            pi->slice_ranges.assign(num_slice_ops, true);
+                        }
                     }
                 }
                 // Resolve local vars from AOT locals

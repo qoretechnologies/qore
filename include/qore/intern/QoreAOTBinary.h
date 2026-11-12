@@ -373,6 +373,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
 //!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
 //!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
+//! v25: a ListIndexSlice step of an lvalue path (in a function record and in serialized IR) has, after its operand ids,
+//!      one byte per selector: 1 if the selector is a range (LVPathStep::slice_ranges).  A v9-v24 step has no such
+//!      bytes; each of its selectors is taken as a range, which selects every index of a list value, as before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -384,6 +387,8 @@ constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
 //! First format version with source locations of calls, members and default arguments (see v25 above).
 constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 25;
+//! First format version whose ListIndexSlice steps record which selectors are ranges (see v25 above).
+constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -2506,6 +2511,9 @@ struct AOTLVPathSlotId {
     int64_t pattern_options = 0;//!< PCRE2 options bitmask (regex only)
     uint8_t pattern_global = 0;//!< global (/g) flag (regex only)
     std::vector<AOTLVPathStepId> steps;
+    //! For a path ending with a ListIndexSlice step: its selectors that are ranges
+    //! (QoreIRLValuePathInstruction::slice_ranges), written after the step's operand ids
+    std::vector<bool> slice_ranges;
 };
 
 //! Complete slot identity set for a single compiled function
