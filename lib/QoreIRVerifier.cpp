@@ -2900,6 +2900,19 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     local_inst->is_ref = localMayHoldReference(local_inst->local,
                         creates_reference, body_local_keys);
                 }
+            } else if (inst->opcode == QoreIROpcode::DebugBlock) {
+                // the slots of the locals of the block that the debugger's release uses (#5921)
+                auto* db = dynamic_cast<QoreIRDebugStatementInstruction*>(inst.get());
+                if (db && db->block_locals) {
+                    QoreIRDebugBlockLocals& bl = *db->block_locals;
+                    bl.slots.assign(bl.locals.size(), UINT32_MAX);
+                    for (size_t i = 0; i < bl.locals.size(); ++i) {
+                        auto it = slot_map.find(bl.locals[i]);
+                        if (it != slot_map.end()) {
+                            bl.slots[i] = it->second;
+                        }
+                    }
+                }
             } else if (inst->opcode == QoreIROpcode::ScopeEnter) {
                 // the slots of the locals that an exception leaving the scope releases (#5867)
                 auto* se = static_cast<QoreIRScopeEnterInstruction*>(inst.get());

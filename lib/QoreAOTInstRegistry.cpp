@@ -2612,6 +2612,17 @@ static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
+    // from format version 27, the locals of the block of a DebugBlock, by name and slot (#5921)
+    if (ctx.inst->opcode == QoreIROpcode::DebugBlock) {
+        const QoreIRDebugBlockLocals* bl = dbg ? dbg->block_locals.get() : nullptr;
+        size_t count = bl ? bl->locals.size() : 0;
+        ctx.writer.writeU32(static_cast<uint32_t>(count));
+        for (size_t i = 0; i < count; ++i) {
+            const LocalVar* lv = bl->locals[i];
+            ctx.writer.writeStringRef(lv ? lv->getName() : "");
+            ctx.writer.writeU32(i < bl->slots.size() ? bl->slots[i] : UINT32_MAX);
+        }
+    }
     return true;
 }
 
@@ -2633,6 +2644,26 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
     if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
         inst->nest_depth = QoreAOTBinaryReader::readU16(ctx.ptr);
         inst->nest_flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+    }
+    // the locals of the block of a DebugBlock (see writeDebugStatement()); a local that the function does not have is
+    // not released
+    if (opcode == QoreIROpcode::DebugBlock && ctx.reader.getHeader().version >= QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION) {
+        uint32_t count = QoreAOTBinaryReader::readU32(ctx.ptr);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* lname = ctx.reader.readStringRef(ctx.ptr);
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+            LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+            if (!lv) {
+                lv = ctx.resolveLocal(lname);
+            }
+            if (lv) {
+                if (!inst->block_locals) {
+                    inst->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
+                }
+                inst->block_locals->locals.push_back(lv);
+                inst->block_locals->slots.push_back(slot_id);
+            }
+        }
     }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);

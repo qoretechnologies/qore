@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # The locals of a block that an exception leaves are released after its handlers and before the debugger's exception
-# events of the statements that contain the block (#5867); see debugger-block-locals-unwind.qtest
+# events of the statements that contain the block (#5867, #5921); see debugger-block-locals-unwind.qtest
 
 %modern
 %allow-debugger
@@ -24,7 +24,7 @@ class D inherits DebugProgram {
     onExit(ProgramControl pgm, int s, reference result, reference rs, reference rts) {}
 }
 const FirstLine = 35;
-const LastLine = 157;
+const LastLine = 278;
 our list<string> log = ();
 class T { private { string n; } constructor(string n) { self.n = n; } destructor() { log += "~" + n; } }
 our *D R;
@@ -155,7 +155,130 @@ auto sub n6() {
         return (t,);
     }
 }
-foreach string fn in (("a", "b", "c", "d", "e", "f", "g", "h", "i", "n2", "n3", "n4", "n5", "n6")) {
+# a block without handlers that an exception leaves through an inner block: its locals are released before the event
+# of the statement that contains it (#5921)
+sub k1() {
+    T o("k1o");
+    if (True) {
+        T a("k1a");
+        if (True) {
+            on_exit log += "x";
+            T b("k1b");
+            throw "K1";
+        }
+    }
+}
+# two nested blocks without handlers
+sub k2() {
+    T o("k2o");
+    if (True) {
+        T a("k2a");
+        if (True) {
+            T b("k2b");
+            if (True) {
+                on_exit log += "x";
+                throw "K2";
+            }
+        }
+    }
+}
+# a block without handlers whose own statement raises the exception, in a try block
+sub k3() {
+    try {
+        if (True) {
+            T a("k3a");
+            throw "K3";
+        }
+    } catch () {
+        log += "c";
+    }
+    T z("k3z");
+}
+# a block without handlers that continues after an exception is caught in it, and that an exception leaves later
+sub k4() {
+    if (True) {
+        T a("k4a");
+        try {
+            if (True) {
+                on_exit log += "x";
+                throw "K4A";
+            }
+        } catch () {
+            log += "c";
+        }
+        T b("k4b");
+        throw "K4B";
+    }
+}
+# a block without handlers in a loop: each iteration's locals
+sub k5() {
+    foreach int i in (1, 2) {
+        T a("k5a" + i);
+        if (i == 2) {
+            if (True) {
+                on_exit log += "x";
+                throw "K5";
+            }
+        }
+    }
+}
+# a return of a local of a block without handlers that a handler's exception interrupts: the value is kept until the
+# function ends, however the local reaches it
+T sub m1() {
+    if (True) {
+        T t("m1");
+        T u("m1u");
+        if (True) {
+            on_exit { log += "x"; throw "M1"; }
+            return t;
+        }
+    }
+}
+auto sub m2() {
+    if (True) {
+        T t("m2");
+        code c = auto sub () { return t; };
+        if (True) {
+            on_exit { log += "x"; throw "M2"; }
+            return c();
+        }
+    }
+}
+auto sub m3() {
+    if (True) {
+        list l = (new T("m3"),);
+        if (True) {
+            on_exit { log += "x"; throw "M3"; }
+            return l[0];
+        }
+    }
+}
+auto sub m4() {
+    if (True) {
+        T t("m4");
+        reference r = \t;
+        if (True) {
+            on_exit { log += "x"; throw "M4"; }
+            return r;
+        }
+    }
+}
+# two blocks without handlers around the interrupted return
+T sub m5() {
+    if (True) {
+        T t("m5");
+        if (True) {
+            T u("m5u");
+            if (True) {
+                on_exit { log += "x"; throw "M5"; }
+                return t;
+            }
+        }
+    }
+}
+foreach string fn in (("a", "b", "c", "d", "e", "f", "g", "h", "i", "n2", "n3", "n4", "n5", "n6", "k1", "k2", "k3",
+        "k4", "k5", "m1", "m2", "m3",
+        "m4", "m5")) {
     log = ();
     try { call_function(fn); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
     printf("%s: %y\n", fn, log);

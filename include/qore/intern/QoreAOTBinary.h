@@ -358,8 +358,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v26: a ScopeEnter instruction ends with the locals of its block that an exception leaving the scope releases
 //!      (QoreIRScopeEnterInstruction::locals: u32 count + N x (name stringref + slot u32)), so that the debug IR
 //!      releases them before the debugger's exception events of the statements that contain the block (#5867).
+//! v27: a DebugBlock instruction of the debug IR ends with the locals of its block (QoreIRDebugStatementInstruction::
+//!      block_locals: u32 count + N x (name stringref + slot u32)), so that an exception that leaves a block without
+//!      an exception path of its own releases them before the debugger's exception event of the statement that
+//!      contains the block (#5921).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 26;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 27;
+//! First format version whose DebugBlock instructions record the locals of their block (see v27 above).
+constexpr uint16_t QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION = 27;
 //! First format version whose ScopeEnter instructions record the locals of their block (see v26 above).
 constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 26;
 //! First format version with source locations of calls, members and default arguments (see v25 above).

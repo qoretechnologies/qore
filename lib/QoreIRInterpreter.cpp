@@ -1473,6 +1473,9 @@ struct QoreIRDebugNestEntry {
     //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
     uint16_t depth = 0;
     uint8_t flags = 0;
+    //! the DebugBlock of the block in the statement that the frame entered last, whose locals an exception that leaves
+    //! the block releases before the statement's exception event (#5921)
+    const QoreIRDebugStatementInstruction* block = nullptr;
 };
 
 //! The statements that a frame is in, kept in the pooled frame while a debugger is attached (#5816)
@@ -1483,6 +1486,9 @@ struct QoreIRDebugNestEntry {
 */
 struct QoreIRDebugNest {
     std::vector<QoreIRDebugNestEntry> entries;
+    //! the function of the frame and its pre-instantiated locals, for the release of the locals of a block (#5921)
+    const QoreIRFunction* func = nullptr;
+    const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr;
     //! the index of the next statement to report for the current exception, or -1
     int chain = -1;
     //! the statement that ended last, which tells whether the block that it was in is a try block or a catch block
@@ -2052,9 +2058,10 @@ static bool qore_ir_scope_records_locals(const IRScopeEntry& scope) {
     to each until the frame's values are released.  Taken once, at the start of the unwind, as the temps of each scope
     that it leaves hold the values until the scope's temps are released.
 */
-static void qore_ir_hold_pending_returns(const IRScopeEntry& scope, std::vector<QoreValue>& held) {
-    const std::vector<uint8_t>& return_slots = scope.func->interpreter_return_protected_slots;
-    const std::vector<QoreValue>& values = scope.frame->values;
+template <typename Values>
+static void qore_ir_hold_pending_returns(const QoreIRFunction& func, const Values& values,
+        std::vector<QoreValue>& held) {
+    const std::vector<uint8_t>& return_slots = func.interpreter_return_protected_slots;
     for (size_t id = 0, e = std::min(return_slots.size(), values.size()); id < e; ++id) {
         if (return_slots[id] && values[id].hasNode()) {
             held.push_back(values[id].refSelf());
@@ -2068,15 +2075,15 @@ static void qore_ir_hold_pending_returns(const IRScopeEntry& scope, std::vector<
     frame removes from the stack when it ends (cleanupInstantiatedLocals()); a closure-bound local loses its value only
     if no closure holds it.  Called only on the unwind path, with the frame that the scope keeps.
 */
-static void qore_ir_release_unwound_scope_locals(const IRScopeEntry& scope, ExceptionSink* xsink) {
-    const QoreIRScopeEnterInstruction& enter = *scope.enter;
-    IRCallFrame& frame = *scope.frame;
-    for (size_t i = enter.locals.size(); i; --i) {
-        const LocalVar* lv = enter.locals[i - 1];
-        uint32_t slot = i - 1 < enter.local_slots.size() ? enter.local_slots[i - 1] : UINT32_MAX;
-        if (slot == UINT32_MAX) {
-            auto it = scope.func->local_var_slots.find(lv);
-            if (it != scope.func->local_var_slots.end()) {
+static void qore_ir_release_block_locals(const std::vector<LocalVar*>& locals, const std::vector<uint32_t>& slots,
+        IRCallFrame& frame, const QoreIRFunction* func, const std::unordered_set<const LocalVar*>* pre_instantiated,
+        ExceptionSink* xsink) {
+    for (size_t i = locals.size(); i; --i) {
+        const LocalVar* lv = locals[i - 1];
+        uint32_t slot = i - 1 < slots.size() ? slots[i - 1] : UINT32_MAX;
+        if (slot == UINT32_MAX && func) {
+            auto it = func->local_var_slots.find(lv);
+            if (it != func->local_var_slots.end()) {
                 slot = it->second;
             }
         }
@@ -2107,8 +2114,13 @@ static void qore_ir_release_unwound_scope_locals(const IRScopeEntry& scope, Exce
                 frame.locals_slot_cache.set(slot, QoreValue());
             }
         }
-        releaseFrameRuntimeLocal(lv, frame.instantiated_locals, scope.pre_instantiated, xsink);
+        releaseFrameRuntimeLocal(lv, frame.instantiated_locals, pre_instantiated, xsink);
     }
+}
+
+static void qore_ir_release_unwound_scope_locals(const IRScopeEntry& scope, ExceptionSink* xsink) {
+    qore_ir_release_block_locals(scope.enter->locals, scope.enter->local_slots, *scope.frame, scope.func,
+        scope.pre_instantiated, xsink);
 }
 
 static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals_ordered, ExceptionSink* xsink,
@@ -7121,6 +7133,23 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     e.scope_depth = scope_depth;
     e.depth = inst->nest_depth;
     e.flags = inst->nest_flags;
+    e.block = nullptr;
+}
+
+//! Records the block of a DebugBlock instruction, which has locals, on the statement that contains it (#5921)
+static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_block(QoreIRDebugFrameState& st,
+        const QoreIRDebugStatementInstruction* inst, const QoreIRFunction* func,
+        const std::unordered_set<const LocalVar*>* pre_instantiated) {
+    if (!st.nest_used) {
+        return;
+    }
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (n.entries.empty()) {
+        return;
+    }
+    n.entries.back().block = inst;
+    n.func = func;
+    n.pre_instantiated = pre_instantiated;
 }
 
 //! The end of a statement (QORE_IR_DEBUG_NEST_END): the frame is in the statement that contains it, which an exception
@@ -7213,6 +7242,17 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
         // the scopes opened in the statement are not closed yet
         if (scope_size > e.scope_depth) {
             break;
+        }
+        // the locals of the block in the statement that the exception left are released before the statement's
+        // event, as the AST interpreter releases the locals of a block when an exception leaves it (#5921); a block
+        // whose scope released them already (#5867), or that has an exception path of its own, has none left
+        if (n.entries[n.chain].block && n.func) {
+            const QoreIRDebugStatementInstruction* block = n.entries[n.chain].block;
+            n.entries[n.chain].block = nullptr;
+            IRCallFramePool& pool = TlFramePool::get();
+            assert(pool.top);
+            qore_ir_release_block_locals(block->block_locals->locals, block->block_locals->slots, *pool.frames[pool.top - 1],
+                n.func, n.pre_instantiated, xsink);
         }
         --n.chain;
         if (!e.stmt) {
@@ -8712,17 +8752,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // A debugger that dismisses the exception ends the function, which returns no value (see exitAfterUnwind()); the AST
     // interpreter continues after the statement (#5825).
     auto unwindForException = [&]() QORE_IR_LAMBDA_NOINLINE {
+        // the values of a return that the exception interrupted are held until the frame's values are released, taken
+        // before the temps of any scope or the locals of any block are released (#5867); with a debugger attached, the
+        // events of the statements that the exception leaves release the locals of the blocks without handlers in
+        // them (#5921)
+        std::vector<QoreValue> pending_returns;
+        bool hold_returns = debug_active;
+        for (size_t i = 0; !hold_returns && i < scope_stack.size(); ++i) {
+            hold_returns = qore_ir_scope_records_locals(scope_stack[i]);
+        }
+        if (hold_returns) {
+            qore_ir_hold_pending_returns(func, values, pending_returns);
+        }
         dbgReportException();
         dbgReportEnclosing();
-        // the values of a return that the exception interrupted are held until the frame's values are released, taken
-        // before the temps of any scope are released (#5867)
-        std::vector<QoreValue> pending_returns;
-        for (const IRScopeEntry& entry : scope_stack) {
-            if (qore_ir_scope_records_locals(entry)) {
-                qore_ir_hold_pending_returns(entry, pending_returns);
-                break;
-            }
-        }
         while (!scope_stack.empty()) {
             // the locals of a block without an exception path of its own are released after its handlers and before
             // the events of the statements that contain it, as the AST interpreter releases them (#5867)
@@ -14341,6 +14384,12 @@ load_local_done:
             }
             case QoreIROpcode::DebugBlock: {
                 if (debug_active && !(xsink && *xsink)) {
+                    // the block's locals, which an exception that leaves the block releases before the event of the
+                    // statement that contains it (#5921)
+                    if (auto* dbg_block_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst);
+                            dbg_block_inst && dbg_block_inst->block_locals) {
+                        qore_ir_dbg_nest_block(dbg_state, dbg_block_inst, &func, pre_instantiated);
+                    }
                     // the block of the instruction, or the block that starts at its location, as for the debug IR of
                     // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
