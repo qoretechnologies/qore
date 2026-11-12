@@ -160,9 +160,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     }
 
     #! Sets the callback invoked when the stream has ended
-    /** The async I/O controller calls it exactly once on a thread of its handler pool when the stream has ended
-        for any reason: a disconnect by the client, the end of a stream that the producer closed, a connection
-        error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback()).
+    /** The callback is called exactly once when the stream has ended for any reason: by the async I/O controller, on a
+        thread of its handler pool, for a disconnect by the client, the end of a stream that the producer closed, a
+        connection error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback());
+        or, for a client dropped because its data would exceed its bound, on the thread that queued the data, before
+        \c SSE-CLIENT-OVERFLOW is raised.
     */
     setCloseCallback(*code<nothing()> cb) {
         lockState("setCloseCallback");
@@ -483,14 +485,30 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                 # logging must not change the outcome
             }
         }
-        # the controller ends the operation and runs the close callback, which reports the end of the stream; the
-        # socket is closed even if the state lock cannot be taken, so that the client is dropped in any case
+        # the end of the stream is reported here, on the thread that queued the data, before the stream is aborted: the
+        # callback is taken first, so that the controller, which ends the operation once the socket is closed, finds
+        # none, and the client has been dropped and deregistered when the exception is raised (a callback run by the
+        # controller could still be running then)
+        *code<nothing()> end_cb;
+        try {
+            end_cb = takeCloseCallback();
+        } catch (hash<ExceptionInfo> ex) {
+            # the state lock could not be taken: the controller reports the end
+        }
+        # the socket is closed even if the state lock cannot be taken, so that the client is dropped in any case
         try {
             abort();
         } catch (hash<ExceptionInfo> ex) {
             try {
                 sock.close();
             } catch () {
+            }
+        }
+        if (end_cb) {
+            try {
+                end_cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow
             }
         }
         throw SseClientOverflowErr, msg;
