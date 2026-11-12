@@ -133,6 +133,25 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+//! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
+//! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
+//! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
+//! before it is consumed); excess and orphaned count reports that credit nothing
+struct QoreDbgStreamCreditStats {
+    //! bytes whose stream credit was deferred when they were received
+    std::atomic<int64_t> deferred{0};
+    //! bytes whose deferred stream credit was granted when they were consumed
+    std::atomic<int64_t> credited{0};
+    //! bytes whose deferred stream credit was settled when their stream or session ended before they were consumed
+    std::atomic<int64_t> settled{0};
+    //! bytes reported as consumed beyond the stream's deferred credit (credited when received, or reported twice)
+    std::atomic<int64_t> excess{0};
+    //! bytes reported as consumed after their session was gone
+    std::atomic<int64_t> orphaned{0};
+};
+DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
+DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference

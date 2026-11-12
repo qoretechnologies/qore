@@ -985,6 +985,10 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 
 QuicSession::~QuicSession() {
 #ifdef DEBUG
+    // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
+    for (auto& i : deferred_stream_credit_) {
+        qore_dbg_stream_credit_stats.settled.fetch_add(i.second, std::memory_order_relaxed);
+    }
     {
         std::lock_guard<std::mutex> g(quic_test_settings_m);
         quic_test_held_sessions.erase(this);
@@ -4039,6 +4043,40 @@ void QuicSession::setHeadersOnlyMode(bool v) {
     headers_only_mode_ = v;
 }
 
+void QuicSession::setStreamCreditOnConsume(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        it->second->credit_on_consume = true;
+    }
+}
+
+size_t QuicSession::creditConsumedStreamData(int64_t stream_id, size_t len) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto i = deferred_stream_credit_.find(stream_id);
+    size_t take = (i == deferred_stream_credit_.end()) ? 0 : std::min(len, i->second);
+#ifdef DEBUG
+    if (len > take) {
+        qore_dbg_stream_credit_stats.excess.fetch_add(len - take, std::memory_order_relaxed);
+    }
+#endif
+    if (!take) {
+        return 0;
+    }
+    if (!(i->second -= take)) {
+        deferred_stream_credit_.erase(i);
+    }
+#ifdef DEBUG
+    qore_dbg_stream_credit_stats.credited.fetch_add(take, std::memory_order_relaxed);
+#endif
+    // a stream that has closed takes no stream credit
+    if (conn_ && streams_.find(stream_id) != streams_.end()) {
+        ngtcp2_conn_extend_max_stream_offset(conn_, stream_id, static_cast<uint64_t>(take));
+        pending_write_.store(true, std::memory_order_release);
+    }
+    return take;
+}
+
 void QuicSession::setStreamStreaming(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
@@ -4397,7 +4435,10 @@ int QuicSession::resetStream(int64_t stream_id) {
 
 
 
-QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
+QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
     if (it == streams_.end()) {
@@ -4427,7 +4468,13 @@ QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
     // consumes data, not when it arrives. This naturally caps the buffer to the
     // initial flow control window (QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256KB)
     // and provides backpressure when the handler is slow.
-    if (conn_) {
+    if (conn_ && it->second->streaming && !is_server_) {
+        // a client streaming response was credited as it was received: the connection always, the stream unless
+        // its credit is deferred until the data is consumed (issue #5820), which is now
+        if (it->second->credit_on_consume && creditConsumedStreamData(stream_id, consumed) && credit_due) {
+            *credit_due = true;
+        }
+    } else if (conn_) {
         ngtcp2_conn_extend_max_stream_offset(conn_, stream_id,
                                               static_cast<uint64_t>(consumed));
         ngtcp2_conn_extend_max_offset(conn_, static_cast<uint64_t>(consumed));
@@ -4895,6 +4942,18 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
 
     bool peer_reset = (flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)
         && app_error_code != NGHTTP3_H3_NO_ERROR;
+
+    // a closed stream takes no more stream credit: the credit deferred until the data is consumed is settled
+    // (issue #5820); data consumed later is reported in vain
+    {
+        auto dit = session->deferred_stream_credit_.find(stream_id);
+        if (dit != session->deferred_stream_credit_.end()) {
+#ifdef DEBUG
+            qore_dbg_stream_credit_stats.settled.fetch_add(dit->second, std::memory_order_relaxed);
+#endif
+            session->deferred_stream_credit_.erase(dit);
+        }
+    }
 
     try {
         if (session->h3_conn_) {
@@ -5926,10 +5985,18 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             stream->body.insert(stream->body.end(), data, data + datalen);
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
-            // Extend flow control
-            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
-                                                  static_cast<uint64_t>(datalen));
+            // the connection credit is granted now; the stream credit when the application consumes the data, if a
+            // consume hook reports it (issue #5820), otherwise now
             ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            if (stream->credit_on_consume) {
+                session->deferred_stream_credit_[stream_id] += datalen;
+#ifdef DEBUG
+                qore_dbg_stream_credit_deferred(datalen);
+#endif
+            } else {
+                ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                      static_cast<uint64_t>(datalen));
+            }
             return 0;
         }
 

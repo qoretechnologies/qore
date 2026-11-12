@@ -42,6 +42,8 @@
 #include "qore/QoreString.h"
 
 #include <memory>
+#include "qore/intern/QoreConsumeHook.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include <mutex>
 
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
@@ -69,8 +71,12 @@ public:
     }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        // reports data that the channel's consumer will not take to the consume hook after the lock is released
+        QoreConsumeNotifier cn;
         std::lock_guard<std::mutex> lg(mtx);
         if (sse_state) {
+            // the events parsed from the data are taken from a Queue of their own, which reports the data of each
+            // event as it is taken (see installSseState())
             sse_state->execute(output, xsink);
             return;
         }
@@ -80,17 +86,32 @@ public:
             // via mtx, so no pre-swap dispatch can leak into the channel
             // after the install returns, and no post-swap dispatch can be
             // ordered before the residual drain.
+            // the messages decoded from the data are taken from a Queue of their own, which reports the data of
+            // each message as it is taken (see installFrameState())
             feedHashBodyLocked(output, frame_state.get());
             output.discard(xsink);
             return;
         }
         if (!channel->trySend(output)) {
-            // Backpressure: channel full — discard and log
+            // Backpressure: channel full — discard and log; the discarded data counts as consumed
+            if (consume_hook) {
+                cn.set(consume_hook, consume_hook->measure(output));
+            }
             output.discard(xsink);
             printd(5, "ChannelAction::execute(): channel full, discarding value\n");
         } else {
             notify();
         }
+    }
+
+    //! Sets the hook that grants the flow-control credit of the data that the channel's consumer takes
+    /** Installed by the client poll operation that registers the action for a stream (issue #5820); the channel
+        reports the values its consumer takes, and those dropped with it.
+    */
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        std::lock_guard<std::mutex> lg(mtx);
+        consume_hook = hook;
+        channel->setConsumeHook(std::move(hook));
     }
 
     DLLLOCAL bool isStreaming() const override { return true; }
@@ -201,6 +222,12 @@ public:
                 "cannot install frame state after SSE state has been installed");
             return;
         }
+        // the frame state reports the data from now on (issue #5820): with the messages made from it as they are
+        // taken from the queue (or at once without a queue); the data still in the channel is reported with the
+        // messages made from it, not when it is moved out of the channel below
+        if (consume_hook && fs->setConsumeHook(consume_hook) && channel) {
+            channel->setConsumeHook(nullptr);
+        }
         if (initial.getType() != NT_NOTHING) {
             feedHashBodyLocked(initial, fs.get());
             initial.discard(xsink);
@@ -275,6 +302,8 @@ private:
     AbstractAsyncAction* sse_state = nullptr;
     QoreEventNotifier* notifier = nullptr;
     QoreObject* notifier_obj = nullptr;
+    //! grants the flow-control credit of the data delivered through the channel; see setConsumeHook()
+    std::shared_ptr<QoreConsumeHook> consume_hook;
     bool completed = false;
     bool sse_install_eligible = false;
     bool byte_stream = false;
@@ -422,6 +451,14 @@ public:
     DLLLOCAL bool isStreaming() const override { return true; }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        // the body data that reaches this action is discarded (or handed over with the headers) at once, so it
+        // counts as consumed now (issue #5820)
+        if (consume_hook) {
+            size_t n = consume_hook->measure(output);
+            if (n) {
+                consume_hook->consumed(n);
+            }
+        }
         if (!done && output.getType() == NT_HASH
                 && output.get<QoreHashNode>()->getKeyValue("status_code").getType()) {
             done = true;
@@ -430,6 +467,11 @@ public:
             return;
         }
         output.discard(xsink);
+    }
+
+    //! Sets the hook that grants the flow-control credit of the data that the action receives
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        consume_hook = std::move(hook);
     }
 
     DLLLOCAL void executeError(const char* err, const char* desc,
@@ -469,6 +511,8 @@ private:
     QorePromise* promise;
     QoreEventNotifier* notifier;
     QoreObject* notifier_obj;
+    //! grants the flow-control credit of the data that the action receives; see setConsumeHook()
+    std::shared_ptr<QoreConsumeHook> consume_hook;
     bool done = false;
 };
 
@@ -529,16 +573,36 @@ public:
     //! Pushes NOTHING sentinel to the Queue (stream complete)
     DLLLOCAL void complete(ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        // the data of an event that the stream did not end makes no item
+        creditPendingLocked();
         if (queue) {
             queue->pushAndTakeRef(QoreValue());
             notify();
         }
     }
 
+    //! Has the stream credit of the data granted as the events made from it are taken from the queue (issue #5820)
+    /** @param stream_hook the hook of the stream; the events of the queue, and data that makes no event (or every
+        event without a queue), are reported to it
+
+        @return true: the action always reports the data
+    */
+    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        std::lock_guard<std::mutex> lg(mtx);
+        // the queue's hook serves every stream whose events it receives; without a queue, no event is kept, and the
+        // data is credited as it is parsed
+        if (queue) {
+            item_hook = queue->getItemConsumeHook();
+        }
+        stream_hook = std::move(hook);
+        return true;
+    }
+
     //! Pushes an error hash to the Queue
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        creditPendingLocked();
         if (queue) {
             ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
             err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
@@ -579,6 +643,44 @@ private:
     //! splits the stream into events: line endings are normalized and a leading byte order mark is dropped
     SseEventFramer framer;
     bool too_large = false; //!< true once an event exceeded MaxEventSize; the rest of the stream is discarded
+    //! reports the data that the events were made from, if the stream's credit is granted as they are taken
+    std::shared_ptr<QueueItemConsumeHook> item_hook;
+    //! the hook of the stream, which the data is reported to
+    std::shared_ptr<QoreConsumeHook> stream_hook;
+
+    //! Reports data that makes no event at once
+    DLLLOCAL void creditNow(size_t bytes) {
+        if (stream_hook && bytes) {
+            stream_hook->consumed(bytes);
+        }
+    }
+    //! the data of the event read so far, which no event has been made from yet
+    size_t pending_bytes = 0;
+    //! the part of pending_bytes reported to the stream hook as the data of an event in progress
+    size_t progress_bytes = 0;
+
+    //! Ends the event in progress for the stream hook: its data is reported with the event, or at once
+    DLLLOCAL void closeItemLocked() {
+        if (stream_hook && progress_bytes) {
+            stream_hook->closeItem();
+        }
+        progress_bytes = 0;
+    }
+
+    //! Reports the data of the event in progress that was not reported yet (it can exceed the stream's window)
+    DLLLOCAL void reportProgressLocked() {
+        if (stream_hook && pending_bytes > progress_bytes) {
+            stream_hook->progress(pending_bytes - progress_bytes);
+            progress_bytes = pending_bytes;
+        }
+    }
+
+    //! Reports the data of the event read so far at once; called with the lock held
+    DLLLOCAL void creditPendingLocked() {
+        closeItemLocked();
+        creditNow(pending_bytes);
+        pending_bytes = 0;
+    }
 
     //! Adds received stream data to the event read so far, and pushes each complete event to the queue
     /** @return true if an event was pushed
@@ -603,6 +705,12 @@ inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* noti
     }
 
     ReferenceHolder<SseAction> action(new SseAction(queue, notifier, notifier_obj), xsink);
+    // the action reports the data from now on (issue #5820): with the events made from it as they are taken from the
+    // queue (or at once without a queue); the data still in the channel is reported with the events made from it,
+    // not when it is moved out of the channel below
+    if (consume_hook && action->setConsumeHook(consume_hook) && channel) {
+        channel->setConsumeHook(nullptr);
+    }
     if (initial.getType() != NT_NOTHING) {
         action->execute(initial, xsink);
         if (*xsink) {
@@ -653,6 +761,8 @@ public:
     }
 
     //! Receives a body data chunk and feeds it into the frame state
+    /** The data of each message is reported as the message is taken from the queue (see setConsumeHook()).
+    */
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
         if (output.getType() == NT_HASH) {
             QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
@@ -706,6 +816,13 @@ public:
         if (frame_state && data && len) {
             frame_state->feedData(data, len);
         }
+    }
+
+    //! Has the flow-control credit of the data granted as the messages made from it are taken from the queue
+    /** @return false if the action has no frame state (after cleanup()): nothing reports the data then
+    */
+    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        return frame_state && frame_state->setConsumeHook(std::move(hook));
     }
 
 private:
