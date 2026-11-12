@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreEventNotifier.h"
@@ -343,6 +344,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     int total_drain_count = 0;
+    const int drain_limit = qore_http_client_drain_limit(MAX_DRAIN_ITERATIONS);
     QoreHashNode* last_poll_info = nullptr;
 
     while (true) {
@@ -492,9 +494,9 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 break;
             }
             had_output = true;
-            if (++total_drain_count > MAX_DRAIN_ITERATIONS) {
-                break;
-            }
+            // a response taken from the operation is always dispatched: each continuePoll() call yields one at most,
+            // and the loop stops calling it at the drain limit below (issue #5839)
+            ++total_drain_count;
             empty_read_count = 0;
 
             QoreHashNode* output = output_val->get<QoreHashNode>();
@@ -592,7 +594,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // there may be more completed streams — loop to fetch them.
         // If C++ returned poll_info (no more completed streams, did I/O), or we
         // got no output, we're done for this cycle.
-        if (!poll_info && had_output && total_drain_count < MAX_DRAIN_ITERATIONS) {
+        if (!poll_info && had_output && total_drain_count < drain_limit) {
             continue;
         }
         break;
@@ -612,6 +614,14 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
+    // the completed streams that the pass leaves, at the drain limit or taken from the session with the poll info
+    // that ended the pass, are dispatched by a pass that runs at once (issue #5839)
+    bool remaining;
+    {
+        std::shared_ptr<QuicSession> drain_session = inner_op->getSession();
+        remaining = drain_session && drain_session->hasCompletedStreams();
+    }
+
     bool dispatched;
     {
         AutoLocker al(stream_lock);
@@ -620,17 +630,17 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     if (dispatched) {
         setOpenState(H3State::WAIT_READ, "response-dispatched");
         if (last_poll_info) {
-            return last_poll_info;
+            return qore_http_client_finish_read_pass(last_poll_info, remaining, xsink);
         }
         // carry the QUIC timer deadline so ngtcp2's keep-alive still fires
         // while we wait for the next response (see h3_set_quic_poll_timeout)
-        return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
-            inner_op, xsink);
+        return qore_http_client_finish_read_pass(h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+            inner_op, xsink), remaining, xsink);
     }
 
     if (last_poll_info) {
         empty_read_count = 0;
-        return last_poll_info;
+        return qore_http_client_finish_read_pass(last_poll_info, remaining, xsink);
     }
 
     ++empty_read_count;
@@ -648,8 +658,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // QUIC timer deadline the I/O thread sleeps until a packet arrives, and a
     // peer that stays silent while computing a slow reply never sends one --
     // so the keep-alive PING is never emitted and the session idle-closes.
-    return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
-        inner_op, xsink);
+    return qore_http_client_finish_read_pass(h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+        inner_op, xsink), remaining, xsink);
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {

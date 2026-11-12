@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -681,9 +682,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // let the multiplex reader drain a fast response with no action; also do
     // not block the I/O thread, since it may need to run the submit exec.
     if (submission_lock.trylock() != 0) {
+        // the responses that an earlier pass left are dispatched by a pass that runs at once (issue #5839)
+        const bool remaining
+            = static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount() > 0;
         op->deref(xsink);
         setStateUnlessClosed(H2State::WAIT_READ, "submission-busy");
-        return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+        return qore_http_client_finish_read_pass(applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink),
+            remaining, xsink);
     }
     AutoLocker submission_al(submission_lock, true);
 
@@ -763,16 +768,34 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
+#ifdef DEBUG
+    // a test can hold the completed responses, which then accumulate in the operation (issue #5839)
+    if (QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire)) {
+        QoreHttpClientDrainDebug::get().recordHeld(
+            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount());
+        setStateUnlessClosed(H2State::WAIT_READ, "dbg-hold-outputs");
+        if (!poll_info) {
+            poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+        op->deref(xsink);
+        return applyIdleTimeout(poll_info, xsink);
+    }
+#endif
+
     // Drain completed responses
     int drain_count = 0;
+    const int drain_limit = qore_http_client_drain_limit(MAX_DRAIN_ITERATIONS);
     while (true) {
+        // a response is taken from the operation only when it can be dispatched: one taken past the limit would be
+        // lost (issue #5839)
+        if (drain_count >= drain_limit) {
+            break;
+        }
         ValueHolder output_val(op->getOutput(), xsink);
         if (output_val->isNullOrNothing()) {
             break;
         }
-        if (++drain_count > MAX_DRAIN_ITERATIONS) {
-            break;
-        }
+        ++drain_count;
         empty_read_count = 0;
 
         QoreHashNode* output = output_val->get<QoreHashNode>();
@@ -912,12 +935,17 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     // Check dispatched flag
+    // the responses left at the drain limit are dispatched by a pass that runs at once: no socket event may come for
+    // them (issue #5839)
+    const bool remaining = static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount() > 0;
+
     bool dispatched;
     {
         AutoLocker al(stream_lock);
         dispatched = response_dispatched;
     }
-    if (dispatched) {
+    // responses left in the operation are not an end of the connection (see goalReached() below)
+    if (dispatched || remaining) {
         setStateUnlessClosed(H2State::WAIT_READ, "response-dispatched");
         // Use C++ events when available — they include SOCK_POLLOUT if there
         // are pending sends (e.g., WINDOW_UPDATE after receiving data)
@@ -925,7 +953,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         op->deref(xsink);
-        return applyIdleTimeout(poll_info, xsink);
+        return qore_http_client_finish_read_pass(applyIdleTimeout(poll_info, xsink), remaining, xsink);
     }
 
     if (poll_info) {
@@ -933,7 +961,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // response output — reset the empty read counter
         empty_read_count = 0;
         op->deref(xsink);
-        return applyIdleTimeout(poll_info, xsink);
+        return qore_http_client_finish_read_pass(applyIdleTimeout(poll_info, xsink), remaining, xsink);
     }
 
     if (op->goalReached()) {
@@ -968,7 +996,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
     setStateUnlessClosed(H2State::WAIT_READ, "read-idle");
     op->deref(xsink);
-    return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+    return qore_http_client_finish_read_pass(applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink),
+        remaining, xsink);
 }
 
 int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {

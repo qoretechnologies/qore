@@ -1651,6 +1651,12 @@ public:
     DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
         std::vector<Http2ResponseHeaderEvent>& out);
 
+    //! Returns the number of completed responses that getOutput() has not returned yet
+    DLLLOCAL size_t completedResponseCount() const {
+        AutoLocker al(response_lock);
+        return completed_responses.size();
+    }
+
     //! Returns the next completed response, or NOTHING if none available
     DLLLOCAL virtual QoreValue getOutput() const override {
         AutoLocker al(response_lock);

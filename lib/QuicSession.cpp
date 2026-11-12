@@ -35,6 +35,7 @@
 #include <qore/QoreSSLPrivateKey.h>
 
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
@@ -4076,7 +4077,20 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
 }
 
 bool QuicSession::hasCompletedStreams() const {
-    return has_completed_streams_.load(std::memory_order_acquire);
+    bool rv = has_completed_streams_.load(std::memory_order_acquire);
+#ifdef DEBUG
+    // a test can hold the completed responses of clients, which then accumulate in the session (issue #5839)
+    if (rv && !is_server_ && QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire)) {
+        size_t queued;
+        {
+            std::lock_guard<std::recursive_mutex> lock(mtx_);
+            queued = completed_streams_.size();
+        }
+        QoreHttpClientDrainDebug::get().recordHeld(queued);
+        return false;
+    }
+#endif
+    return rv;
 }
 
 void QuicSession::setHeadersOnlyMode(bool v) {
