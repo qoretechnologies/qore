@@ -17438,6 +17438,202 @@ static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeC
     return make_unit_test_result(c, xsink);
 }
 
+//! issues #5917, #5933: self calls without a method, as the AOT runtime makes for calls that it dispatches by name
+/** The background operator holds the object of the starting code for a call of a normal method, which a call without
+    a method is unless its name resolves only to a static method (SelfFunctionCallNode::backgroundCallIsStatic()).
+    BGThreadParams asserted that only a copy() call has no method.  A qualified call without a method asserted that
+    it had one (SelfFunctionCallNode::evalImpl()); it now calls the method of the class that it names, which the class
+    of the object must be or inherit.
+*/
+static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm] () {
+        ExceptionSink xs;
+        // waits for the threads that the test starts
+        pgm->waitForTerminationAndDeref(&xs);
+        xs.clear();
+    });
+    // the code is parsed as at the top level, with no return type of running code: StatementBlock::parseCheckReturn()
+    // reads the return type of the running code (getReturnTypeInfo()), here hash for run_debug_unit_tests(), and not
+    // the one of the code being parsed (parse_get_return_type_info()), so the blocks of the methods were refused
+    // (issue #5940)
+    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
+    pgm->parse("%modern\n"
+        "class UtBgBase {\n"
+        "    public { static Queue q(); }\n"
+        "    m() { UtBgBase::q.push(\"UtBgBase::m\"); }\n"
+        "    static sm() { UtBgBase::q.push(\"UtBgBase::sm\"); }\n"
+        "}\n"
+        "class UtBgChild inherits UtBgBase {\n"
+        "    m() { UtBgBase::q.push(\"UtBgChild::m\"); }\n"
+        "}\n"
+        "class UtBgOther {\n"
+        "    m() {}\n"
+        "}\n"
+        "UtBgChild sub ut_make() { return new UtBgChild(); }\n"
+        "string sub ut_take() { return UtBgBase::q.get(10s); }\n",
+        "ut-self-call-without-method", &xsink, nullptr, 0);
+    saveReturnTypeInfo(old_return_type);
+    UT_ASSERT(c, !xsink, "the self call test program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        return;
+    }
+    const QoreClass* base = pgm->findClass("UtBgBase", &xsink);
+    const QoreClass* child = pgm->findClass("UtBgChild", &xsink);
+    const QoreClass* other = pgm->findClass("UtBgOther", &xsink);
+    UT_ASSERT(c, base && child && other && !xsink, "the classes of the self call test program are found");
+    if (!base || !child || !other || xsink) {
+        xsink.clear();
+        return;
+    }
+    ValueHolder obj_holder(pgm->callFunction("ut_make", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && obj_holder->getType() == NT_OBJECT, "the object of the self call test is made");
+    if (xsink || obj_holder->getType() != NT_OBJECT) {
+        xsink.clear();
+        return;
+    }
+    QoreObject* obj = obj_holder->get<QoreObject>();
+
+    // makes a self call without a method; a qualified name is resolved on the class of the call
+    auto make_call = [&xsink] (const char* name, const QoreClass* qc, bool is_copy = false) {
+        return ReferenceHolder<SelfFunctionCallNode>(new SelfFunctionCallNode(&loc_builtin, strdup(name), nullptr,
+            qc, qore_class_private::get(*qc), is_copy), &xsink);
+    };
+    // takes the record of the next call made by the test program
+    auto take = [&] () -> std::string {
+        ValueHolder v(pgm->callFunction("ut_take", nullptr, &xsink), &xsink);
+        if (xsink || v->getType() != NT_STRING) {
+            xsink.clear();
+            return std::string();
+        }
+        return v->get<const QoreStringNode>()->c_str();
+    };
+
+    // the calls that hold the object in a background thread
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("m", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of a normal method by name is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr),
+            "a call of a normal method by name is not static without an object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a call of a static method by name is static");
+        UT_ASSERT(c, n->backgroundCallIsStatic(nullptr), "a call of a static method by name is static without an "
+            "object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a qualified call of a static method by name is static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("no_such_method", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of an unknown method by name is not static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("copy", base, true);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a copy() call is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr), "a copy() call is not static without an object");
+    }
+
+    {
+        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+        UT_ASSERT(c, !xsink, "the self call test program is entered");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        ObjectSubstitutionHelper osh(obj, qore_class_private::get(*child));
+
+        // background calls without a method: virtual by name, qualified (not virtual), and static by name
+        struct {
+            const char* name;
+            const QoreClass* qc;
+            const char* expected;
+        } bg_calls[] = {
+            {"m", child, "UtBgChild::m"},
+            {"UtBgBase::m", base, "UtBgBase::m"},
+            {"sm", base, "UtBgBase::sm"},
+        };
+        for (auto& bc : bg_calls) {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call(bc.name, bc.qc);
+            ValueHolder tid(do_op_background(QoreValue(*n), &xsink), &xsink);
+            std::string desc = std::string("a background call of ") + bc.name + "() without a method";
+            UT_ASSERT(c, !xsink && tid->getType() == NT_INT, (desc + " starts a thread").c_str());
+            xsink.clear();
+            UT_ASSERT(c, take() == bc.expected, (desc + " calls " + bc.expected + "()").c_str());
+        }
+
+        // a qualified call without a method evaluated in the starting thread calls the method of the class that it
+        // names
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::m", base);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            UT_ASSERT(c, !xsink, "a qualified call without a method is evaluated");
+            xsink.clear();
+            UT_ASSERT(c, take() == "UtBgBase::m", "a qualified call without a method is not virtual");
+        }
+        // which the class of the object must be or inherit
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgOther::m", other);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            QoreValue err = xsink.isException() ? xsink.getExceptionErr() : QoreValue();
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "METHOD-DOES-NOT-EXIST"),
+                "a qualified call of a class that the object does not inherit raises METHOD-DOES-NOT-EXIST");
+            xsink.clear();
+        }
+    }
+}
+
+// the helpers of AOT code compiled before issue #5933 (JITRuntime.cpp), with the arguments that such code passes
+extern "C" uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! issue #5933: the background self-call helper of code compiled by an older qcc raises an exception
+/** The helper became qore_rt_background_self_call_aot_v2(), which takes a class reference before the name of the
+    method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
+    identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
+*/
+static void ut_old_background_self_call_helper(UnitTestCounters& c) {
+    auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
+        if (!xsink.isException()) {
+            return false;
+        }
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "AOT-RUNTIME-ERROR")
+            && desc.getType() == NT_STRING && strstr(desc.get<const QoreStringNode>()->c_str(), "'m'")
+            && strstr(desc.get<const QoreStringNode>()->c_str(), "recompile the program");
+    };
+    {
+        ExceptionSink xsink;
+        uint64_t args[1] = {0};
+        qore_rt_background_self_call_aot("m", args, 1, &xsink);
+        UT_ASSERT(c, is_rebuild_error(xsink), "the old background self-call helper raises AOT-RUNTIME-ERROR");
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        bool thrown = false;
+        try {
+            qore_rt_background_self_call_aot_throwing("m", nullptr, 0, &xsink);
+        } catch (...) {
+            thrown = true;
+        }
+        UT_ASSERT(c, thrown && is_rebuild_error(xsink),
+            "the old throwing background self-call helper raises AOT-RUNTIME-ERROR and unwinds");
+        xsink.clear();
+    }
+}
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -17453,6 +17649,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_self_call_without_method(c, rc.getProgram());
+    ut_old_background_self_call_helper(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
 #endif

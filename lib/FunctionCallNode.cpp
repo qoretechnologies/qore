@@ -468,7 +468,11 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
-    if (tmp_args) {
+    // issue #5917: a copy() call (which takes no arguments; see QoreDotEvalOperatorNode::parseInitImpl()) is
+    // dispatched by qore_class_private::evalMethod() below to the copy constructor of the class, also when the call is
+    // the background copy of a call with pre-evaluated arguments: its variant is a copy variant, which cannot be called
+    // as a normal method
+    if (tmp_args && strcmp(c_str, "copy")) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
@@ -870,17 +874,22 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
+    if (is_abstract) {
+        // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
+        // qualified name) on the class of the object, which implements it; exec() sets the call site
+        return exec(self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, xsink);
+    }
+
+    if (!method) {
+        // issue #5933: a qualified call that the AOT runtime dispatches by name
+        return evalUnresolvedQualified(self, class_ctx ? class_ctx : runtime_cls, rc, xsink);
+    }
+
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
 
     // the explicit type arguments of the call (qore#5818)
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
-    if (is_abstract) {
-        return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
-            class_ctx ? class_ctx : runtime_cls, rc, xsink, explicit_inst);
-    }
-
-    assert(method);
 
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
@@ -888,6 +897,68 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             nullptr, nullptr, explicit_inst);
     }
     return qore_method_private::eval(*method, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+SelfFunctionCallNode::SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
+        const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
+        AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n), class_ctx(class_ctx), is_copy(false),
+        is_abstract(m && qore_method_private::get(*m)->isAbstract()) {
+}
+
+QoreValue SelfFunctionCallNode::evalUnresolvedQualified(QoreObject* self, const qore_class_private* ctx,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the call is non-virtual: it calls the method of the class that it names (qc; see the deferred self calls in
+    // QoreAOTRuntime.cpp), or of a class that the named class inherits
+    const char* name = ns.getIdentifier();
+    bool priv;
+    if (!qc || !self->getClass()->getClass(*qc, priv)) {
+        xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
+            "not inherit the class of the call", ns.ostr, self->getClassName());
+        return QoreValue();
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    const QoreMethod* m = qcp->getMethodForEval(name, self->getProgram(), ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (!m) {
+        // raises the exception for a method that does not exist, or calls a pseudo-method
+        return qcp->evalMethod(self, name, args, ctx, rc, xsink, explicit_inst);
+    }
+    if (qore_method_private::get(*m)->isAbstract()) {
+        // exec() sets the call site
+        return exec(self, name, ctx, xsink);
+    }
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgs(*m, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr, nullptr,
+            nullptr, explicit_inst);
+    }
+    return qore_method_private::eval(*m, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+bool SelfFunctionCallNode::backgroundCallIsStatic(const QoreObject* obj) const {
+    if (method) {
+        return method->isStatic();
+    }
+    if (is_copy) {
+        return false;
+    }
+    // an unqualified call is resolved on the class of the object, a qualified one on the class that it names
+    const QoreClass* c = (ns.size() == 1 && obj) ? obj->getClass() : qc;
+    if (!c && obj) {
+        c = obj->getClass();
+    }
+    if (!c) {
+        return false;
+    }
+    ClassAccess access;
+    const char* name = ns.getIdentifier();
+    return !c->findMethod(name, access) && c->findStaticMethod(name, access);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {

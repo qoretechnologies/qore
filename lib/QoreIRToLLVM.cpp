@@ -10944,22 +10944,31 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         if (aot_mode) {
             // AOT: use name-based helper (method resolved on spawned thread)
             const char* method_name = sfcn->getName();
+            // issue #5933: a qualified call is not virtual; it carries the class that it was resolved on, which the
+            // helper resolves as compiled code resolves its other class references; an unqualified call carries an
+            // empty string and is resolved on the class of the object
+            std::string class_ref;
+            if (!sfcn->hasSingleName()) {
+                const QoreClass* call_qc = sfcn->getClass() ? sfcn->getClass() : sfcn->getMethod()->getClass();
+                class_ref = qore_aot_encode_class_ref(call_qc);
+            }
+            llvm::Value* class_ref_ptr = qore_ir_create_global_string_ptr(builder, class_ref.c_str());
             llvm::Value* name_ptr = qore_ir_create_global_string_ptr(builder, method_name);
             llvm::Value* args_array = build_args_array(0, actual_nargs);
             if (build_args_failed) { return false; }
             auto ft = llvm::FunctionType::get(i64_type,
-                {ptr_type, ptr_type, i32_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot", ft);
+                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot_v2", ft);
             if (throwing_ok) {
                 auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_background_self_call_aot_throwing", ft);
+                    "qore_rt_background_self_call_aot_v2_throwing", ft);
                 *result_out = emitMaybeInvoke(helper, helper_throwing,
-                    {name_ptr, args_array,
+                    {class_ref_ptr, name_ptr, args_array,
                      llvm::ConstantInt::get(i32_type, (int)actual_nargs), xsink_arg},
                     module, llvm_func, inst);
             } else {
                 *result_out = builder->CreateCall(helper,
-                    {name_ptr, args_array,
+                    {class_ref_ptr, name_ptr, args_array,
                      llvm::ConstantInt::get(i32_type, (int)actual_nargs), xsink_arg});
             }
             return true;

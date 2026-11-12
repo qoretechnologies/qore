@@ -2095,15 +2095,21 @@ public:
 
             // issue #2653: calling a static method from inside a non-static method in the background operator
             // incorrectly extends the lifetime of the object
-            if (!sfcn->getMethod()->isStatic()) {
+            // issue #5917: a self call can have no method: an implicit copy() call, and a call that the AOT runtime
+            // dispatches by name (see SelfFunctionCallNode::backgroundCallIsStatic())
+            if (!sfcn->backgroundCallIsStatic(call_obj)) {
                 //printd(5, "BGThreadParams::BGThreadParams() real object method call: %p\n", call_obj);
                 // must have a current object if an in-object method call is being executed
                 // (i.e. $.method())
                 // we reference the object so it won't go out of scope while the thread is running
                 obj = call_obj;
-                assert(obj);
-                obj->realRef();
-                call_obj = nullptr;
+                // the background copy of a self call (SetSelfFunctionCallNode) holds the object of the starting code,
+                // so there is one here; a call dispatched by name is not assumed to have one, however
+                assert(obj || (!sfcn->getMethod() && !sfcn->isCopyCall()));
+                if (obj) {
+                    obj->realRef();
+                    call_obj = nullptr;
+                }
             }
         }
 

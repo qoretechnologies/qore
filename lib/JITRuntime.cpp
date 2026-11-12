@@ -21617,8 +21617,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
 }
 
 //! Background self-method call (AOT mode): takes method name string for runtime resolution
-extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
+/** @param class_ref for a qualified call (Class::method()), the class that the call was resolved on when it was
+    compiled (encoded with qore_aot_encode_class_ref()), otherwise an empty string
+    @param method_name the name of the method as written in the call (qualified for a qualified call)
+
+    issue #5933: a qualified call is not virtual: it calls the method of the class that it was resolved on when it
+    was compiled, which must be the class of the object or a class that it inherits; resolving the qualified name at
+    run time from the root namespace could find another class with the same name
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* class_ref,
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(class_ref);
     assert(method_name);
 
     // Get current self + class context
@@ -21635,19 +21644,39 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     if (!cls) {
         cls = qore_class_private::get(*self->getClass());
     }
+    const qore_class_private* method_cls = cls;
+    const char* name = method_name;
+    NamedScope scope(method_name);
+    if (*class_ref) {
+        assert(scope.size() > 1);
+        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), class_ref, false);
+        if (!qc) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot resolve the class of background method call '%s'",
+                method_name);
+            return toBits(QoreValue());
+        }
+        bool priv;
+        if (!self->getClass()->getClass(*qc, priv)) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
+                "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
+            return toBits(QoreValue());
+        }
+        method_cls = qore_class_private::get(*qc);
+        name = scope.getIdentifier();
+    }
     ClassAccess access = Public;
-    const QoreMethod* method = cls->runtimeFindCommittedMethod(method_name, access, cls);
+    const QoreMethod* method = method_cls->runtimeFindCommittedMethod(name, access, cls);
     if (!method) {
         xsink->raiseException("BACKGROUND-ERROR", "cannot resolve method '%s' on class '%s'",
-            method_name, cls->name.c_str());
+            method_name, method_cls->name.c_str());
         return toBits(QoreValue());
     }
 
-    // Build QoreListNode from pre-evaluated args
-    QoreListNode* arg_list = nullptr;
+    // Build QoreListNode from pre-evaluated args; held until the call node takes it, so that it is released if
+    // making the node fails
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
     if (nargs > 0) {
-        arg_list = new QoreListNode(autoTypeInfo);
-        qore_list_private* priv = qore_list_private::get(*arg_list);
+        qore_list_private* priv = qore_list_private::get(**arg_list);
         priv->reserve(nargs);
         for (int i = 0; i < nargs; i++) {
             QoreValue val = fromBits(args[i]);
@@ -21658,18 +21687,33 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         }
     }
 
-    // Create a temporary SelfFunctionCallNode with resolved method identity
+    // Create a temporary SelfFunctionCallNode with resolved method identity; the call of an abstract method is
+    // dispatched by name (see SelfFunctionCallNode::evalImpl())
     // strdup gives NamedScope ownership of the name string (del=true)
     SelfFunctionCallNode temp_sfcn(&loc_builtin, strdup(method_name),
         nullptr, method, method->getClass(), cls);
 
-    // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
+    // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership (the
+    // node is allocated before the argument is evaluated, so a failed allocation leaves the list in its holder)
     // do_op_background copies the expression; the original must be freed after; releasing it releases its
     // reference to self as well (SetSelfFunctionCallNode::derefImpl())
-    SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
-    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
-    QoreValue(call_node).discard(xsink);
+    ReferenceHolder<SetSelfFunctionCallNode> call_node(new SetSelfFunctionCallNode(temp_sfcn, arg_list.release()),
+        xsink);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(*call_node), xsink);
     return toBits(result);
+}
+
+//! The background self-method call helper of AOT code compiled before issue #5933, which took no class reference
+/** A standalone executable compiled by an older qcc and linked to this libqore dynamically is not refused by a
+    runtime identity check; it calls this symbol with the arguments of the old helper, so it raises an exception
+    instead of calling qore_rt_background_self_call_aot_v2() with arguments that it does not take
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    xsink->raiseException("AOT-RUNTIME-ERROR", "the background call of method '%s' was compiled by an older version "
+        "of qcc, whose code this version of Qore no longer supports; recompile the program",
+        method_name ? method_name : "<unknown>");
+    return toBits(QoreValue());
 }
 
 namespace {
@@ -22486,6 +22530,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_v2_throwing(
+        const char* class_ref, const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_self_call_aot_v2(class_ref, method_name, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+//! The throwing variant of the helper of AOT code compiled before issue #5933 (see
+//! qore_rt_background_self_call_aot())
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_throwing(
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_self_call_aot(method_name, args, nargs, xsink);

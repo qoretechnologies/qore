@@ -1679,6 +1679,25 @@
       the variable are seen through the weak reference in every execution mode; previous releases shared the value,
       and the weak reference then kept the old one; see the @ref weak_assignment_operator "weak assignment operator"
 
+    - a \c copy() call that the @ref background "background operator" ran (for example
+      <tt>background obj.copy()</tt> or <tt>background q.push(obj.copy())</tt>) was dispatched as a call of the copy
+      constructor as a normal method, which crashed the process for objects of builtin and user classes alike, and
+      <tt>background copy()</tt> in a method crashed when the thread was started in the AST interpreter; it now
+      copies the object in every execution mode and in programs compiled with \c qcc (issue #5917)
+    - a qualified call of a method of the object in a background expression (for example
+      <tt>background Base::method()</tt>) raised \c BACKGROUND-ERROR in programs compiled with \c qcc, which looked
+      up the qualified name as the name of a method, and once looked up, resolved the class from the root namespace,
+      which could find another class with the same name; it now calls the method of the class that the call was
+      resolved on when it was compiled.  A qualified call of an abstract method (<tt>Base::method()</tt>, in the
+      background or not) raised \c METHOD-DOES-NOT-EXIST, or \c ABSTRACT-VARIANT-ERROR in programs compiled with
+      \c qcc; it now calls the method that the class of the object implements.  A program compiled with \c qcc
+      before this fix must be recompiled: a module is refused when it is loaded, as for any module compiled by
+      another version of Qore, and a standalone executable linked to the library dynamically raises
+      \c AOT-RUNTIME-ERROR when it makes a background call of a method of the object (issue #5933)
+    - a background call of a method of the object that compiled code dispatches by name (a call that the AOT runtime
+      could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
+      such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
+      method, and a qualified call calls the method of the class that it names (issue #5917)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
