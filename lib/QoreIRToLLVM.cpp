@@ -3950,11 +3950,36 @@ void QoreIRToLLVM::endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* 
     builder->CreateCall(end_helper, {guard, xsink_arg});
 }
 
+llvm::BasicBlock* QoreIRToLLVM::beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count) {
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    auto count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
+            llvm::FunctionType::get(i64_type, {}, false));
+    llvm::Value* count = builder->CreateCall(count_fn, {});
+    llvm::Value* pending = builder->CreateICmpSGT(count, saved_count, "obe_pending");
+    // the names of these blocks are checked by examples/test/ir/on-exit-captured-locals
+    llvm::BasicBlock* run_bb = llvm::BasicBlock::Create(ctx, "obe.pending", llvm_func);
+    llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "obe.done", llvm_func);
+    // a handler is pending only on the exits that an exception, a thread_exit or a return from a handler takes
+    builder->CreateCondBr(pending, run_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(run_bb);
+    return done_bb;
+}
+
+void QoreIRToLLVM::endPendingHandlerRun(llvm::BasicBlock* done_bb) {
+    builder->CreateBr(done_bb);
+    builder->SetInsertPoint(done_bb);
+}
+
 void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     if (!obe_saved_count) {
         return;
     }
     llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    // the handlers still registered at an exit of the function are those of the scopes that an exception (or a
+    // thread_exit, or a return from a handler) leaves; a normal exit has run its handlers inline and left their
+    // scopes, so the protocol below (which publishes every local and copies it into a slot cache allocated for the
+    // handlers, and reloads every local afterwards) runs only when a handler is pending (qore#5927)
+    llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, obe_saved_count);
     syncLocalsToRuntimeForHandlers(module);
     llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
@@ -3967,6 +3992,7 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     // sufficient.  IR-only locals remain reload-exempt because they are not on
     // the runtime local stack.
     reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+    endPendingHandlerRun(done_bb);
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool exception_exit) {
@@ -21660,12 +21686,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* saved_count = it->second;
                     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
                             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    // the blocks left by the exception have usually run their handlers already; the handlers run
+                    // through the runtime only if one is still registered (see emitOnBlockExitExec())
+                    llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     syncLocalsToRuntimeForHandlers(module);
                     llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
                     builder->CreateCall(helper, {saved_count, xsink_arg});
                     endNativeHandlerSlotCache(module, native_slot_cache);
-                    // On-block-exit handlers execute through the AST path and can modify
-                    // any local variable on the thread-local stack
+                    endPendingHandlerRun(done_bb);
+                    // On-block-exit handlers execute through the AST path and can modify any local variable on the
+                    // thread-local stack.  The local caches are invalidated on both paths: the instruction that
+                    // raised the exception can have left the cache of a local it assigns through the runtime empty
+                    // (a member assignment of an object whose memberNotification() throws takes the local's cached
+                    // value and stores the result in the runtime variable), so the catch block must reload it
+                    // (examples/test/qore/misc/member-notification); invalidating costs only an increment
                     reloadAllLocalsFromRuntime(module, llvm_func);
                 }
             }
@@ -34702,18 +34736,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Call the implementation function with inline_lowered flag
                 // If inline_lowered=true, skip handler execution (handlers were already inlined)
                 // If inline_lowered=false, execute handlers normally
-                auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type, builder->getInt1Ty()}, false));
-                llvm::Value* inline_lowered_val = llvm::ConstantInt::get(builder->getInt1Ty(), sinst->inline_lowered ? 1 : 0);
-                syncLocalsToRuntimeForHandlers(module);
-                llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
-                builder->CreateCall(helper, {saved_count, xsink_arg, inline_lowered_val});
-                endNativeHandlerSlotCache(module, native_slot_cache);
-                // On-block-exit handlers execute through the AST path and can modify
-                // any local variable on the thread-local stack. Reload all local
-                // allocas so subsequent LoadLocal sees the updated values.
-                // (Only needed if handlers actually executed, but safe to do always)
-                if (!sinst->inline_lowered) {
+                if (sinst->inline_lowered) {
+                    // the handlers of the scope have run inline: the registrations left are dropped, and none runs
+                    // here, so nothing is published to or reloaded from the runtime for them (qore#5927)
+                    auto discard_fn = module.getOrInsertFunction("qore_rt_discard_on_block_exit",
+                            llvm::FunctionType::get(void_type, {i64_type}, false));
+                    builder->CreateCall(discard_fn, {saved_count});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type, builder->getInt1Ty()}, false));
+                    // the handlers run through the runtime only if one of the scope is registered (see
+                    // emitOnBlockExitExec())
+                    llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
+                    syncLocalsToRuntimeForHandlers(module);
+                    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
+                    builder->CreateCall(helper, {saved_count, xsink_arg, builder->getInt1(false)});
+                    endNativeHandlerSlotCache(module, native_slot_cache);
+                    endPendingHandlerRun(done_bb);
+                    // On-block-exit handlers execute user code and can modify any local variable on the
+                    // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
+                    // exit is on an exception path, where the cache of a local can have been left empty by the
+                    // instruction that raised the exception (see the LandingPad case)
                     reloadAllLocalsFromRuntime(module, llvm_func);
                     emitExceptionCheck(module, llvm_func, inst);
                 }
