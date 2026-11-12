@@ -20,9 +20,11 @@ checked for a build that matches them all (any other build, such as one made wit
 reported, not checked, unless --force is given).
 
 A function that GCC splits into a head and a ".part" clone (partial inlining) can have both frames on the stack, as
-the head calls the clone: GCC records the clone as "0(<params>)" at the head's own file:line:col, and the frame of the
-function is counted as the head's plus the clone's.  GCC records .constprop and .isra clones under the function's own
-name: they are alternatives, of which the largest counts.
+the head calls the clone, and its frame is counted as the head's plus the clone's.  GCC records the clone of a free or
+static member function as "0(<params>)" at the head's own file:line:col, and that of a non-static member function or
+a template instance under the function's own name at the same location, as it does .constprop and .isra clones, which
+are alternatives to the function: such records are added only if nm lists a ".part" clone of the function in the
+object file (or the object file cannot be read, conservatively); see check().
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded
@@ -32,6 +34,8 @@ or a function is missing, 2 for a usage or input error
 import argparse
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,17 +119,33 @@ def is_part_clone(signature):
 
 def matches(func, signature):
     """True if signature is the frame of func itself: the qualified name, not preceded by an identifier character or
-    a scope (so that A::f matches neither XA::f nor B::A::f), followed by its parameter list and nothing but
-    qualifiers and clone suffixes (so that a lambda or local class inside func, which GCC names
-    "A::f(...)::<lambda()>", is not func)."""
+    a scope (so that A::f matches neither XA::f nor B::A::f), optionally followed by template arguments (as nm names
+    a template instance: "A::f<int>(int)"), then by its parameter list and nothing but qualifiers, the template
+    arguments that GCC's .su records give ("[with T = int]") and clone suffixes (so that a lambda or local class
+    inside func, which GCC names "A::f(...)::<lambda()>", is not func)."""
     # a record without parameters (as Clang may write it) names the function exactly
     if signature.strip() == func:
         return True
-    pattern = r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"\("
+    pattern = r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"(?=[(<])"
     for m in re.finditer(pattern, signature):
+        i = m.end()
+        # skip template arguments
+        if signature[i] == "<":
+            depth = 0
+            while i < len(signature):
+                if signature[i] == "<":
+                    depth += 1
+                elif signature[i] == ">":
+                    depth -= 1
+                    if not depth:
+                        i += 1
+                        break
+                i += 1
+            if depth or i >= len(signature) or signature[i] != "(":
+                continue
         # find the end of the parameter list
         depth = 1
-        i = m.end()
+        i += 1
         while i < len(signature) and depth:
             if signature[i] == "(":
                 depth += 1
@@ -134,10 +154,29 @@ def matches(func, signature):
             i += 1
         if depth:
             continue
-        rest = re.sub(r"\[clone [^\]]*\]", "", signature[i:])
+        rest = re.sub(r"\[(clone|with) [^\]]*\]", "", signature[i:])
         if re.fullmatch(r"(\s*(const|volatile|noexcept|&&|&))*\s*", rest):
             return True
     return False
+
+
+def object_part_clones(su_path, cache):
+    """Returns the names of the ".part" clones defined in the object file of a .su file, from nm, or None if they
+    cannot be read (no object file, as when a build removed it, or no nm)."""
+    obj = su_path.with_suffix(".o") if su_path else None
+    if obj in cache:
+        return cache[obj]
+    names = None
+    if obj and obj.exists() and shutil.which("nm"):
+        try:
+            out = subprocess.run(["nm", "-C", "--defined-only", str(obj)], stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, universal_newlines=True, check=True).stdout
+            names = [line.split(" ", 2)[2] for line in out.splitlines()
+                if line.count(" ") >= 2 and "[clone .part." in line]
+        except (OSError, subprocess.CalledProcessError):
+            names = None
+    cache[obj] = names
+    return names
 
 
 def collect_frames(build_dir):
@@ -158,27 +197,49 @@ def collect_frames(build_dir):
 def check(budgets, frames):
     """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None).
 
-    frames are (signature, bytes, path, location) records.  A function's frame is the largest of its records (GCC
-    prints its .constprop and .isra clones under its own name) plus the ".part" clone recorded at the same location
-    (see is_part_clone()), which the function calls."""
-    parts = {}
+    frames are (signature, bytes, path, location) records.  A function split by partial inlining has its head and its
+    ".part" clone, which the head calls, on the stack: their frames add.  GCC records the clone in two ways:
+    - for a free function or a static member function, as "0(<params>)" at the function's file:line:col, which is
+      added to the largest record of the function there;
+    - for a non-static member function or a template instance, under the function's own name at the same location;
+      GCC records .constprop and .isra clones that way as well, and they are alternatives to the function, not
+      frames on top of it, so two records of the same signature at the same location are added (the two largest)
+      only when nm lists a ".part" clone of the function in the object file, or when the object file cannot be read
+      (conservative); otherwise the largest counts."""
+    zero_parts = {}
     for signature, size, path, location in frames:
         if location and is_part_clone(signature):
             key = (path, location)
-            if key not in parts or size > parts[key][0]:
-                parts[key] = (size, signature)
+            if key not in zero_parts or size > zero_parts[key][0]:
+                zero_parts[key] = (size, signature)
+    nm_cache = {}
     results = []
     for func, budget, _ in budgets:
+        # the records of the function: (path, location, signature) -> sizes
+        groups = {}
+        for signature, size, path, location in frames:
+            if matches(func, signature):
+                groups.setdefault((path, location, signature), []).append(size)
         worst = None
         worst_sig = None
-        for signature, size, path, location in frames:
-            if not matches(func, signature):
-                continue
-            part = parts.get((path, location))
-            total = size + (part[0] if part else 0)
+        for (path, location, signature), sizes in groups.items():
+            sizes = sorted(sizes, reverse=True)
+            total = sizes[0]
+            note = ""
+            zero_part = zero_parts.get((path, location))
+            if zero_part:
+                total += zero_part[0]
+                note = " + .part clone %s at %s" % (zero_part[1], location)
+            elif len(sizes) > 1:
+                part_names = object_part_clones(path, nm_cache)
+                if part_names is None or any(matches(func, n) for n in part_names):
+                    total += sizes[1]
+                    note = " + .part clone recorded under the same name at %s%s" % (location,
+                        "" if part_names is not None else " (assumed: no object file to tell it from a .constprop "
+                        "or .isra clone)")
             if worst is None or total > worst:
                 worst = total
-                worst_sig = signature + (" + .part clone %s at %s" % (part[1], location) if part else "")
+                worst_sig = signature + note
         results.append((func, budget, worst, worst_sig))
     return results
 

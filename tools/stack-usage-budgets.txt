@@ -14,8 +14,9 @@
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload and
-# clone of the function (the largest frame counts, plus that of a ".part" clone, which GCC records as "0(...)" at the
-# function's location and which the function calls), not the lambdas and local classes inside it.
+# clone of the function, not the lambdas and local classes inside it; the largest frame counts, plus that of a
+# ".part" clone, which the function calls (GCC records it as "0(...)" at the function's location, or under the
+# function's own name there for a non-static member function or a template; see tools/check-stack-usage.py).
 
 @compiler GNU
 # the major version must match
