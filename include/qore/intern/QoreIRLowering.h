@@ -583,11 +583,12 @@ private:
         dispatched at run time checks the object itself, after its arguments, so it is checked here only when the
         arguments can show the order (callArgsMayHaveSideEffects()).
 
+        The check has no operand: it takes the current object (see QoreIRBuilder::createCheckCallTarget()).
+
         @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
-        @param self_val the object, if already loaded; otherwise the self local is loaded, if known
         @param loc the location of the call
     */
-    void emitSelfCallTargetCheck(const QoreValue& call, QoreIRValue self_val, const QoreProgramLocation* loc);
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,

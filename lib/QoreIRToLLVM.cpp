@@ -12185,6 +12185,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_definitions.clear();
     aot_hash_string_extraction_cache.clear();
     aot_hash_string_extraction_instruction = nullptr;
+    current_self_bits = nullptr;
     aot_hash_string_extraction_reuses = 0;
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
@@ -13855,6 +13856,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 || inst->opcode == QoreIROpcode::ConstNull
                 || inst->opcode == QoreIROpcode::ConstString
                 || inst->opcode == QoreIROpcode::PushTempMark
+                // the check of the target of a call (issue #5784, #5823) changes no local and runs no Qore code: it
+                // reads the state of an object or looks up a method, and a failure leaves the path that would reuse
+                // the extraction
+                || inst->opcode == QoreIROpcode::CheckCallTarget
                 || safe_hash_string_to_bool
                 || safe_hash_string_branch;
             if (!preserves_hash_string_extraction) {
@@ -33485,6 +33490,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::CheckCallTarget: {
             // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks it
             // (issue #5784)
+            if (inst->operands.empty()) {
+                // a call through self, on the current object (issue #5823), which does not change while the function
+                // runs: it is read once, at the start of the function
+                QoreValue self_call = static_cast<const QoreIRExprInstruction*>(inst)->expr;
+                uint64_t self_call_bits;
+                std::memcpy(&self_call_bits, &self_call, sizeof(self_call_bits));
+                if (!current_self_bits) {
+                    llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+                    llvm::IRBuilder<> entry_builder(entry, entry->getFirstInsertionPt());
+                    auto self_fn = module.getOrInsertFunction("qore_rt_current_self_bits",
+                        llvm::FunctionType::get(i64_type, {}, false));
+                    current_self_bits = entry_builder.CreateCall(self_fn, {}, "current.self");
+                }
+                // a method call on an object that has not been deleted needs no other check
+                llvm::Value* self_valid;
+                const QoreJITObjectLayout* layout = aot_mode ? nullptr : qore_jit_object_layout();
+                if (layout) {
+                    self_valid = emitValidObjectTest(current_self_bits, *layout, llvm_func);
+                } else {
+                    auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
+                        llvm::FunctionType::get(i1_type, {i64_type}, false));
+                    self_valid = builder->CreateCall(fast, {current_self_bits});
+                }
+                llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "check.self.call", llvm_func);
+                llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx, "check.self.call.cont", llvm_func);
+                // the block of the test dominates the continuation, which has two predecessors: the values
+                // computed before the check stay usable after it (see dominates())
+                immediate_dominator[cont_block] = builder->GetInsertBlock();
+                builder->CreateCondBr(self_valid, cont_block, check_block);
+                builder->SetInsertPoint(check_block);
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(self_call_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_check_call_target_aot",
+                        llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                        current_self_bits, xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_check_call_target",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+                    builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, self_call_bits), current_self_bits,
+                        xsink_arg});
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+                builder->CreateBr(cont_block);
+                builder->SetInsertPoint(cont_block);
+                return true;
+            }
             if (immediate_closure_creates.count(inst->operands[0].id)) {
                 // a closure that the function created and calls directly, whose load is elided: a closure is always
                 // callable, and has no object
@@ -33545,6 +33597,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::BasicBlock* fast_block = llvm::BasicBlock::Create(ctx, "check.call.target.ok", llvm_func);
             llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "check.call.target", llvm_func);
             llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx, "check.call.target.cont", llvm_func);
+            // the block of the test dominates the continuation, which has two predecessors (see dominates())
+            immediate_dominator[cont_block] = builder->GetInsertBlock();
             builder->CreateCondBr(no_check, fast_block, check_block);
             builder->SetInsertPoint(fast_block);
             release_boxed();

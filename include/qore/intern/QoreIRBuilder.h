@@ -259,6 +259,9 @@ public:
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
     //! Checks the target of the call @a call before its arguments are evaluated (QoreIROpcode::CheckCallTarget)
+    /** An invalid @a target checks the current object, for a call through self (issue #5823): the code then does not
+        load self, which a fast entry of a method of the object does not have.
+    */
     QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,

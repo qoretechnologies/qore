@@ -190,6 +190,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
     { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
     { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
+    { "qore_rt_check_self_call_target", reinterpret_cast<void*>(&qore_rt_check_self_call_target) },
+    { "qore_rt_current_self_bits", reinterpret_cast<void*>(&qore_rt_current_self_bits) },
+    { "qore_rt_check_self_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_self_call_target_aot) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -1785,6 +1788,30 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
 
 extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
     qore_check_call_target(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+QoreValue qore_rt_current_self_value() {
+    // the object of the current frame, as the direct call of a method through self (CallMethodDirect) takes it; not
+    // through rc_get_current_ref(), which sets up the runtime configuration of the thread on each call
+    QoreObject* self = runtime_get_stack_object();
+    return self ? QoreValue(static_cast<AbstractQoreNode*>(self)) : QoreValue();
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_current_self_bits() {
+    return toBits(qore_rt_current_self_value());
+}
+
+extern "C" DLLEXPORT void qore_rt_check_self_call_target(uint64_t call_bits, ExceptionSink* xsink) {
+    qore_check_call_target(fromBits(call_bits), qore_rt_current_self_value(), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_check_self_call_target_aot(QoreAOTContext* ctx, int32_t slot,
+        ExceptionSink* xsink) {
+    QoreValue self = qore_rt_current_self_value();
+    uint64_t self_bits;
+    static_assert(sizeof(self_bits) == sizeof(self), "a QoreValue is 64 bits");
+    std::memcpy(&self_bits, &self, sizeof(self_bits));
+    qore_rt_check_call_target_aot(ctx, slot, self_bits, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,

@@ -379,6 +379,18 @@ void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, Excepti
 //! The AOT counterpart of qore_rt_check_call_target(), with the call identified by its expression slot
 void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits, ExceptionSink* xsink);
 
+//! Returns the current object, as a call through self takes it (QoreIROpcode::CheckCallTarget with no operand)
+QoreValue qore_rt_current_self_value();
+
+//! QoreIROpcode::CheckCallTarget with no operand: the call is made through self, on the current object
+void qore_rt_check_self_call_target(uint64_t call_bits, ExceptionSink* xsink);
+
+//! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
+uint64_t qore_rt_current_self_bits();
+
+//! The AOT counterpart of qore_rt_check_self_call_target(), with the call identified by its expression slot
+void qore_rt_check_self_call_target_aot(QoreAOTContext* ctx, int32_t slot, ExceptionSink* xsink);
+
 //! Checks the value of a return statement against the declared return type as the AST interpreter checks it in the
 //! return statement, without changing the value (QoreIROpcode::CheckReturnValue)
 void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink);

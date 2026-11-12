@@ -498,7 +498,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::ToStringChecked, "ToStringChecked"                , false, true , false,  1, "string() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 427
     { QoreIROpcode::ToIntChecked, "ToIntChecked"                   , false, true , false,  1, "int() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 428
     { QoreIROpcode::ToFloatChecked, "ToFloatChecked"                 , false, true , false,  1, "float() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 429
-    { QoreIROpcode::CheckCallTarget, "CheckCallTarget"                , false, false, false,  1, "Check the target of a call before its arguments are evaluated", true , true , "QoreDotEvalOperatorNode", false, false, false, false, false }, // 430
+    { QoreIROpcode::CheckCallTarget, "CheckCallTarget"                , false, false, false, -1, "Check the target of a call before its arguments are evaluated", true , true , "QoreDotEvalOperatorNode", false, false, false, false, false }, // 430
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

@@ -12984,7 +12984,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     variant, m->getParseArgs(), m->getArgs())) {
             // the direct call does not check the object: it is checked before the arguments, as the AST interpreter
             // checks it (issue #5823)
-            emitSelfCallTargetCheck(expr, QoreIRValue(), op->loc);
+            emitSelfCallTargetCheck(expr, op->loc);
             std::vector<QoreIRValue> lowered_args;
             if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
                 if (!exception_stack.empty()) {
@@ -15315,19 +15315,14 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
 // QoreIRInlineStateClaim in QoreIR.h), so a value written at lowering time would never be
 // read; the interpreter resolves the same values from the variant on first execution.
 
-void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, QoreIRValue self_val,
-        const QoreProgramLocation* loc) {
-    if (!self_val.isValid()) {
-        if (!self_local) {
-            // code without a self local (a closure, for example) keeps the check made by the call
-            return;
-        }
-        QoreIRLocalInstruction* load = self_local->closureUse()
-            ? builder.createLoadClosure(self_local, loc)
-            : builder.createLoadLocal(self_local, loc);
-        self_val = load->result;
+void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc) {
+    if (!self_local) {
+        // code without a self local (top-level code, a function) has no object to check
+        return;
     }
-    builder.createCheckCallTarget(call, self_val, getCurrentExceptionTarget(), loc);
+    // the check takes the current object itself: a load of self would make a method ineligible for the fast entries
+    // that have no self (isAOTImplicitSelfFastEntryEligible())
+    builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc);
 }
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
@@ -15360,7 +15355,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
                 call->getVariant(), call->getParseArgs(), call->getArgs());
         if ((!method || !method->isStatic()) && !call->isCopyCall()
                 && (direct || callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs()))) {
-            emitSelfCallTargetCheck(expr, QoreIRValue(), call->loc);
+            emitSelfCallTargetCheck(expr, call->loc);
         }
     }
     std::vector<QoreIRValue> operands;
