@@ -15744,6 +15744,66 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && (!QoreTypeInfo::hasType(linst->local->getTypeInfo())
                     || QoreTypeInfo::isReference(linst->local->getTypeInfo()));
 
+            // A load that asks for no reference (auto_ref == false) is the load of a container that a store changes in
+            // place (HashKeyStore, ListIndexStore, ...): the store decides by the container's references whether it is
+            // shared and must be copied, so the load must not add one.  A local that is read through the runtime stack
+            // (a closure-bound local, a variable of an enclosing scope, one that an earlier store copied, one that holds
+            // a reference) is loaded as the load of a weak-assigned local is: a borrow of the value the variable holds,
+            // or an owned value if the variable does not hold one directly.  An owned load made the container look
+            // shared, the store copied it although the variable was its only owner, and a weak reference to the
+            // variable was left with the container the variable no longer held (qore#5832).
+            const bool borrowed_load = linst->local && !linst->auto_ref && !weak_assigned_locals.count(key);
+            auto emitBorrowedLoad = [&]() -> bool {
+                llvm::Value* result;
+                llvm::AllocaInst* owned_flag = nullptr;
+                {
+                    llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                    llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+                    llvm::IRBuilder<> alloca_builder(entry_bb, entry_bb->begin());
+                    owned_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "borrowed_load_owned");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), owned_flag);
+                }
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), owned_flag, xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, owned_flag, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                // the cleanup slot holds the value only if it is owned: the release of a borrow is a no-op (as for
+                // the load of a weak-assigned local, which see)
+                auto alloca_it = invoke_alloca_map.find(inst->result.id);
+                if (alloca_it != invoke_alloca_map.end()) {
+                    llvm::Value* cleanup_alloca = alloca_it->second
+                        ? alloca_it->second
+                        : promoteSsaEntryToAlloca(inst->result.id, module, llvm_func);
+                    if (cleanup_alloca) {
+                        llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                        llvm::Value* owned = builder->CreateLoad(i8_type, owned_flag);
+                        llvm::Value* is_owned = builder->CreateICmpNE(owned,
+                            llvm::ConstantInt::get(i8_type, 0));
+                        llvm::Value* cleanup_val = builder->CreateSelect(is_owned, result,
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                        builder->CreateStore(cleanup_val, cleanup_alloca);
+                    }
+                }
+                weak_load_result_ids.insert(inst->result.id);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
+                return true;
+            };
+
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
             // The alloca cache becomes stale after any call that may invoke a closure.
@@ -15756,6 +15816,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // it until function exit can run the referent's destructor before on_exit
             // cleanup in the same frame.
             if (linst->local && linst->local->closureUse()) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15882,6 +15945,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !pre_instantiated_locals->count(key)
                     && !current_body_locals.count(key)
                     && !block_scoped_locals.count(key)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15910,6 +15976,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // If this local underwent COW, reload fresh from runtime stack instead of
             // using cached alloca, which may have the old pre-COW value.
             if (linst->local && cow_modified_locals.count(linst->local)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15943,6 +16012,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // store, would hold the value the reference had then, while the referenced lvalue can change without a
             // store to the local (see readsThroughReference())
             if (readsThroughReference(linst->local)) {
+                if (borrowed_load) {
+                    return emitBorrowedLoad();
+                }
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
