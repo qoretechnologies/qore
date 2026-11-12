@@ -80,6 +80,37 @@ class Fac {
     }
 }
 
+#! an iterator that gives a new object for each element and whose third next() raises an exception
+class NextRaisesIt inherits AbstractIterator {
+    public {
+        Log log;
+        int i = 0;
+    }
+
+    constructor(Log l) {
+        log = l;
+    }
+
+    destructor() {
+        log.add("itdone it");
+    }
+
+    bool next() {
+        if (i == 2) {
+            throw "NEXT";
+        }
+        return ++i <= 3;
+    }
+
+    auto getValue() {
+        return new Holder(log, "i" + i);
+    }
+
+    bool valid() {
+        return i > 0 && i <= 3;
+    }
+}
+
 Holder sub fail_on(Holder h, string name) {
     if (h.n == name) {
         throw "STAGE", h.n;
@@ -93,6 +124,13 @@ list<Holder> sub holders(Log log, int n, string p = "h") {
 
 int sub idiv(int i) {
     return i == 2 ? 0 : 1;
+}
+
+int sub int_fail_on(int i, int n) {
+    if (i == n) {
+        throw "STAGE", i;
+    }
+    return i;
 }
 
 #! a value whose destructor raises for the first one
@@ -319,6 +357,67 @@ sub hash_map_select_iterator() {
     out("hash map select iterator", log);
 }
 
+# a fold whose list comes from a pipeline (a fused fold) restores $1 and $2 before the handler
+sub foldl_pipeline_raises() {
+    Log log();
+    try {
+        auto r = foldl (exists (fail_on($2, "h2") ?? NOTHING)) ? $1 : $2, (map $1, holders(log, 3));
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldl pipeline raises", log);
+}
+
+# nested folds whose code is delegated to the AST interpreter: the inner fold's restoration does not keep the outer
+# fold's argument list
+sub foldl_nested_raises() {
+    Log log();
+    try {
+        auto r = foldl (exists (foldl (exists (fail_on($2, "h2") ?? NOTHING)) ? $1 : $2,
+            (new Holder(log, "x"), $2)) ?? NOTHING) ? $1 : $2,
+            (new Holder(log, "h1"), new Holder(log, "h2"), new Holder(log, "h3"));
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldl nested raises", log);
+}
+
+# a fold over an iterator whose next() raises: the first element is released when the accumulator is replaced, and
+# the iterator before the accumulator
+sub foldl_next_raises() {
+    Log log();
+    try {
+        auto r = foldl (exists $1) ? $2 : $1, new NextRaisesIt(log);
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldl next raises", log);
+}
+
+# a fold whose code is delegated to the AST interpreter raises in a map in a function with no handler: the exit restores
+# the fold's and then the map's implicit arguments, which release the map's argument list
+auto sub map_fold_no_handler(Log log) {
+    return map ((foldl (exists (int_fail_on($2, 2) ?? NOTHING)) ? $1 : $2, (1, 2, 3)) + ($1.n ?? "")),
+        holders(log, 2, "m");
+}
+
+sub map_fold_raises_no_handler() {
+    Log log();
+    try {
+        map_fold_no_handler(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("map fold no handler", log);
+}
+
 sub main() {
     map_list();
     select_list();
@@ -335,6 +434,10 @@ sub main() {
     foldr_raises();
     hash_map_iterator();
     hash_map_select_iterator();
+    foldl_pipeline_raises();
+    foldl_nested_raises();
+    foldl_next_raises();
+    map_fold_raises_no_handler();
 }
 
 main();
