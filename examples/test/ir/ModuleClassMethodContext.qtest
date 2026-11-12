@@ -21,7 +21,8 @@
     including the AST interpreter.  The restrictions of a sandboxed caller are part of its sandbox: module code runs
     with them as well as its own, also when another module method or function, a closure or a call reference enters
     it.  A caller restricted only by its parse options restricts its own code, and the module code runs with the
-    module's own options.
+    module's own options; a call reference that its code makes to a builtin method of an object that module code
+    created is its own code, refused as the direct call is (#5692).
 
     Module code, a module function as well as a method, runs in the module's Program, so the names it resolves at run
     time (\c call_function(), \c create_object()) are those of the module, including its private names, as its direct
@@ -87,15 +88,15 @@ function_via_method_create_obj: CREATE-OBJECT-ERROR
 function_via_method_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
-unsandboxed static_callref: null
-unsandboxed method_callref: null
+unsandboxed static_callref: INVALID-FUNCTION-ACCESS
+unsandboxed method_callref: INVALID-FUNCTION-ACCESS
 unsandboxed static_create_obj: \"RWLock\"
 unsandboxed static_create_obj: \"RWLock\"
 unsandboxed static_create_obj: \"RWLock\"
 unsandboxed method_create_obj: \"RWLock\"
 unsandboxed method_create_obj: \"RWLock\"
 unsandboxed method_create_obj: \"RWLock\"
-unsandboxed function_via_method_callref: null
+unsandboxed function_via_method_callref: INVALID-FUNCTION-ACCESS
 unsandboxed member: \"member\"
 unsandboxed member: \"member\"
 unsandboxed holder: \"member\"

@@ -1088,14 +1088,14 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // functional-domain (dom=...) check is evaluated against the CALLER's parse options (the
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
-    const bool defer_domain_po = (pgm != nullptr);
+    const unsigned call_flags = pgm ? QCEF_DEFER_DOMAIN_PO : 0;
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
         return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
-            getExplicitTypeParamInstantiation(), defer_domain_po);
+            getExplicitTypeParamInstantiation(), call_flags);
     }
     return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
-        defer_domain_po);
+        call_flags);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

@@ -672,6 +672,29 @@ public:
 class AbstractQoreFunctionVariant;
 class RuntimeConfig;
 
+#ifdef DEBUG
+//! Set for the next call of a variant that the caller chose at runtime (the reflection API), which the parser did not
+/** CodeEvaluationHelper::init() checks the invariant of the parse-time variant commitment for the other calls: only a
+    variant committed at parse time is known to match the types of its arguments.  It reads and clears the flag, so
+    that the calls that the variant makes are checked.
+*/
+DLLLOCAL extern thread_local bool qore_dbg_runtime_chosen_variant;
+
+class QoreDbgRuntimeChosenVariantHelper {
+public:
+    DLLLOCAL QoreDbgRuntimeChosenVariantHelper() {
+        qore_dbg_runtime_chosen_variant = true;
+    }
+
+    DLLLOCAL ~QoreDbgRuntimeChosenVariantHelper() {
+        qore_dbg_runtime_chosen_variant = false;
+    }
+};
+#define QORE_DBG_RUNTIME_CHOSEN_VARIANT() QoreDbgRuntimeChosenVariantHelper qore_dbg_runtime_chosen_variant_helper
+#else
+#define QORE_DBG_RUNTIME_CHOSEN_VARIANT()
+#endif
+
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
@@ -698,7 +721,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            unsigned n_call_flags = 0);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -725,7 +748,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false, bool n_hide_call_site = false);
+            unsigned n_call_flags = 0, bool n_hide_call_site = false);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -862,6 +885,14 @@ protected:
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
+    //! QCEF_DEFER_DOMAIN_PO and the QRFV_* filter of the variants that the call can select (see
+    //! QoreFunction::runtimeFindVariant()); with QCEF_DEFER_DOMAIN_PO, the switch of the runtime parse options to
+    //! the called Program is deferred until *after* argument evaluation, variant resolution and the
+    //! functional-domain (dom=...) check, so that a deliberate cross-Program QoreProgram::callFunction() evaluates
+    //! the dom check against the CALLER's parse options (the cross-Program privilege model); for everything else
+    //! (direct calls, method calls, call references, closures) the switch happens before the dom check, so the
+    //! check runs against the target/creation Program's options
+    unsigned call_flags;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
@@ -895,13 +926,6 @@ protected:
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
     bool restore_call_program_context = false;
-    // when true, defer switching the runtime parse options to the called Program until *after* argument
-    // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
-    // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
-    // options (the cross-Program privilege model).  For everything else (direct calls, method calls,
-    // call references, closures) the switch happens before the dom check, so the check runs against the
-    // target/creation Program's options.
-    bool defer_domain_po = false;
 
 #ifdef DEBUG
     //! the resolved variant, recorded once init() has committed to actually running the call
@@ -919,6 +943,11 @@ protected:
 
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
+
+    //! the variant search of findVariant() with the QRFV_* filter of the call flags (not 0); out of line, as it is
+    //! not on a call's common path
+    DLLLOCAL QORE_INTERN_NOINLINE const AbstractQoreFunctionVariant* findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx);
 
     DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
         const AbstractFunctionSignature* sig);
@@ -1898,6 +1927,25 @@ struct IList : public ilist_t {
         const_iterator aqfi, bool& internal_access, bool& stop) const;
 };
 
+//! variant filter of QoreFunction::runtimeFindVariant(): only user variants
+#define QRFV_ONLY_USER     (1 << 0)
+//! variant filter of QoreFunction::runtimeFindVariant(): no user variant that a user module does not export
+/** For a caller that the export boundary of the module applies to (see QoreReflectionCaller::appliesModuleExports()):
+    it can call only the variants that an importer of the module sees.
+*/
+#define QRFV_EXPORTED_ONLY (1 << 1)
+//! call flag of CodeEvaluationHelper and QoreFunction::evalFunction(): defer the switch of the runtime parse options
+/** to the called Program until the functional-domain check has been made with the caller's (a deliberate
+    cross-Program QoreProgram::callFunction()); the bits in QRFV_MASK of the call flags are QRFV_* variant filters,
+    so that one argument carries both
+*/
+#define QCEF_DEFER_DOMAIN_PO (1u << 8)
+//! the bits of the call flags of CodeEvaluationHelper that hold the QRFV_* variant filter
+/** The filter has a byte of its own, and QCEF_DEFER_DOMAIN_PO is outside it, so that each is read with a single
+    byte access on a call's path
+*/
+#define QRFV_MASK 0xffu
+
 class QoreFunction : protected QoreReferenceCounter {
 friend class QoreFunctionIterator;
 friend class qore_external_function_iterator_private;
@@ -2184,17 +2232,20 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    //! \a call_flags: QCEF_DEFER_DOMAIN_PO and a QRFV_* variant filter (see QRFV_EXPORTED_ONLY), which applies when
+    //! the variant is selected for the arguments, also when the given variant does not accept them
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool defer_domain_po = false) const;
+            unsigned call_flags = 0) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
+    //! \a call_flags: see evalFunction()
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool defer_domain_po = false) const;
+            unsigned call_flags = 0) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -2296,17 +2347,27 @@ public:
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-            bool only_user, const qore_class_private* class_ctx,
+            unsigned variant_filter, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
             bool* content_dependent = nullptr) const;
 
-    // finds the best match with the given arg types
+    // finds the best match with the given arg types; \a variant_filter: see QRFV_ONLY_USER and QRFV_EXPORTED_ONLY
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
+            unsigned variant_filter = 0) const;
+
+    //! returns true if \a v is skipped by a runtime variant search with the given QRFV_* filter (not 0)
+    DLLLOCAL static bool skipFilteredVariant(unsigned variant_filter, const AbstractQoreFunctionVariant* v) {
+        if ((variant_filter & QRFV_ONLY_USER) && !v->isUser()) {
+            return true;
+        }
+        // a user module's variant that the module does not export
+        return (variant_filter & QRFV_EXPORTED_ONLY) && v->isUser() && !v->isModulePublic();
+    }
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 
@@ -2493,7 +2554,7 @@ protected:
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
         const QoreTypeInfo* receiver_type_info = nullptr,
-        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr, unsigned variant_filter = 0) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;

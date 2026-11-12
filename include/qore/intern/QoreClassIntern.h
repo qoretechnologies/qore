@@ -4037,9 +4037,15 @@ public:
     DLLLOCAL void generateBuiltinSignature(const char* nspath);
     DLLLOCAL void initializeBuiltin();
 
+    //! calls the named method of the object, resolved at run time
+    /** @param pgm_ctx the Program that the call runs in, if not the current Program: a call reference created in
+        another Program runs as a direct call there does (see RunTimeObjectMethodReferenceNode::execValue()); a user
+        method runs in the Program that defines its class in any case
+    */
     DLLLOCAL QoreValue evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
             const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreProgram* pgm_ctx = nullptr) const;
 
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 

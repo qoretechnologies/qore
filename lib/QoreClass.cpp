@@ -3483,6 +3483,7 @@ QoreValue QoreClass::evalPseudoMethod(const QoreValue n, const char* nme, const 
 
 QoreValue QoreClass::evalPseudoMethod(const QoreMethod* m, const QoreExternalMethodVariant* variant,
         const QoreValue n, const QoreListNode* args, ExceptionSink* xsink) const {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     assert(isPseudoClass());
     RuntimeConfig& rc = rc_get_current_ref();
     return priv->evalPseudoMethod(m, reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), n, args, rc,
@@ -4849,6 +4850,7 @@ QoreObject* QoreClass::execConstructor(const QoreClass& obj_cls, const QoreListN
 QoreObject* QoreClass::execConstructorVariant(const QoreExternalMethodVariant* mv, const QoreListNode *args,
         ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     return priv->execConstructor(xsink, rc, reinterpret_cast<const ConstructorMethodVariant*>(mv), args);
 }
 
@@ -4869,13 +4871,14 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
 
 QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
     QORE_TRACE("qore_class_private::evalMethod()");
     assert(self);
 
+    qore_object_private* self_priv = qore_object_private::get(*self);
     // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
     // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
-    if (!self->isValid()) {
+    if (self_priv->status == OS_DELETED) {
         qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
             "already been deleted", self->getClassName(), nme);
         return QoreValue();
@@ -4889,13 +4892,13 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
         return execCopy(self, xsink);
     }
 
-    const QoreMethod* w = getMethodForEval(nme, self->getProgram(), class_ctx, xsink);
+    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
     if (w) {
-        return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx, nullptr, nullptr,
+        return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
             explicit_type_param_instantiation);
     }
 
@@ -7312,7 +7315,7 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
         qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, false, true);
+        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, 0, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);

@@ -823,6 +823,12 @@ public:
     */
     DLLEXPORT func_vec_t findAllFunctionsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const;
 
+    //! returns a list of all functions that match the pattern, each with the namespace it was found in
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT func_ns_vec_t findAllFunctionsRegexNs(const QoreString& pattern, int re_opts, ExceptionSink* xsink)
+            const;
+
     //! returns a list of all namespaces that match the pattern
     /** @since %Qore 0.9
     */
@@ -842,6 +848,14 @@ public:
     /** @since %Qore 0.9
     */
     DLLEXPORT const QoreExternalFunction* findFunction(const char* path) const;
+
+    //! search for the given function in the program and return the namespace it was found in
+    /** @param path a simple function name or a namespace-prefixed path (ex: "NamespaceName::function_name")
+        @param pns set to the namespace that holds the function, or nullptr if it is not found
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreExternalFunction* findFunction(const char* path, const QoreNamespace*& pns) const;
 
     //! search for the given typed hash (hashdecl) in the program; can be a simple function name or a namespace-prefixed path (ex: "NamespaceName::TypedHashName")
     /** @since %Qore 0.9

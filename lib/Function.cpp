@@ -971,10 +971,10 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     // Qore code must never be started on an async I/O thread answering a fast route
@@ -992,7 +992,6 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
-    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1000,12 +999,12 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
         bool n_hide_call_site)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
@@ -1021,7 +1020,6 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
-    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1167,8 +1165,17 @@ private:
 };
 }
 
+#ifdef DEBUG
+thread_local bool qore_dbg_runtime_chosen_variant = false;
+#endif
+
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
+#ifdef DEBUG
+    // a variant that the caller chose at runtime was not committed at parse time
+    const bool runtime_chosen_variant = qore_dbg_runtime_chosen_variant;
+    qore_dbg_runtime_chosen_variant = false;
+#endif
     sandbox_provenance.set(self);
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
@@ -1218,7 +1225,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         // against the Program where they run (their target/creation context).  For a cross-Program
         // callFunction() the switch is deferred (see below) so the dom check is evaluated against the
         // CALLER's options (the cross-Program privilege model).
-        if (!defer_domain_po) {
+        if (!(call_flags & QCEF_DEFER_DOMAIN_PO)) {
             QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
             if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
                 old_rc_po = rc.getParseOptions();
@@ -1274,7 +1281,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 #ifdef DEBUG
             // the invariant of the parse-time variant commitment (see QoreFunction::parseFindVariant())
             {
-                bool runtime_state = false;
+                bool runtime_state = runtime_chosen_variant;
                 for (size_t i = 0, e = tmp.size(); i < e && !runtime_state; ++i) {
                     QoreValue a = tmp->retrieveEntry(i);
                     runtime_state = a.isNothing() || (a.getType() == NT_OBJECT && !a.get<const QoreObject>()->isValid());
@@ -1339,7 +1346,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     // options) can invoke a privileged builtin (e.g. set_save_object_callback(), dom=PROCESS) on a
     // sandboxed target Program, while the body itself still runs under the called Program's options (so
     // e.g. load_module() registers into the target with the target's options).
-    if (pgm_ctx && defer_domain_po) {
+    if (pgm_ctx && (call_flags & QCEF_DEFER_DOMAIN_PO)) {
         QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
         if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
             old_rc_po = rc.getParseOptions();
@@ -1389,8 +1396,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
+    // the search with no variant filter, the usual case, can use a specialization of the search for no filter;
+    // the search with a filter is out of line
+    variant = (call_flags & QRFV_MASK)
+        ? findFilteredVariant(func, class_ctx)
+        : func->runtimeFindVariant(xsink, getArgs(), 0, class_ctx, receiver_type_info, &type_param_instantiation,
+            explicit_type_param_instantiation, &variant_content_dependent);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -1408,6 +1419,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         }
     }
     return 0;
+}
+
+const AbstractQoreFunctionVariant* CodeEvaluationHelper::findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx) {
+    return func->runtimeFindVariant(xsink, getArgs(), call_flags & QRFV_MASK, class_ctx, receiver_type_info,
+        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
 }
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
@@ -3264,7 +3281,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
         bool* content_dependent) const {
     if (type_param_inst) {
@@ -3323,8 +3340,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         //  last_class, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            // skip checking variant if we are only looking for user variants and this variant is builtin
-            if (only_user && !(*i)->isUser()) {
+            // skip a variant that the filter excludes (a builtin one when only user variants are wanted)
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
                 continue;
             }
 
@@ -3476,7 +3493,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         *content_dependent = elements_checked;
     }
 
-    if (!variant && !only_user) {
+    if (!variant && !(variant_filter & QRFV_ONLY_USER)) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, receiver_type_info, true);
         desc->concat("' can be found; ");
@@ -3503,6 +3520,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                         && (skip_method_variant(*i, class_ctx, internal_access)
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
+                    }
+                    // a variant that the filter excludes was not tested, and is not shown to the caller
+                    if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                        continue;
                     }
                     // a noop variant that is not a candidate for the caller was not tested
                     if (qore_runtime_skip_noop_variant((*i)->getParseOptions(ppo), (*i)->getFlags())) {
@@ -3539,7 +3560,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
             if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS) && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
                 //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(), variant->getFunctionality());
-                if (!only_user) {
+                if (!(variant_filter & QRFV_ONLY_USER)) {
                     std::string class_path = classPath();
                     xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to builtin " \
                         "%s '%s%s%s(%s)'", !class_path.empty() ? "method" : "function",
@@ -3574,7 +3595,8 @@ bool QoreFunction::hasInheritedVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3615,6 +3637,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 && (skip_method_variant(*i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
+            }
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                continue;
             }
 
             // get runtime parse options
@@ -3689,7 +3714,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant, receiver_type_info,
-        explicit_type_param_inst);
+        explicit_type_param_inst, variant_filter);
 }
 
 DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
@@ -3726,7 +3751,8 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
 const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
-        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (!variant) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, nullptr, receiver_type_info, true);
@@ -3750,6 +3776,10 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
                     && (skip_method_variant(*i, class_ctx, internal_access)
                         || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                         continue;
+                }
+                // a variant that the filter excludes is not shown to the caller
+                if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                    continue;
                 }
                 desc->concat("\n   ");
                 QoreTypeParamInstantiation candidate_inst;
@@ -5427,7 +5457,7 @@ private:
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -5464,7 +5494,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
-        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
     if (*xsink) {
         return QoreValue();
     }
@@ -5475,7 +5505,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
 // identified at run time
 QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags) const {
     const char* fname = getName();
     // a user function runs in the Program that defined it, as a method runs in its class's (see
     // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
@@ -5493,7 +5523,7 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
     if (*xsink) {
         return QoreValue();
     }

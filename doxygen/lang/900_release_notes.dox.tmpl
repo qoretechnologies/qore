@@ -589,6 +589,17 @@
     another @ref Qore::Program "Program" reads or writes its values, calls its code, or creates objects in it; see
     @ref reflection_caller_privilege (<a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>).
 
+    @par Reflection Respects the Export Boundary of User Modules
+    Sandboxed and restricted code no longer finds, calls, reads or writes through reflection what a user module does
+    not export, nor constructs or uses the static members of a class it does not export; see
+    @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
+    @par Call References to Builtin Methods Run in the Program That Made Them
+    A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
+    %Program that made it, wherever it is called, so restricted code's reference is refused like its direct call, also
+    for an object that module code created, and it raises \c PROGRAM-ERROR once that %Program is deleted; see
+    @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
@@ -1613,6 +1624,12 @@
     - a hash or list whose value type is \c date&lt;absolute&gt; or \c date&lt;relative&gt; took a container of
       \c date values without checking them and then had the value type \c date; it now checks each value and has
       its declared type (see @ref date_literal_subtypes)
+    - a @ref call_reference "call reference" to a method of a builtin object (<tt>\\o.write()</tt>) ran with the
+      parse options of the object's @ref Qore::Program "Program", and one to an inherited method with those of the
+      Program calling it, so restricted code could use a privileged Program's object past the checks that a direct
+      call makes; it now runs as a direct call in the Program that created the reference
+    - a call through a fixed function variant (ex: <tt>FunctionVariant::call()</tt>) with arguments that only another
+      variant accepts called that variant without its arguments
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

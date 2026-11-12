@@ -344,8 +344,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v24: a string value that is not in UTF-8 is serialized with its encoding (QoreAOTValueTag::VT_STRING_ENC), and a
 //!      string constant in an expression that is not in UTF-8 or that has a null byte is a CONST_VALUE and not a
 //!      CONST_STRING, whose text ends at the first null byte and which is rebuilt in the default encoding.
+//! v25: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
+//!      module exports (a function can have public and private variants); an older function record has only the
+//!      function's public flag, which applies to all of its variants.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
+//! First format version whose function variant flags record each variant's public flag (see v25 above).
+constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
+//! the current format version: the newest feature version above
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_VARIANT_PUBLIC_VERSION;
+//! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
+constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
+//! Variant-flags bit of FUNCTIONS records (QORE_AOT_VARIANT_PUBLIC_VERSION): the variant is module-public
+constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

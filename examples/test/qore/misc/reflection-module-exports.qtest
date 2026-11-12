@@ -1,0 +1,531 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires FsUtil
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionModuleExportsTest
+
+#! Reflection respects the export boundary of a user module for sandboxed and restricted callers (qore#5692)
+/** A module exports what it declares \c public.  Code that a sandbox governs, or whose functional domains are
+    restricted, must not reach the other declarations of a module through reflection, for example through
+    \c Class::getClass(obj).getNamespace() for an object that module code created:
+    - a lookup by name in a namespace of the module does not find what the module does not export, and a listing does
+      not include it, as if it did not exist
+    - a reflection handle of a declaration that the module does not export, which the module itself created and handed
+      out, cannot be used to call a function, read or write a variable or constant, or evaluate initializers
+      (\c REFLECTION-ACCESS-ERROR)
+    - a class that the module does not export cannot be constructed, nor its static methods, static members, constants
+      or member initializers used (\c REFLECTION-ACCESS-ERROR); its normal methods and members can be used on an
+      object of the class, as in the language
+    - what the module exports is used as before, and other callers see every declaration, as before
+
+    Every caller kind runs in a child process in each execution mode, with the fixture module loaded from source and
+    compiled with qcc.  The restricted caller loads the module itself, so the module Program has the caller's
+    restrictions and only the export boundary refuses the access.
+*/
+class ReflectionModuleExportsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string module_path;
+    }
+
+    #! the execution modes
+    const ExecModes = ("ast", "ir", "jit", "tiered");
+
+    #! the caller kinds: an unrestricted Program, a Program that a sandbox governs, and one with a restricted domain
+    const Callers = ("trusted", "sandbox", "restricted");
+
+    #! the operations in the order they run, with the results of a trusted caller and of the other callers
+    /** the "state" operation shows the module state that the operations change: a refused write changes nothing
+    */
+    const Ops = (
+        # namespace lookups and listings
+        ("func-hidden", "555", "UNKNOWN-FUNCTION"),
+        ("func-pub", "556", "556"),
+        ("func-args-hidden", "555", "UNKNOWN-FUNCTION"),
+        ("func-list-hidden", "listed", "unlisted"),
+        ("func-list-pub", "listed", "listed"),
+        ("variant-hidden", "555", "UNKNOWN-FUNCTION"),
+        ("variant-pub", "556", "556"),
+        ("variant-args-hidden", "555", "UNKNOWN-FUNCTION"),
+        ("variant-list-hidden", "listed", "unlisted"),
+        ("variant-list-pub", "listed", "listed"),
+        ("const-hidden", "hidden", "UNKNOWN-CONSTANT"),
+        ("const-pub", "pub", "pub"),
+        ("const-list-hidden", "listed", "unlisted"),
+        ("const-list-pub", "listed", "listed"),
+        ("var-get-hidden", "555", "UNKNOWN-GLOBAL-VAR"),
+        ("var-set-hidden", "9:1:556:1", "UNKNOWN-GLOBAL-VAR"),
+        ("var-get-pub", "556", "556"),
+        ("var-list-hidden", "listed", "unlisted"),
+        ("var-list-pub", "listed", "listed"),
+        ("ns-hidden", "HiddenNs", "UNKNOWN-NAMESPACE"),
+        ("ns-pub", "PubNs", "PubNs"),
+        ("ns-list-hidden", "listed", "unlisted"),
+        ("ns-list-pub", "listed", "listed"),
+        ("ns-func-hidden", "5", "UNKNOWN-FUNCTION"),
+        ("ns-func-pub", "6", "6"),
+        ("class-hidden", "HiddenClass", "UNKNOWN-CLASS"),
+        ("class-pub", "PubClass", "PubClass"),
+        ("class-list-hidden", "listed", "unlisted"),
+        ("class-list-pub", "listed", "listed"),
+        ("hash-hidden", "HiddenHash", "UNKNOWN-TYPED-HASH"),
+        ("hash-pub", "PubHash", "PubHash"),
+        ("hash-list-hidden", "listed", "unlisted"),
+        ("hash-list-pub", "listed", "listed"),
+        ("enum-hidden", "HiddenEnum", "UNKNOWN-ENUM"),
+        ("enum-pub", "PubEnum", "PubEnum"),
+        ("enum-list-hidden", "listed", "unlisted"),
+        ("enum-list-pub", "listed", "listed"),
+        # a class that the module does not export, reached through an object that module code created
+        ("static-method-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("static-method-args-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("static-method-pub", "556", "556"),
+        ("static-variant-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("static-variant-args-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("static-get-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("static-set-hidden", "9:9:556:556", "REFLECTION-ACCESS-ERROR"),
+        ("static-get-pub", "556", "556"),
+        ("class-const-hidden", "hc", "REFLECTION-ACCESS-ERROR"),
+        ("class-const-pub", "pc", "pc"),
+        ("new-object-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("new-object-args-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("call-constructor-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("new-object-pub", "8", "8"),
+        ("constructor-method-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("constructor-method-args-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("constructor-variant-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("constructor-variant-args-hidden", "7", "REFLECTION-ACCESS-ERROR"),
+        ("constructor-method-pub", "8", "8"),
+        ("member-default-hidden", "4", "REFLECTION-ACCESS-ERROR"),
+        ("member-default-pub", "8", "8"),
+        # what the language allows with an object of the class, and with a call reference the module hands out
+        ("method-hidden", "7", "7"),
+        ("method-variant-hidden", "7", "7"),
+        ("member-get-hidden", "4", "4"),
+        ("call-ref-hidden", "555", "555"),
+        # reflection handles that the module created for its own declarations and handed out
+        ("handle-func-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-func-args-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-variant-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-func-pub", "556", "556"),
+        ("handle-const-hidden", "hidden", "REFLECTION-ACCESS-ERROR"),
+        ("handle-const-pub", "pub", "pub"),
+        ("handle-var-get-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-var-set-hidden", "9:9:556:556", "REFLECTION-ACCESS-ERROR"),
+        ("handle-var-get-pub", "556", "556"),
+        ("handle-cast-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-cast-values-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-cast-pub", "1", "1"),
+        # a function with a public and a private variant: the other callers see and call only the public one, and a
+        # call is resolved among the public variants (the private variant matches '7' exactly, the public one by
+        # conversion)
+        ("mixed-pub", "5", "5"),
+        ("mixed-resolve", "-1", "7"),
+        ("mixed-resolve-args", "-1", "7"),
+        ("mixed-unmatched", "-2", "RUNTIME-OVERLOAD-ERROR"),
+        ("mixed-unmatched-desc", "NOTHING", "public-only"),
+        ("mixed-func-variants", "3", "1"),
+        ("mixed-func-variant-call", "-1", "no-variant"),
+        ("mixed-ns-variants", "3", "1"),
+        ("mixed-get-variant", "-1", "VARIANT-MATCH-ERROR"),
+        ("mixed-get-variant-args", "-1", "VARIANT-MATCH-ERROR"),
+        ("mixed-get-variant-hash", "-2", "VARIANT-MATCH-ERROR"),
+        ("mixed-handle-variant", "-1", "REFLECTION-ACCESS-ERROR"),
+        # an importer of the module, also of the module compiled with qcc, calls only the public variant
+        ("mixed-direct", "7", "7"),
+        # a given public variant whose arguments only a private variant accepts: the variant is selected for the
+        # arguments among the variants that the caller sees, with the arguments (they were lost before)
+        ("opt-variant-fallback", "-8", "RUNTIME-OVERLOAD-ERROR"),
+        ("opt-get-variant-fallback", "-8", "RUNTIME-OVERLOAD-ERROR"),
+        ("mixed-variant-fallback", "-2", "RUNTIME-OVERLOAD-ERROR"),
+        # the number of variants agrees with getVariants()
+        ("mixed-num-variants", "3", "1"),
+        # a variant handle of a public function in a namespace that the module does not export, and its function
+        ("handle-variant-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
+        ("handle-variant-function-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
+        # a call reference to a method of a reflection handle is checked as a direct call of the method
+        ("ref-mixed-call", "-1", "7"),
+        ("ref-handle-func-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("ref-type-hash-cast", "555", "REFLECTION-ACCESS-ERROR"),
+        ("ref-get-variants", "3", "1"),
+        # a value of a typed hash that the module does not export: its type gives a handle in the caller's Program
+        ("type-hash-cast", "555", "REFLECTION-ACCESS-ERROR"),
+        ("type-hash-cast-values", "555", "REFLECTION-ACCESS-ERROR"),
+        ("type-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
+        ("handle-pub-hash-member-default", "1", "1"),
+        # an exported typed hash with an initializer that runs module code: the caller could name it
+        ("type-pub-init-hash-cast", "556", "556"),
+        ("type-pub-init-hash-member-default", "556", "556"),
+        # a handle of a public function in a namespace that the module does not export
+        ("handle-func-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
+        # hidden_var is 555 for the other callers only through the call reference
+        ("state", "555:9:556:556", "555:1:556:556"),
+    );
+
+    constructor() : QUnit::Test("reflection module export boundary test", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the child processes load the reflection module that this test loaded
+        module_path = dirname(get_module_hash().reflection.filename);
+
+        addTestCase("the export boundary applies to sandboxed and restricted callers in every execution mode",
+            \sourceTest());
+        addTestCase("the export boundary applies to a module compiled with qcc", \aotTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-reflection-module-exports-");
+        writeFixtures(tmp.path);
+        checkAll(tmp.path, "source");
+    }
+
+    aotTest() {
+        TmpDir tmp("qore-reflection-module-exports-aot-");
+        writeFixtures(tmp.path);
+        string src = tmp.path + DirSep + "ReflectionExportFixture.qm";
+        string qmod = tmp.path + DirSep + "ReflectionExportFixture.qmod";
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, moduleDirs(tmp.path),
+            qcc_bin, qmod, src), \status);
+        if (status || !is_file(qmod)) {
+            testSkip(sprintf("qcc could not compile the fixture module: %s", out));
+        }
+        # the probes must load the compiled module, not its source
+        unlink(src);
+        checkAll(tmp.path, "AOT");
+    }
+
+    private checkAll(string dir, string label) {
+        foreach string caller in (Callers) {
+            hash<string, string> expected;
+            foreach list<string> op in (Ops) {
+                expected{op[0]} = caller == "trusted" ? op[1] : op[2];
+            }
+            foreach string mode in (ExecModes) {
+                string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s "
+                    "--exec-mode=%s %s %s 2>&1", libqore_dir, libqore_dir, moduleDirs(dir), qore_bin, mode,
+                    dir + DirSep + "probe.q", caller));
+                hash<string, string> results;
+                foreach string line in (out.split("\n")) {
+                    *list<*string> m = (line =~ x/^([a-z-]+)=(.*)$/);
+                    if (m) {
+                        results{m[0]} = m[1];
+                    }
+                }
+                # one comparison reports every operation that differs, not only the first one
+                assertEq(expected, results, sprintf("%s %s %s probe output:\n%s", label, mode, caller, out));
+            }
+        }
+    }
+
+    private string moduleDirs(string dir) {
+        return dir + ":" + module_path + (ENV.QORE_MODULE_DIR.val() ? ":" + ENV.QORE_MODULE_DIR : "");
+    }
+
+    private writeFixtures(string dir) {
+        write(dir, "ReflectionExportFixture.qm", FixtureSource);
+        string ops = foldl $1 + ", " + $2, (map sprintf("%y", $1[0]), Ops);
+        write(dir, "probe.q", "%modern\n"
+            "const Ops = (" + ops + ");\n"
+            + ProbeSource);
+    }
+
+    private write(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+
+    #! the module: declarations that it does not export, the same declarations exported, and a factory
+    const FixtureSource = "%modern
+%requires reflection
+module ReflectionExportFixture {
+    version = \"1.0\";
+    desc = \"reflection export boundary test fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+# declarations that the module does not export
+our int hidden_var;
+const HIDDEN = \"hidden\";
+int sub hidden_func() { return hidden_var = 555; }
+namespace HiddenNs {
+    int sub in_hidden_ns() { return 3; }
+    public int sub pub_in_hidden() { return 4; }
+}
+
+# a function with a public variant and a private one, which an importer of the module does not see
+public int sub mixed(softint i) { return i; }
+int sub mixed(string s) { return -1; }
+int sub mixed(hash<auto> h) { return -2; }
+# a public variant and a private one that accepts what the public one does not
+public int sub opt(softint i) { return i; }
+int sub opt(*hash<auto> h) { return -8; }
+hashdecl HiddenHash {
+    int a = hidden_func();
+}
+enum HiddenEnum {
+    HA = 1,
+}
+class HiddenClass {
+    public {
+        static int s = 1;
+        const C = \"hc\";
+        int mv = 4;
+    }
+    constructor() {}
+    static int setS() { return s = 555; }
+    int m() { return 7; }
+}
+
+# declarations that the module exports
+public our int pub_var;
+public const PUB = \"pub\";
+public int sub pub_func() { return pub_var = 556; }
+public namespace PubNs {
+    int sub hidden_in_pub() { return 5; }
+    public int sub pub_in_pub() { return 6; }
+}
+public hashdecl PubHash {
+    int a = 1;
+}
+# an exported typed hash whose initializer runs the module's code
+public hashdecl PubInitHash {
+    int a = pub_func();
+}
+public enum PubEnum {
+    PA = 2,
+}
+public class PubClass {
+    public {
+        static int s = 1;
+        const C = \"pc\";
+        int mv = 8;
+    }
+    constructor() {}
+    static int setS() { return s = 556; }
+    int m() { return 8; }
+}
+
+#! hands out objects of both classes, a call reference, and reflection handles of the module's own declarations
+public class Factory {
+    static object makeHidden() { return new HiddenClass(); }
+    static object makePub() { return new PubClass(); }
+    static code hiddenRef() { return \\hidden_func(); }
+    static Function hiddenFunction() { return Function::forName(\"hidden_func\"); }
+    static Function pubFunction() { return Function::forName(\"pub_func\"); }
+    static Constant hiddenConstant() { return Constant::forName(\"HIDDEN\"); }
+    static Constant pubConstant() { return Constant::forName(\"PUB\"); }
+    static GlobalVar hiddenGlobalVar() { return GlobalVar::forName(\"hidden_var\"); }
+    static GlobalVar pubGlobalVar() { return GlobalVar::forName(\"pub_var\"); }
+    static TypedHash hiddenTypedHash() { return TypedHash::forName(\"HiddenHash\"); }
+    static TypedHash pubTypedHash() { return TypedHash::forName(\"PubHash\"); }
+    static Function hiddenNsFunction() { return Function::forName(\"HiddenNs::pub_in_hidden\"); }
+    static FunctionVariant hiddenNsVariant() { return Function::forName(\"HiddenNs::pub_in_hidden\").getVariants()[0]; }
+    static FunctionVariant mixedHiddenVariant() {
+        foreach FunctionVariant v in (Function::forName(\"mixed\").getVariants()) {
+            if (v.getParamString() =~ /string/) {
+                return v;
+            }
+        }
+        throw \"TEST-ERROR\", \"no string variant\";
+    }
+    #! a value of the typed hash that the module does not export; no initializer runs
+    static hash<auto> hiddenHashValue() { return <HiddenHash>{\"a\": 0}; }
+    static hash<auto> pubInitHashValue() { return <PubInitHash>{\"a\": 0}; }
+    #! the state that the operations change
+    static string state() { return sprintf(\"%d:%d:%d:%d\", hidden_var, HiddenClass::s, pub_var, PubClass::s); }
+}
+";
+
+    #! runs each operation in a Program of the caller kind given as the argument and prints its result
+    const ProbeSource = "const CallerSource = \"%requires reflection
+%requires ReflectionExportFixture
+string sub listed(list<auto> l, string name) {
+    return (select l, $1.getName() == name) ? 'listed' : 'unlisted';
+}
+auto sub run(string op) {
+    object ho = Factory::makeHidden();
+    object po = Factory::makePub();
+    Class hc = Class::getClass(ho);
+    Class pc = Class::getClass(po);
+    Namespace root = hc.getNamespace();
+    switch (op) {
+        case 'func-hidden': return root.getFunction('hidden_func').call();
+        case 'func-pub': return root.getFunction('pub_func').call();
+        case 'func-args-hidden': return root.getFunction('hidden_func').callArgs();
+        case 'func-list-hidden': return listed(root.getFunctions(), 'hidden_func');
+        case 'func-list-pub': return listed(root.getFunctions(), 'pub_func');
+        case 'variant-hidden': return root.getVariant('hidden_func').call();
+        case 'variant-pub': return root.getVariant('pub_func').call();
+        case 'variant-args-hidden': return root.getVariantArgs('hidden_func', ()).callArgs();
+        case 'variant-list-hidden': return listed((map $1.getFunction(), root.getVariants()), 'hidden_func');
+        case 'variant-list-pub': return listed((map $1.getFunction(), root.getVariants()), 'pub_func');
+        case 'const-hidden': return root.getConstant('HIDDEN').getValue();
+        case 'const-pub': return root.getConstant('PUB').getValue();
+        case 'const-list-hidden': return listed(root.getConstants(), 'HIDDEN');
+        case 'const-list-pub': return listed(root.getConstants(), 'PUB');
+        case 'var-get-hidden': return root.getGlobalVar('hidden_var').getValue();
+        case 'var-set-hidden': root.getGlobalVar('hidden_var').setValue(9); return Factory::state();
+        case 'var-get-pub': return root.getGlobalVar('pub_var').getValue();
+        case 'var-list-hidden': return listed(root.getGlobalVars(), 'hidden_var');
+        case 'var-list-pub': return listed(root.getGlobalVars(), 'pub_var');
+        case 'ns-hidden': return root.getNamespace('HiddenNs').getName();
+        case 'ns-pub': return root.getNamespace('PubNs').getName();
+        case 'ns-list-hidden': return listed(root.getNamespaces(), 'HiddenNs');
+        case 'ns-list-pub': return listed(root.getNamespaces(), 'PubNs');
+        case 'ns-func-hidden': return root.getNamespace('PubNs').getFunction('hidden_in_pub').call();
+        case 'ns-func-pub': return root.getNamespace('PubNs').getFunction('pub_in_pub').call();
+        case 'class-hidden': return root.getClass('HiddenClass').getName();
+        case 'class-pub': return root.getClass('PubClass').getName();
+        case 'class-list-hidden': return listed(root.getClasses(), 'HiddenClass');
+        case 'class-list-pub': return listed(root.getClasses(), 'PubClass');
+        case 'hash-hidden': return root.getTypedHash('HiddenHash').getName();
+        case 'hash-pub': return root.getTypedHash('PubHash').getName();
+        case 'hash-list-hidden': return listed(root.getTypedHashes(), 'HiddenHash');
+        case 'hash-list-pub': return listed(root.getTypedHashes(), 'PubHash');
+        case 'enum-hidden': return root.getEnum('HiddenEnum').getName();
+        case 'enum-pub': return root.getEnum('PubEnum').getName();
+        case 'enum-list-hidden': return listed(root.getEnums(), 'HiddenEnum');
+        case 'enum-list-pub': return listed(root.getEnums(), 'PubEnum');
+        case 'static-method-hidden': return hc.getStaticMethod('setS').call();
+        case 'static-method-args-hidden': return hc.getStaticMethod('setS').callArgs();
+        case 'static-method-pub': return pc.getStaticMethod('setS').call();
+        case 'static-variant-hidden': return hc.getStaticVariant('setS').call();
+        case 'static-variant-args-hidden': return hc.getStaticVariant('setS').callArgs();
+        case 'static-get-hidden': return hc.getStaticMember('s').getValue();
+        case 'static-set-hidden': hc.getStaticMember('s').setValue(9); return Factory::state();
+        case 'static-get-pub': return pc.getStaticMember('s').getValue();
+        case 'class-const-hidden': return hc.getConstant('C').getValue();
+        case 'class-const-pub': return pc.getConstant('C').getValue();
+        case 'new-object-hidden': return hc.newObject().m();
+        case 'new-object-args-hidden': return hc.newObjectArgs().m();
+        case 'call-constructor-hidden': return hc.callConstructor((), NOTHING).m();
+        case 'new-object-pub': return pc.newObject().m();
+        case 'constructor-method-hidden': return hc.getConstructorMethod().call().m();
+        case 'constructor-method-args-hidden': return hc.getConstructorMethod().callArgs().m();
+        case 'constructor-variant-hidden': return hc.getConstructorVariants()[0].call().m();
+        case 'constructor-variant-args-hidden': return hc.getConstructorVariants()[0].callArgs().m();
+        case 'constructor-method-pub': return pc.getConstructorMethod().call().m();
+        case 'member-default-hidden': return hc.getMember('mv').getDefaultValue();
+        case 'member-default-pub': return pc.getMember('mv').getDefaultValue();
+        case 'method-hidden': return hc.getNormalMethod('m').call(ho);
+        case 'method-variant-hidden': return hc.getNormalVariant('m').call(ho);
+        case 'member-get-hidden': return cast<NormalMember>(hc.getMember('mv')).getValue(ho);
+        case 'call-ref-hidden': return Factory::hiddenRef()();
+        case 'handle-func-hidden': return Factory::hiddenFunction().call();
+        case 'handle-func-args-hidden': return Factory::hiddenFunction().callArgs();
+        case 'handle-variant-hidden': return Factory::hiddenFunction().getVariants()[0].call();
+        case 'handle-func-pub': return Factory::pubFunction().call();
+        case 'handle-const-hidden': return Factory::hiddenConstant().getValue();
+        case 'handle-const-pub': return Factory::pubConstant().getValue();
+        case 'handle-var-get-hidden': return Factory::hiddenGlobalVar().getValue();
+        case 'handle-var-set-hidden': GlobalVar hv = Factory::hiddenGlobalVar(); hv.setValue(9);
+            return Factory::state();
+        case 'handle-var-get-pub': return Factory::pubGlobalVar().getValue();
+        case 'handle-cast-hidden': return Factory::hiddenTypedHash().doCast({}).a;
+        case 'handle-cast-values-hidden': return Factory::hiddenTypedHash().doCastValues({'x': {}}).x.a;
+        case 'handle-cast-pub': return Factory::pubTypedHash().doCast({}).a;
+        case 'mixed-pub': return root.getFunction('mixed').call(5);
+        case 'mixed-resolve': return root.getFunction('mixed').call('7');
+        case 'mixed-resolve-args': return root.getFunction('mixed').callArgs(('7',));
+        case 'mixed-unmatched': return root.getFunction('mixed').call({});
+        case 'mixed-unmatched-desc': {
+            try {
+                root.getFunction('mixed').call({});
+            } catch (hash<ExceptionInfo> ex) {
+                # the variants listed in the error are only those the caller can see
+                return ex.desc =~ /string s|hash<auto> h/ ? 'private-listed' : 'public-only';
+            }
+            return NOTHING;
+        }
+        case 'mixed-func-variants': return root.getFunction('mixed').getVariants().size();
+        case 'mixed-func-variant-call': {
+            foreach FunctionVariant v in (root.getFunction('mixed').getVariants()) {
+                if (v.getParamString() =~ /string/) {
+                    return v.call('7');
+                }
+            }
+            return 'no-variant';
+        }
+        case 'mixed-ns-variants': return (select root.getVariants(), $1.getFunction().getName() == 'mixed').size();
+        case 'mixed-get-variant': return root.getVariant('mixed', StringType).call('7');
+        case 'mixed-get-variant-args': return root.getVariantArgs('mixed', (StringType,)).call('7');
+        case 'mixed-get-variant-hash': return root.getFunction('mixed').getVariant(HashType).call({});
+        case 'mixed-handle-variant': return Factory::mixedHiddenVariant().call('7');
+        case 'mixed-direct': return mixed('7');
+        case 'opt-variant-fallback': return root.getFunction('opt').getVariants()[0].call({});
+        case 'opt-get-variant-fallback': return root.getFunction('opt').getVariant(SoftIntType).call({});
+        case 'mixed-variant-fallback': {
+            foreach FunctionVariant v in (root.getFunction('mixed').getVariants()) {
+                if (v.getParamString() =~ /softint/) {
+                    return v.call({});
+                }
+            }
+            return 'no-variant';
+        }
+        case 'mixed-num-variants': return root.getFunction('mixed').numVariants();
+        case 'handle-variant-hidden-ns': return Factory::hiddenNsVariant().call();
+        case 'handle-variant-function-hidden-ns': return Factory::hiddenNsVariant().getFunction().call();
+        case 'ref-mixed-call': { Function f = root.getFunction('mixed'); code c = \\\\f.call(); return c('7'); }
+        case 'ref-handle-func-hidden': { Function f = Factory::hiddenFunction(); code c = \\\\f.call(); return c(); }
+        case 'ref-type-hash-cast': {
+            TypedHash th = Type::getType(Factory::hiddenHashValue()).getTypedHash();
+            code c = \\\\th.doCast();
+            return c({}).a;
+        }
+        case 'ref-get-variants': { Function f = root.getFunction('mixed'); code c = \\\\f.getVariants(); return c().size(); }
+        case 'type-hash-cast': return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCast({}).a;
+        case 'type-hash-cast-values':
+            return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCastValues({'x': {}}).x.a;
+        case 'type-hash-member-default':
+            return Type::getType(Factory::hiddenHashValue()).getTypedHash().getMember('a').getDefaultValue();
+        case 'handle-hash-member-default': return Factory::hiddenTypedHash().getMember('a').getDefaultValue();
+        case 'handle-pub-hash-member-default': return Factory::pubTypedHash().getMember('a').getDefaultValue();
+        case 'type-pub-init-hash-cast': return Type::getType(Factory::pubInitHashValue()).getTypedHash().doCast({}).a;
+        case 'type-pub-init-hash-member-default':
+            return Type::getType(Factory::pubInitHashValue()).getTypedHash().getMember('a').getDefaultValue();
+        case 'handle-func-hidden-ns': return Factory::hiddenNsFunction().call();
+        case 'state': return Factory::state();
+    }
+    throw 'TEST-ERROR', op;
+}
+\";
+string kind = ARGV[0];
+# the restricted caller loads the module itself, so the module Program has its restrictions
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | (kind == \"restricted\" ? PO_NO_PROCESS_CONTROL : 0), True);
+p.parse(CallerSource, \"caller\");
+if (kind == \"sandbox\") {
+    p.setSandboxManager(new SandboxManager());
+}
+foreach string op in (Ops) {
+    try {
+        auto v = p.callFunction(\"run\", op);
+        printf(\"%s=%s\\n\", op, exists v ? v.toString() : \"NOTHING\");
+    } catch (hash<ExceptionInfo> ex) {
+        bool code_only = ex.err == \"REFLECTION-ACCESS-ERROR\" || ex.err =~ /^UNKNOWN-/
+            || ex.err == \"RUNTIME-OVERLOAD-ERROR\" || ex.err == \"VARIANT-MATCH-ERROR\";
+        printf(\"%s=%s\\n\", op, code_only ? ex.err : ex.err + \": \" + ex.desc);
+    }
+}
+";
+}
