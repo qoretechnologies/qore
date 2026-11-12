@@ -2717,350 +2717,6 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
     return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
 }
 
-//! Advance pointer past one AOTExprKind-encoded expression without allocating objects
-static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
-    if (p >= e) { return; }
-    uint8_t ekind = QoreAOTBinaryReader::readU8(p);
-    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
-
-    if (ek == AOTExprKind::HASH_DEREF) {
-        skipOneExpr(rdr, p, e);  // left (base expression)
-        skipOneExpr(rdr, p, e);  // right (key expression)
-        return;
-    }
-    if (ek == AOTExprKind::PLUS || ek == AOTExprKind::SQUARE_BRACKET
-            || ek == AOTExprKind::MULTIPLY || ek == AOTExprKind::DIVIDE
-            || ek == AOTExprKind::MODULO || ek == AOTExprKind::PUSH
-            || ek == AOTExprKind::UNSHIFT || ek == AOTExprKind::NULL_COAL
-            || ek == AOTExprKind::VALUE_COAL || ek == AOTExprKind::FOLDL
-            || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
-            || ek == AOTExprKind::SELECT || ek == AOTExprKind::RANGE
-            || ek == AOTExprKind::ASSIGN || ek == AOTExprKind::LOG_AND
-            || ek == AOTExprKind::LOG_OR || ek == AOTExprKind::BIT_AND
-            || ek == AOTExprKind::BIT_OR || ek == AOTExprKind::BIT_XOR
-            || ek == AOTExprKind::SHIFT_LEFT || ek == AOTExprKind::SHIFT_RIGHT
-            || ek == AOTExprKind::PLUS_EQ || ek == AOTExprKind::MINUS_EQ
-            || ek == AOTExprKind::MULTIPLY_EQ || ek == AOTExprKind::DIVIDE_EQ
-            || ek == AOTExprKind::MODULO_EQ || ek == AOTExprKind::AND_EQ
-            || ek == AOTExprKind::OR_EQ || ek == AOTExprKind::XOR_EQ
-            || ek == AOTExprKind::SHL_EQ || ek == AOTExprKind::SHR_EQ) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::ITERATE) {
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::STREAMING) {
-        if (p < e) {
-            ++p;  // streaming operator kind
-        }
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::SQUARE_BRACKET_RANGE) {
-        skipOneExpr(rdr, p, e);  // source expression
-        skipOneExpr(rdr, p, e);  // start expression
-        skipOneExpr(rdr, p, e);  // stop expression
-        return;
-    }
-    if (ek == AOTExprKind::MAP_SELECT || ek == AOTExprKind::HASH_MAP_OP) {
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::HASH_MAP_SELECT_OP) {
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::PARSE_REF) {
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_PARSE_REF_TYPE) != 0) {
-            rdr.readStringRef(p);  // reference type path
-        }
-        skipOneExpr(rdr, p, e);  // inner lvalue expression
-        return;
-    }
-    if (ek == AOTExprKind::EXISTS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::IMPLICIT_ARG) {
-        (void)QoreAOTBinaryReader::readI64(p);  // offset
-        return;
-    }
-    if (ek == AOTExprKind::KEYS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::IMPLICIT_ELEM) {
-        return;
-    }
-    if (ek == AOTExprKind::INSTANCEOF) {
-        rdr.readStringRef(p);  // type path
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::REGEX_MATCH || ek == AOTExprKind::REGEX_NMATCH
-            || ek == AOTExprKind::REGEX_EXTRACT) {
-        rdr.readStringRef(p);  // pattern
-        (void)QoreAOTBinaryReader::readI64(p);  // options
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::PRE_INC || ek == AOTExprKind::PRE_DEC
-            || ek == AOTExprKind::POST_INC || ek == AOTExprKind::POST_DEC) {
-        skipOneExpr(rdr, p, e);  // lvalue operand
-        return;
-    }
-    if (ek == AOTExprKind::LOG_EQ || ek == AOTExprKind::LOG_NE
-            || ek == AOTExprKind::LOG_LT || ek == AOTExprKind::LOG_GT
-            || ek == AOTExprKind::LOG_LE || ek == AOTExprKind::LOG_GE) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::LOG_NOT || ek == AOTExprKind::UNARY_MINUS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::QUESTION) {
-        skipOneExpr(rdr, p, e);  // condition
-        skipOneExpr(rdr, p, e);  // true expression
-        skipOneExpr(rdr, p, e);  // false expression
-        return;
-    }
-    if (ek == AOTExprKind::TRIM || ek == AOTExprKind::CHOMP
-            || ek == AOTExprKind::POP || ek == AOTExprKind::SHIFT
-            || ek == AOTExprKind::ELEMENTS || ek == AOTExprKind::DELETE
-            || ek == AOTExprKind::REMOVE || ek == AOTExprKind::BACKGROUND) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::CONTEXT_REF) {
-        rdr.readStringRef(p);  // member
-        return;
-    }
-    if (ek == AOTExprKind::CONTEXT_ROW) {
-        return;
-    }
-    if (ek == AOTExprKind::COMPLEX_CONTEXT_REF) {
-        rdr.readStringRef(p);  // context name
-        rdr.readStringRef(p);  // member
-        (void)QoreAOTBinaryReader::readI64(p);  // stack offset
-        return;
-    }
-    if (ek == AOTExprKind::MINUS) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::HASH_LITERAL) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            rdr.readStringRef(p);  // key
-            skipOneExpr(rdr, p, e);  // value (recursive)
-        }
-        return;
-    }
-    if (ek == AOTExprKind::PARSE_HASH) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            skipOneExpr(rdr, p, e);  // key expression
-            skipOneExpr(rdr, p, e);  // value expression
-        }
-        return;
-    }
-    if (ek == AOTExprKind::LIST_LITERAL) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            skipOneExpr(rdr, p, e);  // each element (recursive)
-        }
-        return;
-    }
-    if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
-        rdr.readStringRef(p);  // class path
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-            rdr.readStringRef(p);  // instantiated object type path
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    if (ek == AOTExprKind::CALLREF_CALL) {
-        skipOneExpr(rdr, p, e);  // callee expression
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + optional receiver type + num_args(u8)
-    // + N×skipOneExpr
-    if (ek == AOTExprKind::STATIC_METHOD_CALL) {
-        rdr.readStringRef(p);  // class path
-        rdr.readStringRef(p);  // method name
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
-            rdr.readStringRef(p);  // receiver type path
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    if (ek == AOTExprKind::SELF_METHOD_CALL) {
-        rdr.readStringRef(p);
-        rdr.readStringRef(p);
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
-            uint8_t na = QoreAOTBinaryReader::readU8(p);
-            for (uint8_t i = 0; i < na; ++i) {
-                skipOneExpr(rdr, p, e);
-            }
-        }
-        return;
-    }
-    // Two-stringref kinds
-    if (ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
-        rdr.readStringRef(p);
-        rdr.readStringRef(p);
-        return;
-    }
-    // HASHDECL_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
-    if (ek == AOTExprKind::HASHDECL_NEW) {
-        rdr.readStringRef(p);  // hashdecl path
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // COMPLEX_HASH_NEW/COMPLEX_LIST_NEW: stringref + u8 num_args + N×encoded args
-    // COMPLEX_BUFFER_NEW recursive expressions always carry an init-kind byte.
-    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW
-            || ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
-        rdr.readStringRef(p);  // type path
-        if (ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
-            QoreAOTBinaryReader::readU8(p);  // QoreComplexBufferInitKind
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref)
-    //   + optional native_body_key(stringref) + return_type(stringref)
-    //   + num_params(u16) + params + varargs flags + num_captured(u16) + captured
-    //   + has_ir(u8) + [ir_size(u32) + ir_data]
-    if (ek == AOTExprKind::CLOSURE_CREATE) {
-        rdr.readStringRef(p);  // flags
-        rdr.readStringRef(p);  // class_type_path
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
-            rdr.readStringRef(p);  // native body key
-        }
-        rdr.readStringRef(p);  // return type
-        uint16_t np = QoreAOTBinaryReader::readU16(p);
-        for (uint16_t i = 0; i < np; ++i) {
-            rdr.readStringRef(p);  // param name
-            rdr.readStringRef(p);  // param type
-            uint8_t hd = QoreAOTBinaryReader::readU8(p);
-            if (hd) {
-                std::string val_error;
-                QoreValue dv = rdr.readValue(p, e, val_error);
-                dv.discard(nullptr);
-            }
-        }
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
-            QoreAOTBinaryReader::readU16(p);  // closure flags
-        } else {
-            QoreAOTBinaryReader::readU8(p);  // legacy varargs
-        }
-        uint16_t nc = QoreAOTBinaryReader::readU16(p);
-        for (uint16_t i = 0; i < nc; ++i) {
-            rdr.readStringRef(p);  // captured name
-            QoreAOTBinaryReader::readU32(p);  // parent slot
-        }
-        uint8_t has_ir = QoreAOTBinaryReader::readU8(p);
-        if (has_ir) {
-            uint32_t ir_size = QoreAOTBinaryReader::readU32(p);
-            p += ir_size;  // skip IR data
-        }
-        return;
-    }
-    // Inline FUNC_CALL: function name + optional variant signature + optional serialized args.
-    // Expression slots use a separate compact slot payload and are not skipped here.
-    if (ek == AOTExprKind::FUNC_CALL) {
-        rdr.readStringRef(p);
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
-            rdr.readStringRef(p);
-        }
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_INLINE_CALL_ARGS) != 0) {
-            uint8_t na = QoreAOTBinaryReader::readU8(p);
-            for (uint8_t i = 0; i < na; ++i) {
-                skipOneExpr(rdr, p, e);
-            }
-        }
-        return;
-    }
-    // CONST_NUMBER carries its precision in a second stringref from
-    // QORE_AOT_NUMBER_PRECISION_VERSION; skipping only the digits would desynchronise the stream
-    if (ek == AOTExprKind::CONST_NUMBER) {
-        rdr.readStringRef(p);
-        if (rdr.getHeader().version >= QORE_AOT_NUMBER_PRECISION_VERSION) {
-            rdr.readStringRef(p);
-        }
-        return;
-    }
-    // One-stringref kinds
-    if (ek == AOTExprKind::RUNTIME_CONST_REF
-            || ek == AOTExprKind::CONST_BINARY
-            || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
-            || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF) {
-        rdr.readStringRef(p);
-        return;
-    }
-    // Cast kinds: stringref + u8 or_nothing + u8 has_inner + optional inner expression
-    if (ek == AOTExprKind::CAST_HASHDECL || ek == AOTExprKind::CAST_COMPLEX_HASH
-            || ek == AOTExprKind::CAST_COMPLEX_LIST || ek == AOTExprKind::CAST_CLASS
-            || ek == AOTExprKind::CAST_ENUM || ek == AOTExprKind::CAST_SCALAR) {
-        rdr.readStringRef(p);
-        QoreAOTBinaryReader::readU8(p);
-        uint8_t has_inner = QoreAOTBinaryReader::readU8(p);
-        if (has_inner) {
-            skipOneExpr(rdr, p, e);
-        }
-        return;
-    }
-    // Inline constants
-    if (ek == AOTExprKind::CONST_INT) {
-        p += 8;
-        return;
-    }
-    if (ek == AOTExprKind::CONST_FLOAT) {
-        p += 8;
-        return;
-    }
-    if (ek == AOTExprKind::CONST_BOOL) {
-        QoreAOTBinaryReader::readU8(p);
-        return;
-    }
-    if (ek == AOTExprKind::CONST_VALUE) {
-        std::string value_error;
-        QoreValue v = rdr.readValue(p, e, value_error);
-        v.discard(nullptr);
-        return;
-    }
-    // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
-}
-
 // Forward declaration for use by expression registry handlers (Phase 3.2)
 QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
@@ -5867,6 +5523,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::CLOSURE_CREATE: {
+                // Establish a current-Program context for the whole closure record: the types and default values
+                // of its parameters (a default can be an expression tree that calls a function of the Program,
+                // qore#5827), the class-ref resolution below and the closure constructor are all resolved in the
+                // closure's Program, which the value reader takes from the current one.  Class resolution can fall
+                // back to parseFindClass() (for private/internal classes that are not in the committed runtime
+                // maps), which reads the parse options of the *current* Program; without this context
+                // getProgram() is null and the lookup dereferences it — crashing, e.g., for a closure inside a
+                // method capturing a parameter, where the method's class is resolved here at load time.
+                //
+                // A plain current-Program context (not a parse lock) is used: this AOT slot-map reconstruction can
+                // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
+                // order with another loader thread that already holds the Program parse lock and is waiting for AOT
+                // init.
+                QoreProgramContextHelper closure_pch(pgm);
+
                 // Read flags
                 const char* flags_str = reader.readStringRef(ptr);
                 const char* class_type_path = reader.readStringRef(ptr);
@@ -5898,6 +5569,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::vector<std::string> param_names(closure_num_params);
                 std::vector<const QoreTypeInfo*> param_types(closure_num_params);
                 std::vector<QoreValue> defaults(closure_num_params);
+                // true if a default cannot be read: the record is read to its end, and the function is not
+                // registered
+                bool default_failed = false;
                 for (uint16_t p = 0; p < closure_num_params; ++p) {
                     const char* pname = reader.readStringRef(ptr);
                     param_names[p] = pname ? pname : "";
@@ -5908,6 +5582,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (has_default) {
                         std::string val_error;
                         defaults[p] = reader.readValue(ptr, end, val_error);
+                        if (!val_error.empty()) {
+                            // a closure without the default would run with another value: the function is not
+                            // registered
+                            setClosureIRError("closure expression slot " + std::to_string(i) + " parameter '"
+                                + param_names[p] + "' default: " + val_error);
+                            closure_ir_missing = true;
+                            default_failed = true;
+                        }
                     }
                 }
                 bool closure_sig_has_varargs = false;
@@ -5943,6 +5625,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
                     closure_ir_missing = true;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
 
@@ -5956,27 +5641,22 @@ static QoreAOTContext* buildContextFromSlotMap(
                     setClosureIRError(msg);
                     closure_ir_missing = true;
                     ptr = ir_boundary;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
                 const uint8_t* ir_end_ptr = ptr + ir_size;
+                if (default_failed) {
+                    // the closure is not built: the function fails (closure_ir_missing)
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
+                    ptr = ir_end_ptr;
+                    continue;
+                }
 
-                // Resolve class for method context
-                // Establish a current-Program context for BOTH the class-ref
-                // resolution below and the closure constructor.  Class resolution
-                // can fall back to parseFindClass() (for private/internal classes
-                // that are not in the committed runtime maps), which reads the parse
-                // options of the *current* Program; without this context getProgram()
-                // is null and the lookup dereferences it — crashing, e.g., for a
-                // closure inside a method capturing a parameter, where the method's
-                // class is resolved here at load time.
-                //
-                // A plain current-Program context (not a parse lock) is used: this
-                // AOT slot-map reconstruction can run while the global AOT init lock
-                // is held, and taking a Program parse lock here can invert lock order
-                // with another loader thread that already holds the Program parse lock
-                // and is waiting for AOT init.
-                QoreProgramContextHelper closure_pch(pgm);
-
+                // Resolve class for method context (in the closure's Program; see closure_pch above)
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);

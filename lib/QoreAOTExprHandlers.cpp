@@ -1346,6 +1346,15 @@ static bool write_expr_closure_create(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
+    // The closure record is read and the closure constructed in the closure's Program: the types and default values
+    // of its parameters (a default can be an expression tree that calls a function of the Program, qore#5827), its
+    // class and the closure itself.  This runs when a cold call or a closure's first call deserializes IR, so it
+    // selects the Program without claiming parse ownership, like the CLOSURE_CREATE slot reader in
+    // buildContextFromSlotMap(): a module loader can own parsing while waiting for this thread.  The caller keeps the
+    // Program alive, and the Program's runtime metadata lock protects the locations, strings, and locals that the
+    // closure signature allocates.
+    QoreProgramContextHelper closure_program_context(ctx.pgm);
+
     // Read flags
     const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
     const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
@@ -1374,6 +1383,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     std::vector<std::string> param_names(closure_num_params);
     std::vector<const QoreTypeInfo*> param_types(closure_num_params);
     std::vector<QoreValue> defaults(closure_num_params);
+    // the error of a default that cannot be read; the record is read to its end before the error is returned, so that
+    // a reader that reads more expressions after this one stays at their start
+    std::string default_error;
     for (uint16_t p = 0; p < closure_num_params; ++p) {
         const char* pname = ctx.reader.readStringRef(ctx.ptr);
         param_names[p] = pname ? pname : "";
@@ -1384,6 +1396,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (has_default) {
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            if (!val_error.empty() && default_error.empty()) {
+                // a closure without the default would run with another value
+                default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
+            }
         }
     }
     bool closure_sig_has_varargs = false;
@@ -1411,21 +1427,36 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Read closure body IR
     uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!has_ir) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
         ctx.error = "closure has no IR data";
         return QoreValue();
     }
 
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    // the IR must be in the data, as in the slot-map reader (buildContextFromSlotMap())
+    if (ctx.ptr > ctx.end || ir_size > static_cast<size_t>(ctx.end - ctx.ptr)) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        // at the end of the data, so that no reader reads the IR as an expression
+        ctx.ptr = ctx.end;
+        ctx.error = default_error.empty() ? std::string("closure IR range exceeds the expression data")
+            : std::move(default_error);
+        return QoreValue();
+    }
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
+    if (!default_error.empty()) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ir_end_ptr;
+        ctx.error = std::move(default_error);
+        return QoreValue();
+    }
 
-    // Resolve the class for the method context and construct the closure in the
-    // closure's Program.  This runs when a cold call or a closure's first call
-    // deserializes IR, so it selects the Program without claiming parse ownership,
-    // like the CLOSURE_CREATE slot reader in buildContextFromSlotMap(): a module
-    // loader can own parsing while waiting for this thread.  The caller keeps the
-    // Program alive, and the Program's runtime metadata lock protects the
-    // locations, strings, and locals that the closure signature allocates.
-    QoreProgramContextHelper closure_program_context(ctx.pgm);
+    // Resolve the class for the method context (in the closure's Program; see closure_program_context above)
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
