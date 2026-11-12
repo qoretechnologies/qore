@@ -1196,6 +1196,28 @@ void Http2Session::setStreamCreditOnConsume(int32_t stream_id) {
     }
 }
 
+bool Http2Session::failStream(int32_t stream_id, const char* err, const std::string& desc) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    // a stream that has closed can no longer fail: its response is delivered already
+    if (!stream || !stream->fail_err.empty() || stream->state == Http2StreamState::Closed) {
+        return false;
+    }
+    stream->fail_err = err;
+    stream->fail_desc = desc;
+    // the data is discarded and credited as it arrives, as for a response that exceeds its maximum size
+    stream->body_too_large = true;
+    size_t held = stream->body.size();
+    std::vector<char>().swap(stream->body);
+    // the client credits the connection as data arrives; the stream credit of the data discarded is granted now if
+    // it was deferred (otherwise it was granted as the data arrived)
+    if (held && stream->credit_on_consume) {
+        creditConsumedStreamData(stream_id, held);
+    }
+    nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_CANCEL);
+    return true;
+}
+
 size_t Http2Session::creditConsumedStreamData(int32_t stream_id, size_t len) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto i = deferred_stream_credit.find(stream_id);
@@ -1947,6 +1969,12 @@ bool Http2Session::isStreamEndStreamReceived(int32_t stream_id) const {
     return it != streams.end() && it->second->end_stream_received;
 }
 
+bool Http2Session::isStreamReset(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    return it != streams.end() && it->second->reset;
+}
+
 void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -2538,7 +2566,9 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     // the rest of a body after the server's RST_STREAM(NO_ERROR), and padding): WINDOW_UPDATE frames submitted
     // directly reset that accounting, and the peer's connection window shrank by up to half a window with every
     // such stream until the next request could not send its body.
-    if (len && h2->is_server) {
+    // a server stream whose request body a bounded Queue receives has its stream credit deferred until the data is
+    // taken from it, as a client stream (issue #5859)
+    if (len && h2->is_server && !(stream && stream->credit_on_consume && !stream->body_too_large)) {
         int rv = h2->consumeReceivedData(stream_id, len);
         if (rv) {
             printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
@@ -2546,7 +2576,8 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         }
     } else if (len) {
         // client: the connection credit is granted now; the stream credit of a streaming response (and of a CONNECT
-        // tunnel) when the application consumes the data, and that of a response returned whole now (issue #5820)
+        // tunnel) when the application consumes the data, and that of a response returned whole now (issue #5820);
+        // server: the same for a stream drained to a bounded Queue (issue #5859)
         if (stream && stream->credit_on_consume && !stream->body_too_large) {
             int rv = h2->consumeReceivedData(0, len);
             if (rv) {

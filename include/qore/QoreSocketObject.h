@@ -793,6 +793,8 @@ if (accepted) {
     DLLLOCAL bool isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const;
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
+    //! Returns true if the HTTP/2 stream is known and was reset (issue #5859)
+    DLLLOCAL bool isHttp2StreamResetForAsyncPoll(int32_t stream_id) const;
 
     //! Sets the host name of the next TLS connection made on the socket (async-poll helper)
     /** The name is sent with SNI and the server certificate is verified against it; by default it is the host
@@ -1155,6 +1157,21 @@ if (accepted) {
         @since %Qore 3.0
     */
     DLLLOCAL void installHttp2StreamConsumeHook(int32_t stream_id, AbstractAsyncAction* action);
+
+    //! Defers the stream credit of an HTTP/2 client stream's data until it is taken from the stream (issue #5859)
+    /** For a stream whose data is drained to a registered stream queue: the data that the queue has no room for
+        stays in the stream without credit.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setHttp2StreamCreditOnConsume(int32_t stream_id);
+
+    //! Fails an HTTP/2 client stream with the error given: its response is the error (issue #5859)
+    /** @return true if the stream was failed, false if it has ended or there is no HTTP/2 session
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool failHttp2Stream(int32_t stream_id, const char* err, const char* desc);
 
     //! Has the stream credit of an HTTP/3 client stream's response data granted as the action's consumer takes it
     /** See installHttp2StreamConsumeHook().

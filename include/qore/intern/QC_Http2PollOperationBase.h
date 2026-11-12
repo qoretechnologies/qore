@@ -36,6 +36,7 @@
 #include <atomic>
 #include "qore/SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
+#include "qore/intern/QoreConsumeHook.h"
 
 #include <memory>
 #include <unordered_map>
@@ -220,6 +221,14 @@ public:
     }
 
     //! Information for a registered CONNECT stream queue
+    struct DLLLOCAL StreamQueueInfo;
+
+    //! Pushes data taken from a stream to its queue without waiting (issue #5859)
+    /** @return 1 if the queue is full (the data is kept in @p info as pending data), otherwise 0 (pushed, or
+        discarded by a queue that refused it)
+    */
+    DLLLOCAL int pushStreamQueueData(StreamQueueInfo& info, BinaryNode* data);
+
     struct DLLLOCAL StreamQueueInfo {
         Queue* queue;                       //!< ref'd Queue for data delivery
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
@@ -239,6 +248,13 @@ public:
             tunnel always ends with NOTHING.
         */
         bool request_body = false;
+        //! Data taken from the stream that the queue, which is bounded and was full, has not taken yet (owned)
+        /** Pushed first when the queue has room (issue #5859); the rest of the stream's data stays in the stream until
+            then, without stream credit (this chunk was credited when it was taken)
+        */
+        BinaryNode* pending = nullptr;
+        //! Told when the queue has room again; added to the queue when it is first found full (issue #5859)
+        std::shared_ptr<QoreQueueRoomListener> room;
     };
 
     //! Returns the error hash that ends a request body that was not received completely

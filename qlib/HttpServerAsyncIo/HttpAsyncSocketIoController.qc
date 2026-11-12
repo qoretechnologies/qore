@@ -4574,7 +4574,8 @@ public class HttpAsyncSocketIoController {
                 # Async-body opt-in: handlers that want inbound DATA frames
                 # delivered via a Qore Queue (instead of the handler-thread
                 # sync Socket::readHttp2StreamDataBlock() path) call this
-                # closure with an unlimited (max=-1) Queue.  The I/O thread
+                # closure with a Queue (a bounded Queue is supported: the I/O
+                # thread never waits for room in it).  The I/O thread
                 # drains previously-buffered frames into the Queue at
                 # registration time and pushes subsequent frames as they
                 # arrive; a NOTHING sentinel marks END_STREAM, and a body that
