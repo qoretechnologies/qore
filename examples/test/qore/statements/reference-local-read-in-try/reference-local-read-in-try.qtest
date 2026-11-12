@@ -22,9 +22,9 @@
     the caller.
 
     ReferenceLocalReadInTry.q reads reference parameters and a local declared as a reference in try blocks, as method
-    and function call arguments, and without a handler, and reads and writes a valid reference; its output must be the
-    one in ReferenceLocalReadInTry.expected, which the AST interpreter prints, in every execution mode, on the IR tier
-    and in programs compiled with qcc -O0 and -O3.
+    and function call arguments and in an on_exit statement, and without a handler, and reads and writes a valid
+    reference; its output must be the one in ReferenceLocalReadInTry.expected, which the AST interpreter prints, in
+    every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
 */
 class ReferenceLocalReadInTryTest inherits QUnit::Test {
     private {
