@@ -546,6 +546,15 @@ public:
     */
     DLLLOCAL int sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
+#ifdef DEBUG
+    //! Resumes the streams whose staged data dbg_quic_hold_stream_data() held back (debug builds only)
+    /** Called by dbg_quic_release_stream_data() after it clears the hold: a held stream returned
+        \c NGHTTP3_ERR_WOULDBLOCK, so nghttp3 does not read it again until it is resumed; the data is then written
+        with the session's next write, for example when a packet of the peer is processed.
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+#endif
+
     //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
     /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a
         limit, a send that would make the staged data exceed it returns 1 instead, unless nothing is staged, so that

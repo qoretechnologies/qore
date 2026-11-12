@@ -6380,6 +6380,61 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
     return 0;
 }
 
+#ifdef DEBUG
+namespace {
+//! the sessions whose staged data dbg_quic_hold_stream_data() held back since the last release
+std::mutex dbg_quic_held_sessions_m;
+std::vector<std::weak_ptr<QuicSession>> dbg_quic_held_sessions;
+
+//! called from nghttp3's C callback: no exception may leave it
+void dbg_quic_note_held_session(QuicSession* session) {
+    try {
+        std::weak_ptr<QuicSession> w = session->weak_from_this();
+        if (w.expired()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lg(dbg_quic_held_sessions_m);
+        for (const auto& i : dbg_quic_held_sessions) {
+            if (!i.owner_before(w) && !w.owner_before(i)) {
+                return;
+            }
+        }
+        dbg_quic_held_sessions.push_back(std::move(w));
+    } catch (...) {
+        printd(0, "dbg_quic_note_held_session(): the held session could not be recorded\n");
+    }
+}
+}
+
+void QuicSession::dbgResumeHeldStreams() {
+    std::vector<std::weak_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lg(dbg_quic_held_sessions_m);
+        sessions.swap(dbg_quic_held_sessions);
+    }
+    for (auto& w : sessions) {
+        std::shared_ptr<QuicSession> session = w.lock();
+        if (!session) {
+            continue;
+        }
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        if (!session->h3_conn_) {
+            continue;
+        }
+        for (auto& [stream_id, sbd] : session->streaming_body_data_) {
+            if (sbd.deferred) {
+                int rv = nghttp3_conn_resume_stream(session->h3_conn_, stream_id);
+                if (!rv) {
+                    sbd.deferred = false;
+                    // as sendStreamData(): the session's next write cycle writes the stream's data
+                    session->pending_write_.store(true, std::memory_order_release);
+                }
+            }
+        }
+    }
+}
+#endif
+
 nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                                nghttp3_vec* vec, size_t veccnt,
                                                uint32_t* pflags,
@@ -6417,10 +6472,15 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
 #ifdef DEBUG
-        // tests hold the staged data back, as a client that grants no flow-control credit does
+        // tests hold the staged data back, as a client that grants no flow-control credit does; the session is
+        // recorded, so that the release resumes the stream (dbgResumeHeldStreams()), and the hold is checked again
+        // after it is recorded: a release in between finds the session recorded, or this check sees it released
         if (!sbd.eof && qore_dbg_quic_stream_data_held(session->getSessionId(), stream_id)) {
-            sbd.deferred = true;
-            return NGHTTP3_ERR_WOULDBLOCK;
+            dbg_quic_note_held_session(session);
+            if (qore_dbg_quic_stream_data_held(session->getSessionId(), stream_id)) {
+                sbd.deferred = true;
+                return NGHTTP3_ERR_WOULDBLOCK;
+            }
         }
 #endif
         if (!sbd.data.empty()) {

@@ -20391,10 +20391,15 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
 }
 
 //! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+/** The held streams are resumed; their data is written with the session's next write, for example when a packet of
+    the peer is processed.
+*/
 static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    // a held stream is deferred until it is resumed: without this, its data stayed held after the release
+    QuicSession::dbgResumeHeldStreams();
     return QoreValue();
 }
 
