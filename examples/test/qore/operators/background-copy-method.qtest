@@ -1,0 +1,299 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BackgroundCopyMethodTest
+
+#! the execution modes, by name
+const ExecModes = {
+    "ast": EM_AST,
+    "ir": EM_IR,
+    "jit": EM_JIT,
+    "tiered": EM_TIERED,
+};
+
+#! the code checked in every execution mode and compiled with qcc
+/** Each function returns a hash of the values that the test expects; the copy constructor of \c CopyCounter records
+    the object that it creates, so that a background copy() call that makes no copy is detected
+*/
+const Code = "%modern
+class CopyCounter {
+    public {
+        int value;
+        bool is_copy = False;
+        static int copies = 0;
+        static Queue made();
+    }
+
+    constructor(int value) {
+        self.value = value;
+    }
+
+    copy() {
+        ++CopyCounter::copies;
+        is_copy = True;
+        CopyCounter::made.push(self);
+    }
+
+    int other(Queue q) {
+        q.push(self);
+        return value;
+    }
+
+    # background copy() calls of the object from its own methods
+    int bgSelfDirect() {
+        return background self.copy();
+    }
+
+    int bgSelfArg(Queue q) {
+        return background q.push(self.copy());
+    }
+
+    int bgImplicitArg(Queue q) {
+        return background q.push(copy());
+    }
+
+    int bgImplicitDirect() {
+        return background copy();
+    }
+}
+
+# a class without a copy() method
+class Plain {
+    public {
+        int value = 7;
+    }
+
+    int bgSelfDirect() {
+        return background self.copy();
+    }
+
+    int bgSelfArg(Queue q) {
+        return background q.push(self.copy());
+    }
+
+    int bgImplicitDirect() {
+        return background copy();
+    }
+}
+
+#! describes a copy and checks that it is not the original
+hash<auto> sub describe(object orig, object c) {
+    return {
+        \"class\": c.className(),
+        \"new\": c != orig,
+    };
+}
+
+#! background obj.copy() with a builtin object
+hash<auto> sub builtin_direct() {
+    Mutex m();
+    thread_join(background m.copy());
+    # the original is still usable
+    m.lock();
+    bool owner = m.lockOwner();
+    m.unlock();
+    return {\"owner\": owner};
+}
+
+#! background obj.copy() with a builtin object in a call argument
+hash<auto> sub builtin_arg() {
+    Queue q();
+    Mutex m();
+    background q.push(m.copy());
+    Mutex c = q.get(10s);
+    hash<auto> rv = describe(m, c);
+    c.lock();
+    rv.locked = c.lockOwner();
+    c.unlock();
+
+    # a builtin class with data: the copy has the data of the original
+    Counter cnt(3);
+    background q.push(cnt.copy());
+    Counter cc = q.get(10s);
+    rv.count = cc.getCount();
+    rv.count_new = cc != cnt;
+    return rv;
+}
+
+#! background obj.copy() with a user object
+hash<auto> sub user_direct() {
+    CopyCounter o(5);
+    int copies = CopyCounter::copies;
+    thread_join(background o.copy());
+    CopyCounter c = CopyCounter::made.get(10s);
+    return describe(o, c) + {
+        \"value\": c.value,
+        \"copy\": c.is_copy,
+        \"orig_copy\": o.is_copy,
+        \"copies\": CopyCounter::copies - copies,
+    };
+}
+
+#! background obj.copy() with a user object in a call argument
+hash<auto> sub user_arg() {
+    Queue q();
+    CopyCounter o(5);
+    int copies = CopyCounter::copies;
+    background q.push(o.copy());
+    CopyCounter c = q.get(10s);
+    CopyCounter m = CopyCounter::made.get(10s);
+    return describe(o, c) + {
+        \"value\": c.value,
+        \"copy\": c.is_copy,
+        \"orig_copy\": o.is_copy,
+        \"copies\": CopyCounter::copies - copies,
+        \"same\": m == c,
+    };
+}
+
+#! background copy() calls through variables of type object and auto
+hash<auto> sub via_variables() {
+    Queue q();
+    object o = new CopyCounter(6);
+    auto a = new Mutex();
+    hash<auto> rv;
+    background q.push(o.copy());
+    object c = q.get(10s);
+    CopyCounter::made.get(10s);
+    rv.obj = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+    background q.push(a.copy());
+    rv.untyped = describe(a, q.get(10s));
+    thread_join(background o.copy());
+    c = CopyCounter::made.get(10s);
+    rv.obj_direct = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+    thread_join(background a.copy());
+    return rv;
+}
+
+#! background copy() calls of the object from its own methods
+hash<auto> sub self_calls() {
+    Queue q();
+    CopyCounter o(8);
+    hash<auto> rv;
+    thread_join(o.bgSelfDirect());
+    object c = CopyCounter::made.get(10s);
+    rv.direct = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+    o.bgSelfArg(q);
+    c = q.get(10s);
+    CopyCounter::made.get(10s);
+    rv.arg = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+    o.bgImplicitArg(q);
+    c = q.get(10s);
+    CopyCounter::made.get(10s);
+    rv.implicit = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+    thread_join(o.bgImplicitDirect());
+    c = CopyCounter::made.get(10s);
+    rv.implicit_direct = describe(o, c) + {\"value\": c.value, \"orig_copy\": o.is_copy};
+
+    Plain p();
+    thread_join(p.bgSelfDirect());
+    p.bgSelfArg(q);
+    c = q.get(10s);
+    rv.plain = describe(p, c) + {\"value\": c.value};
+    rv.plain_implicit_direct = thread_join(p.bgImplicitDirect());
+    return rv;
+}
+
+#! other methods in background calls are called on the object itself
+hash<auto> sub other_methods() {
+    Queue q();
+    CopyCounter o(4);
+    thread_join(background o.other(q));
+    bool direct = q.get(10s) == o;
+    Counter cnt(3);
+    background q.push(cnt.getCount());
+    return {\"direct\": direct, \"arg\": q.get(10s)};
+}
+";
+
+#! the expected results of the functions in Code, by function name
+const Expected = {
+    "builtin_direct": {"owner": True},
+    "builtin_arg": {"class": "Mutex", "new": True, "locked": True, "count": 3, "count_new": True},
+    "user_direct": {"class": "CopyCounter", "new": True, "value": 5, "copy": True, "orig_copy": False, "copies": 1},
+    "user_arg": {"class": "CopyCounter", "new": True, "value": 5, "copy": True, "orig_copy": False, "copies": 1,
+        "same": True},
+    "via_variables": {
+        "obj": {"class": "CopyCounter", "new": True, "value": 6, "orig_copy": False},
+        "untyped": {"class": "Mutex", "new": True},
+        "obj_direct": {"class": "CopyCounter", "new": True, "value": 6, "orig_copy": False},
+    },
+    "self_calls": {
+        "direct": {"class": "CopyCounter", "new": True, "value": 8, "orig_copy": False},
+        "arg": {"class": "CopyCounter", "new": True, "value": 8, "orig_copy": False},
+        "implicit": {"class": "CopyCounter", "new": True, "value": 8, "orig_copy": False},
+        "implicit_direct": {"class": "CopyCounter", "new": True, "value": 8, "orig_copy": False},
+        "plain": {"class": "Plain", "new": True, "value": 7},
+        "plain_implicit_direct": True,
+    },
+    "other_methods": {"direct": True, "arg": 3},
+};
+
+#! Regression test for issue #5917: a background copy() call makes a copy of the object
+/** The background operator runs a copy of the call with its arguments evaluated; the copy of a copy() call is a
+    method call with pre-evaluated arguments, and it was run as a call of the copy constructor as a normal method:
+    for a builtin object that crashed, and for a user object it ran the body of copy() on the original object.  The
+    call is now dispatched to the copy constructor in every execution mode and in compiled programs.
+*/
+public class BackgroundCopyMethodTest inherits QUnit::Test {
+    constructor() : Test("background copy() method", "1.0", \ARGV) {
+        foreach hash<auto> mode in (ExecModes.pairIterator()) {
+            string name = mode.key;
+            ExecMode em = mode.value;
+            addTestCase("background copy(): " + name, sub () { checkMode(name, em); });
+        }
+        addTestCase("background copy(): qcc", \checkQcc());
+        set_return_value(main());
+    }
+
+    private checkMode(string mode, ExecMode em) {
+        Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+        p.setExecMode(em);
+        p.parse(Code, "background-copy-" + mode);
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, p.callFunction(i.key), mode + ": " + i.key);
+        }
+    }
+
+    private checkQcc() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string src = dir + "/bgcopy.q";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Code);
+        foreach string func in (keys Expected) {
+            f.printf("printf(\"%%s: %%y\\n\", %y, %s());\n", func, func);
+        }
+        f.close();
+        string expected;
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            expected += sprintf("%s: %y\n", i.key, i.value);
+        }
+        foreach int opt in ((0, 3)) {
+            string program = sprintf("%s/bgcopy-O%d", dir, opt);
+            string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt,
+                shellQuote(program), shellQuote(src)));
+            assertTrue(is_file(program), sprintf("-O%d: compiled: %s", opt, output));
+            assertEq(expected, backquote(shellQuote(program) + " 2>&1"), sprintf("qcc -O%d", opt));
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

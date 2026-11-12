@@ -2051,7 +2051,11 @@ public:
 
             // issue #2653: calling a static method from inside a non-static method in the background operator
             // incorrectly extends the lifetime of the object
-            if (!sfcn->getMethod()->isStatic()) {
+            // issue #5917: an implicit copy() call has no method (see SelfFunctionCallNode::parseInitImpl()); it
+            // copies the current object, which the thread therefore holds like for a call of a normal method
+            const QoreMethod* m = sfcn->getMethod();
+            assert(m || sfcn->isCopyCall());
+            if (!m || !m->isStatic()) {
                 //printd(5, "BGThreadParams::BGThreadParams() real object method call: %p\n", call_obj);
                 // must have a current object if an in-object method call is being executed
                 // (i.e. $.method())

@@ -460,7 +460,11 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
-    if (tmp_args) {
+    // issue #5917: a copy() call (which takes no arguments; see QoreDotEvalOperatorNode::parseInitImpl()) is
+    // dispatched by qore_class_private::evalMethod() below to the copy constructor of the class, also when the call is
+    // the background copy of a call with pre-evaluated arguments: its variant is a copy variant, which cannot be called
+    // as a normal method
+    if (tmp_args && strcmp(c_str, "copy")) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
         const qore_class_private* priv = qore_class_private::get(*o->getClass());

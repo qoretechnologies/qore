@@ -1604,6 +1604,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a \c copy() call that the @ref background "background operator" ran (for example
+      <tt>background obj.copy()</tt> or <tt>background q.push(obj.copy())</tt>) was dispatched as a call of the copy
+      constructor as a normal method, which crashed the process for objects of builtin and user classes alike, and
+      <tt>background copy()</tt> in a method crashed when the thread was started in the AST interpreter; it now
+      copies the object in every execution mode and in programs compiled with \c qcc (issue #5917)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
