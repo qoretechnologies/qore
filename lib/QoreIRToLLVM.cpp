@@ -12569,6 +12569,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     bool owner_has_parse_reference = false;
     std::vector<const QoreIRInstruction*> closure_call_candidates;
     std::unordered_map<uint32_t, const QoreIRInstruction*> closure_calls_by_value;
+    // the reads of each value by the check of the target of a call (CheckCallTarget, issue #5784): the call of a
+    // closure stored in a local is the load's only use besides the check, which a closure always passes
+    std::unordered_map<uint32_t, uint32_t> check_call_target_reads;
     std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
         local_load_instructions;
     std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
@@ -12713,6 +12716,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 closure_call_candidates.push_back(inst_ptr.get());
                 closure_calls_by_value.emplace(inst_ptr->operands[0].id,
                     inst_ptr.get());
+            } else if (inst_ptr->opcode == QoreIROpcode::CheckCallTarget
+                    && !inst_ptr->operands.empty()) {
+                ++check_call_target_reads[inst_ptr->operands[0].id];
             }
             if (inst_ptr->opcode == QoreIROpcode::CreateParseRef
                     || (inst_ptr->opcode == QoreIROpcode::Invoke
@@ -13442,8 +13448,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         }
                         auto uses = operand_remaining_uses.find(load->result.id);
                         auto call = closure_calls_by_value.find(load->result.id);
+                        auto check_reads = check_call_target_reads.find(load->result.id);
                         if (!load->is_ref && uses != operand_remaining_uses.end()
-                                && uses->second == 1
+                                && uses->second - (check_reads == check_call_target_reads.end()
+                                    ? 0 : check_reads->second) == 1
                                 && call != closure_calls_by_value.end()
                                 && !call->second->operands.empty()
                                 && call->second->operands[0].id == load->result.id) {
@@ -13475,9 +13483,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                     auto uses = operand_remaining_uses.find(load->result.id);
                     auto call = closure_calls_by_value.find(load->result.id);
+                    auto check_reads = check_call_target_reads.find(load->result.id);
                     if (load->is_closure || load->is_ref
                             || uses == operand_remaining_uses.end()
-                            || uses->second != 1
+                            || uses->second - (check_reads == check_call_target_reads.end()
+                                ? 0 : check_reads->second) != 1
                             || call == closure_calls_by_value.end()
                             || call->second->operands.empty()
                             || call->second->operands[0].id != load->result.id) {
@@ -33475,6 +33485,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::CheckCallTarget: {
             // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks it
             // (issue #5784)
+            if (immediate_closure_creates.count(inst->operands[0].id)) {
+                // a closure that the function created and calls directly, whose load is elided: a closure is always
+                // callable, and has no object
+                return true;
+            }
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) {
                 return false;

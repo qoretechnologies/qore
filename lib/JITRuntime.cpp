@@ -1750,19 +1750,27 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
     if (qore_call_target_needs_no_check(call, target)) {
         return 0;
     }
-    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        return dot->checkReceiver(target, xsink);
-    }
-    if (const CallReferenceCallNode* call_node = dynamic_cast<const CallReferenceCallNode*>(node)) {
+    // dispatched on the node types, without RTTI: the check is made for every call that it is emitted for
+    if (node && node->getType() == NT_FUNCREFCALL) {
         // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
         // arguments are evaluated
-        const ResolvedCallReferenceNode* r = target.hasNode()
-            ? dynamic_cast<const ResolvedCallReferenceNode*>(target.getInternalNode()) : nullptr;
-        if (!r) {
-            qore_raise_not_call_reference(xsink, call_node->loc, target);
+        const AbstractQoreNode* target_node = target.hasNode() ? target.getInternalNode() : nullptr;
+        qore_type_t target_type = target_node ? target_node->getType() : NT_NOTHING;
+        if (target_type == NT_RUNTIME_CLOSURE) {
+            // a closure is always callable, and is not a reference to a method of an object
+            return 0;
+        }
+        if (target_type != NT_FUNCREF) {
+            qore_raise_not_call_reference(xsink, static_cast<const CallReferenceCallNode*>(node)->loc, target);
             return -1;
         }
-        return qore_call_reference_check_target(r, xsink);
+        // a resolved call reference (as qore_rt_call_closure_fast_impl() dispatches it): an unresolved one is a parse
+        // node that needs evaluation, never a value
+        assert(dynamic_cast<const ResolvedCallReferenceNode*>(target_node));
+        return qore_call_reference_check_target(static_cast<const ResolvedCallReferenceNode*>(target_node), xsink);
+    }
+    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        return dot->checkReceiver(target, xsink);
     }
     return 0;
 }
@@ -8868,13 +8876,18 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         return toBits(QoreValue());
     }
 
+    if (nargs < 2) {
+        // a single argument has no order
+        return toBits(callref->invoke(*arg_list, xsink));
+    }
     ValueHolder result(callref->invoke(*arg_list, xsink), xsink);
     // the list holds the only references of the arguments that the frame gave over: they are released last argument
     // first, as the AST interpreter releases the parameters that took them over when the callee returns (the list
     // releases its elements first to last); a list that the callee kept is left as it is
-    if (arg_list && arg_list->is_unique()) {
-        while (!arg_list->empty()) {
-            ValueHolder arg(arg_list->pop(), xsink);
+    if (arg_list->is_unique()) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        for (size_t i = priv->length; i > 0; --i) {
+            ValueHolder arg(priv->takeExists(i - 1), xsink);
         }
     }
     return toBits(result.release());

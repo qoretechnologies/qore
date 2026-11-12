@@ -2529,8 +2529,9 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
                     && check->operands.front().id == load->result.id
                     && check->cached_start_line == load->cached_start_line) {
                 const QoreValue& call = static_cast<const QoreIRExprInstruction*>(check)->expr;
-                load->fused_call_target_check = call.isPointer() && call.getType() != NT_FUNCREFCALL
-                    ? QoreIRFusedCallTargetCheck::MethodCall : QoreIRFusedCallTargetCheck::Other;
+                load->fused_call_target_check = !call.isPointer() ? QoreIRFusedCallTargetCheck::Other
+                    : call.getType() == NT_FUNCREFCALL ? QoreIRFusedCallTargetCheck::CallReference
+                    : QoreIRFusedCallTargetCheck::MethodCall;
                 ++count;
             }
         }
