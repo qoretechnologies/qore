@@ -6486,7 +6486,12 @@ public:
             if (rc || xsink) {
                 return;
             }
-            holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            struct pollfd lpfd = {listener.getDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
             if (holder_peer < 0) {
                 return;
@@ -6623,7 +6628,13 @@ public:
             if (rc || xsink) {
                 return;
             }
-            int peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            int peer = -1;
+            struct pollfd lpfd = {listener->getPollableDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, peer >= 0, "shared registration peer is accepted");
             if (peer < 0) {
                 return;
