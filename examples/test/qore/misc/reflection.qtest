@@ -1439,7 +1439,7 @@ class ReflectionTest inherits QUnit::Test {
             ("controller", "connection_unique_hash", "state"));
         assertNamedClassMethodVariantCount("Http3ServerPollOperation", "onComplete", ("result",));
         assertNamedClassMethodVariantCount("Http3ServerPollOperation", "registerStreamQueue",
-            ("session_id", "stream_id", "queue"));
+            ("session_id", "stream_id", "queue", "tunnel"));
         assertNamedClassMethodVariantCount("Http3ServerPollOperation", "registerStreamListener",
             ("session_id", "stream_id", "listener"));
         assertNamedClassMethodVariantCount("Http3ServerPollOperation", "onStreamData", ("stream_key",));
