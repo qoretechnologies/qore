@@ -342,9 +342,9 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     @ref on_exit "on_exit" handler) is discarded by the first <tt><b>try</b></tt> block it reaches.  Each block that
     the thread leaves runs its @ref on_exit "on_exit" and @ref on_success "on_success" handlers, and its
     @ref on_error "on_error" handlers only for an exception raised while the thread exits.  A
-    @ref rethrow "rethrow" in an @ref on_error "on_error" handler replaces only the exception: a
-    <tt><b>thread_exit</b></tt> that another handler of the block (or of a block that the exception left) executed
-    stays pending, and the thread exits after the handlers as without the <tt><b>rethrow</b></tt>.
+    @ref rethrow "rethrow" in an @ref on_error "on_error" handler replaces only the exception: a pending
+    <tt><b>thread_exit</b></tt> (executed by the block, by another of its handlers or by a block that the exception
+    left) stays pending, and the thread exits after the handlers as without the <tt><b>rethrow</b></tt>.
 
     <hr>
     @section context context Statements

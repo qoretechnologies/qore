@@ -87,8 +87,27 @@ sub caller() {
     printf("caller continued\n");
 }
 
+# a function without a try statement whose on_error handler rethrows
+sub no_try() {
+    if (True) {
+        on_error { printf("on_error %s\n", $1.err); rethrow; }
+        on_exit { printf("on_exit\n"); thread_exit; }
+        throw "ERR";
+    }
+}
+
+# the function above called in a try statement: the caller does not catch the exception
+sub caller_try() {
+    try {
+        no_try();
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caller caught %s\n", ex.err);
+    }
+    printf("caller continued\n");
+}
+
 foreach string fn in (("rethrow_after_exit", "no_rethrow", "exit_after_rethrow", "outer_rethrow", "rethrow_args",
-        "caller")) {
+        "caller", "caller_try")) {
     printf("-- %s\n", fn);
     Counter c(1);
     background sub () {
