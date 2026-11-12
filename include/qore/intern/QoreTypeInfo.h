@@ -567,6 +567,19 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexHashOrNothing(const QoreTypeInfo* ti);
 
+    // static version of method, checking for null pointer; returns the value type of reference<T> or *reference<T>
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexReferenceOrNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return nullptr;
+        }
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT) {
+                return nullptr;
+            }
+        }
+        return ti->return_vec[0].spec.getComplexReference();
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexListOrNothing(const QoreTypeInfo* ti) {
         if (!ti || !hasType(ti))

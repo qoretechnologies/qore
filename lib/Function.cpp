@@ -246,15 +246,15 @@ static bool qore_type_contains_type_param(const QoreTypeInfo* ti) {
         return qore_type_contains_type_param(cti->getReturnType())
             || qore_type_contains_type_param_vec(cti->getParamTypes());
     }
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (qore_type_contains_type_param(subtype)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (qore_type_contains_type_param(subtype)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     return qore_type_contains_type_param(subtype);
 }
 
@@ -291,15 +291,15 @@ static bool qore_type_contains_type_param_key(const QoreTypeInfo* ti, const Gene
         return qore_type_contains_type_param_key(cti->getReturnType(), key)
             || qore_type_vec_contains_type_param_key(cti->getParamTypes(), key);
     }
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (qore_type_contains_type_param_key(subtype, key)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (qore_type_contains_type_param_key(subtype, key)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     return qore_type_contains_type_param_key(subtype, key);
 }
 
@@ -380,22 +380,28 @@ static bool qore_generic_types_unify(const QoreTypeInfo* a, const QoreTypeInfo* 
                 saw_type_param);
     }
 
-    const QoreTypeInfo* hash_a = QoreTypeInfo::getUniqueReturnComplexHash(a);
-    const QoreTypeInfo* hash_b = QoreTypeInfo::getUniqueReturnComplexHash(b);
+    // containers, also or-nothing ones (qore#5849): both or neither accept NOTHING, as for code types above
+    bool nothing_a = QoreTypeInfo::parseAcceptsReturns(a, NT_NOTHING);
+    bool nothing_b = QoreTypeInfo::parseAcceptsReturns(b, NT_NOTHING);
+    const QoreTypeInfo* hash_a = QoreTypeInfo::getReturnComplexHashOrNothing(a);
+    const QoreTypeInfo* hash_b = QoreTypeInfo::getReturnComplexHashOrNothing(b);
     if (hash_a || hash_b) {
-        return hash_a && hash_b && qore_generic_types_unify(hash_a, hash_b, bindings, saw_type_param);
+        return hash_a && hash_b && nothing_a == nothing_b
+            && qore_generic_types_unify(hash_a, hash_b, bindings, saw_type_param);
     }
 
-    const QoreTypeInfo* list_a = QoreTypeInfo::getUniqueReturnComplexList(a);
-    const QoreTypeInfo* list_b = QoreTypeInfo::getUniqueReturnComplexList(b);
+    const QoreTypeInfo* list_a = QoreTypeInfo::getReturnComplexListOrNothing(a);
+    const QoreTypeInfo* list_b = QoreTypeInfo::getReturnComplexListOrNothing(b);
     if (list_a || list_b) {
-        return list_a && list_b && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
+        return list_a && list_b && nothing_a == nothing_b
+            && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
     }
 
-    const QoreTypeInfo* ref_a = QoreTypeInfo::getUniqueReturnComplexReference(a);
-    const QoreTypeInfo* ref_b = QoreTypeInfo::getUniqueReturnComplexReference(b);
+    const QoreTypeInfo* ref_a = QoreTypeInfo::getReturnComplexReferenceOrNothing(a);
+    const QoreTypeInfo* ref_b = QoreTypeInfo::getReturnComplexReferenceOrNothing(b);
     if (ref_a || ref_b) {
-        return ref_a && ref_b && qore_generic_types_unify(ref_a, ref_b, bindings, saw_type_param);
+        return ref_a && ref_b && nothing_a == nothing_b
+            && qore_generic_types_unify(ref_a, ref_b, bindings, saw_type_param);
     }
 
     return false;
@@ -491,17 +497,17 @@ static const UserSignature* qore_find_signature_type_param_owner_in_type(const Q
         }
         return qore_find_signature_type_param_owner_in_vec(cti->getParamTypes());
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti)) {
         if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
             return sig;
         }
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti)) {
         if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
             return sig;
         }
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti)) {
         return qore_find_signature_type_param_owner_in_type(subtype);
     }
     return nullptr;
@@ -660,24 +666,24 @@ static bool qore_infer_signature_type_args_from_type(const UserSignature* sig, c
                 actual_code->getParamTypes(), bindings);
     }
 
-    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
-    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexListOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexListOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
@@ -2846,24 +2852,24 @@ static bool qore_infer_class_type_args_from_type(const QoreClass* cls, const Qor
                 actual_code->getParamTypes(), bindings);
     }
 
-    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
-    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexListOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexListOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
