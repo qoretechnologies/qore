@@ -37,17 +37,18 @@
     level.  This test measures the bytes per level of a recursion of a function, a method and a static method in the
     AST and IR execution modes, and fails when it exceeds the budget of the build.
 
-    The bytes per level are measured as a difference: the recursion runs until STACK-LIMIT-EXCEEDED in a thread with
-    a 4 MB stack and in one with an 8 MB stack, so (8 MB - 4 MB) / (depth8 - depth4) is the stack of one level, free
-    of the stack guard, of the thread's start and of the frames below the recursion.  What remains depends on the
-    compiler, its optimization level, its hardening options and the C library's headers (a memcpy() that musl's
-    fortify-headers check made the frame of the IR interpreter 2.4 KB larger on Alpine until NaN-boxed values were
-    converted with std::bit_cast): the budgets are for GCC on x86_64 Linux with glibc (Ubuntu) and with musl
-    (Alpine), each with a release build (-O3) and a debug build (-Og, as CI builds Qore).  They are 5-7% over the
-    measured values, but never more than 400 bytes, so that a frame of 528 bytes more at each level (an array in a
-    frame of the IR interpreter, as 13281fbbd7 added) fails here.  On any other compiler, CPU, C library or flag set
-    (see getCalibrationMismatch()) the values are reported but not checked, as they are in sanitizer builds, whose
-    stack redzones make every frame larger.
+    The bytes per level are measured as a difference: the recursion runs until STACK-LIMIT-EXCEEDED in a thread
+    created with a 4 MB stack and in one created with an 8 MB stack, and the difference of the stacks that the
+    threads have (which glibc can make larger than asked for, see getDepth()) over the difference of the depths is
+    the stack of one level, free of the stack guard, of the thread's start and of the frames below the recursion.
+    What remains depends on the compiler, its optimization level, its hardening options and the C library's headers
+    (a memcpy() that musl's fortify-headers check made the frame of the IR interpreter 2.4 KB larger on Alpine until
+    NaN-boxed values were converted with std::bit_cast): the budgets are for GCC on x86_64 and aarch64 Linux with
+    glibc (Ubuntu) and with musl (Alpine), each with a release build (-O3) and a debug build (-Og, as CI builds
+    Qore).  They are 6-7% over the measured values, but never more than 400 bytes, so that a frame of 528 bytes more
+    at each level (an array in a frame of the IR interpreter, as 13281fbbd7 added) fails here.  On any other
+    compiler, CPU, C library or flag set (see getCalibrationMismatch()) the values are reported but not checked, as
+    they are in sanitizer builds, whose stack redzones make every frame larger.
 
     tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
     -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
@@ -104,27 +105,23 @@ int sub run(string f) {
         #! the only compiler flags (CFLAGS) besides those of the build type that the budgets are calibrated for
         const CalibratedCFlags = ("-fno-strict-aliasing", "-std=c++20");
 
-        #! the targets that the budgets are calibrated for: target triple -> C library and the hardening options that
-        #! the distribution's GCC enables by default (Ubuntu and Alpine, the images of CI)
+        #! the targets that the budgets are calibrated for: target triple (which names the C library) -> the CPU and
+        #! the hardening options that the distribution's GCC enables by default (Ubuntu and Alpine, the images of CI)
         const CalibratedTargets = {
             "x86_64-linux-gnu": {
                 "cpu": "x86_64",
-                "libc": "glibc",
                 "hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 3, "glibcxx_assertions": False},
             },
             "x86_64-alpine-linux-musl": {
                 "cpu": "x86_64",
-                "libc": "musl",
                 "hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
             },
             "aarch64-linux-gnu": {
                 "cpu": "aarch64",
-                "libc": "glibc",
                 "hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 0, "glibcxx_assertions": False},
             },
             "aarch64-alpine-linux-musl": {
                 "cpu": "aarch64",
-                "libc": "musl",
                 "hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
             },
         };
@@ -140,7 +137,7 @@ int sub run(string f) {
         const Budgets = {
             # measured: ast 2639, 2448, 2496; ir 4355, 5343, 4396
             "x86_64-linux-gnu release": {
-                "ast": {"function": 2820, "method": 2620, "static method": 2670},
+                "ast": {"function": 2820, "method": 2610, "static method": 2670},
                 "ir": {"function": 4650, "method": 5700, "static method": 4700},
             },
             # measured: ast 2639, 2576, 2496; ir 4369, 5729, 4369
@@ -150,33 +147,33 @@ int sub run(string f) {
             },
             # measured: ast 2639, 2448, 2496; ir 4350, 5343, 4401
             "x86_64-alpine-linux-musl release": {
-                "ast": {"function": 2820, "method": 2620, "static method": 2670},
+                "ast": {"function": 2820, "method": 2610, "static method": 2670},
                 "ir": {"function": 4650, "method": 5700, "static method": 4700},
             },
             # measured: ast 2639, 2576, 2496; ir 4364, 5722, 4364
             "x86_64-alpine-linux-musl debug": {
                 "ast": {"function": 2820, "method": 2750, "static method": 2670},
-                "ir": {"function": 4670, "method": 6120, "static method": 4670},
+                "ir": {"function": 4660, "method": 6120, "static method": 4660},
             },
             # measured: ast 2734, 2592, 2592; ir 4258, 5216, 4271
             "aarch64-linux-gnu release": {
-                "ast": {"function": 2930, "method": 2770, "static method": 2770},
-                "ir": {"function": 4570, "method": 5600, "static method": 4590},
+                "ast": {"function": 2920, "method": 2770, "static method": 2770},
+                "ir": {"function": 4550, "method": 5580, "static method": 4560},
             },
             # measured: ast 2623, 2623, 2511; ir 4096, 5555, 4112
             "aarch64-linux-gnu debug": {
-                "ast": {"function": 2810, "method": 2810, "static method": 2690},
-                "ir": {"function": 4380, "method": 5950, "static method": 4400},
+                "ast": {"function": 2800, "method": 2800, "static method": 2680},
+                "ir": {"function": 4380, "method": 5940, "static method": 4390},
             },
             # measured: ast 2736, 2592, 2592; ir 4271, 5229, 4288
             "aarch64-alpine-linux-musl release": {
-                "ast": {"function": 2930, "method": 2770, "static method": 2770},
-                "ir": {"function": 4570, "method": 5600, "static method": 4590},
+                "ast": {"function": 2920, "method": 2770, "static method": 2770},
+                "ir": {"function": 4560, "method": 5590, "static method": 4580},
             },
             # measured: ast 2623, 2623, 2511; ir 4096, 5555, 4112
             "aarch64-alpine-linux-musl debug": {
-                "ast": {"function": 2810, "method": 2810, "static method": 2690},
-                "ir": {"function": 4380, "method": 5950, "static method": 4400},
+                "ast": {"function": 2800, "method": 2800, "static method": 2680},
+                "ir": {"function": 4380, "method": 5940, "static method": 4390},
             },
         };
     }
@@ -202,40 +199,14 @@ int sub run(string f) {
         return sprintf("%s %s", info.Target ?? "unknown target", library_debugging ? "debug" : "release");
     }
 
-    #! returns the C library that a target triple names ("glibc" or "musl"), or nothing
-    static *string getTargetLibc(*string target) {
-        if (*hash<auto> t = CalibratedTargets{target}) {
-            return t.libc;
-        }
-        if (target =~ /-gnu[a-z0-9_]*$/) {
-            return "glibc";
-        }
-        if (target =~ /-musl[a-z0-9_]*$/) {
-            return "musl";
-        }
-    }
-
-    #! returns the C library loaded into the process ("glibc" or "musl") from its memory map, or nothing
-    /** For a library that does not report its target: the dynamic loader of musl is its C library
-        (ld-musl-<arch>.so.1), glibc's C library is libc.so.6 (with the loader ld-linux-<arch>.so.N)
-    */
-    static *string getMapsLibc(*string maps) {
-        if (maps =~ /\/ld-musl-[^\/\s]*\.so/) {
-            return "musl";
-        }
-        if (maps =~ /\/libc\.so\.6\b/) {
-            return "glibc";
-        }
-    }
-
     #! returns why the budgets do not apply to a library with the given build information, or nothing if they do
     /** @param info the build information of the library, as get_qore_library_info() returns it
         @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
 
         The budgets are calibrated for one compiler and flag set: GCC 15 on x86_64 and aarch64 Linux with glibc
-        (Ubuntu) or musl (Alpine) and the hardening options of the distribution's GCC, a single compilation unit, no link-time
-        optimization, no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags of Qore's
-        CMake build; frames differ with another GCC version or distribution, another optimization level (a
+        (Ubuntu) or musl (Alpine) and the hardening options of the distribution's GCC, a single compilation unit, no
+        link-time optimization, no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags
+        of Qore's CMake build; frames differ with another GCC version or distribution, another optimization level (a
         distribution's -O2 build, a debug build made without -Og), link-time optimization or other hardening flags, so
         such a build is not checked
     */
@@ -460,19 +431,6 @@ int sub run(string f) {
                 assertEq(keys Modes, keys Budgets{target + " " + bt}, target + " " + bt);
             }
         }
-        # the C library of a target, also of one that is not calibrated, and from the memory map of the process
-        assertEq("glibc", getTargetLibc("aarch64-linux-gnu"));
-        assertEq("musl", getTargetLibc("aarch64-alpine-linux-musl"));
-        assertEq("glibc", getTargetLibc("powerpc64le-linux-gnu"));
-        assertEq("musl", getTargetLibc("riscv64-alpine-linux-musl"));
-        assertEq("glibc", getTargetLibc("arm-linux-gnueabihf"));
-        assertNothing(getTargetLibc("x86_64-apple-darwin23"));
-        assertEq("glibc", getMapsLibc("ffff9e2c0000-ffff9e44c000 r-xp 00000000 fd:01 1 /usr/lib/aarch64-linux-gnu/libc.so.6\n"
-            "ffff9e470000-ffff9e49c000 r-xp 00000000 fd:01 2 /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1\n"));
-        assertEq("musl", getMapsLibc("ffff8a1d0000-ffff8a26c000 r-xp 00000000 fd:01 3 /lib/ld-musl-aarch64.so.1\n"));
-        assertEq("musl", getMapsLibc("7f00-7f01 r-xp 0 08:01 4 /lib/ld-musl-x86_64.so.1\n"));
-        assertEq("glibc", getMapsLibc("7f00-7f01 r-xp 0 08:01 5 /usr/lib/x86_64-linux-gnu/libc.so.6\n"));
-        assertNothing(getMapsLibc("7f00-7f01 r-xp 0 08:01 6 /usr/lib/libSystem.B.dylib\n"));
 
         # each difference from the calibrated builds: the build information -> library debugging -> the reason
         list<list<auto>> cases = (

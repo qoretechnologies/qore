@@ -91,11 +91,13 @@ def frames_of(su_text, path=None):
     return frames
 
 
-def run(argv):
+def run(argv, allow_no_symbols=True):
+    """Runs the check; the fixtures have .su files without object files, so their symbol tables are not required
+    unless allow_no_symbols is False"""
     out = io.StringIO()
     err = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        rc = csu.main(argv)
+        rc = csu.main((["--allow-no-symbols"] if allow_no_symbols else []) + argv)
     return rc, out.getvalue(), err.getvalue()
 
 
@@ -259,7 +261,8 @@ class ParseTest(unittest.TestCase):
         with build_dir(su) as d:
             b = write_budgets(d, "100 K::f2\n")
             with unittest.mock.patch.object(csu, "object_symbols", return_value=[
-                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190), csu.Symbol("K::f2(int)", ".text", 0x200, 0x17)]):
+                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190),
+                    csu.Symbol("K::f2(int)", ".text", 0x200, 0x17)]):
                 rc, out, _ = run(["--budgets", b, str(d)])
         self.assertEqual(1, rc, out)
         self.assertRegex(out, r"UNACCOUNTED\s+K::f2")
@@ -360,6 +363,39 @@ class CheckTest(unittest.TestCase):
                 self.assertIn("SKIPPED", out)
                 self.assertIn(text, out)
 
+    def test_input_errors(self):
+        with build_dir(GCC_SU, write_config=False) as d:
+            b = write_budgets(d, "600 UserVariantBase::eval\n")
+            rc, _, err = run(["--budgets", b, str(d)])
+            self.assertEqual(2, rc)
+            self.assertIn("QORE_STACK_USAGE_REPORT", err)
+        with build_dir(None) as d:
+            b = write_budgets(d, "600 UserVariantBase::eval\n")
+            rc, _, err = run(["--budgets", b, str(d)])
+            self.assertEqual(2, rc)
+            self.assertIn("no .su files", err)
+            rc, _, err = run(["--budgets", str(Path(d) / "none.txt"), str(d)])
+            self.assertEqual(2, rc)
+            self.assertIn("cannot read", err)
+
+    def test_missing_symbols(self):
+        # without the object file of a .su file with records of a budgeted function, the clones that are not at the
+        # function's location cannot be found: an error, or a note with --allow-no-symbols
+        with build_dir(GCC_SU) as d:
+            b = write_budgets(d, "600 UserVariantBase::eval\n")
+            rc, out, err = run(["--budgets", b, str(d)], allow_no_symbols=False)
+            self.assertEqual(2, rc, out)
+            self.assertIn("symbol tables of the object files", err)
+            rc, out, _ = run(["--budgets", b, str(d)])
+            self.assertEqual(0, rc, out)
+            self.assertIn("note: the symbol tables", out)
+        # a .su file without records of budgeted functions needs none
+        with build_dir("/src/lib/other.cpp:1:1:int other(int)\t8\tstatic\n") as d:
+            b = write_budgets(d, "8 another\n")
+            rc, out, _ = run(["--budgets", b, str(d)], allow_no_symbols=False)
+            self.assertEqual(1, rc, out)
+            self.assertIn("MISSING", out)
+
     def test_part_clone_adds(self):
         # GCC records the .part clone of a function split by partial inlining as "0(<params>)" at the function's own
         # location; both frames can be on the stack, as the function calls the clone
@@ -413,6 +449,11 @@ class CheckTest(unittest.TestCase):
             "folded-same-arity.cpp": {"K::f": ("min", 1272)},
             # f(long)'s clone folded with z's, f(int) with a larger clone of its own
             "folded-larger-own.cpp": {"K::f": ("min", 1320), "K::z": ("min", 1304)},
+            # g's clone folded with that of the static z, whose head is inlined into all of its callers and whose
+            # clone GCC records only as "0(int)" at z's location; z's frame is its clone's
+            "folded-into-inlined-static.cpp": {"g": ("exact", 1272), "z": ("exact", 1264)},
+            # the same with two instances of a template, whose heads are recorded at one location
+            "folded-into-inlined-static-template.cpp": {"tf": ("min", 1272), "z": ("exact", 1264)},
         }
         samples = ROOT / "examples" / "test" / "cmake" / "stack-usage-samples"
         self.assertEqual(sorted(expected), sorted(p.name for p in samples.glob("*.cpp")))

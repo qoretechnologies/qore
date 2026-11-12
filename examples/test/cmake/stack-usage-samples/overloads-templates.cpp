@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Qore Technologies, s.r.o.
+// Copyright 2026 Qore Technologies, s.r.o.; SPDX-License-Identifier: MIT
 // a sample of GCC's records of .part clones for examples/test/cmake/test_check_stack_usage.py (issue #5852)
 #include <cstring>
 extern void use(char*);

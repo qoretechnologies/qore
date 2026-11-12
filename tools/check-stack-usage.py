@@ -20,13 +20,15 @@ checked for a build that matches them all (any other build, such as one made wit
 reported, not checked, unless --force is given).
 
 The frame of a function counts the clones that GCC makes of it with the rule of check(): for each location of a
-record of the function (per overload group), the sum of the two largest records there (its head, the ".part" clone
-of partial inlining, which the head calls and GCC records as "0(...)" or under the function's name at the head's
-location, .constprop/.isra alternatives) and of the records of clones that identical code folding merged with its
-clones (found by address in the object file's symbol table, objdump -t).  The head and its clone are two of those
-records, so the sum can never be less than their frames together: growth cannot be hidden; it is more when the two
-largest records are alternatives, which can only fail a check falsely.  A .part clone in the symbol table for which
-no record can be found fails the check as UNACCOUNTED.
+record of the function (per overload group), the sum of the two largest of the records there (its head, the ".part"
+clone of partial inlining, which the head calls and GCC records as "0(...)" or under the function's name at the head's
+location, .constprop/.isra alternatives) and the record of each of its .part clones found with the object file's
+symbol table (objdump -t), also where identical code folding merged it with another function's clone, recorded at
+that function's location (or as "0(...)" where a function without records, its head inlined everywhere, was).  The
+head and its clone are both counted, so the sum can never be less than their frames together: growth cannot be
+hidden; it is more when the two largest records are alternatives, which can only fail a check falsely.  A .part clone
+for which no record can only be its own fails the check as UNACCOUNTED, and so do object files whose symbol tables
+cannot be read (unless --allow-no-symbols is given).
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded,
@@ -354,25 +356,93 @@ def shape_of(func, signature):
     return shape
 
 
+class ObjectRecords:
+    """The frame records of one .su file and the functions of its object file (None if they cannot be read)"""
+
+    def __init__(self, records, symbols):
+        # (signature, bytes, location, index): the index tells identical records apart
+        self.records = [(signature, size, location, i) for i, (signature, size, location) in enumerate(records)]
+        self.symbols = symbols
+        # the locations with a record of a named function
+        self.named_locations = set(location for signature, size, location in records if not is_part_clone(signature))
+
+    def own_records(self, func, shape):
+        """Returns the named records of func's overload group shape: (size, signature, location, index)"""
+        return [(size, signature, location, i) for signature, size, location, i in self.records
+            if not is_part_clone(signature) and shape_of(func, signature) == shape]
+
+    def at(self, location):
+        """Returns all records at a location: (size, signature, location, index)"""
+        return [(size, signature, loc, i) for signature, size, loc, i in self.records if loc == location]
+
+    def code_symbols(self, func, shape):
+        """Returns the number of functions of func's overload group in the symbol table that have a record of their
+        own: the function itself and its .constprop and .isra clones, not its .part clones and .cold fragments"""
+        return sum(1 for sym in self.symbols if not sym.is_part and not sym.is_cold
+            and "[clone .part." not in sym.name and symbol_function(sym.name) == func
+            and shape_of(func, sym.name) == shape)
+
+    def clone_records(self, func, shape):
+        """Returns the records that can only be a .part clone of func's overload group shape: a "0(...)" record at
+        a location of its records, or, if the group has more named records than functions with records of their own
+        in the symbol table, the largest of them (conservative)"""
+        own = self.own_records(func, shape)
+        locations = set(r[2] for r in own)
+        rv = [(size, signature, location, i) for signature, size, location, i in self.records
+            if location in locations and is_part_clone(signature)]
+        if own and len(own) > self.code_symbols(func, shape):
+            rv.append(max(own))
+        return rv
+
+    def orphan_records(self, arity):
+        """Returns the "0(...)" records with the given number of parameters at a location without a record of a named
+        function: the clones of functions whose heads were inlined into all of their callers"""
+        rv = []
+        for signature, size, location, i in self.records:
+            if is_part_clone(signature) and location not in self.named_locations:
+                if len(split_params(signature[signature.index("(") + 1:signature.rindex(")")])) == arity:
+                    rv.append((size, signature, location, i))
+        return rv
+
+    def fold_set_clone(self, key):
+        """Returns the record of the .part clones at an address (identical code folding merges identical clones of
+        several functions into one, which GCC records once): the largest record that can only be the clone of one of
+        those functions, or None if there is none"""
+        candidates = []
+        for sym in self.symbols:
+            if not sym.is_part or sym.key != key:
+                continue
+            func = symbol_function(sym.name)
+            shape = shape_of(func, sym.name) if func else None
+            if shape is None:
+                continue
+            candidates += self.clone_records(func, shape)
+            if not self.own_records(func, shape) and shape != "template":
+                # a function without records: its head was inlined into all of its callers, and its clone can be a
+                # "0(...)" record at its location, which has no other record
+                candidates += self.orphan_records(shape[0])
+        return max(candidates) if candidates else None
+
+
 def check(budgets, frames):
     """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None,
     unaccounted .part clone or None).
 
     frames are (signature, bytes, path, location) records.  The frame of a budgeted function is the largest, over the
     locations of the records of each of its overload groups (number of parameters and qualifiers; template instances
-    by name), of the sum of the two largest records that may be the head there or a clone of it (the "pool"):
-    - every record at the location: GCC records a .part clone (partial inlining) as "0(...)" at the function's
-      location for a free or static member function, and under the function's own name there for a non-static member
-      function or a template instance, as it does .constprop and .isra clones;
-    - with the object file's symbol table (objdump -t), for each .part clone of the group, the largest record of the
-      functions whose .part clone shares its address (identical code folding merged them; GCC records the merged
-      clone once, at one of those functions' locations), each address once; .cold fragments are ignored, as they
-      share the frame of the function they were split from.
+    by name), of the sum of the two largest records of the "pool" there: every record at the location (its head and
+    its .constprop and .isra clones, and a .part clone that GCC records as "0(...)" or under the function's name
+    there), plus the record of each of the group's .part clones (from the object file's symbol table, objdump -t).
+    The record of a .part clone is the largest record that can only be a clone of one of the functions whose .part
+    clones share its address (identical code folding merges identical clones into one, which GCC records once): a
+    "0(...)" record at a location of one of those functions, a named record of one of them beyond the number of its
+    functions with records of their own in the symbol table (the function and its .constprop and .isra clones), or,
+    for one of them without any record (its head inlined into all of its callers), a "0(...)" record with as many
+    parameters at a location without a named record; .cold fragments are ignored, as they share the frame of the
+    function they were split from.  A .part clone without such a record is UNACCOUNTED and fails the check.
     The head and its clone are two records of the pool, so the sum of its two largest records is never less than
-    their sum, nor than any single record: growth cannot be hidden.  It overcharges when the two largest records are
-    alternatives (a .constprop or .isra clone and the function, or two variants of a clone): a false failure only.
-    A .part clone in the symbol table for which no record can be found (its group's pool has a single record while
-    the symbol table also has the function itself, and no folded clone gives one) is UNACCOUNTED and fails the check."""
+    their frames together: growth cannot be hidden.  It overcharges when the two largest records are alternatives:
+    a false failure only.  Without the symbol table, clones that are not at the function's location are not seen."""
     by_path = {}
     for signature, size, path, location in frames:
         by_path.setdefault(path, []).append((signature, size, location))
@@ -383,56 +453,28 @@ def check(budgets, frames):
         worst_sig = None
         unaccounted = None
         for path, records in by_path.items():
-            symbols = object_symbols(path, sym_cache)
-
-            def pools_of(f, shape):
-                # the records of f's group shape, and every record at their locations, by location
-                own = [(size, signature, location) for signature, size, location in records
-                    if not is_part_clone(signature) and shape_of(f, signature) == shape]
-                rv = {}
-                for size, signature, location in own:
-                    rv.setdefault(location, [])
-                for signature, size, location in records:
-                    if location in rv:
-                        rv[location].append((size, signature, location))
-                return own, rv
-
-            shapes = set()
-            for signature, size, location in records:
-                if not is_part_clone(signature):
-                    shape = shape_of(func, signature)
-                    if shape is not None:
-                        shapes.add(shape)
-            parts = [] if symbols is None else [sym for sym in symbols if sym.is_part
-                and shape_of(func, sym.name) is not None]
-            for shape in shapes | set(shape_of(func, sym.name) for sym in parts):
-                own, pools = pools_of(func, shape)
-                # the records of the functions whose clones identical code folding merged with this group's clones,
-                # each address once; they are added to the pool at every location of the group
-                folded = []
-                seen = set()
-                for part in parts:
-                    if shape_of(func, part.name) != shape or part.key in seen:
-                        continue
-                    seen.add(part.key)
-                    candidates = []
-                    for other in symbols:
-                        if other is part or not other.is_part or other.key != part.key:
-                            continue
-                        other_func = symbol_function(other.name)
-                        other_shape = shape_of(other_func, other.name) if other_func else None
-                        if other_shape is None or (other_func == func and other_shape == shape):
-                            continue
-                        for pool in pools_of(other_func, other_shape)[1].values():
-                            candidates += pool
-                    if candidates:
-                        folded.append(max(candidates))
-                    elif not any(len(pool) > 1 for pool in pools.values()) \
-                            and (not own or has_head(symbols, func, shape)):
-                        # no record can be the clone: each location has at most the head
-                        unaccounted = unaccounted or part.name
-                for location, pool in (pools.items() if pools else [(None, [])]):
-                    pool = sorted(pool + folded, reverse=True)
+            obj = ObjectRecords(records, object_symbols(path, sym_cache))
+            shapes = set(shape_of(func, signature) for signature, size, location in records
+                if not is_part_clone(signature)) - {None}
+            # the records of the clones of each overload group, from the symbol table
+            clones = {}
+            for part in obj.symbols or ():
+                if not part.is_part:
+                    continue
+                shape = shape_of(func, part.name)
+                if shape is None:
+                    continue
+                shapes.add(shape)
+                clone = obj.fold_set_clone(part.key)
+                if clone is None:
+                    unaccounted = unaccounted or part.name
+                elif clone not in clones.setdefault(shape, []):
+                    clones[shape].append(clone)
+            for shape in shapes:
+                locations = sorted(set(r[2] for r in obj.own_records(func, shape)))
+                for location in locations or [None]:
+                    # each record once (a clone's record can be at the location as well)
+                    pool = sorted(set((obj.at(location) if location else []) + clones.get(shape, [])), reverse=True)
                     if not pool:
                         continue
                     total = pool[0][0] + (pool[1][0] if len(pool) > 1 else 0)
@@ -444,9 +486,13 @@ def check(budgets, frames):
     return results
 
 
-def has_head(symbols, func, shape):
-    """True if the symbol table has func itself (not a clone) with the given overload group"""
-    return any("[clone " not in sym.name and shape_of(func, sym.name) == shape for sym in symbols)
+def missing_symbols(budgets, frames):
+    """Returns the .su files with records of budgeted functions whose object file's symbol table cannot be read (no
+    object file, or no objdump)"""
+    cache = {}
+    paths = set(path for signature, _, path, _ in frames
+        if any(matches(func, signature) for func, _, _ in budgets))
+    return sorted(str(path) for path in paths if object_symbols(path, cache) is None)
 
 
 def flags_match(calibrated, actual):
@@ -500,6 +546,8 @@ def main(argv=None):
     parser.add_argument("--force", action="store_true",
         help="check the budgets even if the build is not the one they are calibrated for")
     parser.add_argument("--verbose", "-v", action="store_true", help="print the signature that matched each budget")
+    parser.add_argument("--allow-no-symbols", action="store_true",
+        help="check the records only if the object files or objdump are missing (by default, that is an error)")
     args = parser.parse_args(argv)
 
     try:
@@ -533,6 +581,13 @@ def main(argv=None):
         if not frames:
             raise InputError("no .su files found under %s: was libqore built with -DQORE_STACK_USAGE_REPORT=ON?" %
                 args.build_dir)
+        missing = missing_symbols(budgets, frames)
+        if missing:
+            msg = ("the symbol tables of the object files of %s cannot be read (no object file, or no objdump): the "
+                ".part clones that are not recorded at their function's location cannot be found" % ", ".join(missing))
+            if not args.allow_no_symbols:
+                raise InputError(msg + " (use --allow-no-symbols to check the records only)")
+            print("stack usage: note: " + msg)
     except InputError as e:
         print("stack usage: ERROR: %s" % e, file=sys.stderr)
         return 2
