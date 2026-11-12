@@ -10436,10 +10436,10 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
             if (build_args_failed) { return false; }
             auto ft = llvm::FunctionType::get(i64_type,
                 {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot", ft);
+            auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot_v2", ft);
             if (throwing_ok) {
                 auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_background_self_call_aot_throwing", ft);
+                    "qore_rt_background_self_call_aot_v2_throwing", ft);
                 *result_out = emitMaybeInvoke(helper, helper_throwing,
                     {class_ref_ptr, name_ptr, args_array,
                      llvm::ConstantInt::get(i32_type, (int)actual_nargs), xsink_arg},

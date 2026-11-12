@@ -17258,6 +17258,49 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
     }
 }
 
+// the helpers of AOT code compiled before issue #5933 (JITRuntime.cpp), with the arguments that such code passes
+extern "C" uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! issue #5933: the background self-call helper of code compiled by an older qcc raises an exception
+/** The helper became qore_rt_background_self_call_aot_v2(), which takes a class reference before the name of the
+    method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
+    identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
+*/
+static void ut_old_background_self_call_helper(UnitTestCounters& c) {
+    auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
+        if (!xsink.isException()) {
+            return false;
+        }
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "AOT-RUNTIME-ERROR")
+            && desc.getType() == NT_STRING && strstr(desc.get<const QoreStringNode>()->c_str(), "'m'")
+            && strstr(desc.get<const QoreStringNode>()->c_str(), "recompile the program");
+    };
+    {
+        ExceptionSink xsink;
+        uint64_t args[1] = {0};
+        qore_rt_background_self_call_aot("m", args, 1, &xsink);
+        UT_ASSERT(c, is_rebuild_error(xsink), "the old background self-call helper raises AOT-RUNTIME-ERROR");
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        bool thrown = false;
+        try {
+            qore_rt_background_self_call_aot_throwing("m", nullptr, 0, &xsink);
+        } catch (...) {
+            thrown = true;
+        }
+        UT_ASSERT(c, thrown && is_rebuild_error(xsink),
+            "the old throwing background self-call helper raises AOT-RUNTIME-ERROR and unwinds");
+        xsink.clear();
+    }
+}
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -17274,6 +17317,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
+    ut_old_background_self_call_helper(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
 #endif

@@ -1735,7 +1735,7 @@ private:
     // On success writes the call result to *result and returns true; on non-match
     // (empty operands or unsupported inner shape) returns false leaving *result
     // untouched so the caller emits the AST fallback path.  In AOT mode, only the
-    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot);
+    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot_v2);
     // other shapes fall through to AST eval since they'd need name-based lookup.
     // @param expr_val        The QoreBackgroundOperatorNode wrapped as QoreValue
     // @param operands        Pre-evaluated operands (layout described above)

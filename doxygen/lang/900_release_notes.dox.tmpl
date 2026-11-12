@@ -1615,7 +1615,10 @@
       which could find another class with the same name; it now calls the method of the class that the call was
       resolved on when it was compiled.  A qualified call of an abstract method (<tt>Base::method()</tt>, in the
       background or not) raised \c METHOD-DOES-NOT-EXIST, or \c ABSTRACT-VARIANT-ERROR in programs compiled with
-      \c qcc; it now calls the method that the class of the object implements (issue #5933)
+      \c qcc; it now calls the method that the class of the object implements.  A program compiled with \c qcc
+      before this fix must be recompiled: a module is refused when it is loaded, as for any module compiled by
+      another version of Qore, and a standalone executable linked to the library dynamically raises
+      \c AOT-RUNTIME-ERROR when it makes a background call of a method of the object (issue #5933)
     - a background call of a method of the object that compiled code dispatches by name (a call that the AOT runtime
       could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
       such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
