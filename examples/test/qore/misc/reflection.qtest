@@ -2392,6 +2392,13 @@ class ReflectionTest inherits QUnit::Test {
             assertEq(2, members.size());
         }
 
+        # the members as declared (qore#5858): a complex type, an or-nothing member and a nested union
+        {
+            Type t("union<hash<auto>, *string, union<float, bool>>");
+            list<string> names = map $1.getName(), t.getUnionMemberTypes();
+            assertEq(("hash<auto>", "*string", "union<float, bool>"), names);
+        }
+
         # Test non-union types
         {
             Type t("int");

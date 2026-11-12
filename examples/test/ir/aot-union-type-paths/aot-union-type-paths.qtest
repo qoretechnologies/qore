@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotUnionTypePathsTest
+
+#! issue #5858: AOT code keeps union types whose members are typed hashes, classes or enums
+/** A union type was written to an AOT image as the type of its first member when that member was a typed hash
+    (QoreTypeInfo::getTypedHash() looks at the first member of a union only), so a compiled
+    <tt>union<hash<H>, int></tt> variable took only <tt>hash<H></tt>; and the members of a union were read back from
+    its return types, which give only their base types (\c hash, \c object, \c string for an enum).  A union is now
+    written with the path of each declared member type.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class AotUnionTypePathsTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "union-type-path-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOT code keeps union types", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        list<string> lines = select astOutput().split("\n"), $1 =~ / => /;
+        assertEq(32, lines.size(), "every case ran");
+        hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
+        assertEq("{a: 2} hash<H>", res."local hashdecl first hash");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."local hashdecl first refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<int, hash<H>>", res."local hashdecl last refuses");
+        assertEq("\"y\" string", res."local namespace hashdecl");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<NH>, int>", res."local namespace hashdecl refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<object<K>, int>", res."local class refuses");
+        assertEq("\"blue\" enum<Color>", res."local enum member");
+        assertEq("RUNTIME-TYPE-ERROR union<enum<Color>, int>", res."local enum refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."member hashdecl refuses");
+        assertEq("4 integer", res."member or-nothing namespace hashdecl");
+        assertEq("5 integer", res."return hash");
+        assertEq("\"hash z\" string", res."param hash");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."hash value type refuses");
+        assertEq("8 integer", res."list element type");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."list element type refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<*int, hash<H>>", res."or-nothing member refuses");
+        assertEq("9 integer", res."nested union member");
+        assertEq("RUNTIME-TYPE-ERROR union<int, *union<string, hash<H>>>", res."nested union refuses");
+        assertEq("3 integer", res."parameterized hashdecl member");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<P<int>>, string>", res."parameterized hashdecl refuses");
+        assertEq("[{a: 1}] list<hash<H>>", res."list member");
+        assertEq("RUNTIME-TYPE-ERROR union<list<hash<H>>, int>", res."list member refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<string, hash<H>>, int>", res."hash member refuses");
+        assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."duplicate member refuses");
+        assertEq("RUNTIME-TYPE-ERROR int", res."duplicate type only refuses");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("aot-union-type-paths-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

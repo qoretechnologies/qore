@@ -2949,6 +2949,31 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return "*list<auto!>";
     }
 
+    // a union is written with the path of each of its member types; it is checked before the type checks below, which
+    // look at the first member of a union only (QoreTypeInfo::getTypedHash() took union<hash<H>, int> for hash<H>:
+    // qore#5858)
+    if (const QoreUnionTypeInfo* union_ti = QoreTypeInfo::getUnionType(ti)) {
+        // the members as declared, without duplicates (QoreUnionTypeInfo::getMemberTypes())
+        type_vec_t members = union_ti->getMemberTypes();
+        std::string rv = union_ti->isOrNothing() ? "*union<" : "union<";
+        for (size_t i = 0; i < members.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT union type path serialization")) {
+                return {};
+            }
+            std::string member_path = getAOTSerializableTypePath(members[i]);
+            // a member type always has a path; only a cancelled serialization gives none, and then nothing is written
+            if (member_path.empty()) {
+                return {};
+            }
+            if (i) {
+                rv += ", ";
+            }
+            rv += member_path;
+        }
+        rv += ">";
+        return rv;
+    }
+
     if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
         bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
         const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);

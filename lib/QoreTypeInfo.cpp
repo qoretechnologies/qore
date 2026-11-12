@@ -2193,17 +2193,20 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     if (member_types.empty()) {
         return autoTypeInfo;  // empty union accepts anything
     }
-    if (member_types.size() == 1) {
-        const QoreTypeInfo* ti = member_types[0];
+
+    // Normalize the key for consistent cache lookup
+    type_vec_t key = normalize_union_key(member_types);
+
+    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
+    // that writes the union without the duplicates reads it back (qore#5858)
+    if (key.size() == 1) {
+        const QoreTypeInfo* ti = key[0];
         if (or_nothing) {
             const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
             return orn ? orn : ti;
         }
         return ti;
     }
-
-    // Normalize the key for consistent cache lookup
-    type_vec_t key = normalize_union_key(member_types);
 
     // Check if any member already accepts NOTHING, if so, or_nothing is already covered
     bool has_nothing = false;
@@ -2271,10 +2274,11 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     }
 
     // Build the name
-    QoreString name = build_union_name(member_types, or_nothing && !has_nothing);
+    // the name is built from the members without duplicates, as an AOT image writes and reads the type (qore#5858)
+    QoreString name = build_union_name(key, or_nothing && !has_nothing);
 
     // Create the union type
-    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name,
+    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
         or_nothing || has_nothing);
     noteDerivedTypeKeys(nullptr, key);
     cache[key] = ti;

@@ -4264,9 +4264,12 @@ constexpr size_t QORE_MAX_UNION_MEMBERS = 100;
 class QoreUnionTypeInfo : public QoreTypeInfo {
 public:
     //! Constructor for explicit union types
+    /** @param members the member types as declared (without duplicates)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, bool or_nothing = false)
-            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing) {
+            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
+            members(std::move(members)) {
     }
 
     //! Returns true if this is an or-nothing union type
@@ -4274,21 +4277,18 @@ public:
         return orNothing;
     }
 
-    //! Returns the member types of this union
+    //! Returns the member types of this union as declared
+    /** The return types of the union give only the base type of a member (ex: \c hash for <tt>hash<H></tt>, \c object
+        for a class, \c string for a string enum), so the members are kept as declared (qore#5858)
+    */
     DLLLOCAL type_vec_t getMemberTypes() const {
-        type_vec_t result;
-        for (const auto& rt : return_vec) {
-            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
-            // Skip NOTHING type for or-nothing unions
-            if (ti && ti != nothingTypeInfo) {
-                result.push_back(ti);
-            }
-        }
-        return result;
+        return members;
     }
 
 protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
+    //! the member types as declared, without duplicates
+    const type_vec_t members;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);
