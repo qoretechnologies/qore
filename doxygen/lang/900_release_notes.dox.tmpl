@@ -1677,6 +1677,9 @@
       @ref Qore::Program "Program" object first, so a function of the Program with the name of a method of the class
       (ex: \c run()) could not be referenced; a class path naming a non-static method of the Program class no longer
       returns a reference bound to the Program object (issue #5863)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
+      significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
+      limit; such a frame is now an error (issue #5878)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

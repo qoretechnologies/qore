@@ -220,6 +220,9 @@ private:
 
     WebSocketFrameDecoder decoder;
     WebSocketFrameReassembler reassembler;
+    //! the size of the fragments received of the message being reassembled, checked against the maximum message
+    //! size as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
 
     size_t max_message_size = WS_DEFAULT_MAX_FRAME_SIZE;
     int messages_pushed = 0;
