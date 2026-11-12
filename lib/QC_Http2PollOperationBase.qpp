@@ -875,9 +875,13 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.
         // When the peer drops the TCP connection, the socket becomes closed but
         // the HTTP/2 stream state in nghttp2 remains unchanged.
+        // A CONNECT tunnel (no request body, no WebSocket frame state) of a draining connection is ended as well:
+        // a tunnel has no end that a drain could wait for, and its handler ends the stream when its inbound side ends
+        // (qore#5899); a WebSocket tunnel is closed with its closing handshake by the server instead
         if (sock->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
                 || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
-                || !sock->isOpen()) {
+                || !sock->isOpen()
+                || (!info.request_body && !info.frame_state && drain_requested.load(std::memory_order_acquire))) {
             // Push the end of the stream so the handler thread knows the stream is done; the data received before
             // END_STREAM was drained above.  A request body closed without END_STREAM (RST_STREAM, a dropped
             // connection) ends with an error, so its consumer cannot take the part it received for the complete body

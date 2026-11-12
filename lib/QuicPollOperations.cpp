@@ -2225,9 +2225,11 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
     }
 }
 
-void SocketQuicServerPollOperation::drainSessions() {
+bool SocketQuicServerPollOperation::drainSessions() {
     int fd = sock->priv->socket->getDescriptor();
     uint8_t close_buf[1280];
+    // set if a session is still open after this pass
+    bool open = false;
     for (auto& entry : sessions_) {
         QuicSession& session = *entry.second;
         if (session.isClosed()) {
@@ -2241,6 +2243,7 @@ void SocketQuicServerPollOperation::drainSessions() {
         }
         if (session.hasActiveApplicationStreams() || session.hasCompletedStreams()
                 || session.hasDispatchedStreams()) {
+            open = true;
             continue;
         }
         // the session has no request left: the final GOAWAY, then CONNECTION_CLOSE (RFC 9000 section 10.2), as
@@ -2264,6 +2267,9 @@ void SocketQuicServerPollOperation::drainSessions() {
     }
     // the closed sessions are reaped and their close reported
     cleanupClosedSessions();
+    // the drain is done when every session is closed: a closed session can do no more I/O, so a handler that still
+    // holds one of its streams (until it sees the close) has nothing left that the drain could wait for
+    return !open;
 }
 
 void SocketQuicServerPollOperation::collectResponseSendResults(int64_t session_id, QuicSession& session) {
@@ -2374,8 +2380,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 // a draining server closes each session that has no request left, and is done when none is left
                 // (qore#5899)
                 if (sock->priv->http_draining.load(std::memory_order_acquire)) {
-                    drainSessions();
-                    if (sessions_.empty()) {
+                    if (drainSessions()) {
                         qcs_state = QCS::CLOSED;
                         sock->priv->clearNonBlock();
                         set_non_block = false;

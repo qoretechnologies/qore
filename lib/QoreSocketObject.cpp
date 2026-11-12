@@ -2262,8 +2262,10 @@ private:
             case Action::Trailers:
                 return output == 0;
             case Action::Cleanup:
-                // a STOP_SENDING queued by the cleanup is only written when the I/O thread handles the session
-                return cleanup_queued_frame;
+                // a STOP_SENDING queued by the cleanup is only written when the I/O thread handles the session; while
+                // the server drains, the end of a stream can end the drain of its session, which the I/O thread
+                // closes when it handles it (qore#5899)
+                return cleanup_queued_frame || sock->isHttpDraining();
             case Action::WatchResponseSend:
             case Action::RegisterConnectQueue:
             case Action::DeregisterConnectQueue:
@@ -6004,6 +6006,10 @@ int QoreSocketObject::sendHttp2ShutdownGoaway(ExceptionSink* xsink) {
 
 int QoreSocketObject::startHttp2Drain(ExceptionSink* xsink) {
     return qore_socket_object_http2_shutdown(this, true, xsink);
+}
+
+bool QoreSocketObject::isHttpDraining() const {
+    return priv->http_draining.load(std::memory_order_acquire);
 }
 
 bool QoreSocketObject::isHttp2DrainComplete() const {

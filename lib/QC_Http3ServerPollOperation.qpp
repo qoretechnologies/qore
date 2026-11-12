@@ -143,6 +143,7 @@ void Http3ServerPollOperationPriv::closeStreamQueues() {
     // sentinel push instead of inserting into the map after we've cleared
     // it (the H2 commit af761a3d9 closes the analogous race for H2).
     stream_queues_closed = true;
+    tunnel_stream_keys.clear();
     for (auto& [skey, queue] : stream_queues) {
         (void)skey;
         if (queue) {
@@ -726,6 +727,22 @@ void Http3ServerPollOperationPriv::startReadRequest(ExceptionSink* xsink) {
 
 void Http3ServerPollOperationPriv::checkStreamQueues() {
     data_ready_streams.clear();
+    // a draining server ends the CONNECT tunnels, which have no end that a drain could wait for: the handler ends
+    // the stream when the inbound side of its tunnel ends; a WebSocket tunnel is closed with its closing handshake by
+    // the server instead (qore#5899)
+    if (!tunnel_stream_keys.empty() && sock_obj && sock_obj->isHttpDraining()) {
+        for (const std::string& skey : tunnel_stream_keys) {
+            auto i = stream_queues.find(skey);
+            if (i != stream_queues.end()) {
+                if (i->second) {
+                    i->second->pushAndTakeRef(QoreValue());
+                    data_ready_streams.push_back(skey);
+                }
+                stream_queues.erase(i);
+            }
+        }
+        tunnel_stream_keys.clear();
+    }
     for (auto& [skey, queue] : stream_queues) {
         if (queue && !queue->empty()) {
             data_ready_streams.push_back(skey);
@@ -1335,9 +1352,11 @@ nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) 
 /** @param session_id the QUIC session ID
     @param stream_id the QUIC stream ID
     @param queue the Queue that h3RecvDataCallback pushes data to
+    @param tunnel @ref True if the stream is a CONNECT tunnel that carries raw data (not a WebSocket connection): a
+    server that drains its connections before it stops ends it by pushing @ref nothing to the queue
 */
 nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream_id,
-        Queue[Queue] queue) [flags=NAMED_ARGS] {
+        Queue[Queue] queue, bool tunnel = False) [flags=NAMED_ARGS] {
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
 
     // Store the QoreObject ref in internal_members to prevent GC
@@ -1365,7 +1384,7 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
 
     // Register the C++ Queue pointer in the priv class
     // Queue inherits from QoreQueue — empty() is available via the QoreQueue base
-    priv->registerStreamQueue(skey, *queue);
+    priv->registerStreamQueue(skey, *queue, tunnel);
 }
 
 //! Registers a stream data listener

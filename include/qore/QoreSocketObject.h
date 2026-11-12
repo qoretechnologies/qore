@@ -876,6 +876,9 @@ if (accepted) {
     //! Returns true if a drain of the socket's HTTP/2 session was started and it has no open stream and nothing to write
     DLLLOCAL bool isHttp2DrainComplete() const;
 
+    //! Returns true if the server drains the socket's connection (see Socket::drainHttpConnection())
+    DLLLOCAL bool isHttpDraining() const;
+
     //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
     /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
     */

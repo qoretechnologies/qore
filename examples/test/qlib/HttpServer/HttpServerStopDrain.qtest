@@ -59,6 +59,15 @@ class DrainHandler inherits AbstractHttpRequestHandler {
             release.waitForZero();
             return makeResponse(200, "released", {"Content-Type": "text/plain"});
         }
+        if (hdr.path == "sse") {
+            # an event stream that the handler starts once it is released
+            entered.push(hdr.path);
+            release.waitForZero();
+            return makeResponse(200, "", {"Content-Type": "text/event-stream"});
+        }
+        if (hdr.path == "post") {
+            return makeResponse(200, sprintf("%d", body ? body.size() : 0), {"Content-Type": "text/plain"});
+        }
         return makeResponse(200, "ok", {"Content-Type": "text/plain"});
     }
 
@@ -128,6 +137,8 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         addTestCase("stop() stops waiting at the drain timeout (quic_drain_timeout alias)",
             \testDrainTimeout());
         addTestCase("stopImmediate() does not wait for a request in progress", \testStopImmediate());
+        addTestCase("stop() answers a request whose body is still arriving", \testBodyInProgress());
+        addTestCase("stop() refuses an event stream that a handler starts during the drain", \testStreamRefused());
         set_return_value(main());
     }
 
@@ -200,9 +211,8 @@ class HttpServerStopDrainTest inherits QUnit::Test {
         assertEq("SOCKET-CLOSED", readEnd(idle), "the idle connection is closed when the drain starts");
         assertEq(1, stopped.getCount(), "stop() waits for the request in progress");
 
-        # a connection made during the drain is not served
-        Socket late = sendRequest(setup.port, "quick");
-        on_exit late.close();
+        # a connection made during the drain is refused: the listening socket is closed
+        assertThrows("SOCKET-CONNECT-ERROR", \sendRequest(), (setup.port, "quick"));
 
         handler.releaseAll();
         resp = readResponse(busy);
@@ -213,7 +223,6 @@ class HttpServerStopDrainTest inherits QUnit::Test {
 
         assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the request is answered");
         assertFalse(appender.seen("did not finish"), "the drain did not time out");
-        assertNeq(NOTHING, readEnd(late), "a connection made during the drain gets no response");
     }
 
     testStopNoWaitDrains() {
@@ -299,6 +308,69 @@ class HttpServerStopDrainTest inherits QUnit::Test {
             assertRegex("^SOCKET-", ex.err, "the connection is closed without a response");
         }
         assertFalse(appender.seen("drain started"), "no drain was started");
+    }
+
+    testBodyInProgress() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        # the header and half of the body are sent before the stop, the rest of the body after the drain started
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", setup.port), 10s);
+        on_exit s.close();
+        s.send("POST /post HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\n12345");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        appender.waitFor("drain started");
+        s.send("67890");
+
+        hash<auto> resp = readResponse(s);
+        assertEq(200, resp.status_code, "the request is answered");
+        assertEq("10", resp.body, "the whole body is read");
+        assertEq("close", resp.connection, "the response closes the connection");
+        assertEq("SOCKET-CLOSED", readEnd(s), "the connection is closed after the response");
+        assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the request is answered");
+        assertFalse(appender.seen("did not finish"), "the drain did not time out");
+    }
+
+    testStreamRefused() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        hash<auto> setup = startServer(handler, appender, {"drain_timeout": LongDrain});
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+
+        Socket s = sendRequest(setup.port, "sse");
+        on_exit s.close();
+        assertEq("sse", handler.entered.get(StopTimeout), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        appender.waitFor("drain started");
+        handler.releaseAll();
+
+        # the event stream would hold the drain until its timeout: it is refused
+        hash<auto> resp = readResponse(s);
+        assertEq(503, resp.status_code, "an event stream started during the drain is refused");
+        assertEq("close", resp.connection, "the response closes the connection");
+        assertEq(0, stopped.waitForZero(StopTimeout), "stop() ends once the request is answered");
+        assertFalse(appender.seen("did not finish"), "the drain did not time out");
     }
 
     #! reads a response header, raising an exception if the connection is closed

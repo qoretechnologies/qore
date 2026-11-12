@@ -2343,9 +2343,11 @@ private:
 
     //! Drains the sessions of a server that stops (qore#5899; called on the I/O thread with the socket lock held)
     /** Sends each session the GOAWAY notice once, and closes (final GOAWAY, then CONNECTION_CLOSE) each session that
-        has no request left; the operation ends (isDrained()) when no session is left
+        has no request left
+
+        @return true if every session is closed, in which case the operation ends (isDrained())
     */
-    DLLLOCAL void drainSessions();
+    DLLLOCAL bool drainSessions();
 
 public:
     //! Returns true if the operation ended because the server drained all its sessions
