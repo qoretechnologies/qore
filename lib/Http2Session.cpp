@@ -1071,13 +1071,13 @@ int Http2Session::submitShutdownGoaway(ExceptionSink* xsink) {
 
 int Http2Session::startDrain(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    draining = true;
+    draining.store(true, std::memory_order_release);
     return submitShutdownGoaway(xsink);
 }
 
 bool Http2Session::isDrainComplete() const {
     std::lock_guard<std::recursive_mutex> lg(m);
-    return draining && streams.empty() && send_offset >= send_buffer.size()
+    return draining.load(std::memory_order_acquire) && streams.empty() && send_offset >= send_buffer.size()
         && !nghttp2_session_want_write(session);
 }
 

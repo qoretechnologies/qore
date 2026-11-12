@@ -396,6 +396,12 @@ public:
     //! Returns true if a drain was started and the session has no open streams and nothing left to write
     DLLLOCAL bool isDrainComplete() const;
 
+    //! Returns true if startDrain() was called; lock-free, so that the paths that end a stream pay for the
+    //! completion check only while draining
+    DLLLOCAL bool isDraining() const {
+        return draining.load(std::memory_order_acquire);
+    }
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
@@ -1093,8 +1099,8 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
-    //! true once startDrain() was called; protected by m
-    bool draining = false;
+    //! true once startDrain() was called; set under m, read without it by isDraining()
+    std::atomic<bool> draining{false};
     int32_t last_stream_id = 0;
 
     // Request body data for callbacks - owns the data

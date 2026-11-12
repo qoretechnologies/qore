@@ -1851,6 +1851,11 @@ public:
             case Action::Cleanup:
                 h2->cleanupStream(stream_id);
                 output = 0;
+                // the end of the last stream of a draining connection: the connection's poll operation must run to
+                // close it (qore#5899)
+                if (h2->isDraining() && h2->isDrainComplete()) {
+                    wake_controller = true;
+                }
                 break;
 
             case Action::WatchResponseSend:
@@ -6021,6 +6026,13 @@ void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
         if (h2) {
             h2->cleanupStream(stream_id);
+            // the end of the last stream of a draining connection: its poll operation must run to close it; on the
+            // I/O thread, the cycle that runs this sees it (qore#5899)
+            if (h2->isDraining() && !qore_on_async_io_thread() && h2->isDrainComplete()) {
+                ExceptionSink wake_xsink;
+                qore_socket_object_wake_async_controller(this, &wake_xsink);
+                wake_xsink.clear();
+            }
         }
         return;
     }
