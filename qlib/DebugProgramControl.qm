@@ -70,6 +70,9 @@ module DebugProgramControl {
       writes before an interrupt is sent before the interrupt
     - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
       stack catches the exception
+    - a step to the block of the top-level code, whose statement ID is 0 in
+      @ref Qore::DebugProgram::onStep() "DebugProgram::onStep()" as it has none, stops at the first statement of the
+      block, as a step to a block does, and not at the block
     - a thread stops once for an exception, at its first event that a client's exception filter matches: the
       exception events of the statements that contain it, which the exception leaves after the thread continued, do
       not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes uncaught an
@@ -3049,6 +3052,8 @@ public namespace DebugProgramControl {
                     return;
                 }
             }
+            # the block of the top-level code has no statement ID: blockStatementId is 0 then, and the thread stops at
+            # the first statement of the block instead
             statementId = statementId ?? blockStatementId;
             /*
                 when a statement is parsed in non-pgm context then it is not registered in pgm and no statementId can be resolved
