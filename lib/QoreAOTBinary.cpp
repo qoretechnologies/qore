@@ -3501,7 +3501,11 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     QoreAOTTypeResolver resolver(pgm);
     std::string type_error;
     const QoreTypeInfo* rti = resolver.resolve(type_path, type_error);
-    return rti && QoreTypeInfo::equal(rti, ti);
+    // the type itself: QoreTypeInfo::equal() takes a deferred type of a hashdecl that the Program does not have as equal
+    // to the value's type of the same name, and a class of a module that failed to load as equal to the Program's own
+    // class of the same name, while a type that the Program has resolves to the same type object, as the complex types
+    // are kept for their element types and the class and hashdecl types are unique
+    return rti && rti == ti;
 }
 
 static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
