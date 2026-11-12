@@ -1277,162 +1277,180 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d pending=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, pending);
-    // First, collect data from nghttp2; drain until it reports no more data.
-    // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
-    // relying on nghttp2_session_want_write() as a loop condition.
-    size_t total_collected = 0;
+    // The output of nghttp2 is collected and written in rounds: a round stops collecting at the high-water mark,
+    // and the next one runs only if the socket took the whole buffer; when the socket would block, the rest stays in
+    // nghttp2 until the socket is writable again
     while (true) {
-        const uint8_t* data;
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-        nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
-#else
-        ssize_t len = nghttp2_session_mem_send(session, &data);
-#endif
-        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
-        if (len < 0) {
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
-#else
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
-#endif
-                nghttp2_strerror(static_cast<int>(len)));
-            return -1;
-        }
-        if (len == 0) {
-            break;
-        }
-        send_buffer.insert(send_buffer.end(), data, data + len);
-        total_collected += len;
-    }
-
-    // nghttp2 reports a frame as sent while returning its data, so each END_STREAM frame of a watched response
-    // serialized in this pass is in the buffer now
-    for (int32_t stream_id : response_end_streams_serialized) {
-        auto i = response_send_watches.find(stream_id);
-        if (i != response_send_watches.end()) {
-            i->second.end_pos = send_buffer_base + send_buffer.size();
-            i->second.end_pos_set = true;
-        }
-    }
-    response_end_streams_serialized.clear();
-
-    // Compact send buffer when consumed prefix exceeds threshold
-    if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
-        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
-        send_buffer_base += send_offset;
-        send_offset = 0;
-    }
-
-    pending = send_buffer.size() - send_offset;
-    printd(5, "sendPendingData() collected %zu bytes from nghttp2, pending=%zu\n",
-        total_collected, pending);
-
-    // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
-    if (send_offset < send_buffer.size()) {
-        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
-            sock->ssl.load(std::memory_order_relaxed));
-        {
-            size_t off = send_offset;
-            int count = 0;
-            while (off + 9 <= send_buffer.size() && count < 32) {
-                const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
-                uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-                uint8_t type = hdr[3];
-                uint8_t flags = hdr[4];
-                uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
-                    | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
-                printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
-                    count, length, type, flags, stream_id);
-                size_t frame_size = 9 + length;
-                if (off + frame_size > send_buffer.size()) {
-                    printd(5, "sendPendingData() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
-                        count, off, frame_size, send_buffer.size());
-                    break;
-                }
-                off += frame_size;
-                ++count;
-            }
-        }
-
-        // the descriptor and the TLS connection stay valid while another thread closes the socket
-        qore_socket_private::IoUseHelper io_use(*sock);
-        // Always use non-blocking mode for async I/O
-        OptionalNonBlockingHelper nbh(*sock, true, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        // Loop until buffer consumed or we need to poll
-        while (send_offset < send_buffer.size()) {
-            ssize_t rc;
-            size_t to_send = send_buffer.size() - send_offset;
-            if (SSLSocketHelper* ssl = io_use.getSsl()) {
-                // Use doNonBlockingIo for proper async SSL I/O
-                // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
-                size_t real_io = 0;
-                printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
-                    const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
-                    to_send, SslAction::WRITE, real_io);
-                printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
-                if (*xsink) {
-                    return -1;
-                }
-
-                // Advance offset past sent data
-                if (real_io > 0) {
-                    send_offset += real_io;
-                    printd(5, "sendPendingData() sent %zu bytes, remaining=%zu\n",
-                        real_io, send_buffer.size() - send_offset);
-                }
-
-                if (!rc) {
-                    // Data was written successfully and SSL doesn't need to poll - continue loop
-                    continue;
-                }
-                if (rc == SOCK_POLLOUT || rc == SOCK_POLLIN) {
-                    // SSL needs to wait for socket - return the actual poll direction
-                    // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
-                    printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
-                        rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size() - send_offset);
-                    return rc;  // Return actual poll direction needed
-                }
-                // rc < 0 but no exception - shouldn't happen
-                printd(5, "sendPendingData() SSL unexpected: rc=%zd (breaking)\n", rc);
+        // First, collect data from nghttp2; drain until it reports no more data.
+        // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
+        // relying on nghttp2_session_want_write() as a loop condition.
+        size_t total_collected = 0;
+        // set when collection stopped at the high-water mark with output left in nghttp2
+        bool capped = false;
+        while (true) {
+            // nghttp2 serializes DATA only when it is asked for output: the output is taken only while the unwritten
+            // part of the buffer is below the high-water mark, so that a peer that does not read (whatever window it
+            // grants) leaves the rest in the streams' pending data, where its limits apply (issue #5819)
+            if (send_buffer.size() - send_offset >= SEND_BUFFER_HIGH_WATER) {
+                capped = true;
                 break;
-            } else {
-                // Non-SSL: use regular send
-                rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
-                printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
-                if (rc >= 0) {
-                    // Advance offset past sent data
-                    if (rc > 0) {
-                        send_offset += rc;
-                    }
-                    continue;
-                }
-                sock_get_error();
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN
-#ifdef EWOULDBLOCK
-                    || errno == EWOULDBLOCK
+            }
+            const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+            nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
+#else
+            ssize_t len = nghttp2_session_mem_send(session, &data);
 #endif
-                ) {
-                    // Would block - signal poll needed
-                    printd(5, "sendPendingData() socket would block, remaining=%zu\n",
-                        send_buffer.size() - send_offset);
-                    return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
-                }
-                xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
+            printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
+            if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+                xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
+                xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
+                    nghttp2_strerror(static_cast<int>(len)));
                 return -1;
             }
+            if (len == 0) {
+                break;
+            }
+            send_buffer.insert(send_buffer.end(), data, data + len);
+            total_collected += len;
         }
 
-        printd(5, "sendPendingData() all data sent, buffer empty\n");
-    } else {
-        printd(5, "sendPendingData() no data to send\n");
+        // nghttp2 reports a frame as sent while returning its data, so each END_STREAM frame of a watched response
+        // serialized in this pass is in the buffer now
+        for (int32_t stream_id : response_end_streams_serialized) {
+            auto i = response_send_watches.find(stream_id);
+            if (i != response_send_watches.end()) {
+                i->second.end_pos = send_buffer_base + send_buffer.size();
+                i->second.end_pos_set = true;
+            }
+        }
+        response_end_streams_serialized.clear();
+
+        // Compact send buffer when consumed prefix exceeds threshold
+        if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+            send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
+            send_buffer_base += send_offset;
+            send_offset = 0;
+        }
+
+        pending = send_buffer.size() - send_offset;
+        printd(5, "sendPendingData() collected %zu bytes from nghttp2, pending=%zu\n",
+            total_collected, pending);
+
+        // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
+        if (send_offset < send_buffer.size()) {
+            printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
+                sock->ssl.load(std::memory_order_relaxed));
+            {
+                size_t off = send_offset;
+                int count = 0;
+                while (off + 9 <= send_buffer.size() && count < 32) {
+                    const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
+                    uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
+                    uint8_t type = hdr[3];
+                    uint8_t flags = hdr[4];
+                    uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+                        | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
+                    printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
+                        count, length, type, flags, stream_id);
+                    size_t frame_size = 9 + length;
+                    if (off + frame_size > send_buffer.size()) {
+                        printd(5, "sendPendingData() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
+                            count, off, frame_size, send_buffer.size());
+                        break;
+                    }
+                    off += frame_size;
+                    ++count;
+                }
+            }
+
+            // the descriptor and the TLS connection stay valid while another thread closes the socket
+            qore_socket_private::IoUseHelper io_use(*sock);
+            // Always use non-blocking mode for async I/O
+            OptionalNonBlockingHelper nbh(*sock, true, xsink);
+            if (*xsink) {
+                return -1;
+            }
+
+            // Loop until buffer consumed or we need to poll
+            while (send_offset < send_buffer.size()) {
+                ssize_t rc;
+                size_t to_send = send_buffer.size() - send_offset;
+                if (SSLSocketHelper* ssl = io_use.getSsl()) {
+                    // Use doNonBlockingIo for proper async SSL I/O
+                    // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
+                    size_t real_io = 0;
+                    printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
+                    rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
+                        const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
+                        to_send, SslAction::WRITE, real_io);
+                    printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+
+                    // Advance offset past sent data
+                    if (real_io > 0) {
+                        send_offset += real_io;
+                        printd(5, "sendPendingData() sent %zu bytes, remaining=%zu\n",
+                            real_io, send_buffer.size() - send_offset);
+                    }
+
+                    if (!rc) {
+                        // Data was written successfully and SSL doesn't need to poll - continue loop
+                        continue;
+                    }
+                    if (rc == SOCK_POLLOUT || rc == SOCK_POLLIN) {
+                        // SSL needs to wait for socket - return the actual poll direction
+                        // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
+                        printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
+                            rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size() - send_offset);
+                        return rc;  // Return actual poll direction needed
+                    }
+                    // rc < 0 but no exception - shouldn't happen
+                    printd(5, "sendPendingData() SSL unexpected: rc=%zd (breaking)\n", rc);
+                    break;
+                } else {
+                    // Non-SSL: use regular send
+                    rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
+                    printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
+                    if (rc >= 0) {
+                        // Advance offset past sent data
+                        if (rc > 0) {
+                            send_offset += rc;
+                        }
+                        continue;
+                    }
+                    sock_get_error();
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+                        || errno == EWOULDBLOCK
+#endif
+                    ) {
+                        // Would block - signal poll needed
+                        printd(5, "sendPendingData() socket would block, remaining=%zu\n",
+                            send_buffer.size() - send_offset);
+                        return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
+                    }
+                    xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
+                    return -1;
+                }
+            }
+
+            printd(5, "sendPendingData() all data sent, buffer empty\n");
+        } else {
+            printd(5, "sendPendingData() no data to send\n");
+        }
+        // another round only if collection stopped at the mark and the socket took the whole buffer
+        if (!capped || send_offset < send_buffer.size()) {
+            break;
+        }
     }
 
     // Release memory when fully drained to prevent long-lived idle connections
@@ -2653,6 +2671,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    h2->stream_send_limits.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2937,6 +2956,24 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     return 0;
 }
 
+int Http2Session::setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    if (limit <= 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid send limit %lld for stream %d: must be > 0", (long long)limit,
+            stream_id);
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    if ((!stream || stream->state == Http2StreamState::Closed)
+            && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+        xsink->raiseException("HTTP2-ERROR", "cannot set the send limit of stream %d: the stream is not open",
+            stream_id);
+        return -1;
+    }
+    stream_send_limits[stream_id] = (size_t)limit;
+    return 0;
+}
+
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
@@ -2999,9 +3036,19 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     // Limit to 1MB per stream to prevent unbounded memory growth
     // Allow zero-length end_stream sends through — they just set the flag without
     // adding data, so they must not be rejected by backpressure
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+    // A stream with its own limit (setStreamSendLimit()) refuses data that would take the buffer over it
     auto it = pending_body_data.find(stream_id);
-    if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
+    auto lit = stream_send_limits.find(stream_id);
+    if (lit != stream_send_limits.end()) {
+        if (len > 0 && it != pending_body_data.end()) {
+            size_t pending = it->second.data.size() - it->second.offset;
+            if (pending > 0 && pending + len > lit->second) {
+                printd(2, "sendStreamData() stream %d over its send limit: %zu bytes pending + %zu > %zu, data "
+                    "dropped\n", stream_id, pending, len, lit->second);
+                return 1;
+            }
+        }
+    } else if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
         size_t pending = it->second.data.size() - it->second.offset;
         if (pending > MAX_STREAM_BUFFER) {
             // Return 1 (buffer full, non-fatal) — caller decides how to handle

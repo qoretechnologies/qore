@@ -242,6 +242,35 @@ When the function is left, the temporaries of the statements still running and t
 statements left are released before the `on_exit` / `on_error` handlers that the function exit runs
 (`QoreIRToLLVM::emitExitStatementCleanup()`), as the AST interpreter releases them when the statements unwind.
 
+## Functional operators in an expression
+
+The predicate of a streaming operator (`takewhile`, `first`, `count` ...), of `select` and the expressions of a
+map-select run with the element as the implicit argument (`$1`) and its index as `$#`
+(`QoreIRLowering::lowerWithImplicitContext()`).  Their temporaries stay in the statement's temp scope, one per
+expression, as for the AST interpreter's receivers: the code records a temp scope that no `PushTempMark` opens
+(`QoreIRBuilder::allocateUnmarkedTempScopeId()`), so the normal path has no per-element mark or drain, an exception
+that the code raises releases nothing before the operator's cleanup, and the arguments that it creates for a call are
+still the call's.
+
+An exception that leaves the operator releases, in the AST interpreter's order, the element, the value that a map
+expression gave last, the list built so far, the iterator and the source, then the statement's temporaries
+(`FunctionalLoopExceptionCleanup`); an exception that the iterator's `next()` raises releases the iterator and the
+source before the list (`routeNext()`), as the AST interpreter's functional iterator ends as if the source were
+exhausted.  The cleanup exists only if a handler of the function encloses the operator: an exception target gives
+the operator's calls and operations their invoke form, which the IR interpreter runs much more slowly, so an operator
+with no handler keeps the form it has always had and an exception leaves the function directly.  The function's exit
+then restores the implicit arguments and elements open at the raising instruction, innermost first, before it
+releases the frame's values (`qore_ir_find_open_implicit_contexts()`: the IR interpreter's frame exit, native code's
+`QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only), and releases the
+operator's iterator before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).
+
+A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
+`first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map
+and select (`lowerWithSourceRelease()`).
+
+`examples/test/ir/streaming-element-cleanup/` compares the release order with the AST interpreter's in every mode
+and with AOT.
+
 ## Leaving a `foreach` statement
 
 The AST interpreter's `foreach` statement (`ForEachStatement::execImpl()`) destroys its iterator, which holds the

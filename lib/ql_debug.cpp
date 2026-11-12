@@ -1197,6 +1197,57 @@ static void ut_fork_jit_background_compiler(UnitTestCounters& c) {
     }
 }
 
+//! A synchronous JIT compile that waits for the compile lock in another thread is not counted in a child process
+/** The background compile thread takes no work while a synchronous compile waits for the lock; a child created while
+    another thread waited kept the count of the thread that does not exist in it, and its background thread never
+    compiled anything
+*/
+static void ut_fork_jit_sync_compile_waiter(UnitTestCounters& c) {
+    QoreJIT& jit = QoreJIT::instance();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        jit.lockCompileForTest();
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&] { return release; });
+        ul.unlock();
+        jit.releaseCompileLock();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&] { return held; });
+    }
+    bool waiter_locked = false;
+    std::thread waiter([&]() {
+        waiter_locked = jit.lockForSyncCompileForTest();
+        if (waiter_locked) {
+            jit.releaseCompileLock();
+        }
+    });
+    bool waiting = jit.dbgWaitSyncCompileWaiting(60000);
+    UT_ASSERT(c, waiting, "a synchronous compile waits for the compile lock");
+    pid_t pid = waiting ? fork() : -1;
+    if (!pid) {
+        _exit(jit.syncCompileWaitersForTest() ? 1 : 0);
+    }
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    waiter.join();
+    UT_ASSERT(c, waiter_locked, "the synchronous compile gets the compile lock");
+    UT_ASSERT_EQ(c, 0, jit.syncCompileWaitersForTest(), "no synchronous compile waits in the parent afterwards");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "no synchronous compile waits in the child");
+    }
+}
+
 //! The AOT module initializations that other threads claimed are released in a child process
 static void ut_fork_aot_module_state(UnitTestCounters& c) {
     QoreProgram* pgm = getProgram();
@@ -17326,6 +17377,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
+    ut_fork_jit_sync_compile_waiter(c);
     ut_fork_aot_module_state(c);
     ut_fork_aot_lazy_constant_lock(c);
     ut_fork_lazy_value_in_first_use(c);
@@ -18098,6 +18150,12 @@ static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeC
     return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
 }
 
+//! waits until a synchronous JIT compile waits for the compilation lock; returns False on timeout
+static QoreValue f_dbg_wait_sync_compile_waiting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgWaitSyncCompileWaiting(get_param_value(params, 0).getAsBigInt());
+}
+
 //! returns True if the background JIT compiler is stopped at a hold point
 static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return QoreJIT::instance().dbgBgCompileHeld();
@@ -18843,6 +18901,10 @@ struct DerefPointHold {
 DerefPointHold deref_decide_hold;
 //! the hold of dbg_hold_deref_marked()
 DerefPointHold deref_marked_hold;
+//! the hold of dbg_hold_deref_delete()
+DerefPointHold deref_delete_hold;
+//! the hold of dbg_hold_deref_last()
+DerefPointHold deref_last_hold;
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -18878,6 +18940,14 @@ void dbg_hold_deref_decide_hook(const char* class_name) {
 
 void dbg_hold_deref_marked_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, class_name, "dbg_hold_deref_marked");
+}
+
+void dbg_hold_deref_delete_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, class_name, "dbg_hold_deref_delete");
+}
+
+void dbg_hold_deref_last_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
 }
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
@@ -18939,6 +19009,40 @@ static QoreValue f_dbg_hold_deref_decide(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, dbg_hold_deref_marked_hook,
         params, xsink);
+}
+
+//! holds the next dereference that deletes an object of the given class, once it has completed
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference that marked the object as
+    being destroyed has completed (RObject::derefDone()), and before the deletion starts (the object's destructor);
+    another thread can release a reference to the object meanwhile, and tests use the hold to make that
+    deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, dbg_hold_deref_delete_hook,
+        params, xsink);
+}
+
+//! holds the next dereference that releases the last reference to an object of the given class
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has released the last
+    reference to the object (one that has no collection to decide), and before it takes the object's lock to delete
+    the object or to hand its deletion off; another dereference can mark the object as being destroyed meanwhile, and
+    tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
+        xsink);
 }
 
 namespace {
@@ -19075,6 +19179,26 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     h.waiting = waiting.release();
     qore_dbg_deref_wait_hook.store(dbg_deref_wait_notify_hook);
     return QoreValue();
+}
+
+//! disarms the notification of dbg_deref_wait_notify(), if it has not been made
+/** A test disarms it when the wait it was armed for did not happen.
+
+    @return true if a notification was armed
+*/
+static QoreValue f_dbg_deref_wait_notify_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DerefWaitNotify& h = deref_wait_notify;
+    ReferenceHolder<Counter> waiting(xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.waiting) {
+            return false;
+        }
+        waiting = h.waiting;
+        h.waiting = nullptr;
+        qore_dbg_deref_wait_hook.store(nullptr);
+    }
+    return true;
 }
 
 namespace {
@@ -19923,6 +20047,48 @@ static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, Runt
     h->setKeyValue("excess", s.excess.load(), xsink);
     h->setKeyValue("orphaned", s.orphaned.load(), xsink);
     return h.release();
+}
+
+namespace {
+//! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
+std::atomic<int64_t> dbg_quic_hold_session{0};
+std::atomic<int64_t> dbg_quic_hold_stream{-1};
+}
+
+bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
+    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
+        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
+//! flow-control credit
+/** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
+    stream's send buffer deterministically.  Only one stream is held at a time.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID of a streaming response
+*/
+static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || stream_id < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
+            "ID %lld", (long long)session_id, (long long)stream_id);
+        return QoreValue();
+    }
+    // the stream is set first, so that no other stream of the session matches meanwhile
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_session.store(session_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
 }
 
 namespace {
@@ -21050,6 +21216,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_sync_compile_waiting", f_dbg_wait_sync_compile_waiting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_wait_bg_compile_teardown_waiting", f_dbg_wait_bg_compile_teardown_waiting,
@@ -21151,6 +21319,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_hold_deref_collect", f_dbg_hold_deref_collect,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -21158,6 +21334,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_deref_wait_notify_clear", f_dbg_deref_wait_notify_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_fd_wait_notify", f_dbg_fd_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo,
         3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_QUEUE->getTypeInfo(), QORE_PARAM_NO_ARG, "queue",
         autoTypeInfo, QORE_PARAM_NO_ARG, "value");
@@ -21195,6 +21373,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_stream_credit_wait_deferred", f_dbg_http_stream_credit_wait_deferred,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "total",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+
+    qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id");
+    qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");

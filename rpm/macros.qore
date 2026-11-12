@@ -1,6 +1,6 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
-%qore_module_api 2.0
+%qore_module_api 2.1
 %qore_module_dir %{_libdir}/qore-modules
 %qore_user_module_dir %{_datadir}/qore-modules
 %qore_rpm_helper %{_rpmconfigdir}/qore/preserve-aot-metadata.py

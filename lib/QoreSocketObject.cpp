@@ -6900,6 +6900,28 @@ void QoreSocketObject::installQuicStreamConsumeHook(int64_t session_id, int64_t 
     }
 }
 
+int QoreSocketObject::setHttp2StreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    // the session's own lock serializes the limit with the sends and the I/O thread, so this needs no controller
+    // round trip
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    return h2->setStreamSendLimit(stream_id, limit, xsink);
+}
+
+int QoreSocketObject::setQuicStreamSendLimit(int64_t session_id, int64_t stream_id, int64_t limit,
+        ExceptionSink* xsink) {
+    // the session's own lock serializes the limit with the sends and the I/O thread
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with ID %lld is active", (long long)session_id);
+        return -1;
+    }
+    return session->setStreamSendLimit(stream_id, limit, xsink);
+}
+
 int QoreSocketObject::cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
     if (qore_on_async_io_thread()) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);

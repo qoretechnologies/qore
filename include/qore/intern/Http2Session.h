@@ -233,6 +233,12 @@ public:
         O(remaining_data) but amortized: only fires after this many bytes consumed.
     */
     static constexpr size_t SEND_BUFFER_COMPACTION_THRESHOLD = 65536;
+    //! The unwritten output above which sendPendingData() takes no more output from nghttp2 until the socket takes it
+    /** Bounds the output held for a peer that does not read, whatever flow-control window it grants: the data of
+        the streams then stays in their pending data, where the per-stream limits apply (issue #5819).  The buffer can
+        exceed it by the last chunk that nghttp2 returned.
+    */
+    static constexpr size_t SEND_BUFFER_HIGH_WATER = 256 * 1024;
 
     //! Create a client-side HTTP/2 session
     /** @param sock Socket for the connection
@@ -433,6 +439,23 @@ public:
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
+        is buffered.  With a limit, a send that would make the buffered data exceed it returns 1 instead, unless
+        nothing is buffered, so that one send larger than the limit can still be made.  Data that the peer's
+        flow-control window has accepted is no longer buffered here.  The limit ends with the stream.
+
+        @param stream_id the stream
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c HTTP2-ERROR if the limit is not positive or the stream
+        is not open)
+    */
+    DLLLOCAL int setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink);
+
+    //! The default limit of the data of a stream that is buffered for sending
+    static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
@@ -1103,6 +1126,9 @@ private:
 
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
+
+    //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
+    std::unordered_map<int32_t, size_t> stream_send_limits;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that

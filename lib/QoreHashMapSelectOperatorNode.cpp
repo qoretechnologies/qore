@@ -80,6 +80,9 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
             QoreTypeInfo::getImplicitArgTypeForIterator(e[2], iteratorTypeInfo);
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
 
         // check key expression
         parse_context.typeInfo = nullptr;
@@ -165,6 +168,8 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
         }
 
         // check if value can be mapped
+        // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
+        ImplicitElementHelper eh(0);
         SingleArgvContextHelper argv_helper(arg_lst.takeReferencedValue(), xsink);
         ValueEvalOptimizedRefHolder result(e[3], xsink);
         if (*xsink || !result->getAsBool())

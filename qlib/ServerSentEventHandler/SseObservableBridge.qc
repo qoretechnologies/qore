@@ -236,7 +236,7 @@ public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyn
         msg = validateOutgoingEvent(msg);
         # a terminal event is queued and closes the stream in one step, so that no event of another publisher
         # thread follows it
-        pushChunkIntern(encodeMessage(msg), exists terminate_on && event_id == terminate_on);
+        pushChunkIntern(encodeMessage(msg), exists terminate_on && event_id == terminate_on, False);
     }
 
     #! Close the stream cleanly after any queued chunks are drained.
@@ -338,10 +338,13 @@ public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyn
         @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF
         character, which an event stream cannot carry, or the retry value is
         negative; nothing is queued
+        @throw SSE-CLIENT-OVERFLOW the event would take the data held for the client of the stream over its bound;
+        the event is not sent, and the client has been dropped (see @ref httpserverasyncio_sse_buffer); events from
+        the Observable (@ref update()) never raise it
     */
     pushMessage(hash<SseMessageInfo> msg) {
         msg = validateOutgoingEvent(msg);
-        pushChunkIntern(encodeMessage(msg), False);
+        pushChunkIntern(encodeMessage(msg), False, True);
     }
 
     #! Queues a chunk, or pushes it to the stream once the bridge has been started; closes the stream after it if
@@ -349,7 +352,7 @@ public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyn
     /** Pushes are serialized, so that the events are sent in the order they were queued; an event queued after the
         stream was closed is dropped.
     */
-    private pushChunkIntern(string chunk, bool close_after) {
+    private pushChunkIntern(string chunk, bool close_after, bool raise_overflow) {
         AutoLock sl(send_lock);
         *HttpServerAsyncIo::AbstractSseConnection s;
         {
@@ -367,7 +370,7 @@ public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyn
                 return;
             }
         }
-        pushChunk(s, chunk);
+        pushChunk(s, chunk, raise_overflow);
         if (close_after) {
             closeStream(s);
         }
@@ -375,14 +378,19 @@ public class SseObservableBridge inherits DataProvider::Observer, HttpServerAsyn
 
     #! Pushes a chunk to the stream; returns @ref False if the stream can no longer take it
     /** A stream that has gone away is not an error of the publisher: the server stops the bridge when it reports
-        the end of the stream.
+        the end of the stream.  A client dropped because its data would exceed the stream's bound is reported only
+        to a caller that pushed to this stream directly (@p raise_overflow), never to an Observable's publisher.
     */
-    private bool pushChunk(HttpServerAsyncIo::AbstractSseConnection s, string chunk) {
+    private bool pushChunk(HttpServerAsyncIo::AbstractSseConnection s, string chunk, bool raise_overflow = False) {
         try {
             s.queueRawString(chunk);
             return True;
         } catch (hash<ExceptionInfo> ex) {
-            # the stream has ended (SSE-CLOSED, or a transport error); the server stops the bridge
+            if (raise_overflow && ex.err == HttpServerAsyncIo::SseClientOverflowErr) {
+                rethrow;
+            }
+            # the stream has ended (SSE-CLOSED, SSE-CLIENT-OVERFLOW, or a transport error); the server stops the
+            # bridge
             return False;
         }
     }

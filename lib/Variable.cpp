@@ -30,6 +30,8 @@
 */
 
 #include <qore/Qore.h>
+
+#include <optional>
 #include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/RuntimeConfig.h"
@@ -1204,12 +1206,150 @@ static int raise_negative_list_or_buffer_index(const QoreSquareBracketsOperatorN
     return -1;
 }
 
+const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cache, const QoreValue& n) {
+    int8_t state = cache.state.load(std::memory_order_acquire);
+    if (state >= 0) {
+        return state ? cache.keys.load(std::memory_order_relaxed) : nullptr;
+    }
+    // the keys are collected only for a path that needs them: count the keys to evaluate first
+    size_t evaluated = 0;
+    QoreValue c = n;
+    while (c.getType() == NT_OPERATOR) {
+        const AbstractQoreNode* node = c.getInternalNode();
+        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            evaluated += op->getRight().needsEval() ? 1 : 0;
+            c = op->getLeft();
+        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            evaluated += hop->getRight().needsEval() ? 1 : 0;
+            c = hop->getLeft();
+        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            c = cop->getExp();
+        } else {
+            break;
+        }
+    }
+    if (evaluated < 2) {
+        cache.state.store(0, std::memory_order_release);
+        return nullptr;
+    }
+    // the keys of the path, the last step's first
+    std::vector<QoreValue> keys;
+    c = n;
+    while (c.getType() == NT_OPERATOR) {
+        const AbstractQoreNode* node = c.getInternalNode();
+        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            keys.push_back(op->getRight());
+            c = op->getLeft();
+        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            keys.push_back(hop->getRight());
+            c = hop->getLeft();
+        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            c = cop->getExp();
+        } else {
+            break;
+        }
+    }
+    std::unique_ptr<QoreLValuePathKeys> pk = std::make_unique<QoreLValuePathKeys>();
+    pk->keys.assign(keys.rbegin(), keys.rend());
+    // a concurrent first resolution of the same path computes the same keys: the first one is kept
+    const QoreLValuePathKeys* expected = nullptr;
+    if (cache.keys.compare_exchange_strong(expected, pk.get(), std::memory_order_acq_rel)) {
+        pk.release();
+    }
+    cache.state.store(1, std::memory_order_release);
+    return cache.keys.load(std::memory_order_acquire);
+}
+
+//! the evaluation of the keys of a path at its outermost step, and the release of the keys that no step took
+class LValueHelper::PathKeyScope {
+public:
+    DLLLOCAL explicit PathKeyScope(LValueHelper& lvh) : lvh(lvh) {
+    }
+
+    DLLLOCAL ~PathKeyScope() {
+        if (store) {
+            lvh.clearPathKeys();
+            lvh.path_keys = nullptr;
+        }
+    }
+
+    //! evaluates the keys \a keys of the path into the store of this scope; returns -1 if a key raised an exception
+    DLLLOCAL int begin(const QoreLValuePathKeys& keys) {
+        assert(!lvh.path_keys);
+        store.emplace();
+        lvh.path_keys = &*store;
+        return lvh.evalPathKeys(keys);
+    }
+
+private:
+    LValueHelper& lvh;
+    std::optional<PathKeyStore> store;
+};
+
+// out of line, so that the frame of doLValue() does not hold the store of the keys
+template <typename Step>
+__attribute__((noinline)) int LValueHelper::doStepWithPathKeys(const QoreValue& n, QoreLValuePathKeyCache& cache,
+        Step step) {
+    const QoreLValuePathKeys* keys = getPathKeys(cache, n);
+    PathKeyScope scope(*this);
+    if ((keys && scope.begin(*keys)) || step()) {
+        // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
+        clearPtr();
+        return -1;
+    }
+    return 0;
+}
+
+int LValueHelper::evalPathKeys(const QoreLValuePathKeys& keys) {
+    assert(path_keys && !path_keys->count);
+    size_t count = keys.keys.size();
+    if (count > PathKeyStore::BufSize) {
+        path_keys->more.resize(count);
+    }
+    PathKey* store = path_keys->data();
+    for (const QoreValue& key : keys.keys) {
+        bool needs_deref = true;
+        QoreValue v;
+        if (key.needsEval()) {
+            // each key is a statement of its own, whose temporaries are released when it has been evaluated
+            QoreStatementTempScope temps(vl.xsink);
+            v = key.eval(needs_deref, vl.xsink);
+            // a value borrowed from a variable gets a reference of its own: a later key can assign the variable
+            // (h.(key).(key = "b") = 1), and the key keeps the value that it had when it was evaluated; this
+            // includes an enum value, which holds a reference to its declaration
+            if (!needs_deref && v.needsRef()) {
+                v.refSelf();
+                needs_deref = true;
+            }
+        } else {
+            v = key;
+            needs_deref = false;
+        }
+        new (&store[path_keys->count++]) PathKey{v, needs_deref};
+        if (*vl.xsink) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void LValueHelper::clearPathKeys() {
+    assert(path_keys);
+    PathKey* store = path_keys->data();
+    while (path_keys->count) {
+        PathKey& key = store[--path_keys->count];
+        if (key.needs_deref) {
+            key.value.discard(vl.xsink);
+        }
+    }
+}
+
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
-    // first get index
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
-    // in the other execution modes
+    // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
+    // out (qore#5753)
     ValueEvalOptimizedRefHolder rh(vl.xsink);
-    {
+    if (!takePathKey(rh)) {
         QoreStatementTempScope temps(vl.xsink);
         rh.eval(op->getRight());
     }
@@ -1353,11 +1493,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 }
 
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
-    // first get index
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
-    // in the other execution modes
+    // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
+    // out (qore#5753)
     ValueEvalOptimizedRefHolder rh(vl.xsink);
-    {
+    if (!takePathKey(rh)) {
         QoreStatementTempScope temps(vl.xsink);
         rh.eval(op->getRight());
     }
@@ -1701,9 +1841,10 @@ int LValueHelper::doBackgroundRootLValue(const QoreValue& n) {
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
-    // in the other execution modes
+    // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
+    // out (qore#5753)
     ValueEvalOptimizedRefHolder rh(vl.xsink);
-    {
+    if (!takePathKey(rh)) {
         QoreStatementTempScope temps(vl.xsink);
         rh.eval(op->getRight());
     }
@@ -1751,9 +1892,10 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
-    // in the other execution modes
+    // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
+    // out (qore#5753)
     ValueEvalOptimizedRefHolder rh(vl.xsink);
-    {
+    if (!takePathKey(rh)) {
         QoreStatementTempScope temps(vl.xsink);
         rh.eval(op->getRight());
     }
@@ -1931,7 +2073,13 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {
-            if (doListLValue(op, for_remove)) {
+            // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
+            // outermost step of a path that needs it (qore#5753)
+            if (!path_keys && op->lvalue_path_keys.state.load(std::memory_order_acquire)) {
+                if (doStepWithPathKeys(n, op->lvalue_path_keys, [&]() { return doListLValue(op, for_remove); })) {
+                    return -1;
+                }
+            } else if (doListLValue(op, for_remove)) {
                 // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
                 clearPtr();
                 return -1;
@@ -1951,7 +2099,13 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
                 assert(dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode()));
                 const QoreHashObjectDereferenceOperatorNode* hop =
                     n.get<const QoreHashObjectDereferenceOperatorNode>();
-                if (doHashObjLValue(hop, for_remove)) {
+                // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
+                // outermost step of a path that needs it (qore#5753)
+                if (!path_keys && hop->lvalue_path_keys.state.load(std::memory_order_acquire)) {
+                    if (doStepWithPathKeys(n, hop->lvalue_path_keys, [&]() { return doHashObjLValue(hop, for_remove); })) {
+                        return -1;
+                    }
+                } else if (doHashObjLValue(hop, for_remove)) {
                     // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
                     clearPtr();
                     return -1;
@@ -2057,7 +2211,13 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {
-            if (doListLValue(op, rc, for_remove)) {
+            // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
+            // outermost step of a path that needs it (qore#5753)
+            if (!path_keys && op->lvalue_path_keys.state.load(std::memory_order_acquire)) {
+                if (doStepWithPathKeys(n, op->lvalue_path_keys, [&]() { return doListLValue(op, rc, for_remove); })) {
+                    return -1;
+                }
+            } else if (doListLValue(op, rc, for_remove)) {
                 // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
                 clearPtr();
                 return -1;
@@ -2077,7 +2237,13 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
                 assert(dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode()));
                 const QoreHashObjectDereferenceOperatorNode* hop =
                     n.get<const QoreHashObjectDereferenceOperatorNode>();
-                if (doHashObjLValue(hop, rc, for_remove)) {
+                // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
+                // outermost step of a path that needs it (qore#5753)
+                if (!path_keys && hop->lvalue_path_keys.state.load(std::memory_order_acquire)) {
+                    if (doStepWithPathKeys(n, hop->lvalue_path_keys, [&]() { return doHashObjLValue(hop, rc, for_remove); })) {
+                        return -1;
+                    }
+                } else if (doHashObjLValue(hop, rc, for_remove)) {
                     // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
                     clearPtr();
                     return -1;
@@ -3650,15 +3816,17 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     assert(dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvalue.getInternalNode()));
     const QoreHashObjectDereferenceOperatorNode* op = lvalue.get<const QoreHashObjectDereferenceOperatorNode>();
 
-    // get the member name or names
-    ValueEvalOptimizedRefHolder member(op->getRight(), xsink);
-    if (*xsink)
-        return;
+    // the member name or names are evaluated after the keys of the path to the lvalue, from the root out, and
+    // before its lock, as in the other execution modes (qore#5753, qore#5696)
+    const QoreValue member_expr = op->getRight();
+    LValueRemoveSelectors sel(member_expr, nullptr, xsink);
 
     // find variable ptr, exit if doesn't exist anyway
-    LValueHelper lvh(op->getLeft(), xsink, true);
-    if (!lvh)
+    LValueHelper lvh(op->getLeft(), xsink, true, &LValueRemoveSelectors::eval, &sel);
+    if (!lvh || sel.raised())
         return;
+    assert(sel.size() == 1);
+    const QoreValue* member = &sel[0];
     lvh.startContainerRemoval();
 
     t = lvh.getType();

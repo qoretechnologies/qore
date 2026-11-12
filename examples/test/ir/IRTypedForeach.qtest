@@ -251,20 +251,21 @@ int sub directIndex(list<int> values) {
     return result;
 }
 
-int sub readDynamicIndex() {
+# a function called from the body of a foreach statement does not see its index (qore#5690)
+*int sub readDynamicIndex() {
     return $#;
 }
 
 int sub calledIndex(list<int> values) {
     int result = 0;
     foreach int value in (values) {
-        result = result * 10 + readDynamicIndex() + (value & 0);
+        result = result * 10 + (readDynamicIndex() ?? 0) + (value & 0);
     }
     return result;
 }
 
 class IndexReader {
-    int read() {
+    *int read() {
         return $#;
     }
 }
@@ -273,7 +274,7 @@ int sub methodIndex(list<int> values) {
     IndexReader reader();
     int result = 0;
     foreach int value in (values) {
-        result = result * 10 + reader.read() + (value & 0);
+        result = result * 10 + (reader.read() ?? 0) + (value & 0);
     }
     return result;
 }
@@ -489,7 +490,7 @@ string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
 }
 
 string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb:"
-    + "123:123:123:123:2:2:1101\n";
+    + "123:0:0:123:2:2:1101\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
@@ -498,7 +499,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb:"
-    + "123:123:123:123:2:2:1101\n";
+    + "123:0:0:123:2:2:1101\n";
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode, True, "basic");
     if (actual != basic_expected) {

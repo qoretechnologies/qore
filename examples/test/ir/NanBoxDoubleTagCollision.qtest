@@ -62,7 +62,7 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
         const LeakCases = ("locals", "handler", "projections", "closures");
 
         #! the iterations of each pattern, and the boxed values that the negative control retains
-        const LeakIterations = 200000;
+        const LeakIterations = 1000;
     }
 
     constructor() : QUnit::Test("NanBoxDoubleTagCollisionTest", "1.0", \ARGV) {

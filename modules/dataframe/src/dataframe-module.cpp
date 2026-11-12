@@ -20,6 +20,8 @@ static void dataframe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns,
     ExceptionSink& xsink);
 static void dataframe_module_delete();
 
+extern QoreNamespace DFNS;
+
 extern "C" DLLEXPORT void dataframe_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "dataframe";
     mod_info.version = PACKAGE_VERSION;
@@ -32,6 +34,8 @@ extern "C" DLLEXPORT void dataframe_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = dataframe_module_init;
     mod_info.ns_init = dataframe_module_ns_init;
     mod_info.del = dataframe_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &DFNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

@@ -35,6 +35,8 @@ static void json_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void json_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void json_module_delete();
 
+extern QoreNamespace JNS;
+
 extern "C" DLLEXPORT void json_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "json";
     mod_info.version = PACKAGE_VERSION;
@@ -46,6 +48,8 @@ extern "C" DLLEXPORT void json_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = json_module_init;
     mod_info.ns_init = json_module_ns_init;
     mod_info.del = json_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &JNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
