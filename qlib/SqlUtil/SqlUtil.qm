@@ -156,6 +156,11 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a database connection from a
+      connection string or a serialized configuration
+      (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
+      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", datasource deserialization):
+      \c PERMISSION-DENIED; it uses the datasources that its host provides
     - @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commits each statement of the drop on
       its own, so a partitioned table that its driver drops one partition per statement stays within the database's
       lock limits however many partitions it has
@@ -7743,6 +7748,11 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             return ds_get(type, config);
         }
 
+        # a deserialized configuration opens a connection of its own: sandboxed code may use only the datasources that
+        # the host provides
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        }
         switch (type) {
             case "DatasourcePool":
                 return new DatasourcePool(structured_config ?? config);

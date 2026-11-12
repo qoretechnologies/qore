@@ -84,6 +84,7 @@ class QlibModuleDomainsTest inherits QUnit::Test {
         addTestCase("a restricted Program loads the modules that declare their domains", \testLoad());
         addTestCase("a restricted Program cannot call the APIs that declare a domain", \testTaggedApis());
         addTestCase("module state that a subclass must not change is internal", \testInternalState());
+        addTestCase("sandboxed code cannot open a database from a connection string", \testRawDatasource());
         addTestCase("the APIs that declare a domain work in an unrestricted Program", \testUnrestricted());
         addTestCase("a QUnit test runs in a restricted Program and never exits the process", \testQUnit());
         addTestCase("a module that does not declare its domains stays refused", \testUndeclared());
@@ -154,6 +155,20 @@ printf(\"end\\n\");
             "try { call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"setEnvironmentVariable\", \"/x\"); "
             "printf(\"called\\n\"); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }");
         assertEq("loaded\nINVALID-FUNCTION-ACCESS\nend\n", out);
+    }
+
+    #! module code builds no connection from a connection string that sandboxed code gives it (qorus#856)
+    testRawDatasource() {
+        list<list<string>> cases = (
+            ("DbDataProvider", "DbDataProvider::DbDataProviderBase::getDatasource(\"pgsql:u/p@db\")"),
+            ("SqlUtil", "SqlUtil::AbstractTable::getTable(\"pgsql:u/p@db\", \"t\")"),
+            ("SqlUtil", "SqlUtil::AbstractDatabase::getDatabase(\"pgsql:u/p@db\")"),
+        );
+        foreach list<string> c in (cases) {
+            string out = run(InterfaceRestrictions, c[0], sprintf("try { %s; printf(\"opened\\n\"); } "
+                "catch (hash<ExceptionInfo> ex) { printf(\"%%s\\n\", ex.err); }", c[1]), True);
+            assertEq("loaded\nPERMISSION-DENIED\nend\n", out, c[1]);
+        }
     }
 
     #! a subclass cannot set the thread that stopping a watch provider cancels

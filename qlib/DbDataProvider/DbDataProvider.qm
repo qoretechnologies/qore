@@ -529,6 +529,10 @@ mv.doRequest({"concurrent": True});
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a datasource from a connection string
+      given as the \c datasource option: \c PERMISSION-DENIED; it uses the datasources that the host's datasource
+      lookup provides; @ref DbDataProvider::DbDataProviderBase::setDatasourceLookup() "setDatasourceLookup()" and
+      @ref DbDataProvider::DbDataProviderBase::setTableLookup() "setTableLookup()" declare the \c PROCESS domain
     - a where hash with a SqlUtil operator, such as from \c op_gt(), \c op_between(), \c op_in(), \c op_not(),
       \c op_clt() or \c wop_or(), in a search, update or delete of a table or a search of a view is a SqlUtil where
       clause, evaluated by SqlUtil with its own semantics; such a search raised \c INVALID-MEMBER or
