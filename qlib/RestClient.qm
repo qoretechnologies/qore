@@ -173,6 +173,14 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_7 RestClient v2.7
+    - added the @ref RestClient::AbstractRestConnection "AbstractRestConnection" class, which provides all of
+      @ref RestClient::RestConnection "RestConnection" (options, OAuth2, features, pings and polling) with
+      @ref RestClient::AbstractRestConnection::get() "get()" returning an object of any class, for connections
+      whose client is not a @ref RestClient::RestClient "RestClient"; @ref RestClient::RestConnection "RestConnection"
+      inherits it and is unchanged (a child class method must return a type that the method it overrides accepts:
+      see @ref override_return_types)
+    - @ref RestClient::RestClient::close() "RestClient::close()" returns \c 0, as
+      @ref Qore::Socket::close() "Socket::close()", which it overrides
     - fixed @ref RestClient::RestClient::constructor() "RestClient::constructor()" to accept a \c headers option
       whose values all have the same type, such as a literal \c {"X-Count": 1}, with the \c content_encoding
       option; adding the \c Accept-Encoding header raised \c RUNTIME-TYPE-ERROR
@@ -186,8 +194,8 @@ printf("%Y\n", ans.body);
       earlier releases, also now that @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512 type
       \c "application/yaml", which the servers of %Qore releases before 3.0 do not decode
     - added support for the OAuth2 \c implicit grant type, and the
-      @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
-      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features, the
+      @ref RestClient::AbstractRestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
+      @ref RestClient::AbstractRestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features, the
       \c oauth2_redirect_passthrough_state option for providers that do not pass the \c state parameter through
       the redirect, and <tt>{{option_name}}</tt> template substitution in \c oauth2_auth_args values for providers
       that use non-standard parameter names
@@ -224,7 +232,7 @@ printf("%Y\n", ans.body);
     - polling pings decode response bodies by the rules shared by all HTTP clients instead of as ISO-8859-1
       without a charset; added
       @ref RestClient::RestClient::getPollResponseBodyText() "RestClient::getPollResponseBodyText()"
-    - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
+    - @ref RestClient::AbstractRestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
       providers with a @ref restclientiointro "RestClientIo" client and no longer connects
       to the server to create them
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
@@ -241,25 +249,25 @@ printf("%Y\n", ans.body);
       empty optional scope lists serialize as empty query values
       (<a href="https://github.com/qoretechnologies/qore/issues/5443">issue 5443</a>)
     - connection pings can validate service-specific authentication information with
-      @ref RestClient::RestConnection::validatePingResponse() "validatePingResponse()" on all transports
+      @ref RestClient::AbstractRestConnection::validatePingResponse() "validatePingResponse()" on all transports
     - clearing the connection path also clears the default path so opening a socket cannot restore
       the API prefix on a ping that addresses the host root
     - renews expiring client-credentials tokens by acquiring another token when no refresh token is issued
-    - connections claim the @ref RestClient::RestConnection::RCF_OAUTH2 "RCF_OAUTH2" feature for every OAuth2
-      grant type, and @ref RestClient::RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS"
-      and @ref RestClient::RestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
+    - connections claim the @ref RestClient::AbstractRestConnection::RCF_OAUTH2 "RCF_OAUTH2" feature for every OAuth2
+      grant type, and @ref RestClient::AbstractRestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS"
+      and @ref RestClient::AbstractRestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
       authorization step, and publish the grant type itself in
-      @ref RestClient::RestConnection::getExtendedInfo() "getExtendedInfo()", so that a connection using OAuth2 can
+      @ref RestClient::AbstractRestConnection::getExtendedInfo() "getExtendedInfo()", so that a connection using OAuth2 can
       be told apart from one using no OAuth2 at all; \c oauth2-auth means that there is an authorization step to
       offer.  The features are derived from the new
-      @ref RestClient::RestConnection::getOAuth2GrantType() "getOAuth2GrantType()" hook, which connection
+      @ref RestClient::AbstractRestConnection::getOAuth2GrantType() "getOAuth2GrantType()" hook, which connection
       classes configuring OAuth2 through options of their own can override
       (<a href="https://github.com/qoretechnologies/qore/issues/5441">issue 5441</a>)
     - fixed a \c charset parameter being appended to a \c "multipart/<!--%%-->*" \c Content-Type header;
       \c charset is not defined for multipart types, and appending it after the \c boundary
       parameter breaks strict multipart parsers.  @ref Qore::HTTPClient "HTTPClient" already
       applied this rule when adding the charset itself, so the two disagreed
-    - added @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()", which sets the
+    - added @ref RestClient::AbstractRestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()", which sets the
       feature of an OAuth2 authorization flow together with the general \c oauth2-auth feature that a UI reads to
       offer an \c Authorize control; a \c checkAuthCodeFeature() override must call it instead of setting the
       authorization code feature directly
@@ -4424,92 +4432,22 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
     }
 } # class RestClient
 
-#! class for REST HTTP connections; returns @ref RestClient::RestClient objects
-/** supports the following options:
-    - \c "connect_timeout": connection timeout to use in milliseconds
-    - \c "content_encoding": this sets the send encoding (if the \c "send_encoding" option is not set) and the
-      requested response encoding; for possible values, see
-      @ref RestClient::RestClient::EncodingSupport "EncodingSupport"
-    - \c "data": see @ref RestClient::RestClient::DataSerializationOptions for possible values when used with the
-      null REST schema validator; the default is \c "auto"
-    - \c "error_passthru": if @ref True "True" then HTTP status codes indicating errors will not cause a
-      \c REST-RESPONSE-ERROR exception to be raised, rather such responses will be passed through to the caller
-      like any other response
-    - \c "headers": an optional hash of headers to send with every request, these can also be overridden in
-      request method calls; also a string giving headers can be given in the format:
-      <tt>header1=value, header2=value</tt>; the value will be parsed with
-      @ref Util::parse_to_qore_value() "parse_to_qore_value()"
-    - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0")
-    - \c "max_redirects": maximum redirects to support
-    - \c "max_response_body_size": the maximum size in bytes of a response body received into memory, as received
-      and after its content encoding is decoded (0, the default, means no limit)
-    - \c "oauth2_app": An OAuth2 app name for external programs handling OAuth2 calls for this client
-    - \c "oauth2_auth_url": The OAuth2 authorization URL for the \c authorization_code grant type; ignored if the
-      \c token option is set.  Note that the \c authorization_code grant type requires external user authorization to
-      acquire an access token
-    - \c "oauth2_client_id": The OAuth2 client ID; ignored if the \c token option is set
-    - \c "oauth2_client_secret": the OAuth2 client secret; ignored if the \c token option is set
-    - \c "oauth2_grant_type": the OAuth2 grant type; ignored if the \c token option is set; possible values:
-      - \c "authorization_code": requires \c oauth2_client_id, \c oauth2_client_secret, \c oauth2_auth_url, as well as
-        \c oauth2_token_url; note that this grant type cannot be handled automatically but rather must be handled by
-        external code that redirects the user to the authentication server and then updates the connection with token
-        information retrieved
-      - \c "client_credentials": requires \c oauth2_client_id, \c oauth2_client_secret, as well as
-        \c oauth2_token_url
-      - \c "password": requires a username, password, \c oauth2_client_id, \c oauth2_client_secret, as well as
-        \c oauth2_token_url
-      - \c "none": same as if this option is not set; it means that no OAuth2 grant flow will be used
-    - \c "oauth2_pkce": Use PKCE (Proof Key Code Exchange) when using the OAuth2 \c authorization_code flow; this
-      value specifies the code challenge method
-    - \c "oauth2_redirect_url": The OAuth2 redirect URL for the \c authorization_code grant type; ignored if the
-      \c token option is set.  Note that the \c authorization_code grant type requires external user authorization to
-      acquire an access token; the special value \c "auto" (the default) is meant to be interpreted by servers
-      that implement OAuth2 authorization code client handling
-    - \c "oauth2_refresh_token": An OAuth2 refresh token (complements option \c "token")
-    - \c "oauth2_scopes": A list of OAuth2 scopes to request; ignored if the \c token option is set
-    - \c "oauth2_scope_separator_char": A separator character for OAuth2 scopes in URI arguments
-    - \c "oauth2_token_args": Extra arguments for OAuth2 authentication requests to \c oauth2_token_url; if this
-      option is set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as
-      well when the request is made to the \c oauth2_alt_token_url
-    - \c "oauth2_token_expiry": The expiry date of the token, if known
-    - \c "oauth2_token_expiry_hint": A integer value in minutes giving the expected lifetime of the token
-    - \c "oauth2_token_url": The token URL for OAuth2 flows; ignored if the \c token option is set
-    - \c "oauth2_token_use_basic_auth": Use basic authentication for the OAuth2 token request
-    - \c "openapi3": the path to a <a href="https://swagger.io/">OpenApi 3</a> REST schema file for API
-      validation; only used if \a validator not provided (see the @ref openapi3intro "OpenApi3" module)
-    - \c "password": The password for authentication; only used if no username or password is set in the URL and if
-      the \c username option is also used
-    - \c "proxy": proxy URL to use
-    - \c "redirect_passthru": if @ref True "True" then redirect responses wil0l be passed to the caller instead of
-      processed
-    - \c "send_encoding": a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value
-      \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent
-      message bodies
-    - \c "swagger": the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for runtime API
-      validation (see the @ref swaggerintro "Swagger" module); conflicts with \a validator
-    - \c "swagger_base_path": in case a REST validator is used, the base path in the schema can be overridden
-      with this option (applies to any REST validator; not just Swagger validators)
-    - \c "swagger_lax_parsing": try to parse invalid Swagger schemas
-    - \c "timeout": transfer timeout to use in milliseconds
-    - \c "token": Any bearer token to use for the connection; will be passed as <tt>Authorization: Bearer ...</tt>
-      in request headers; cannot be used with username and password options or authentication information in the URL;
-      if this option is set then any OAuth2 options are ignored
-    - \c "token_api_key_header": The name of a header where to send the token as an API key
-    - \c "username": The username for authentication; only used if no username or password is set in the URL
-    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
-      object to validate request and response messages; conflicts with \a swagger
+#! Base class for REST HTTP connections: options, authentication (including OAuth2), features, pings and polling
+/** This class provides everything that @ref RestClient::RestConnection "RestConnection" does, except that its
+    @ref get() and getImpl() methods are declared to return an object of any class: a connection whose client is not a
+    @ref RestClient::RestClient "RestClient" inherits this class to keep the REST connection's options and
+    behavior.  Its @ref get() method still creates a @ref RestClient::RestClient "RestClient" by default.
 
-    @note additionally supports the following runtime option in getImpl():
-    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
-      object for REST message validation (if present, overrides any REST schema validation option provided as a
-      connection option)
+    The options are those of @ref RestClient::RestConnection "RestConnection" (see @ref ConnectionScheme).
 
-    @see @ref RestClient::RestClient::constructor() "RestClient::constructor()" for more information on the above
-    options
+    @note The poll operations use getPollImpl(), which uses getImpl() and so the default
+    @ref RestClient::RestClient "RestClient", and the ping uses getAsync() (a \c RestClientIo client), so they keep
+    working when a subclass returns another client from get(); the ping uses get() only when asynchronous I/O is not
+    available, so a subclass whose get() returns another client overrides pingImpl() for that case
 
-    @since %RestConnection 1.4
+    @since %RestClient 2.7
 */
-public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
+public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnection,
         ConnectionProvider::UpdateOptionsInterface {
     public {
         #! real options used when creating an object
@@ -5132,7 +5070,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
         #! The feature claimed for each OAuth2 grant type that has no authorization step
         /** Grants with an authorization step are handled by
-            @ref RestClient::RestConnection::checkAuthCodeFeature() "checkAuthCodeFeature()" instead, since their features are claimed only when the connection also holds
+            @ref RestClient::AbstractRestConnection::checkAuthCodeFeature() "checkAuthCodeFeature()" instead, since their features are claimed only when the connection also holds
             every option needed to make the authorization request.  The grants here have no such request, so the
             feature follows from the grant type alone.
 
@@ -5194,7 +5132,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
-            : HttpBasedConnection(name, description, url, attributes, RestConnection::processOptions(name, options)) {
+            : HttpBasedConnection(name, description, url, attributes, AbstractRestConnection::processOptions(name, options)) {
         setupRest();
     }
 
@@ -5349,7 +5287,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         } else {
             new_opts.validator = new NullRestSchemaValidator(logger);
         }
-        return setupRestClientConfig(getImpl(False, new_opts));
+        return setupRestClientConfig(cast<RestClient>(getImpl(False, new_opts)));
     }
 
     #! gets options
@@ -5504,7 +5442,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Called after a new connection object is created from an existing connection
     /** @param old the old connection object
     */
-    persistInfo(RestConnection old) {
+    persistInfo(AbstractRestConnection old) {
         if (old.needs_auth) {
             needs_auth = True;
         }
@@ -5727,9 +5665,11 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! returns the underlying connection object
     /** calls @ref getImpl() to actually acquire the connection object
     */
-    RestClient get(bool connect = True, *hash<auto> rtopts) {
-        RestClient rest = HttpBasedConnection::get(connect, rtopts);
-        return setupRestClientConfig(rest);
+    object get(bool connect = True, *hash<auto> rtopts) {
+        object client = HttpBasedConnection::get(connect, rtopts);
+        # the client of a REST connection is a RestClient; a subclass can return another client (see the class
+        # documentation)
+        return client instanceof RestClient ? setupRestClientConfig(cast<RestClient>(client)) : client;
     }
 
     #! Common REST client initialization
@@ -5974,8 +5914,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
         @return a @ref RestClient::RestClient "RestClient" object
     */
-    private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return RestClient rest(getConnectionOptions(rtopts), !connect);
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new RestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Returns an async-I/O-capable REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
@@ -6047,7 +5987,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             if (ex.err != "CONNECTION-ASYNC-UNSUPPORTED" && ex.err != "LOAD-MODULE-ERROR") {
                 rethrow;
             }
-            client = get();
+            client = cast<AbstractRestClient>(get());
         }
         *string ping_path;
         if (!opts.ping_method || !exists (ping_path = getPingPath())) {
@@ -6176,6 +6116,146 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! class for REST HTTP connections; returns @ref RestClient::RestClient objects
+/** supports the following options:
+    - \c "connect_timeout": connection timeout to use in milliseconds
+    - \c "content_encoding": this sets the send encoding (if the \c "send_encoding" option is not set) and the
+      requested response encoding; for possible values, see
+      @ref RestClient::RestClient::EncodingSupport "EncodingSupport"
+    - \c "data": see @ref RestClient::RestClient::DataSerializationOptions for possible values when used with the
+      null REST schema validator; the default is \c "auto"
+    - \c "error_passthru": if @ref True "True" then HTTP status codes indicating errors will not cause a
+      \c REST-RESPONSE-ERROR exception to be raised, rather such responses will be passed through to the caller
+      like any other response
+    - \c "headers": an optional hash of headers to send with every request, these can also be overridden in
+      request method calls; also a string giving headers can be given in the format:
+      <tt>header1=value, header2=value</tt>; the value will be parsed with
+      @ref Util::parse_to_qore_value() "parse_to_qore_value()"
+    - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0")
+    - \c "max_redirects": maximum redirects to support
+    - \c "max_response_body_size": the maximum size in bytes of a response body received into memory, as received
+      and after its content encoding is decoded (0, the default, means no limit)
+    - \c "oauth2_app": An OAuth2 app name for external programs handling OAuth2 calls for this client
+    - \c "oauth2_auth_url": The OAuth2 authorization URL for the \c authorization_code grant type; ignored if the
+      \c token option is set.  Note that the \c authorization_code grant type requires external user authorization to
+      acquire an access token
+    - \c "oauth2_client_id": The OAuth2 client ID; ignored if the \c token option is set
+    - \c "oauth2_client_secret": the OAuth2 client secret; ignored if the \c token option is set
+    - \c "oauth2_grant_type": the OAuth2 grant type; ignored if the \c token option is set; possible values:
+      - \c "authorization_code": requires \c oauth2_client_id, \c oauth2_client_secret, \c oauth2_auth_url, as well as
+        \c oauth2_token_url; note that this grant type cannot be handled automatically but rather must be handled by
+        external code that redirects the user to the authentication server and then updates the connection with token
+        information retrieved
+      - \c "client_credentials": requires \c oauth2_client_id, \c oauth2_client_secret, as well as
+        \c oauth2_token_url
+      - \c "password": requires a username, password, \c oauth2_client_id, \c oauth2_client_secret, as well as
+        \c oauth2_token_url
+      - \c "none": same as if this option is not set; it means that no OAuth2 grant flow will be used
+    - \c "oauth2_pkce": Use PKCE (Proof Key Code Exchange) when using the OAuth2 \c authorization_code flow; this
+      value specifies the code challenge method
+    - \c "oauth2_redirect_url": The OAuth2 redirect URL for the \c authorization_code grant type; ignored if the
+      \c token option is set.  Note that the \c authorization_code grant type requires external user authorization to
+      acquire an access token; the special value \c "auto" (the default) is meant to be interpreted by servers
+      that implement OAuth2 authorization code client handling
+    - \c "oauth2_refresh_token": An OAuth2 refresh token (complements option \c "token")
+    - \c "oauth2_scopes": A list of OAuth2 scopes to request; ignored if the \c token option is set
+    - \c "oauth2_scope_separator_char": A separator character for OAuth2 scopes in URI arguments
+    - \c "oauth2_token_args": Extra arguments for OAuth2 authentication requests to \c oauth2_token_url; if this
+      option is set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as
+      well when the request is made to the \c oauth2_alt_token_url
+    - \c "oauth2_token_expiry": The expiry date of the token, if known
+    - \c "oauth2_token_expiry_hint": A integer value in minutes giving the expected lifetime of the token
+    - \c "oauth2_token_url": The token URL for OAuth2 flows; ignored if the \c token option is set
+    - \c "oauth2_token_use_basic_auth": Use basic authentication for the OAuth2 token request
+    - \c "openapi3": the path to a <a href="https://swagger.io/">OpenApi 3</a> REST schema file for API
+      validation; only used if \a validator not provided (see the @ref openapi3intro "OpenApi3" module)
+    - \c "password": The password for authentication; only used if no username or password is set in the URL and if
+      the \c username option is also used
+    - \c "proxy": proxy URL to use
+    - \c "redirect_passthru": if @ref True "True" then redirect responses wil0l be passed to the caller instead of
+      processed
+    - \c "send_encoding": a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value
+      \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent
+      message bodies
+    - \c "swagger": the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for runtime API
+      validation (see the @ref swaggerintro "Swagger" module); conflicts with \a validator
+    - \c "swagger_base_path": in case a REST validator is used, the base path in the schema can be overridden
+      with this option (applies to any REST validator; not just Swagger validators)
+    - \c "swagger_lax_parsing": try to parse invalid Swagger schemas
+    - \c "timeout": transfer timeout to use in milliseconds
+    - \c "token": Any bearer token to use for the connection; will be passed as <tt>Authorization: Bearer ...</tt>
+      in request headers; cannot be used with username and password options or authentication information in the URL;
+      if this option is set then any OAuth2 options are ignored
+    - \c "token_api_key_header": The name of a header where to send the token as an API key
+    - \c "username": The username for authentication; only used if no username or password is set in the URL
+    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+      object to validate request and response messages; conflicts with \a swagger
+
+    @note additionally supports the following runtime option in getImpl():
+    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+      object for REST message validation (if present, overrides any REST schema validation option provided as a
+      connection option)
+
+    @see @ref RestClient::RestClient::constructor() "RestClient::constructor()" for more information on the above
+    options
+
+    @since %RestConnection 1.4
+*/
+public class RestConnection inherits AbstractRestConnection {
+    #! creates the RestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes; see below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : AbstractRestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the RestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : AbstractRestConnection(config, attr) {
+    }
+
+    #! returns the underlying connection object
+    /** calls @ref getImpl() to actually acquire the connection object
+    */
+    RestClient get(bool connect = True, *hash<auto> rtopts) {
+        return cast<RestClient>(AbstractRestConnection::get(connect, rtopts));
+    }
+
+    #! returns a @ref RestClient::RestClient "RestClient" object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref RestClient::RestClient "RestClient" object
+    */
+    private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return cast<RestClient>(AbstractRestConnection::getImpl(connect, rtopts));
     }
 }
 

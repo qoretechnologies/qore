@@ -1084,7 +1084,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
             /** Other keys are ignored, so that a subclass or a connection can pass options of its own in the same
                 hash; this set includes the options of @ref RestClient::RestConnection "RestConnection", so that
-                @ref RestClient::RestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
+                @ref RestClient::AbstractRestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
                 verbatim.
             */
             const hash<string, bool> KnownOptions = {

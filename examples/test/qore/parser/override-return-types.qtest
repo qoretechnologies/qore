@@ -160,6 +160,9 @@ string sub get_rcv() { Base b = new C(); return b.rcv(\"a\", \"b\"); }
             "class C2 inherits A2, B2 { string m(string s) { return s; } }", "class 'C2' cannot inherit method "
             "A2::m\\(softint i\\) returning string with parent class method B2::m\\(int i\\) returning int",
             "a sibling parent class's method before the other one");
+        # an abstract variant of a parent class listed first, which another parent class's variant implements
+        parseAccepted("class AJ { abstract *int prog(); } class LJ { int prog() { return 1; } } "
+            "class J inherits AJ, LJ {}", "an abstract variant implemented by another parent class");
         # compatible sibling parent classes
         Program p = parseAccepted("class A3 { int m(softint i) { return 1; } } class B3 { *int m(int i) { return i; } } "
             "class C3 inherits A3, B3 {} *int sub get() { B3 b = new C3(); return b.m(5); }", "compatible siblings");
