@@ -148,8 +148,8 @@ printf(\"sum=%d held_lowering=%y waited=%y pending=%d continued_lowering=%y held
     /** The compile is stopped at the end of the LLVM phase, after the code of the batch was generated; the deletion of
         the callee's Program detaches it.  The discarded module is removed from the JIT: a function of the surviving
         Program that the batch defined is compiled again afterwards under the same symbol.  The root function's state
-        is reset, so it is submitted again when it is called, and refused for good, as its batch still refers to the
-        deleted Program.
+        is reset, so it is submitted again when it is called, and compiled: its batch no longer collects the function
+        of the deleted Program, which it calls through the call path, which refuses the call (issue #5822).
     */
     otherProgramCallee(string mode) {
         checkDebug();
@@ -187,21 +187,30 @@ for (int i = 0; i < 3; ++i) {
     sum += a.callFunction(\"f\", 0);
 }
 call_function(\"dbg_wait_bg_compile_idle\");
-int resubmitted = call_function(\"dbg_get_bg_compile_refused_count\") - r0;
-printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded=%d resubmitted=%d\\n\", f0, g1, sum,
-    held, deleted_while_held, continued, discarded, resubmitted);
+int refused = call_function(\"dbg_get_bg_compile_refused_count\") - r0;
+# f(1) calls h, whose Program is deleted: the call is refused, as for the AST interpreter
+string err;
+try {
+    a.callFunction(\"f\", 1);
+} catch (hash<ExceptionInfo> ex) {
+    err = ex.err;
+}
+printf(\"f0=%d g1=%d sum=%d held=%y deleted_while_held=%y continued=%y discarded=%d refused=%d err=%s\\n\", f0,
+    g1, sum, held, deleted_while_held, continued, discarded, refused, err);
 ", mode);
         assertEq(0, r.rc, r.output);
-        # f is submitted again once, and refused for good: its batch still refers to the deleted Program
-        assertRegex("f0=0 g1=2 sum=0 held=True deleted_while_held=True continued=True discarded=1 "
-            "resubmitted=1",
-            r.output, "the compile was detached by the callee's Program and discarded, and f was submitted again");
+        # f is submitted again and compiled: its batch no longer collects h, whose Program is deleted, and calls it
+        # through the call path, which refuses the call (issue #5822)
+        assertRegex("f0=0 g1=2 sum=0 held=True deleted_while_held=True continued=True discarded=1 refused=0 "
+            "err=PROGRAM-ERROR",
+            r.output, "the compile was detached by the callee's Program and discarded, and f was compiled again");
         assertRegex("\\[BG-JIT\\] discarded the compile of 'f@", r.output);
         # g was defined by the discarded batch; it compiles under the same symbol only if that module was removed
         assertRegex("\\[BG-JIT\\] compiled 'g@[^']*' and promoted to JIT tier", r.output,
             "g compiled again after the batch that defined it was discarded");
         assertNRegex("failed to compile", r.output);
-        assertNRegex("compiled 'f@[^']*' and promoted", r.output, "f's discarded code was not installed");
+        # the discarded code was not installed: f is promoted once, by the compile that it was submitted again for
+        assertEq(1, (r.output =~ x/(compiled 'f@[^']*' and promoted)/g).size(), "f promoted once: " + r.output);
     }
 
     #! a teardown that finds the compile publishing its result waits for it

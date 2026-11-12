@@ -521,6 +521,10 @@
     - a value returned by builtin code together with an exception is released, so API callers receive no value
       with an exception (see \c q_func_t)
     - \c QoreFile::write() returns \c int64
+    - \c QoreProgram::deref() without an \c ExceptionSink releases the Program's own dependency reference with the last
+      reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
+      be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
+      \c QoreProgram::deref())
     @endparblock
 
     @par qget Command-Line Changes

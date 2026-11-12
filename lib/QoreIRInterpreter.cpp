@@ -5070,15 +5070,18 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     if (!exec_pgm) {
         return false;
     }
-    // the callee runs in this interpreter instead of being called, so the call is counted here for its promotion
-    // to native code, as qore_rt_call_fast() counts the calls it makes; once the callee is native, this inline
-    // path is no longer taken (see hasCachedFunction() above)
-    uvb->recordFastCallExecution();
+    // entering the Program refuses a call into a Program that has been deleted (PROGRAM-ERROR), as the call path
+    // does: a reference to it, such as a call reference stored in another Program, keeps it registered
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
     }
+    // the callee runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code, as qore_rt_call_fast() counts the calls it makes; once the callee is native, this inline
+    // path is no longer taken (see hasCachedFunction() above).  It is counted once the Program is entered: the
+    // promotion compiles the callee, which reads the data of its Program (qore#5822)
+    uvb->recordFastCallExecution();
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
@@ -5708,7 +5711,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
             return false;
         }
     }
-    if (nargs == 0 && simple_increment
+    // the increment runs without entering the closure's Program, which is the caller's here: once its deletion has
+    // started, the call path decides, as for the AST interpreter (qore#5822)
+    if (nargs == 0 && simple_increment && !uvb->pgm_deleted.load(std::memory_order_acquire)
             && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
                 simple_increment->delta, result, xsink)) {
         if (may_invalidate_external_caches) {

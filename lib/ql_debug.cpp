@@ -18620,6 +18620,11 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
     return q_get_live_bigfloat_count();
 }
 
+//! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
+}
+
 //! returns the number of hashes and lists copied in the current thread
 /** Copy-on-write in an lvalue operation copies a container that is not unique, so tests compare the count before
     and after an update to verify that a container that only one variable holds is changed in place in every
@@ -21614,6 +21619,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
