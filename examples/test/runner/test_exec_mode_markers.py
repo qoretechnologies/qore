@@ -169,8 +169,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - RestSchemaModuleLazyTypes: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
+        # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
+        #   processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
