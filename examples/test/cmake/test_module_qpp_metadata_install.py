@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -109,14 +110,13 @@ class ModuleQppMetadataInstallTest(unittest.TestCase):
             self.assertIn(name, checked)
 
 
-
 class BuildStateTest(unittest.TestCase):
     """Runs the build test against stand-in build trees with QORE_TEST_BUILD_DIR"""
 
     def run_build_test(self, build):
         env = dict(os.environ, QORE_TEST_BUILD_DIR=str(build))
         return subprocess.run(
-            ["python3", "-m", "unittest", "-v",
+            [sys.executable, "-B", "-W", "error", "-m", "unittest", "-v",
              f"{Path(__file__).stem}.ModuleQppMetadataInstallTest.test_build_installs_module_metadata"],
             cwd=Path(__file__).parent, capture_output=True, text=True, timeout=120, env=env)
 
