@@ -865,18 +865,21 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
 
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (is_abstract) {
         return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
-            class_ctx ? class_ctx : runtime_cls, rc, xsink);
+            class_ctx ? class_ctx : runtime_cls, rc, xsink, explicit_inst);
     }
 
     assert(method);
 
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
-        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy));
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr,
+            nullptr, nullptr, explicit_inst);
     }
-    return qore_method_private::eval(*method, xsink, rc, self, args);
+    return qore_method_private::eval(*method, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
@@ -1188,8 +1191,12 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                     if (!m->isStatic()) {
                         sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
                             qore_class_private::get(*qc));
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        sfcn->moveExplicitTypeArgsFrom(*this);
                     } else {
                         StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        smcn->moveExplicitTypeArgsFrom(*this);
                         // issue #5769: the receiver of an implicit call to a static method of a generic base class
                         smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, qore_class_private::get(*qc)));
                         val = smcn;
@@ -1211,6 +1218,8 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
             if (m) {
                 StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                // the explicit type arguments of the call go to the method call (qore#5818)
+                smcn->moveExplicitTypeArgsFrom(*this);
                 // issue #5769: the receiver of an implicit call to a static method of a generic base class
                 smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, class_ctx));
                 val = smcn;
@@ -1861,6 +1870,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             assert(!parameterized_receiver);
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(loc, scope->takeName(), takeParseArgs(), method, qc,
                 class_ctx);
+            // the explicit type arguments of the call go to the method call (qore#5818)
+            sfcn->moveExplicitTypeArgsFrom(*this);
             val = sfcn;
             deref();
             return parse_init_value(val, parse_context);

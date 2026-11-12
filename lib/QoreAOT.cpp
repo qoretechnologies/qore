@@ -35230,8 +35230,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         const AbstractQoreFunctionVariant* call_variant = call->getVariant();
+        // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo());
+            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }

@@ -12907,16 +12907,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const Qore
 */
 static QoreValue qore_rt_eval_self_method_by_name(QoreObject* self, const char* name,
         QoreListNode* arg_list, const qore_class_private* class_ctx, RuntimeConfig& rc,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
     const qore_class_private* priv = qore_class_private::get(*self->getClass());
     const QoreMethod* m = priv->getMethodForEval(name, self->getProgram(), class_ctx, xsink);
     if (*xsink) {
         return QoreValue();
     }
     if (m) {
-        return qore_method_private::evalTmpArgs(*m, xsink, rc, self, arg_list, class_ctx);
+        return qore_method_private::evalTmpArgs(*m, xsink, rc, self, arg_list, class_ctx, nullptr, nullptr,
+            explicit_type_param_instantiation);
     }
-    return priv->evalMethod(self, name, arg_list, class_ctx, rc, xsink);
+    return priv->evalMethod(self, name, arg_list, class_ctx, rc, xsink, explicit_type_param_instantiation);
 }
 
 static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& target,
@@ -12967,17 +12968,20 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
         // is the parse-time class (or the method's), the method is resolved by name on the object's class
         if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
             return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, call_ctx,
-                target.variant));
+                target.variant, nullptr, target.explicit_type_param_instantiation));
         }
-        return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list, call_ctx, rc, xsink));
+        return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list, call_ctx, rc, xsink,
+            target.explicit_type_param_instantiation));
     }
 
     if (target.self_is_abstract) {
-        return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list, call_ctx, rc, xsink));
+        return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list, call_ctx, rc, xsink,
+            target.explicit_type_param_instantiation));
     }
 
     // Explicit base/namespace-qualified self calls are deliberately non-virtual.
-    return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, nullptr, target.variant));
+    return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, nullptr, target.variant,
+        nullptr, target.explicit_type_param_instantiation));
 }
 
 // --- Fast method call (bypasses QoreListNode + dispatch chain for devirtualized calls) ---

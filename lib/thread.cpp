@@ -1984,6 +1984,39 @@ public:
     }
 };
 
+//! makes the type arguments of the generic code that started a background thread current in the thread (qore#5732)
+/** The type arguments of the starting code's call (its own type parameters) and its receiver type (the type
+    parameters of its class)
+*/
+class BGTypeParamInstantiationHelper {
+public:
+    DLLLOCAL BGTypeParamInstantiationHelper(const QoreTypeParamInstantiation& inst,
+            const QoreTypeInfo* receiver_type_info) : inst_set(!inst.empty()),
+            receiver_set(receiver_type_info != nullptr) {
+        if (inst_set) {
+            old_inst = runtime_set_type_param_instantiation(&inst);
+        }
+        if (receiver_set) {
+            old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        }
+    }
+
+    DLLLOCAL ~BGTypeParamInstantiationHelper() {
+        if (inst_set) {
+            runtime_set_type_param_instantiation(old_inst);
+        }
+        if (receiver_set) {
+            runtime_set_receiver_type_info(old_receiver_type_info);
+        }
+    }
+
+private:
+    const QoreTypeParamInstantiation* old_inst = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    bool inst_set;
+    bool receiver_set;
+};
+
 class BGThreadParams {
 private:
     // call_obj: get and reference the current stack object, if any, for the new call stack
@@ -2010,6 +2043,12 @@ public:
     const QoreProgramLocation* loc;
     //! the identity of the thread for its Program's lifecycle events
     ProgramThreadIdentity identity;
+    //! the type arguments of the generic code that starts the thread, which its expression runs with (qore#5732)
+    /** A copy: the instantiation of the starting code's call ends with that call, which the thread can outlive
+    */
+    QoreTypeParamInstantiation type_param_inst;
+    //! the receiver type of the code that starts the thread, which binds the type parameters of its class (qore#5732)
+    const QoreTypeInfo* receiver_type_info = nullptr;
     bool registered = false,
         started = false;
 
@@ -2025,6 +2064,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
         //    "fct: %d\n", f, f->getTypeName(), f->getType(), t, this, call_obj,
@@ -2086,6 +2126,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         if (preregister(xsink)) {
             return;
@@ -2102,6 +2143,15 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! copies the type arguments and the receiver type of the generic code that starts the thread, if any
+    DLLLOCAL void setTypeParamInstantiation() {
+        const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+        if (inst && !inst->empty()) {
+            type_param_inst = *inst;
+        }
+        receiver_type_info = runtime_get_receiver_type_info();
     }
 
     //! records the identity of the new thread and of the starting thread
@@ -6966,6 +7016,10 @@ namespace {
                     // run thread expression; it is the statement of the thread, so its temporaries live until it
                     // returns
                     if (entered) {
+                        // the expression runs with the type arguments of the generic code that started the thread,
+                        // as it would have in that code (qore#5732); the thread has none of its own
+                        BGTypeParamInstantiationHelper type_param_helper(btp->type_param_inst,
+                            btp->receiver_type_info);
                         QoreStatementTempScope temps(&xsink);
                         rv = btp->exec(&xsink);
                     } else {

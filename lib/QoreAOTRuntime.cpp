@@ -1671,8 +1671,14 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!m) {
                 printd(2, "AOT SLOT: deferring self method '%s::%s' to name-based dispatch\n",
                     ref1 ? ref1 : "", method_name);
-                return toBitsNB(QoreValue(new SelfFunctionCallNode(
-                    &loc_builtin, strdup(method_full_name), nullptr, qc, qcp)));
+                SelfFunctionCallNode* deferred = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name),
+                    nullptr, qc, qcp);
+                // the explicit type arguments of the call (qore#5818)
+                if (!applyAOTExplicitTypeArgs(*deferred, method_ref, pgm, containing_signature)) {
+                    deferred->deref(nullptr);
+                    return 0;
+                }
+                return toBitsNB(QoreValue(deferred));
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
@@ -1695,6 +1701,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
+                // the explicit type arguments of the call (qore#5818)
+                if (!applyAOTExplicitTypeArgs(*smcn, method_ref, pgm, containing_signature)) {
+                    delete smcn;
+                    return 0;
+                }
                 return toBitsNB(QoreValue(smcn));
             }
             // Use the full ref2 for NamedScope: qualified names ("ClassName::method") produce
@@ -1707,6 +1718,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 if (!type_param_instantiation.type_args.empty()) {
                     sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
+            }
+            // the explicit type arguments of the call (qore#5818)
+            if (!applyAOTExplicitTypeArgs(*sfcn, method_ref, pgm, containing_signature)) {
+                sfcn->deref(nullptr);
+                return 0;
             }
             return toBitsNB(QoreValue(sfcn));
         }
@@ -4696,7 +4712,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
                     // with the args via the copy constructor (mirrors read_node_EN_SELF_CALL).
-                    uint64_t base_bits = resolveExprSlot(kind, ref1, ref2, pgm);
+                    uint64_t base_bits = resolveExprSlot(kind, ref1, ref2, pgm,
+                        uvb ? uvb->getUserSignature() : nullptr);
                     if (base_bits) {
                         QoreValue base_val = fromBits(base_bits);
                         const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
@@ -6401,6 +6418,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             ctx->call_targets[i].class_ctx = self_call->getClassContext();
             ctx->call_targets[i].is_self_method = true;
+            // the explicit type arguments of the call (qore#5818)
+            ctx->call_targets[i].explicit_type_param_instantiation = self_call->getExplicitTypeParamInstantiation();
             ctx->call_targets[i].self_ns_single = self_call->hasSingleName();
             ctx->call_targets[i].self_is_copy = self_call->isCopyCall();
             ctx->call_targets[i].self_is_abstract = self_call->isAbstractCall();
