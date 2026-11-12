@@ -2927,7 +2927,12 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         // a reload after publishing an actual value.  Closure-use vars are also
         // skipped because LLVM manages their cvstack lifetime explicitly.
         bool is_aot_body_local = aot_body_locals.count(key) > 0;
-        bool skip_pre_inst_load = aot_mode && (var->closureUse() || is_aot_body_local);
+        // A local declared with a reference type is read through the runtime stack on every load and never from its
+        // native cache (see readsThroughReference()): loading it here would read the referenced lvalue when the
+        // function is entered, outside the try block of the read, whose exception (the lvalue is gone, as a member
+        // of a deleted object, or reading it raises) no check then sees (issue #5908)
+        bool skip_pre_inst_load = (aot_mode && (var->closureUse() || is_aot_body_local))
+            || readsThroughReference(var);
         if (pre_instantiated_locals && pre_instantiated_locals->count(key)
                 && !ir_only_body_locals.count(key) && !skip_pre_inst_load) {
             // Pre-instantiated and NOT IR-only: initialize from runtime stack
