@@ -860,8 +860,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
         on_exit udp.close();
 
-        # the deleted server's sessions are gone and nothing answers on its port, which the test holds: the request gets
-        # no answer and fails (it times out)
+        # the deleted server closed the client's connection (CONNECTION_CLOSE), and nothing answers on its port, which
+        # the test holds: the request, sent on a new connection, gets no answer and fails
         *hash<auto> late;
         *string err;
         try {
