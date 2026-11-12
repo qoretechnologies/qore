@@ -1632,8 +1632,24 @@ extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeI
 /** Raises "<return statement> expects type ..." if the type does not accept the value; the value is not changed, as
     the caller applies the declared return type to it, which converts it for a type that converts it.
 */
+//! Returns true if @a target is an object that has not been deleted (issue #5784)
+/** With the inline accessors of the value: the check is made for every call that it is emitted for.
+*/
+static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT && static_cast<const QoreObject*>(n)->isValid();
+}
+
 int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
-    const AbstractQoreNode* node = call.getInternalNode();
+    const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
+    // the common case first: a method call (not a call through a call reference, which an object is not) on an
+    // object that has not been deleted has nothing to check
+    if (node && node->getType() != NT_FUNCREFCALL && qore_call_target_is_valid_object(target)) {
+        return 0;
+    }
     if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         return dot->checkReceiver(target, xsink);
     }
@@ -1660,6 +1676,10 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
     // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET), not its
     // expression: the check is made from the target
     if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        // the common case first: a method call on an object that has not been deleted has nothing to check
+        if (qore_call_target_is_valid_object(fromBits(target_bits))) {
+            return;
+        }
         const QoreAOTCallTarget& target = ctx->call_targets[slot];
         const char* name = target.method ? target.method->getName() : target.method_name;
         if (name) {
