@@ -2058,8 +2058,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         ExceptionSink work_xsink;
         const char* method_name = nullptr;
         // the class of the operation of a continuePoll() item, whose reference is released after the step; for the
-        // log below
-        const char* step_class_name = nullptr;
+        // log below (copied, as the release can delete the object and, with it, the last reference to its class)
+        std::string step_class_name;
 
         // A step of a poll operation is governed by the sandbox of the code that submitted the operation, not by
         // the context of this worker: without it, a connection made here (to follow a redirect, retry a failed
@@ -2361,7 +2361,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
             const char* type_name = getDispatchTypeName(async_item.type);
             const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName()
-                : (step_class_name ? step_class_name : "null");
+                : (!step_class_name.empty() ? step_class_name.c_str() : "null");
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
             const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
             const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
