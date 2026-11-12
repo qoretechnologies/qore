@@ -49,6 +49,7 @@ typed_list: list
 objects: list
 []
 {z: \"p\"}
+mask: buffer<bool> 3
 ";
 
         #! the optimization levels of the AOT compiles

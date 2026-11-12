@@ -20,6 +20,15 @@ const C4 = <CallStackInfo>{"function": "f", "line": 1, "endline": 1, "file": "x"
     "typecode": 0, "type": "user", "lang": "Qore"} - "start_column";
 const C2 = <ExceptionInfo>{"err": "X", "desc": "d"};
 const C3 = cast<list<hash<string, int>>>((cast<hash<string, int>>({"b": 2}),));
+# the argument list of a typed buffer, whose element is evaluated: an expression, not a typed value
+*buffer<bool> sub mask(list<auto> vector) {
+    list<bool> m = ();
+    foreach auto raw in (vector) {
+        push m, raw > 1;
+    }
+    return new buffer<bool>(m);
+}
+
 sub show(string label, auto v) {
     printf("%s: %s\n", label, v.fullType());
 }
@@ -50,3 +59,5 @@ printf("%y\n", init_err.arg.typed_list);
 show("objects", init_err.arg.objects);
 printf("%y\n", init_err.arg.objects);
 printf("%y\n", <ThrowingInitHash5895>{"z": "p"});
+*buffer<bool> m = mask((1, 2, 3));
+printf("mask: %s %d\n", m.fullType(), m.size());
