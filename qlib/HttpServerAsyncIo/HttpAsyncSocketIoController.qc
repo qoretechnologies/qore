@@ -2588,9 +2588,22 @@ public class HttpAsyncSocketIoController {
         return exists result.input_stream && isCloseDelimited(result.hdr);
     }
 
+    #! Returns the owner of the delayed-response timers of a connection or session
+    /** The timers have an owner of their own, so that the flush of their callbacks by
+        @ref cancelDelayedResponses() discards nothing else of the connection: a flush of the connection's own owner
+        would discard the callbacks of its operations that are queued then, such as the completion of an operation
+        that the removal of its listener has just canceled, which ends the connection and its streams.
+
+        @param owner the connection/session owner
+    */
+    private static string getDelayedResponseOwner(string owner) {
+        return owner + ":delayed-response";
+    }
+
     #! Defers response processing without occupying a worker thread
-    /** The timer is tagged with the connection owner and tracked independently so shutdown and
-        listener removal can cancel it before captured socket, target, and response objects are released.
+    /** The timer is tagged with an owner derived from the connection owner (see getDelayedResponseOwner()) and
+        tracked independently so shutdown and listener removal can cancel it before captured socket, target, and
+        response objects are released.
 
         @param owner connection/session owner
         @param delay minimum delay before response processing
@@ -2627,7 +2640,7 @@ public class HttpAsyncSocketIoController {
                 if (dispatch) {
                     callback();
                 }
-            }, owner);
+            }, getDelayedResponseOwner(owner));
             hash<HttpDelayedResponseInfo> delayed = delayed_responses{delay_key};
             delayed.timer_id = timer_id;
             delayed_responses{delay_key} = delayed;
@@ -2676,9 +2689,10 @@ public class HttpAsyncSocketIoController {
                     timer_id, ex.err, ex.desc);
             }
         }
+        # waits for a timer callback that is running
         foreach string owner in (owners) {
             try {
-                controller.flushCallbacksByOwner(owner);
+                controller.flushCallbacksByOwner(getDelayedResponseOwner(owner));
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "failed to flush delayed response callbacks for %y: %s: %s",
                     owner, ex.err, ex.desc);

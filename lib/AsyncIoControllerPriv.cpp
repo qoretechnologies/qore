@@ -1345,8 +1345,10 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
 }
 
 void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj, const std::string& owner,
-        AsyncIoSandboxContext sandbox_ctx) {
+        AsyncIoSandboxContext sandbox_ctx, AsyncIoNativeTask* after_abort) {
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_ABORT, nullptr, std::string()};
+    // run after abort() by the worker, or discarded with the item (see releaseWorkItem() and workerLoop())
+    item.native_task = after_abort;
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
     enqueue(std::move(item));
@@ -2051,8 +2053,25 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             switch (async_item.type) {
                 case DT_ABORT: {
                     method_name = "abort";
-                    ValueHolder rv(async_item.spop_obj->evalMethod("abort", nullptr, &work_xsink),
-                        &work_xsink);
+                    {
+                        ValueHolder rv(async_item.spop_obj->evalMethod("abort", nullptr, &work_xsink),
+                            &work_xsink);
+                    }
+                    // the result of the operation is delivered once abort() has returned; see
+                    // AsyncIoControllerPriv::AbortThenDeliverTask
+                    if (async_item.native_task) {
+                        AsyncIoNativeTask* task = async_item.native_task;
+                        async_item.native_task = nullptr;
+                        // the task gets a sink of its own: an exception of abort() is reported below
+                        ExceptionSink task_xsink;
+                        task->run(&task_xsink);
+                        delete task;
+                        if (task_xsink && !work_xsink) {
+                            // the exception is from the operation's onComplete()
+                            method_name = "onComplete";
+                        }
+                        work_xsink.assimilate(task_xsink);
+                    }
                     break;
                 }
                 case DT_ON_COMPLETE: {
@@ -4862,6 +4881,13 @@ bool AsyncIoControllerPriv::dbgWaitWorkersIdle(int timeout_ms, int64_t& on_compl
     return idle;
 }
 
+int64_t AsyncIoControllerPriv::dbgOnCompleteDispatched() {
+    // read under the lock: a stop of the controller deletes its dispatcher after taking it under the lock
+    AutoLocker al(m);
+    QoreCallDispatcher* cd = call_dispatcher;
+    return cd ? cd->dbgOnCompleteDispatched() : 0;
+}
+
 size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
     std::vector<std::string> hashes;
     {
@@ -6451,6 +6477,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // --- PHASE 3: Update cache (I/O-thread-only) + deferred delivery ---
         std::vector<DeferredDelivery> deferred_deliveries;
+        // the abort() calls dispatched to workers, each with the delivery of its result; see AbortThenDeliverTask
+        std::vector<DeferredAbort> deferred_aborts;
         bool do_autostop = false;
 
         {
@@ -6485,14 +6513,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // registrations (see retireOp())
                     unregisterOp(t, result.op_id, xsink);
 
+                    // an abort() dispatched to a worker is dispatched below, with the delivery of the result,
+                    // which must follow it (see AbortThenDeliverTask)
+                    bool async_abort = false;
                     if (result.timed_out) {
                         bool worker_abort = pinfo.has_qore_abort
                             || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
                         if (worker_abort && on_async_io_thread) {
-                            ensureCallDispatcher();
-                            pinfo.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
-                                pinfo.owner, pinfo.sandbox_ctx);
+                            async_abort = true;
                         } else if (pinfo.spop_base && !pinfo.has_qore_abort) {
                             pinfo.spop_base->abort(xsink);
                         } else {
@@ -6529,28 +6557,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         result.ex_hash = nullptr;
                     }
 
-                    if (deliver_result) {
+                    if (async_abort) {
+                        // dispatched with the deliveries below, so that the result follows the operation's last state
+                        // event and the update of the cache, as the results delivered there do
+                        pinfo.spop_obj->ref();
+                        deferred_aborts.push_back(DeferredAbort{pinfo.spop_obj, pinfo.owner, pinfo.sandbox_ctx,
+                            deliver_result
+                                ? new AbortThenDeliverTask(this, makeDeferredDelivery(key, pinfo, result_hash))
+                                : nullptr});
+                    } else if (deliver_result) {
                         // Prepare deferred delivery
-                        DeferredDelivery dd;
-                        dd.key = key;
-                        dd.queue = pinfo.queue;
-                        if (dd.queue) {
-                            dd.queue->ref();
-                        }
-                        dd.queue_obj = pinfo.queue_obj;
-                        if (dd.queue_obj) {
-                            dd.queue_obj->ref();
-                        }
-                        dd.spop_obj = pinfo.spop_obj;
-                        if (dd.spop_obj) {
-                            dd.spop_obj->ref();
-                        }
-                        dd.has_on_complete = pinfo.has_qore_on_complete;
-                        dd.result = result_hash;
-                        dd.owner = pinfo.owner;
-                        dd.sandbox_ctx = pinfo.sandbox_ctx;
-                        dd.sync_release = pinfo.sync_release;
-                        deferred_deliveries.push_back(std::move(dd));
+                        deferred_deliveries.push_back(makeDeferredDelivery(key, pinfo, result_hash));
                     }
 
                     // Terminal completion (error/timeout/completed) committed
@@ -6881,7 +6898,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock.
             // With multiple I/O threads, only autostop when ALL threads are idle —
             // otherwise one idle thread would kill threads still serving connections.
-            if (t.cache.empty() && t.cmdq.empty() && deferred_deliveries.empty()
+            if (t.cache.empty() && t.cmdq.empty() && deferred_deliveries.empty() && deferred_aborts.empty()
                     && getCacheSize() == 0) {
                 bool timer_empty;
                 bool do_autostop_check;
@@ -6933,31 +6950,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Deliver results outside lock — onComplete dispatched to worker threads
         for (auto& dd : deferred_deliveries) {
-            ASYNC_IO_TRACE("deliverResult key='%s' onComplete=%d\n",
-                dd.key.c_str(), (int)dd.has_on_complete);
-            // taken before the context is moved
-            const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
-            deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete, dd.result, xsink, dd.owner,
-                std::move(dd.sandbox_ctx), dd.sync_release.get());
-            dd.spop_obj = nullptr;
-            dd.result = nullptr;
-            if (dd.queue) {
-                dd.queue->deref(xsink);
-                dd.queue = nullptr;
+            deliverDeferred(dd, xsink);
+        }
+        if (!deferred_aborts.empty()) {
+            ensureCallDispatcher();
+            for (auto& da : deferred_aborts) {
+                call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(da.spop_obj, da.owner,
+                    std::move(da.sandbox_ctx), da.after_abort);
             }
-            if (dd.queue_obj) {
-                // the last reference to the Queue's object can be this one; see releaseOffIoThread()
-                AsyncIoDeferredRelease refs;
-                refs.queue_obj = dd.queue_obj;
-                refs.module_cleanup_delegate = dd_delegate;
-                dd.queue_obj = nullptr;
-                releaseOffIoThread(refs, xsink, dd.sync_release.get());
-            }
-            dd.sync_release.reset();
         }
 
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
-        if (!do_autostop && !deferred_deliveries.empty()) {
+        if (!do_autostop && (!deferred_deliveries.empty() || !deferred_aborts.empty())) {
             if (t.cache.empty() && t.cmdq.empty() && getCacheSize() == 0) {
                 bool timer_empty;
                 bool do_check;
@@ -8553,12 +8557,9 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     // Dispatch Qore abort() and C++ wrappers that can call Qore/blocking code
     // to the worker pool to avoid blocking the I/O thread.
     bool worker_abort = pinfo.has_qore_abort || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
-    if (worker_abort && on_async_io_thread) {
-        ensureCallDispatcher();
-        pinfo.spop_obj->ref();
-        call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
-            pinfo.owner, pinfo.sandbox_ctx);
-    } else {
+    // an abort() dispatched to a worker is dispatched below, with the delivery of the result, which must follow it
+    bool async_abort = worker_abort && on_async_io_thread;
+    if (!async_abort) {
         // C++ built-in or not on I/O thread - safe to call directly
         callAbort(pinfo.spop_obj, xsink);
     }
@@ -8572,8 +8573,17 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     // Build result hash
     QoreHashNode* result = deliver_result ? buildResultHash(pinfo, true, nullptr, xsink) : nullptr;
 
-    // Deliver result — dispatches onComplete to worker thread if overridden
-    if (deliver_result) {
+    if (async_abort) {
+        ensureCallDispatcher();
+        // the result is delivered by the worker after abort() has returned; see AbortThenDeliverTask
+        AsyncIoNativeTask* after_abort = deliver_result
+            ? new AbortThenDeliverTask(this, makeDeferredDelivery(std::string(), pinfo, result))
+            : nullptr;
+        pinfo.spop_obj->ref();
+        call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
+            pinfo.owner, pinfo.sandbox_ctx, after_abort);
+    } else if (deliver_result) {
+        // Deliver result — dispatches onComplete to worker thread if overridden
         if (pinfo.spop_obj) {
             pinfo.spop_obj->ref();
         }
@@ -8584,6 +8594,117 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     // cleanup() backstop must not synthesize a duplicate.
     pinfo.completion_delivered = true;
 }
+
+AsyncIoControllerPriv::DeferredDelivery AsyncIoControllerPriv::makeDeferredDelivery(const std::string& key,
+        PollInfo& pinfo, QoreHashNode* result) {
+    DeferredDelivery dd;
+    dd.key = key;
+    dd.queue = pinfo.queue;
+    if (dd.queue) {
+        dd.queue->ref();
+    }
+    dd.queue_obj = pinfo.queue_obj;
+    if (dd.queue_obj) {
+        dd.queue_obj->ref();
+    }
+    dd.spop_obj = pinfo.spop_obj;
+    if (dd.spop_obj) {
+        dd.spop_obj->ref();
+    }
+    dd.has_on_complete = pinfo.has_qore_on_complete;
+    dd.result = result;
+    dd.owner = pinfo.owner;
+    dd.sandbox_ctx = pinfo.sandbox_ctx;
+    dd.sync_release = pinfo.sync_release;
+    return dd;
+}
+
+void AsyncIoControllerPriv::deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink) {
+    ASYNC_IO_TRACE("deliverResult key='%s' onComplete=%d\n",
+        dd.key.c_str(), (int)dd.has_on_complete);
+    // taken before the context is moved
+    const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
+    deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete, dd.result, xsink, dd.owner,
+        std::move(dd.sandbox_ctx), dd.sync_release.get());
+    dd.spop_obj = nullptr;
+    dd.result = nullptr;
+    if (dd.queue) {
+        dd.queue->deref(xsink);
+        dd.queue = nullptr;
+    }
+    if (dd.queue_obj) {
+        // the last reference to the Queue's object can be this one; see releaseOffIoThread()
+        AsyncIoDeferredRelease refs;
+        refs.queue_obj = dd.queue_obj;
+        refs.module_cleanup_delegate = dd_delegate;
+        dd.queue_obj = nullptr;
+        releaseOffIoThread(refs, xsink, dd.sync_release.get());
+    }
+    dd.sync_release.reset();
+}
+
+AsyncIoControllerPriv::AbortThenDeliverTask::AbortThenDeliverTask(AsyncIoControllerPriv* ctrl,
+        DeferredDelivery&& dd) : ctrl(ctrl), dd(std::move(dd)) {
+}
+
+AsyncIoControllerPriv::AbortThenDeliverTask::~AbortThenDeliverTask() {
+    // run() or discard() is always called before the task is deleted
+    assert(delivered);
+}
+
+void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete, ExceptionSink* xsink) {
+    if (delivered) {
+        return;
+    }
+    delivered = true;
+    // as in deliverResult(): onComplete() is not called without a result
+    bool on_complete = dd.has_on_complete && dd.spop_obj && dd.result;
+    if (dd.queue) {
+        // the operation's reference is kept for onComplete() if it is called; otherwise it is handed to
+        // deliverResult(), which releases it (to a synchronous caller first; see AsyncIoSyncRelease)
+        QoreHashNode* queue_result = on_complete ? dd.result->hashRefSelf() : dd.result;
+        QoreObject* spop_obj = on_complete ? nullptr : dd.spop_obj;
+        if (!on_complete) {
+            dd.result = nullptr;
+            dd.spop_obj = nullptr;
+        }
+        ctrl->deliverResult(dd.queue, dd.queue_obj, spop_obj, false, queue_result, xsink, dd.owner, dd.sandbox_ctx,
+            dd.sync_release.get());
+    }
+    if (on_complete && call_on_complete) {
+#ifdef DEBUG
+        ctrl->dbgCountOnComplete();
+#endif
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(dd.result, xsink);
+        dd.result = nullptr;
+        ValueHolder rv(dd.spop_obj->evalMethod("onComplete", *args, xsink), xsink);
+    }
+    // the remaining references; the last ones to the operation and everything it holds can be these (see
+    // releaseOffIoThread())
+    AsyncIoDeferredRelease refs;
+    refs.spop_obj = dd.spop_obj;
+    refs.other = dd.result;
+    refs.queue = dd.queue;
+    refs.queue_obj = dd.queue_obj;
+    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
+    dd.spop_obj = nullptr;
+    dd.result = nullptr;
+    dd.queue = nullptr;
+    dd.queue_obj = nullptr;
+    ctrl->releaseOffIoThread(refs, xsink, dd.sync_release.get());
+    dd.sync_release.reset();
+}
+
+#ifdef DEBUG
+void AsyncIoControllerPriv::dbgCountOnComplete() {
+    AutoLocker al(m);
+    QoreCallDispatcher* cd = call_dispatcher;
+    if (cd) {
+        cd->dbgCountOnComplete();
+    }
+}
+#endif
 
 void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pinfo,
         ExceptionSink* xsink) {

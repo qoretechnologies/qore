@@ -360,9 +360,13 @@ public:
     //! Dispatch an abort() call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param owner optional owner identifier for per-owner flush tracking
+        @param sandbox_ctx the sandbox of the operation's submitter
+        @param after_abort a task that the worker runs after abort() returns (ownership transferred), or nullptr; if
+        the item is not run, the task is discarded (AsyncIoNativeTask::discard())
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        AsyncIoNativeTask* after_abort = nullptr);
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -480,6 +484,11 @@ public:
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
+    }
+
+    //! Debug-only: counts an onComplete() call that a worker makes itself (see AbortThenDeliverTask)
+    DLLLOCAL void dbgCountOnComplete() {
+        dbg_on_complete_dispatched.fetch_add(1, std::memory_order_acq_rel);
     }
 #endif
 
@@ -867,6 +876,9 @@ public:
         @return true if the worker threads are idle, false if they were not when \a timeout_ms elapsed
     */
     DLLLOCAL bool dbgWaitWorkersIdle(int timeout_ms, int64_t& on_complete_dispatched);
+
+    //! Debug-only: the number of onComplete() calls dispatched so far; 0 if no dispatcher has been created
+    DLLLOCAL int64_t dbgOnCompleteDispatched();
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -1400,6 +1412,59 @@ private:
         AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
         //! The references taken by the synchronous exec() call that waits for the result, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+    };
+
+    //! Delivers the result of an operation whose abort() runs on a callback worker, after abort() has returned
+    /** A canceled or timed-out operation is aborted before its result is delivered, so that the receiver of the
+        result (its onComplete() or the waiter on its result queue) sees the operation in its aborted state.  When
+        abort() runs on a callback worker (an abort() implemented in Qore, or one that needsWorkerDispatch()), the
+        result is delivered by this task on the same worker once abort() has returned: delivered separately, the
+        result could be handled on another worker before, or while, abort() runs.
+
+        Run on the worker, the task pushes the result to the operation's result queue and calls its onComplete()
+        itself, in the work item of abort() (under the same Program, sandbox and owner), so that a stop of the
+        dispatcher, which waits for the item, also waits for onComplete().  A task that is not run (the dispatcher is
+        stopping, or the operation's Program or owner is shutting down) pushes the result to the result queue only:
+        an onComplete() dispatched at that point would be discarded as well.
+    */
+    class AbortThenDeliverTask : public AsyncIoNativeTask {
+    public:
+        //! Takes over the references of @a dd
+        /** @param ctrl the controller, not referenced: the dispatcher that runs or discards the task is stopped,
+            and so the task is run or discarded, before the controller is deleted
+            @param dd the delivery
+        */
+        DLLLOCAL AbortThenDeliverTask(AsyncIoControllerPriv* ctrl, DeferredDelivery&& dd);
+
+        DLLLOCAL ~AbortThenDeliverTask() override;
+
+        DLLLOCAL void run(ExceptionSink* xsink) override {
+            deliver(true, xsink);
+        }
+
+        DLLLOCAL void discard(ExceptionSink* xsink) override {
+            deliver(false, xsink);
+        }
+
+        DLLLOCAL QoreProgram* getProgram() const override {
+            return dd.spop_obj ? dd.spop_obj->getProgram() : nullptr;
+        }
+
+    private:
+        AsyncIoControllerPriv* ctrl;
+        DeferredDelivery dd;
+        bool delivered = false;
+
+        //! Delivers the result once, and calls onComplete() if @a call_on_complete is true
+        DLLLOCAL void deliver(bool call_on_complete, ExceptionSink* xsink);
+    };
+
+    //! An abort() dispatched to a callback worker with the delivery of the result, after the cache is updated
+    struct DeferredAbort {
+        QoreObject* spop_obj;               //!< Referenced
+        std::string owner;                  //!< Owner identifier for per-owner flush tracking
+        AsyncIoSandboxContext sandbox_ctx;  //!< The submitter's sandbox context
+        AsyncIoNativeTask* after_abort;     //!< Owned, or nullptr
     };
 
     //! Timer info stored under lock
@@ -2071,6 +2136,17 @@ private:
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Delivers a deferred result and releases the references of @a dd
+    DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Debug-only: counts an onComplete() call made by AbortThenDeliverTask in the current dispatcher
+    DLLLOCAL void dbgCountOnComplete();
+#endif
+
+    //! Returns a deferred delivery of @a result (referenced; ownership transferred) to the receivers of @a pinfo
+    DLLLOCAL DeferredDelivery makeDeferredDelivery(const std::string& key, PollInfo& pinfo, QoreHashNode* result);
 
     //! Deliver-exactly-once backstop: if \a pinfo owns a result queue but no
     //! terminal completion was ever committed, synthesize and deliver a
