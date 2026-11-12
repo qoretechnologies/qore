@@ -311,10 +311,21 @@ list<string> sub exception_frames() {
         return (uProbe(),);
     }
 
+    #! uFrame() as a synchronized method, which is not called through the fast call path of native code
+    synchronized list<string> uFrameSynchronized(int n) {
+        return (uProbe(),);
+    }
+
     #! code of this test called back by module code that a caller restricted with PO_LOCKDOWN called: the callback
-    #! runs with this test's options (the override of the module call is cleared for it, see
-    #! UserVariantBase::eval()), and the module code after it with the module call's override again: the module's own
-    #! options, and for a sandboxed caller also the caller's restrictions
+    #! runs with this test's options (the override of the module call is cleared for it in the borrowed helper, see
+    #! UserVariantBase::eval() and UserClosureVariant::evalClosure()), and the module code after it with the module
+    #! call's override again: the module's own options, and for a sandboxed caller also the caller's restrictions
+    /** Only the sandboxed caller's callbacks detect a wrong borrow, such as an override restored before the callback
+        runs: its restrictions are those of the override, and the callback must not keep them.  For the unsandboxed
+        caller, and in testParseOptions(), where the callbacks are code of the caller itself, switching Programs gives
+        the same results, so they check the semantics only.  Each kind of callback probes in its own body: a callback
+        that calls another method to probe would have the options set again by that method's call.
+    */
     testOtherProgramCallbacks() {
         foreach hash<auto> m in (Modes.pairIterator()) {
             if ((m.value == EM_JIT || m.value == EM_TIERED) && !inlist("JIT", get_feature_list())) {
@@ -335,8 +346,17 @@ list<string> sub exception_frames() {
                     string label = sprintf("%s %s %d", m.key, sandboxed ? "sandboxed" : "unsandboxed", i);
                     list<string> frames = (Denied, module, Allowed, module, Denied);
                     assertEq(frames, pgm.callFunction("other_frames", \uFrame()), label + ": method");
-                    assertEq(frames, pgm.callFunction("other_frames", list<string> sub (int n) { return uFrame(n); }),
-                        label + ": closure");
+                    assertEq(frames, pgm.callFunction("other_frames", \uFrameSynchronized()),
+                        label + ": synchronized method");
+                    # a closure that probes in its own body (see UserClosureVariant::evalClosure())
+                    assertEq(frames, pgm.callFunction("other_frames", list<string> sub (int n) {
+                            try {
+                                create_object("RWLock");
+                                return (Allowed,);
+                            } catch (hash<ExceptionInfo> ex) {
+                                return (ex.err,);
+                            }
+                        }), label + ": closure");
                     assertEq((Denied, module, Allowed, module, module, Denied),
                         pgm.callFunction("other_catch", sub () { throw "BORROW-TEST", uProbe(); }),
                         label + ": exception");

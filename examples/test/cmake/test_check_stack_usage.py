@@ -169,6 +169,17 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big(int) [clone .part.0]"))
         self.assertTrue(csu.is_part_clone_of("N::K::big", sig, "N::K::big[abi:cxx11](int) [clone .part.0]"))
         self.assertFalse(csu.is_part_clone_of("N::K::big", "int N::K::big(int, int)", "N::K::big(int) [clone .part.0]"))
+        # the types are spelled differently by nm: the number of parameters and the qualifiers decide
+        self.assertTrue(csu.is_part_clone_of("K::b", "int K::b(const char*, ExceptionSink*, int)",
+            "K::b(char const*, ExceptionSink*, int) [clone .part.0]"))
+        self.assertTrue(csu.is_part_clone_of("K::s", "int K::s(int, const std::string&)",
+            "K::s(int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) "
+            "[clone .part.0]"))
+        self.assertFalse(csu.is_part_clone_of("K::a", "int K::a(int) const", "K::a(int) [clone .part.0]"))
+        self.assertTrue(csu.is_part_clone_of("K::a", "int K::a(int) &&", "K::a(int) && [clone .part.0]"))
+        self.assertEqual(["int", "std::map<int, int>", "int (*)(int, int)"],
+            csu.split_params("int, std::map<int, int>, int (*)(int, int)"))
+        self.assertEqual([], csu.split_params("void"))
         self.assertFalse(csu.is_part_clone_of("N::K::big", sig, "N::K::bigger(int) [clone .part.0]"))
         # a template instance is matched by its name only (.su records give the template parameters)
         self.assertTrue(csu.is_part_clone_of("tf", "int tf(T) [with T = int]", "int tf<char>(char) [clone .part.0]"))
@@ -190,6 +201,81 @@ class ParseTest(unittest.TestCase):
         with unittest.mock.patch.object(csu, "object_part_clones", return_value=nm):
             results = csu.check([("N::K::big", 1, 1)], [f for f in frames if f[1] != 1632])
         self.assertEqual(584, results[0][2])
+
+    @unittest.skipUnless(shutil.which("g++") and shutil.which("nm"), "g++ or nm is not available")
+    def test_part_clone_types_and_folding_with_gcc(self):
+        # nm and .su records spell parameter types differently ("char const*" and "const char*", std::string with its
+        # template arguments): the clones of split members with such parameters are matched by their number; and two
+        # identical .part clones folded into one by identical code folding are recorded once, so that the frame of
+        # the other function's clone is unknown and reported
+        source = """#include <cstring>
+#include <string>
+extern void use(char*);
+struct ExceptionSink;
+#define BODY(test, k) if (test) return 1; \\
+    char buf[300]; memset(buf, x, sizeof buf); use(buf); use(buf+1); use(buf+2); use(buf+k); \\
+    for (int i = 0; i < x; ++i) { char b2[200]; memset(b2, i, sizeof b2); use(b2); use(b2+1); use(b2+2);} \\
+    use(buf+4); use(buf+5); use(buf+6); use(buf+7); use(buf+8); return buf[k];
+struct K {
+    int m;
+    int b(const char* p, ExceptionSink* xsink, int x);
+    int s(int x, const std::string& str);
+    // identical bodies: identical code folding merges their .part clones
+    int f1(int x);
+    int f2(int x);
+};
+int K::b(const char* p, ExceptionSink* xsink, int x) { BODY(m, 3) }
+int K::s(int x, const std::string& str) { BODY(m, 5) }
+int K::f1(int x) { BODY(m, 7) }
+int K::f2(int x) { BODY(m, 7) }
+int c1(K* k, int n) { return k->b("a", 0, n) + k->b("b", 0, n * 2); }
+int c2(K* k, int n, const std::string& s) { return k->s(n, s) + k->s(n * 2, s); }
+int c3(K* k, int n) { return k->f1(n) + k->f1(n * 2) + k->f2(n) + k->f2(n * 3); }
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "p.cpp").write_text(source)
+            subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "p.cpp", "-o", "p.cpp.o"], cwd=str(tmp), check=True)
+            frames = csu.collect_frames(tmp)
+            parts = csu.object_part_clones(tmp / "p.cpp.su", {})
+            results = {r[0]: r for r in csu.check([("K::b", 1, 1), ("K::s", 1, 2), ("K::f1", 1, 3), ("K::f2", 1, 4)],
+                frames)}
+
+        def records(func):
+            return sorted((f[1] for f in frames if csu.matches(func, f[0])), reverse=True)
+
+        if not any(csu.matches("K::b", n) for n in parts):
+            self.skipTest("this g++ does not split the functions by partial inlining")
+        # nm spells the parameters "char const*" and "std::__cxx11::basic_string<...> const&"
+        self.assertTrue(any("char const*" in n for n in parts))
+        for func in ("K::b", "K::s"):
+            r = records(func)
+            self.assertEqual(2, len(r), func)
+            self.assertEqual(r[0] + r[1], results[func][2], func)
+            self.assertIsNone(results[func][4], func)
+        # one of the folded clones is recorded at the location of its function, the other is unaccounted
+        folded = [f for f in ("K::f1", "K::f2") if len(records(f)) == 1]
+        if len(folded) != 1:
+            self.skipTest("this g++ does not fold the identical .part clones")
+        self.assertIsNotNone(results[folded[0]][4])
+        self.assertIn("[clone .part.", results[folded[0]][4])
+
+    def test_unaccounted_reported(self):
+        # a function with a .part clone that no record accounts for fails the check, with the clone named
+        su = "/src/d.cpp:15:5:int K::f2(int)\t8\tstatic\n"
+        with build_dir(su) as d:
+            b = write_budgets(d, "100 K::f2\n")
+            with unittest.mock.patch.object(csu, "object_symbols",
+                    return_value=(["K::f2(int) [clone .part.0]"], ["K::f2(int)"])):
+                rc, out, _ = run(["--budgets", b, str(d)])
+        self.assertEqual(1, rc, out)
+        self.assertRegex(out, r"UNACCOUNTED\s+K::f2")
+        # its head inlined into all of its callers, the function's only record is that of its clone: accounted
+        with build_dir(su) as d:
+            b = write_budgets(d, "100 K::f2\n")
+            with unittest.mock.patch.object(csu, "object_symbols", return_value=(["K::f2(int) [clone .part.0]"], [])):
+                rc, out, _ = run(["--budgets", b, str(d)])
+        self.assertEqual(0, rc, out)
 
     def test_same_location_records_without_object(self):
         # two records of the same signature at the same location are a .part clone and its head, or a .constprop or

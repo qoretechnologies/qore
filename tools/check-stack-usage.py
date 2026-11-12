@@ -23,12 +23,14 @@ A function that GCC splits into a head and a ".part" clone (partial inlining) ca
 the head calls the clone, and its frame is counted as the head's plus the clone's.  GCC records the clone of a free or
 static member function as "0(<params>)" at the head's own file:line:col, and that of a non-static member function or
 a template instance under the function's own name at the same location, as it does .constprop and .isra clones, which
-are alternatives to the function: such records are added only if nm lists a ".part" clone of the function in the
-object file (or the object file cannot be read, conservatively); see check().
+are alternatives to the function: such records are added only if nm lists a ".part" clone of the function (the same
+name and number of parameters) in the object file (or the object file cannot be read, conservatively).  A .part clone
+that nm lists for a function but no record accounts for (identical code folding merged it with another function's)
+fails the check as UNACCOUNTED, as its frame is unknown; see check().
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
-exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded
-or a function is missing, 2 for a usage or input error
+exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded,
+a function is missing or a .part clone of a function is unaccounted, 2 for a usage or input error
 """
 
 import argparse
@@ -118,7 +120,13 @@ def is_part_clone(signature):
 
 
 def match_params(func, signature):
-    """Returns the parameter list of func in signature, or None if signature is not the frame of func itself.
+    """Returns the parameter list of func in signature, or None; see match_signature()."""
+    m = match_signature(func, signature)
+    return m[0] if m else None
+
+
+def match_signature(func, signature):
+    """Returns (parameter list, qualifiers) of func in signature, or None if signature is not the frame of func itself.
 
     func is a qualified name; it must not be preceded by an identifier character or a scope (so that A::f matches
     neither XA::f nor B::A::f), and may be followed by ABI tags and template arguments (as nm names functions:
@@ -127,7 +135,7 @@ def match_params(func, signature):
     inside func, which GCC names "A::f(...)::<lambda()>", is not func).  A record without parameters (as Clang may
     write it) that names the function exactly has the parameter list ""."""
     if signature.strip() == func:
-        return ""
+        return "", ""
     pattern = r"(?<![A-Za-z0-9_:])" + re.escape(func) + r"(?=[(<\[])"
     for m in re.finditer(pattern, signature):
         i = m.end()
@@ -173,8 +181,28 @@ def match_params(func, signature):
             continue
         rest = re.sub(r"\[(clone|with) [^\]]*\]", "", signature[i:])
         if re.fullmatch(r"(\s*(const|volatile|noexcept|&&|&))*\s*", rest):
-            return " ".join(signature[start:i - 1].split())
+            return " ".join(signature[start:i - 1].split()), " ".join(rest.split())
     return None
+
+
+def split_params(params):
+    """Splits a parameter list at its top-level commas."""
+    rv = []
+    depth = 0
+    cur = ""
+    for c in params:
+        if c in "(<[":
+            depth += 1
+        elif c in ")>]":
+            depth -= 1
+        if c == "," and not depth:
+            rv.append(cur.strip())
+            cur = ""
+        else:
+            cur += c
+    if cur.strip():
+        rv.append(cur.strip())
+    return [] if rv == ["void"] else rv
 
 
 def matches(func, signature):
@@ -183,35 +211,51 @@ def matches(func, signature):
 
 
 def is_part_clone_of(func, signature, part_name):
-    """True if part_name, a ".part" clone that nm names, is a clone of the function that the .su record signature
-    records: the same function with the same parameters; for a template instance, which .su records name by its
-    template parameters ("int f(T) [with T = int]") and nm by its template arguments ("int f<int>(int)"), the same
-    function name only (conservative)."""
-    part_params = match_params(func, part_name)
-    if part_params is None:
+    """True if part_name, a ".part" clone that nm names, may be a clone of the function that the .su record signature
+    records: the same function name, the same number of parameters and the same qualifiers (const, &, &&).  The
+    parameter types are not compared: nm and .su records spell them differently ("char const*" and "const char*", a
+    std::string with its template arguments, typedefs resolved), so an overload with the same number of parameters
+    also counts (conservative); for a template instance, which .su records name by its template parameters
+    ("int f(T) [with T = int]") and nm by its template arguments ("int f<int>(int)"), the name only."""
+    part = match_signature(func, part_name)
+    if part is None:
         return False
     if "[with " in signature:
         return True
-    return part_params == match_params(func, signature)
+    own = match_signature(func, signature)
+    return own is not None and len(split_params(part[0])) == len(split_params(own[0])) and part[1] == own[1]
 
 
-def object_part_clones(su_path, cache):
-    """Returns the names of the ".part" clones defined in the object file of a .su file, from nm, or None if they
-    cannot be read (no object file, as when a build removed it, or no nm)."""
+def object_symbols(su_path, cache):
+    """Returns (".part" clones, other functions) defined in the object file of a .su file, as nm names them, or None
+    if they cannot be read (no object file, as when a build removed it, or no nm)."""
     obj = su_path.with_suffix(".o") if su_path else None
     if obj in cache:
         return cache[obj]
-    names = None
+    rv = None
     if obj and obj.exists() and shutil.which("nm"):
         try:
             out = subprocess.run(["nm", "-C", "--defined-only", str(obj)], stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, universal_newlines=True, check=True).stdout
-            names = [line.split(" ", 2)[2] for line in out.splitlines()
-                if line.count(" ") >= 2 and "[clone .part." in line]
+            parts = []
+            others = []
+            for line in out.splitlines():
+                if line.count(" ") < 2:
+                    continue
+                name = line.split(" ", 2)[2]
+                (parts if "[clone .part." in name else others).append(name)
+            rv = (parts, others)
         except (OSError, subprocess.CalledProcessError):
-            names = None
-    cache[obj] = names
-    return names
+            rv = None
+    cache[obj] = rv
+    return rv
+
+
+def object_part_clones(su_path, cache):
+    """Returns the names of the ".part" clones defined in the object file of a .su file, from nm, or None if they
+    cannot be read; see object_symbols()."""
+    symbols = object_symbols(su_path, cache)
+    return symbols[0] if symbols else None
 
 
 def collect_frames(build_dir):
@@ -230,7 +274,8 @@ def collect_frames(build_dir):
 
 
 def check(budgets, frames):
-    """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None).
+    """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None,
+    unaccounted .part clone or None).
 
     frames are (signature, bytes, path, location) records.  A function split by partial inlining has its head and its
     ".part" clone, which the head calls, on the stack: their frames add.  GCC records the clone in two ways:
@@ -239,8 +284,11 @@ def check(budgets, frames):
     - for a non-static member function or a template instance, under the function's own name at the same location;
       GCC records .constprop and .isra clones that way as well, and they are alternatives to the function, not
       frames on top of it, so two records of the same signature at the same location are added (the two largest)
-      only when nm lists a ".part" clone of that function (the same name and parameters, see is_part_clone_of())
-      in the object file, or when the object file cannot be read (conservative); otherwise the largest counts."""
+      only when nm lists a ".part" clone of that function (see is_part_clone_of())
+      in the object file, or when the object file cannot be read (conservative); otherwise the largest counts.
+    A .part clone that nm lists for a function whose records account for none (identical code folding merged it
+    with the clone of another function, which GCC recorded at that function's location) is reported as unaccounted:
+    its frame cannot be read from the records."""
     zero_parts = {}
     for signature, size, path, location in frames:
         if location and is_part_clone(signature):
@@ -257,6 +305,8 @@ def check(budgets, frames):
                 groups.setdefault((path, location, signature), []).append(size)
         worst = None
         worst_sig = None
+        # whether each group accounts for a .part clone of the function
+        accounted = []
         for (path, location, signature), sizes in groups.items():
             sizes = sorted(sizes, reverse=True)
             total = sizes[0]
@@ -265,17 +315,36 @@ def check(budgets, frames):
             if zero_part:
                 total += zero_part[0]
                 note = " + .part clone %s at %s" % (zero_part[1], location)
+                accounted.append(True)
             elif len(sizes) > 1:
                 part_names = object_part_clones(path, nm_cache)
                 if part_names is None or any(is_part_clone_of(func, signature, n) for n in part_names):
                     total += sizes[1]
+                    accounted.append(True)
                     note = " + .part clone recorded under the same name at %s%s" % (location,
                         "" if part_names is not None else " (assumed: no object file to tell it from a .constprop "
                         "or .isra clone)")
             if worst is None or total > worst:
                 worst = total
                 worst_sig = signature + note
-        results.append((func, budget, worst, worst_sig))
+        # a .part clone that nm lists for the function without a record that accounts for it: identical code folding
+        # merges identical .part clones of several functions into one, and GCC records it once, at the location of
+        # one of them; the frame of the clone cannot then be told from the records of this function
+        # (when nm does not list the function itself, its head was inlined into all of its callers, and its only
+        # record is that of the clone)
+        unaccounted = None
+        if groups and not any(accounted):
+            for (path, location, signature), sizes in groups.items():
+                if "[with " in signature:
+                    continue
+                symbols = object_symbols(path, nm_cache)
+                if not symbols:
+                    continue
+                clones = [n for n in symbols[0] if is_part_clone_of(func, signature, n)]
+                if clones and any(is_part_clone_of(func, signature, n) for n in symbols[1]):
+                    unaccounted = clones[0]
+                    break
+        results.append((func, budget, worst, worst_sig, unaccounted))
     return results
 
 
@@ -352,7 +421,13 @@ def main(argv=None):
         return 2
 
     failed = 0
-    for func, budget, worst, signature in check(budgets, frames):
+    for func, budget, worst, signature, unaccounted in check(budgets, frames):
+        if unaccounted:
+            print("UNACCOUNTED %-52s budget %5d B: nm lists the .part clone %r, which no record of the function "
+                "accounts for (identical code folding merged it with the clone of another function); its frame is "
+                "unknown" % (func, budget, unaccounted))
+            failed += 1
+            continue
         if worst is None:
             print("MISSING  %-55s budget %5d B: no frame found (renamed, or inlined into its callers)" % (func, budget))
             failed += 1
