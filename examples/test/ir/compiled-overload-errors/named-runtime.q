@@ -134,3 +134,18 @@ printf("length bin: %y\n", length(bin: bb));
 printf("length str: %y\n", length(str: bs));
 printf("substr: %y\n", substr(str: bs, start: 1));
 printf("substr len: %y\n", substr(str: bs, start: 0, len: 2));
+
+# a parameter that no argument is bound to does not count toward the match
+string sub h(*int a, *int b) { return "h(*int a, *int b)"; }
+string sub h(*string b, *string a) { return "h(*string b, *string a)"; }
+try {
+    printf("unfilled tie: %s\n", h(a: nv));
+} catch (hash<ExceptionInfo> ex) {
+    printf("unfilled tie: %s\n", ex.err);
+}
+string sub uv(int a) { return "uv(int a)"; }
+string sub uv(*hash<auto> h, int a) { return "uv(*hash<auto> h, int a)"; }
+string sub uv(string s) { return "uv(string s)"; }
+auto ai = 1;
+printf("unfilled positional: %s\n", uv(ai));
+printf("unfilled named: %s\n", uv(a: ai));

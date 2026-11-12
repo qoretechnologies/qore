@@ -262,9 +262,11 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     and take the arguments at the same positions, the first one, as for positional arguments).  If none matches, or
     two variants that take the arguments at other positions match equally well, the call raises
     \c RUNTIME-OVERLOAD-ERROR, whose message gives the names and types of the arguments; arguments whose types are
-    known and that two variants match equally well are rejected at parse time with \c NAMED-CALL-NOT-SUPPORTED.  The arguments are not passed to a variant by position, except to a variant
-    whose parameters only accept no value (type \c nothing), which is given no value however they are named.  The
-    return type of the call is that of the variants that its arguments can be bound to:
+    known and that two variants match equally well are rejected at parse time with \c NAMED-CALL-NOT-SUPPORTED.
+    A parameter that no argument is bound to is given no value (or its default value) and does not count toward the
+    match.  The arguments are not passed to a variant by position, except to a variant whose parameters only accept
+    no value (type \c nothing), which is given no value however they are named.  The return type of the call is that
+    of the variants that its arguments can be bound to:
     @code{.py}
 string sub show(int count, string label) { return sprintf("%s: %d", label, count); }
 string sub show(string label, float count) { return sprintf("%g x %s", count, label); }

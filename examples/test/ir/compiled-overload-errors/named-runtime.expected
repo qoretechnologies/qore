@@ -29,3 +29,6 @@ length bin: 3
 length str: 3
 substr: "bc"
 substr len: "ab"
+unfilled tie: RUNTIME-OVERLOAD-ERROR
+unfilled positional: uv(int a)
+unfilled named: uv(int a)

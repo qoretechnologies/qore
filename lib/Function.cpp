@@ -2838,6 +2838,16 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
     return true;
 }
 
+// true if an argument of a named call is bound to the parameter position
+static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi) {
+    for (size_t p : source_to_param) {
+        if (p == pi) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // true if the signature has a parameter for each of the arguments and each of them only accepts no value
 static bool qore_signature_takes_only_nothing(const AbstractFunctionSignature* sig, size_t nargs) {
     if (!nargs || sig->numParams() < nargs) {
@@ -2857,8 +2867,8 @@ static bool qore_signature_takes_only_nothing(const AbstractFunctionSignature* s
 static int qore_bind_runtime_named_args(const AbstractFunctionSignature* sig, const name_vec_t& names,
         const QoreListNode* args, ReferenceHolder<QoreListNode>& bound_args, std::vector<size_t>& source_to_param) {
     size_t nargs = args ? args->size() : 0;
-    // the call has one name for each argument, also when an argument is NOTHING
-    assert(nargs == names.size());
+    // the call has one name for each argument, also when an argument is NOTHING; a call read from an AOT binary is
+    // not trusted
     if (nargs != names.size()) {
         return -1;
     }
@@ -3646,7 +3656,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
                         break;
                     }
                     // do not count default matches with non-existent arguments
-                    if (pi >= vnargs) {
+                    // a parameter that no named argument is bound to is given no value: its match is not
+                    // counted, as for a parameter after the arguments of a positional call
+                    if (pi >= vnargs || (NAMED && !qore_named_position_filled(positions, pi))) {
                         rc = QTI_IGNORE;
                     }
                 }
