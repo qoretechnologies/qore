@@ -2228,6 +2228,24 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     q_accept_vec_t accept_vec;
     q_return_vec_t return_vec;
 
+    // a return type is exact only if the union returns no other value (qore#5857): with an exact member return
+    // type, QoreTypeInfo::parseReturns() reports the union as returning only that type (QTI_IDENT), and code
+    // specialized for it took a union<int, float> member value as an int; as with the builtin multi-type types (ex:
+    // int|float), the member return types of a union with more than one value type are not exact; the same value
+    // type returned by several members (ex: union<int, *int>) counts once
+    std::vector<const QoreTypeSpec*> value_specs;
+    for (const QoreTypeInfo* ti : key) {
+        for (const auto& r : ti->return_vec) {
+            if (r.spec.getType() == NT_NOTHING) {
+                continue;
+            }
+            if (std::none_of(value_specs.begin(), value_specs.end(),
+                    [&r](const QoreTypeSpec* s) { return *s == r.spec; })) {
+                value_specs.push_back(&r.spec);
+            }
+        }
+    }
+    size_t value_returns = value_specs.size();
     for (const QoreTypeInfo* ti : key) {
         // Add accept types from this member
         for (const auto& a : ti->getAcceptSpecs()) {
@@ -2235,7 +2253,13 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
         }
         // Add return types from this member
         for (const auto& r : ti->return_vec) {
-            return_vec.push_back(r);
+            if (value_returns > 1 && r.exact) {
+                QoreReturnSpec inexact = r;
+                inexact.exact = false;
+                return_vec.push_back(inexact);
+            } else {
+                return_vec.push_back(r);
+            }
         }
     }
 
