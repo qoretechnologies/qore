@@ -15,8 +15,10 @@
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
 # the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
-# .constprop and .isra clones under its name); a function that partial inlining split (a .part clone in the symbol
-# table) fails as SPLIT, see tools/check-stack-usage.py.
+# .constprop and .isra clones under its name), as an overload is assumed not to call another (checked for direct
+# calls: OVERLOAD-CALL).  A function that partial inlining split (a .part clone in the symbol table) fails as SPLIT,
+# one that identical code folding merged into another (only a branch to it) as FOLDED, and one that allocates stack of
+# a size known only at run time (a "dynamic" record) as DYNAMIC; see tools/check-stack-usage.py.
 
 @compiler GNU
 # the major version must match

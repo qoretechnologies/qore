@@ -25,12 +25,16 @@ function that partial inlining split into a head and a ".part" clone, which the 
 stack, and GCC records the clone in ways that cannot be attributed reliably.  So a budgeted function with a .part
 clone in the object file's symbol table (objdump -t; .cold fragments, which share their function's frame, do not
 count) fails the check as SPLIT: an unsplit function's frame is fully in its own record, and a split one is never
-passed.  A SPLIT function needs a review: a budget for its head and part, or code that GCC does not split.  The check
-needs the symbol tables (an error without them, unless --allow-no-symbols is given).
+passed.  A SPLIT function needs a review: a budget for its head and part, or code that GCC does not split.  A function
+that is only a branch to another one (identical code folding merged it) fails as FOLDED, as it runs in the other
+function's frame, and one with a "dynamic" record that is not "bounded" (alloca(), variable-length arrays) as DYNAMIC.
+Overloads of a function are charged the largest of their frames, not the sum: this assumes that an overload does not
+call another, which the check verifies for direct calls (OVERLOAD-CALL; a tail call reuses the frame and is allowed).
+The check needs the object files (an error without them, unless --allow-no-symbols is given).
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
-exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded,
-a function is missing or split by partial inlining, 2 for a usage or input error
+exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded or
+a function is missing, SPLIT, FOLDED, DYNAMIC or has an OVERLOAD-CALL, 2 for a usage or input error
 """
 
 import argparse
@@ -113,6 +117,13 @@ def parse_su_line(line):
     return fields[0], int(fields[1]), ""
 
 
+def su_line_dynamic(line):
+    """True if a .su record is "dynamic" without "bounded": the function allocates stack of a size known only at run
+    time (alloca(), variable-length arrays), which its record does not include"""
+    fields = line.rstrip("\n").split("\t")
+    return len(fields) > 2 and "dynamic" in fields[2].split(",") and "bounded" not in fields[2].split(",")
+
+
 def is_part_clone(signature):
     """True for the record of a ".part" clone made by partial inlining: GCC names it only by a number and its
     parameters ("0(int)"), at the location of the function it was split from."""
@@ -188,20 +199,50 @@ def match_signature(func, signature):
 def matches(func, signature):
     """True if signature is the frame of func itself, also with the template arguments of its scopes (as .su records
     write the members of class templates: "int S<T>::h(int) [with T = int]") ignored; see match_params()."""
+    # most records do not even contain the function's own name
+    if func.rsplit("::", 1)[-1] not in signature:
+        return False
     return match_params(func, signature) is not None or match_params(func, strip_templates(signature)) is not None
 
 
 class Symbol:
-    """A function defined in an object file: its name as objdump -C writes it"""
+    """A function defined in an object file: its name as objdump -C writes it, its section, address and size, and
+    its object file"""
 
-    def __init__(self, name, section=None, address=None, size=None):
+    def __init__(self, name, section=None, address=None, size=None, obj=None):
+        name = re.sub(r"^\.hidden ", "", name)
         self.name = name.replace("(anonymous namespace)", "{anonymous}")
+        self.section = section
+        self.address = address
+        self.size = size
+        self.obj = obj
         # a .cold fragment of a function shares its frame and has no record of its own
         self.is_cold = "[clone .cold" in name
         self.is_part = "[clone .part." in name and not self.is_cold
 
     def __repr__(self):
         return self.name
+
+    def function(self):
+        """Returns the qualified name of the function without template arguments and ABI tags, or None"""
+        if not hasattr(self, "_function"):
+            name = symbol_function(self.name)
+            self._function = strip_templates(name) if name is not None else None
+        return self._function
+
+
+def object_functions(su_path, cache):
+    """Returns the functions of the object file of a .su file by qualified name (see Symbol.function()), or None"""
+    key = ("functions", su_path)
+    if key not in cache:
+        symbols = object_symbols(su_path, cache)
+        rv = None
+        if symbols is not None:
+            rv = {}
+            for sym in symbols:
+                rv.setdefault(sym.function(), []).append(sym)
+        cache[key] = rv
+    return cache[key]
 
 
 def object_symbols(su_path, cache):
@@ -219,11 +260,86 @@ def object_symbols(su_path, cache):
             for line in out.splitlines():
                 m = re.match(r"^([0-9a-fA-F]+) (.{7}) (\S+)\t([0-9a-fA-F]+) +(.*)$", line)
                 if m and "F" in m.group(2):
-                    rv.append(Symbol(m.group(5), m.group(3), int(m.group(1), 16), int(m.group(4), 16)))
+                    rv.append(Symbol(m.group(5), m.group(3), int(m.group(1), 16), int(m.group(4), 16), obj))
         except (OSError, subprocess.CalledProcessError):
             rv = None
     cache[obj] = rv
     return rv
+
+
+# the largest function that can be a wrapper of identical code folding: a branch to the function it was merged into,
+# with an endbr64 (x86_64, 4 bytes, and a jmp of up to 5) or bti (aarch64, 4 bytes, and a b of 4) before it
+WRAPPER_MAX_SIZE = 16
+
+
+def disassemble(sym, cache):
+    """Returns the instructions of a function as a list of (mnemonic, operands, branch target or None), the target
+    being the demangled name of the function a branch or call goes to (from its relocation, or from objdump's
+    "<name>" for one the assembler resolved); or None if the object file cannot be disassembled.  Padding and branch
+    target markers (endbr64 on x86_64, bti and paciasp on aarch64) are left out."""
+    key = ("disassembly", sym.obj, sym.address)
+    if key in cache:
+        return cache[key]
+    rv = None
+    if sym.obj is not None and sym.size and shutil.which("objdump"):
+        try:
+            out = subprocess.run(["objdump", "-dr", "-C", "--no-show-raw-insn", "-j", sym.section,
+                "--start-address=%d" % sym.address, "--stop-address=%d" % (sym.address + sym.size), str(sym.obj)],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True, check=True).stdout
+            rv = []
+            for line in out.splitlines():
+                m = re.match(r"^\s*[0-9a-f]+:\s+R_\S+\s+(.*?)(-0x[0-9a-f]+)?$", line)
+                if m:
+                    # the relocation of the instruction before it names its target
+                    if rv:
+                        rv[-1] = (rv[-1][0], rv[-1][1], m.group(1).replace("(anonymous namespace)", "{anonymous}"))
+                    continue
+                m = re.match(r"^\s*[0-9a-f]+:\s+([a-z][a-z0-9.]*)\s*(.*)$", line)
+                if not m or m.group(1) in ("endbr64", "endbr32", "bti", "paciasp", "hint") \
+                        or m.group(1).startswith("nop"):
+                    continue
+                target = re.search(r"<(.*?)(\+0x[0-9a-f]+)?>\s*$", m.group(2))
+                rv.append((m.group(1), m.group(2),
+                    target.group(1).replace("(anonymous namespace)", "{anonymous}") if target else None))
+        except (OSError, subprocess.CalledProcessError):
+            rv = None
+    cache[key] = rv
+    return rv
+
+
+# x86_64 and aarch64 mnemonics of an unconditional direct branch and of a call
+BRANCHES = ("jmp", "jmpq", "b")
+CALLS = ("call", "callq", "bl")
+
+# the largest function that can be a wrapper of identical code folding: a branch to the function it was merged into,
+# with an endbr64 (x86_64, 4 bytes, and a jmp of up to 5) or bti (aarch64, 4 bytes, and a b of 4) before it
+WRAPPER_MAX_SIZE = 16
+
+
+def wrapper_target(sym, cache):
+    """Returns the function that sym only branches to (a wrapper that identical code folding left of a function
+    merged into an identical one: "endbr64; jmp f" on x86_64, "bti c; b f" on aarch64), or None"""
+    if sym.size is None or sym.size > WRAPPER_MAX_SIZE:
+        return None
+    insns = disassemble(sym, cache)
+    if not insns or len(insns) != 1 or insns[0][0] not in BRANCHES:
+        return None
+    return insns[0][2] or insns[0][1]
+
+
+def overload_call(func, symbols, cache):
+    """Returns (caller, callee) if one overload of func calls another (not as a tail call, which reuses the caller's
+    frame): both frames are then on the stack, while the check charges only the larger; or None.  symbols are the
+    functions of func in an object file."""
+    overloads = [sym for sym in symbols if not sym.is_cold and "[clone " not in sym.name]
+    if len(overloads) < 2:
+        return None
+    names = set(sym.name for sym in overloads)
+    for sym in overloads:
+        for mnemonic, _, target in disassemble(sym, cache) or ():
+            if mnemonic in CALLS and target in names and target != sym.name:
+                return sym.name, target
+    return None
 
 
 def symbol_function(name):
@@ -277,7 +393,7 @@ def symbol_function(name):
 
 
 def collect_frames(build_dir):
-    """Returns a list of (signature, bytes, .su path, location) for every frame record under build_dir."""
+    """Returns a list of (signature, bytes, .su path, location, dynamic) for every frame record under build_dir."""
     frames = []
     for path in sorted(Path(build_dir).rglob("*.su")):
         try:
@@ -287,7 +403,7 @@ def collect_frames(build_dir):
         for line in text.splitlines():
             rec = parse_su_line(line)
             if rec:
-                frames.append((rec[0], rec[1], path, rec[2]))
+                frames.append((rec[0], rec[1], path, rec[2], su_line_dynamic(line)))
     return frames
 
 
@@ -298,7 +414,7 @@ def strip_templates(name):
     depth = 0
     for i, c in enumerate(name):
         # "operator<" and "operator<<" are names, not template arguments
-        if c == "<" and not re.search(r"operator\s*<*$", name[:i]):
+        if c == "<" and not re.search(r"operator\s*<*$", name[max(0, i - 16):i]):
             depth += 1
         elif c == ">" and depth:
             depth -= 1
@@ -311,38 +427,62 @@ def split_function(func, symbol):
     """True if symbol, a function of the symbol table (objdump -C), is a .part clone of func (partial inlining), in
     any overload or template instance (template arguments of every scope and ABI tags are ignored); .cold fragments
     are not clones of their own"""
-    if not symbol.is_part:
-        return False
-    name = symbol_function(symbol.name)
-    return name is not None and strip_templates(name) == func
+    return symbol.is_part and symbol.function() == func
 
 
 def check(budgets, frames):
     """Checks frames against budgets: returns a list of (func, budget, frame or None, signature or None, .part clone
-    or None).
+    or None, (status, detail) or None).
 
-    The frame of a budgeted function is the largest of its records (all overloads; GCC records its .constprop and
-    .isra clones, which are alternatives to it, under its own name).  A function that partial inlining split into a
-    head and a ".part" clone, which the head calls, has both frames on the stack, and GCC records the clone in ways
-    that cannot be attributed reliably (as "0(...)", under the function's name, or once for several functions whose
-    clones identical code folding merged): if the object file's symbol table (objdump -t) has a .part clone of the
-    function (not a .cold fragment), the clone is returned and the function fails the check as SPLIT."""
+    frames are (signature, bytes, path, location[, dynamic]) records.  The frame of a budgeted function is the largest
+    of its records (all overloads; GCC records its .constprop and .isra clones, which are alternatives to it, under its
+    own name).  It fails the check
+    - as SPLIT if the object file's symbol table (objdump -t) has a .part clone of the function (partial inlining; not
+      a .cold fragment): its head and clone are both on the stack, and GCC records the clone in ways that cannot be
+      attributed reliably (as "0(...)", under the function's name, or once for several functions whose clones
+      identical code folding merged); the clone is returned;
+    - as FOLDED if the function is only a branch to another function (identical code folding merged it into an
+      identical one, and it runs in that function's frame, which its own record does not show);
+    - as DYNAMIC if one of its records is "dynamic" but not "bounded" (stack of a size known only at run time, which
+      the record does not include).
+    - as OVERLOAD-CALL if one of its overloads calls another (other than as a tail call): both frames are on the
+      stack, while the function is charged only the larger.
+    Overloads are charged the largest frame, not the sum, on the assumption that an overload does not call another
+    one; OVERLOAD-CALL finds direct calls, not a call through another function (which a recursion of interpreted
+    code does not make between overloads of the per-call path)."""
     sym_cache = {}
-    paths = sorted(set(path for _, _, path, _ in frames), key=str)
+    paths = sorted(set(f[2] for f in frames), key=str)
     results = []
     for func, budget, _ in budgets:
         worst = None
         worst_sig = None
         split = None
-        for signature, size, path, location in frames:
-            if not is_part_clone(signature) and matches(func, signature) and (worst is None or size > worst):
+        problem = None
+        for f in frames:
+            signature, size, path, location = f[:4]
+            if is_part_clone(signature) or not matches(func, signature):
+                continue
+            if len(f) > 4 and f[4] and not problem:
+                problem = ("DYNAMIC", "%s allocates stack of a size known only at run time (its record %r is "
+                    "\"dynamic\" but not \"bounded\"), which the record does not include" % (func, signature))
+            if worst is None or size > worst:
                 worst = size
                 worst_sig = signature
         for path in paths:
-            for sym in object_symbols(path, sym_cache) or ():
+            symbols = (object_functions(path, sym_cache) or {}).get(func, ())
+            for sym in symbols:
                 if split_function(func, sym):
                     split = split or sym.name
-        results.append((func, budget, worst, worst_sig, split))
+                elif not problem and not sym.is_cold and "[clone " not in sym.name:
+                    target = wrapper_target(sym, sym_cache)
+                    if target:
+                        problem = ("FOLDED", "%s was merged by identical code folding into %s; budget %s or make the "
+                            "bodies differ" % (func, target, target))
+            call = None if problem else overload_call(func, symbols, sym_cache)
+            if call:
+                problem = ("OVERLOAD-CALL", "%s calls %s: both frames are on the stack, while the budget is checked "
+                    "against the larger; budget the sum or avoid the call" % call)
+        results.append((func, budget, worst, worst_sig, split, problem))
     return results
 
 
@@ -350,8 +490,7 @@ def missing_symbols(budgets, frames):
     """Returns the .su files with records of budgeted functions whose object file's symbol table cannot be read (no
     object file, or no objdump)"""
     cache = {}
-    paths = set(path for signature, _, path, _ in frames
-        if any(matches(func, signature) for func, _, _ in budgets))
+    paths = set(f[2] for f in frames if any(matches(func, f[0]) for func, _, _ in budgets))
     return sorted(str(path) for path in paths if object_symbols(path, cache) is None)
 
 
@@ -453,7 +592,11 @@ def main(argv=None):
         return 2
 
     failed = 0
-    for func, budget, worst, signature, split in check(budgets, frames):
+    for func, budget, worst, signature, split, problem in check(budgets, frames):
+        if problem:
+            print("%-8s %-55s budget %5d B: %s" % (problem[0], func, budget, problem[1]))
+            failed += 1
+            continue
         if split:
             print("SPLIT    %-55s budget %5d B: %s was split by partial inlining (%s); its frame can't be checked "
                 "from .su: review it and add a budget for head+part, or prevent the split (e.g. "
@@ -471,9 +614,10 @@ def main(argv=None):
         if args.verbose:
             print("         %s" % signature)
     if failed:
-        print("stack usage: FAILED: %d function(s) over budget, missing or split; a frame on the per-call path of interpreted "
-            "code costs its size at every level of a recursion: shrink it, or if the growth is justified, raise the "
-            "budget in %s and explain why in the commit" % (failed, args.budgets))
+        print("stack usage: FAILED: %d function(s) over budget, missing, split, folded, dynamic or calling an "
+            "overload; a frame on the per-call path of interpreted code costs its size at every level of a recursion: "
+            "shrink it, or if the growth is justified, raise the budget in %s and explain why in the commit"
+            % (failed, args.budgets))
         return 1
     print("stack usage: OK: %d function(s) within budget" % len(budgets))
     return 0

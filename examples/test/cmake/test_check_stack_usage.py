@@ -20,6 +20,7 @@ import contextlib
 import importlib.util
 import io
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -86,7 +87,7 @@ def frames_of(su_text, path=None):
     for line in su_text.splitlines():
         rec = csu.parse_su_line(line)
         if rec:
-            frames.append((rec[0], rec[1], path, rec[2]))
+            frames.append((rec[0], rec[1], path, rec[2], csu.su_line_dynamic(line)))
     return frames
 
 
@@ -435,12 +436,145 @@ class CheckTest(unittest.TestCase):
                 results = {r[0]: r for r in csu.check([(f, 1, 1) for f in funcs], csu.collect_frames(tmp))}
             for func, value in funcs.items():
                 label = "%s: %s: %r" % (name, func, results[func])
+                self.assertIsNone(results[func][5], label)
                 if value == split:
                     self.assertIsNotNone(results[func][4], label)
                     self.assertIn("[clone .part.", results[func][4], label)
                 else:
                     self.assertIsNone(results[func][4], label)
                     self.assertEqual(value, results[func][2], label)
+
+
+# a body that GCC compiles to the same code wherever it is used, so that identical code folding merges its copies
+ICF_BODY = """
+    char buf[1000]; memset(buf, x, sizeof buf); use(buf); use(buf + 1); use(buf + 9);
+    for (int i = 0; i < x; ++i) { char b2[300]; memset(b2, i, sizeof b2); use(b2); use(b2 + 1); }
+    use(buf + 4); use(buf + 5); return buf[9];
+"""
+
+# a member of a class merged into an identical one (the wrapper is "endbr64; jmp A::a(int)"), static functions whose
+# addresses are taken (also merged, as wrappers, not aliases), and one with different code (not merged)
+FOLDED_CPP = """
+#include <cstring>
+extern void use(char*);
+struct A { static int a(int x); };
+struct B { static int b(int x); };
+int A::a(int x) {%(body)s}
+int B::b(int x) {%(body)s}
+static int sa(int x) {%(body)s}
+static int sb(int x) {%(body)s}
+int (*pa)(int) = sa;
+int (*pb)(int) = sb;
+int other(int x) { char buf[100]; memset(buf, x, sizeof buf); use(buf); return buf[x]; }
+""" % {"body": ICF_BODY}
+
+# variable-length arrays and alloca(): "dynamic" records; a VLA with a known bound: "dynamic,bounded"
+DYNAMIC_CPP = """
+#include <cstring>
+extern void use(char*);
+int vla(int x) { char big[x * 100]; memset(big, x, x * 100); use(big); return big[3]; }
+int dyn_alloca(int x) { char* p = (char*)__builtin_alloca(x); memset(p, x, x); use(p); return p[3]; }
+int fixed(int x) { char buf[100]; memset(buf, x, sizeof buf); use(buf); return buf[3]; }
+"""
+
+# overloads: K::f(int) calls K::f(double) and uses the result (both frames on the stack); K::g(int) only branches to
+# K::g(double) (a tail call, which reuses the frame)
+OVERLOAD_CPP = """
+#include <cstring>
+extern void use(char*);
+struct K {
+    static int f(int x);
+    static int f(double x);
+    static int g(int x);
+    static int g(double x);
+};
+__attribute__((noinline)) int K::f(double x) { char buf[500]; memset(buf, (int)x, sizeof buf); use(buf);
+    return buf[3]; }
+int K::f(int x) { char buf[600]; memset(buf, x, sizeof buf); use(buf); int r = f((double)x); use(buf + r);
+    return buf[r] + r; }
+__attribute__((noinline)) int K::g(double x) { char buf[500]; memset(buf, (int)x + 1, sizeof buf); use(buf);
+    return buf[4]; }
+int K::g(int x) { return g((double)(x + 1)); }
+"""
+
+
+@unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "needs g++ and objdump")
+class ObjectCodeTest(unittest.TestCase):
+    """Functions compiled with g++ -O3 whose records do not show their stack use"""
+
+    def compile(self, tmp, source):
+        (tmp / "t.cpp").write_text(source)
+        subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "t.cpp", "-o", "t.cpp.o"], cwd=str(tmp), check=True)
+
+    def check(self, source, funcs):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.compile(tmp, source)
+            return {r[0]: r for r in csu.check([(f, 100000, 1) for f in funcs], csu.collect_frames(tmp))}
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the wrapper of identical code folding is that of "
+        "x86_64 (endbr64; jmp)")
+    def test_folded(self):
+        results = self.check(FOLDED_CPP, ["A::a", "B::b", "sa", "sb", "other"])
+        # the record of a merged function is that of its wrapper (a few bytes), not of the code it runs
+        self.assertLess(results["B::b"][2], 64)
+        self.assertEqual(("FOLDED", "B::b was merged by identical code folding into A::a(int); budget A::a(int) or "
+            "make the bodies differ"), results["B::b"][5])
+        # static functions whose addresses are taken: wrappers of the same function
+        for func in ("sa", "sb"):
+            self.assertEqual("FOLDED", results[func][5][0], results[func])
+            self.assertIn("%s was merged by identical code folding into A::a(int)" % func, results[func][5][1])
+        for func in ("A::a", "other"):
+            self.assertIsNone(results[func][5], results[func])
+        # the status is printed, and the check fails
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.compile(tmp, FOLDED_CPP)
+            (tmp / "stack-usage-config.txt").write_text("compiler=GNU\nbuild-type=Release\ntarget=x86_64-linux-gnu\n")
+            budgets = tmp / "b.txt"
+            budgets.write_text("@compiler GNU\n@build-type Release\n@target x86_64-linux-gnu\n100000 A::a\n64 B::b\n")
+            code, out, err = run(["--budgets", str(budgets), str(tmp)], allow_no_symbols=False)
+            self.assertEqual(1, code, out + err)
+            self.assertRegex(out, r"FOLDED +B::b +budget +64 B: B::b was merged by identical code folding into "
+                r"A::a\(int\); budget A::a\(int\) or make the bodies differ")
+            self.assertRegex(out, r"OK +A::a ")
+
+    def test_dynamic(self):
+        results = self.check(DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"])
+        for func in ("vla", "dyn_alloca"):
+            self.assertEqual("DYNAMIC", results[func][5][0], results[func])
+            self.assertIn("known only at run time", results[func][5][1])
+        self.assertIsNone(results["fixed"][5], results["fixed"])
+
+    def test_dynamic_records(self):
+        # "dynamic,bounded" includes the allocation; "dynamic" does not; a function with any "dynamic" record fails
+        su = ("/src/lib/a.cpp:1:1:int f(int)\t32\tdynamic\n/src/lib/a.cpp:2:1:int g(int)\t96\tdynamic,bounded\n"
+            "/src/lib/a.cpp:3:1:int h(int)\t96\tstatic\n/src/lib/a.cpp:4:1:int h(double)\t16\tdynamic\n")
+        self.assertTrue(csu.su_line_dynamic(su.splitlines()[0]))
+        self.assertFalse(csu.su_line_dynamic(su.splitlines()[1]))
+        self.assertFalse(csu.su_line_dynamic(su.splitlines()[2]))
+        self.assertFalse(csu.su_line_dynamic("a.cpp:1:1:int f(int)\t32"))
+        results = {r[0]: r for r in csu.check([("f", 100, 1), ("g", 100, 1), ("h", 100, 1)], frames_of(su))}
+        self.assertEqual("DYNAMIC", results["f"][5][0])
+        self.assertIsNone(results["g"][5])
+        self.assertEqual(96, results["g"][2])
+        self.assertEqual("DYNAMIC", results["h"][5][0])
+        self.assertIn("int h(double)", results["h"][5][1])
+        with build_dir(su) as tmp:
+            budgets = write_budgets(tmp, "100 f\n100 g\n100 h\n")
+            code, out, err = run(["--budgets", str(budgets), str(tmp)])
+            self.assertEqual(1, code, out + err)
+            self.assertRegex(out, r"DYNAMIC +f ")
+            self.assertRegex(out, r"OK +g ")
+            self.assertRegex(out, r"DYNAMIC +h ")
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64", "aarch64", "arm64"), "x86_64 and aarch64 calls")
+    def test_overload_call(self):
+        results = self.check(OVERLOAD_CPP, ["K::f", "K::g"])
+        self.assertEqual(("OVERLOAD-CALL", "K::f(int) calls K::f(double): both frames are on the stack, while the "
+            "budget is checked against the larger; budget the sum or avoid the call"), results["K::f"][5])
+        # a tail call
+        self.assertIsNone(results["K::g"][5], results["K::g"])
 
 
 if __name__ == "__main__":
