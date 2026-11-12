@@ -33,6 +33,12 @@ t3 on_error T3
 dtor t3
 t4 on_success
 dtor t4
+t5 inner on_exit
+t5 outer on_exit
+t5 outer on_success
+t6 on_exit1
+t6 on_exit2
+t6 on_error T6
 done
 ";
 

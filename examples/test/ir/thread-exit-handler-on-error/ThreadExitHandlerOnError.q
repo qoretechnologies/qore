@@ -47,7 +47,29 @@ sub t4() {
     }
     printf("t4 not reached\n");
 }
-foreach code f in ((\t1(), \t2(), \t3(), \t4())) {
+# t5: nested blocks: the inner block's on_exit raises thread_exit; neither block's on_error runs
+sub t5() {
+    if (True) {
+        on_error { printf("t5 outer on_error\n"); }
+        on_success { printf("t5 outer on_success\n"); }
+        on_exit { printf("t5 outer on_exit\n"); }
+        if (True) {
+            on_error { printf("t5 inner on_error\n"); }
+            on_exit { printf("t5 inner on_exit\n"); thread_exit; }
+        }
+        printf("t5 after inner\n");
+    }
+}
+# t6: a thread_exit, then an exception from another handler: on_error runs for the exception
+sub t6() {
+    if (True) {
+        on_error { printf("t6 on_error %s\n", $1.err); }
+        on_success { printf("t6 on_success\n"); }
+        on_exit { printf("t6 on_exit2\n"); throw "T6"; }
+        on_exit { printf("t6 on_exit1\n"); thread_exit; }
+    }
+}
+foreach code f in ((\t1(), \t2(), \t3(), \t4(), \t5(), \t6())) {
     Counter c(1);
     background sub () {
         on_exit c.dec();
