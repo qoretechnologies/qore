@@ -447,7 +447,10 @@ public class AwsRestClientBase {
     #! Performs an AWS STS AssumeRole call and returns temporary credentials
     /** Builds a one-shot @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" bound to the STS service with
         the supplied base credentials, posts the AssumeRole action, parses
-        the XML response, and returns the temporary credentials in a hash.
+        the XML response with @ref AwsRestClientBase::parseAssumeRoleResponse() "parseAssumeRoleResponse()", and
+        returns the temporary credentials in a hash.  No XML module is needed: without one, the client cannot
+        deserialize the \c text/xml response and gives the body as it was received, which
+        @ref AwsRestClientBase::parseAssumeRoleResponse() "parseAssumeRoleResponse()" reads.
         Auto-refresh is the caller's responsibility — credentials carry an
         \c expires date so callers can re-call when within a safety window.
 
@@ -503,6 +506,8 @@ public class AwsRestClientBase {
         # Use a one-shot client bound to the STS service that form-encodes the
         # hash body for the STS Query API; aws_role_arn is not passed, so the
         # client does not recurse into another AssumeRole call.
+        # STS answers with text/xml, which RestClient deserializes only with the xml module; without it the body is
+        # returned as received (allow_any_response), and parseAssumeRoleResponse() reads either form
         hash<auto> sts_opts = {
             "url": url,
             "aws_keyid": opts.aws_keyid,
@@ -510,6 +515,7 @@ public class AwsRestClientBase {
             "aws_region": region,
             "aws_service": "sts",
             "data": "url",
+            "allow_any_response": True,
         };
         if (opts.aws_token.val()) {
             sts_opts.aws_token = opts.aws_token;
@@ -527,10 +533,9 @@ public class AwsRestClientBase {
     }
 
     #! Parses an STS AssumeRole response body
-    /** Accepts either a string/binary XML body (e.g. captured from a test
-        fixture) or a hash already deserialized by RestClient's XML parser
-        when the response Content-Type is \c text/xml.  No external XML
-        module dependency is required.
+    /** Accepts either a string/binary XML body (as received when the xml module is not available, or captured from a
+        test fixture) or a hash already deserialized by RestClient's XML parser when the response Content-Type is
+        \c text/xml and the xml module is available.  No external XML module dependency is required.
 
         @param raw the response body (hash, binary, or string)
 

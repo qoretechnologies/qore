@@ -90,6 +90,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("env-var credential fallback", \envVarCredentialTest());
         addTestCase("STS XML response parse", \stsParseTest());
         addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
+        addTestCase("STS AssumeRole without the xml module", \stsAssumeRoleWithoutXmlTest());
         addTestCase("IMDS credentials body parse", \imdsParseTest());
         addTestCase("credential failures do not disclose values", \credentialPrivacyTest());
         addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
@@ -297,11 +298,50 @@ class AwsTest inherits QUnit::Test {
         });
     }
 
+    #! AssumeRole needs no xml module (qore#5833)
+    /** A child process (assume-role-without-xml.q) blacklists the xml module before it loads AwsRestClient, so
+        RestClient cannot deserialize the \c text/xml response of STS there, as on a system without the module
+    */
+    stsAssumeRoleWithoutXmlTest() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeStsHandler sts_handler();
+        sts_http.setDefaultHandler("sts", sts_handler);
+        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        on_exit delete sts_http;
+
+        string script = get_script_dir() + "/assume-role-without-xml.q";
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        string env = sprintf("QORE_MODULE_DIR=%s", shellQuote(qlib + (module_dir ? ":" + module_dir : "")));
+        string cmd = sprintf("%s %s %s %s 2>&1", env, shellQuote(qore), shellQuote(script),
+            shellQuote("http://localhost:" + sts_port));
+
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        # the child does not have the xml module, and gets the temporary credentials
+        assertRegex("(?m)^xml=False$", out, out);
+        assertRegex("(?m)^keyid=FAKE-ASIA-KEY secret=fake-secret-456 token=fake-session-token-xyz expires=2099-12-31$",
+            out, out);
+        assertEq("AssumeRole", sts_handler.params.Action);
+
+        # an error response is reported as such without the xml module too
+        sts_handler.status = 403;
+        on_exit sts_handler.status = 200;
+        out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        assertRegex("(?m)^error=AWSRESTCLIENT-STS-ERROR$", out, out);
+    }
+
+    #! Returns the string quoted for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
     #! End-to-end: AssumeRole against a fake STS HTTP endpoint, then sign with the temp creds
     stsAssumeRoleE2ETest() {
-%ifdef NoXml
-        testSkip("no xml module: the response is XML");
-%endif
         # spin up a fake STS endpoint that returns canned credentials
         Logger logger("test", LoggerLevel::getLevelInfo());
         HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
