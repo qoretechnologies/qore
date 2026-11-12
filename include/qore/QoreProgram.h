@@ -473,15 +473,22 @@ public:
     //! returns true if the given function exists as a user function, false if not
     DLLEXPORT bool existsFunction(const char* name);
 
-    //! dereferences the object and deletes it if the reference count reaches zero, without clearing it first
-    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero
+    //! dereferences the object without clearing it; its last reference releases the Program's own dependency reference
+    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero, and
+        it is destroyed once nothing depends on it any more (see depRef()).  Clearing a Program
+        (waitForTerminationAndDeref(), deref(ExceptionSink*)) deletes its code, so that only what outlives it keeps it
+        allocated (closures, call references, imported functions and objects held elsewhere, for example); the code of
+        a Program that was never cleared keeps it allocated
 
-        @since %Qore 3.0 the Program leaves the registry with its last reference
+        @since %Qore 3.0 the Program leaves the registry with its last reference, and is destroyed with its last
+        dependency
     */
     DLLEXPORT virtual void deref();
 
-    //! dereferences the object and deletes it if the reference count reaches zero
-    /** do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
+    //! dereferences the object; its last reference clears it (deletes its code) and releases its dependency reference
+    /** the Program is destroyed once nothing depends on it any more (see deref())
+
+        do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @see QoreProgram::waitForTerminationAndDeref()
     */
@@ -510,7 +517,7 @@ public:
     //! this call blocks until the program's last thread terminates
     DLLEXPORT void waitForTermination();
 
-    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref()
+    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref(ExceptionSink*)
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */

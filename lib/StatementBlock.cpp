@@ -776,6 +776,16 @@ TopLevelStatementBlock::~TopLevelStatementBlock() {
     delete cached_toplevel_ir;
 }
 
+void TopLevelStatementBlock::delCompiledCode() {
+    // the entry points into the code freed here are cleared as well
+    cached_toplevel_jit_fn = nullptr;
+    cached_toplevel_aot_fn = nullptr;
+    delete cached_toplevel_aot_ctx;
+    cached_toplevel_aot_ctx = nullptr;
+    delete cached_toplevel_ir;
+    cached_toplevel_ir = nullptr;
+}
+
 void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     // Copy LocalVar* pointers from the AOT context to the statement block's LVList
     // This ensures pointer consistency between AOT-compiled code and runtime

@@ -252,6 +252,15 @@ public:
 
     DLLLOCAL virtual ~TopLevelStatementBlock();
 
+    //! Frees the code compiled from the top-level statements (IR, AOT context) when the Program's code is deleted
+    /** The IR of the top-level code refers to the closures that the code creates (QoreClosureParseNode), whose
+        variants keep the Program allocated while they live (UserVariantBase::setProgram()): freeing it only when the
+        Program is destroyed would keep both forever (qore#5822).  Called by qore_program_private::del() once no thread
+        runs the Program's code and its background compiles are drained (QoreJIT::waitForBgCompileQueue()), as a
+        background compile can lower the closures' code.
+    */
+    DLLLOCAL void delCompiledCode();
+
     using StatementBlock::parseInit;
     DLLLOCAL int parseInit();
 

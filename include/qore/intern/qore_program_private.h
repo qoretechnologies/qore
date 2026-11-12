@@ -1656,6 +1656,11 @@ public:
     //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
     DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
 
+#ifdef DEBUG
+    //! For tests: the number of Program objects that exist (created and not yet destroyed)
+    DLLLOCAL static size_t dbgGetLiveProgramCount();
+#endif
+
     //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
     /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
         fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,

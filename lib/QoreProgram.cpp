@@ -441,6 +441,13 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+#ifdef DEBUG
+size_t qore_program_private::dbgGetLiveProgramCount() {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    return qore_program_set.size();
+}
+#endif
+
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
@@ -3092,6 +3099,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // delete all root code
     // method call can be repeated
     sb.del();
+    // and the code compiled from it, which refers to the closures that it creates (qore#5822)
+    sb.delCompiledCode();
 
     // clear expressions
     for (auto& i : exp_set) {
@@ -3639,7 +3648,11 @@ void QoreProgram::deref() {
     printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(),
         reference_count() - 1);
     if (priv->derefUnregister()) {
-        delete this;
+        // the Program's own dependency reference is released, as clear() does, so that the Program is destroyed once
+        // nothing refers to it (the user variants of its code, for example; qore#5822); its code is not deleted here,
+        // so a Program that was never cleared stays allocated with its code (its owner is expected to clear it first
+        // with waitForTerminationAndDeref())
+        priv->depDeref();
     }
 }
 

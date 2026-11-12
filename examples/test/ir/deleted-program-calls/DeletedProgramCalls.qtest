@@ -105,8 +105,9 @@ class DeletedProgramCallsTest inherits QUnit::Test {
         checkDebugging();
         string exp = ast();
         foreach string mode in (("ir", "jit", "tiered")) {
-            assertEq(exp, backquote(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s 2>&1",
-                env, qore_bin, mode, script)), mode + " with background compiles");
+            string cmd = sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s 2>&1", env, qore_bin, mode, script);
+            assertEq(exp, backquote(cmd), mode + " with background compiles");
         }
     }
 
