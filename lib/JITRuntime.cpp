@@ -12328,6 +12328,9 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         return toBits(QoreValue());
     }
 
+    // the closure's code runs with the type arguments of the code that created it (qore#5733)
+    QoreClosureTypeContextHelper type_context(cb);
+
     // Push captured vars onto the cvstack selected by the closure's program context.
     CVecInstantiator cvi(cb ? cb->getCvec() : nullptr, xsink);
 
@@ -12377,7 +12380,11 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     if (!use_direct_params) {
         // Standard path: push params to TLS
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        // the receiver type of a generic class that created the closure binds the type parameters of the class in its
+        // parameter types (qore#5733)
+        const QoreClosureTypeContext* closure_type_context = cb ? cb->getTypeContext() : nullptr;
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink,
+                closure_type_context ? closure_type_context->receiver_type_info : nullptr) < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }

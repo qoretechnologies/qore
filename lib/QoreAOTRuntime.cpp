@@ -3607,6 +3607,21 @@ using AOTClosureRuntimeBindingMap =
     @param name the function name (for debug output)
     @return heap-allocated QoreAOTContext, or nullptr on failure
 */
+static thread_local const UserSignature* qore_aot_type_param_owner = nullptr;
+
+const UserSignature* qore_aot_get_type_param_owner() {
+    return qore_aot_type_param_owner;
+}
+
+QoreAOTTypeParamOwnerHelper::QoreAOTTypeParamOwnerHelper(const UserSignature* owner)
+        : old_owner(qore_aot_type_param_owner) {
+    qore_aot_type_param_owner = owner;
+}
+
+QoreAOTTypeParamOwnerHelper::~QoreAOTTypeParamOwnerHelper() {
+    qore_aot_type_param_owner = old_owner;
+}
+
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -3621,6 +3636,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         const std::vector<LocalVar*>* direct_local_slots = nullptr,
         AOTClosureRuntimeBindingMap* closure_bindings = nullptr,
         QoreProgram* local_owner_pgm = nullptr) {
+    // the closures read in the context name the type parameters of the function (qore#5733)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -5858,18 +5875,23 @@ static QoreAOTContext* buildContextFromSlotMap(
                     native_body_key = reader.readStringRef(ptr);
                 }
 
-                bool is_lambda = false, is_in_method = false;
+                bool is_lambda = false, is_in_method = false, closure_needs_type_context = false;
                 if (flags_str) {
                     is_lambda = (flags_str[0] == '1');
                     is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+                    closure_needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
                 }
 
                 // Read return type
                 const char* ret_type_path = reader.readStringRef(ptr);
                 std::string type_error;
                 QoreAOTTypeResolver type_resolver(pgm);
+                // the closure's types name the type parameters of the function that creates it (qore#5733)
+                const UserSignature* closure_type_param_owner = uvb
+                    ? uvb->getUserSignature()->getTypeParamOwner() : nullptr;
                 const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
-                    ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+                    ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner)
+                    : nullptr;
 
                 // Read params
                 uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ptr);
@@ -5881,7 +5903,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     param_names[p] = pname ? pname : "";
                     const char* ptype = reader.readStringRef(ptr);
                     param_types[p] = (ptype && *ptype)
-                        ? type_resolver.resolve(ptype, type_error) : nullptr;
+                        ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
                     if (has_default) {
                         std::string val_error;
@@ -5966,6 +5988,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
                 UserSignature* closure_sig = closure_variant->getUserSignature();
+                // the closure names the type parameters of the function that creates it (qore#5733)
+                closure_sig->enclosing_signature = closure_type_param_owner;
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
@@ -6216,6 +6240,7 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+                closure_node->setNeedsTypeContext(closure_needs_type_context);
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }

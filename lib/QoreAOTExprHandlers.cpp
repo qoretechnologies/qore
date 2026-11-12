@@ -1353,18 +1353,21 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
 
-    bool is_lambda = false, is_in_method = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+        needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
     }
 
     // Read return type
     const char* ret_type_path = ctx.reader.readStringRef(ctx.ptr);
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
+    // the closure's types name the type parameters of the function whose context is being built (qore#5733)
+    const UserSignature* closure_type_param_owner = qore_aot_get_type_param_owner();
     const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
-        ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+        ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner) : nullptr;
 
     // Read params
     uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
@@ -1376,7 +1379,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         param_names[p] = pname ? pname : "";
         const char* ptype = ctx.reader.readStringRef(ctx.ptr);
         param_types[p] = (ptype && *ptype)
-            ? type_resolver.resolve(ptype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
             std::string val_error;
@@ -1433,6 +1436,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     auto* closure_variant = static_cast<UserClosureVariant*>(
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
     UserSignature* closure_sig = closure_variant->getUserSignature();
+    closure_sig->enclosing_signature = closure_type_param_owner;
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
@@ -1611,6 +1615,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    closure_node->setNeedsTypeContext(needs_type_context);
     return QoreValue(closure_node);
 }
 

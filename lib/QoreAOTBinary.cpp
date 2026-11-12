@@ -6243,7 +6243,8 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveForSignature(const char* path, std::string& error,
         const UserSignature* signature) {
     const UserSignature* old_signature = signature_type_param_owner;
-    signature_type_param_owner = signature;
+    // the type parameters that a closure names are those of the code that it is in (qore#5733)
+    signature_type_param_owner = signature ? signature->getTypeParamOwner() : nullptr;
     const QoreTypeInfo* rv = resolve(path, error);
     signature_type_param_owner = old_signature;
     return rv;
@@ -13411,9 +13412,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE));
 
-                // Write flags: "lambda,in_method" (matches write_slot_CLOSURE_CREATE ref1 format)
+                // Write flags: "lambda,in_method,type_context" (matches write_slot_CLOSURE_CREATE ref1 format)
                 std::string flags = std::string(closure->isLambda() ? "1" : "0") + ","
-                    + (closure->isInMethod() ? "1" : "0");
+                    + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
                 writer.writeStringRef(flags.c_str());
 
                 // Write class type path (ref2)
@@ -15983,7 +15984,12 @@ bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
         const uint8_t* p = pd.blob.data();
         const uint8_t* pend = p + pd.blob.size();
         std::string expr_error;
-        QoreValue v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        QoreValue v;
+        {
+            // a closure in a default argument names the type parameters of the function (qore#5733)
+            QoreAOTTypeParamOwnerHelper type_param_owner_helper(pd.uvb->getUserSignature()->getTypeParamOwner());
+            v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        }
         if (!expr_error.empty() || p != pend) {
             v.discard(nullptr);
             error = "cannot deserialize deferred default-argument expression for parameter "
