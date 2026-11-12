@@ -964,7 +964,7 @@ inline bool qore_aot_string_needs_value(const QoreValue& v) {
 }
 
 //! Returns true if a hash or list value has a type that a literal of it does not give (#5895); false for a container
-//! that needs evaluation, which is an expression
+//! that needs evaluation, which is an expression, and for one that holds anything but plain data (such as an object)
 /** a hash of a hashdecl or of a complex type, or a list of a complex type, such as the hash<ExceptionInfo> of a
     %try-module error variable and the lists and hashes in it; such a value is an AOTExprKind::CONST_VALUE, whose value
     keeps the type and exactly the keys and their order: a HASH_LITERAL or LIST_LITERAL is untyped, and a construction

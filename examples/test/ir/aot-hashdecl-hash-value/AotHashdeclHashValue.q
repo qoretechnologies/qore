@@ -61,3 +61,30 @@ printf("%y\n", init_err.arg.objects);
 printf("%y\n", <ThrowingInitHash5895>{"z": "p"});
 *buffer<bool> m = mask((1, 2, 3));
 printf("mask: %s %d\n", m.fullType(), m.size());
+# a hash that holds an object constant of a binary module is written with its constant, as before #5895
+%requires reflection
+class Field5895 {
+    public {
+        hash<auto> h;
+    }
+    constructor(hash<auto> h) {
+        self.h = h;
+    }
+}
+class FieldOwner5895 {
+    public {
+        list<Field5895> fields;
+    }
+    constructor() {
+        addField(new Field5895({
+            "name": "data",
+            "desc": "the data",
+            "type": AutoHashOrNothingType,
+        }));
+    }
+    addField(Field5895 f) {
+        push fields, f;
+    }
+}
+FieldOwner5895 owner();
+printf("%s %s\n", owner.fields[0].h.name, owner.fields[0].h.type.getName());

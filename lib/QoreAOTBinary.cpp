@@ -3670,10 +3670,52 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
 }
 
+//! Returns true if a container holds only plain data at every level: scalars, binaries, enum values, and hashes and
+//! lists of them, which a CONST_VALUE holds; an object (such as a constant of a binary module holding one) is written
+//! with a reference to where it comes from by the literal paths instead
+static bool qoreAOTContainerHoldsPlainData(const QoreValue& v) {
+    if (v.isNothing() || v.isNull() || v.isEnum()) {
+        return true;
+    }
+    switch (v.getType()) {
+        case NT_BOOLEAN:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_DATE:
+        case NT_BINARY:
+            return true;
+        case NT_LIST: {
+            ConstListIterator li(v.get<const QoreListNode>());
+            while (li.next()) {
+                if (!qoreAOTContainerHoldsPlainData(li.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case NT_HASH: {
+            ConstHashIterator hi(v.get<const QoreHashNode>());
+            while (hi.next()) {
+                if (!qoreAOTContainerHoldsPlainData(hi.get())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 bool qore_aot_value_container_is_typed(const AbstractQoreNode* node) {
     // a container whose elements are evaluated, as the argument list of a call (new buffer<bool>(mask)), is an
-    // expression and not a value
-    if (!node || node->needs_eval()) {
+    // expression and not a value; one that holds anything but plain data, such as an object constant of a binary
+    // module (AutoHashOrNothingType), is written with references to its values as before (a CONST_VALUE can hold
+    // neither)
+    if (!node || node->needs_eval()
+            || !qoreAOTContainerHoldsPlainData(QoreValue(const_cast<AbstractQoreNode*>(node)))) {
         return false;
     }
     if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
