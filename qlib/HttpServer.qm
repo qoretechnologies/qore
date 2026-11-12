@@ -5980,7 +5980,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
     }
 
-    #! Returns the code that the async I/O controller calls when an SSE stream has ended
+    #! Returns the code that is called when an SSE stream has ended: by the async I/O controller, or, for a client dropped for its bound, on the thread that queued the data
     /** Deregisters a socket handler's connection, and ends the run of the stream's event source, if any.  Created
         here so that the frame of sendReply() keeps no locals for it.
     */

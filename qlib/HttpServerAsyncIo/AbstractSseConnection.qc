@@ -235,9 +235,10 @@ public class AbstractSseConnection {
     }
 
     #! Drops the client of a stream whose data would exceed its bound, and raises \c SSE-CLIENT-OVERFLOW
-    /** Logs a warning through the warning callback, aborts the stream, and reports its end as for any other end
-        (@ref notifyPeerClosed()); used by the multiplexed transports, whose streams learn about their end only from
-        an explicit notification.
+    /** Logs a warning through the warning callback, aborts the stream, and reports its end on the calling thread
+        (the peer-close callback, which it claims before the abort, so that a notification that the abort causes on
+        another thread does not report it first); used by the multiplexed transports, whose streams learn about their
+        end only from an explicit notification.
 
         @param len the size of the data that could not be queued
 
@@ -256,12 +257,31 @@ public class AbstractSseConnection {
         if (first) {
             warn(msg);
         }
+        # the end of the stream is reported here, on the thread that queued the data: the callback is claimed before
+        # the stream is aborted, so that a notification of the transport, which the abort can cause on another thread,
+        # finds it claimed, and the client has been dropped and deregistered when the exception is raised
+        *code<nothing()> cb;
+        {
+            AutoLock al(peer_close_mutex);
+            if (!peer_close_fired) {
+                peer_close_fired = True;
+                cb = remove peer_close_callback;
+            }
+        }
         try {
             abort();
         } catch (hash<ExceptionInfo> ex) {
             # the stream has already ended
         }
-        notifyPeerClosed();
+        if (cb) {
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                warn(sprintf("%s SSE stream: the peer-close callback of the dropped client raised %s: %s",
+                    getProtocol(), ex.err, ex.desc));
+            }
+        }
         throw SseClientOverflowErr, msg;
     }
 
