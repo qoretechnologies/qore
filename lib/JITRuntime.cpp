@@ -10870,7 +10870,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     QoreValue result;
 
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
-        QoreValue call_expr(new FunctionCallNode(*call, arg_list.release()));
+        QoreValue call_expr(call->copyWithArgs(arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
@@ -21255,7 +21255,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call(
     // Clone with pre-evaluated args (tmp_args=true via AbstractFunctionCallNode copy ctor).
     // do_op_background will make its own copy via crlr_fcall_copy; we release the
     // original here so the local FunctionCallNode's destructor cleans up.
-    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
     QoreValue result = doBackgroundWithLocation(fcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
@@ -21355,7 +21355,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
         return 0;
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
-    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);

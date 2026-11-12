@@ -1742,7 +1742,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
         QoreListNode* arg_list =
             buildArgListFromIROperands(operands, 0, actual_nargs, values);
-        FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+        FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
         return {true, result};
@@ -6153,8 +6153,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     if (auto* call = dynamic_cast<const FunctionCallNode*>(
                             inv->expr.getInternalNode())) {
                         // Direct evalImpl() — avoids evalExprNode() overhead
-                        FunctionCallNode clone(*call, arg_list);
-                        res = evalAndRef(&clone, xsink);
+                        if (call->getRuntimeArgNames()) {
+                            // a named call resolved at run time by parameter name keeps its class
+                            RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                            res = evalAndRef(&clone, xsink);
+                        } else {
+                            FunctionCallNode clone(*call, arg_list);
+                            res = evalAndRef(&clone, xsink);
+                        }
                         used_operands = true;
                     }
                 } else if (op == QoreIROpcode::CallMethod) {
@@ -16757,8 +16763,14 @@ load_local_done:
                     if (effective_opcode == QoreIROpcode::Call) {
                         if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
-                            FunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            if (call->getRuntimeArgNames()) {
+                                // a named call resolved at run time by parameter name keeps its class
+                                RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                                res = evalAndRef(&clone, xsink);
+                            } else {
+                                FunctionCallNode clone(*call, arg_list);
+                                res = evalAndRef(&clone, xsink);
+                            }
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
@@ -16788,8 +16800,14 @@ load_local_done:
                                 call_expr.getInternalNode())) {
                             // AOT can load parser-equivalent namespace function fallbacks
                             // from Class::name() syntax through CallStatic slots.
-                            FunctionCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
+                            if (call->getRuntimeArgNames()) {
+                                // a named call resolved at run time by parameter name keeps its class
+                                RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                                res = evalAndRef(&clone, xsink);
+                            } else {
+                                FunctionCallNode clone(*call, arg_list);
+                                res = evalAndRef(&clone, xsink);
+                            }
                             used_operands = true;
                         }
                     } else {

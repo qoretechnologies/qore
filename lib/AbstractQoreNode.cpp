@@ -580,7 +580,7 @@ static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNo
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
     }
-    return crlr_call_copy_done(new FunctionCallNode(*n, na));
+    return crlr_call_copy_done(n->copyWithArgs(na));
 }
 
 static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode* m, ExceptionSink* xsink) {

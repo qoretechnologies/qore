@@ -603,11 +603,12 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
 }
 
 const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names) {
-    // a set does not move its elements, so the pointer to an interned list stays valid
+    // a set does not move its elements, so the pointer to an interned list stays valid; the set is never destroyed,
+    // so that a list stays valid also for code that runs while static objects are destroyed at exit
     static std::mutex m;
-    static std::set<name_vec_t> lists;
+    static std::set<name_vec_t>* lists = new std::set<name_vec_t>;
     std::lock_guard<std::mutex> lock(m);
-    return &*lists.insert(std::move(names)).first;
+    return &*lists->insert(std::move(names)).first;
 }
 
 void FunctionCallBase::setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size) {
@@ -1086,8 +1087,28 @@ QoreString* FunctionCallNode::getAsString(bool& del, int foff, ExceptionSink* xs
     return rv;
 }
 
-// a named call resolved at run time by parameter name; outside of evalImpl(), whose other calls are hot
-__attribute__((noinline, cold)) QoreValue FunctionCallNode::evalNamed(QoreFunction* func, QoreProgram* call_pgm,
+FunctionCallNode* FunctionCallNode::makeRuntimeNamed(FunctionCallNode* call) {
+    assert(call->getRuntimeArgNames());
+    // the arguments as parsed (not temporary) are taken over by the new call
+    FunctionCallNode* rv = new RuntimeNamedFunctionCallNode(*call, call->takeArgs(), call->tmp_args);
+    rv->parse_args = call->takeParseArgs();
+    call->deref();
+    return rv;
+}
+
+QoreValue RuntimeNamedFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue RuntimeNamedFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    // see FunctionCallNode::evalImpl()
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return evalNamed(fe->getFunction(), getCallProgram(rc), rc, pgm != nullptr, xsink);
+}
+
+// a named call resolved at run time by parameter name
+QoreValue FunctionCallNode::evalNamed(QoreFunction* func, QoreProgram* call_pgm,
         RuntimeConfig& rc, bool defer_domain_po, ExceptionSink* xsink) const {
     assert(!variant);
     if (tmp_args) {
@@ -1130,9 +1151,8 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
     const bool defer_domain_po = (pgm != nullptr);
-    if (__builtin_expect(runtime_arg_names != nullptr, 0)) {
-        return evalNamed(func, call_pgm, rc, defer_domain_po, xsink);
-    }
+    // a named call resolved at run time by parameter name is a RuntimeNamedFunctionCallNode
+    assert(!runtime_arg_names);
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
         return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
@@ -1380,7 +1400,13 @@ int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& p
     // a function call binds named arguments at run time when the variants that could be selected name their
     // parameters differently (see FunctionCallNode::evalImpl())
     allow_runtime_arg_names = true;
-    return parseArgs(parse_context, func, fe->getNamespace());
+    int err = parseArgs(parse_context, func, fe->getNamespace());
+    if (runtime_arg_names) {
+        // the call is replaced with one of the class of named calls resolved at run time; this node is released
+        assert(val.getInternalNode() == this);
+        val = makeRuntimeNamed(this);
+    }
+    return err;
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {

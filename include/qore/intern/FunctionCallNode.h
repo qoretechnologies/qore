@@ -396,6 +396,18 @@ public:
         return const_cast<QoreProgram*>(pgm);
     }
 
+    //! returns a copy of the call with the given temporary arguments, of the class of this call
+    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const {
+        return new FunctionCallNode(*this, n_args);
+    }
+
+    //! returns the call as a named call whose variant is resolved at run time by parameter name
+    /** @param call a call whose runtime argument names are set; it is consumed (dereferenced)
+
+        @return a RuntimeNamedFunctionCallNode with the arguments, names and state of the call
+    */
+    DLLLOCAL static FunctionCallNode* makeRuntimeNamed(FunctionCallNode* call);
+
     DLLLOCAL int parseInitCall(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL int parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context);
@@ -485,6 +497,12 @@ protected:
     DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, bool defer_domain_po,
             ExceptionSink* xsink) const;
 
+    //! the Program to execute this call in (see evalImpl())
+    DLLLOCAL QoreProgram* getCallProgram(RuntimeConfig& rc) const {
+        QoreProgram* call_pgm = pgm ? pgm : ::getProgram();
+        return call_pgm ? call_pgm : rc.getProgram();
+    }
+
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* a, qore_type_t n_type)
             : AbstractFunctionCallNode(loc, n_type, a), c_str(name), finalized(false) {
     }
@@ -496,6 +514,32 @@ protected:
             ? variant->parseGetReturnTypeInfo()
             : (fe ? fe->getFunction()->parseGetUniqueReturnTypeInfo() : nullptr);
     }
+};
+
+//! a named function call whose variant is resolved at run time by parameter name
+/** a class of its own, so that the evaluation of other function calls has no cost of it; the names of the arguments
+    are in FunctionCallBase (getRuntimeArgNames()), which IR lowering, the JIT and AOT read
+*/
+class RuntimeNamedFunctionCallNode : public FunctionCallNode {
+public:
+    //! a copy of the call with the given arguments
+    /** @param tmp true if the arguments are temporary (evaluated values), false for the arguments of the call as
+        parsed
+    */
+    DLLLOCAL RuntimeNamedFunctionCallNode(const FunctionCallNode& old, QoreListNode* n_args, bool tmp = true)
+            : FunctionCallNode(old, n_args) {
+        assert(getRuntimeArgNames());
+        tmp_args = tmp;
+    }
+
+    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const {
+        return new RuntimeNamedFunctionCallNode(*this, n_args);
+    }
+
+protected:
+    using FunctionCallNode::evalImpl;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 class ProgramFunctionCallNode : public FunctionCallNode {

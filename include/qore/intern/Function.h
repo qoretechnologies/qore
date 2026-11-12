@@ -878,9 +878,10 @@ protected:
     const QoreProgramLocation** hidden_call_site_slot = nullptr;
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
-    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name; set
-    //! only by the constructors for named calls and read only by init<true>() (a call with positional arguments does
-    //! not set it, so that it costs nothing)
+    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name
+    /** set only by the constructors for named calls and read only by init<true>() / findVariantNamed(); the
+        constructors for other calls leave it unset, as initializing it would cost every call (see M4 phase 1 perf)
+    */
     const name_vec_t* arg_names;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info

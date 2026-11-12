@@ -1377,6 +1377,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             }
             if (named.has_names) {
                 fcn->setRuntimeArgNames(std::move(named.names));
+                fcn = FunctionCallNode::makeRuntimeNamed(fcn);
             }
             static constexpr const char* type_arg_marker = "\ntypeargs:";
             size_t type_arg_pos = encoded_ref.find(type_arg_marker);

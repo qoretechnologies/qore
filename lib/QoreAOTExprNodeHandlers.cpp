@@ -404,7 +404,9 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     if (named.has_names) {
         fcn->setRuntimeArgNames(std::move(named.names));
-    } else if (named.has_map) {
+        return QoreValue(FunctionCallNode::makeRuntimeNamed(fcn));
+    }
+    if (named.has_map) {
         fcn->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
     }
     return QoreValue(fcn);
