@@ -101,6 +101,6 @@ class FieldOwner5895 {
 }
 FieldOwner5895 owner();
 printf("%s %s\n", owner.fields[0].h.name, owner.fields[0].h.type.getName());
-FieldOwner owner();
-owner.init();
-printf("fields: %y\n", owner.fields);
+FieldOwner hash_owner();
+hash_owner.init();
+printf("fields: %y\n", hash_owner.fields);
