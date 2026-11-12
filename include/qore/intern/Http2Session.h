@@ -367,6 +367,23 @@ public:
     DLLLOCAL int submitGoaway(uint32_t error_code, const char* opaque_data = nullptr,
         size_t len = 0, ExceptionSink* xsink = nullptr);
 
+    //! Submits a GOAWAY with NO_ERROR and the last stream processed, unless one was submitted already (qore#5899)
+    /** Used when the server closes the connection because it stops (RFC 9113 section 6.8): the client learns which
+        of its requests were processed and that it must not send more.  Does nothing before the connection preface
+        was submitted.  Performs no socket I/O: the frame is written by the next flush of the session's pending data.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int submitShutdownGoaway(ExceptionSink* xsink);
+
+    //! Submits a GOAWAY with submitShutdownGoaway() and writes it without blocking (qore#5899)
+    /** If the socket cannot take the frame, or if the peer has closed the connection, it is not sent and no error is
+        raised (the connection is closed anyway).  Called on the I/O thread of the socket only.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 

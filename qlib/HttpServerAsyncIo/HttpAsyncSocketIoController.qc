@@ -445,6 +445,26 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("cancelling delayed response timer " + timer_id.toString(), ex);
             }
         }
+        # Tell each HTTP/2 client that the connection is closing before it is aborted: the GOAWAY frame gives the last
+        # stream processed, so the client knows which requests it can retry elsewhere (RFC 9113 section 6.8).  The
+        # frame is written on the connection's I/O thread, which the abort below would otherwise race (qore#5899)
+        if (stream_ops_to_abort) {
+            foreach AbstractPollOperation sop in (stream_ops_to_abort) {
+                if (sop instanceof Http2PollOperation) {
+                    try {
+                        cast<Http2PollOperation>(sop).sendShutdownGoaway();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a connection that is gone already needs no GOAWAY
+                        if (ex.err =~ /^SOCKET-/) {
+                            log(LoggerLevel::DEBUG, "Async HTTP shutdown: no HTTP/2 GOAWAY sent on a closed "
+                                "connection: %s: %s", ex.err, ex.desc);
+                        } else {
+                            logShutdownException("sending HTTP/2 GOAWAY", ex);
+                        }
+                    }
+                }
+            }
+        }
         # Abort each stream_op so its clearStreamQueues() fires immediately,
         # pushing NOTHING sentinels onto any registered body_queue and
         # unblocking handler threads stuck in body_queue.get(timeout).

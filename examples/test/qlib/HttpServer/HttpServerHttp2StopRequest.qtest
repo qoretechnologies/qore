@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connection teardown and GOAWAY delivery on HttpServer stop over sockets
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -145,6 +146,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         addTestCase("DATA for a cancelled body read is discarded", \cancelledBodyReadTest());
         addTestCase("a bounded body Queue is rejected", \boundedQueueTest());
         addTestCase("the connection window is credited for data on reset streams", \windowNotLostTest());
+        addTestCase("a stopping server sends GOAWAY(NO_ERROR) with the last processed stream", \stopGoawayTest());
         set_return_value(main());
     }
 
@@ -408,10 +410,62 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         return rv;
     }
 
+    #! a server that stops tells its HTTP/2 clients which requests it processed (RFC 9113 section 6.8, qore#5899)
+    stopGoawayTest() {
+        HttpServer stopping(<HttpServerOptionInfo>{
+            "logger": new Logger("h2-stop-goaway-test", LoggerLevel::getLevelError()),
+        });
+        stopping.setHandler("size", "/size", NOTHING, new BodySizeHandler(), NOTHING, False);
+        int stop_port = stopping.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        stopping.waitForAsyncIo();
+        on_exit delete stopping;
+
+        Socket s = connect(stop_port);
+        on_exit s.close();
+        # stream 1 is processed
+        sendRequest(s, 1, "/size", True);
+        list<hash<H2Frame>> frames = readResponse(s, 1);
+        assertEq(1, elements (select frames, $1.type == HEADERS && $1.sid == 1), "the request is answered");
+        # the server has processed every frame sent before the PING when it acknowledges it, and sent every frame of
+        # the stream before the acknowledgement, so no frame of the stream is mistaken for one sent at the stop
+        pingRoundTrip(s, "stopgoaw");
+
+        stopping.stop();
+
+        # the frames that the server sent until it closed the connection
+        frames = ();
+        *string end_err;
+        while (True) {
+            try {
+                push frames, readFrame(s);
+            } catch (hash<ExceptionInfo> ex) {
+                end_err = ex.err;
+                break;
+            }
+        }
+        # the server closes the connection after the GOAWAY (a receive timeout would mean that it did not)
+        assertEq("SOCKET-CLOSED", end_err, "the connection is closed");
+        list<hash<H2Frame>> goaways = select frames, $1.type == GOAWAY;
+        assertEq(1, goaways.size(), sprintf("one GOAWAY is sent: %y", (map $1.type, frames)));
+        if (goaways) {
+            binary p = goaways[0].payload;
+            int last_sid = ((get_byte(p, 0) & 0x7f) << 24) | (get_byte(p, 1) << 16) | (get_byte(p, 2) << 8)
+                | get_byte(p, 3);
+            int error_code = (get_byte(p, 4) << 24) | (get_byte(p, 5) << 16) | (get_byte(p, 6) << 8)
+                | get_byte(p, 7);
+            assertEq(1, last_sid, "the last processed stream");
+            assertEq(0, error_code, "NO_ERROR");
+        }
+    }
+
     #! connects and sends the connection preface
-    private Socket connect() {
+    private Socket connect(*int to_port) {
         Socket s();
-        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        s.connect(sprintf("127.0.0.1:%d", to_port ?? port), 10s);
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + frame(SETTINGS, 0, 0, binary()));
         return s;
     }

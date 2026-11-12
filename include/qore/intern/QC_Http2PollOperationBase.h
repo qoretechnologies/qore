@@ -151,6 +151,16 @@ public:
         return h2_state == H2ServerState::CLOSED;
     }
 
+    //! Sends a GOAWAY with NO_ERROR before the server closes the connection because it stops (qore#5899)
+    /** Does nothing if the connection is closed already.  The frame is written on the socket's I/O thread, which is the
+        only thread that writes server session data; a caller on an ordinary thread waits for that write, and so the
+        call must not be made with @ref op_lock held, since the I/O thread's continuePoll() takes it.  On an I/O thread
+        or in a continuePoll worker the frame is only submitted, and the call does not wait.
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
+
     //! Returns true if the given stream can no longer carry data to the peer
     /** True when the peer reset the stream (RST_STREAM) or the whole connection
         is closed.  Used by long-lived stream owners (SSE response streams) that
