@@ -33,6 +33,10 @@ public namespace HttpServerAsyncIo {
     The stream is kept open (no END_STREAM flag) until explicitly closed,
     allowing the server to send events incrementally.
 
+    Queueing never waits for the client: the data staged for the stream beyond the client's flow-control credit is
+    bounded (see @ref setMaxBufferSize(), applied with @ref Qore::Socket::setQuicStreamSendLimit()), and an event
+    that would exceed the bound drops the client (see @ref httpserverasyncio_sse_buffer).
+
     @since Qore 3.0
 */
 public class Http3SseStream inherits AbstractSseConnection {
@@ -122,31 +126,30 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     #! Pushes a pre-formatted SSE text frame onto the HTTP/3 stream
-    /** Writes the frame as DATA on the QUIC stream.  Safe to call from any
-        thread.  Handles QUIC stream-level backpressure by waking the I/O
-        controller and blocking on
-        @ref Qore::Socket::waitForQuicStreamDrain().
+    /** Safe to call from any thread; never waits for the client.
 
         @param data the pre-formatted SSE frame text
 
-        @throw SSE-CLOSED the stream is closed, or it closed while this call was
-        waiting for the QUIC send buffer to drain — the latter is how a dead peer
-        surfaces: its buffer never drains, and the QUIC idle timeout closes the
-        session (SSE is server-to-client only, so the transport close is the only
-        signal available).  The stream is marked closed before the exception is
-        thrown, so @ref isOpen() returns @ref False afterwards.
+        @throw SSE-CLOSED the stream is closed
+        @throw SSE-CLIENT-OVERFLOW the frame would take the data staged for the client over its bound (see
+        @ref setMaxBufferSize()); the frame is not queued, and the client has been dropped (the stream is reset with
+        \c H3_REQUEST_CANCELLED)
     */
     queueRawString(string data) {
         if (!isStreamOpen()) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
+        bool queued;
         try {
-            sendRawStringIntern(data);
-            noteSseDataSent();
+            queued = sendRawStringIntern(data);
         } catch (hash<ExceptionInfo> ex) {
             markStreamClosed();
             rethrow;
         }
+        if (!queued) {
+            dropOverflowingClient(data.size());
+        }
+        noteSseDataSent();
     }
 
     #! Configures the SSE heartbeat for this stream
@@ -166,31 +169,23 @@ public class Http3SseStream inherits AbstractSseConnection {
         rescheduleHeartbeatTimerLocked();
     }
 
-    private sendRawStringIntern(string data) {
-        # submitQuicStreamData() returns 1 when the stream's send buffer is full;
-        # wake the I/O thread and wait for it to drain before retrying.
-        while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
-            if (wake_callback) {
-                wake_callback();
-            }
-            # -1 means the stream is gone (reset, or its QUIC session closed).
-            # Ignoring it re-submits into a buffer that will never drain, which is
-            # how a dead SSE peer used to park this thread forever: SSE is
-            # server-to-client only, so there are no inbound frames to time out on
-            # and the transport close is the only signal we will ever get.
-            int drain_rv = sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            if (drain_rv == -1) {
-                throw "SSE-CLOSED", sprintf("HTTP/3 SSE stream %d on session %d was "
-                    "closed while waiting for the send buffer to drain", stream_id,
-                    session_id);
-            }
-            # drain_rv == 1 (timed out) retries: a live peer may just be slow, and
-            # capping retries would abort a legitimately backlogged consumer.  A
-            # dead peer is bounded by the QUIC idle timeout, which closes the
-            # session and turns the next call into -1.
+    #! Hands data to the stream; returns @ref False if it would take the staged data over the stream's bound
+    private bool sendRawStringIntern(string data) {
+        if (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
+            return False;
         }
         if (wake_callback) {
             wake_callback();
+        }
+        return True;
+    }
+
+    #! Sets the bound of the data staged for the stream in the QUIC session
+    private applyMaxBufferSize(int size) {
+        try {
+            sock.setQuicStreamSendLimit(session_id, stream_id, size);
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended: its next send reports it
         }
     }
 
@@ -280,10 +275,13 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     #! Sends an SSE event on the HTTP/3 stream
-    /** Formats and sends the event immediately. Handles backpressure via
-        waitForQuicStreamDrain().
+    /** Formats and sends the event immediately; never waits for the client.
 
         @param event hash with optional keys: type, data, id, retry
+
+        @throw SSE-CLOSED the stream is closed
+        @throw SSE-CLIENT-OVERFLOW the event would take the data staged for the client over its bound; the client has
+        been dropped
     */
     sendEvent(hash<auto> event) {
         if (!isStreamOpen()) {
@@ -383,7 +381,14 @@ public class Http3SseStream inherits AbstractSseConnection {
         }
 
         try {
-            sendRawStringIntern(msg);
+            if (!sendRawStringIntern(msg)) {
+                # a client that does not take even the heartbeat is dropped; no caller gets the error
+                try {
+                    dropOverflowingClient(msg.size());
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                return;
+            }
             noteSseDataSent();
         } catch (hash<ExceptionInfo> ex) {
             markStreamClosed();

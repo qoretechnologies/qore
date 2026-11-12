@@ -175,6 +175,9 @@ class MysqlSequenceFunctionTest inherits QUnit::Test {
         if (!connstr) {
             testSkip("no MySQL connection configured (use -c or QORE_DB_CONNSTR_MYSQL)");
         }
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
         Datasource ds(connstr);
         if (ds.getDriverName() != "mysql") {
             testSkip(sprintf("connection uses driver %y, not mysql", ds.getDriverName()));

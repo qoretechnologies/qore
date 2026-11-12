@@ -80,10 +80,20 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
-    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
-    With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
-    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
-    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
+    @par Plain Function Bodies No Longer Inherit a Caller's Class Context
+    A plain function's body could be parse-initialized in the class context of the method that first called it, which
+    gave it access to that class's private and static members depending on the parse order; such code now raises a
+    parse error and must qualify its references (<tt>Class::member</tt>).
+
+    @par Dynamic Static Method Calls Respect Private Access
+    call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
+    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
+    the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
+
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
+    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
+    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
+    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
     The most common cases keep their results with regular variants:
     - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
     - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
@@ -100,6 +110,17 @@
     Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
+    @par The Implicit Index Is Unset Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
+    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
+    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
+    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+
+    @par An Operator over a Single Value Gives It the Implicit Index 0
+    A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
+    it the @ref implicit_index "implicit index" (<tt>$#</tt>) \c 0, as for a list of one element, instead of leaving
+    the enclosing index.
 
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
@@ -142,6 +163,11 @@
     imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
     it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
+
+    @par The Keys of an Lvalue Path Are Evaluated From the Root Out
+    The AST interpreter evaluated the keys and indices of an lvalue path of two or more steps from the last step to
+    the root (ex: <tt>h.(k1()).(k2())[i()] = v</tt> evaluated \c i(), \c k2(), \c k1()); every execution mode now
+    evaluates them from the root out, also for a reference (see @ref lvalue_evaluation_order).
 
     @par A List of Selectors Removes Nothing From a Value That Is Not a List, a String or a Binary
     @ref remove "remove" and @ref delete "delete" with a list of selectors in square brackets on a hash, a number, an
@@ -190,10 +216,11 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.0
-    Every external binary module must be rebuilt for module API 2.0, which registers its metadata with a
-    \c {name}_qore_module_desc() function and reports initialization errors as exceptions; see "Developing Qore
-    Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.1
+    Every external binary module must be rebuilt for module API 2.1, which registers its metadata with a
+    \c {name}_qore_module_desc() function, reports initialization errors as exceptions and covers all public ABI
+    changes of %Qore 3.0; a module built for another module API is not found by its feature name, and the
+    \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
@@ -441,8 +468,9 @@
 
     @par Compatibility Parse Options Refused Under \%modern
     Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect; legacy code that needs them is
-    parsed without @ref modern "%modern" (see @ref modern_option_consistency).
+    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
+    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
+    @ref modern "%modern" (see @ref modern_option_consistency).
 
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
@@ -572,6 +600,13 @@
     limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
+    @par Slow Server-Sent Events Clients Are Dropped
+    Every SSE stream bounds the data queued for its client (the \c sse_max_buffer_size listener and
+    \c ServerSentEventHandler options, default 1 MiB): queueing an event never waits for the client, a client whose
+    data would exceed the bound is dropped, and a send to that stream alone raises \c SSE-CLIENT-OVERFLOW, while a
+    send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer
+    (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -697,6 +732,12 @@
     A binary module can publish a versioned C++ API that other binary modules resolve at run time with
     \c q_get_module_cpp_api(), which raises a %Qore exception on a version mismatch, so an optional C++ dependency
     between modules is possible; see "Sharing a C++ API Between Modules" in the C++ API documentation.
+
+    @par Module State Released Before the Library Shuts Down
+    A binary module registers its static namespace with \c QoreModuleInfo::ns (\c QORE_HAS_MODULE_NS_PURGE), and the
+    library releases it when it deletes the module, not in a C++ static destructor.  All bundled modules do, so a
+    process that exits during a background JIT compile no longer leaks their values; see "Releasing Module State at
+    Shutdown" in the module development guide of the C++ API documentation.
 
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
@@ -1178,6 +1219,8 @@
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
+      - every SSE stream bounds the data held for its client, and a slow client is dropped instead of making the
+        publisher wait or the server's memory grow (see @ref httpserverasyncio_sse_buffer)
       - see @ref serversenteventhandler_v1_2_0 for all changes
 
     - @ref servicenowrestdataproviderintro "ServiceNowRestDataProvider" module
@@ -1561,10 +1604,19 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an object collected with a reference cycle could be freed while it was still in use, which could crash the
+      process, when another thread released the last reference to it through a weak reference (or C++ code through
+      an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
+    - \c $2 and the following implicit arguments had the type of the element in the code of every operator, so
+      <tt>map ($2,), l</tt> over a typed list raised \c RUNTIME-TYPE-ERROR; only foldl and foldr, whose \c $2 is the
+      next element, now give it that type
+    - a hash or list whose value type is \c date&lt;absolute&gt; or \c date&lt;relative&gt; took a container of
+      \c date values without checking them and then had the value type \c date; it now checks each value and has
+      its declared type (see @ref date_literal_subtypes)
     - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
-      for <tt>number * float</tt>, \c int for <tt>*float + int</tt>), so a typed container built from the result raised
-      \c RUNTIME-TYPE-ERROR (issue #5663)
+      for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
+      AST interpreter's \c / gave a \c float for a \c float and a \c *number operand (issue #5663)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

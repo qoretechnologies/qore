@@ -33,11 +33,18 @@
 
 #define _QORE_QOREHASHOBJECTDEREFERENCEOPERATORNODE_H
 
+
+#include <atomic>
 //! Warns when a hash member is converted directly to bool by a condition expression
 DLLLOCAL void qore_warn_hash_member_truth_test(QoreProgram* pgm, const QoreValue& condition);
 
 class QoreHashObjectDereferenceOperatorNode : public QoreBinaryOperatorNode<> {
 OP_COMMON
+public:
+    //! the keys of the lvalue path that ends with this step, if they are evaluated before it is resolved
+    /** computed from the path the first time that it is resolved (LValueHelper::evalPathKeys(), qore#5753) */
+    mutable QoreLValuePathKeyCache lvalue_path_keys;
+
 protected:
     const QoreTypeInfo* typeInfo;
     const QoreTypeInfo* ownerTypeInfo = nullptr;

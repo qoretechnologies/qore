@@ -83,6 +83,12 @@ public:
     static bool simulateInvoke(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink);
     static int execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
             ExceptionSink* xsink);
+    //! Runs an IR function
+    /** @param statements the block of the function, which the debugger's events are given with; with \a pgm, the
+        frame makes the debugger's events while a debugger is attached
+        @param handler_frame true for the code of an on_exit, on_error or on_success handler, which makes the
+        debugger's events of its statements but not those of a function (enter and exit)
+    */
     static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
             const std::vector<QoreValue>* closure = nullptr,
@@ -91,7 +97,7 @@ public:
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
             bool suppress_guard_deopt = false,
             const IRDirectParams* direct_params = nullptr,
-            std::vector<QoreValue>* parent_slot_cache = nullptr);
+            std::vector<QoreValue>* parent_slot_cache = nullptr, bool handler_frame = false);
 
     //! Emit a `[ir-silent-fail:<tag>]` line to stderr naming the last IR
     //! opcode + source location that ran before `execute()` returned
@@ -124,6 +130,14 @@ DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
 */
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+
+//! Applies a step of a list of selectors for the IR interpreter (QoreIROpcode::ListSelectorStep)
+/** As qore_rt_list_selector_step(), but the selector values are read from the IR value slots \a slots, at the
+    \a count value IDs \a selector_ids, instead of from an array, which would be in the frame of
+    QoreIRInterpreter::execute() and so in the frame of every interpreted call
+*/
+DLLLOCAL uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const QoreValue* slots, const QoreIRValue* selector_ids, int32_t count, ExceptionSink* xsink);
 
 //! Applies a compound assignment to an lvalue as the AST interpreter does
 /** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see

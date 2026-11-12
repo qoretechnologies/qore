@@ -70,6 +70,8 @@ extern "C" DLLEXPORT void i18n_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = i18n_module_init;
     mod_info.ns_init = i18n_module_ns_init;
     mod_info.del = i18n_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &I18nNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

@@ -92,7 +92,10 @@ extern "C" {
             64 bits).  Typical: <tt>PO_NEW_STYLE | PO_STRICT_ARGS</tt> for a
             modern-Qore program.  Use 0 for the defaults.
     @return a new QoreProgram, or NULL if libqore has not been
-            initialized (i.e. <tt>qore_init</tt> was never called).  The
+            initialized (i.e. <tt>qore_init</tt> was never called) or if the
+            options have %modern with a compatibility option that it does not
+            allow (an artifact compiled before %Qore 3.0's rule; it must be
+            rebuilt), with the reason in <tt>qore_last_error()</tt>.  The
             caller owns the returned pointer and must call
             <tt>qore_destroy_program</tt> exactly once.
  */
@@ -105,8 +108,10 @@ DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options);
 
     @param parse_options_lo the low 64 bits of the parse options (the <tt>PO_*</tt> flags)
     @param parse_options_hi the high 64 bits of the parse options (the extended options)
-    @return a new QoreProgram, or NULL if libqore has not been initialized; the caller owns the returned pointer and
-            must call <tt>qore_destroy_program</tt> exactly once
+    @return a new QoreProgram, or NULL if libqore has not been initialized or if the options have %modern with a
+            compatibility option that it does not allow (see @ref qore_create_program()), with the reason in
+            <tt>qore_last_error()</tt>; the caller owns the returned pointer and must call
+            <tt>qore_destroy_program</tt> exactly once
 
     @since %Qore 3.0
  */

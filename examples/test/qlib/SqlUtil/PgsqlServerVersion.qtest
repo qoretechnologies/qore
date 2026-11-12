@@ -11,6 +11,11 @@
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
 
+# the datasources that do not connect use the jdbc driver
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class PgsqlServerVersionTest
 
 #! A datasource that does not connect: it reports the given server version and records the SQL it is given
@@ -69,6 +74,9 @@ class PgsqlServerVersionTest inherits QUnit::Test {
     #! pg_proc.prokind was added with procedures in PostgreSQL 11: the routines of an earlier version are read without
     #! it, and are all functions
     private routines() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
         hash<string, list<auto>> cases = {
             "pgsql 10": (100023, False),
             "pgsql 16": (160004, True),
@@ -98,6 +106,9 @@ class PgsqlServerVersionTest inherits QUnit::Test {
     }
 
     private sequences() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
         hash<string, list<auto>> cases = {
             "pgsql 16": (160004, "pg_sequence"),
             "pgsql 9.6": (90624, "start_value"),

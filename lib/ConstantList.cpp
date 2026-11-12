@@ -536,7 +536,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
         parse_context.expected_type_info = declaredTypeInfo;
-        err = parse_init_value(val, parse_context);
+        {
+            // the initializer is the value of the constant of the declared type (issue #5782)
+            QoreParseTargetHelper target(parse_context, val, declaredTypeInfo);
+            err = parse_init_value(val, parse_context);
+        }
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
@@ -1020,6 +1024,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
+            qore_aot_record_folded_constant_import(consumer_loc, i->second, ptr);
             return i->second->getParseValue();
         }
         constantTypeInfo = nothingTypeInfo;

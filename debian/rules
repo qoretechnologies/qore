@@ -146,4 +146,11 @@ override_dh_gencontrol:
 		test -n "$$llvm_dep" || exit 1; \
 		dh_gencontrol -plibqore-dev -- "-Vqore:LLVM-Depends=$$llvm_dep"; \
 	fi
+	# Binary module packages depend on qore-module-abi-<major>.<minor>, the module API of
+	# include/qore/ModuleManager.h that the library loads (design/module-api-version.md).
+	if dh_listpackages | grep -qx libqore20; then \
+		api=$$(python3 debian/module-api.py include/qore/ModuleManager.h); \
+		test -n "$$api" || exit 1; \
+		dh_gencontrol -plibqore20 -- "-Vqore:Module-ABI=qore-module-abi-$$api"; \
+	fi
 	dh_gencontrol --remaining-packages

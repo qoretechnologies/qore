@@ -26,15 +26,19 @@ list<int> values = (1, 2, 3, 4);
 list<int> empty = ();
 list<float> float_values = (1.5, 2.0, 3.0);
 int native_foldl = (foldl \$1 + (\$2 & 7), values);
-int delegated_foldl = (foldl string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
+# \$3 is NOTHING, which only the implicit argument list set at run time gives: these folds set it for each element
+int delegated_foldl = (foldl exists \$3 ? \$1 : \$1 + \$2, values);
 int native_foldr = (foldr \$1 + (\$2 & 7), values);
-int delegated_foldr = (foldr string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
+int delegated_foldr = (foldr exists \$3 ? \$1 : \$1 + \$2, values);
+# the regular expression match is lowered natively and reads \$2 as the element, so these folds set no context
+int regex_foldl = (foldl string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
+int regex_foldr = (foldr string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
 int ordered_foldr = (foldr \$1 - \$2 * \$2, values);
 float float_foldr = (foldr \$1 - \$2 * \$2, float_values);
 auto empty_foldl = (foldl \$1 + \$2 * \$2, empty);
 auto empty_foldr = (foldr \$1 + \$2 * \$2, empty);
-printf(\"%d:%d:%d:%d:%d:%.2f:%s:%s\\n\", native_foldl, delegated_foldl,
-    native_foldr, delegated_foldr, ordered_foldr, float_foldr,
+printf(\"%d:%d:%d:%d:%d:%d:%d:%.2f:%s:%s\\n\", native_foldl, delegated_foldl,
+    native_foldr, delegated_foldr, regex_foldl, regex_foldr, ordered_foldr, float_foldr,
     exists empty_foldl ? string(empty_foldl) : \"NOTHING\",
     exists empty_foldr ? string(empty_foldr) : \"NOTHING\");
 ";
@@ -47,7 +51,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "10:10:10:10:-10:-3.25:NOTHING:NOTHING\n";
+string expected = "10:10:10:10:10:10:-10:-3.25:NOTHING:NOTHING\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = ExecModeHarness::run(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
