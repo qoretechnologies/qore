@@ -253,6 +253,27 @@ public:
 
     QoreObject* obj;
 
+#ifdef DEBUG
+    //! The weak references that the dereferences taking the count to zero may release
+    /** The object's base weak reference, plus one for each reference taken when the count was zero (a destructor
+        making its object reachable again, or the deletion's own reference when others released the count to zero
+        first; see takeDeleteReference()).  Each dereference that takes the count to zero once the object is being
+        destroyed releases one of them, and they must never run out: a release beyond them frees the object while
+        other weak references (the self reference of a poll operation's private data, for one) still use it.
+    */
+    std::atomic<int> dbg_zero_count_weak_refs{1};
+
+    //! Accounts for the release of a weak reference owed to a dereference that took the count to zero
+    DLLLOCAL void dbgReleaseZeroCountWeakRef() {
+        int rv = --dbg_zero_count_weak_refs;
+        if (rv < 0) {
+            printd(0, "qore_object_private::dbgReleaseZeroCountWeakRef() this: %p '%s': weak reference released "
+                "for a dereference to zero that had none\n", this, getName());
+            assert(false);
+        }
+    }
+#endif
+
     //! Unique hash computed lazily on first getUniqueHash() call — stable for
     //! the object's lifetime and globally unique even when malloc reuses
     //! addresses. Deferred to keep the constructor cheap (the SHA1+sprintf
@@ -506,8 +527,43 @@ public:
             const qore_class_private* member_class_ctx, QoreValue value,
             qore_type_t expected_type, ExceptionSink* xsink);
 
-    // lock not held on entry
-    DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
+    //! Runs the destructor and releases the object's data
+    /** Lock not held on entry.
+
+        @param ref_taken true if the reference that the deletion holds while the destructor runs has been taken
+        already (takeDeleteReference(), when a dereference decided to delete the object), false to take it here (an
+        explicit deletion, whose caller holds a reference of its own)
+    */
+    DLLLOCAL void doDeleteIntern(ExceptionSink* xsink, bool ref_taken = false);
+
+    //! Takes the reference that the deletion holds while the destructor runs
+    /** Called by the dereference that decided to delete the object, with the object's lock held exclusively, in
+        the critical section that marks the object as being destroyed: from then on, a dereference that takes the
+        count to zero finds the object being destroyed, and releases a weak reference of the object (see
+        robject_dereference_helper::finalDeref()).
+
+        When the deciding dereference released the last reference itself, that release is the deletion's: the count
+        is zero, and the release of the deletion's reference is the one that releases the object's base weak
+        reference.  When the dereference decided to collect the object with references remaining, which happens when
+        all of them are held by other members of its recursive set, they can be released before this, by threads
+        that reach the members through weak references; the dereference that took the count to zero then releases
+        the base weak reference, so the deletion's reference, taken when the count is zero, takes a weak reference of
+        its own for its release, as any reference taken when the count is zero does (customRefIntern()).  Taking the
+        reference after the object had been marked, and the deciding dereference had completed, let the count reach
+        zero twice: the base weak reference was released twice, which freed the object while weak references to it
+        were still held.
+
+        @param refs_remained true if references remained when the dereference decided to delete the object
+    */
+    DLLLOCAL void takeDeleteReference(bool refs_remained) {
+        // no lock: the count is atomic, as in customRefIntern()
+        if (!references.fetch_add(1, std::memory_order_acq_rel) && refs_remained) {
+            tRef();
+#ifdef DEBUG
+            ++dbg_zero_count_weak_refs;
+#endif
+        }
+    }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
 
@@ -536,6 +592,9 @@ public:
         }
 
         obliterateMembers(xsink);
+#ifdef DEBUG
+        dbgReleaseZeroCountWeakRef();
+#endif
         tDeref();
     }
 
@@ -722,7 +781,9 @@ public:
 
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
-        doDeleteIntern(xsink);
+        // only a dereference that decided to delete the object defers or makes its deletion, and it has taken the
+        // deletion's reference (takeDeleteReference())
+        doDeleteIntern(xsink, true);
     }
 
     DLLLOCAL void fastDeref();

@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcCollectWeakReleaseRaceTest
+
+/*  A dereference collects an object whose remaining references are held by another member of its recursive set,
+    and another thread releases those references meanwhile, through a weak reference to the member.
+
+    Objects a and b reference each other; one thread holds the only other reference to a, and the test holds weak
+    references to both, which do not count as references.  When the thread releases its reference, the references
+    left (b.other) are held by the set, so the dereference decides to collect a.  The test then clears b.other through
+    its weak reference, which releases the last reference to a while the dereference deletes it.
+
+    The dereference that took the count to zero found a being destroyed and released its base weak reference; the
+    deletion then took its temporary reference when the count was zero, without a weak reference, and its release
+    released the base weak reference again: the object was freed while weak references to it were still held (the
+    weak references of the test here; the self reference of an HTTP/2 client poll operation's private data in a
+    crash of RestClientIoResend.qtest in the CI).  Released while the deciding dereference was still in progress, the release made
+    the deletion complete with a waiter left instead (the assertion "ref_inprogress || !del" in RObject::derefDone()).
+
+    The hooks are only in debug builds; a debug build also checks that no dereference to zero releases a weak
+    reference that it is not owed (qore_object_private::dbgReleaseZeroCountWeakRef()).
+*/
+
+#! An object that is collected with the object it references
+class DgcWeakReleaseObject {
+    public {
+        #! the reference that closes the cycle
+        *DgcWeakReleaseObject other;
+        #! the name of the object
+        string name;
+        #! the names of the objects whose destructor ran, with the thread
+        static Queue destructed();
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        DgcWeakReleaseObject::destructed.push(sprintf("%s:%d", name, gettid()));
+    }
+}
+
+public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
+    public {
+        #! a wait that runs out means the interleaving was not reached; a failure, never a retry
+        const HoldTimeout = 30s;
+        #! the class of the objects that the hooks act on
+        const ClassName = "DgcWeakReleaseObject";
+    }
+
+    constructor() : QUnit::Test("dgc-collect-weak-release-race", "1.0") {
+        addTestCase("a reference released through a weak reference while the collector marks the object",
+            \releaseWhileMarkedTest());
+        addTestCase("a reference released through a weak reference before the collector deletes the object",
+            \releaseBeforeDeleteTest());
+        set_return_value(main());
+    }
+
+    #! Makes a and b, which reference each other, and pushes a to the Queue
+    /** The weak references are returned in the references; no local variable of the caller holds a or b.
+    */
+    static makeCycle(Queue q, reference<auto> weak_a, reference<auto> weak_b) {
+        DgcWeakReleaseObject a("a");
+        DgcWeakReleaseObject b("b");
+        a.other = b;
+        b.other = a;
+        weak_a := a;
+        weak_b := b;
+        q.push(a);
+    }
+
+    #! Marked: the collector is held after it has marked a as being destroyed, before its dereference completes
+    releaseWhileMarkedTest() {
+        runTest("dbg_hold_deref_marked", True);
+    }
+
+    #! Delete: the collector is held after its dereference has completed, before the deletion starts
+    releaseBeforeDeleteTest() {
+        runTest("dbg_hold_deref_delete", False);
+    }
+
+    #! Collects a with the given hold and releases b.other through the weak reference while the collector is held
+    /** @param hold the debug function that holds the collector
+        @param can_wait true if the release can wait for the collector's dereference to complete
+    */
+    private runTest(string hold, bool can_wait) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that order the dereferences are only in debug builds");
+        }
+
+        Queue q();
+        auto weak_a;
+        auto weak_b;
+        DgcCollectWeakReleaseRaceTest::makeCycle(q, \weak_a, \weak_b);
+
+        Counter held(1);
+        Counter release(1);
+        Counter done(2);
+        Queue collector_tid();
+        call_function(hold, ClassName, held, release);
+        # the collector: releases the only reference to a that is not held by the set
+        background sub () {
+            on_exit done.dec();
+            collector_tid.push(gettid());
+            {
+                *DgcWeakReleaseObject a = q.get();
+                remove a;
+            }
+        }();
+        if (held.waitForZero(HoldTimeout)) {
+            release.dec();
+            done.waitForZero(HoldTimeout);
+            fail(sprintf("the collector was not held by %s()", hold));
+        }
+
+        # the release of the last reference to a: b.other, cleared through the weak reference to b
+        Counter released(1);
+        if (can_wait) {
+            # the release finds a being destroyed while the collector's dereference is in progress, and either
+            # finishes or waits for it
+            call_function("dbg_deref_wait_notify", ClassName, released);
+        }
+        background sub () {
+            on_exit done.dec();
+            weak_b.other = NOTHING;
+            released.dec();
+        }();
+        int rc = released.waitForZero(HoldTimeout);
+
+        # the collector deletes a
+        release.dec();
+        done.waitForZero(HoldTimeout);
+        assertEq(0, rc, "the release makes progress while the collector is held");
+
+        list<string> destructed = ();
+        while (DgcWeakReleaseObject::destructed.size()) {
+            destructed += DgcWeakReleaseObject::destructed.get();
+        }
+        int tid = collector_tid.get();
+        assertEq(sprintf("a:%d", tid), destructed[0], "the collector destroys a, once");
+        assertEq(2, destructed.size(), "a and b are destroyed once each");
+        assertEq(1, (select destructed, $1 =~ /^b:/).size(), "b is destroyed once");
+
+        # the weak references are released after the objects have been deleted; a weak reference released after the
+        # object's memory has been freed is a use after free
+        remove weak_a;
+        remove weak_b;
+    }
+}

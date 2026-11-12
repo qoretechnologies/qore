@@ -1912,6 +1912,9 @@ robject_dereference_helper::~robject_dereference_helper() {
     // references it counted as recursive are released later, and the last of them releases the base reference;
     // releasing it here as well freed the object while those dereferences still used it.
     if (qo && !refs) {
+#ifdef DEBUG
+        qo->dbgReleaseZeroCountWeakRef();
+#endif
         qo->tDeref();
     }
 }

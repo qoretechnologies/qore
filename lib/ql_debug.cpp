@@ -18901,6 +18901,8 @@ struct DerefPointHold {
 DerefPointHold deref_decide_hold;
 //! the hold of dbg_hold_deref_marked()
 DerefPointHold deref_marked_hold;
+//! the hold of dbg_hold_deref_delete()
+DerefPointHold deref_delete_hold;
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -18936,6 +18938,10 @@ void dbg_hold_deref_decide_hook(const char* class_name) {
 
 void dbg_hold_deref_marked_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, class_name, "dbg_hold_deref_marked");
+}
+
+void dbg_hold_deref_delete_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, class_name, "dbg_hold_deref_delete");
 }
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
@@ -18996,6 +19002,23 @@ static QoreValue f_dbg_hold_deref_decide(const QoreListNode* params, RuntimeConf
 */
 static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, dbg_hold_deref_marked_hook,
+        params, xsink);
+}
+
+//! holds the next dereference that deletes an object of the given class, once it has completed
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference that marked the object as
+    being destroyed has completed (RObject::derefDone()), and before the deletion starts (the object's destructor);
+    another thread can release a reference to the object meanwhile, and tests use the hold to make that
+    deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, dbg_hold_deref_delete_hook,
         params, xsink);
 }
 
@@ -21199,6 +21222,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_marked", f_dbg_hold_deref_marked,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");

@@ -1604,6 +1604,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an object collected with a reference cycle could be freed while it was still in use, which could crash the
+      process, when another thread released the last reference to it through a weak reference (or C++ code through
+      an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
     - \c $2 and the following implicit arguments had the type of the element in the code of every operator, so
       <tt>map ($2,), l</tt> over a typed list raised \c RUNTIME-TYPE-ERROR; only foldl and foldr, whose \c $2 is the
       next element, now give it that type

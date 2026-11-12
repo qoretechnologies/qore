@@ -79,6 +79,12 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_
 typedef void (*qore_dbg_deref_marked_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook;
 
+//! called by qore_object_private::customDeref() when the dereference that marked the object as being destroyed has
+//! completed (RObject::derefDone()), before the deletion starts; called with no lock held; set by
+//! dbg_hold_deref_delete()
+typedef void (*qore_dbg_deref_delete_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);

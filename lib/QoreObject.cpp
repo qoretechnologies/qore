@@ -1546,11 +1546,12 @@ AbstractPrivateData* qore_object_private::getScanPrivateData(qore_classid_t key)
     return privateData->getReferencedPrivateData(key);
 }
 
-void qore_object_private::doDeleteIntern(ExceptionSink* xsink) {
+void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
     printd(5, "qore_object_private::doDeleteIntern() execing destructor() obj: %p\n", obj);
 
-    // increment reference count temporarily for destructor
-    {
+    // increment reference count temporarily for destructor, unless the dereference that decided to delete the object
+    // has taken it while marking the object (takeDeleteReference())
+    if (!ref_taken) {
         AutoLocker slr(rlck);
         ++obj->references;
     }
@@ -1644,6 +1645,7 @@ void qore_object_private::unsetRealReference() {
 #ifdef DEBUG
 std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook{nullptr};
 std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
+std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
 
@@ -1865,6 +1867,11 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // mark status as in destructor
         status = q_gettid();
 
+        // the deletion's reference is taken while the object is marked, before any other dereference can find it
+        // being destroyed: references that remained when this dereference decided to collect the object can be
+        // released from now on (see takeDeleteReference())
+        takeDeleteReference(qodh.getRefs() != 0);
+
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
         sl.unlock();
@@ -1877,6 +1884,14 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         }
 #endif
     }
+
+#ifdef DEBUG
+    // this dereference has completed and the deletion has not started; tests hold it here, so that another thread
+    // releases a reference to the object meanwhile
+    if (qore_dbg_deref_delete_hook_t hook = qore_dbg_deref_delete_hook.load()) {
+        hook(getClassName());
+    }
+#endif
 
     deleteOrDefer(xsink, cycle_cleanup);
 }
@@ -2291,6 +2306,9 @@ void qore_object_private::customRefIntern(bool real) {
     // for any reference count increment: the reference being copied already keeps the object alive.
     if (!references.fetch_add(1, std::memory_order_relaxed)) {
         tRef();
+#ifdef DEBUG
+        ++dbg_zero_count_weak_refs;
+#endif
     }
     if (real) {
         rrefs.fetch_add(1, std::memory_order_relaxed);
