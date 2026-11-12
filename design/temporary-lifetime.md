@@ -67,7 +67,15 @@ An expression evaluated again within the same statement - the expression of a `m
 `select`, of `foldl`, also when a `foreach` statement gets the elements of a `map` one by one - keeps one temporary
 per expression: the one from the previous element is released when the next one is created (the IR interpreter
 overwrites the value slot of the instruction; native code overwrites the cleanup slot), so a loop never accumulates
-temporaries; the last one is released at the end of the statement.
+temporaries; the last one is released at the end of the statement.  An expression that raises an exception creates no
+temporary, so the previous element's stays until the statement's temporaries are released, after the operator's
+values: the IR interpreter sets no value for an instruction that raises, and native code sets the cleanup slot of an
+IR invoke at the start of its normal continuation (`QoreIRToLLVM::getInvokeResultDeferBlock()`), which costs the
+normal path nothing; before, an exception released the previous element's temporary first (qore#5830).  The blocks
+that a functional operator's lowering creates for the code after its loop are laid out after the blocks of its body
+(`qore_ir_move_loop_exit_blocks()`): they hold the end of the statement, and native code, which closes a temp scope
+in the order of the blocks, otherwise left the temporaries of the body to the enclosing statement, which released
+them after the handler of an exception, and after the code that followed the statement in a `try` block.
 
 ## AST interpreter
 
@@ -259,7 +267,12 @@ per element.  Whether code over a list, a map expression or a fused pipeline's s
 exception cleanup block restores the implicit argument and element before the operator's cleanup or the handler, as the
 AST interpreter's helpers restore them when an exception unwinds the operator; the argument list holds a reference to
 the element, which was otherwise released after the handler.  Code that does not need it runs with the virtual
-implicit argument only.
+implicit argument only.  The body of an operator with an exception cleanup (see below) records a temp scope that no
+mark opens (`UnmarkedExceptionTempScope`), so the statement's temporaries, the body's among them, are released after
+the operator's values; the body of a map over an iterator had the statement's scope, which released its temporary
+before the iterator (qore#5830).  The argument list that foldl and foldr set for their expression is owned by the
+implicit arguments alone, as the AST interpreter's `ArgvContextHelper` owns it, so that its restoration releases it
+for each element and on an exception (`QoreIRLowering::createFoldPopImplicitArg()`).
 
 A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
 can hold an object, the `IteratorNext` instruction releases the previous element and then the values that the stages
@@ -304,6 +317,42 @@ or float division by zero where it happens, on the path that only a zero divisor
 operation through a runtime helper (an untyped division, modulo, addition, subtraction or multiplication, a number
 division, a string concatenation) on the path where the helper returns NOTHING, which it returns when it raises: left
 pending, the exception let the code after it run, and the operator's `next()` then took it for its own.
+
+A hash map and a hash map-select over an iterator have the same exception cleanup as map, with the hash built so far
+as the partial result and the key and the value as the values the expressions gave; they had none, and an exception
+released their iterator after the handler (qore#5830).
+
+`foldl` and `foldr` have it too over an iterator, and the code of every fold - over a list of scalars, over an
+iterator and as the root of a fused pipeline - restores `$1` and `$2` on an exception as the code of the other
+operators restores the implicit argument (`ImplicitContextExceptionBlock`), and an exception that leaves the function
+restores them too (`SetImplicitArgv` is `restore_on_exception_exit`, see `qore_ir_find_open_implicit_contexts()`):
+`$1` stayed set in the handler, the elements were released after it, and the exit of a function with no handler
+restored an enclosing map's arguments in the fold's place, whose argument list was never released (qore#5830).  The
+fold's argument list (`QoreIRLowering::insertFoldImplicitArgvSetup()`) is owned by the implicit arguments alone, as
+the AST interpreter's `ArgvContextHelper` owns it: a `ReleaseOwnedTemp` after `SetImplicitArgv` releases its slot's
+reference, so the `PopImplicitArg` that restores the arguments releases the list, for each element and on an
+exception; and the reference that the IR interpreter's `SetImplicitArgv` keeps to the arguments that it replaces is
+released once they are restored (`createFoldPopImplicitArg()`; native code holds it in no slot, and its
+`PopImplicitArg` releases it).  With those references, the list outlived each element, and an inner fold's slot kept
+the outer fold's list after the outer fold's restoration.  The interpreter's dispatch of `SetImplicitArgv` is
+unchanged: an edit of that case changed the code that the compiler generates for the whole dispatch loop, which cost
+every call of an IR-interpreted loop instructions.  An exception that the code raises then releases the accumulator
+and the element in the order of the argument list (the initial accumulator, the accumulator, the element; the
+accumulator before the element of a fused pipeline too), then the iterator and the source; an exception that the
+iterator's `next()` raises releases the iterator and the source first and then the accumulator, as the AST
+interpreter's functional iterator ends before the fold releases its value (`routeNext()`).  The accumulator's Phi of a
+fold over an iterator takes the first element over from the slot of its `IteratorNext` (the IR interpreter's
+`phi_takes_incoming`, native code's Phi fixup), so the first element is released when the accumulator is replaced, as
+in the AST interpreter, and not when the frame ends; a fold at the root of a fused pipeline keeps the first element
+in the slot of a `RefSelf` until the statement ends.  The releases of a functional operator's exception cleanup
+(`QoreIRInstruction::exception_cleanup_release`, set by `FunctionalLoopExceptionCleanup`) are not uses that keep a
+value from being taken over by a Phi or moved into a container (`qore_ir_is_exception_only_release()`, in the IR
+interpreter's use counts and native code's Phis of temporaries): counted, they cost a fold a reference and a release
+per element in the IR interpreter, and native code's accumulator Phi lost its own slot and borrowed the element that
+the next `IteratorNext` released.  Native code's Phi of temporaries takes its incoming values over on its own edge: an
+edge from a predecessor with other successors, such as the edge from a loop's header to the exit block whose Phi gives
+the loop's value, gets a block of its own, as the reference otherwise moved on every edge, and the loop's accumulator
+left its slot for the exit Phi's at each element.
 
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map

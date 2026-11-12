@@ -2597,9 +2597,15 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     // a function that creates a reference can write a variable through it with any call or store
     bool creates_reference = false;
     std::vector<const QoreIRPhiInstruction*> phis;
+    // the releases of a functional operator's exception cleanup are not uses that keep a value from being taken over
+    // by a Phi or moved into a list (see qore_ir_is_exception_only_release()): counted, they cost a fold or a map
+    // over a list in a try block a reference and a release per element (qore#5830)
     for (const auto& block : func.blocks) {
         for (size_t inst_pos = 0; inst_pos < block->instructions.size(); ++inst_pos) {
             const QoreIRInstruction* inst = block->instructions[inst_pos].get();
+            if (qore_ir_is_exception_only_release(*inst)) {
+                continue;
+            }
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
             });
@@ -2655,6 +2661,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
         for (const auto& block : func.blocks) {
             for (const auto& inst_uptr : block->instructions) {
                 const QoreIRInstruction* inst = inst_uptr.get();
+                if (qore_ir_is_exception_only_release(*inst)) {
+                    continue;
+                }
                 bool phi_inst = inst->opcode == QoreIROpcode::Phi;
                 qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     if (!operand.isValid() || operand.id >= counts.size()) {
@@ -2679,7 +2688,12 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     }
     for (const QoreIRPhiInstruction* phi : phis) {
         for (const auto& inc : phi->incoming) {
-            if (inc.value.isValid() && inc.value.id < counts.size() && def_by_call[inc.value.id]
+            // the element that an iterator gives owns its slot too (see IteratorNext): the first element of a fold
+            // over an iterator, its initial accumulator, is then released when the accumulator is replaced, as the AST
+            // interpreter's fold releases it, and not when the frame ends (qore#5830)
+            if (inc.value.isValid() && inc.value.id < counts.size()
+                    && (def_by_call[inc.value.id] || (def_inst[inc.value.id]
+                        && def_inst[inc.value.id]->opcode == QoreIROpcode::IteratorNext))
                     && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
                 phi_takes_incoming[inc.value.id] = 1;
             }

@@ -1733,8 +1733,33 @@ private:
     // Creates an alloca initialized to NOTHING in the entry block, stores the result,
     // and registers it for decref at exit.  For Return, the alloca can be cleared
     // via invoke_alloca_map so the returned value isn't decremented.
-    void trackResultForCleanup(llvm::Value* result, uint32_t result_id,
-            llvm::Function* llvm_func);
+    //! With \a defer_to (see getInvokeResultDeferBlock()), the result replaces the value of the alloca at the start of
+    //! that block, the normal continuation of an IR invoke, rather than where it is emitted; returns true if it does,
+    //! and the exception edge of the invoke must then release the result (getInvokeResultDiscardEdge())
+    bool trackResultForCleanup(llvm::Value* result, uint32_t result_id,
+            llvm::Function* llvm_func, llvm::BasicBlock* defer_to = nullptr);
+
+    //! Returns the LLVM block of \a normal_target, the normal continuation of an IR invoke, if the cleanup slot of the
+    //! invoke's result can be set there (see trackResultForCleanup()), otherwise nullptr
+    /** The IR interpreter does not set the value of an instruction that raises an exception: the value that its
+        previous execution gave (an element of a functional operator's loop) stays in its slot, and the statement
+        releases it with its other temporaries after the operator's values, as the AST interpreter does (qore#5830).
+        Native code therefore replaces the slot's value on the normal edge only, at the start of the continuation, which
+        costs the normal path nothing.  The block must not be lowered yet, start with no PHI node and have the invoke's
+        block as its only predecessor, which dominates it.
+    */
+    llvm::BasicBlock* getInvokeResultDeferBlock(const QoreIRBasicBlock* normal_target,
+        const QoreIRBasicBlock* exception_target);
+
+    //! Returns a block that releases \a result, the value of an IR invoke that raised an exception, and branches to
+    //! \a target; for an invoke whose result trackResultForCleanup() deferred to its normal continuation
+    llvm::BasicBlock* getInvokeResultDiscardEdge(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* result,
+            llvm::BasicBlock* target);
+
+    //! the number of predecessors of each block of the function being lowered, over its normal and exception edges,
+    //! computed when first needed (getInvokeResultDeferBlock())
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> ir_block_predecessor_counts;
+    bool ir_block_predecessor_counts_valid = false;
 
     // Track a boxed temp that may own a heap node (boxInt()/boxFloat() result) for release at
     // function exit; each store releases the previous value held by the same cleanup slot.

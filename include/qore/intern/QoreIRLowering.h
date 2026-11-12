@@ -445,6 +445,10 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         const QoreTypeInfo* element_type, std::string& error);
+    //! Restores the implicit arguments that the SetImplicitArgv of a fold's (accumulator, element) argument list
+    //! replaced (\a old_argv; see lowerWithImplicitArgs()), and releases the reference to them that the IR
+    //! interpreter's slot keeps
+    void createFoldPopImplicitArg(QoreIRValue old_argv, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
