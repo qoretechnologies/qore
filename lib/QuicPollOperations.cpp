@@ -55,13 +55,10 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // Shared sendmmsg() batch helper for QUIC I/O
 #include "qore/intern/QuicCommon.h"
 
-//! Maximum poll timeout (ms) when no QUIC timer is pending.
-/** Fallback poll timeout (ms) when ngtcp2 reports no timer pending
-    (ngtcp2_conn_get_expiry2() == UINT64_MAX).  Per RFC 9002, ACK-only packets
-    are not loss-detected, so the peer's retransmission timer drives recovery.
-    1 second is a reasonable fallback for this rare edge case.
-*/
-static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
+// The poll timeout of an operation for the next timer of its connection (qore_quic_poll_timeout_ms()); with no timer
+// pending (ngtcp2_conn_get_expiry2() == UINT64_MAX), QORE_QUIC_NO_TIMER_POLL_MS.  Per RFC 9002, ACK-only packets are
+// not loss-detected, so the peer's retransmission timer drives recovery then.
+#include "qore/intern/QuicPollTimeout.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
@@ -119,48 +116,18 @@ static int quic_input_stream_pollable_descriptor(InputStream* is, const char* er
 }
 
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
-/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
-    thread's poll() wakes when the QUIC retransmission/PTO timer fires.
+/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O thread's poll() wakes when the
+    connection's earliest timer is due (qore_quic_poll_timeout_ms()).  Every timer is honoured, however close or
+    late: the earliest one is often ngtcp2's pacing timer, due some microseconds after a packet was sent, and the
+    delayed acknowledgement, probe timeout and keep-alive timers come after it, so replacing a near or due timer with
+    the 1 s fallback postponed all of them (a late acknowledgement put the next keep-alive PING at the idle
+    deadline).
     @param poll_info the poll info hash to update (must not be nullptr)
     @param expiry the next timer expiry (UINT64_MAX if no timer pending)
     @param xsink for exception handling
 */
-static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry,
-                                     ExceptionSink* xsink, bool nothing_to_send = false) {
-    int64_t timeout_ms;
-    if (expiry == UINT64_MAX) {
-        timeout_ms = QUIC_NO_TIMER_POLL_MS;
-    } else {
-        ngtcp2_tstamp now = QuicSession::timestamp();
-        if (expiry <= now) {
-            // Timer still in the past after processTimerAndWrite handled it.
-            // Don't set a sub-ms timeout — the timer work was already done
-            // and tight-polling won't help.  Use the default fallback so the
-            // poll blocks until the next packet arrives or the fallback fires.
-            // Matches curl's pattern: if expiry <= ts after handle+flush,
-            // no Curl_expire is set — the next I/O event wakes the loop.
-            timeout_ms = QUIC_NO_TIMER_POLL_MS;
-        } else {
-            ngtcp2_duration timeout_ns = expiry - now;
-            timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
-            // Round up sub-millisecond durations to 1ms (curl pattern: line 933-934)
-            if (timeout_ns % 1000000) {
-                ++timeout_ms;
-            }
-            // Anti-spin (issue #5351): if the timer-and-write pass produced
-            // nothing to send (e.g. a stream is flow-control-blocked and we are
-            // waiting for the peer's MAX_STREAM_DATA / an ACK to reopen the
-            // congestion window), a sub-millisecond timer wakeup just re-runs the
-            // same no-op write and busy-loops the I/O thread.  The event that
-            // actually unblocks progress is an INCOMING packet, which wakes the
-            // poll regardless of the timeout, so fall back to the long poll
-            // instead of tight-polling — same rationale as the expiry<=now branch.
-            if (nothing_to_send && timeout_ms <= 1) {
-                timeout_ms = QUIC_NO_TIMER_POLL_MS;
-            }
-        }
-    }
-    poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry, ExceptionSink* xsink) {
+    poll_info->setKeyValue("poll_timeout_ms", qore_quic_poll_timeout_ms(expiry, QuicSession::timestamp()), xsink);
 }
 
 //! Clamp poll_timeout_ms so the I/O thread wakes no later than deadline_ns.
@@ -1045,9 +1012,9 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
     }
     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
     if (poll_info) {
-        // nothing_to_send: the flush produced no packet send (srv==0) yet data may
-        // still be pending (flow-control-blocked) — avoid sub-ms tight-polling.
-        setPollTimeoutFromExpiry(poll_info, expiry, xsink, srv == 0);
+        // data still pending here is flow-control-blocked; the timers are honoured all the same, as running them
+        // never loops (see qore_quic_poll_timeout_ms())
+        setPollTimeoutFromExpiry(poll_info, expiry, xsink);
     }
     return poll_info;
 }
@@ -1422,7 +1389,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                             // request immediate re-poll for fair scheduling
                             poll_info->setKeyValue("poll_timeout_ms", 0, xsink);
                         } else {
-                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, srv == 0);
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                         }
                     }
                     return poll_info;
@@ -2854,9 +2821,9 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        // flow-control-blocked pending data: don't sub-ms tight-poll
-                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
+                        // flow-control-blocked pending data: the unblocking ACK / MAX_STREAM_DATA wakes the
+                        // operation, and the connection's timers are honoured meanwhile
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -3273,9 +3240,9 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        // flow-control-blocked pending data: don't sub-ms tight-poll
-                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
+                        // flow-control-blocked pending data: the unblocking ACK / MAX_STREAM_DATA wakes the
+                        // operation, and the connection's timers are honoured meanwhile
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }

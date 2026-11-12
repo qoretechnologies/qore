@@ -114,7 +114,9 @@ module DebugProgramControl {
     - added the \c program/&lt;id&gt;/terminate command,
       @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
-      threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+      threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O; a thread
+      that stops at the end of its code (\c exit) or when it leaves the program (\c detach) is resumed by the client,
+      as for any thread that ends, also when it stopped there before the program was ended
     - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
       statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
       are evaluated also with the top-level local variables of the program, which have global scope
@@ -576,7 +578,9 @@ public namespace DebugProgramControl {
         /** The threads of the program end with a \c THREAD-CANCELLED exception: a thread that is stopped continues
             and ends, a thread that runs ends at its next statement, and a thread that waits, as for a lock or for I/O,
             is cancelled.  The thread that runs the program ends the run with the exception, which the code that
-            started the program can recognize with isTerminateException().
+            started the program can recognize with isTerminateException().  A thread that is stopped at the end of its
+            code (\c exit) or where it leaves the program (\c detach) stays stopped: its end is reported to the clients,
+            which resume it as any thread that ends.
 
             @param pgm the program to end
 
@@ -593,11 +597,15 @@ public namespace DebugProgramControl {
             setProgramTerminating(pgm);
             {
                 # no thread is registered as stopped while the program is marked, so each thread that is stopped is
-                # resumed here and no other one stops (see handleInterrupt())
+                # resumed here and no other one stops (see handleInterrupt()); a thread that stops at its end (exit or
+                # detach) is not resumed here: it stops there also while the program is marked, as its end is reported
+                # to the clients, which resume it as any thread that ends; since the program is marked before this
+                # loop, such a thread can have registered after the mark, so that a client that got its interrupt event
+                # and resumed it would find it no longer stopped if it were resumed here
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 foreach hash<auto> i in (ctxThread.pairIterator()) {
-                    if (i.value.pgmId == pgm_id) {
+                    if (i.value.pgmId == pgm_id && !i.value.ends) {
                         # it runs, so that it leaves the program as a thread that is debugged (the detach is
                         # reported), also from the stop at the start of the program, where it was not yet debugged
                         # the command itself tells the thread to end: the mark of the program is gone if debugging
@@ -2438,6 +2446,9 @@ public namespace DebugProgramControl {
             hash<auto> ctx = {
                 "queue": new Queue(),
                 "pgmId": pgm.getProgramId(),
+                # a thread that stops at its end is resumed by a client, also when the debugger ends its program (see
+                # terminateProgram())
+                "ends": ends,
                 "stackSize": get_thread_call_stack().size(),
                 "intrInfo": {
                     'type': DebugResponseType::Event,

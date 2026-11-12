@@ -44,6 +44,7 @@
 #include "qore/intern/SocketSyncPoll.h"
 
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QuicPollTimeout.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -51,12 +52,12 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
-// Fallback poll timeout (ms) when ngtcp2 reports no timer pending; matches
-// QUIC_NO_TIMER_POLL_MS in QuicPollOperations.cpp.
+// The longest poll timeout (ms) of the wrapper: QORE_QUIC_NO_TIMER_POLL_MS, the timeout when ngtcp2 reports no
+// timer pending (QuicPollTimeout.h).
 // NOTE: plain "//" comments only in this file outside qpp declarations --
 // qpp consumes "//!" and "/** */" blocks as documentation for the next qpp
 // entity, which silently deletes a plain C++ helper's signature.
-static constexpr int64_t H3_NO_TIMER_POLL_MS = 1000;
+static constexpr int64_t H3_NO_TIMER_POLL_MS = QORE_QUIC_NO_TIMER_POLL_MS;
 
 // Returns a POLLIN poll-info hash that carries the QUIC timer deadline.
 //
@@ -86,26 +87,13 @@ static QoreHashNode* h3_set_quic_poll_timeout(QoreHashNode* sock_poll_info_hash,
         ? inner_op->getSession()
         : nullptr;
     if (session) {
-        const ngtcp2_tstamp expiry = session->getExpiry();
-        if (expiry != UINT64_MAX) {
-            const ngtcp2_tstamp now = QuicSession::timestamp();
-            if (expiry > now) {
-                const ngtcp2_duration timeout_ns = expiry - now;
-                timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
-                // round up sub-millisecond durations so we never busy-spin on a
-                // 0 ms timeout, and never sleep past the deadline
-                if (timeout_ns % 1000000) {
-                    ++timeout_ms;
-                }
-                if (timeout_ms > H3_NO_TIMER_POLL_MS) {
-                    // wake at least once per second: the timer may be re-armed
-                    // earlier (e.g. keep-alive) while we are parked here
-                    timeout_ms = H3_NO_TIMER_POLL_MS;
-                }
-            } else {
-                // deadline already passed; the next poll pass handles it
-                timeout_ms = 1;
-            }
+        // every timer is honoured, however close; one already due is run by the next poll pass
+        // (qore_quic_poll_timeout_ms())
+        timeout_ms = qore_quic_poll_timeout_ms(session->getExpiry(), QuicSession::timestamp());
+        if (timeout_ms > H3_NO_TIMER_POLL_MS) {
+            // wake at least once per second: the timer may be re-armed
+            // earlier (e.g. keep-alive) while we are parked here
+            timeout_ms = H3_NO_TIMER_POLL_MS;
         }
     }
     sock_poll_info_hash->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
