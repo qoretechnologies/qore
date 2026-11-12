@@ -824,6 +824,8 @@ DLLLOCAL const AbstractStatement* get_runtime_statement();
 
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
+DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti);
+DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg2_type_info();
 
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
@@ -1682,18 +1684,23 @@ private:
    void* operator new(size_t) = delete;
 };
 
-// allows for implicit argument types to be set at parse time
+// allows for implicit argument types to be set at parse time: the type of $1 and, for the code of foldl and foldr,
+// which get the next element as $2, the type of $2; every other implicit argument has no parse-time type, and code
+// that sets $1 alone unsets the type of $2 of an enclosing fold
 class ParseImplicitArgTypeHelper {
 public:
-   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti) : ati(parse_set_implicit_arg_type_info(ti)) {
+   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti, const QoreTypeInfo* ti2 = nullptr)
+         : ati(parse_set_implicit_arg_type_info(ti)), ati2(parse_set_implicit_arg2_type_info(ti2)) {
    }
 
    DLLLOCAL ~ParseImplicitArgTypeHelper() {
+      parse_set_implicit_arg2_type_info(ati2);
       parse_set_implicit_arg_type_info(ati);
    }
 
 private:
    const QoreTypeInfo* ati;
+   const QoreTypeInfo* ati2;
 };
 
 // acquires a TID and thread entry, returns -1 if not successful

@@ -1,0 +1,819 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SSE over HTTP/1.1, 2 and 3: socket send buffers of a client that stops reading, HTTP/2 flow control, QUIC streams
+
+/*  SseBufferBound.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5792: the data held for the client of a Server-Sent Events stream is bounded on HTTP/1.x, HTTP/2 and HTTP/3,
+    and queueing an event never waits for the client.  Each case has a client that stops reading (a raw HTTP/1.1
+    socket that never reads, a raw HTTP/2 client that grants no flow-control window, an HTTP/3 stream whose data the
+    server holds back with a debug hook, as an exhausted flow-control credit does) beside a client that reads; the
+    events are published on a thread of their own, so that a publisher that waits for the stalled client fails the
+    case instead of hanging the test.  The stalled clients connect to listeners with a small bound, the reading
+    clients to listeners with a bound that they never reach.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires DataProvider
+
+%exec-class SseBufferBoundTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The bound of the listeners of the stalled clients
+const SmallBound = 65536;
+
+#! The bound of the listeners of the reading clients; never reached
+const LargeBound = 1024 * 1024 * 1024;
+
+#! The size of the data of each event
+const EventSize = 32768;
+
+#! The most events published in a case before the stalled client must have been dropped (a hang guard: 64 MiB)
+const MaxSends = 2048;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+
+#! Returns one byte
+binary sub b1(int b) {
+    return parse_hex_string(sprintf("%02x", b));
+}
+
+#! Returns a serialized HTTP/2 frame
+binary sub h2_frame(int type, int flags, int sid, binary payload) {
+    return parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, sid)) + payload;
+}
+
+#! A client that stops reading its SSE stream
+class StalledClient {
+    abstract close();
+}
+
+#! An HTTP/1.1 client that sends its request and never reads
+class StalledH1 inherits StalledClient {
+    private {
+        Socket s();
+    }
+
+    constructor(int port, string path) {
+        s.connect(sprintf("127.0.0.1:%d", port), HangGuard);
+        s.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n", path));
+    }
+
+    close() {
+        s.close();
+    }
+}
+
+#! A cleartext HTTP/2 client that grants no flow-control window to its streams and never reads
+class StalledH2 inherits StalledClient {
+    private {
+        Socket s();
+    }
+
+    constructor(int port, string path) {
+        s.connect(sprintf("127.0.0.1:%d", port), HangGuard);
+        # SETTINGS_INITIAL_WINDOW_SIZE (0x4) = 0: the server can send no DATA on the stream
+        binary settings = h2_frame(4, 0, 0, <000400000000>);
+        string p = "/" + path;
+        # :method GET (static index 2), :scheme http (static index 6), :path and :authority as literals with
+        # indexed names (static indexes 4 and 1), and accept as a literal with a literal name; no Huffman coding
+        binary block = <8286> + <04> + b1(p.size()) + binary(p) + <01> + b1(9) + binary("localhost")
+            + <00> + b1(6) + binary("accept") + b1(17) + binary("text/event-stream");
+        # HEADERS with END_STREAM | END_HEADERS on stream 1
+        s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + h2_frame(1, 0x5, 1, block));
+    }
+
+    close() {
+        s.close();
+    }
+}
+
+#! An HTTP/3 client whose stream data the server holds back (see RecordingHandler and ObsHandler)
+class StalledH3 inherits StalledClient {
+    private {
+        HttpClientIo::HttpClientConnectionManager mgr;
+        HttpClientIo::HttpClientStreamHandle stream;
+    }
+
+    constructor(int port, string path) {
+        mgr = new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        stream = mgr.acquireAndStartStreaming(sprintf("https://127.0.0.1:%d/", port), "GET", "/" + path,
+            {"Accept": "text/event-stream"});
+    }
+
+    close() {
+        try {
+            stream.cancel();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        delete mgr;
+        call_function("dbg_quic_release_stream_data");
+    }
+}
+
+#! A client that reads every event of its stream on a thread of its own until the "done" event
+class Reader {
+    public {
+        #! the IDs of the events read, in order
+        list<int> ids = ();
+
+        #! the error that ended the reads, if any
+        *hash<ExceptionInfo> err;
+
+        #! decremented when the reads have ended
+        Counter done(1);
+    }
+
+    private {
+        HttpClientIo::HttpClientConnectionManager mgr;
+        HttpClientIo::HttpClientStreamHandle stream;
+        HttpClientStreamingIo::SseStreamReader reader;
+    }
+
+    constructor(string proto, int port, string path) {
+        mgr = new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        stream = mgr.acquireAndStartStreaming(sprintf("%s://127.0.0.1:%d/", proto == "h1" ? "http" : "https", port),
+            "GET", "/" + path, {"Accept": "text/event-stream"});
+        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+        background run();
+    }
+
+    #! Waits for the reads to end; returns 0 if they did
+    int wait() {
+        return done.waitForZero(HangGuard);
+    }
+
+    close() {
+        try {
+            stream.cancel();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        delete mgr;
+    }
+
+    private run() {
+        on_exit done.dec();
+        try {
+            while (*hash<SseMessageInfo> e = reader.readEvent(HangGuard)) {
+                if (e.event == "done") {
+                    break;
+                }
+                # the events of the handler carry their number in the ID, those of the Observable in the event name
+                ids += exists e.id ? e.id.toInt() : e.event.substr(1).toInt();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+    }
+}
+
+#! A ServerSentEventHandler that records its connections
+class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    private {
+        Mutex rm();
+        Condition rc();
+
+        #! the registered connections, keyed by the path of their request without the leading slash
+        hash<string, ServerSentEventHandler::ServerSentEventConnection> conns = {};
+
+        #! the IDs of the deregistered connections
+        hash<string, bool> gone = {};
+
+        #! while set, a deregistration made on another thread than @ref allowed_tid waits until it reaches zero
+        *Counter gate;
+
+        #! the thread whose deregistrations pass the gate
+        int allowed_tid;
+    }
+
+    constructor(*hash<auto> opts) : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}
+            + opts) {
+    }
+
+    reset() {
+        AutoLock al(rm);
+        conns = {};
+        gone = {};
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        string key = conn.hdr.path;
+        key =~ s/^\///;
+        AutoLock al(rm);
+        conns{key} = conn;
+        rc.broadcast();
+    }
+
+    deregisterConnectionImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        AutoLock al(rm);
+        gone{conn.cid} = True;
+        rc.broadcast();
+    }
+
+    #! Returns the connection of the request with the given path, once it has been registered
+    ServerSentEventHandler::ServerSentEventConnection waitConn(string path) {
+        date deadline = now_us() + HangGuard;
+        AutoLock al(rm);
+        while (!conns{path}) {
+            if (now_us() >= deadline) {
+                throw "SSE-TEST-ERROR", sprintf("connection %y was not registered", path);
+            }
+            rc.wait(rm, deadline - now_us());
+        }
+        return conns{path};
+    }
+
+    #! Returns True if the connection has been deregistered
+    bool isGone(string cid) {
+        AutoLock al(rm);
+        return gone{cid} ?? False;
+    }
+
+    #! Makes the deregistrations of other threads than @p tid wait until @ref releaseGate() is called
+    armGate(int tid) {
+        AutoLock al(rm);
+        gate = new Counter(1);
+        allowed_tid = tid;
+    }
+
+    releaseGate() {
+        AutoLock al(rm);
+        if (gate) {
+            gate.dec();
+            remove gate;
+        }
+    }
+
+    #! Holds the deregistration that ends a stream while the gate is armed (see armGate())
+    deregisterConnection(softstring cid) {
+        *Counter g;
+        {
+            AutoLock al(rm);
+            if (gate && gettid() != allowed_tid) {
+                g = gate;
+            }
+        }
+        if (g) {
+            g.waitForZero(HangGuard);
+        }
+        ServerSentEventHandler::deregisterConnection(cid);
+    }
+
+    #! Holds the data of a stalled HTTP/3 client back in the server, as an exhausted flow-control credit does
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        if (hdr.path =~ /stall/) {
+            call_function("dbg_quic_hold_stream_data", session_id, stream_id);
+        }
+        return ServerSentEventHandler::setupAsyncSseConnectionHttp3(sock, cx, hdr, cid, session_id, stream_id,
+            wake_callback);
+    }
+}
+
+#! An Observable that reports how many observers it has
+class CountingObservable inherits Observable {
+    private {
+        Mutex m();
+        Condition c();
+        int live = 0;
+    }
+
+    registerObserver(Observer observer, ...) {
+        Observable::registerObserver(observer);
+        AutoLock al(m);
+        ++live;
+        c.broadcast();
+    }
+
+    bool deregisterObserver(Observer observer) {
+        bool rv = Observable::deregisterObserver(observer);
+        if (rv) {
+            AutoLock al(m);
+            --live;
+            c.broadcast();
+        }
+        return rv;
+    }
+
+    int getLive() {
+        AutoLock al(m);
+        return live;
+    }
+
+    #! Waits until the Observable has @p n observers; returns True if it has
+    bool waitLive(int n) {
+        date deadline = now_us() + HangGuard;
+        AutoLock al(m);
+        while (live != n) {
+            if (now_us() >= deadline) {
+                return False;
+            }
+            c.wait(m, deadline - now_us());
+        }
+        return True;
+    }
+}
+
+#! Streams the events of an Observable as event sources of the responses (not a socket handler)
+class ObsHandler inherits AbstractHttpRequestHandler {
+    public {
+        CountingObservable src();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /stall/ && cx."header-info".http3) {
+            call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
+        }
+        return sseObservableResponse(src, {"terminate_on": "done"});
+    }
+}
+
+#! An event source that records the bound of its stream
+class BoundSource inherits HttpServerAsyncIo::AbstractSseEventSource {
+    public {
+        #! the bound of the stream, set by start()
+        int bound;
+        #! decremented by start()
+        Counter started(1);
+    }
+
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        bound = conn.getMaxBufferSize();
+        started.dec();
+        conn.close();
+    }
+
+    stop() {
+    }
+}
+
+#! Returns an event source that records the bound of its stream
+class SourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        BoundSource src();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {"code": 200, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": src};
+    }
+}
+
+#! The result of a publisher thread
+hashdecl PublishResult {
+    #! True if the publisher ended within the hang guard
+    bool ended = False;
+    #! the number of events published
+    int sent = 0;
+    #! the exception that the publisher raised, if any
+    *hash<ExceptionInfo> ex;
+}
+
+class SseBufferBoundTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        RecordingHandler handler();
+        RecordingHandler override_handler({"sse_max_buffer_size": 12345});
+        ObsHandler obs_handler();
+        SourceHandler source_handler();
+
+        int h1_small;
+        int h1_large;
+        int h2c_small;
+        int tls_large;
+        int tls_small;
+
+        #! the data of each event
+        string payload = strmul("x", EventSize);
+    }
+
+    constructor() : Test("SseBufferBoundTest", "1.0") {
+        addTestCase("listener and handler options", \testOptions());
+        addTestCase("H1 broadcast drops a stalled client and the reading client gets every event",
+            \testBroadcast(), "h1");
+        addTestCase("H2 broadcast drops a stalled client and the reading client gets every event",
+            \testBroadcast(), "h2");
+        addTestCase("H3 broadcast drops a stalled client and the reading client gets every event",
+            \testBroadcast(), "h3");
+        addTestCase("H1 direct send to a stalled client raises SSE-CLIENT-OVERFLOW", \testDirectSend(), "h1");
+        addTestCase("H2 direct send to a stalled client raises SSE-CLIENT-OVERFLOW", \testDirectSend(), "h2");
+        addTestCase("H3 direct send to a stalled client raises SSE-CLIENT-OVERFLOW", \testDirectSend(), "h3");
+        addTestCase("H1 Observable publisher drops a stalled client and stops its source", \testObservable(), "h1");
+        addTestCase("H2 Observable publisher drops a stalled client and stops its source", \testObservable(), "h2");
+        addTestCase("H3 Observable publisher drops a stalled client and stops its source", \testObservable(), "h3");
+        addTestCase("broadcast with an overflowing and a closed stream does not raise", \testBroadcastClosed());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("sse-buffer-bound", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setDefaultHandler("sse", handler);
+        server.setHandler("override", "^/?override", NOTHING, override_handler);
+        server.setHandler("obs", "^/?obs", NOTHING, obs_handler);
+        server.setHandler("source", "^/?source", NOTHING, source_handler);
+        server.waitForAsyncIo();
+
+        h1_small = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "sse_max_buffer_size": SmallBound,
+        }).port;
+        h1_large = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "sse_max_buffer_size": LargeBound,
+        }).port;
+        h2c_small = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+            "sse_max_buffer_size": SmallBound,
+        }).port;
+        # HTTP/2 over TLS and HTTP/3 (the QUIC listener takes the bound of its TCP listener)
+        tls_large = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+            "sse_max_buffer_size": LargeBound,
+        }).port;
+        tls_small = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+            "sse_max_buffer_size": SmallBound,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testOptions() {
+        assertThrows("HTTPSERVER-ADDLISTENER-ERROR", sub () {
+            server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "sse_max_buffer_size": 0,
+            });
+        });
+        assertThrows("SERVERSENTEVENTHANDLER-OPTION-ERROR", sub () {
+            new ServerSentEventHandler::ServerSentEventHandler({"sse_max_buffer_size": 0});
+        });
+        assertThrows("SERVERSENTEVENTHANDLER-OPTION-ERROR", sub () {
+            new ServerSentEventHandler::ServerSentEventHandler({"sse_max_buffer_size": "x"});
+        });
+        assertThrows("SERVERSENTEVENTHANDLER-OPTION-ERROR", sub () {
+            ServerSentEventHandler::ServerSentEventHandler h();
+            h.setSseMaxBufferSize(-1);
+        });
+        {
+            ServerSentEventHandler::ServerSentEventHandler h({"sse_max_buffer_size": 4096});
+            assertEq(4096, h.getSseMaxBufferSize());
+            ServerSentEventHandler::ServerSentEventHandler h2();
+            assertNothing(h2.getSseMaxBufferSize(), "a handler sets no bound by default");
+        }
+        {
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            assertFalse(op.hasMaxBufferSize());
+            assertEq(HttpServerAsyncIo::DefaultSseMaxBufferSize, op.getMaxBufferSize());
+            assertThrows("SSE-OPTION-ERROR", \op.setMaxBufferSize(), 0);
+            op.setMaxBufferSize(100);
+            assertTrue(op.hasMaxBufferSize());
+            assertEq(100, op.getMaxBufferSize());
+            assertEq(0, op.getQueuedBytes());
+            # one event larger than the bound is queued when nothing else is; the next one drops the client
+            op.queueRawString(strmul("y", 150));
+            assertEq(150, op.getQueuedBytes());
+            assertThrows("SSE-CLIENT-OVERFLOW", \op.queueRawString(), "z");
+            assertTrue(op.isDisconnected(), "the client is dropped");
+            assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
+        }
+        {
+            # a stream that has already ended is closed, not dropped for its bound
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            op.abort();
+            assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
+        }
+        {
+            # a draining stream (close()) still has a client, which is dropped for its bound
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            op.close();
+            assertEq(HttpServerAsyncIo::HttpSseStreamPollOperation::STATE_DRAINING, op.getState());
+            assertThrows("SSE-CLIENT-OVERFLOW", \op.queueRawString(), "z");
+            assertTrue(op.isDisconnected(), "the client of the draining stream is dropped");
+        }
+        {
+            # the end of a stream reported before its peer-close callback is set is delivered when it is set
+            HttpServerAsyncIo::Http2SseStream h2(new Socket(), 1);
+            h2.notifyPeerClosed();
+            int calls = 0;
+            h2.setPeerCloseCallback(sub () { ++calls; });
+            assertEq(1, calls, "a callback set after the end of the stream is called at once");
+        }
+        {
+            HttpServerAsyncIo::Http2SseStream h2(new Socket(), 1);
+            assertThrows("SSE-OPTION-ERROR", \h2.setMaxBufferSize(), 0);
+            assertFalse(h2.hasMaxBufferSize());
+            assertEq(HttpServerAsyncIo::DefaultSseMaxBufferSize, h2.getMaxBufferSize());
+        }
+        Socket s();
+        assertThrows("HTTP2-ERROR", \s.setHttp2StreamSendLimit(), (1, 1024));
+        assertThrows("QUIC-ERROR", \s.setQuicStreamSendLimit(), (1, 0, 1024));
+        assertThrows("QUIC-ERROR", \s.setQuicStreamSendLimit(), (0, 0, 1024));
+
+        # the bound of the listener, or of the handler when it sets one; the QUIC listener takes the bound of its TCP
+        # listener
+        handler.reset();
+        override_handler.reset();
+        list<Reader> readers = (
+            new Reader("h1", h1_small, "read"),
+            new Reader("h1", h1_small, "override"),
+            new Reader("h2", tls_large, "read2"),
+            new Reader("h3", tls_small, "read3"),
+        );
+        on_exit map $1.close(), readers;
+        assertEq(SmallBound, handler.waitConn("read").getAsyncPollOp().getMaxBufferSize());
+        assertEq(12345, override_handler.waitConn("override").getAsyncPollOp().getMaxBufferSize());
+        assertEq(LargeBound, handler.waitConn("read2").getAsyncSseConnection().getMaxBufferSize());
+        assertEq(SmallBound, handler.waitConn("read3").getAsyncSseConnection().getMaxBufferSize());
+
+        # an error in the message itself is raised by a send to all connections
+        assertThrows("SSE-EVENT-ERROR", \handler.sendAll(), <SseMessageInfo>{"event": "a\nb", "data": "x"});
+
+        # an event source gets a stream with the listener's bound
+        Reader src_reader("h1", h1_small, "source");
+        on_exit src_reader.close();
+        assertEq(0, source_handler.src.started.waitForZero(HangGuard));
+        assertEq(SmallBound, source_handler.src.bound, "the event source's stream has the listener's bound");
+    }
+
+    testBroadcast(string proto) {
+        handler.reset();
+        StalledClient stalled = getStalled(proto, "stall");
+        on_exit stalled.close();
+        ServerSentEventHandler::ServerSentEventConnection sconn = handler.waitConn("stall");
+        Reader reader(proto, getLargePort(proto), "read");
+        on_exit reader.close();
+        handler.waitConn("read");
+
+        hash<PublishResult> r = publish(sub (int i) {
+            handler.sendAll(<SseMessageInfo>{"event": "n", "id": string(i), "data": payload});
+        }, bool sub () { return handler.isGone(sconn.cid); }, sub () {
+            handler.sendAll(<SseMessageInfo>{"event": "done", "data": "done"});
+        });
+        assertTrue(r.ended, "the publisher never waits for the stalled client");
+        assertNothing(r.ex, "a broadcast raises no exception for the state of one client");
+        assertTrue(handler.isGone(sconn.cid), "the stalled client is dropped");
+        assertEq(0, reader.wait(), "the reading client gets the end of the events");
+        assertNothing(reader.err);
+        assertEq(r.sent ? range(r.sent) : (), reader.ids, "the reading client gets every event");
+    }
+
+    testDirectSend(string proto) {
+        handler.reset();
+        StalledClient stalled = getStalled(proto, "stall");
+        on_exit stalled.close();
+        ServerSentEventHandler::ServerSentEventConnection sconn = handler.waitConn("stall");
+
+        *hash<ExceptionInfo> first_ex;
+        hash<PublishResult> r = publish(sub (int i) {
+            # on HTTP/2 and HTTP/3 no data reaches the stalled client: one event larger than the bound is still
+            # taken when nothing else is held, the next one overflows
+            string data = (proto != "h1" && !i) ? strmul("x", SmallBound * 2) : payload;
+            try {
+                handler.sendOne(sconn.cid, <SseMessageInfo>{"event": "n", "id": string(i), "data": data});
+            } catch (hash<ExceptionInfo> ex) {
+                if (!i) {
+                    first_ex = ex;
+                }
+                rethrow;
+            }
+        }, bool sub () { return False; });
+        assertTrue(r.ended, "the direct send never waits for the stalled client");
+        assertEq(HttpServerAsyncIo::SseClientOverflowErr, r.ex.err, "the direct send raises SSE-CLIENT-OVERFLOW");
+        if (proto != "h1") {
+            assertNothing(first_ex, "an event larger than the bound is taken when nothing else is held");
+            assertEq(1, r.sent, "the event after it overflows");
+        }
+        assertTrue(handler.isGone(sconn.cid), "the stalled client is dropped");
+    }
+
+    testObservable(string proto) {
+        CountingObservable src = obs_handler.src;
+        int base = src.getLive();
+        StalledClient stalled = getStalled(proto, "obs-stall");
+        on_exit stalled.close();
+        assertTrue(src.waitLive(base + 1), "the stalled client's source is registered");
+        Reader reader(proto, getLargePort(proto), "obs-read");
+        on_exit reader.close();
+        assertTrue(src.waitLive(base + 2), "the reading client's source is registered");
+
+        hash<PublishResult> r = publish(sub (int i) {
+            src.notifyObservers(sprintf("e%d", i), {"pad": payload});
+        }, bool sub () { return src.getLive() == base + 1; }, sub () {
+            src.notifyObservers("done", {});
+        });
+        assertTrue(r.ended, "the publisher never waits for the stalled client");
+        assertNothing(r.ex, "the publisher gets no exception for the state of one client");
+        assertTrue(src.waitLive(base), "the sources of both streams are stopped");
+        assertEq(0, reader.wait(), "the reading client gets the end of the events");
+        assertNothing(reader.err);
+        assertEq(r.sent ? range(r.sent) : (), reader.ids, "the reading client gets every event");
+    }
+
+    testBroadcastClosed() {
+        handler.reset();
+        StalledClient stalled = getStalled("h2", "stall");
+        on_exit stalled.close();
+        ServerSentEventHandler::ServerSentEventConnection sconn = handler.waitConn("stall");
+        Reader closed_reader("h2", tls_large, "closed");
+        on_exit closed_reader.close();
+        ServerSentEventHandler::ServerSentEventConnection cconn = handler.waitConn("closed");
+        Reader reader("h1", h1_large, "read");
+        on_exit reader.close();
+        handler.waitConn("read");
+
+        # the stream of "closed" is closed and its connection stays registered: its deregistration by the end of the
+        # stream waits for the gate, which only the publisher's own deregistrations pass
+        Counter armed(1);
+        Counter go(1);
+        on_exit handler.releaseGate();
+        hash<PublishResult> r = publish(sub (int i) {
+            if (!i) {
+                handler.armGate(gettid());
+                armed.dec();
+                go.waitForZero(HangGuard);
+            }
+            handler.sendAll(<SseMessageInfo>{"event": "n", "id": string(i), "data": payload});
+        }, bool sub () { return handler.isGone(sconn.cid); }, sub () {
+            handler.sendAll(<SseMessageInfo>{"event": "done", "data": "done"});
+        }, sub () {
+            assertEq(0, armed.waitForZero(HangGuard));
+            cconn.getAsyncSseConnection().close();
+            go.dec();
+        });
+        assertTrue(r.ended, "the publisher never waits for the stalled client");
+        assertNothing(r.ex, "a broadcast raises no exception for an overflowing or a closed stream");
+        assertTrue(handler.isGone(sconn.cid), "the stalled client is dropped");
+        assertTrue(handler.isGone(cconn.cid), "the closed stream's connection is deregistered by the broadcast");
+        assertEq(0, reader.wait(), "the reading client gets the end of the events");
+        assertNothing(reader.err);
+        assertEq(r.sent ? range(r.sent) : (), reader.ids, "the reading client gets every event");
+    }
+
+    #! Publishes events on a thread of its own until @p stop returns True (or MaxSends events), then calls @p finish
+    /** @param send publishes event @p i
+        @param stop returns True when publishing ends
+        @param finish called after the events, if any
+        @param started called on this thread once the publisher has started, if any
+    */
+    private hash<PublishResult> publish(code send, code stop, *code finish, *code started) {
+        hash<PublishResult> r();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                while (r.sent < MaxSends && !stop()) {
+                    send(r.sent);
+                    ++r.sent;
+                }
+                if (finish) {
+                    finish();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                r.ex = ex;
+            }
+        }();
+        if (started) {
+            started();
+        }
+        r.ended = !done.waitForZero(HangGuard);
+        return r;
+    }
+
+    private StalledClient getStalled(string proto, string path) {
+        # the HTTP/3 client is stalled by a hook of debug builds
+        if (proto == "h3" && !Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the data of an HTTP/3 stream is only in debug builds");
+        }
+        switch (proto) {
+            case "h1": return new StalledH1(h1_small, path);
+            case "h2": return new StalledH2(h2c_small, path);
+            case "h3": return new StalledH3(tls_small, path);
+        }
+        throw "SSE-TEST-ERROR", proto;
+    }
+
+    private int getLargePort(string proto) {
+        return proto == "h1" ? h1_large : tls_large;
+    }
+}

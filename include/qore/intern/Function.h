@@ -1498,9 +1498,32 @@ public:
         return statements;
     }
     DLLLOCAL StatementBlock* getEntryStatementBlock() const {
-        return statements ? statements : aot_entry_statement;
+        if (statements) {
+            return statements;
+        }
+        return aot_entry_statement;
+    }
+    //! Returns the block that the debugger's events of the variant's code are given with
+    /** As getEntryStatementBlock(), but code without a parse tree or an entry block, as an AOT closure, gets a block
+        at the location of its signature while a debugger is attached to its Program, so that its debug IR makes the
+        debugger's events as the debug IR of an AOT function does with its entry block (#5795).  The block gives the
+        variant no parse options, unlike the entry block of a function (setAOTEntryStatementBlock()); its Program
+        owns it and keeps it by location (qore_program_private::getAOTClosureDebugBlock()), so that the variant has
+        no state for it.  Without a debugger, the code runs without a block, as before.
+    */
+    DLLLOCAL StatementBlock* getDebugEntryStatementBlock() const {
+        if (statements) {
+            return statements;
+        }
+        return aot_entry_statement ? aot_entry_statement : getAOTClosureDebugBlock();
     }
     DLLLOCAL void setAOTEntryStatementBlock(StatementBlock* b);
+
+protected:
+    //! the block of getDebugEntryStatementBlock() for code without a parse tree or an entry block: an AOT closure
+    DLLLOCAL StatementBlock* getAOTClosureDebugBlock() const;
+
+public:
 
     DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 
@@ -2178,7 +2201,7 @@ public:
 
     // finds a variant using destructive evaluation of temporary arguments and executes the variant
     DLLLOCAL QoreValue evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
@@ -2190,18 +2213,22 @@ public:
 
         @param args_with_value if given, true for each argument whose expression always has a value of its type (see
         parse_arg_always_has_value()); such an argument cannot select another variant by having no value
+        @param union_rt if given, it gives the return type of the given variant (nullptr if it has none that the call
+        can have), and is set to the return type that covers it and every other variant that could be resolved at run
+        time (qore_union_return_type()), or nullptr if there is no such type; all of the variants are then checked
     */
     DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
             const qore_class_private* class_ctx, QoreParseOptions po,
             const arg_value_vec_t* args_with_value = nullptr,
-            const std::vector<bool>* named_positions = nullptr) const;
+            const std::vector<bool>* named_positions = nullptr, const QoreTypeInfo** union_rt = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
-            const arg_value_vec_t* args_with_value = nullptr) const;
+            const arg_value_vec_t* args_with_value = nullptr,
+            const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
@@ -2215,7 +2242,8 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
-            const arg_value_vec_t* args_with_value = nullptr) const;
+            const arg_value_vec_t* args_with_value = nullptr,
+            const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none

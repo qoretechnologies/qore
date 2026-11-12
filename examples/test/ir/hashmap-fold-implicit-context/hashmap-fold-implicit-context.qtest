@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit arguments of hash map, hash map-select and folds
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class HashMapFoldImplicitContextTest
+
+#! issue #5691: hash map, hash map-select, foldl and foldr set the implicit arguments for code that reads them
+/** The code of hash map and hash map-select runs with the element as the implicit argument list and its index as the
+    implicit element, and the expression of foldl and foldr (also as the last stage of a fused pipeline) with
+    (accumulator, element), also in compiled code when the code reads them at run time (code that the AST interpreter
+    evaluates, such as a constructor call), decided before the code is lowered; the context is restored when the code
+    raises an exception, also when the exception leaves the function.  Before, compiled code set the context only
+    when the lowering of the code had delegated an expression to the AST interpreter, so other code read the caller's
+    arguments, a fold lost an element, an exception could be lost and the caller's arguments were left changed.
+
+    hashmap-fold-implicit-context.q prints the values; the AST interpreter's output must be the expected one, and every
+    other execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
+*/
+class HashMapFoldImplicitContextTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = (
+            "hm typed $2 {x1: \"-\", x2: \"-\"}",
+            "hm untyped $2 {x1: \"-\", x2: \"-\"}",
+            "hm iterator $2 {x1: \"-\", x2: \"-\"}",
+            "hm value ctx {x1: \"x1\", x2: \"x2\"}",
+            "hm key ctx {x1-0: 0, x2-1: 1}",
+            "hm untyped ctx {x1: \"x1-0\", x2: \"x2-1\"}",
+            "hm iterator ctx {x1: \"x1-0\", x2: \"x2-1\"}",
+            "hm plain {x1: 0, x2: 1}",
+            "hms pred ctx {x1: 0, x2: 1}",
+            "hms insert ctx {x2: \"-\"}",
+            "hms both {x1: \"-\", x2: \"-\"}",
+            "hms untyped both {x1: \"-\", x2: \"-\"}",
+            "hms iterator both {x1: \"-\", x2: \"-\"}",
+            "hms value ctx {x2: \"x2-1\"}",
+            "hms plain {x1: 0}",
+            "foldl ctx \"abc\"",
+            "foldr ctx \"cba\"",
+            "foldl typed ctx 6",
+            "foldr typed ctx 6",
+            "foldl iterator ctx \"x1x2\"",
+            "foldl plain 6",
+            "foldr plain 6",
+            "foldl fused ctx \"a!b!\"",
+            "foldl fused plain 30",
+            "hm catch STAGE released h1 h2 h3 ",
+            "hms catch STAGE released h1 h2 h3 ",
+            "foldl catch FOLD \"a\"",
+            "foldl leaves function FOLD \"a\"",
+            "function args [\"a\", \"b\"]",
+            "top $1 null",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("hash map and fold implicit context", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/hashmap-fold-implicit-context.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("hashmap-fold-implicit-context-aot-");
+        string exe = dir.path + "/hashmap-fold-implicit-context";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

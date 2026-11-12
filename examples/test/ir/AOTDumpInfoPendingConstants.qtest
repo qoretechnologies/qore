@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc, which runs in a child process of its own
+# test-platform: macos - AOT code generation and linking, and the reader of the AOT image
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDumpInfoPendingConstantsTest
+
+#! `qcc --dump-info` reads every constant entry that the writer writes (qore#5799)
+/** AOT format v15 and later write the compile-time value of a pending constant (one whose initializer is evaluated
+    at run time) after its placeholder value.  The loader reads it, but the `--dump-info` scanner of the constants
+    and of the class constants did not, so it read the next entry from the middle of that value and reported
+    "truncated class constant entry" or "unknown serialized value tag N".
+*/
+class AOTDumpInfoPendingConstantsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTDumpInfoPendingConstantsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string module_dir = libqore_dir + "/modules/reflection";
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir, libqore_dir, module_dir);
+
+        addTestCase("pending class constants are dumped", \testPendingClassConstants());
+        addTestCase("pending namespace constants are dumped", \testPendingNamespaceConstants());
+        addTestCase("pending and plain constants together", \testMixedConstants());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string dump(string name, string body) {
+        TmpDir tmp("qore-aot-dump-pending-constants-");
+        string src = tmp.path + "/" + name + ".qc";
+        string out = tmp.path + "/" + name + ".qo";
+        write(src, "%new-style\n" + body);
+        string compile_out = backquote(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s 2>&1", env, qcc_bin, out,
+            src));
+        if (!is_file(out)) {
+            testSkip("qcc is not available or cannot compile " + name + ": " + compile_out);
+        }
+        return backquote(sprintf("%s %s --dump-info %s 2>&1", env, qcc_bin, out));
+    }
+
+    private checkDump(string name, string dump, int total) {
+        assertFalse(dump =~ /truncated/, name + ": no truncated entry: " + dump);
+        assertFalse(dump =~ /unknown serialized value tag/, name + ": no value tag error: " + dump);
+        assertFalse(dump =~ /serialized defaults: error/, name + ": no scan error: " + dump);
+        # every constant value is counted once; the compile-time value of a pending one is not a default
+        assertTrue(dump.find(sprintf("serialized defaults: total=%d ", total)) != -1,
+            sprintf("%s: %d serialized values: %s", name, total, dump));
+    }
+
+    testPendingClassConstants() {
+        string d = dump("class-consts", "int sub f() { return 5; }\n"
+            "class K {\n"
+            "    const A = 1;\n"
+            "    const B = f();\n"
+            "    const C = \"x\" + \"y\";\n"
+            "    const D = (1, 2);\n"
+            "}\n");
+        checkDump("class constants", d, 4);
+    }
+
+    testPendingNamespaceConstants() {
+        string d = dump("ns-consts", "int sub g() { return 7; }\n"
+            "const NSC = g();\n"
+            "const NSV = (\"a\", \"b\");\n"
+            "const NSW = g() + 1;\n");
+        checkDump("namespace constants", d, 3);
+    }
+
+    testMixedConstants() {
+        string d = dump("mixed-consts", "int sub g() { return 7; }\n"
+            "const NSC = g();\n"
+            "class K2 {\n"
+            "    const P = g();\n"
+            "    const Q = (1, 2, 3);\n"
+            "    const R = g() * 2;\n"
+            "}\n"
+            "const NSV = (\"a\", \"b\");\n");
+        checkDump("mixed constants", d, 5);
+    }
+}

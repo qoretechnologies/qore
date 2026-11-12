@@ -40,11 +40,20 @@ public class AbstractSseConnection {
         #! Callback run once when the transport reports that the peer is gone
         *code<nothing()> peer_close_callback;
 
+        #! Set once the client has been dropped for exceeding the bound (the warning is logged once)
+        bool overflow_dropped = False;
+
         #! Set when @ref notifyPeerClosed() has already run the callback
         bool peer_close_fired = False;
 
         #! Protects the peer-close callback slot
         Mutex peer_close_mutex();
+
+        #! The bound of the data held for the client set with @ref setMaxBufferSize(), if any
+        *int max_buffer_size;
+
+        #! The callback that logs a warning, set with @ref setWarningCallback()
+        *code<nothing(string)> warning_callback;
     }
 
     #! Returns the underlying transport protocol
@@ -59,11 +68,24 @@ public class AbstractSseConnection {
         this callback to deregister the connection from its handler, mirroring
         @ref HttpSseStreamPollOperation::setCloseCallback() on the HTTP/1.x path.
 
-        @param cb the callback; called at most once, from a worker thread
+        @param cb the callback; called at most once; if the stream has already ended (for example when its client
+        was dropped while the connection was being set up), it is called at once on this thread
+
+        @note the callback runs on the thread that reports the end of the stream: a worker thread for an end that
+        the transport reports, or the thread that queued the event for a client dropped for exceeding its bound
     */
     setPeerCloseCallback(*code<nothing()> cb) {
-        AutoLock al(peer_close_mutex);
-        peer_close_callback = cb;
+        {
+            AutoLock al(peer_close_mutex);
+            if (!peer_close_fired) {
+                peer_close_callback = cb;
+                return;
+            }
+        }
+        # the end reported before the callback was set is delivered now
+        if (cb) {
+            cb();
+        }
     }
 
     #! Marks the stream closed and runs the peer-close callback exactly once
@@ -94,6 +116,56 @@ public class AbstractSseConnection {
         }
     }
 
+    #! Sets the bound of the data held for the client of the stream
+    /** The data held for the client is the data queued but not yet written to the socket (HTTP/1.x), or buffered for
+        the stream beyond what the client's flow-control window has accepted (HTTP/2 and HTTP/3).  Queueing an event
+        that would take it over the bound, when it is not the only data held, drops the client and raises
+        \c SSE-CLIENT-OVERFLOW; see @ref httpserverasyncio_sse_buffer.
+
+        @param size the bound in bytes; must be > 0
+
+        @throw SSE-OPTION-ERROR the size is not positive
+
+        @see @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize"
+    */
+    setMaxBufferSize(int size) {
+        if (size <= 0) {
+            throw "SSE-OPTION-ERROR", sprintf("the SSE buffer bound must be > 0; got %d", size);
+        }
+        applyMaxBufferSize(size);
+        AutoLock al(peer_close_mutex);
+        max_buffer_size = size;
+    }
+
+    #! Returns the bound of the data held for the client of the stream, in bytes
+    /** @return the bound set with @ref setMaxBufferSize(), or
+        @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize" if none was set
+    */
+    int getMaxBufferSize() {
+        AutoLock al(peer_close_mutex);
+        return max_buffer_size ?? DefaultSseMaxBufferSize;
+    }
+
+    #! Returns @ref True if a bound was set with @ref setMaxBufferSize()
+    bool hasMaxBufferSize() {
+        AutoLock al(peer_close_mutex);
+        return exists max_buffer_size;
+    }
+
+    #! Sets the callback that logs a warning when the client of the stream is dropped
+    /** @param cb the callback, called with the message; exceptions that it raises are ignored
+    */
+    setWarningCallback(*code<nothing(string)> cb) {
+        AutoLock al(peer_close_mutex);
+        warning_callback = cb;
+    }
+
+    #! Returns @ref True if a warning callback was set with @ref setWarningCallback()
+    bool hasWarningCallback() {
+        AutoLock al(peer_close_mutex);
+        return exists warning_callback;
+    }
+
     #! Queues an SSE event for sending
     /** @param event_type the event type (optional)
         @param data the event data
@@ -102,6 +174,8 @@ public class AbstractSseConnection {
 
         @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
         non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
+        @throw SSE-CLIENT-OVERFLOW the event would take the data held for the client over its bound (see
+        @ref setMaxBufferSize()); the event is not queued, and the client has been dropped
     */
     abstract queueEvent(*string event_type, string data, *string id, *int retry);
 
@@ -110,6 +184,8 @@ public class AbstractSseConnection {
 
         @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
         non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
+        @throw SSE-CLIENT-OVERFLOW the event would take the data held for the client over its bound (see
+        @ref setMaxBufferSize()); the event is not queued, and the client has been dropped
     */
     abstract queueRawEvent(hash<auto> event);
 
@@ -117,9 +193,12 @@ public class AbstractSseConnection {
     /** The string must already be formatted per the SSE spec (e.g., from
         \c ServerSentEventHandler::encodeMessage()).  Used by
         \c ServerSentEventConnection::sendEncoded() to deliver events across
-        all HTTP protocol versions through a uniform write path.
+        all HTTP protocol versions through a uniform write path.  It never waits for the client.
 
         @param data the pre-formatted SSE frame text
+
+        @throw SSE-CLIENT-OVERFLOW the frame would take the data held for the client over its bound (see
+        @ref setMaxBufferSize()); the frame is not queued, and the client has been dropped
     */
     abstract queueRawString(string data);
 
@@ -148,6 +227,59 @@ public class AbstractSseConnection {
 
     #! Aborts the connection immediately
     abstract abort();
+
+    #! Applies the bound of the data held for the client to the transport; called by @ref setMaxBufferSize()
+    /** The default implementation does nothing.
+    */
+    private applyMaxBufferSize(int size) {
+    }
+
+    #! Drops the client of a stream whose data would exceed its bound, and raises \c SSE-CLIENT-OVERFLOW
+    /** Logs a warning through the warning callback, aborts the stream, and reports its end as for any other end
+        (@ref notifyPeerClosed()); used by the multiplexed transports, whose streams learn about their end only from
+        an explicit notification.
+
+        @param len the size of the data that could not be queued
+
+        @throw SSE-CLIENT-OVERFLOW always
+    */
+    private dropOverflowingClient(int len) {
+        string msg = sprintf("%s SSE stream: queueing %d bytes would take the data held for the client over its "
+            "bound of %d bytes; dropping the client", getProtocol(), len, getMaxBufferSize());
+        bool first;
+        {
+            AutoLock al(peer_close_mutex);
+            first = !overflow_dropped;
+            overflow_dropped = True;
+        }
+        # concurrent producers can all find the stream over its bound; the drop is logged once
+        if (first) {
+            warn(msg);
+        }
+        try {
+            abort();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended
+        }
+        notifyPeerClosed();
+        throw SseClientOverflowErr, msg;
+    }
+
+    #! Logs a warning through the warning callback, if any
+    private warn(string msg) {
+        *code<nothing(string)> cb;
+        {
+            AutoLock al(peer_close_mutex);
+            cb = warning_callback;
+        }
+        if (cb) {
+            try {
+                cb(msg);
+            } catch (hash<ExceptionInfo> ex) {
+                # logging must not change the outcome
+            }
+        }
+    }
 }
 
 #! Stream listener that tears down a multiplexed SSE stream when its peer goes away
@@ -268,6 +400,27 @@ public class Http1SseConnection inherits AbstractSseConnection {
 
     abort() {
         poll_op.abort();
+    }
+
+    #! Sets the bound of the data queued for the client; see @ref HttpSseStreamPollOperation::setMaxBufferSize()
+    setMaxBufferSize(int size) {
+        poll_op.setMaxBufferSize(size);
+    }
+
+    int getMaxBufferSize() {
+        return poll_op.getMaxBufferSize();
+    }
+
+    bool hasMaxBufferSize() {
+        return poll_op.hasMaxBufferSize();
+    }
+
+    setWarningCallback(*code<nothing(string)> cb) {
+        poll_op.setWarningCallback(cb);
+    }
+
+    bool hasWarningCallback() {
+        return poll_op.hasWarningCallback();
     }
 
     #! Returns the underlying poll operation for direct access if needed

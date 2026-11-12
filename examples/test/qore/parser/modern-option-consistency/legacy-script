@@ -1,5 +1,0 @@
-#!/usr/bin/env qore
-# a legacy script without an extension (parsed in %modern mode by default) that opts out with %old-style; an option
-# given on the command line for it is suspended while %modern is in effect and applies after %old-style
-%old-style
-printf("range: %y\n", range(1, 2));
