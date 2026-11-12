@@ -1196,7 +1196,8 @@ After teardown, `thread_list.deleteDataRelease()` releases the TID slot, whose
 
 ### Program Scope: Who Can Cancel Whom?
 
-`Program::cancelThread(tid, reason)` uses the Program as an explicit target scope. It checks membership under the
+`Program::cancelThread(tid, reason)` (and `ProgramControl::cancelThread()`, with which a debugger ends the threads
+of a program it debugs; qore#5854) uses the Program as an explicit target scope. It checks membership under the
 Program lock, releases that lock before entering the thread registry, and sends the Program ID with the request.
 The target's normal cancellation checkpoint rejects a request if the ID was recycled outside that scope.
 `Program::cancelThreads(reason)` also sets a cancellation wave under the Program lock: preregistered threads and

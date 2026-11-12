@@ -593,10 +593,14 @@ public namespace DebugProgramControl {
                     if (tid == gettid() || endedThreads{pgm_id}{tid}) {
                         continue;
                     }
+                    # the request is scoped to the program: a thread that called into it, such as a host thread,
+                    # does not raise it in its own code after the call returns, also when debugging ends before the
+                    # thread detaches and nothing in the debugger clears it (qore#5854)
                     try {
-                        cancel_thread(tid, TerminateReason);
+                        pgm.cancelThread(tid, TerminateReason);
                     } catch (hash<ExceptionInfo> ex) {
-                        # a thread that has ended
+                        # not expected: the current thread is skipped and the IDs are valid; a thread that has left the
+                        # program is not cancelled (False)
                     }
                 }
             }

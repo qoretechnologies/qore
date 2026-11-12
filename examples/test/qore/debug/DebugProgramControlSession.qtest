@@ -373,7 +373,16 @@ class DebuggedProgram {
         try {
             done.push({"rc": pgm.run()});
         } catch (hash<ExceptionInfo> ex) {
-            done.push({"ex": ex});
+            # the code of this thread after the run: a cancellation that ended the program applies only to it, so a
+            # loop, a cancellation point, does not raise it again here (qore#5854)
+            *string host_cancel;
+            try {
+                foreach int i in (range(2)) {
+                }
+            } catch (hash<ExceptionInfo> ex2) {
+                host_cancel = ex2.err;
+            }
+            done.push({"ex": ex, "host_cancel": host_cancel});
         }
     }
 
@@ -1892,6 +1901,9 @@ int x = 1;
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);
         assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+        # the cancellation, which the debugger no longer clears at the detach of the thread, is scoped to the program:
+        # the code of the thread that ran it is not cancelled after the run (qore#5854)
+        assertNothing(rv.host_cancel, "the thread is not cancelled after the run");
     }
 
     # a thread in the debugger's code when the debugger ends its program, which is not stopped so it is cancelled: the
