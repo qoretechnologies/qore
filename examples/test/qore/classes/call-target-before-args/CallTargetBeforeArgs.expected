@@ -64,6 +64,19 @@ valid method call:
 existing pseudo-method:
   arg function called
   "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
+  arg function called
+  "bc"
+pseudo-method on an overridden method's result:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an overridden method's result, unqualified call:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
 hash member call reference:
   arg evaluated
   closure called
@@ -134,6 +147,19 @@ valid method call:
 existing pseudo-method:
   arg function called
   "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
+  arg function called
+  "bc"
+pseudo-method on an overridden method's result:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an overridden method's result, unqualified call:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
 hash member call reference:
   arg evaluated
   closure called
@@ -204,6 +230,19 @@ valid method call:
 existing pseudo-method:
   arg function called
   "bc"
+pseudo-method on an unassigned string:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an unassigned hash member:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on a call result:
+  arg function called
+  "bc"
+pseudo-method on an overridden method's result:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
+pseudo-method on an overridden method's result, unqualified call:
+  PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::substr() has been defined
 hash member call reference:
   arg evaluated
   closure called

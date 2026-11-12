@@ -26,6 +26,34 @@ class A {
     }
 }
 
+#! a declared string that can have no value
+hashdecl StringField {
+    string a;
+}
+
+class StringMember {
+    public {
+        string m;
+    }
+}
+
+#! a method returning a string, which a subclass overrides with a method that can return no value
+class StringSource {
+    string get() {
+        return "abc";
+    }
+
+    #! an unqualified call to the method, dispatched on the object's class
+    substrOfOwn() {
+        get().substr(arg_value());
+    }
+}
+
+class NoStringSource inherits StringSource {
+    *string get() {
+    }
+}
+
 class Sub inherits C {
 }
 
@@ -179,6 +207,24 @@ sub cases() {
     check("valid call reference", sub () { C o(); code r = \o.m(); r(new A()); });
     check("valid method call", sub () { C o(); o.m(new A()); });
     check("existing pseudo-method", sub () { string s = "abc"; printf("  %y\n", s.substr(arg_value())); });
+    # a value declared string can have no value: the "<nothing>" pseudo-class has no such method
+    check("pseudo-method on an unassigned string", sub () { string s; s.substr(arg_value()); });
+    check("pseudo-method on an unassigned member", sub () { StringMember o(); o.m.substr(arg_value()); });
+    check("pseudo-method on an unassigned hash member", sub () {
+        hash<StringField> h();
+        h.a.substr(arg_value());
+    });
+    # the result of a call with a return type that excludes no value
+    check("pseudo-method on a call result", sub () { printf("  %y\n", "ABC".lwr().substr(arg_value())); });
+    # a method call result: a subclass can override the method with one that returns no value
+    check("pseudo-method on an overridden method's result", sub () {
+        StringSource s = new NoStringSource();
+        s.get().substr(arg_value());
+    });
+    check("pseudo-method on an overridden method's result, unqualified call", sub () {
+        StringSource s = new NoStringSource();
+        s.substrOfOwn();
+    });
     check("hash member call reference", sub () {
         hash<auto> h = {"f": sub (auto a) { printf("  closure called\n"); }};
         h.f(new A());

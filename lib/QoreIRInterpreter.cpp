@@ -10457,6 +10457,12 @@ load_local_done:
                         ++ip;
                         break;
                     }
+                    // and a call of a closure, which is always callable and has no object
+                    if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::CallReference
+                            && target_node && target_node->getType() == NT_RUNTIME_CLOSURE) {
+                        ++ip;
+                        break;
+                    }
                     if (qore_check_call_target(call, out, xsink)) {
                         if (check->exception_target) {
                             // the handler is in this frame: only the raising statement's temps are dead there
