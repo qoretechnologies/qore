@@ -19,6 +19,12 @@ method call of subclass:
   OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
 method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:
@@ -83,6 +89,12 @@ method call of subclass:
   OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
 method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:
@@ -147,6 +159,12 @@ method call of subclass:
   OBJECT-ALREADY-DELETED: cannot call Sub::m() on an object that has already been deleted
 method call through weak reference:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+method call through opaque reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+valid method call through opaque reference:
+  arg evaluated
+  C::m() called
+  arg destroyed
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:

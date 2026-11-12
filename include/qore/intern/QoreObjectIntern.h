@@ -846,6 +846,24 @@ public:
         return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
     }
 
+    //! The byte offset of an object's private data pointer, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getPrivOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // QoreObject has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(QoreObject, priv));
+#pragma GCC diagnostic pop
+    }
+
+    //! The byte offset of the status in an object's private data, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getStatusOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // qore_object_private has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(qore_object_private, status));
+#pragma GCC diagnostic pop
+    }
+
     DLLLOCAL static QoreStringNode* firstKey(QoreObject* obj, ExceptionSink* xsink) {
         return obj->priv->firstKey(xsink);
     }

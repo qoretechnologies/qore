@@ -8,6 +8,7 @@
 
 %modern
 %allow-weak-references
+%allow-opaque-references
 
 class C {
     m(auto a) {
@@ -145,6 +146,8 @@ sub cases() {
     # other receivers of a deleted object
     check("method call of subclass", sub () { Sub o(); C o2 = o; delete o; o2.m(new A()); });
     check("method call through weak reference", sub () { C o(); C o2 := o; delete o; o2.m(new A()); });
+    check("method call through opaque reference", sub () { C o(); C o2 @= o; delete o; o2.m(new A()); });
+    check("valid method call through opaque reference", sub () { C o(); C o2 @= o; o2.m(new A()); });
     # an argument read through a reference
     check("reference argument", sub () { object g = new Gate(); call_with_reference(\g.y); });
     check("optional reference argument", sub () { object g = new Gate(); call_with_optional_reference(\g.y); });

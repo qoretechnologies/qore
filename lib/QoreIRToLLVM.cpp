@@ -33,6 +33,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRToLLVM.h"
+#include "qore/intern/JITRuntime.h"
 
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
@@ -1160,6 +1161,8 @@ static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 
 static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
 // the top 12 bits of an opaque reference (QoreValue::TAG12_OPAQUE)
 static constexpr uint64_t TAG12_OPAQUE       = 0xFFD;
+// the top 16 bits of an opaque reference to an object (QoreValue::TAG_OPAQUE_OBJECT: OPAQUE_KIND_OBJECT is 0)
+static constexpr uint64_t TAG16_OPAQUE_OBJECT = TAG12_OPAQUE << 4;
 static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
 static constexpr uint64_t VAL_NOTHING        = 0;
 static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
@@ -1997,6 +2000,56 @@ llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
 // pointer value (tag == TAG_POINTER) or an opaque reference (the 0xFFD tag family), which owns its node like a pointer
 // value; a node held through an opaque reference must be referenced and released like any other
 // Uses bit operations to extract tag and check for pointer type
+llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func) {
+    // JIT only: the layout is the running libqore's (issue #5784)
+    assert(!aot_mode);
+    llvm::LLVMContext& ctx = builder->getContext();
+    llvm::Value* tag = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 48), "obj.tag");
+    llvm::Value* addr = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK), "obj.addr");
+    llvm::Value* is_node = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER >> 48)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "obj.is.node");
+    llvm::Value* is_opaque_object = builder->CreateICmpEQ(tag,
+        llvm::ConstantInt::get(i64_type, TAG16_OPAQUE_OBJECT), "obj.is.opaque");
+    llvm::BasicBlock* node_block = llvm::BasicBlock::Create(ctx, "obj.node", llvm_func);
+    llvm::BasicBlock* other_block = llvm::BasicBlock::Create(ctx, "obj.other", llvm_func);
+    llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "obj.status", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "obj.done", llvm_func);
+    builder->CreateCondBr(is_node, node_block, other_block);
+    // a node: its type must be NT_OBJECT
+    builder->SetInsertPoint(node_block);
+    llvm::Value* node_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::Value* type_ptr = builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), node_ptr,
+        layout.type_byte_offset);
+    llvm::LoadInst* type_word = builder->CreateAlignedLoad(i32_type, type_ptr, llvm::MaybeAlign(1), "obj.type.word");
+    llvm::Value* type = builder->CreateAnd(builder->CreateLShr(type_word, layout.type_shift),
+        llvm::ConstantInt::get(i32_type, (1u << 11) - 1));
+    llvm::Value* is_object = builder->CreateICmpEQ(type, llvm::ConstantInt::get(i32_type, NT_OBJECT), "obj.is.object");
+    builder->CreateCondBr(is_object, status_block, done_block);
+    // not a node: an opaque reference to an object is an object
+    builder->SetInsertPoint(other_block);
+    builder->CreateCondBr(is_opaque_object, status_block, done_block);
+    // an object: it must not have been deleted (qore_object_private::isValidInline())
+    builder->SetInsertPoint(status_block);
+    llvm::Value* obj_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::Value* priv = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), obj_ptr, layout.priv_offset), "obj.priv");
+    llvm::LoadInst* status = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.status_offset), llvm::MaybeAlign(4),
+        "obj.status");
+    status->setAtomic(llvm::AtomicOrdering::Monotonic);
+    llvm::Value* valid = builder->CreateICmpNE(status,
+        llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "obj.valid");
+    builder->CreateBr(done_block);
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* result = builder->CreatePHI(i1_type, 3, "obj.valid.object");
+    result->addIncoming(builder->getFalse(), node_block);
+    result->addIncoming(builder->getFalse(), other_block);
+    result->addIncoming(valid, status_block);
+    return result;
+}
+
 llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
     // Extract tag: tag = qv & 0xFFFF000000000000
     llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
@@ -33450,10 +33503,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i1_type, {ptr_type, i32_type, i64_type}, false));
                 no_check = builder->CreateCall(fast, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed});
             } else if (call_val.isPointer() && call_val.getType() != NT_FUNCREFCALL) {
-                // not a call through a call reference: only the object is tested
-                auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
-                    llvm::FunctionType::get(i1_type, {i64_type}, false));
-                no_check = builder->CreateCall(fast, {boxed});
+                // not a call through a call reference: only the object is tested, inline with the layout of the
+                // running libqore if it is known
+                if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
+                    no_check = emitValidObjectTest(boxed, *layout, llvm_func);
+                } else {
+                    auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
+                        llvm::FunctionType::get(i1_type, {i64_type}, false));
+                    no_check = builder->CreateCall(fast, {boxed});
+                }
             } else {
                 auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check",
                     llvm::FunctionType::get(i1_type, {i64_type, i64_type}, false));

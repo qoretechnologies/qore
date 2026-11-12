@@ -1648,6 +1648,89 @@ extern "C" DLLEXPORT bool qore_rt_call_target_is_valid_object(uint64_t target_bi
     return n && n->getType() == NT_OBJECT && qore_object_private::isValidInline(static_cast<const QoreObject*>(n));
 }
 
+// the fields read by the JIT's inline test for a valid object (QoreJITObjectLayout): a plain 32-bit load of the
+// status must see what QoreObject::isValid() sees, and a deleted object's type must fit the 11-bit field
+static_assert(std::is_same<decltype(qore_object_private::status), std::atomic<int>>::value,
+    "the JIT's inline test of an object's status reads a std::atomic<int>");
+static_assert(sizeof(std::atomic<int>) == sizeof(int32_t) && std::atomic<int>::is_always_lock_free,
+    "the JIT's inline test of an object's status reads it as a lock-free 32-bit int");
+static_assert(NT_OBJECT > 0 && NT_OBJECT < (1 << 10), "the JIT's inline test reads the type as an 11-bit field");
+
+//! Finds the position of the type bitfield of an AbstractQoreNode in its storage (see qore_jit_object_layout())
+/** Returns true if exactly one bit position gives the type of every node given.
+*/
+static bool qore_jit_find_type_bits(const std::vector<const AbstractQoreNode*>& nodes, uint32_t& byte_offset,
+        uint32_t& shift) {
+    constexpr size_t size = sizeof(AbstractQoreNode);
+    constexpr uint32_t mask = (1u << 11) - 1;
+    int found = -1;
+    for (size_t bit = 0; bit + 11 <= size * 8; ++bit) {
+        size_t byte = bit / 8;
+        if (byte + sizeof(uint32_t) > size) {
+            break;
+        }
+        bool match = true;
+        for (const AbstractQoreNode* n : nodes) {
+            uint8_t bytes[sizeof(uint32_t)];
+            std::memcpy(bytes, reinterpret_cast<const unsigned char*>(n) + byte, sizeof(bytes));
+            // little-endian, as the JIT code loads it
+            uint32_t word = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8)
+                | (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
+            if (((word >> (bit % 8)) & mask) != static_cast<uint32_t>(n->getType())) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            if (found >= 0) {
+                // more than one position: not known
+                return false;
+            }
+            found = static_cast<int>(bit);
+        }
+    }
+    if (found < 0) {
+        return false;
+    }
+    byte_offset = static_cast<uint32_t>(found / 8);
+    shift = static_cast<uint32_t>(found % 8);
+    return true;
+}
+
+//! Returns the layout read by JIT code, computed once (see qore_jit_object_layout())
+static std::unique_ptr<QoreJITObjectLayout> qore_jit_compute_object_layout() {
+    // the JIT code loads the type's word as little-endian
+    uint16_t endian_probe = 1;
+    uint8_t endian_byte;
+    std::memcpy(&endian_byte, &endian_probe, 1);
+    if (endian_byte != 1) {
+        return nullptr;
+    }
+    // nodes of several types whose values tell every position apart: 3 (string), 4 (date), 7 (binary), 8 (list),
+    // 9 (hash), 11 (number)
+    ExceptionSink xsink;
+    ReferenceHolder<QoreStringNode> str(new QoreStringNode, &xsink);
+    ReferenceHolder<DateTimeNode> date(DateTimeNode::makeAbsolute(nullptr, (int64)0), &xsink);
+    ReferenceHolder<BinaryNode> bin(new BinaryNode, &xsink);
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreNumberNode> num(new QoreNumberNode, &xsink);
+    std::vector<const AbstractQoreNode*> nodes = {*str, *date, *bin, *list, *hash, *num};
+    std::unique_ptr<QoreJITObjectLayout> layout(new QoreJITObjectLayout);
+    if (!qore_jit_find_type_bits(nodes, layout->type_byte_offset, layout->type_shift)) {
+        return nullptr;
+    }
+    layout->priv_offset = qore_object_private::getPrivOffset();
+    layout->status_offset = qore_object_private::getStatusOffset();
+    layout->deleted_status = OS_DELETED;
+    return layout;
+}
+
+const QoreJITObjectLayout* qore_jit_object_layout() {
+    static std::unique_ptr<QoreJITObjectLayout> layout = qore_jit_compute_object_layout();
+    return layout.get();
+}
+
 extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits) {
     return qore_call_target_needs_no_check(fromBits(call_bits), fromBits(target_bits));
 }

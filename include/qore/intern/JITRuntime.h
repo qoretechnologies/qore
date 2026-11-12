@@ -342,6 +342,31 @@ static inline bool qore_call_target_needs_no_check(const QoreValue& call, const 
 //! when the call is compiled): true if the target is an object that has not been deleted
 bool qore_rt_call_target_is_valid_object(uint64_t target_bits);
 
+//! The layout of the fields that JIT-generated code reads to test that a value is an object that has not been deleted
+/** Taken from the running libqore: JIT code is generated and run in the same process.  AOT code never uses it (the AOT
+    runtime identity does not cover the layout of these classes), and calls qore_rt_call_target_is_valid_object()
+    instead (issue #5784).
+*/
+struct QoreJITObjectLayout {
+    //! the byte offset of a 32-bit little-endian word of an AbstractQoreNode holding its 11-bit type
+    uint32_t type_byte_offset;
+    //! the position of the type in that word
+    uint32_t type_shift;
+    //! the byte offset of the QoreObject's private data pointer
+    uint32_t priv_offset;
+    //! the byte offset of the status (a 32-bit atomic int) in the private data
+    uint32_t status_offset;
+    //! the status of a deleted object
+    int32_t deleted_status;
+};
+
+//! Returns the layout of the fields that JIT code reads to test for a valid object, or nullptr if it is not known
+/** The type is a bitfield: its position is found by reading nodes of several known types, and the layout is given only
+    if exactly one position gives the type of each, so a change of the layout makes the JIT call the helper instead of
+    reading the wrong bits.
+*/
+const QoreJITObjectLayout* qore_jit_object_layout();
+
 //! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
 bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
 
