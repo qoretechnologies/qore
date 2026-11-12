@@ -1604,6 +1604,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
+      context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
+      \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
