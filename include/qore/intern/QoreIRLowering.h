@@ -172,18 +172,6 @@ public:
         return stack_limit_reached;
     }
 
-    //! Gives the parameters of the function that is lowered (issue #5784)
-    /** Only a parameter (given a reference by the caller) or the variable of a foreach statement (bound to the
-        elements of a list given by a reference) can hold a reference; a read of another local variable gives its
-        value without running any code, whatever its type.  Without this call every local whose type can hold a
-        reference is taken to hold one (see callArgsMayHaveSideEffects()).
-    */
-    void setParameterLocals(const std::vector<LocalVar*>& params) {
-        param_locals.clear();
-        param_locals.insert(params.begin(), params.end());
-        params_known = true;
-    }
-
     // Expression handler methods - public for use by QoreIRExprRegistry
     // These are implementation details not meant for external use
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
@@ -396,13 +384,6 @@ public:
 private:
     //! set when lowering stopped at QORE_IR_LOWERING_STACK_RESERVE; see stackLimitReached()
     bool stack_limit_reached = false;
-
-    //! the parameters of the function lowered, if known (see setParameterLocals())
-    std::unordered_set<const LocalVar*> param_locals;
-    //! true if param_locals holds the parameters of the function lowered
-    bool params_known = false;
-    //! the variables of the foreach statements lowered so far (see setParameterLocals())
-    std::unordered_set<const LocalVar*> foreach_locals;
 
     //! the number of walks that stopped at the stack reserve in this thread when lowering started
     /** see qore_ir_walk_stack_reserve_reached()

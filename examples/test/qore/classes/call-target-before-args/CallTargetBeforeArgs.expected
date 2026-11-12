@@ -23,6 +23,12 @@ reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
   OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
 call reference from an immediate closure:
@@ -81,6 +87,12 @@ reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
   OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
 call reference from an immediate closure:
@@ -138,6 +150,12 @@ method call through weak reference:
 reference argument:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 optional reference argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local assigned a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+local declared as a reference:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure reading a reference parameter:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
   OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted

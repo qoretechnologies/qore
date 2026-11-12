@@ -2268,11 +2268,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        // its variable is bound to the elements of a list given by a reference: a read of it is taken to have side
-        // effects in the calls lowered from now on (see setParameterLocals())
-        if (LocalVar* foreach_local = getLocalVarFromValue(foreach_stmt->getVar())) {
-            foreach_locals.insert(foreach_local);
-        }
         // Reference iteration (foreach x in \list): natively compile with try/catch
         // wrapping for exception safety.  The runtime helpers manage the opaque
         // RefForeachState (init, get entry, record modified value, finalize/cleanup).
@@ -14597,11 +14592,6 @@ bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_a
         // one, such as auto) gives the referenced value, which can run code (memberGate())
         if (LocalVar* local = getLocalVarFromValue(arg)) {
             if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
-                continue;
-            }
-            // only a parameter or the variable of a foreach statement can hold a reference: another local holds the
-            // value of what it was assigned, a reference included (see setParameterLocals())
-            if (params_known && !param_locals.count(local) && !foreach_locals.count(local)) {
                 continue;
             }
         }

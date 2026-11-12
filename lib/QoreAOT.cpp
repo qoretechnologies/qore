@@ -2776,10 +2776,6 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
-    // the parameters, which alone of the function's locals can hold a reference given by the caller (issue #5784)
-    if (sig) {
-        lowering.setParameterLocals(sig->lv);
-    }
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (q_env_is_set("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());

@@ -6586,8 +6586,6 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
-    // the parameters, which alone of the function's locals can hold a reference given by the caller (issue #5784)
-    lowering.setParameterLocals(signature.lv);
     std::string error;
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (mark_failure) {

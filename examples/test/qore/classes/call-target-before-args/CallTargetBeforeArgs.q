@@ -53,6 +53,41 @@ sub call_with_reference(reference r) {
     o2.m(r);
 }
 
+#! a class without members: a reference to a member of one of its objects raises INVALID-MEMBER when it is read
+class NoMembers {
+}
+
+#! a local assigned a reference holds the reference: reading it raises INVALID-MEMBER
+sub local_reference() {
+    object g = new NoMembers();
+    auto x = \g.q;
+    C o();
+    C o2 = o;
+    delete o;
+    o2.m(x);
+}
+
+#! the same with a local declared as a reference
+sub typed_local_reference() {
+    object g = new NoMembers();
+    reference x = \g.q;
+    C o();
+    C o2 = o;
+    delete o;
+    o2.m(x);
+}
+
+#! a closure reads a reference parameter of the function that creates it
+sub captured_reference(reference r) {
+    C o();
+    C o2 = o;
+    delete o;
+    code c = sub () {
+        o2.m(r);
+    };
+    c();
+}
+
 #! the same with a parameter that can also have no value
 sub call_with_optional_reference(*reference r) {
     C o();
@@ -109,6 +144,13 @@ sub cases() {
     # an argument read through a reference
     check("reference argument", sub () { object g = new Gate(); call_with_reference(\g.y); });
     check("optional reference argument", sub () { object g = new Gate(); call_with_optional_reference(\g.y); });
+    # locals that hold a reference: reading one raises INVALID-MEMBER, which must not come before the check
+    check("local assigned a reference", \local_reference());
+    check("local declared as a reference", \typed_local_reference());
+    check("closure reading a reference parameter", sub () {
+        object g = new NoMembers();
+        captured_reference(\g.q);
+    });
     # a call reference given by a call, by an immediate closure and in a map expression
     check("returned call reference", sub () { deleted_method_reference()(new A()); });
     check("call reference from an immediate closure", sub () {
