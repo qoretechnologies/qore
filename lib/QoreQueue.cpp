@@ -46,6 +46,8 @@ void Queue::deref(ExceptionSink* xsink) {
 }
 
 void qore_queue_private::destructor(ExceptionSink* xsink) {
+    // tells the room listeners that the queue no longer takes values, after the lock (issue #5859)
+    QoreQueueRoomNotifier rn;
     // declared before the lock, so that the weak reference is released after it
     ScanHolderRelease release;
     // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
@@ -66,6 +68,7 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
     measureAllIntern(cn);
     takeAllIntern(values);
     setLenIntern(Queue_Deleted);
+    roomClosedIntern(rn);
     if (desc) {
         desc->deref();
         desc = nullptr;
@@ -369,6 +372,51 @@ void qore_queue_private::pushAndTakeRef(QoreValue n) {
     n.discard(&xsink);
 }
 
+QoreQueue::TryPushResult qore_queue_private::tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max) {
+    QoreQueue::TryPushResult rv;
+    {
+        AutoLocker al(&l);
+        if (getLenIntern() == Queue_Deleted) {
+            rv = QoreQueue::QTP_DELETED;
+        } else if (!err.empty()) {
+            xsink->raiseException(err.c_str(), desc->stringRefSelf());
+            rv = QoreQueue::QTP_REFUSED;
+        } else if (!ignore_max && max > 0 && getLenIntern() >= max) {
+            // the caller keeps the value; the next value taken tells the room listeners
+            room_wanted = true;
+            return QoreQueue::QTP_FULL;
+        } else {
+            // the queue takes the reference
+            pushIntern(n);
+            return QoreQueue::QTP_PUSHED;
+        }
+    }
+    // a deleted queue or a queue in an error state takes the value and releases it, outside the lock
+    if (const AbstractQoreNode* node = n.getInternalNode()) {
+        forgetRefusedItem(node);
+    }
+    n.discard(xsink);
+    return rv;
+}
+
+void qore_queue_private::addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener) {
+    AutoLocker al(&l);
+    room_listeners.push_back(std::move(listener));
+}
+
+void qore_queue_private::removeRoomListener(const QoreQueueRoomListener* listener) {
+    // the listener removed is released after the lock
+    std::shared_ptr<QoreQueueRoomListener> removed;
+    AutoLocker al(&l);
+    for (auto i = room_listeners.begin(), e = room_listeners.end(); i != e; ++i) {
+        if (i->get() == listener) {
+            removed = std::move(*i);
+            room_listeners.erase(i);
+            break;
+        }
+    }
+}
+
 void qore_queue_private::countValues(QoreObject& self) {
     AutoLocker al(&l);
     assert(!scan_count);
@@ -464,6 +512,8 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
     to = false;
     QoreValue rv{};
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
         QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
@@ -499,6 +549,7 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
         }
 
         addLenIntern(-1);
+        roomIntern(rn);
         if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
@@ -530,6 +581,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
     to = false;
     QoreValue rv{};
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
         QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
@@ -559,6 +612,7 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
         }
 
         addLenIntern(-1);
+        roomIntern(rn);
         if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
@@ -588,6 +642,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
 
 void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
@@ -617,6 +673,7 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
+        roomIntern(rn);
 
         if (getWriteWaitingIntern()) {
             write_cond.signal();
@@ -626,6 +683,8 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
 
 void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_desc, QoreObject* self, ExceptionSink* xsink) {
     {
+        // tells the room listeners that the queue no longer takes values, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
@@ -655,6 +714,7 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
+        roomClosedIntern(rn);
 
         if (getReadWaitingIntern()) {
             read_cond.broadcast();
@@ -713,6 +773,18 @@ void QoreQueue::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
 
 std::shared_ptr<QueueItemConsumeHook> QoreQueue::getItemConsumeHook() {
     return priv->getItemConsumeHook();
+}
+
+QoreQueue::TryPushResult QoreQueue::tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max) {
+    return priv->tryPush(xsink, n, ignore_max);
+}
+
+void QoreQueue::addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener) {
+    priv->addRoomListener(std::move(listener));
+}
+
+void QoreQueue::removeRoomListener(const QoreQueueRoomListener* listener) {
+    priv->removeRoomListener(listener);
 }
 
 QoreQueue::QoreQueue(int n_max) : priv(new qore_queue_private(n_max)) {

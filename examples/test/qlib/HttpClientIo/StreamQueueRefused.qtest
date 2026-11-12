@@ -174,22 +174,27 @@ class StreamQueueRefusedTest inherits QUnit::Test {
                     sprintf("round %d: a request after the first chunk is answered", i));
                 checkConnection(sync, \conn_id, sprintf("round %d sync", i));
             }
-            # the rest of the response
-            string rest;
-            foreach int j in (xrange(5)) {
-                string c = sprintf("data: %d\n\n", j);
-                rest += c;
-                st.sock.sendHttp2StreamData(st.stream_id, binary(c), False);
+            # the drain took the first chunk, which the queue refused: the stream fails, as its data was lost, and the
+            # client cancels it, so the server's writes can find it closed (issue #5859)
+            try {
+                foreach int j in (xrange(5)) {
+                    st.sock.sendHttp2StreamData(st.stream_id, binary(sprintf("data: %d\n\n", j)), False);
+                }
+                st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+            } catch (hash<ExceptionInfo> ex) {
+                assertRegex("^HTTP2-STREAM-(CLOSED|RESET)$", ex.err, sprintf("round %d: the client canceled the "
+                    "failed stream", i));
             }
-            st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
             if (st.wake) {
                 st.wake();
             }
-            hash<auto> r = h.future.get(HangGuard);
-            assertEq(200, r.status_code, sprintf("round %d: the response is answered", i));
-            # the queue's drain took the first chunk; the rest is the response's
-            assertEq(rest, r.body.typeCode() == NT_BINARY ? r.body.toString() : r.body,
-                sprintf("round %d: the response has the data that the drain did not take", i));
+            *string err;
+            try {
+                h.future.get(HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq("HTTP2-STREAM-QUEUE-ERROR", err, sprintf("round %d: the stream fails with an error", i));
         }
         # the connection serves a new stream
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/",

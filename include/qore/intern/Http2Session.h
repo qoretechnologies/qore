@@ -118,6 +118,12 @@ struct Http2StreamInfo {
     */
     bool body_too_large = false;
 
+    //! client: the error that the stream failed with (see Http2Session::failStream()); the stream's response is
+    //! this error, and its data is discarded as it arrives, as for @ref body_too_large
+    std::string fail_err;
+    //! client: the description of @ref fail_err
+    std::string fail_desc;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;
@@ -163,9 +169,11 @@ struct Http2StreamInfo {
     */
     bool end_stream_received = false;
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
-    //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
-    /** Set by setStreamCreditOnConsume() once a consume hook reports the stream's consumption; data received
-        before is credited when it is received.
+    //! The stream credit of the stream's data is granted when the data is consumed, not when it is received
+    /** Set by setStreamCreditOnConsume(): on a client once a consume hook reports the stream's consumption (issue
+        #5820), or once a stream queue is registered for it; on a server once a bounded stream queue is registered
+        for it, the data being consumed when the queue's drain takes it (issue #5859).  Data received before is
+        credited when it is received.
     */
     bool credit_on_consume = false;
     bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
@@ -405,11 +413,21 @@ public:
     */
     DLLLOCAL size_t creditConsumedStreamData(int32_t stream_id, size_t len);
 
-    //! Client: the stream credit of the stream's response data is granted when the application consumes it
-    /** Called once a consume hook that reports the stream's consumption has been installed (see
-        HttpStreamConsumeHook); the stream credit of data received from then on is deferred.
+    //! Defers the stream credit of the stream's data until the data is consumed
+    /** Called on a client once a consume hook that reports the stream's consumption has been installed (see
+        HttpStreamConsumeHook), or once a stream queue is registered for the stream; on a server once a bounded
+        stream queue is registered for it (issue #5859).  The stream credit of data received from then on is
+        deferred; the connection credit is granted as the data is received.
     */
     DLLLOCAL void setStreamCreditOnConsume(int32_t stream_id);
+
+    //! Fails a client stream: its response is the error given, and the stream is canceled (issue #5859)
+    /** The data already received and the data still arriving are discarded and credited; the stream ends with the
+        error as its response.  Does nothing if the stream has ended.
+
+        @return true if the stream was failed
+    */
+    DLLLOCAL bool failStream(int32_t stream_id, const char* err, const std::string& desc);
 
     //! Submit a PRIORITY frame to set stream priority
     /** @param stream_id Stream ID to prioritize
@@ -655,6 +673,9 @@ public:
         it was closed without END_STREAM (for example, by RST_STREAM); see Http2StreamInfo::end_stream_received
     */
     DLLLOCAL bool isStreamEndStreamReceived(int32_t stream_id) const;
+
+    //! Returns true if the stream is known and was reset (RST_STREAM sent or received) (issue #5859)
+    DLLLOCAL bool isStreamReset(int32_t stream_id) const;
 
     //! Returns the trailers received for a stream, or nullptr if none were received
     /** Server streams keep the trailers of the request until the stream is cleaned up, so that a handler can read

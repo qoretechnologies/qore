@@ -96,6 +96,10 @@ private:
                     * tail;
     //! told about the values taken from the queue and those dropped with it, if set; see QoreConsumeHook
     std::shared_ptr<QoreConsumeHook> consume_hook;
+    //! told when the queue has room after tryPush() found it full, and when it is deleted or set to an error state
+    std::vector<std::shared_ptr<QoreQueueRoomListener>> room_listeners;
+    //! set when tryPush() found the queue full: the next value taken tells the room listeners
+    bool room_wanted = false;
     std::string err;
     QoreStringNode* desc;
     // len, read_waiting and write_waiting are only written with the lock held, but size(), empty(),
@@ -266,6 +270,29 @@ public:
 
     //! Returns the queue's item consume hook, which is created if the queue has none
     DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
+
+    //! Pushes without waiting; see QoreQueue::tryPush()
+    DLLLOCAL QoreQueue::TryPushResult tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max);
+
+    DLLLOCAL void addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener);
+    DLLLOCAL void removeRoomListener(const QoreQueueRoomListener* listener);
+
+    //! Tells the room listeners, after the lock, that the queue has room if a tryPush() found it full; called with
+    //! the lock held after values were taken
+    DLLLOCAL void roomIntern(QoreQueueRoomNotifier& rn) {
+        if (room_wanted && !room_listeners.empty()) {
+            room_wanted = false;
+            rn.set(room_listeners);
+        }
+    }
+
+    //! Tells all room listeners, after the lock, that the queue no longer takes values; called with the lock held
+    DLLLOCAL void roomClosedIntern(QoreQueueRoomNotifier& rn) {
+        room_wanted = false;
+        if (!room_listeners.empty()) {
+            rn.set(room_listeners);
+        }
+    }
 
     //! Tells the item consume hook, if any, that a value it may know was not queued (issue #5820)
     /** Called without the lock and before the value is released, so that its address is not reused meanwhile; the

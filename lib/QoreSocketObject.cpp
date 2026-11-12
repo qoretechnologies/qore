@@ -6131,6 +6131,11 @@ bool QoreSocketObject::isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool QoreSocketObject::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 && h2->isStreamReset(stream_id);
+}
+
 std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
@@ -6912,6 +6917,18 @@ void QoreSocketObject::installHttp2StreamConsumeHook(int32_t stream_id, Abstract
     if (qore_socket_object_set_action_consume_hook(action, hook)) {
         h2->setStreamCreditOnConsume(stream_id);
     }
+}
+
+void QoreSocketObject::setHttp2StreamCreditOnConsume(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setStreamCreditOnConsume(stream_id);
+    }
+}
+
+bool QoreSocketObject::failHttp2Stream(int32_t stream_id, const char* err, const char* desc) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 ? h2->failStream(stream_id, err, desc) : false;
 }
 
 void QoreSocketObject::installQuicStreamConsumeHook(int64_t session_id, int64_t stream_id,

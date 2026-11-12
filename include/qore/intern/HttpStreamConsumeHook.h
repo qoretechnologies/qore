@@ -30,6 +30,7 @@
 #include "qore/intern/QoreConsumeHook.h"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -48,6 +49,36 @@ DLLLOCAL void qore_http_stream_wake_socket(const std::string& sock_hash);
 //! Adds bytes reported as consumed after their session was gone to the debug accounting
 DLLLOCAL void qore_http_stream_credit_orphaned(size_t bytes);
 #endif
+
+//! Wakes the I/O thread of a connection when a stream queue that was full has room again (issue #5859)
+/** The I/O thread drains a stream into a registered queue without waiting: when a bounded queue is full, the data
+    stays in the stream, and this listener has the I/O thread drain it again once the queue has room.
+*/
+class HttpStreamQueueRoomListener : public QoreQueueRoomListener {
+public:
+    /** @param route_key the socket's I/O identity hash, to wake the I/O thread with
+        @param room if set, set before the wake-up, for a drain that can be skipped and is repeated when it is set
+    */
+    DLLLOCAL HttpStreamQueueRoomListener(std::string route_key, std::shared_ptr<std::atomic<bool>> room = nullptr)
+            : route_key(std::move(route_key)), room(std::move(room)) {
+    }
+
+    //! Never throws
+    DLLLOCAL void roomAvailable() override {
+        if (room) {
+            room->store(true, std::memory_order_seq_cst);
+        }
+        try {
+            qore_http_stream_wake_socket(route_key);
+        } catch (...) {
+            // the drain runs with the next event on the connection
+        }
+    }
+
+private:
+    std::string route_key;
+    std::shared_ptr<std::atomic<bool>> room;
+};
 
 //! Grants the stream credit of the response data that the application of an HTTP/2 or HTTP/3 client consumes
 /** Installed on the Channel or Queue that delivers a streaming response (issue #5820).  It holds a weak reference to

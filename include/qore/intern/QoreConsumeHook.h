@@ -29,6 +29,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 class QoreValue;
 
@@ -76,6 +77,39 @@ public:
     */
     virtual void closeItem() {
     }
+};
+
+//! Told when a bounded queue that was full has room again, or when it is deleted or set to an error state
+/** A producer that must not wait, such as the I/O thread draining a stream into a queue (issue #5859), pushes with
+    QoreQueue::tryPush(); when the queue is full, it keeps the value, and the queue tells its room listeners when a
+    value is taken.  Called without the queue's lock, and must not throw.
+*/
+class QoreQueueRoomListener {
+public:
+    virtual ~QoreQueueRoomListener() = default;
+
+    //! The queue has room, or no longer takes values (deleted, or in an error state)
+    virtual void roomAvailable() = 0;
+};
+
+//! Calls QoreQueueRoomListener::roomAvailable() when it goes out of scope, after the queue's lock is released
+/** Declared before the lock guard of the queue, so that its destructor runs after the guard's.
+*/
+class QoreQueueRoomNotifier {
+public:
+    //! Records the listeners to tell; called with the lock held
+    void set(const std::vector<std::shared_ptr<QoreQueueRoomListener>>& l) {
+        listeners = l;
+    }
+
+    ~QoreQueueRoomNotifier() {
+        for (auto& i : listeners) {
+            i->roomAvailable();
+        }
+    }
+
+private:
+    std::vector<std::shared_ptr<QoreQueueRoomListener>> listeners;
 };
 
 //! Calls QoreConsumeHook::consumed() when it goes out of scope, after the lock that a later local holds is released
