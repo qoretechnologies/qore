@@ -1239,7 +1239,7 @@ private:
         const QoreIRBasicBlock* ir_block;
         QoreIRPhiValueKind value_kind;
         //! the cleanup slot of a Phi of temporaries, which takes each incoming temporary's reference over at the end
-        //! of its predecessor (see consumable_phis); null for any other Phi
+        //! of its predecessor (see consumable_phis), or of a Phi in owning_phis; null for any other Phi
         llvm::AllocaInst* temp_cleanup = nullptr;
     };
     std::vector<PendingPhi> pending_phis;
@@ -1252,8 +1252,33 @@ private:
         incoming slots kept their references until the end of the statement, after the temporaries that the call
         consumed, which the AST interpreter releases last argument first when the call returns, as the callee's
         parameters.
+
+        A loop header's Phi whose incoming values include the Phi itself (a path that keeps its value, such as the
+        skip path of a select stage before a fold at the root of a fused pipeline) is one only when it can hold a
+        temporary (see owning_phis): the Phi's own value is not a use of it, and stays in its slot on that edge.
     */
     std::unordered_set<uint32_t> consumable_phis;
+    //! QoreValue Phis that hold a reference of their own in a cleanup slot, and that no call consumes
+    /** A Phi that is not a Phi of temporaries gets a cleanup slot as one does, which takes over the incoming
+        temporaries that it is the only user of (single_use_phi_incoming) and takes a reference of its own to its
+        other incoming values (qore#5883), when it is:
+        - a loop header's Phi among its own incoming values (the accumulator of a fold at the root of a fused pipeline
+          with a select stage, which keeps its value for an element that the stage skips) whose value can be a
+          temporary released in the loop: an iterator's element, which the next IteratorNext releases, or the value of
+          a call or RefSelf, whose slot the next execution of the instruction replaces.  It keeps its value in its slot
+          on the edge back to the header; without the slot, it borrowed the element that the next IteratorNext
+          released.  A Phi of temporaries among its own incoming values is one too, as its value can reach the header
+          again, and no call consumes it
+        - a Phi whose only use is an incoming value of a Phi with a slot of its own and that has an incoming temporary
+          that it is the only user of: the value of a fold over a fused pipeline on the edge that gives the
+          accumulator, which is the first element or the value of the fold's expression.  The reference of its own
+          that it takes to the first element is the one that the accumulator's Phi took to it otherwise, and the value
+          of the expression, which it takes over, gave the accumulator a reference of its own as well
+    */
+    std::unordered_set<uint32_t> owning_phis;
+    //! The incoming values of QoreValue Phis that one Phi uses once, and no instruction outside the block that
+    //! defines them (see consumable_phis)
+    std::unordered_set<uint32_t> single_use_phi_incoming;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;

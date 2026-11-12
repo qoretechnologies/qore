@@ -111,6 +111,42 @@ class NextRaisesIt inherits AbstractIterator {
     }
 }
 
+#! an iterator that gives a new object for each element
+class HolderIt inherits AbstractIterator {
+    public {
+        Log log;
+        int i = 0;
+    }
+
+    constructor(Log l) {
+        log = l;
+    }
+
+    destructor() {
+        log.add("itdone it");
+    }
+
+    bool next() {
+        return ++i <= 3;
+    }
+
+    auto getValue() {
+        return new Holder(log, "i" + i);
+    }
+
+    bool valid() {
+        return i > 0 && i <= 3;
+    }
+}
+
+Holder sub id(Holder h) {
+    return h;
+}
+
+bool sub keep(Holder h) {
+    return h.n != "i2";
+}
+
 Holder sub fail_on(Holder h, string name) {
     if (h.n == name) {
         throw "STAGE", h.n;
@@ -370,6 +406,54 @@ sub foldl_pipeline_raises() {
     out("foldl pipeline raises", log);
 }
 
+# a fold over a pipeline (a fused fold) releases its first element when the accumulator is replaced, as the other
+# elements, and not when the statement ends (qore#5883)
+sub foldl_pipeline() {
+    Log log();
+    {
+        auto r = foldl $2, (map $1, new HolderIt(log));
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline", log);
+}
+
+sub foldl_pipeline_call() {
+    Log log();
+    {
+        auto r = foldl $2, (map id($1), new HolderIt(log));
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline call", log);
+}
+
+# a select stage keeps the accumulator for the element that it skips: native code's accumulator borrowed the element,
+# which the next element released (qore#5883)
+sub foldl_pipeline_select() {
+    Log log();
+    {
+        auto r = foldl $2, (select (map $1, new HolderIt(log)), keep($1));
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline select", log);
+}
+
+# the same when the iterator's next() raises: the first element is released when the accumulator is replaced, and the
+# iterator before the accumulator
+sub foldl_pipeline_next_raises() {
+    Log log();
+    try {
+        auto r = foldl (exists $1) ? $2 : $1, (map $1, new NextRaisesIt(log));
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err + " $1 " + (exists $1 ? "set" : "unset"));
+    }
+    log.add("after");
+    out("foldl pipeline next raises", log);
+}
+
 # nested folds whose code is delegated to the AST interpreter: the inner fold's restoration does not keep the outer
 # fold's argument list
 sub foldl_nested_raises() {
@@ -435,6 +519,10 @@ sub main() {
     hash_map_iterator();
     hash_map_select_iterator();
     foldl_pipeline_raises();
+    foldl_pipeline();
+    foldl_pipeline_call();
+    foldl_pipeline_select();
+    foldl_pipeline_next_raises();
     foldl_nested_raises();
     foldl_next_raises();
     map_fold_raises_no_handler();

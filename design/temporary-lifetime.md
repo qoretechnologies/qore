@@ -343,8 +343,18 @@ iterator's `next()` raises releases the iterator and the source first and then t
 interpreter's functional iterator ends before the fold releases its value (`routeNext()`).  The accumulator's Phi of a
 fold over an iterator takes the first element over from the slot of its `IteratorNext` (the IR interpreter's
 `phi_takes_incoming`, native code's Phi fixup), so the first element is released when the accumulator is replaced, as
-in the AST interpreter, and not when the frame ends; a fold at the root of a fused pipeline keeps the first element
-in the slot of a `RefSelf` until the statement ends.  The releases of a functional operator's exception cleanup
+in the AST interpreter, and not when the frame ends.  A fold at the root of a fused pipeline gives its accumulator's
+Phi the first element (the value of the last stage) as it gives it the value of its expression: a `RefSelf` gave the
+first element a slot of its own, which kept it until the statement ended (qore#5883).  The IR interpreter's Phi takes
+the element over from its slot or takes a reference of its own to it.  In native code, the Phi that gives the
+accumulator its value (the first element or the value of the expression) has a slot of its own when the accumulator's
+Phi has one (`QoreIRToLLVM::owning_phis`): it takes the value of the expression over and takes a reference of its own
+to the first element, which the accumulator's Phi takes over in turn, so a fold costs no reference per element.  The
+accumulator's Phi of a pipeline with a select stage has itself as an incoming value, on the path of an element that
+the stage skips: in native code, the Phi's own value is not a use of it, and a Phi among its own incoming values whose
+value can be a temporary that the loop releases (an iterator's element, the value of a call) has a slot of its own,
+which keeps its value on that edge, and no call consumes it; it had none, and borrowed the element that the next
+`IteratorNext` released.  The releases of a functional operator's exception cleanup
 (`QoreIRInstruction::exception_cleanup_release`, set by `FunctionalLoopExceptionCleanup`) are not uses that keep a
 value from being taken over by a Phi or moved into a container (`qore_ir_is_exception_only_release()`, in the IR
 interpreter's use counts and native code's Phis of temporaries): counted, they cost a fold a reference and a release

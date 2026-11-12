@@ -21677,7 +21677,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 return QoreIRValue();
             }
         } else {
-            init_accum_val = builder.createRefSelf(element_val, loc)->result;
+            // the accumulator's Phi takes the first element over or takes a reference of its own, as for the value of
+            // the fold's expression, so that it is released when the accumulator is replaced, as in the AST
+            // interpreter: a reference of its own (RefSelf) kept it in a slot until the statement ended (qore#5883)
+            init_accum_val = element_val;
         }
         QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
