@@ -4084,6 +4084,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     if (!root_statement_block) {
         // the event is for this block, which a step of a debugger can stop at, also when it is empty
         builder.createDebugBlock(block->loc, block);
+    } else if (handler_body && (builder.getFunction()->source_dpgm_addr
+            || builder.getFunction()->emit_debug_statements)) {
+        // the body of a handler compiled to an IR function of its own: the event of the handler's block, made where
+        // the statements of the function have their debug events, so that code without them gets nothing (#5870)
+        builder.createDebugBlock(block->loc, block);
     }
 
     bool terminated = false;
@@ -4623,6 +4628,8 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
         // background helper parameter names are unique within the function the handler belongs to
         handler_lowering.bg_helper_count = bg_helper_count;
+        // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
+        handler_lowering.handler_body = true;
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -4755,6 +4762,8 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
         // background helper parameter names are unique within the function the handler belongs to
         handler_lowering.bg_helper_count = bg_helper_count;
+        // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
+        handler_lowering.handler_body = true;
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the

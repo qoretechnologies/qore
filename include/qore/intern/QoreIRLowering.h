@@ -768,6 +768,12 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! True if the root block that this lowering lowers is the body of a handler (on_exit, on_error, on_success)
+    /** The body of a handler has the block event of the debugger, as in the AST interpreter, which makes one for the
+        block of each handler that it runs: a handler lowered inline is a nested block, which has it, while the body of
+        a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
+    */
+    bool handler_body = false;
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
