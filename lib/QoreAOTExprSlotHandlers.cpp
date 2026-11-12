@@ -705,6 +705,11 @@ static bool write_slot_XOR_EQ(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_SHL_EQ(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftLeftEqualsOperatorNode>(ctx);
 }
+//! a source location is never a slot expression; it precedes inline call expressions only (classifyAndWriteExpr())
+static bool write_slot_SOURCE_LOCATION(AOTExprSlotWriteCtx& ctx) {
+    return false;
+}
+
 static bool write_slot_SHR_EQ(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftRightEqualsOperatorNode>(ctx);
 }
@@ -1077,6 +1082,9 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     if (!ucf) {
         return false;
     }
+    // the location of the closure (see v25)
+    qore_aot_write_source_location(ctx.writer, ctx.writer.omit_source_locations ? nullptr
+        : qore_aot_closure_location(ucf));
     auto* variant = static_cast<const UserClosureVariant*>(ucf->first());
     const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
 

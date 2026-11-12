@@ -2717,6 +2717,25 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
     return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
 }
 
+const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        QoreProgram* pgm) {
+    int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+    const char* file = reader.readStringRef(ptr);
+    const char* source = reader.readStringRef(ptr);
+    if (start_line <= 0 || !file || !*file || !pgm) {
+        return nullptr;
+    }
+    // interned in the Program, as the locations of parsed code; the Program's runtime metadata lock protects its
+    // strings and locations, so that this can run when code is deserialized lazily
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const char* interned_file = pp->addString(file);
+    const char* interned_source = source && *source ? pp->addString(source) : nullptr;
+    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, static_cast<int>(offset));
+    return pp->getLocation(tmp, start_line, end_line);
+}
+
 // Forward declaration for use by expression registry handlers (Phase 3.2)
 QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
@@ -5553,6 +5572,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
                     native_body_key = reader.readStringRef(ptr);
                 }
+                // the location of the closure (see v25), which its signature gets
+                const QoreProgramLocation* closure_loc = nullptr;
+                if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                    closure_loc = qore_aot_read_source_location(reader, ptr, pgm);
+                }
 
                 bool is_lambda = false, is_in_method = false, closure_needs_type_context = false;
                 if (flags_str) {
@@ -5674,7 +5698,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
-                    closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+                    closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+                    closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
                     std::vector<uint8_t>(), local_owner_pgm);
                 if (closure_needs_extra_args) {
                     closure_variant->setFlag(QCF_USES_EXTRA_ARGS);

@@ -3555,12 +3555,17 @@ public:
         return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
     }
 
-    DLLLOCAL void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo, QoreValue initial_value) {
+    //! adds a member
+    /** @param loc the location of its declaration, if known (code read from an AOT image)
+    */
+    DLLLOCAL void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo, QoreValue initial_value,
+            const QoreProgramLocation* loc = nullptr) {
         assert(!members.inList(mem));
         if (!has_sig_changes) {
             has_sig_changes = true;
         }
-        members.addNoCheck(strdup(mem), new QoreMemberInfo(&loc_builtin, n_typeinfo, nullptr, initial_value, access, this));
+        members.addNoCheck(strdup(mem), new QoreMemberInfo(loc ? loc : &loc_builtin, n_typeinfo, nullptr,
+            initial_value, access, this));
         if (access == Public && !has_public_memdecl) {
             has_public_memdecl = true;
         }

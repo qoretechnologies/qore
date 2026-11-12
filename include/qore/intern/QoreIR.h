@@ -1408,6 +1408,17 @@ public:
     QoreIRPluginOperationRef operation;
 };
 
+//! QoreIRDebugStatementInstruction::nest_flags: the nesting of the statement is known (#5816)
+constexpr uint8_t QORE_IR_DEBUG_NEST_VALID = 0x01;
+//! QoreIRDebugStatementInstruction::nest_flags: the statement is a try statement
+constexpr uint8_t QORE_IR_DEBUG_NEST_TRY = 0x02;
+//! QoreIRDebugStatementInstruction::nest_flags: the statement is a statement of the catch block of a try statement
+constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
+//! QoreIRDebugStatementInstruction::nest_flags: the instruction marks the end of a statement at its depth, after which
+//! the frame is in the statement that contains it, which an exception raised after it, as in the condition of a loop,
+//! is reported for; it makes no event
+constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
+
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
 class QoreIRDebugStatementInstruction : public QoreIRInstruction {
 public:
@@ -1427,6 +1438,16 @@ public:
         whose block is found from its location (qore_program_private::getBlockFromIndex())
     */
     const AbstractStatement* statement;
+
+    //! the depth of the statement in its function: 0 for a statement of the function's block (#5816)
+    /** The debugger's exception events of the IR interpreter are made for each statement that an exception leaves,
+        from the innermost, as with the AST interpreter: the statements that a frame is in are the statements of its
+        last DebugStatement instructions at each depth up to that of the current statement
+    */
+    uint16_t nest_depth = 0;
+    //! QORE_IR_DEBUG_NEST_* flags; QORE_IR_DEBUG_NEST_VALID is not set if the nesting is not known (AOT debug IR
+    //! before format version 25)
+    uint8_t nest_flags = 0;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {

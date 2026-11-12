@@ -2581,14 +2581,19 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // tree does not exist when the serialized IR is deserialized.  The instruction has no operands and no result; its
 // only runtime-relevant datum besides the statement pointer is the statement's source location, which the generic
 // base-instruction record already serializes from inst->loc (set to statement->loc by
-// QoreIRBuilder::createDebugStatement()).  So nothing group-specific is written here, and the reader reconstructs
-// the instruction with a null statement pointer.  The IR interpreter's DebugStatement handler resolves the
+// QoreIRBuilder::createDebugStatement()).  So the statement is not written here, and the reader reconstructs the
+// instruction with a null statement pointer; from format version 25, the nesting of the statement is written (see
+// writeDebugStatement()).  The IR interpreter's DebugStatement handler resolves the
 // statement from the instruction's source location at runtime when the raw pointer is null (see
 // QoreIRInterpreter.cpp), matching the step behavior of the AST and IR tiers for code whose statement index is
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
 static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
-    // No group-specific fields: the AST statement pointer is not serializable and the source location rides on
-    // the base-instruction record.
+    // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
+    // from format version 25, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
+    // instruction of a block
+    auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
+    ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
+    ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
     return true;
 }
 
@@ -2606,6 +2611,11 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
         return nullptr;
     }
     auto inst = std::make_unique<QoreIRDebugStatementInstruction>(opcode, nullptr);
+    // the nesting of the statement (see writeDebugStatement())
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        inst->nest_depth = QoreAOTBinaryReader::readU16(ctx.ptr);
+        inst->nest_flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;

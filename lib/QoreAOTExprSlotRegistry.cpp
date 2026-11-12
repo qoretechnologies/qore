@@ -467,7 +467,7 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"XOR_EQ", 119, true, write_slot_XOR_EQ, "Bitwise-xor-equals operator"},
     {"SHL_EQ", 120, true, write_slot_SHL_EQ, "Shift-left-equals operator"},
     {"SHR_EQ", 121, true, write_slot_SHR_EQ, "Shift-right-equals operator"},
-    {nullptr, 122, false, nullptr, nullptr},
+    {"SOURCE_LOCATION", 122, true, write_slot_SOURCE_LOCATION, "Source location of the call expression that follows"},
     {nullptr, 123, false, nullptr, nullptr},
     {nullptr, 124, false, nullptr, nullptr},
     {nullptr, 125, false, nullptr, nullptr},

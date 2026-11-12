@@ -206,6 +206,38 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+// ============================================================================
+// SOURCE_LOCATION (122): the location of the call expression that follows (#5745)
+// ============================================================================
+
+//! not written through the registry: classifyAndWriteExpr() writes the location before a call
+static bool write_expr_source_location(AOTExprWriteCtx& ctx) {
+    return false;
+}
+
+//! Gives a call node read from an AOT image the location of the call
+static void qore_aot_set_call_location(AbstractQoreNode* node, const QoreProgramLocation* loc) {
+    if (auto* pn = dynamic_cast<ParseNode*>(node)) {
+        pn->loc = loc;
+    }
+    // the frame of a method call through the dot operator is located at its method call node
+    if (auto* dot = dynamic_cast<QoreDotEvalOperatorNode*>(node)) {
+        if (MethodCallNode* m = dot->getMethodCall()) {
+            m->loc = loc;
+        }
+    }
+}
+
+static QoreValue read_expr_source_location(AOTExprReadCtx& ctx) {
+    const QoreProgramLocation* loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    QoreValue v = readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (loc && ctx.error.empty() && v.hasNode()) {
+        qore_aot_set_call_location(v.getInternalNode(), loc);
+    }
+    return v;
+}
+
 static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     const char* func_name = ctx.reader.readStringRef(ctx.ptr);
     const char* sig_ref = nullptr;
@@ -1387,6 +1419,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
+    // the location of the closure (see v25), which its signature gets
+    const QoreProgramLocation* closure_loc = nullptr;
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    }
 
     bool is_lambda = false, is_in_method = false, needs_type_context = false;
     if (flags_str) {
@@ -1513,7 +1550,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+        closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+        closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
         std::vector<uint8_t>(), ctx.local_owner_pgm);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);

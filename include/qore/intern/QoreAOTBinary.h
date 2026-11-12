@@ -362,6 +362,17 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v25: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
 //!      module exports (a function can have public and private variants); an older function record has only the
 //!      function's public flag, which applies to all of its variants.
+//! v25: source locations (#5745): an inline expression of a call (a function, method, static method, self method,
+//!      constructor or call reference call) that has a source location is preceded by AOTExprKind::SOURCE_LOCATION
+//!      and its location (qore_aot_write_source_location()), which the call node that is read gets, so that the
+//!      frame of the call and its exceptions have the lines of the call; a class member record ends with the
+//!      location of its declaration; a call form of a default argument (has_default 2, 4 or 6) ends with the
+//!      location of the call; a closure record (CLOSURE_CREATE) has the location of the closure's block after its
+//!      native body key (#5816).  The locations are kept out of the aggregate digests
+//!      (QoreAOTBinaryWriter::omit_source_locations).  A DebugStatement or DebugBlock instruction of the debug IR has
+//!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
+//!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
+//!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -371,6 +382,8 @@ constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_VARIANT_PUBLIC_VERSION;
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
 //! Variant-flags bit of FUNCTIONS records (QORE_AOT_VARIANT_PUBLIC_VERSION): the variant is module-public
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
+//! First format version with source locations of calls, members and default arguments (see v25 above).
+constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1027,6 +1040,10 @@ public:
     //! as VT_CONST_REF entries. Set before calling section writers that serialize
     //! user constant values.
     const AOTConstantReverseMap* const_reverse_map = nullptr;
+    //! true while a payload is written for a digest (aotRecordAggregateDeclarationDigest()): the source locations of
+    //! expressions (AOTExprKind::SOURCE_LOCATION), of members and of default arguments are left out, so that a
+    //! digest does not depend on lines or on the path of a source file
+    bool omit_source_locations = false;
 
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
@@ -1586,6 +1603,28 @@ static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const ui
     }
     return static_cast<int>(v);
 }
+
+//! Serializes a source location: start and end line, offset, file and source label
+/** As the entries of the statement-location table; a missing location is written with lines 0 (see
+    qore_aot_read_source_location())
+*/
+DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const QoreProgramLocation* loc);
+
+//! Returns true if a node has a source location that AOT serializes (qore_aot_write_source_location())
+DLLLOCAL bool qore_aot_has_source_location(const QoreProgramLocation* loc);
+
+class UserClosureFunction;
+//! Returns the source location of a closure, which its record carries from format version 25 (#5816)
+/** the location of the block of its code, which the debugger's events of the closure are given with; its signature
+    when read from an AOT image gets it
+*/
+DLLLOCAL const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* ucf);
+
+//! Deserializes a source location written by qore_aot_write_source_location()
+/** @return the location, interned in the Program, or nullptr if none was written (lines 0) or there is no Program
+*/
+DLLLOCAL const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, QoreProgram* pgm);
 
 //! Clamps a deserialized source line number to a value that is legal for QoreProgramLineLocation
 /** Any line below -1 is impossible in a well-formed blob; a corrupt or hand-edited artifact must not be able to
@@ -2156,6 +2195,9 @@ enum class AOTExprKind : uint8_t {
     XOR_EQ             = 119, //!< ^= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHL_EQ             = 120, //!< <<= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHR_EQ             = 121, //!< >>= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    //! the source location of the expression that follows (from format version 25): the location
+    //! (qore_aot_write_source_location()) + the expression (AOTExprKind), which gets the location
+    SOURCE_LOCATION    = 122,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2887,6 +2929,8 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef type_path;
         uint8_t access;
         uint8_t flags = 0;  // bit 0 = transient
+        //! the location of the member's declaration (see v25), or nullptr
+        const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! When set, the member init is a `Class(args)` call whose target
         //! class is a forward reference to a class that has not yet been
@@ -2932,6 +2976,8 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
         uint8_t access;
+        //! the location of the static variable's declaration (see v25), or nullptr
+        const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
         std::string pending_new_class_path;
@@ -3084,6 +3130,8 @@ public:
         std::string method_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
+        //! the location of the call (see v25)
+        const QoreProgramLocation* loc = nullptr;
     };
 
     //! Native-expression default-arg fixups for params whose default is a general
@@ -3118,6 +3166,8 @@ public:
         std::string func_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
+        //! the location of the call (see v25)
+        const QoreProgramLocation* loc = nullptr;
     };
 
 private:

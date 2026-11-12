@@ -2984,7 +2984,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 on_block_exit_stmt->getType(),
                 handler_code,
                 stmt->loc,
-                obe_inst  // enable compileAllHandlerIRs() to compile this handler
+                obe_inst,  // enable compileAllHandlerIRs() to compile this handler
+                // the statement is being lowered, one level deeper than its own depth
+                static_cast<uint16_t>(debug_nest_depth ? debug_nest_depth - 1 : 0),
+                debug_catch_child_depth
             });
         }
 
@@ -3827,7 +3830,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(catch_var_entry);
         }
         ++catch_cleanup_depth;
-        if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
+        // the statements of the catch block are marked for the debugger's exception events (#5816)
+        int old_debug_catch_child_depth = debug_catch_child_depth;
+        debug_catch_child_depth = debug_nest_depth;
+        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error);
+        debug_catch_child_depth = old_debug_catch_child_depth;
+        if (!catch_ok) {
             --catch_cleanup_depth;
             if (catch_var) {
                 cleanup_stack.pop_back();
@@ -4119,9 +4127,29 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // In a function that can be debugged, the debugger's step event for the statement comes first, as with
         // the AST interpreter (StatementBlock::execImpl()); an exception that the debugger raises is raised by the
         // statement.
+        //
+        // The instruction records the nesting of the statement, for the debugger's exception events of each statement
+        // that an exception leaves (#5816), and the debug IR of AOT code marks the end of each statement, after which the
+        // frame is in the statement that contains it.
+        const uint16_t statement_depth = debug_nest_depth;
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
-            builder.createDebugStatement(*it)->exception_target = getCurrentExceptionTarget();
+            auto* dbg = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugStatement(*it));
+            dbg->exception_target = getCurrentExceptionTarget();
+            dbg->nest_depth = statement_depth;
+            dbg->nest_flags = QORE_IR_DEBUG_NEST_VALID
+                | (dynamic_cast<const TryStatement*>(*it) ? QORE_IR_DEBUG_NEST_TRY : 0)
+                | (static_cast<int>(statement_depth) == debug_catch_child_depth ? QORE_IR_DEBUG_NEST_IN_CATCH : 0);
         }
+        // the statements of the blocks of the statement are one level deeper
+        struct DebugNestDepthHelper {
+            uint16_t& depth;
+            DebugNestDepthHelper(uint16_t& d) : depth(d) {
+                ++depth;
+            }
+            ~DebugNestDepthHelper() {
+                --depth;
+            }
+        } debug_nest_depth_helper(debug_nest_depth);
         bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
         uint32_t previous_exception_temp_scope_id = builder.getExceptionTempScopeId();
         if (statement_needs_cleanup) {
@@ -4162,6 +4190,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             createDiscardTemps((*it)->loc);
         } else {
             builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
+        }
+        // after the release of the statement's temporaries, whose destructors raise exceptions of the statement
+        if (builder.getFunction()->emit_debug_statements) {
+            builder.createDebugStatementEnd(statement_depth, (*it)->loc);
         }
     }
 
@@ -4897,6 +4929,31 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     // Lower the handler code block inline using the current parse context
     // This gives the handler natural access to parent block's scope
     bool ok;
+    // the statements of the handler have the debugger's nesting of the statement that declares it, in its place, not
+    // of the exit where it is lowered, as with the AST interpreter, which runs it in the block that declares it and
+    // makes no event for the statement (#5816)
+    struct DebugNestDepthRestore {
+        uint16_t& depth;
+        int& catch_child_depth;
+        uint16_t saved;
+        int saved_catch_child_depth;
+        DebugNestDepthRestore(uint16_t& d, int& ccd, uint16_t new_depth, int new_ccd) : depth(d),
+                catch_child_depth(ccd), saved(d), saved_catch_child_depth(ccd) {
+            depth = new_depth;
+            catch_child_depth = new_ccd;
+        }
+        ~DebugNestDepthRestore() {
+            depth = saved;
+            catch_child_depth = saved_catch_child_depth;
+        }
+    } debug_nest_depth_restore(debug_nest_depth, debug_catch_child_depth, handler.debug_nest_depth,
+        handler.debug_catch_child_depth);
+    // a handler lowered at a break, a continue or a return runs after the statements that the exit leaves, down to the
+    // level of the statement that declares it, which have no end markers on that path; the marker has no location, so
+    // that native code updates no runtime location for it
+    if (builder.getFunction()->emit_debug_statements) {
+        builder.createDebugStatementEnd(handler.debug_nest_depth, nullptr);
+    }
     if (set_exception_target) {
         // An exception raised by the handler goes to the exception target of the body of the handler's block
         // (or leaves the frame when there is none), not to the target of the statement that left the block,

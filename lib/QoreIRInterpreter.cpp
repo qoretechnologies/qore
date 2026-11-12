@@ -121,7 +121,8 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
 // NT_STATIC_METHOD_CALL; a copy keeps the type of the node copied.  A test of the type replaces a dynamic_cast, which
 // compares the names of the classes (strcmp) on every call, at a cost that depends on where the names are in memory.
 static inline const FunctionCallNode* qore_ir_function_call_node(const AbstractQoreNode* node) {
-    const FunctionCallNode* rv = node && (node->getType() == NT_FUNCTION_CALL
+    // a plain function call is the common case: it is tested first in any build
+    const FunctionCallNode* rv = node && (__builtin_expect(node->getType() == NT_FUNCTION_CALL, 1)
             || node->getType() == NT_PROGRAM_FUNC_CALL)
         ? static_cast<const FunctionCallNode*>(node) : nullptr;
     assert(rv == dynamic_cast<const FunctionCallNode*>(node));
@@ -1496,6 +1497,39 @@ static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInte
     }
 }
 
+//! A statement that a frame is in, for the debugger's exception events of the statements that an exception leaves
+//! (#5816)
+struct QoreIRDebugNestEntry {
+    //! the statement; nullptr if not known, as for the statements around the point where a debugger attached
+    const AbstractStatement* stmt = nullptr;
+    //! the number of scopes of the frame (scope_stack) at its start
+    size_t scope_depth = 0;
+    //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
+    uint16_t depth = 0;
+    uint8_t flags = 0;
+};
+
+//! The statements that a frame is in, kept in the pooled frame while a debugger is attached (#5816)
+/** entries[d] is the last statement at depth d that the frame started; the statements up to the current one at the
+    end are the statements that the current statement is in.  An exception is reported for the current statement,
+    and then for each statement that contains it once the scopes opened in the statement are closed (after their
+    handlers ran), until a try statement catches it, as with the AST interpreter.
+*/
+struct QoreIRDebugNest {
+    std::vector<QoreIRDebugNestEntry> entries;
+    //! the index of the next statement to report for the current exception, or -1
+    int chain = -1;
+    //! the statement that ended last, which tells whether the block that it was in is a try block or a catch block
+    //! when the handlers of the block raise an exception after it (see qore_ir_dbg_start_chain_innermost())
+    QoreIRDebugNestEntry last_end;
+
+    DLLLOCAL void reset() {
+        entries.clear();
+        chain = -1;
+        last_end = QoreIRDebugNestEntry();
+    }
+};
+
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
@@ -1621,6 +1655,9 @@ struct IRCallFrame {
         local_owned_slots.assign(reserve_size, 0);
         temp_cleanup_marks.clear();
     }
+    //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
+    //! so that the members used in every call keep their offsets
+    QoreIRDebugNest dbg_nest;
 };
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -7096,6 +7133,14 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 #define QORE_IR_LAMBDA_INLINE
 #endif
 
+//! for lambdas of the exception paths, which are called from many places: kept out of line, so that their bodies do
+//! not weigh on the code generated for the paths of a call that raises no exception
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_IR_LAMBDA_NOINLINE __attribute__((noinline))
+#else
+#define QORE_IR_LAMBDA_NOINLINE
+#endif
+
 //! The state of the debugger's events of a frame of QoreIRInterpreter::execute() (#5795)
 /** One object, so that the debugger's helpers of the frame, which are expanded where they are called, add no state
     of their own to the frame; the work that a debugger needs is done by the functions below, out of line
@@ -7111,7 +7156,149 @@ struct QoreIRDebugFrameState {
     bool exit_dismissed = false;
     //! true once the function's exit event was made
     bool function_exit_done = false;
+    //! true once a DebugStatement with nesting ran in the frame: the statements that it is in are in its pooled frame
+    //! (IRCallFrame::dbg_nest), which a call reset then (see QoreIRDebugNest); a flag, beside the others, so that the
+    //! state costs a call no more than before
+    bool nest_used = false;
 };
+
+//! The statements that the running frame of the thread is in
+/** The frames of a thread are pushed and popped in order (QoreIRInterpreter::execute()), so the frame whose code runs is
+    the top of the thread's pool.  The state is looked up here, in the debugger's paths, and not passed from execute(),
+    so that its dispatch loop keeps no reference to the frame, which costs a call registers (qore#5816).
+*/
+static QoreIRDebugNest& qore_ir_dbg_frame_nest() {
+    IRCallFramePool& pool = TlFramePool::get();
+    assert(pool.top);
+    return pool.frames[pool.top - 1]->dbg_nest;
+}
+
+//! Records the statement of a DebugStatement instruction in the statements that the frame is in
+static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st,
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth) {
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (!st.nest_used) {
+        n.reset();
+        st.nest_used = true;
+    }
+    std::vector<QoreIRDebugNestEntry>& entries = n.entries;
+    entries.resize(static_cast<size_t>(inst->nest_depth) + 1);
+    QoreIRDebugNestEntry& e = entries.back();
+    e.stmt = stmt;
+    e.scope_depth = scope_depth;
+    e.depth = inst->nest_depth;
+    e.flags = inst->nest_flags;
+}
+
+//! The end of a statement (QORE_IR_DEBUG_NEST_END): the frame is in the statement that contains it, which an exception
+//! raised after it, as in a loop's condition, is reported for
+static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState& st,
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement** stmt_ptr) {
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    std::vector<QoreIRDebugNestEntry>& entries = n.entries;
+    if (entries.size() > inst->nest_depth) {
+        n.last_end = entries[inst->nest_depth];
+        entries.resize(inst->nest_depth);
+        st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
+        *stmt_ptr = st.frame_stmt;
+    }
+}
+
+//! Starts the events of the statements that contain the given statement, whose exception event was made
+static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractStatement* stmt) {
+    if (!st.nest_used) {
+        return;
+    }
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    n.chain = !n.entries.empty() && n.entries.back().stmt == stmt ? static_cast<int>(n.entries.size()) - 2 : -1;
+}
+
+//! Starts the events of the statements that the frame is in, for an exception raised by the handlers of a block on its
+//! normal exit, which the handlers' frame made the event of; the innermost statement is the one that contains the block
+/** @param scope_size the number of scopes of the frame with the scope of the block: the statements of the block
+    started with it, and those of a block left by a break, a continue or a return are still in the frame's
+    statements, as their ends did not run
+*/
+static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFrameState& st, size_t scope_size) {
+    if (!st.nest_used) {
+        return;
+    }
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    // the statements of the block, if any are left, are removed; the first one stands for the block
+    QoreIRDebugNestEntry child;
+    bool have_child = false;
+    for (size_t i = 0; i < n.entries.size(); ++i) {
+        if (n.entries[i].scope_depth >= scope_size) {
+            child = n.entries[i];
+            have_child = true;
+            n.entries.resize(i);
+            break;
+        }
+    }
+    if (n.entries.empty()) {
+        n.chain = -1;
+        return;
+    }
+    // the statement of the block that ended last stands for the block, which makes no event: a try statement whose
+    // try block it was in catches the exception (see qore_ir_dbg_report_enclosing()); if it is not known, the block is
+    // taken as a try block, which makes no event for a try statement that contains it
+    if (!have_child && n.last_end.depth == n.entries.size()) {
+        child = n.last_end;
+    }
+    child.stmt = nullptr;
+    child.depth = static_cast<uint16_t>(n.entries.size());
+    child.scope_depth = n.entries.back().scope_depth;
+    n.entries.push_back(child);
+    n.chain = static_cast<int>(n.entries.size()) - 2;
+}
+
+//! Makes the exception events of the statements that contain the statement of the exception, as far as the scopes
+//! of the frame are closed
+/** @return true if events were made; a dismissal ends the function, which returns no value (see exitAfterUnwind())
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameState& st,
+        ThreadLocalProgramData* tlpd, ExceptionSink* xsink, size_t scope_size) {
+    if (!st.nest_used) {
+        return false;
+    }
+    QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    if (n.chain < 0 || !xsink || !xsink->isException()) {
+        return false;
+    }
+    // the statements that the frame is in can have changed since the chain started (as with a handler's statements)
+    if (n.chain > static_cast<int>(n.entries.size()) - 2) {
+        n.chain = static_cast<int>(n.entries.size()) - 2;
+    }
+    bool rc = false;
+    while (n.chain >= 0) {
+        const QoreIRDebugNestEntry& e = n.entries[n.chain];
+        // a try statement whose try block has the statement catches the exception
+        if ((e.flags & QORE_IR_DEBUG_NEST_TRY) && !(n.entries[n.chain + 1].flags & QORE_IR_DEBUG_NEST_IN_CATCH)) {
+            n.chain = -1;
+            break;
+        }
+        // the scopes opened in the statement are not closed yet
+        if (scope_size > e.scope_depth) {
+            break;
+        }
+        --n.chain;
+        if (!e.stmt) {
+            continue;
+        }
+        tlpd->dbgException(e.stmt, xsink);
+        rc = true;
+        if (*xsink) {
+            st.exc_reported = xsink->getException();
+            continue;
+        }
+        // the debugger dismissed the exception: the function ends, which returns no value (#5825)
+        st.exc_reported = nullptr;
+        n.chain = -1;
+        st.exit_dismissed = true;
+        break;
+    }
+    return rc;
+}
 
 //! Makes the exception event of the frame's current statement; returns true if the debugger was called
 /** See dbgReportException() in QoreIRInterpreter::execute()
@@ -7128,7 +7315,9 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_exception(QoreIRDebugFrameSt
     tlpd->dbgException(st.frame_stmt, xsink);
     if (*xsink) {
         st.exc_reported = xsink->getException();
+        qore_ir_dbg_start_chain(st, st.frame_stmt);
     } else {
+        // the debugger dismissed the exception: the function ends, which returns no value (#5825)
         st.exc_reported = nullptr;
         st.exit_dismissed = true;
     }
@@ -8562,13 +8751,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // attached (UserVariantBase::evalTiered(), TopLevelStatementBlock::execImpl()), so this serves the debug IR of
     // AOT code and the frames that were running when the debugger attached.  The event is made where the exception
     // leaves the frame (unwindForException()) or reaches a handler in it (LandingPad, CatchException), once per
-    // exception and frame; the statements that contain the current statement get no event, as the debug IR of AOT
-    // code has no nesting of its statements.  A debugger that dismisses the exception there ends the function, which
-    // returns no value (see exitAfterUnwind()), as the code cannot continue after the statement.
+    // exception and frame, and the events of the statements that contain the current statement follow as their
+    // scopes are closed (dbgReportEnclosing(), #5816).  A debugger that dismisses the exception ends the function,
+    // which returns no value (see exitAfterUnwind()); the AST interpreter continues after the statement (#5825).
     auto dbgReportException = [&]() QORE_IR_LAMBDA_INLINE {
         // the debugger can set the local variables of the frame at the stop of the exception
         if (debug_active && qore_ir_dbg_report_exception(dbg_state, tlpd, xsink)) {
             invalidateExternalCaches();
+        }
+    };
+    // the exception events of the statements that contain the statement of the exception, as far as the scopes of the
+    // frame are closed (see qore_ir_dbg_report_enclosing())
+    auto dbgReportEnclosing = [&]() QORE_IR_LAMBDA_INLINE {
+        if (debug_active) [[unlikely]] {
+            if (qore_ir_dbg_report_enclosing(dbg_state, tlpd, xsink, scope_stack.size())) {
+                invalidateExternalCaches();
+            }
         }
     };
     // after handlers of the frame ran: an exception that they raised, or rethrew with a rethrow statement, was reported
@@ -8627,13 +8825,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
     // While a debugger is attached, the exception event of the current statement comes first, and the function's
     // exit event follows the handlers, as with the AST interpreter.
-    auto unwindForException = [&]() {
+    //
+    // A debugger that dismisses the exception ends the function, which returns no value (see exitAfterUnwind()); the AST
+    // interpreter continues after the statement (#5825).
+    auto unwindForException = [&]() QORE_IR_LAMBDA_NOINLINE {
         dbgReportException();
         restoreImplicitContexts();
         releaseOperatorIterators(active_iterators);
+        dbgReportEnclosing();
         while (!scope_stack.empty()) {
             releaseScopeTemps(scope_stack.back());
             fireScopeExits(scope_stack.size() - 1);
+            dbgReportEnclosing();
         }
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
         if (!on_block_exit_handlers.empty()) {
@@ -9933,6 +10136,9 @@ next_instruction:
                     if (debug_active) {
                         tlpd->dbgException(get_exception_statement(inst), xsink);
                         dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                        if (*xsink) {
+                            qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                        }
                         // the debugger can set the local variables of the frame at the stop of the exception
                         invalidateExternalCaches();
                         if (ir_trace_exceptions_env.get()) {
@@ -9985,9 +10191,12 @@ next_instruction:
             }
             case QoreIROpcode::LandingPad: {
                 // the exception event of the statement that the exception left, before the handlers of its scopes
-                // run, as in the AST interpreter; a dismissal ends the function (see dbgReportException())
+                // run, as in the AST interpreter, and of the statements that contain it as their scopes are closed,
+                // up to the try statement whose catch block the pad leads to; after a dismissal, the frame continues
+                // after the statement if it can, and the function ends otherwise (see dbgReportException())
                 if (debug_active) {
                     dbgReportException();
+                    dbgReportEnclosing();
                     if (dbg_state.exit_dismissed) {
                         unwindForException();
                         cleanupLocalCaches();
@@ -10068,6 +10277,15 @@ next_instruction:
                         invalidateExternalCaches();
                         dbgHandlersRan();
                     }
+                    // the events of the statements that the closed scope was in (#5816); a dismissal ends the function
+                    if (debug_active) [[unlikely]] {
+                        dbgReportEnclosing();
+                        if (dbg_state.exit_dismissed) {
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return exitAfterUnwind();
+                        }
+                    }
                 }
                 ++ip;
                 break;
@@ -10087,7 +10305,10 @@ next_instruction:
                 // every CatchException has the propagation block, so a thread_exit never gets here
                 assert(!xsink || !xsink->isThreadExit());
                 if (debug_active) {
+                    // the events of the statement and of the statements that contain it up to the try statement,
+                    // if no landing pad made them (#5816)
                     dbgReportException();
+                    dbgReportEnclosing();
                     if (dbg_state.exit_dismissed) {
                         unwindForException();
                         cleanupLocalCaches();
@@ -14285,7 +14506,18 @@ load_local_done:
                 // The step event of the statement that follows, where the AST interpreter calls dbgStep() for it
                 // (StatementBlock::execImpl()).
                 if (debug_active && !(xsink && *xsink)) {
-                    const AbstractStatement* dbg_stmt = static_cast<QoreIRDebugStatementInstruction*>(inst)->statement;
+                    auto* dbg_inst = static_cast<QoreIRDebugStatementInstruction*>(inst);
+                    // the end of a statement makes no event
+                    if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_END) {
+                        // the statement ended: the frame is in the statement that contains it, which an exception
+                        // raised after it, as in a loop's condition, is reported for
+                        if (dbg_state.nest_used) {
+                            qore_ir_dbg_statement_end(dbg_state, dbg_inst, rl_cache.stmt_ptr);
+                        }
+                        ++ip;
+                        break;
+                    }
+                    const AbstractStatement* dbg_stmt = dbg_inst->statement;
                     if (!dbg_stmt) {
                         // Deserialized AOT closure IR carries no AST statement pointer: the parse tree is not
                         // serialized, so the pointer cannot survive AOT.  Resolve the statement from the
@@ -14300,6 +14532,11 @@ load_local_done:
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
                         dbg_state.frame_stmt = dbg_stmt;
+                        // the statements that the frame is in, for the exception events (#5816)
+                        if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
+                            qore_ir_dbg_nest_statement(dbg_state, dbg_inst, dbg_stmt,
+                                scope_stack.size());
+                        }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
                         // through the runtime stack, as a callee can: they are read from it again
@@ -14573,6 +14810,25 @@ load_local_done:
                 }
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
+                    // a scope closed on the path of an exception: the exception events of the statements in it come
+                    // before its handlers run, as the AST interpreter makes them as the exception leaves each statement
+                    // of a block before the block's handlers run (#5816); a dismissal ends the function
+                    bool dbg_exception_before = false;
+                    // the number of scopes with the closed one: the statements that it has started with it
+                    size_t dbg_scope_size = 0;
+                    if (debug_active) [[unlikely]] {
+                        dbg_scope_size = scope_stack.size();
+                        dbg_exception_before = xsink && xsink->isException();
+                        if (dbg_exception_before) {
+                            dbgReportException();
+                            dbgReportEnclosing();
+                            if (dbg_state.exit_dismissed) {
+                                unwindForException();
+                                cleanupLocalCaches();
+                                return exitAfterUnwind();
+                            }
+                        }
+                    }
                     size_t scope_start = scope_stack.back().handler_start;
                     scope_stack.pop_back();
                     if (on_block_exit_handlers.size() <= scope_start) {
@@ -14633,6 +14889,17 @@ load_local_done:
                     if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
                         dbgHandlersRan();
+                        // an exception that the handlers raised on a normal exit of the scope: the statements that contain
+                        // the block get its events too, as with the AST interpreter (#5816); they are made, as those
+                        // of an exception that was pending, where the exception goes next (a landing pad, the
+                        // ScopeExit of an enclosing scope, a rethrow, the unwind of the frame), after the locals of
+                        // the block are released, as the AST interpreter releases them before the event of the
+                        // statement that contains the block
+                        if (debug_active) [[unlikely]] {
+                            if (!dbg_exception_before && xsink && xsink->isException()) {
+                                qore_ir_dbg_start_chain_innermost(dbg_state, dbg_scope_size);
+                            }
+                        }
                         // If handler execution raised an exception, route to the
                         // ScopeExit instruction's exception_target (try/catch landing pad)
                         if (xsink && *xsink && inst->exception_target) {
@@ -18314,6 +18581,15 @@ load_local_done:
                     dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
+                    if (*xsink) {
+                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                    } else [[unlikely]] {
+                        // dismissed: the function ends, which returns no value (#5825)
+                        dbg_state.exit_dismissed = true;
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -18371,11 +18647,29 @@ load_local_done:
                         qore_es_private::get(*xsink)->rethrow(ex);
                     }
                 }
-                if (debug_active && *xsink) {
+                if (debug_active && *xsink && rethrow_inst->synthetic) {
+                    // a synthetic rethrow (as of the cleanup of a foreach) propagates the exception of the statement
+                    // that raised it, which made its event: the statements that contain it follow (#5816)
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                } else if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
                     dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
+                    if (*xsink) {
+                        qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                    } else [[unlikely]] {
+                        // dismissed: the function ends, which returns no value (#5825)
+                        dbg_state.exit_dismissed = true;
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
@@ -18460,6 +18754,16 @@ load_local_done:
                 } else {
                     return_value = QoreValue();
                 }
+                // an exception that the handlers of a block raised on its normal exit: the statements that contain the
+                // block get their events before the handlers of the frame run (#5816)
+                if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
@@ -18475,6 +18779,16 @@ load_local_done:
             }
             case QoreIROpcode::ReturnNothing: {
                 return_value = QoreValue();
+                // an exception that the handlers of a block raised on its normal exit: the statements that contain the
+                // block get their events before the handlers of the frame run (#5816)
+                if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                    dbgReportEnclosing();
+                    if (dbg_state.exit_dismissed) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
