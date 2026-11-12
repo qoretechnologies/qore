@@ -1690,6 +1690,9 @@
       could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
       such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
       method, and a qualified call calls the method of the class that it names (issue #5917)
+    - the default values of a @ref closure "closure" created in a method did not see the closure's object in qcc code
+      or in a closure that they created; they are now in the object's context, as the closure's code is (see
+      @ref closure_default_values "closure default values")
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

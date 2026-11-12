@@ -197,6 +197,9 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
         err = uf->parseInitClosure();
         uf->parseCommit();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
 
         // After parseCommit, the signature is available - create a typed callable type
         AbstractFunctionSignature* sig = uf->getUniqueSignature();
@@ -227,6 +230,9 @@ int QoreClosureParseNode::parseInitDeferred() {
         qore_ns_private* old_ns;
         thread_set_class_and_ns(parse_qc, parse_ns, old_qc, old_ns);
         rc = uf->parseInitClosure();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
         thread_set_class_and_ns(old_qc, old_ns);
     }
     uf->parseCommit();

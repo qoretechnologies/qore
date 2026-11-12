@@ -1479,11 +1479,13 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
     }
 
-    bool is_lambda = false, is_in_method = false, needs_type_context = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false, defaults_need_object = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
         needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
+        // the fourth flag: the default values use the closure's object (issue #5931)
+        defaults_need_object = (strlen(flags_str) >= 7 && flags_str[6] == '1');
     }
 
     // Read return type
@@ -1719,6 +1721,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             if (!lv->closureUse()) {
                 lv->setClosureUse();
             }
+        } else if (lv) {
+            // a closure that uses the self of the method that it is in takes the object when it is created, as a
+            // closure of the method does (issue #5931): a closure in a default value of a method's closure, for one
+            is_in_method = true;
+            defaults_need_object = true;
         }
     }
 
@@ -1785,6 +1792,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
     closure_node->setNeedsTypeContext(needs_type_context);
+    if (defaults_need_object) {
+        closure_node->setDefaultsNeedObject();
+    }
     return QoreValue(closure_node);
 }
 

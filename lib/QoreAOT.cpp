@@ -35513,6 +35513,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
                 + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
+        // ",1" after them: the default values use the closure's object (issue #5931); left out otherwise
+        if (closure->defaultsNeedObject()) {
+            id.ref1 += ",1";
+        }
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {

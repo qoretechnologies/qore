@@ -118,6 +118,12 @@ public:
     //! returns the class of the method that the closure is in, or nullptr
     DLLLOCAL const qore_class_private* getMethodClass() const { return method_class; }
 
+    //! Marks a closure whose default values use its object: they use self or create a closure (issue #5931)
+    DLLLOCAL void setDefaultsNeedObject() { defaults_need_object = true; }
+
+    //! Returns true if the default values of the closure are evaluated with its object (issue #5931)
+    DLLLOCAL bool defaultsNeedObject() const { return defaults_need_object; }
+
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
@@ -150,7 +156,9 @@ private:
     bool lambda, in_method,
         is_deferred = false,
         //! true if the closure is in generic code, whose type arguments it is created with (qore#5733)
-        needs_type_context = false;
+        needs_type_context = false,
+        //! the default values of the closure use its object (see setDefaultsNeedObject())
+        defaults_need_object = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
