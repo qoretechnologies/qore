@@ -13194,8 +13194,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     // the receiver is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
-    // (issue #5784)
-    if (m && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
+    // (issue #5784); a pseudo-method resolved at parse time is checked only for a receiver with no value
+    // (qore_check_method_call_receiver()), so a receiver whose type excludes no value needs no check (and the call
+    // stays fused with the operation that gives its receiver, as value.lwr().contains(...))
+    const QoreTypeInfo* pseudo_receiver_type = m && m->isPseudo() && m->getMethod() ? m->getSourceType() : nullptr;
+    bool pseudo_receiver_has_value = pseudo_receiver_type && QoreTypeInfo::hasType(pseudo_receiver_type)
+        && QoreTypeInfo::parseReturns(pseudo_receiver_type, NT_NOTHING) == QTI_NOT_EQUAL;
+    if (m && !pseudo_receiver_has_value && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
         builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
     }
 

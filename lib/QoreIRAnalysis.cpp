@@ -693,8 +693,10 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
     std::vector<uint32_t> uses(groups.size(), 0);
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
-            // the release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp)
-            if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+            // the release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp), nor is the
+            // check of the target of a call before its arguments, which reads the target that the call then holds
+            // as its receiver (CheckCallTarget, issue #5784)
+            if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp || inst->opcode == QoreIROpcode::CheckCallTarget) {
                 continue;
             }
             // the sequence of a list of selectors is held by its first step (QoreIROpcode::ListSelectorStep with
