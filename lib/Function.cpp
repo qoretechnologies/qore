@@ -5890,7 +5890,9 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     assert(ir);
     IRContextFlags flags;
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    // the frame of a call that needs one has argv and self, as in the AST interpreter, also when the code does not
+    // use them
+    if (ir->needs_call_frame || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -5927,6 +5929,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+            ir->needs_call_frame = true;
             if (!ir->ir_only_locals.empty() || !ir->reference_slot_locals.empty()
                     || !ir->real_reference_locals.empty()) {
                 ir->ir_only_locals.clear();
@@ -6581,6 +6584,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        func->needs_call_frame = true;
         if (!func->ir_only_locals.empty() || !func->reference_slot_locals.empty()
                 || !func->real_reference_locals.empty()) {
             func->ir_only_locals.clear();
@@ -6818,6 +6822,15 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     if (uvb->pgm != root_pgm) {
         if (batch_debug) {
             printd(5, "  APPROACH_B: '%s' ineligible: different program\n",
+                callee_ir->name.c_str());
+        }
+        return false;
+    }
+
+    // a call through the fast entry pushes no frame on the stack of local variables
+    if (callee_ir->needs_call_frame) {
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: its calls need frames (PO_ALLOW_DEBUGGER)\n",
                 callee_ir->name.c_str());
         }
         return false;

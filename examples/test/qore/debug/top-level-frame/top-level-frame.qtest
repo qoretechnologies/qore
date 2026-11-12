@@ -19,7 +19,8 @@
     top-level code calls and from the step callback of a debugger, and those of a child Program run with
     Program::run() from the functions of the child Program; the frame of the top-level code of the main Program is
     reached as that of a child Program is, and the values set are those that the top-level code uses afterwards.  A
-    Program whose top-level code runs again in a call that it makes has only the frame of its first entry.
+    Program whose top-level code runs again in a call that it makes has only the frame of its first entry.  The calls
+    of functions, methods and closures that declare no local variables of their own have frames of their own as well.
 */
 class TopLevelFrameTest inherits QUnit::Test {
     public {
@@ -27,13 +28,36 @@ class TopLevelFrameTest inherits QUnit::Test {
         const Script = "top-level-frame-script.q";
 
         #! the top-level local variables of the main Program, sorted
-        const TopLevelVars = "[\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"top\"]";
+        const TopLevelVars = "[\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"ptop\", \"top\"]";
+
+        #! the local variables of the frame of pg() in the script, sorted
+        const PgVars = "[\"argv\", \"i\", \"pc\", \"pfo\", \"val\", \"var\", \"z\"]";
+
+        #! the output of the calls of a function, a method and a closure without local variables of their own, and of
+        #! a function without parameters (#5887), which the script makes twice
+        const ParamCallLines = (
+            "function frame 0: [\"argv\", \"val\", \"var\"]",
+            "function frame 1: " + PgVars,
+            "function frame 2: " + TopLevelVars,
+            "ptop: 42",
+            "no-parameter frame 0: [\"argv\"]",
+            "no-parameter frame 1: " + PgVars,
+            "method frame 0: [\"argv\", \"self\", \"val\", \"var\"]",
+            "method frame 1: " + PgVars,
+            "method frame 2: " + TopLevelVars,
+            "ptop: 43",
+            "closure frame 0: [\"argv\", \"val\", \"var\"]",
+            "closure frame 1: " + PgVars,
+            "closure frame 2: " + TopLevelVars,
+        );
 
         #! the output of the script
         const Expected = (
             "top: call frame 2: " + TopLevelVars,
             "top: call frame 3: {}",
             "top: 42",
+        ) + ParamCallLines + ParamCallLines + (
+            "ptop: 44",
             "ctop: call frame 2: " + TopLevelVars,
             "ctop: call frame 3: {}",
             "step frame 1: " + TopLevelVars,
@@ -50,7 +74,7 @@ class TopLevelFrameTest inherits QUnit::Test {
             "reentrant frame 2: [\"argv\", \"rfl\"]",
             "reentrant frame 3: [\"argv\", \"rl\"]",
             "reentrant frame 4: [\"argv\", \"rfl\"]",
-            "reentrant frame 5: [\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"rx\", \"top\"]",
+            "reentrant frame 5: [\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"ptop\", \"rx\", \"top\"]",
             "reentrant frame 6: " + TopLevelVars,
             "reentrant frame 7: []",
         );

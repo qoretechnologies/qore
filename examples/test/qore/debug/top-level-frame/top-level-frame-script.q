@@ -62,8 +62,6 @@ class StepDebugger inherits DebugProgram {
 }
 
 # frame 0 is the frame of f(), frame 1 that of g(), frame 2 that of the top-level code, and there is no frame 3
-# (f() declares a local variable: a call of a function that declares none has no frame of its own in IR and native
-# code while no debugger is attached)
 sub f(string var, int val) {
     int y = 2;
     printf("%s: call frame 2: %y\n", var, sort(keys get_local_vars(2)));
@@ -74,6 +72,51 @@ sub f(string var, int val) {
 sub g(string var, int val) {
     int z = 3;
     f(var, val);
+}
+
+# the calls of a function, a method and a closure that declare no local variables of their own, only parameters, and
+# of a function without parameters, have frames of their own as well, which the IR interpreter and native code give
+# them by not inlining them (#5887): frame 0 is the frame of the call, frame 1 that of pg(), frame 2 that of the
+# top-level code
+sub pf(string var, int val) {
+    printf("function frame 0: %y\n", sort(keys get_local_vars(0)));
+    printf("function frame 1: %y\n", sort(keys get_local_vars(1)));
+    printf("function frame 2: %y\n", sort(keys get_local_vars(2)));
+    set_local_var_value(2, var, val);
+}
+
+sub nf() {
+    printf("no-parameter frame 0: %y\n", sort(keys get_local_vars(0)));
+    printf("no-parameter frame 1: %y\n", sort(keys get_local_vars(1)));
+}
+
+class ParamFrames {
+    pm(string var, int val) {
+        printf("method frame 0: %y\n", sort(keys get_local_vars(0)));
+        printf("method frame 1: %y\n", sort(keys get_local_vars(1)));
+        printf("method frame 2: %y\n", sort(keys get_local_vars(2)));
+        set_local_var_value(2, var, val);
+    }
+}
+
+sub pg(string var, int val) {
+    int z = 3;
+    ParamFrames pfo();
+    code pc = sub (string var, int val) {
+        printf("closure frame 0: %y\n", sort(keys get_local_vars(0)));
+        printf("closure frame 1: %y\n", sort(keys get_local_vars(1)));
+        printf("closure frame 2: %y\n", sort(keys get_local_vars(2)));
+        set_local_var_value(2, var, val);
+    };
+    # the calls are made twice: the IR interpreter inlines a closure from its second call on
+    for (int i = 0; i < 2; ++i) {
+        pf(var, val);
+        printf("%s: %d\n", var, get_local_vars(1){var}.value);
+        nf();
+        pfo.pm(var, val + 1);
+        printf("%s: %d\n", var, get_local_vars(1){var}.value);
+        pc(var, val + 2);
+    }
 }
 
 #! the number of times reenter() was called
@@ -104,6 +147,7 @@ public sub reenter() {
 }
 
 int top = 1;
+int ptop = 1;
 int dtop = 1;
 int ctop = 1;
 StepDebugger debugger();
@@ -113,6 +157,8 @@ ProgramControl pgm = ProgramControl::getProgram();
 if (!aot) {
     g("top", 42);
     printf("top: %d\n", top);
+    pg("ptop", 42);
+    printf("ptop: %d\n", ptop);
 }
 
 debugger.addProgram(pgm);
