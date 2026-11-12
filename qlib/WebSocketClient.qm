@@ -5020,56 +5020,6 @@ ws.setEventQueue();
         logArgs(LoggerLevel::ERROR, fmt, argv);
     }
 
-    #! Reads a WebSocket message from a stream (HTTP/2 or HTTP/3)
-    /** Large WebSocket frames may be split across multiple protocol DATA frames,
-        so data is accumulated until a complete WebSocket frame is available.
-
-        @param frame_buf reference to the persistent frame buffer for this stream
-        @param read_data callback \c code<*binary(int)> that accepts a timeout in milliseconds and returns stream data
-        @param proto_label protocol label for error messages (e.g. \c "HTTP/2", \c "HTTP/3")
-
-        @return WebSocket message info hash
-
-        @since WebSocketClient 2.4
-    */
-    private hash<WsMsgInfo> readWsMessageFromStream(
-            reference<*binary> frame_buf,
-            code<*binary(int)> read_data,
-            string proto_label) {
-        binary buf = frame_buf ?? binary();
-        date deadline = now_us() + timeout_ms;
-        while (True) {
-            *int needed = ws_get_frame_size(buf);
-            if (exists needed && buf.size() >= needed) {
-                binary frame = buf.substr(0, needed);
-                frame_buf = buf.size() > needed ? buf.substr(needed) : NOTHING;
-                return ws_parse_frame(frame);
-            }
-
-            date remaining = deadline - now_us();
-            if (remaining <= 0s) {
-                throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from %s stream "
-                    "(have %d bytes, need %s)", proto_label, buf.size(),
-                    exists needed ? needed.toString() : "unknown");
-            }
-
-            int read_timeout_ms = min(remaining.durationMilliseconds(), 100);
-            *binary data = read_data(read_timeout_ms);
-            if (data) {
-                buf += data;
-            }
-
-            *int needed2 = ws_get_frame_size(buf);
-            if (exists needed2 && buf.size() >= needed2) {
-                binary frame = buf.substr(0, needed2);
-                frame_buf = buf.size() > needed2 ? buf.substr(needed2) : NOTHING;
-                return ws_parse_frame(frame);
-            } else if (!data && buf.empty()) {
-                throw "WEBSOCKET-ERROR", sprintf("no data available from %s stream", proto_label);
-            }
-        }
-    }
-
     private sendClose(int code, *string txtmsg) {
         if (!WSCCMap{code}) {
             logError("Attempt to send invalid close code %d; expecting one of: %y", code,

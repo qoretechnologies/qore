@@ -79,6 +79,12 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
 
         #! Maximum frame size (16MB default)
         int max_frame_size = 16 * 1024 * 1024;
+
+        #! the size of the fragments received so far of the current fragmented message (issue #5878)
+        int fragment_bytes = 0;
+
+        #! set once a frame was rejected: everything received after it is discarded (issue #5878)
+        bool rejected = False;
     }
 
     #! Creates a WebSocket stream over HTTP/2
@@ -196,8 +202,20 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
         Parses WebSocket frames from the data and adds them to the receive queue.
     */
     processReceivedData(binary data) {
+        # after a rejected frame, nothing more is buffered (issue #5878)
+        if (rejected) {
+            return;
+        }
         recv_buffer += data;
         parseFrames();
+    }
+
+    #! Rejects the frame on its header: closes with the code given and discards everything received from then on
+    private rejectFrame(int code, string reason) {
+        rejected = True;
+        recv_buffer = binary();
+        fragment_bytes = 0;
+        sendClose(code, reason);
     }
 
     #! Parses WebSocket frames from the receive buffer
@@ -234,9 +252,20 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
                 header_size += 4;  # Masking key
             }
 
-            # Check frame size limit
-            if (payload_len > max_frame_size) {
-                sendClose(1009, "Message too big");
+            # a length with its most significant bit set (RFC 6455 section 5.2) is negative here; a control frame is
+            # at most 125 bytes (section 5.5); reserved opcodes are not used: protocol errors, rejected on the header
+            # before the payload is buffered (issue #5878)
+            bool control = opcode == WS_OP_CLOSE || opcode == WS_OP_PING || opcode == WS_OP_PONG;
+            bool data = opcode == WS_OP_TEXT || opcode == WS_OP_BINARY || opcode == WS_OP_CONTINUATION;
+            if (payload_len < 0 || (!control && !data) || (control && payload_len > 125)) {
+                rejectFrame(1002, "Protocol error");
+                return;
+            }
+
+            # Check frame size limit: the frame, and a fragmented message so far, on the header (issue #5878)
+            int so_far = opcode == WS_OP_CONTINUATION ? fragment_bytes : 0;
+            if (data && (payload_len > max_frame_size || so_far > max_frame_size - payload_len)) {
+                rejectFrame(1009, "Message too big");
                 return;
             }
 
@@ -259,6 +288,11 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
 
             # Remove processed frame from buffer
             recv_buffer = recv_buffer.substr(total_frame_size);
+
+            # the size of the fragmented message so far, once the frame is complete
+            if (data) {
+                fragment_bytes = fin ? 0 : so_far + payload_len;
+            }
 
             # Handle frame
             handleFrame(opcode, payload, fin);
