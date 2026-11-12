@@ -1716,6 +1716,23 @@ static inline bool qore_aot_type_path_has_signature_type_param(const char* type_
     return type_path && strstr(type_path, "typeparam<,") != nullptr;
 }
 
+//! Sets the signature whose type parameters the type paths of a default value of its parameter use (issue #5928)
+/** A default value is read as an expression tree (VT_EXPR_NATIVE), whose readers resolve type paths without the
+    callable that owns them; while one is set, QoreAOTTypeResolver::resolve() resolves a path with a signature type
+    parameter with it
+*/
+class QoreAOTDefaultTypeParamSignatureHelper {
+public:
+    DLLLOCAL QoreAOTDefaultTypeParamSignatureHelper(const UserSignature* sig);
+    DLLLOCAL ~QoreAOTDefaultTypeParamSignatureHelper();
+
+    QoreAOTDefaultTypeParamSignatureHelper(const QoreAOTDefaultTypeParamSignatureHelper&) = delete;
+    QoreAOTDefaultTypeParamSignatureHelper& operator=(const QoreAOTDefaultTypeParamSignatureHelper&) = delete;
+
+private:
+    const UserSignature* old;
+};
+
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
 /** In batch mode (multiple AOT blobs registered into one Program),
     every session's methods reference the same builtin types (`string`,

@@ -2498,6 +2498,10 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
         if (call_args) {
             call_args->deref(nullptr);
         }
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex hash constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     // Convert call_args to QoreParseListNode for NewComplexHashNode
@@ -2563,6 +2567,10 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
         arg_val.discard(nullptr);
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex list constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
