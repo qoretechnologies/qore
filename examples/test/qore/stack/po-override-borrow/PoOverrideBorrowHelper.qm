@@ -44,11 +44,54 @@ public int sub module_recurse(code c, int n) {
     return n ? module_recurse(c, n - 1) + 1 : c();
 }
 
+#! returns "allowed" if the code running now may create an RWLock, or the error if not
+/** Creating an object of a thread class is checked against the runtime parse options of the code running: module
+    code runs with the module's own options, which allow it, and code of a caller restricted with PO_LOCKDOWN (and
+    not sandboxed) with that caller's, which forbid it
+*/
+public string sub module_probe() {
+    try {
+        create_object("RWLock");
+        return "allowed";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! probes, calls back into the caller's code, and probes again
+public list<string> sub module_frame(code cb, int n) {
+    list<string> rv = (module_probe(),);
+    rv += cb(n);
+    rv += module_probe();
+    return rv;
+}
+
+#! probes, calls back into the caller's code, which throws, probes in the handler and again after
+public list<string> sub module_catch(code cb) {
+    list<string> rv = (module_probe(),);
+    try {
+        cb();
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.desc;
+        rv += module_probe();
+    }
+    rv += module_probe();
+    return rv;
+}
+
 #! calls callbacks of the caller from methods
 public class ModuleCaller {
     #! calls a callback of the caller
     public auto callBack(code c, auto arg) {
         return c(arg);
+    }
+
+    #! module_frame() as a method
+    public list<string> frame(code cb, int n) {
+        list<string> rv = (module_probe(),);
+        rv += cb(n);
+        rv += module_probe();
+        return rv;
     }
 
     #! calls a callback of the caller holding the gate of this object
