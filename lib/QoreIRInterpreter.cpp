@@ -8006,9 +8006,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
-                // can modify any variable type on the thread-local variable stack)
+                // can modify any variable type on the thread-local variable stack).  An IR-only local exists only in
+                // its slot, and no handler can reach it: QoreIRFunction::computeIROnlyLocals() keeps every local that
+                // an on_block_exit handler references on the runtime stack.  Its slot is left to SlotCacheCleanup,
+                // which releases it with the frame's locals, last declared first, not here in slot order
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    if (preserveParentSlotForWriteback(i)) {
+                    if (preserveParentSlotForWriteback(i) || (i < locals_ir_only.size() && locals_ir_only[i])) {
                         continue;
                     }
                     locals_slot_cache.release(i, xsink);
