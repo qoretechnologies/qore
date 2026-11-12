@@ -65,6 +65,10 @@ good: 1
         addTestCase("an AOT module that fails after loading a module leaves no registration", \testAotModule());
         addTestCase("a failed reload of a module keeps the registration of the module it replaces",
             \testFailedReload());
+        addTestCase("a directory module that fails after loading a module leaves no registration (#5953)",
+            \testDirectoryModule());
+        addTestCase("compiling a directory module that fails to parse leaves no registration (#5953)",
+            \testCompileDirectoryModule());
         addTestCase("a failed load is not a successful one", \testNegative());
         set_return_value(main());
     }
@@ -196,6 +200,136 @@ print(\"reload 2: ok\\n\");
             assertEq("reload 1: LOAD-MODULE-ERROR: missing\nreload 2: ok\n", r.stdout,
                 sprintf("reload, %s: output", mode));
         }
+    }
+
+    #! writes the directory module CleanupFailDir to \a dir, failing if \a fail is set; returns the module directory
+    private string writeDirectoryModule(string dir, bool fail) {
+        string mod_dir = dir + "/CleanupFailDir";
+        if (!is_dir(mod_dir)) {
+            mkdir(mod_dir);
+        }
+        writeFile(mod_dir + "/CleanupFailDir.qm", directoryModuleCode(fail));
+        writeFile(mod_dir + "/Extra.qc", "%modern\npublic namespace CleanupFailDir {\n    public const Extra = 2;\n}\n");
+        return mod_dir;
+    }
+
+    #! the main file of the directory module CleanupFailDir; it loads CleanupGood before it fails if \a fail is set
+    private string directoryModuleCode(bool fail) {
+        return moduleCode("CleanupFailDir", "%requires CleanupGood\n" + (fail ? "%requires " + Missing + "\n" : ""));
+    }
+
+    #! a directory module that loads a user module and then fails is loaded in every way, then loaded once fixed (#5953)
+    /** The failed loads must leave no dependency registration of the module behind; the module manager asserted at
+        exit in a debug build when one was left.  The module, fixed, is then loaded under the same name in the same
+        process, and its dependency on CleanupGood orders its teardown.
+    */
+    testDirectoryModule() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string dir = tmp.path + "/dir-" + mode;
+            mkdir(dir);
+            writeFile(dir + "/CleanupGood.qm", moduleCode("CleanupGood", ""));
+            string mod_dir = writeDirectoryModule(dir, True);
+            string dir_script = writeFile(dir + "/load-dir.q", sprintf("%%modern
+sub load(string label, code load) {
+    try {
+        load();
+        printf(\"%%s: loaded\\n\", label);
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%%s: %%s: %%s\\n\", label, ex.err, index(ex.desc, \"%s\") != -1 ? \"names the missing module\"
+            : ex.desc);
+    }
+}
+string mod_dir = \"%s\";
+load(\"requires by name\", sub () { Program p(); p.parse(\"%%requires CleanupFailDir\\n\", \"name\"); });
+load(\"requires by path\", sub () { Program p(); p.parse(\"%%requires \" + mod_dir + \"\\n\", \"path\"); });
+load(\"loadModule by name\", sub () { Program p(); p.loadModule(\"CleanupFailDir\"); });
+load(\"loadModule by path\", sub () { Program p(); p.loadModule(mod_dir); });
+load(\"load_module\", sub () { load_module(\"CleanupFailDir\"); });
+# fix the module: it loads under the same name, with its dependency on CleanupGood
+File f();
+f.open2(mod_dir + \"/CleanupFailDir.qm\", O_WRONLY | O_TRUNC);
+f.write(\"%s\");
+f.close();
+Program p();
+p.parse(\"%%requires CleanupFailDir\\nint sub get() { return CleanupFailDir::Value + CleanupFailDir::Extra; }\",
+    \"fixed\");
+printf(\"fixed: %%d\\n\", p.callFunction(\"get\"));
+", Missing, mod_dir, escapeForScript(directoryModuleCode(False))));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --enable-debug "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir, dir, qore_bin, mode, dir_script), True);
+            assertEq(0, r.rc, sprintf("directory module, %s: exit status; output: %s", mode, r.out));
+            assertEq("requires by name: LOAD-MODULE-ERROR: names the missing module
+requires by path: LOAD-MODULE-ERROR: names the missing module
+loadModule by name: LOAD-MODULE-ERROR: names the missing module
+loadModule by path: LOAD-MODULE-ERROR: names the missing module
+load_module: LOAD-MODULE-ERROR: names the missing module
+fixed: 3
+", r.stdout, sprintf("directory module, %s: output", mode));
+        }
+    }
+
+    #! the compilers report a directory module that fails to parse after loading a module, and exit normally (#5953)
+    /** The module is parsed only to be compiled; the dependency on CleanupGood that its parse registered must be
+        released although the compiler handles the parse error before it closes the module's context: qcc and qore
+        --compile-module asserted at exit in a debug build (SIGABRT) when it was left.  Exit status 1 is a compile
+        error reported normally.
+    */
+    testCompileDirectoryModule() {
+        string dir = tmp.path + "/compile";
+        mkdir(dir);
+        writeFile(dir + "/CleanupGood.qm", moduleCode("CleanupGood", ""));
+        string mod_dir = writeDirectoryModule(dir, True);
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR=%s", libqore_dir, libqore_dir, libqore_dir, dir);
+
+        # qore --compile-module
+        int rc;
+        string out = backquote(sprintf("%s %s -b --enable-debug --compile-module --output %s %s 2>&1", env, qore_bin,
+            dir + "/qore-out.qmod", mod_dir), \rc);
+        assertEq(1, rc, "qore --compile-module: exit status; output: " + out);
+        assertEq(-1, index(out, "Assertion"), "qore --compile-module: no assertion");
+        assertNeq(-1, index(out, Missing), "qore --compile-module: the error names the missing module");
+        assertFalse(is_file(dir + "/qore-out.qmod"), "qore --compile-module: no module is written");
+
+        *string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            # qcc is built next to qore; qore may have been found in the PATH
+            list<string> bin_dirs = (libqore_dir, dirname(qore_bin));
+            if (index(qore_bin, DirSep) == -1 && ENV.PATH) {
+                bin_dirs += ENV.PATH.split(":");
+            }
+            foreach string bin_dir in (bin_dirs) {
+                if (is_file(bin_dir + DirSep + "qcc")) {
+                    qcc_bin = bin_dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test it", libqore_dir));
+        }
+
+        # qcc -m: the whole module; qcc --context: one file of it, for which the main file is parsed first
+        list<hash<auto>> cmds = (
+            {"label": "qcc -m", "args": sprintf("-m %s -o %s", mod_dir, dir + "/qcc-out.qmod"),
+                "out": dir + "/qcc-out.qmod"},
+            {"label": "qcc --context", "args": sprintf("-c --context=%s -o %s %s", mod_dir, dir + "/Extra.qo",
+                mod_dir + "/Extra.qc"), "out": dir + "/Extra.qo"},
+        );
+        foreach hash<auto> cmd in (cmds) {
+            out = backquote(sprintf("%s %s %s 2>&1", env, qcc_bin, cmd.args), \rc);
+            assertEq(1, rc, sprintf("%s: exit status; output: %s", cmd.label, out));
+            assertEq(-1, index(out, "Assertion"), cmd.label + ": no assertion");
+            assertNeq(-1, index(out, "parse error in main module file"), cmd.label + ": the parse error is reported");
+            assertFalse(is_file(cmd.out), cmd.label + ": no output is written");
+        }
+
+        # the module, fixed, compiles: the failures above are those of the module, not of the commands
+        writeDirectoryModule(dir, False);
+        out = backquote(sprintf("%s %s -m %s -o %s 2>&1", env, qcc_bin, mod_dir, dir + "/qcc-out.qmod"), \rc);
+        assertEq(0, rc, "qcc -m, fixed module: exit status; output: " + out);
+        assertTrue(is_file(dir + "/qcc-out.qmod"), "qcc -m, fixed module: the module is written");
     }
 
     #! returns the text for a double-quoted string literal in generated Qore code

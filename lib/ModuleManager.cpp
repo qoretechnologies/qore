@@ -4706,6 +4706,8 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     omi = mi.release();
     addModule(omi);
     trySetUserModule(name);
+    // the module keeps the dependencies that its load registered
+    qmd.setRegistered();
 
     return omi;
 }

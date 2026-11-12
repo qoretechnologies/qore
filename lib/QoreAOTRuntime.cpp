@@ -13628,6 +13628,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         aot_module_map[mod_name] = std::move(state);
     }
 
+    // the module keeps the dependencies that its initialization registered; a failure above rolls them back
+    mod_ctx.setRegistered();
     return nullptr;  // success
 }
 

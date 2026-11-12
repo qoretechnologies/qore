@@ -537,6 +537,8 @@ struct QoreUserModuleRegistration {
     strset_t deps;
     //! True if the name had registered dependents (md_map)
     bool had_dependents = false;
+    //! the binary modules registered as required by the name (binary_user_dep_map)
+    strset_t binary_deps;
 };
 
 class ModMap {
@@ -944,6 +946,12 @@ public:
             reg.deps = i->second;
         }
         reg.had_dependents = md_map.find(name) != md_map.end();
+        reg.binary_deps.clear();
+        for (const auto& bi : binary_user_dep_map) {
+            if (bi.second.find(name) != bi.second.end()) {
+                reg.binary_deps.insert(bi.first);
+            }
+        }
     }
 
     //! Removes the dependencies that a failed load of \a name registered since \a saved was recorded
@@ -978,6 +986,17 @@ public:
             if (mi != md_map.end()) {
                 md_map.erase(mi);
             }
+        }
+        // the binary modules that the failed load registered as required by the name
+        for (md_map_t::iterator bi = binary_user_dep_map.begin(); bi != binary_user_dep_map.end();) {
+            if (saved.binary_deps.find(bi->first) == saved.binary_deps.end()) {
+                bi->second.erase(name);
+                if (bi->second.empty()) {
+                    binary_user_dep_map.erase(bi++);
+                    continue;
+                }
+            }
+            ++bi;
         }
     }
 
@@ -1495,13 +1514,23 @@ class QoreUserModuleDefContextHelper : public QoreModuleDefContextHelper {
 public:
     DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs);
 
+    //! Closes the module definition context
+    /** Unless the module was registered (see setRegistered()), the dependency registrations that its load made are
+        rolled back.  This does not depend on an exception being pending when the context closes: a caller can handle
+        the exception of a failed load first, and a module parsed only to be compiled is never registered (#5953).
+    */
     DLLLOCAL ~QoreUserModuleDefContextHelper() {
         const char* name = set_module_context_name(old_name);
         set_module_context_path(old_path);
 
-        if (xsink && !dup) {
+        if (!registered && !dup) {
             QMM.rollbackUserModuleDependency(name, saved_reg);
         }
+    }
+
+    //! Marks the module as registered: the dependency registrations that its load made are kept
+    DLLLOCAL void setRegistered() {
+        registered = true;
     }
 
     DLLLOCAL void setDuplicate() {
@@ -1529,6 +1558,8 @@ protected:
 
     ExceptionSink& xsink;
     bool dup;
+    //! true if the module was registered and keeps the dependency registrations of its load
+    bool registered = false;
     //! the registration of the module name when its load began: a module being reloaded is still registered
     QoreUserModuleRegistration saved_reg;
 };

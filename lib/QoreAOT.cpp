@@ -26447,6 +26447,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     ValueHolder init_c_holder(nullptr);
     QoreParseOptions parsed_po;
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
 
         // Use parsePending() + parseCommit() like interpreted module loading does.
@@ -26467,11 +26469,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
         mod_ctx.close();
     }
-
-    // Clean up phantom module dependencies created during compilation
-    // (the module being compiled is not actually loaded, so any dependencies
-    // created by trySetUserModuleDependency need to be removed)
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     if (qoreAotHandleWarnings(wsink, error, "module parsing")) {
         return false;
@@ -26872,6 +26869,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
 
         // Parse main .qm file with parsePending()
@@ -27256,11 +27255,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             compiled_count, total_funcs, failed_count, target_triple,
             (compile_only || target_triple) ? obj_path : output_path);
     }
-
-    // Clean up phantom module dependencies created during compilation
-    // (the module being compiled is not actually loaded, so any dependencies
-    // created by trySetUserModuleDependency need to be removed)
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     return true;
 }
@@ -30734,6 +30728,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink);
 
@@ -31125,7 +31121,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             target_triple, output_path);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
@@ -31303,6 +31298,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink);
 
@@ -31637,7 +31634,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             target_triple ? glue_obj : output_path, true);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
@@ -31856,6 +31852,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink);
 
@@ -32184,7 +32182,6 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             target_triple ? glue_obj : output_path, true);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
