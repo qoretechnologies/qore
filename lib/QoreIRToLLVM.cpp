@@ -443,7 +443,6 @@ static bool isFastMethodCallEligible(
 #include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include <qore/QoreStringNode.h>
-#include <llvm/ADT/SCCIterator.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
@@ -463,8 +462,6 @@ static bool isFastMethodCallEligible(
 #include <cstdio>
 #include <cstring>
 
-// LLVM 23 made getTerminator() assert that the block is already well formed;
-// getTerminatorOrNull() preserves the nullable contract used while lowering.
 //! Returns the runtime helper that a store to a local calls: for the assignment of an element to the variable of a
 //! foreach loop, the variant of a helper that checks the value's type which describes a type error as the AST
 //! interpreter does ("<foreach lvalue assignment>"); the description is given to the store's own type check only,
@@ -492,6 +489,8 @@ static std::string qore_store_helper_name(const char* name, bool foreach_assignm
     return name;
 }
 
+// LLVM 23 made getTerminator() assert that the block is already well formed;
+// getTerminatorOrNull() preserves the nullable contract used while lowering.
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 #if LLVM_VERSION_MAJOR >= 23
     return block->getTerminatorOrNull();
@@ -502,6 +501,110 @@ static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
     return qoreGetTerminator(&block);
+}
+
+static const llvm::Instruction* qoreGetTerminator(const llvm::BasicBlock* block) {
+    return qoreGetTerminator(const_cast<llvm::BasicBlock*>(block));
+}
+
+//! Calls \a f with each successor of \a block; a block that has no terminator yet has none
+/** While a function is lowered, some of its blocks have no terminator yet (the error return, the deopt block and the
+    shared cleanup blocks are completed at the end of lowerFunction()).  The control flow graph of the function must
+    therefore never be walked with LLVM's successor iterators (llvm::successors(), succ_begin(), or a graph algorithm
+    over the function such as llvm::scc_iterator) before it is complete: LLVM 23 made them require a terminator, so
+    that they read the end of the empty instruction list of a block that has none, which crashed qcc on macOS (the
+    first CI platform with LLVM 23); before LLVM 23 such a block had no successors, as it has here
+*/
+template <typename F>
+static void qoreForEachSuccessor(const llvm::BasicBlock* block, F&& f) {
+    const llvm::Instruction* term = qoreGetTerminator(block);
+    if (!term) {
+        return;
+    }
+    for (unsigned i = 0, e = term->getNumSuccessors(); i < e; ++i) {
+        f(term->getSuccessor(i));
+    }
+}
+
+//! Gives each block that is reachable from the entry of \a func and in a cycle of its control flow graph the number
+//! (from 1) of its strongly connected component in \a cycle_of
+/** An iterative form of Tarjan's algorithm over the terminators of the blocks, which a function whose lowering is not
+    finished needs, as some of its blocks have no terminator yet (see qoreForEachSuccessor()); a component is a cycle
+    if it has more than one block or a block that branches to itself
+*/
+static void qoreFindBlockCycles(llvm::Function* func,
+        std::unordered_map<const llvm::BasicBlock*, size_t>& cycle_of) {
+    cycle_of.clear();
+    if (func->empty()) {
+        return;
+    }
+    struct BlockState {
+        size_t index;
+        size_t lowlink;
+        bool on_stack;
+    };
+    std::unordered_map<const llvm::BasicBlock*, BlockState> state;
+    // the blocks of the components that are not complete yet
+    std::vector<const llvm::BasicBlock*> component_stack;
+    // the depth-first path: each block and the index of its next successor to visit
+    std::vector<std::pair<const llvm::BasicBlock*, unsigned>> path;
+    size_t next_index = 0;
+    size_t components = 0;
+    auto visit = [&](const llvm::BasicBlock* bb) {
+        if (!(++next_index % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM ordered error return cycles");
+        }
+        state.emplace(bb, BlockState{next_index, next_index, true});
+        component_stack.push_back(bb);
+        path.emplace_back(bb, 0);
+    };
+    visit(&func->getEntryBlock());
+    while (!path.empty()) {
+        const llvm::BasicBlock* bb = path.back().first;
+        const llvm::Instruction* term = qoreGetTerminator(bb);
+        unsigned succ_count = term ? term->getNumSuccessors() : 0;
+        if (path.back().second < succ_count) {
+            const llvm::BasicBlock* succ = term->getSuccessor(path.back().second++);
+            auto it = state.find(succ);
+            if (it == state.end()) {
+                visit(succ);
+            } else if (it->second.on_stack) {
+                BlockState& bs = state.at(bb);
+                bs.lowlink = std::min(bs.lowlink, it->second.index);
+            }
+            continue;
+        }
+        path.pop_back();
+        const BlockState& bs = state.at(bb);
+        if (!path.empty()) {
+            BlockState& parent = state.at(path.back().first);
+            parent.lowlink = std::min(parent.lowlink, bs.lowlink);
+        }
+        if (bs.lowlink != bs.index) {
+            continue;
+        }
+        // bb is the root of a component: its blocks are bb and those above it on the stack
+        ++components;
+        size_t first = component_stack.size();
+        do {
+            --first;
+            state.at(component_stack[first]).on_stack = false;
+        } while (component_stack[first] != bb);
+        bool cycle = component_stack.size() - first > 1;
+        if (!cycle) {
+            qoreForEachSuccessor(bb, [&](const llvm::BasicBlock* succ) {
+                if (succ == bb) {
+                    cycle = true;
+                }
+            });
+        }
+        if (cycle) {
+            for (size_t i = first, e = component_stack.size(); i < e; ++i) {
+                cycle_of[component_stack[i]] = components;
+            }
+        }
+        component_stack.resize(first);
+    }
 }
 
 static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr,
@@ -4265,24 +4368,15 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
     }
     // the strongly connected component of each block that is in a cycle, computed on first use: a temporary
     // registered after a check holds a value at the check only if a loop that contains the check stores it, and does
-    // not release it before it comes back to the check
+    // not release it before it comes back to the check.  The function is not complete here (the error return block,
+    // among others, has no terminator yet), so its graph is walked over the terminators of its blocks and never with
+    // LLVM's successor iterators, which require a terminator since LLVM 23 (see qoreForEachSuccessor())
     std::unordered_map<const llvm::BasicBlock*, size_t> cycle_of;
     bool cycles_known = false;
     auto getCycle = [&](const llvm::BasicBlock* bb) -> size_t {
         if (!cycles_known) {
             cycles_known = true;
-            size_t n = 0;
-            for (auto it = llvm::scc_begin(llvm_func); !it.isAtEnd(); ++it) {
-                if (!(++n % 100)) {
-                    (void)qore_check_cancel(nullptr, "LLVM ordered error return cycles");
-                }
-                if (!it.hasCycle()) {
-                    continue;
-                }
-                for (llvm::BasicBlock* member : *it) {
-                    cycle_of[member] = n;
-                }
-            }
+            qoreFindBlockCycles(llvm_func, cycle_of);
         }
         auto it = cycle_of.find(bb);
         return it == cycle_of.end() ? 0 : it->second;
@@ -4322,15 +4416,15 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
                 while (!work.empty()) {
                     const llvm::BasicBlock* from = work.back();
                     work.pop_back();
-                    for (const llvm::BasicBlock* succ : llvm::successors(from)) {
+                    qoreForEachSuccessor(from, [&](const llvm::BasicBlock* succ) {
                         if (getCycle(succ) != cycle || !it->second.insert(succ).second) {
-                            continue;
+                            return;
                         }
                         // a block that stores the temporary gives it the value of its own last store
                         if (!last_store.count(succ)) {
                             work.push_back(succ);
                         }
-                    }
+                    });
                 }
             }
         }
