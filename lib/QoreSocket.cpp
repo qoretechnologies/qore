@@ -18390,13 +18390,27 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
 
 QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
     QoreHashNode* rv = SocketRecvPollOperationBase::continuePoll(xsink);
-    // a draining server closes a connection that has not sent a byte of a request (a connection that was opened just
-    // before the drain started, for example): the operation ends without a header, as when the peer closes it; a
-    // request that has started to arrive is read and answered (qore#5899)
-    if (rv && sock->priv->http_draining.load(std::memory_order_acquire) && (!poll_state
-            || !reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived())) {
-        rv->deref(xsink);
-        return nullptr;
+    // a draining server closes a connection that has not sent a byte of a request (one that waited for its request
+    // when the drain started): the operation ends without a header, as when the peer closes it; a request that has
+    // started to arrive is read and answered (qore#5899).  The state is read and released under the socket's lock,
+    // as an abort can reset it from another thread
+    if (rv && sock->priv->http_draining.load(std::memory_order_acquire)) {
+        bool ended = false;
+        {
+            AutoLocker al(sock->priv->m);
+            if (poll_state
+                    && !static_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived()) {
+                poll_state.reset();
+                sock->priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+                ended = true;
+            }
+        }
+        if (ended) {
+            // released outside the lock: the hash refers to the socket
+            rv->deref(xsink);
+            return nullptr;
+        }
     }
     if (rv || !data) {
         return rv;

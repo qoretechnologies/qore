@@ -437,7 +437,6 @@ public class HttpAsyncSocketIoController {
                     case HttpConnectionState::SendAndReadHeader:
                     case HttpConnectionState::SendStreamAndReadHeader:
                     case HttpConnectionState::ResponseDelay:
-                    case HttpConnectionState::SslHandshake:
                         ci.sock.drainHttpConnection();
                         break;
                 }
@@ -579,15 +578,14 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Http3:
             case HttpConnectionState::Http3Sending:
                 return ci;
-            # an HTTP/1.1 connection that carries requests and was written after the drain started: its keep-alive
-            # operation must end after its response too (see startDrain())
+            # an HTTP/1.1 connection that has sent a request and was written after the drain started: its keep-alive
+            # operation must end after its response too (see startDrain()); not a connection that has not sent a
+            # request yet (a new connection, or one in its TLS handshake), whose first request is served
             case HttpConnectionState::KeepAlive:
-            case HttpConnectionState::ReadHeader:
             case HttpConnectionState::ReadBody:
             case HttpConnectionState::SendAndReadHeader:
             case HttpConnectionState::SendStreamAndReadHeader:
             case HttpConnectionState::ResponseDelay:
-            case HttpConnectionState::SslHandshake:
                 ci.sock.drainHttpConnection();
                 break;
         }
@@ -603,7 +601,7 @@ public class HttpAsyncSocketIoController {
         dispatch that ends while the server does not drain only decrements dispatch_count, which the caller does
         itself, so that it pays no call
     */
-    private endDispatch(string uh) {
+    private endDispatch(string uh, Counter dispatch_counter) {
         if (draining) {
             AutoWriteLock al(m);
             *hash<HttpActiveConnectionInfo> ci = connections{uh};
@@ -612,7 +610,7 @@ public class HttpAsyncSocketIoController {
                 (connections{uh} @= (draining ? withDrainToken(uh, ci) : ci));
             }
         }
-        dispatch_count.dec();
+        dispatch_counter.dec();
     }
 
     stop() {
@@ -3323,7 +3321,13 @@ public class HttpAsyncSocketIoController {
                     handleIdleTimeout(uh, cinfo);
                 } else if (op.headersReady()) {
                     # Headers fully read — dispatch directly without round-trip
-                    hash<auto> output = op.getOutput();
+                    *hash<auto> output = op.getOutput();
+                    # no header: the connection is closed (see the ReadHeader case)
+                    if (!output) {
+                        try { cinfo.sock.close(); } catch () {}
+                        handleConnectionClosed(uh, cinfo);
+                        break;
+                    }
                     handleHeaderComplete(uh, cinfo, output);
                 } else {
                     handleConnectionClosed(uh, cinfo);
@@ -3335,6 +3339,7 @@ public class HttpAsyncSocketIoController {
                 # no header: the operation ended without a request, as for a connection that a draining server closes
                 # because it has not sent a byte of a request (qore#5899)
                 if (!output) {
+                    try { cinfo.sock.close(); } catch () {}
                     handleConnectionClosed(uh, cinfo);
                     break;
                 }
@@ -3654,6 +3659,11 @@ public class HttpAsyncSocketIoController {
     #! Handles connection errors
     private handleConnectionError(string uh, hash<HttpActiveConnectionInfo> cinfo,
             string state, hash<ExceptionInfo> ex) {
+        # the operation of a draining HTTP/3 listener has ended (qore#5899); for HTTP/3, cinfo.sock is the listener's
+        # UDP socket
+        if (state == HttpConnectionState::Http3 || state == HttpConnectionState::Http3Sending) {
+            on_exit endH3Drain(cinfo.sock.uniqueHash());
+        }
         @debug {
             if (getenv("QORE_ASYNCIO_TRACE")) {
                 log(LoggerLevel::INFO,
@@ -3838,6 +3848,8 @@ public class HttpAsyncSocketIoController {
         }
 
         # Remove from our tracking; the dispatch is counted until it ends (see endDispatch())
+        # the Counter that counts this dispatch, which the controller replaces when it is restarted (see start())
+        Counter dispatch_counter;
         {
             AutoWriteLock al(m);
             # while draining, the dispatch keeps the drain token of the connection's entry: a drain that started after
@@ -3847,7 +3859,8 @@ public class HttpAsyncSocketIoController {
                 dispatch_cinfo.drain_token = connections{dispatch_uh}.drain_token;
             }
             remove connections{dispatch_uh};
-            dispatch_count.inc();
+            dispatch_counter = dispatch_count;
+            dispatch_counter.inc();
         }
         # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
         # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
@@ -3866,9 +3879,9 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
             dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
@@ -3882,9 +3895,9 @@ public class HttpAsyncSocketIoController {
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled1) {
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             return;
         }
@@ -3902,9 +3915,9 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             log(LoggerLevel::ERROR, "Error preparing request for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
@@ -3919,9 +3932,9 @@ public class HttpAsyncSocketIoController {
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled2) {
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             return;
         }
@@ -3938,9 +3951,9 @@ public class HttpAsyncSocketIoController {
             } catch (hash<ExceptionInfo> ex) {
                 # the dispatch ends here: the connection is closed below
                 if (draining) {
-                    endDispatch(dispatch_uh);
+                    endDispatch(dispatch_uh, dispatch_counter);
                 } else {
-                    dispatch_count.dec();
+                    dispatch_counter.dec();
                 }
                 log(LoggerLevel::ERROR, "Error handling keep-alive request for %y: %s: %s",
                     dispatch_uh, ex.err, ex.desc);
@@ -3953,9 +3966,9 @@ public class HttpAsyncSocketIoController {
                 return;
             }
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
         };
 
@@ -3965,9 +3978,9 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
@@ -4042,6 +4055,8 @@ public class HttpAsyncSocketIoController {
 
         # Remove from our tracking — handler thread owns the socket now; the dispatch is counted until it ends (see
         # endDispatch())
+        # the Counter that counts this dispatch, which the controller replaces when it is restarted (see start())
+        Counter dispatch_counter;
         {
             AutoWriteLock al(m);
             # while draining, the dispatch keeps the drain token of the connection's entry: a drain that started after
@@ -4051,7 +4066,8 @@ public class HttpAsyncSocketIoController {
                 dispatch_cinfo.drain_token = connections{dispatch_uh}.drain_token;
             }
             remove connections{dispatch_uh};
-            dispatch_count.inc();
+            dispatch_counter = dispatch_count;
+            dispatch_counter.inc();
         }
         # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
         # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
@@ -4069,9 +4085,9 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             log(LoggerLevel::ERROR, "Error preparing request after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
@@ -4083,9 +4099,9 @@ public class HttpAsyncSocketIoController {
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled3) {
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             return;
         }
@@ -4099,9 +4115,9 @@ public class HttpAsyncSocketIoController {
             } catch (hash<ExceptionInfo> ex) {
                 # the dispatch ends here: the connection is closed below
                 if (draining) {
-                    endDispatch(dispatch_uh);
+                    endDispatch(dispatch_uh, dispatch_counter);
                 } else {
-                    dispatch_count.dec();
+                    dispatch_counter.dec();
                 }
                 log(LoggerLevel::ERROR, "Error handling request after body read for %y: %s: %s",
                     dispatch_uh, ex.err, ex.desc);
@@ -4111,9 +4127,9 @@ public class HttpAsyncSocketIoController {
                 return;
             }
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
         };
 
@@ -4123,9 +4139,9 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             # the dispatch ends here: the connection is closed below
             if (draining) {
-                endDispatch(dispatch_uh);
+                endDispatch(dispatch_uh, dispatch_counter);
             } else {
-                dispatch_count.dec();
+                dispatch_counter.dec();
             }
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
