@@ -4077,12 +4077,14 @@ auto get_app_registry(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 /** @param identifier the string to resolve; function or static class method, can include namespace path
 
     @return the call reference to the given function or static method; the string is resolved as follows:
-    - if in a class method, a non-static method lookup is made
-    - if not found, then a static method lookup is made
+    - a name with a class path (<tt>Class::method</tt>, also with a namespace path) is looked up as a public static
+      method of the class; a non-static method raises \c CALL-REFERENCE-ERROR, as this function runs without an object
     - if not found, then a function lookup is made
     - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context; a
+    non-static method (which needs an object; use <object>::getCallReference() in the object's code); the identifier
+    contains a NUL character (since %Qore 3.0)
 
     @note
     - use <object>::getCallReference() to get call references to non-public class methods; this builtin function
