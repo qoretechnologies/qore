@@ -1616,7 +1616,7 @@
     - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
       for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
-      AST interpreter's \c / gave a \c float for a \c float and a \c *number operand (issue #5663)
+      AST interpreter gave a \c float instead of a \c number for \c / of a \c float and a \c *number (issue #5663)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# the cases of arith-parse-result-types.qtest (generated for the operand types and values below): each function
+# the cases of parts 1-2 of ArithParseResultTypes.qc (generated for the operand types and values below): each function
 # applies an arithmetic operator to parameters of declared types (which are not narrowed) and returns the result in a
 # list literal, whose element type is the parse result type of the operator in the compiled modes (the AST interpreter
 # takes it from the value): a parse result type that does not allow the value raises RUNTIME-TYPE-ERROR, and one whose

@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include ArithParseResultTypes.qc
+
+%exec-class ArithParseResultTypesPart3
+
+#! runs part 3 of 3 of the cases of ArithParseResultTypesBase: the container and list cases
+class ArithParseResultTypesPart3 inherits ArithParseResultTypesBase {
+    constructor() : ArithParseResultTypesBase("ArithParseResultTypesPart3", 3) {
+    }
+}

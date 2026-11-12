@@ -77,6 +77,48 @@ static bool qore_plus_parse_type_is_unknown(const QoreTypeInfo* ti) {
     return !QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo;
 }
 
+//! returns true if the element type of a list type gives a plain list (no element type) at runtime
+static bool qore_plus_list_element_is_plain(const QoreTypeInfo* element_ti) {
+    return !element_ti || element_ti == anyTypeInfo;
+}
+
+//! the parse type of the list that the operator gives at runtime for a list with elements of type \a element_ti to
+//! which a value of type \a new_ti is added (qore_list_private::setListTypeFromNewElementType()): the list of their
+//! common type (a list, not a soft list type of an operand, ex: softlist<int>, which the compiled modes would use as a
+//! container element type, as the AST interpreter does not), or list<auto>; nullptr (the type of the result depends
+//! on the values) if \a from_values is set
+static const QoreTypeInfo* qore_plus_list_add_type(const QoreTypeInfo* element_ti, const QoreTypeInfo* new_ti,
+        bool& from_values) {
+    // an element type of auto gives the type of the values added to an empty list
+    if (element_ti == autoTypeInfo || element_ti == autoNoNarrowTypeInfo) {
+        from_values = true;
+        return nullptr;
+    }
+    if (qore_plus_list_element_is_plain(element_ti)) {
+        return autoListTypeInfo;
+    }
+    const QoreTypeInfo* ctype = element_ti;
+    if (QoreTypeInfo::matchCommonType(ctype, new_ti)) {
+        return qore_get_complex_list_type(ctype);
+    }
+    return autoListTypeInfo;
+}
+
+//! returns the type of the values of an operand that the operator adds to a list as one element, if every value that
+//! the operand type allows has that type at runtime (QoreValue::getTypeInfo()), as the runtime takes the type of the
+//! value: a scalar base type (not a class or object type, whose values can be of a subclass, a hash type, whose values
+//! can be typed hashes, timeout, whose values are ints, a date, whose values have a subtype, a soft type, a type that
+//! can be NOTHING or a type of more than one value type), else nullptr
+static const QoreTypeInfo* qore_plus_element_value_type(const QoreTypeInfo* ti) {
+    for (const QoreTypeInfo* exact : {bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, boolTypeInfo,
+            binaryTypeInfo}) {
+        if (ti == exact) {
+            return ti;
+        }
+    }
+    return nullptr;
+}
+
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
@@ -287,6 +329,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         QoreBufferBinaryOperation::Add);
     bool is_list_left = QoreTypeInfo::isType(leftTypeInfo, NT_LIST);
     bool is_list_right = QoreTypeInfo::isType(rightTypeInfo, NT_LIST);
+    // set when the type of a list result depends on the values of the operands (it then has no parse type)
+    bool list_type_from_values = false;
     // issue #3157: try to handle timeout + date specially; an operand of a type that is not known at parse time (the
     // argument of a map expression, for example) can be a date, so the flag does not depend on the other operand's
     // type being known, as it does not for the subtraction operator (qore#5735)
@@ -304,23 +348,26 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
     // if either side is a list, then the return type is list (highest priority)
     else if (is_list_left || is_list_right) {
+        // the type of the list that the runtime gives (qore_list_private::concatenate(), concatenateElement() and
+        // prependElement()), which depends on the element types of the values
         if (is_list_left && is_list_right) {
-            parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)
-                ? leftTypeInfo
-                : listTypeInfo;
+            // the element types of the values of two lists (an operand of a list type can also be NOTHING when a
+            // typed variable has not been assigned)
+            list_type_from_values = true;
         } else if (is_list_left) {
-            const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(leftTypeInfo);
-            if (QoreTypeInfo::equal(elementTypeInfo, rightTypeInfo)) {
-                returnTypeInfo = leftTypeInfo;
+            const QoreTypeInfo* value_ti = qore_plus_element_value_type(rightTypeInfo);
+            if (value_ti) {
+                returnTypeInfo = qore_plus_list_add_type(QoreTypeInfo::getElementType(leftTypeInfo), value_ti,
+                    list_type_from_values);
             } else {
-                returnTypeInfo = autoListTypeInfo;
+                list_type_from_values = true;
             }
         } else {
-            const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(rightTypeInfo);
-            if (QoreTypeInfo::equal(elementTypeInfo, leftTypeInfo)) {
-                returnTypeInfo = rightTypeInfo;
-            } else {
+            // prependElement() gives list<auto> for a value that is not a list (and not NOTHING)
+            if (qore_plus_element_value_type(leftTypeInfo)) {
                 returnTypeInfo = autoListTypeInfo;
+            } else {
+                list_type_from_values = true;
             }
         }
     }
@@ -378,8 +425,11 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 break;
             case QoreArithParseResult::Container:
                 // with one value type on each side, the rules above give a container type more precisely (ex: its
-                // element type), if they give the container that the operator returns
-                if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
+                // element type), if they give the container that the operator returns; a list whose type depends on
+                // the values of the operands has no parse type
+                if (list_type_from_values && QoreTypeInfo::isType(arith_ti, NT_LIST)) {
+                    returnTypeInfo = nullptr;
+                } else if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
                     returnTypeInfo = arith_ti;
                 }
                 break;
