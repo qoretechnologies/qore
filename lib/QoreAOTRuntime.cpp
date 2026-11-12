@@ -7004,6 +7004,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
+    if (!validateAOTIROpcode(opcode_raw, error)) {
+        return nullptr;
+    }
     auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;

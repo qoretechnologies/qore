@@ -25,6 +25,7 @@ enum QoreOpcodePropertyFlag : uint32_t {
     QORE_OPCODE_PROPERTY_REGEX_INVOKE = 1u << 1,
     QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE = 1u << 2,
     QORE_OPCODE_PROPERTY_RANGE_SLICE = 1u << 3,
+    QORE_OPCODE_PROPERTY_NO_AOT_IR = 1u << 4, //!< Reserved, AST-only, or native-only instruction
 };
 
 //! Centralized metadata for IR opcodes - SINGLE SOURCE OF TRUTH
@@ -209,7 +210,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::ScopeExit, "ScopeExit"                     , false, false, false,  0, "ScopeExit", false, true , "ParseNode", false, false, false, false, false }, // 138
     { QoreIROpcode::ThreadExit, "ThreadExit"                    , false, false, true ,  0, "ThreadExit", false, true , "ParseNode", false, false, false, false, false }, // 139
     { QoreIROpcode::Context, "Context"                       , false, false, false,  0, "ContextInit: create Context frame from data+where+sort", true , true , "ParseNode", true , false, false, false, false }, // 140
-    { QoreIROpcode::Summarize, "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false, false }, // 141
+    { QoreIROpcode::Summarize, "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false, false, QORE_OPCODE_PROPERTY_NO_AOT_IR }, // 141
     { QoreIROpcode::EqInt, "EqInt"                         , false, true , false,  2, "EqInt", false, true , "ParseNode", true , false, true , false, true  }, // 142
     { QoreIROpcode::EqFloat, "EqFloat"                       , false, true , false,  2, "EqFloat", false, true , "ParseNode", true , false, true , false, true  }, // 143
     { QoreIROpcode::EqString, "EqString"                      , false, false, false,  2, "EqString", false, true , "ParseNode", true , false, false, false, false }, // 144
@@ -365,7 +366,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::IteratorCreateReverse, "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false, false }, // 294
     { QoreIROpcode::Call, "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 295
     { QoreIROpcode::CallDirect, "CallDirect"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 296
-    { QoreIROpcode::CallIndirect, "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 297
+    { QoreIROpcode::CallIndirect, "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_NO_AOT_IR }, // 297
     { QoreIROpcode::CallMethod, "CallMethod"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 298
     { QoreIROpcode::CallMethodDirect, "CallMethodDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 299
     { QoreIROpcode::InvokeMethodDirect, "InvokeMethodDirect"            , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 300
@@ -428,7 +429,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::LValuePathTernary, "LValuePathTernary"             , false, false, false, OPCODE_MIN_OPERANDS(3), "LValuePathTernary", true , true , "ParseNode", true , false, false, false, false }, // 357
     { QoreIROpcode::DiscardTemps, "DiscardTemps"                  , false, false, false,  0, "Drain cleanup back to nearest PushTempMark", false, false, "ParseNode", false, false, false, false, false }, // 358
     { QoreIROpcode::PushTempMark, "PushTempMark"                  , false, false, false,  0, "Push sentinel marking start of statement-scoped cleanup region", false, false, "ParseNode", false, false, false, false, false }, // 359
-    { QoreIROpcode::CallAOTHelper, "CallAOTHelper"                 , false, false, false,  0, "Call AOT-emitted helper function by LLVM symbol name", true , true , "ParseNode", true , false, false, false, false }, // 360
+    { QoreIROpcode::CallAOTHelper, "CallAOTHelper"                 , false, false, false,  0, "Call AOT-emitted helper function by LLVM symbol name", true , true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_NO_AOT_IR }, // 360
     { QoreIROpcode::ContextMaxPos, "ContextMaxPos"                 , false, true , false,  1, "Get max_pos (iteration count) from Context state handle", false, false, "ParseNode", true , false, false, false, false }, // 361
     { QoreIROpcode::ContextSetPos, "ContextSetPos"                 , false, false, false,  2, "Set current row position on Context state handle", true , false, "ParseNode", false, false, false, false, false }, // 362
     { QoreIROpcode::ContextDestroy, "ContextDestroy"                , false, false, false,  1, "Pop thread-local context stack + free Context frame", true , false, "ParseNode", false, false, false, false, false }, // 363
@@ -678,7 +679,8 @@ inline bool qore_ir_validate_opcode_registry(std::string& error) {
         if ((info.property_flags & ~(QORE_OPCODE_PROPERTY_CALL_INVOKE
                     | QORE_OPCODE_PROPERTY_REGEX_INVOKE
                     | QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE
-                    | QORE_OPCODE_PROPERTY_RANGE_SLICE)) != 0) {
+                    | QORE_OPCODE_PROPERTY_RANGE_SLICE
+                    | QORE_OPCODE_PROPERTY_NO_AOT_IR)) != 0) {
             error = "opcode registry entry '" + std::string(info.name)
                 + "' has unknown property flags";
             return false;

@@ -31,6 +31,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
+#include "qore/intern/QoreOpcodeRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/CaseNodeRegex.h"
@@ -1708,6 +1709,10 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
         return nullptr;
     }
     uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
+    if (!validateAOTIROpcode(invoke_opcode_raw, ctx.error)) {
+        expr.discard(nullptr);
+        return nullptr;
+    }
     const char* invoke_key_name = ctx.reader.readStringRef(ctx.ptr);
     AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     bool has_ref_args = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0
@@ -3945,4 +3950,16 @@ bool qore_aot_validate_inst_group_registry(std::string& error) {
     }
 
     return true;
+}
+
+// Group tags are supplied by the image, so a supported group must not disguise an unsupported opcode.
+bool validateAOTIROpcode(uint16_t opcode, std::string& error) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode);
+    if (info && !info->hasProperty(QORE_OPCODE_PROPERTY_NO_AOT_IR)) {
+        return true;
+    }
+    error = "unsupported AOT IR opcode ";
+    error += info ? info->name : "<unknown>";
+    error += " (" + std::to_string(opcode) + ")";
+    return false;
 }

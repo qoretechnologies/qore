@@ -151,4 +151,7 @@ inline const QoreIRInstGroupInfo* getAOTInstGroupInfo(uint8_t raw_group) {
 //! Validate instruction group registry invariants
 bool qore_aot_validate_inst_group_registry(std::string& error);
 
+//! Reject opcodes that cannot appear in serialized IR, independently of a payload's claimed instruction group.
+DLLLOCAL bool validateAOTIROpcode(uint16_t opcode, std::string& error);
+
 #endif // _QORE_INTERN_QOREAOTINSTREGISTRY_H
