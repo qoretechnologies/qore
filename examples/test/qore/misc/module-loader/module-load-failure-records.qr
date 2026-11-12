@@ -5,7 +5,7 @@
 
 # Child script of module-load-failure-cleanup.qtest (#5953): loads and compiles modules that fail, and prints the
 # dependency records of the module manager that name them; a debug build is required (dbg_* functions)
-# usage: module-load-failure-records.qr load|compile <module dir> <output dir>
+# usage: module-load-failure-records.qr load|compile <module dir> <output dir> [v1]
 
 %ifdef QoreDebug
 
@@ -70,6 +70,14 @@ switch (ARGV[0]) {
         check("aot init records", "AotInitFail");
         load("aot ok", "AotInitOk");
         check("aot ok records", "AotInitOk");
+        # binary modules initialized with the legacy AOT entry point, whose initialization loads a user module and then
+        # fails, or succeeds: no record is made for a binary module; given if the test modules were built
+        if (ARGV[3] == "v1") {
+            load("v1 fail", "aotv1fail");
+            check("v1 fail records", "aotv1fail");
+            load("v1 ok", "aotv1ok");
+            check("v1 ok records", "aotv1ok");
+        }
         break;
     }
     case "compile": {

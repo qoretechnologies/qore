@@ -531,6 +531,8 @@ typedef std::map<std::string, strset_t> md_map_t;
     fails (#5706)
 */
 struct QoreUserModuleRegistration {
+    //! the name of the module; held here so that the rollback does not allocate memory for it
+    std::string name;
     //! True if the name had registered requirements (rmd_map)
     bool had_deps = false;
     //! the registered requirements
@@ -939,6 +941,9 @@ public:
 
     //! Records the dependency registration of \a name, to restore it with rollbackUserModuleDependency()
     DLLLOCAL void getUserModuleRegistration(const char* name, QoreUserModuleRegistration& reg) {
+        // the mutex must be held (an error-checking mutex in a debug build cannot be locked again here)
+        assert(mutex.trylock());
+        reg.name = name;
         reg.deps.clear();
         md_map_t::iterator i = rmd_map.find(name);
         reg.had_deps = i != rmd_map.end();
@@ -960,7 +965,7 @@ public:
         getUserModuleRegistration(name, reg);
     }
 
-    //! Removes the dependency records that a load of \a name made since \a saved was recorded
+    //! Removes the dependency records that a load of the module made since \a saved was recorded
     /** The registration that \a saved records belongs to a module that is still loaded under the name (a module being
         reloaded, or a module of the same name that is loaded while another is compiled) and is kept; when it records
         none, this removes every registration of the name, as removeUserModuleDependency() does.
@@ -968,19 +973,19 @@ public:
         The mutex must be held.  This never throws, as it is called when a module definition context closes: a
         record that cannot be released for lack of memory is kept, in both maps, so they stay consistent (#5953)
     */
-    DLLLOCAL void rollbackUserModuleDependency(const char* name, const QoreUserModuleRegistration& saved) noexcept {
+    DLLLOCAL void rollbackUserModuleDependency(const QoreUserModuleRegistration& saved) noexcept {
+        assert(mutex.trylock());
         try {
-            rollbackUserModuleDependencyIntern(std::string(name), saved);
+            rollbackUserModuleDependencyIntern(saved);
         } catch (...) {
             // only std::bad_alloc can be raised; the records not yet released are kept, consistently
         }
     }
 
     //! Calls rollbackUserModuleDependency() with the mutex locked; the mutex must not be held
-    DLLLOCAL void rollbackUserModuleDependencyLocked(const char* name, const QoreUserModuleRegistration& saved)
-            noexcept {
+    DLLLOCAL void rollbackUserModuleDependencyLocked(const QoreUserModuleRegistration& saved) noexcept {
         AutoLocker al(mutex);
-        rollbackUserModuleDependency(name, saved);
+        rollbackUserModuleDependency(saved);
     }
 
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
@@ -1089,7 +1094,8 @@ private:
     DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&) = delete;
 
     //! Implements rollbackUserModuleDependency(); can raise std::bad_alloc only where noted
-    DLLLOCAL void rollbackUserModuleDependencyIntern(const std::string& name, const QoreUserModuleRegistration& saved) {
+    DLLLOCAL void rollbackUserModuleDependencyIntern(const QoreUserModuleRegistration& saved) {
+        const std::string& name = saved.name;
         // the steps that do not allocate memory come first
         if (!saved.had_dependents) {
             md_map_t::iterator mi = md_map.find(name);
@@ -1556,11 +1562,15 @@ protected:
 enum QoreModuleRecordLock : unsigned char {
     //! the module manager's mutex is held when the context is opened and when it is closed
     QMRL_HELD,
-    //! the mutex is not held: the context locks it to record the registration and to roll it back
+    //! the mutex is not held: the context locks it to record the registration and to roll it back; used by the AOT
+    //! compile functions, whose module is parsed but never registered.  The name is not reserved while it is parsed:
+    //! a compilation concurrent with a load of a module of the same name in another thread is not supported (qcc
+    //! and qore --compile-module compile in one thread, before any other code runs)
     QMRL_LOCK,
-    //! the caller records and rolls back the registration itself (the initialization of a binary module, which runs
-    //! without the mutex and is registered only after the context closes; see loadBinaryModuleFromDesc())
-    QMRL_CALLER,
+    //! the context of a binary module: the source of an AOT module initialized with the legacy entry point
+    //! qore_aot_module_init(), which runs without the mutex; no user module dependency is recorded under the name of a
+    //! binary module (see QoreModuleManager::isUserModuleContext()), so there is nothing to record or roll back
+    QMRL_BINARY,
 };
 
 class QoreUserModuleDefContextHelper : public QoreModuleDefContextHelper {
@@ -1577,16 +1587,21 @@ public:
         the exception of a failed load first, and a module parsed only to be compiled is never registered (#5953).
     */
     DLLLOCAL ~QoreUserModuleDefContextHelper() {
-        const char* name = set_module_context_name(old_name);
+        set_module_context_name(old_name);
         set_module_context_path(old_path);
 
         if (!registered && !dup) {
             if (rlock == QMRL_HELD) {
-                QMM.rollbackUserModuleDependency(name, saved_reg);
+                QMM.rollbackUserModuleDependency(saved_reg);
             } else if (rlock == QMRL_LOCK) {
-                QMM.rollbackUserModuleDependencyLocked(name, saved_reg);
+                QMM.rollbackUserModuleDependencyLocked(saved_reg);
             }
         }
+    }
+
+    //! Returns true if this is the context of a binary module (QMRL_BINARY), whose dependencies are not recorded
+    DLLLOCAL bool isBinaryModuleContext() const {
+        return rlock == QMRL_BINARY;
     }
 
     //! Marks the module as registered: the dependency registrations that its load made are kept

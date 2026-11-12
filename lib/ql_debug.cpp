@@ -21928,9 +21928,10 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
     qns.addBuiltinVariant("dbg_get_module_dependency_records", f_dbg_get_module_dependency_records, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
-    qns.addBuiltinVariant("dbg_aot_compile_module", f_dbg_aot_compile_module, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        stringOrNothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "mode", stringTypeInfo, QORE_PARAM_NO_ARG,
-        "path", stringTypeInfo, QORE_PARAM_NO_ARG, "output", listOrNothingTypeInfo, QORE_PARAM_NO_ARG, "targets");
+    qns.addBuiltinVariant("dbg_aot_compile_module", f_dbg_aot_compile_module, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK | QDOM_FILESYSTEM, stringOrNothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "mode",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo, QORE_PARAM_NO_ARG, "output", listOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "targets");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

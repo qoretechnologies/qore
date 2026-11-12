@@ -350,6 +350,7 @@ fixed: 3
         writeFile(dir + "/CleanupFailSource.qm", moduleCode("CleanupFailSource", "%requires CleanupGood\n%requires "
             + Missing + "\n"));
         writeFile(dir + "/CompiledLoaded.qm", moduleCode("CompiledLoaded", "%requires CleanupGood\n"));
+        writeFile(dir + "/AotV1Dep.qm", moduleCode("AotV1Dep", ""));
         writeFile(dir + "/InitFailBin.qm", initModuleCode("InitFailBin", "%requires json\n%requires CleanupGood\n",
             "throw \"INIT-ERROR\", \"init fails\";"));
         return dir;
@@ -377,19 +378,34 @@ public namespace %s {
 
     #! runs module-load-failure-records.qr in a child
     private hash<ExecModeHarness::ModeRunResult> runRecords(string module_path, string action, string dir,
-            string out, string mode) {
+            string out, string mode, *string extra) {
         return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR='%s' %s -b --enable-debug --exec-mode=%s %s %s %s %s", libqore_dir,
-            libqore_dir, libqore_dir, module_path, qore_bin, mode, get_script_dir() + "/module-load-failure-records.qr",
-            action, dir, out), True);
+            "QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR='%s' %s -b --enable-debug --exec-mode=%s %s %s %s %s %s",
+            libqore_dir, libqore_dir, libqore_dir, module_path, qore_bin, mode,
+            get_script_dir() + "/module-load-failure-records.qr", action, dir, out, extra ?? ""), True);
+    }
+
+    #! returns true if the test module \a name (built in the build tree, never installed) is in the module path
+    private bool haveTestModule(string name) {
+        foreach string mdir in ((ENV.QORE_MODULE_DIR ?? "").split(":")) {
+            if (mdir && glob(mdir + DirSep + name + "-api-*.qmod")) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! a failed load releases the records of the module; a module kept registered keeps them (#5953)
     /** The records are read with a debug function, so the check does not depend on the assertion in delUser(); a
         stale record has no other deterministic effect.  The AOT modules load a user module in their initialization,
         which runs without the module manager's mutex; their loader releases the records when the module is not
-        registered.  The initialization of an AOT module makes no records (the user modules that an AOT module
-        requires are tracked by the AOT module state), so the AOT cases check that a failure leaves none.  A module
+        registered.  The initialization of an AOT module compiled by the current qcc (qore_aot_module_init_v3())
+        makes no records (the user modules that an AOT module requires are tracked by the AOT module state), so those
+        cases check that a failure leaves none.  The test modules aotv1fail and aotv1ok initialize themselves with
+        the legacy entry point (qore_aot_module_init()), which parses their source in a module definition context;
+        the user module that their initialization loads must not be recorded as a dependency of these binary modules,
+        which delUser() does not delete: the record was never released, and the process aborted at exit in a debug
+        build when the initialization succeeded.  A module
         whose initialization fails stays registered with its records, so that the binary modules that it requires are
         not deleted before it at exit.
     */
@@ -413,13 +429,13 @@ public namespace %s {
         }
         # json is found in the module path of this test (the directories of the binary modules)
         string module_path = aot_dir + ":" + dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            hash<ExecModeHarness::ModeRunResult> r = runRecords(module_path, "load", dir, tmp.path, mode);
-            if (r.stdout == "no debug\n") {
-                testSkip("the dependency records can be read in a debug build only");
-            }
-            assertEq(0, r.rc, sprintf("records, %s: exit status; output: %s", mode, r.out));
-            assertEq("dir: LOAD-MODULE-ERROR
+        # the test modules initialized with the legacy AOT entry point record a dependency during their
+        # initialization (see examples/test/module-cpp-api/aot-v1-init/aotv1init-module.cpp)
+        bool v1 = haveTestModule("aotv1fail") && haveTestModule("aotv1ok");
+        if (!v1) {
+            printf("the test modules aotv1fail and aotv1ok are not in the module path; their checks are skipped\n");
+        }
+        string expected = "dir: LOAD-MODULE-ERROR
 dir records: none
 bin: LOAD-MODULE-ERROR
 bin records: none
@@ -429,7 +445,19 @@ aot init: INIT-ERROR
 aot init records: none
 aot ok: loaded
 aot ok records: none
-", r.stdout, sprintf("records, %s: output", mode));
+" + (v1 ? "v1 fail: INIT-ERROR
+v1 fail records: none
+v1 ok: loaded
+v1 ok records: none
+" : "");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runRecords(module_path, "load", dir, tmp.path, mode,
+                v1 ? "v1" : NOTHING);
+            if (r.stdout == "no debug\n") {
+                testSkip("the dependency records can be read in a debug build only");
+            }
+            assertEq(0, r.rc, sprintf("records, %s: exit status; output: %s", mode, r.out));
+            assertEq(expected, r.stdout, sprintf("records, %s: output", mode));
         }
     }
 
