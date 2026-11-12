@@ -26,7 +26,9 @@
     arrived, so an application that does not read made the client buffer everything a fast server sends.  The stream
     credit is now granted as the application takes the data (the connection credit as it arrives).  The server of
     the test writes to the response stream directly; a full buffer on the server (HTTP2-FLOW-CONTROL, or a full QUIC
-    send buffer) is the deterministic signal that the client stopped granting credit.
+    send buffer) is the deterministic signal that the server can take no more data.  It does not mean that the client
+    has received any of it: the server sends the data asynchronously, so the client's receipt is waited for with
+    dbg_http_stream_credit_wait_deferred() in debug builds (see fillStream()).
 */
 
 %modern
@@ -57,6 +59,9 @@ const MaxBytes = 256 * 1024 * 1024;
 
 #! The largest initial stream window of the clients (HTTP/3: QUIC_CLIENT_INITIAL_MAX_STREAM_DATA)
 const MaxWindow = 16 * 1024 * 1024;
+
+#! The initial stream window of the HTTP/2 client (SETTINGS_INITIAL_WINDOW_SIZE)
+const H2Window = 1024 * 1024;
 
 #! The size of the plain response returned whole
 const PlainSize = 8 * 1024 * 1024;
@@ -382,20 +387,55 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         return {"stream": stream, "writer": new Writer(handler.streams.get(HangGuard))};
     }
 
+    #! Returns the initial stream window of the client of the given protocol
+    private static int getStreamWindow(string proto) {
+        return proto == "h3" ? MaxWindow : H2Window;
+    }
+
+    #! Fills a stream that the client does not read: the server writes until its send buffer for the stream is full
+    /** The server's buffer is also full while the server has not sent the data yet: its I/O thread sends the data
+        asynchronously (under load, after the buffer has filled), and an HTTP/3 server sends it more slowly than it
+        takes it.  Of the data that the server took, the client's stream window admits all of it up to the window, and
+        no more while the client does not read, so in debug builds the client's receipt of that much is waited for
+        before this returns.
+
+        @param proto the protocol of the stream
+        @param w the stream's writer; nothing may have been written to the stream yet
+
+        @return a hash with the keys \c taken (the bytes that the server took) and, in debug builds, \c before (the
+        stream credit accounting of dbg_http_stream_credit_stats() from before the stream was written to)
+    */
+    private hash<auto> fillStream(string proto, Writer w) {
+        # the counters are process-wide: the cases of this test run one at a time, and each ends its streams, so the
+        # data received from now on is this stream's
+        *hash<auto> before = Option::HAVE_LIBRARY_DEBUGGING
+            ? call_function("dbg_http_stream_credit_stats")
+            : NOTHING;
+        int taken = w.writeUntilFull();
+        assertGt(0, taken + 1, sprintf("the server's buffer is full before %d bytes", MaxBytes));
+        if (before) {
+            int admitted = min(taken, getStreamWindow(proto));
+            assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + admitted,
+                HangGuard), "the client receives the data that its stream window admits");
+        }
+        return {"taken": taken, "before": before};
+    }
+
     testNonReadingThenDrain(string proto) {
         HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
         on_exit delete mgr;
         hash<auto> s = openStream(mgr);
         Writer w = s.writer;
         # the client takes nothing: its stream credit runs out, and the server's send buffer fills
-        int taken = w.writeUntilFull();
-        assertGt(0, taken + 1, sprintf("the server's buffer is full before %d bytes", MaxBytes));
+        hash<auto> fill = fillStream(proto, w);
+        int taken = fill.taken;
         # the client holds the data it received without granting its stream credit, at most the stream's window
-        if (Option::HAVE_LIBRARY_DEBUGGING) {
+        if (*hash<auto> before = fill.before) {
             hash<auto> stats = call_function("dbg_http_stream_credit_stats");
-            int outstanding = stats.deferred - stats.credited - stats.settled;
+            int outstanding = (stats.deferred - before.deferred) - (stats.credited - before.credited);
             assertGt(0, outstanding, "the client holds unread data without granting its stream credit");
-            assertLt(MaxWindow + 1, outstanding, "the data held for the client is bounded by the stream window");
+            assertLe(getStreamWindow(proto), outstanding,
+                "the data held for the client is bounded by the stream window");
         }
         # the client reads now: everything arrives, including what the server writes from now on
         BodyReader r(s.stream);
@@ -411,8 +451,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         on_exit delete mgr;
         hash<auto> idle = openStream(mgr);
         on_exit idle.stream.cancel();
-        # the stream that is not read is full
-        assertGt(0, idle.writer.writeUntilFull() + 1, "the stream that is not read is full");
+        # the stream that is not read is full, and the client holds the data that its stream window admitted
+        fillStream(proto, idle.writer);
         # the other streams of the connection complete
         foreach int i in (xrange(3)) {
             hash<auto> s = openStream(mgr);
