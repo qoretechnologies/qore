@@ -134,6 +134,13 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
+      declared to return <tt>union<hash<auto>, data></tt> and
+      @ref HttpServer::AbstractStreamRequest::getResponseHeaderMessageImpl() "AbstractStreamRequest::getResponseHeaderMessageImpl()"
+      \c hash<auto>, as the subclasses return (a child class method must return a type that the method it overrides
+      accepts: see @ref override_return_types); an inline request answered by
+      @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" accepts a string or binary
+      response as the full path does (@ref HttpServer::AbstractHttpRequestHandler::makeResponseFromResult() "makeResponseFromResult()")
     - added the \c sse_max_buffer_size listener option
       (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
       the bound of the data held for the client of each Server-Sent Events stream
@@ -2997,7 +3004,9 @@ private logChunk(bool send, int size) {
 
         @note this method is called after the message body has been received
     */
-    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+    # returns hash<auto>: a subclass returns a hash<HttpResponseInfo> or a hash<HttpHandlerResponseInfo> (RestHandler),
+    # which getResponseHeaderMessage() converts (issue #5838: a child class method's return type must be compatible)
+    private hash<auto> getResponseHeaderMessageImpl() {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -3927,10 +3936,14 @@ public class AbstractHttpRequestHandler {
           when the handler returns
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 
-        @note the default implementation simply returns a 501 error code for all requests; reimplement this method in
-        a subclass to provide the required functionality
+        @note
+        - the default implementation simply returns a 501 error code for all requests; reimplement this method in
+          a subclass to provide the required functionality
+        - the return type is \c union<hash<auto>, data>: a subclass can return a @ref HttpResponseInfo hash or any
+          other hash with the keys above, or a string or binary value, which is sent as the message body of a \c 200
+          response (issue #5838: an overriding method must return a type that this one accepts)
     */
-    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+    union<hash<auto>, data> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -4009,7 +4022,32 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.4
     */
     hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        return handleRequest(cx, hdr, body);
+        return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, body));
+    }
+
+    #! Returns the response for the value that handleRequest() returned
+    /** @param rv the value that handleRequest() returned: a response hash, or a string or binary message body for a
+        \c 200 response
+
+        @return the response hash; a \c "raw_response" key is removed
+
+        @throw HANDLER-ERROR the value is not a hash, string or binary value
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<HttpResponseInfo> makeResponseFromResult(auto rv) {
+        switch (rv.typeCode()) {
+            case NT_HASH: {
+                hash<auto!> hrv = rv;
+                if (hrv.hasKey("raw_response")) {
+                    delete hrv."raw_response";
+                }
+                return cast<hash<HttpResponseInfo>>(hrv);
+            }
+            case NT_STRING:
+            case NT_BINARY: return <HttpResponseInfo>{"code": 200, "body": rv};
+        }
+        throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
     }
 
     #! top-level request handling method
@@ -4025,20 +4063,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
-            auto rv = handleRequest(cx, hdr, msg_body);
-            switch (rv.typeCode()) {
-                case NT_HASH: {
-                    hash<auto!> hrv = rv;
-                    if (hrv.hasKey("raw_response")) {
-                        delete hrv."raw_response";
-                    }
-                    return cast<hash<HttpResponseInfo>>(hrv);
-                }
-                case NT_STRING:
-                case NT_BINARY: return cast<hash<HttpResponseInfo>>(("code": 200, "body": rv));
-                default:
-                throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
-            }
+            return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
         AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);

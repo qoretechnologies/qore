@@ -4179,6 +4179,11 @@ public:
         @return 0 for OK, -1 if a parse exception was raised
     */
     DLLLOCAL int parseCheckFinalHierarchy() const;
+
+    //! Checks that the variants that a call typed against a parent class can select return compatible types
+    /** See MethodFunctionBase::checkReturnTypeResolution() (issue #5838).
+    */
+    DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();

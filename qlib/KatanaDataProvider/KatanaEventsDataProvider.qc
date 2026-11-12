@@ -116,7 +116,7 @@ public class KatanaEventsDataProvider inherits KatanaDataProviderBase {
     }
 
     #! Returns the list of event types supported by this container
-    private *hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         hash<string, hash<DataProviderMessageInfo>> rv = {};
         foreach string ev in (keys ChildMap) {
             rv{ev} = <DataProviderMessageInfo>{

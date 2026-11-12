@@ -2788,8 +2788,11 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @see @ref httpclient_get_with_body
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
+
+    @note The return type is \c union<*data, hash<auto>>: a subclass (such as RestClient) can return the decoded
+    body as a hash, so a call typed against this class can receive either (issue #5838)
  */
-*data HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+union<*data, hash<auto>> HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     if (hc_check_request(nullptr, path, xsink)) {
         return QoreValue();
     }
@@ -2933,8 +2936,11 @@ httpclient.post("/path", body);
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
+
+    @note The return type is \c union<*data, hash<auto>>: a subclass (such as RestClient) can return the decoded
+    body as a hash, so a call typed against this class can receive either (issue #5838)
  */
-*data HTTPClient::post(string path, string body, *hash<auto> headers,
+union<*data, hash<auto>> HTTPClient::post(string path, string body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     if (hc_check_request(nullptr, path, xsink)) {
         return QoreValue();
@@ -3009,8 +3015,11 @@ httpclient.post("/path", body);
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
+
+    @note The return type is \c union<*data, hash<auto>>: a subclass (such as RestClient) can return the decoded
+    body as a hash, so a call typed against this class can receive either (issue #5838)
  */
-*data HTTPClient::post(string path, *binary body, *hash<auto> headers,
+union<*data, hash<auto>> HTTPClient::post(string path, *binary body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     if (hc_check_request(nullptr, path, xsink)) {
         return QoreValue();
@@ -3663,11 +3672,14 @@ nothing HTTPClient::addDefaultHeaders(hash<auto> headers) [flags=NAMED_ARGS] {
 //! Returns a hash of default headers to be sent with every outgoing request
 /** @return a hash of default headers to be sent with every outgoing request
 
+    @note The return type is \c hash<auto>: a subclass (such as RestClient) can keep header values of other types,
+    which are converted to strings when they are sent; this class returns string values (issue #5838)
+
     @see addDefaultHeaders()
 
     @since %Qore 0.9.5
 */
-hash<string, string> HTTPClient::getDefaultHeaders() [flags=CONSTANT] {
+hash<auto> HTTPClient::getDefaultHeaders() [flags=CONSTANT] {
     return client->getDefaultHeaders();
 }
 

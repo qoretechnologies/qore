@@ -277,7 +277,8 @@ public class StripeRestClient inherits RestClient::RestClient, StripeRestClientB
     }
 
     #! Returns the default headers sent with every request
-    *hash<auto> getDefaultHeaders() {
+    # the type of RestClient::getDefaultHeaders(), which this overrides (issue #5838)
+    hash<auto> getDefaultHeaders() {
         return headers;
     }
 }
@@ -293,7 +294,8 @@ public class StripeRestClientIo inherits RestClientIo::RestClientIo, StripeRestC
     }
 
     #! Returns the default headers sent with every request
-    *hash<auto> getDefaultHeaders() {
+    # the type of RestClientIo::getDefaultHeaders(), which this overrides (issue #5838)
+    hash<auto> getDefaultHeaders() {
         return headers;
     }
 }

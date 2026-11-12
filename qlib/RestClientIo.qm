@@ -5487,6 +5487,16 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
             saved_client_opts = client_opts;
         }
 
+        #! Returns the statistics of the connection pool
+        /** @return the statistics of the connection pool, as
+            @ref Qore::Thread::AbstractConnectionPool::getStats() "AbstractConnectionPool::getStats()" returns them;
+            this overrides both @ref RestClientIo::getStats() "RestClientIo::getStats()" and the pool's method, so
+            a call typed against either class gets the same statistics (issue #5838)
+        */
+        hash<ConnectionPoolStats> getStats() {
+            return AbstractConnectionPool::getStats();
+        }
+
         #! Shuts down the pool and closes the connection
         shutdown() {
             AbstractConnectionPool::shutdown();
