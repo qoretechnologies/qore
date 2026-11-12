@@ -3810,9 +3810,17 @@ hash<auto> h = get_local_vars(0);
     - \c "unassigned": @ref True if the variable has no value but its declared type requires one, as for a variable
       that was declared but not assigned (see @ref pitfalls_declaration); missing otherwise (since %Qore 3.0)
 
+    @throw AOT-FRAME-ERROR the frame, or a frame before it, is a call that @ref exec_mode_aot "AOT-compiled" code made
+    directly to an AOT-compiled function, which has no frame of its own (see @ref aot_local_variables) (since %Qore
+    3.0)
     @throw CIRCULAR-REFERENCE-ERROR circular reference found when retrieving local variable values
     @throw DEBUGGING the frame is in, or past the frames of, a Program that does not allow debugging (see
     @ref Qore::PO_NO_DEBUGGING "PO_NO_DEBUGGING")
+
+    @note A function, method or closure compiled with @ref qcc_tool "qcc" (AOT) keeps its local variables in native
+    code: a call that AOT-compiled code makes directly to it has no frame of its own, for which this function raises
+    \c AOT-FRAME-ERROR instead of returning the variables of another frame, and the frame of a call made otherwise
+    can have values that the code no longer uses; see @ref aot_local_variables
 
     @since %Qore 0.8.13
  */
@@ -3831,11 +3839,18 @@ set_local_var_value(0, "var", 1);
     @param name the name of the local variable
     @param value the value to assign
 
+    @throw AOT-FRAME-ERROR the frame, or a frame before it, is a call that @ref exec_mode_aot "AOT-compiled" code made
+    directly to an AOT-compiled function, which has no frame of its own (see @ref aot_local_variables) (since %Qore
+    3.0)
     @throw UNKNOWN-VARIABLE the given local variable is not present in the current stack frame, or the variable name contains a NUL character (since %Qore 3.0)
 
     @note
     - other exceptions could be raised when making the assignment such as incompatible type exceptions
     - pure local variables (i.e. not closure bound and not subject to the reference operator) are not stored with type information at runtime; type information is only enforced at parse / compile time, therefore it's possible to set local variables with invalid values that contradict their declarations with this function
+    - a function, method or closure compiled with @ref qcc_tool "qcc" (AOT) keeps its local variables in native
+      code: a call that AOT-compiled code makes directly to it has no frame of its own, for which this function
+      raises \c AOT-FRAME-ERROR instead of setting a variable of another frame, and the code of a call made otherwise
+      may not see a value set; see @ref aot_local_variables
 
     @since %Qore 0.8.13
 */

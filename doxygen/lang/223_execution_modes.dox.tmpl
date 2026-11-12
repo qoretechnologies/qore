@@ -377,6 +377,43 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     text is not required either: stripped-source artifacts still report file
     and line.
 
+    @subsection aot_local_variables Local Variables of AOT-Compiled Code
+
+    A function, method or closure compiled ahead of time keeps its local
+    variables in native code, so that @ref Qore::get_local_vars() "get_local_vars()"
+    and @ref Qore::set_local_var_value() "set_local_var_value()", which read and
+    change the stack of local variables of the thread, cost nothing on its calls:
+    - a call that AOT-compiled code makes directly to an AOT-compiled function
+      has no frame of its own on that stack; these functions raise an
+      \c AOT-FRAME-ERROR exception when the frame that they are asked for, or a
+      frame before it, is such a call, instead of giving or setting the
+      variables of another frame
+    - a call made through a runtime helper or the function's tiered entry (as
+      with @ref Qore::call_function() "call_function()", or a call from
+      interpreted code) has a frame with the parameters and local variables,
+      but the native code keeps the values of some of them (the parameters and
+      \c int, \c float, \c bool and \c string locals, for example) in native
+      code only: these functions can give values that the code no longer uses,
+      and a value that they set may not be seen by the code; closure-bound
+      variables (also those passed by reference) are kept on the stack and are
+      read as in interpreted code
+
+    The frames are matched with the calls on the call stack of the thread up to
+    the first frame of top-level code, the first call of a builtin function,
+    such as @ref Qore::Program::run() "Program::run()" or
+    @ref Qore::call_function() "call_function()", or the first call made from
+    another @ref Qore::Program "Program" (as when the code of a child Program
+    calls get_local_vars() from a closure called by AOT-compiled code): calls
+    without a frame beyond it are not recognized, and the frames found there
+    can be those of other calls.  The local variables of the top-level code of a
+    @ref Qore::Program "Program" are on the stack and can be read and set also
+    from AOT-compiled code.
+
+    When a debugger is attached to the Program, a call through the tiered entry
+    runs the function's debug IR in the IR interpreter, whose frame has all the
+    local variables; a call that native code makes directly runs native code
+    without a frame also then.
+
     @subsection qcc_tool Qore Code Compiler (qcc)
 
     \c qcc only compiles @ref modern "%modern" code (see @ref exec_mode_requirements); each source is parsed with

@@ -11381,8 +11381,7 @@ public:
             const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
             const QoreProgramLocation* callee_loc = nullptr)
             : thread_data(thread_data), call_name(call_name), statements(statements) {
-        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
-            callee_loc);
+        push(call_loc, callee_loc);
     }
 
     //! Pops the frame and restores the caller's runtime location, which the callee changed
@@ -11411,6 +11410,22 @@ public:
         return saved_stmt;
     }
 
+protected:
+    //! Creates the frame without pushing it, for a derived class that pushes it once it is constructed
+    /** The frame is pushed by the most derived class, so that other threads, which can read it from then on, find it
+        fully constructed with its final type
+    */
+    DLLLOCAL QoreNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements, std::nullptr_t)
+            : thread_data(thread_data), call_name(call_name), statements(statements) {
+    }
+
+    //! Pushes the frame; see the public constructor
+    DLLLOCAL void push(const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
+            callee_loc);
+    }
+
 private:
     //! the data of the thread, which the caller got once (QoreNativeEntrySlots::thread_data)
     void* thread_data;
@@ -11428,12 +11443,40 @@ private:
     const QoreStackLocation* prev;
 };
 
+//! The call stack frame of a call that AOT-compiled code makes directly to native code of user code
+/** The callee has no frame on the stack of local variables (and, run inline, no native frame either): AOT-compiled
+    code keeps its local variables in native code and pushes no frame boundary for a direct call, so that the call
+    costs nothing for get_local_vars() and set_local_var_value(); these find the frame by its type
+    (qore_is_aot_native_call_frame()) and raise an exception instead of giving the variables of another frame
+    (issue #5890).  The type is the only difference: it is set when the frame is constructed, as the type of a
+    QoreNativeCallStackLocation is, so that the call does the same work as before.
+*/
+class QoreAOTNativeCallStackLocation final : public QoreNativeCallStackLocation {
+public:
+    //! Pushes the frame; see QoreNativeCallStackLocation
+    DLLLOCAL QoreAOTNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
+            const QoreProgramLocation* callee_loc = nullptr)
+            : QoreNativeCallStackLocation(thread_data, call_name, statements, nullptr) {
+        push(call_loc, callee_loc);
+    }
+};
+
+// AOT-compiled code allocates the storage of either frame with the size and alignment that it got when it was
+// compiled
+static_assert(sizeof(QoreAOTNativeCallStackLocation) == sizeof(QoreNativeCallStackLocation));
+static_assert(alignof(QoreAOTNativeCallStackLocation) == alignof(QoreNativeCallStackLocation));
+
 size_t qore_rt_native_call_frame_size() {
     return sizeof(QoreNativeCallStackLocation);
 }
 
 size_t qore_rt_native_call_frame_align() {
     return alignof(QoreNativeCallStackLocation);
+}
+
+bool qore_is_aot_native_call_frame(const QoreStackLocation* loc) {
+    return dynamic_cast<const QoreAOTNativeCallStackLocation*>(loc) != nullptr;
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
@@ -11454,7 +11497,7 @@ static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_
     const UserVariantBase* callee = target.uvb ? target.uvb
         : (target.variant ? target.variant->getUserVariantBase() : nullptr);
     static const std::string unknown_call_name;
-    new (storage) QoreNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
+    new (storage) QoreAOTNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
         callee ? callee->getStatementBlock() : nullptr, call_loc,
         inline_body && callee ? callee->getAOTBodyLocation() : nullptr);
 }
@@ -11491,14 +11534,14 @@ extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot_named(void* storage
         name = qore_rt_intern_native_call_name(call_name);
         call_name_cache->store(name, std::memory_order_release);
     }
-    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+    new (storage) QoreAOTNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_closure_call_frame(void* storage) {
     assert(storage);
     // the name of the frame of a closure call, as an AST call of a closure names it
     static const std::string closure_call_name("<anonymous closure>");
-    new (storage) QoreNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
+    new (storage) QoreAOTNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
 }
 
 extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {

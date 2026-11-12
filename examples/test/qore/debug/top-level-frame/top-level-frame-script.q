@@ -12,7 +12,8 @@
 
 #! true if the script runs as an AOT-compiled executable
 /** AOT-compiled top-level code is native code without step events, and an AOT-compiled function has a frame only when
-    it runs with a debugger attached (in the IR interpreter), so the executable skips the checks that need either
+    it runs with a debugger attached (in the IR interpreter), so the executable skips the checks that need either; it
+    checks instead that the frames of the calls that it makes directly cannot be accessed (#5890)
 */
 our bool aot = ARGV[0] == "aot";
 
@@ -146,6 +147,84 @@ public sub reenter() {
     }
 }
 
+# a call that AOT-compiled code makes directly to an AOT-compiled function has no frame of its own, as the function
+# keeps its local variables in native code: get_local_vars() and set_local_var_value() raise AOT-FRAME-ERROR for the
+# frame of such a call and for the frames after it (#5890)
+hash<auto> sub aot_frame0() {
+    int y = 2;
+    return get_local_vars(0);
+}
+
+sub aot_set_frame0() {
+    int y = 2;
+    set_local_var_value(0, "y", 3);
+}
+
+hash<auto> sub aot_frame1_callee() {
+    return get_local_vars(1);
+}
+
+hash<auto> sub aot_frame1() {
+    int y = 2;
+    return aot_frame1_callee();
+}
+
+# a closure of a child Program called in a new thread through functions that call each other directly in AOT-compiled
+# code: the thread's first entry into the child Program has a frame after that of the closure, which has no call of
+# its own on the call stack, so no frame after the call from the main Program is matched with a call (#5890)
+sub bg_h(code c) {
+    int hv = 1;
+    c();
+}
+
+sub bg_g(code c) {
+    int gv = 1;
+    bg_h(c);
+}
+
+sub bg_run(code c, Counter cnt) {
+    on_exit cnt.dec();
+    bg_g(c);
+}
+
+sub bg_check() {
+    Program bgchild(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+    bgchild.parse("code sub getf() {
+    return sub () {
+        int cv = 1;
+        for (int i = 0; i < 2; ++i) {
+            printf(\"bg closure frame %d: %y\\n\", i, sort(keys get_local_vars(i)));
+        }
+    };
+}", "bgchild");
+    code cf = bgchild.callFunction("getf");
+    Counter cnt(1);
+    background bg_run(cf, cnt);
+    cnt.waitForZero();
+}
+
+# makes the calls directly, without a debugger, and prints the codes of the exceptions raised
+sub aot_checks() {
+    try {
+        aot_frame0();
+        printf("aot frame 0: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot frame 0: %s\n", ex.err);
+    }
+    try {
+        aot_set_frame0();
+        printf("aot set frame 0: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot set frame 0: %s\n", ex.err);
+    }
+    try {
+        aot_frame1();
+        printf("aot frame 1: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot frame 1: %s\n", ex.err);
+    }
+}
+
 int top = 1;
 int ptop = 1;
 int dtop = 1;
@@ -159,6 +238,10 @@ if (!aot) {
     printf("top: %d\n", top);
     pg("ptop", 42);
     printf("ptop: %d\n", ptop);
+} else {
+    aot_checks();
+    # the frame of the top-level code is accessible
+    printf("aot top: %y\n", get_local_vars(0).top.value);
 }
 
 debugger.addProgram(pgm);
@@ -205,3 +288,6 @@ if (!aot) {
     reentrant.parse("sub rf() { int rfl = 1; reenter(); } int rx = 1; rf();", "reentrant");
     reentrant.run();
 }
+
+# a closure of a child Program called in a new thread (see bg_check())
+bg_check();

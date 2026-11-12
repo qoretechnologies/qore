@@ -419,6 +419,10 @@ DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_d
 //! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
 DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc);
+//! Returns true if the location is the call stack frame of a call that AOT-compiled code makes directly to native code
+/** Such a call has no frame on the stack of local variables (see ProgramThreadCountContextHelper::getContextFrame())
+*/
+DLLLOCAL bool qore_is_aot_native_call_frame(const QoreStackLocation* loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 //! Sets the runtime statement, location and parse options of the current thread, and returns the previous ones

@@ -2856,7 +2856,8 @@ QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
         if (*xsink)
             return nullptr;
-    } else {
+    } else if (*xsink) {
+        return nullptr;
     }
     return rv.release();
 }
@@ -2870,13 +2871,14 @@ int64 thread_get_local_var_count(ExceptionSink* xsink) {
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_local_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
-    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink) : 1;
+    // a frame that cannot be accessed because of an exception is not looked up again for a closure-bound variable
+    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink) : (*xsink ? -1 : 1);
 }
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_closure_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
-    return tlpd ? tlpd->cvstack.setVarValue(frame, name, val, xsink) : 1;
+    return tlpd ? tlpd->cvstack.setVarValue(frame, name, val, xsink) : (*xsink ? -1 : 1);
 }
 
 void parse_push_ns_name(const char* name) {
@@ -4680,6 +4682,59 @@ bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const Thread
     } while (ch);
     return !ch;
 }
+
+//! Raises AOT-FRAME-ERROR if a frame from the current one to the given one is a call of AOT-compiled code without one
+/** A call that AOT-compiled code makes directly to native code of user code pushes no frame on the stack of local
+    variables, as the callee keeps its local variables in native code (issue #5890); counted on that stack, the frame
+    would be another call's.  Each call of user code has an entry on the thread's call stack, and that of such a call
+    has a type of its own (qore_is_aot_native_call_frame()), so the frames are matched with the entries, the newest
+    first, from that of the caller of get_local_vars() or set_local_var_value() (below the entry of the builtin
+    function itself, if it has one).
+
+    The match ends where a frame can have no entry of its own, so that no frame is matched with the entry of another:
+    - at the first entry that is not one of a call of user code: the frame of top-level code (of a Program run with
+      Program::run() as well) and of an expression evaluated with Program::evalExpression() has none
+    - after the entry of a call made from another Program, which getContextFrame() can count with a frame of the
+      called Program that has no entry, that of the context that entered the Program on the thread first (init_tlpd);
+      the entry gives the Program of the caller (getProgram()), and a direct call of AOT-compiled code is made in its
+      own Program
+
+    The frames from there on are not checked.  The check is made here only, so that calls cost nothing for it.
+
+    @param pgm the Program of the code that calls the builtin function
+
+    @return 0 if OK, -1 if an exception was raised
+*/
+static int check_aot_native_frames(ThreadData* td, QoreProgram* pgm, int frame, ExceptionSink* xsink) {
+    const QoreStackLocation* loc = td->current_stack_location.load(std::memory_order_relaxed);
+    // the entry of the builtin function that looks up the frame
+    if (loc && loc->getCallType() == CT_BUILTIN) {
+        const std::string& name = loc->getCallName();
+        if (name == "get_local_vars" || name == "set_local_var_value") {
+            loc = loc->getNext();
+        }
+    }
+    for (int i = 0; i <= frame && loc && loc->getCallType() == CT_USER; ++i, loc = loc->getNext()) {
+        if (qore_is_aot_native_call_frame(loc)) {
+            if (i == frame) {
+                xsink->raiseException("AOT-FRAME-ERROR", "frame %d is a call of '%s' that AOT-compiled code made "
+                    "directly to native code, which has no frame of its own: its local variables cannot be accessed",
+                    i, loc->getCallName().c_str());
+            } else {
+                xsink->raiseException("AOT-FRAME-ERROR", "frame %d is a call of '%s' that AOT-compiled code made "
+                    "directly to native code, which has no frame of its own: frame %d cannot be found", i,
+                    loc->getCallName().c_str(), frame);
+            }
+            return -1;
+        }
+        // a call made from another Program
+        if (loc->getProgram() != pgm) {
+            break;
+        }
+    }
+    return 0;
+}
+
 /*
    there is context stack where pgm/tlpd might repeat, in this case we need consider frame value when context
    started
@@ -4689,6 +4744,10 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         return nullptr;
 
     ThreadData* td = thread_data.get();
+    // the frames of calls that AOT-compiled code makes directly are checked once the frame was found or found missing
+    // without an exception, so that a frame in or past a Program that does not allow debugging raises DEBUGGING
+    const int requested_frame = frame;
+    QoreProgram* const current_pgm = td->current_pgm;
     ThreadLocalProgramData* tlpd = td->tlpd;
     int frameCount = tlpd->lvstack.getFrameCount();
     const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
@@ -4730,13 +4789,14 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         if (!tlpd || !pgm) {
             printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p\n",
                 frame, ch, tlpd);
+            check_aot_native_frames(td, current_pgm, requested_frame, xsink);
             return nullptr;
         }
         printd(5, "ProgramThreadCountContextHelper::getContextFrame() L: frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
             "pgmid:" QLLD ", inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
             (int64)pgm->getProgramId(), tlpd->inst, ch ? ch->init_tlpd: -1);
     }
-    if (!pgm->checkAllowDebugging(xsink)) {
+    if (!pgm->checkAllowDebugging(xsink) || check_aot_native_frames(td, current_pgm, requested_frame, xsink)) {
         return nullptr;
     }
     /* now we know that desired frame should be in tlpd and we must add frame index to consider frames above */
