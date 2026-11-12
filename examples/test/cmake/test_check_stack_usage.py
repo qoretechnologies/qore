@@ -535,15 +535,25 @@ class SampleOracle:
             self.su.append((signature, int(fields[1]), fields[2].split(",")))
         out = subprocess.run(["objdump", "-t", str(obj)], stdout=subprocess.PIPE, universal_newlines=True,
             check=True).stdout
-        # "address flags section<TAB>size name" lines of functions
-        table = [line.split("\t")[1].split() for line in out.splitlines() if " F " in line]
-        mangled = [fields[-1] for fields in table]
-        out = subprocess.run(["c++filt"] + mangled, stdout=subprocess.PIPE, universal_newlines=True,
-            check=True).stdout
-        # (mangled, demangled, size) of each function in the symbol table
-        self.symbols = [(fields[-1], d.replace("(anonymous namespace)", "{anonymous}"), int(fields[0], 16))
-            for fields, d in zip(table, out.splitlines())]
+        # "address flags section<TAB>size name" lines of functions: (mangled, section, address, size)
+        table = []
+        for line in out.splitlines():
+            m = re.match(r"^([0-9a-f]+) .{7} (\S+)\t([0-9a-f]+) +(?:\.hidden )?(\S+)$", line)
+            if m and " F " in line:
+                table.append((m.group(4), m.group(2), int(m.group(1), 16), int(m.group(3), 16)))
+        self.demangled = {}
+        self.demangle([t[0] for t in table])
+        # (mangled, demangled, size, section, address) of each function in the symbol table
+        self.symbols = [(t[0], self.demangled[t[0]], t[3], t[1], t[2]) for t in table]
         self.obj = obj
+
+    def demangle(self, names):
+        names = [n for n in names if n not in self.demangled]
+        if names:
+            out = subprocess.run(["c++filt"] + names, stdout=subprocess.PIPE, universal_newlines=True,
+                check=True).stdout
+            for n, d in zip(names, out.splitlines()):
+                self.demangled[n] = d.replace("(anonymous namespace)", "{anonymous}")
 
     @staticmethod
     def untemplated(text):
@@ -565,43 +575,63 @@ class SampleOracle:
             if not re.match(r"^\d+\(", signature) and self.is_function(func, signature)]
 
     def part_clones(self, func):
-        return [d for _, d, _ in self.symbols if self.is_function(func, d) and "[clone .part." in d
-            and ".cold" not in d]
+        return [s[1] for s in self.symbols if self.is_function(func, s[1]) and "[clone .part." in s[1]
+            and ".cold" not in s[1]]
 
     def functions(self, func):
-        """(mangled, demangled, size) of func's overloads (not clones)"""
+        """(mangled, demangled, size, section, address) of func's overloads (not clones)"""
         return [s for s in self.symbols if self.is_function(func, s[1]) and "[clone " not in s[1]]
 
     def instructions(self, mangled):
+        """[mnemonic, operands, demangled target or None] of each instruction of a function"""
         out = subprocess.run(["objdump", "-dr", "--no-show-raw-insn", "--disassemble=" + mangled, str(self.obj)],
             stdout=subprocess.PIPE, universal_newlines=True, check=True).stdout
         rv = []
         for line in out.splitlines():
-            m = re.match(r"^\s*[0-9a-f]+:\s+R_\S+\s+(\S+?)(-0x[0-9a-f]+)?$", line)
+            m = re.match(r"^\s*[0-9a-f]+:\s+(R_\S+)\s+(\S+?)([+-]0x[0-9a-f]+)?$", line)
             if m:
-                rv[-1][2] = m.group(1)
+                target = m.group(2)
+                if target.startswith("."):
+                    # a section: the function at the offset, which x86_64 PC-relative relocations give less 4
+                    offset = (int(m.group(3), 16) if m.group(3) else 0) + (4 if m.group(1).startswith("R_X86_64_P")
+                        else 0)
+                    found = [s[0] for s in self.symbols if s[3] == target and s[4] == offset]
+                    target = found[0] if found else target
+                rv[-1][2] = target
                 continue
             m = re.match(r"^\s*[0-9a-f]+:\s+([a-z][a-z0-9.]*)\s*(.*)$", line)
             if m and m.group(1) not in MARKERS and not m.group(1).startswith("nop"):
                 target = re.search(r"<([^+>]*)(\+0x[0-9a-f]+)?>\s*$", m.group(2))
                 rv.append([m.group(1), m.group(2), target.group(1) if target else None])
+        self.demangle([i[2] for i in rv if i[2]])
+        for i in rv:
+            if i[2]:
+                i[2] = self.demangled[i[2]]
         return rv
 
     def status(self, func):
         """the status that the check gives func, or None"""
         if any("dynamic" in quals and "bounded" not in quals for _, quals in self.records(func)):
             return "DYNAMIC"
-        overloads = self.functions(func)
-        for mangled, _, size in overloads:
-            insns = self.instructions(mangled)
-            if size <= 16 and len(insns) == 1 and insns[0][0] in ("jmp", "jmpq", "b"):
+        for mangled, _, size, _, _ in self.functions(func):
+            insns = [i for i in self.instructions(mangled) if not (i[0] in ("call", "callq")
+                and i[2] in ("__fentry__", "mcount", "_mcount", "__mcount"))]
+            if len(insns) == 3 and insns[0][0] == "sub" and insns[1][0] == "add" and insns[0][1] == insns[1][1] \
+                    and insns[0][1].endswith(",%rsp"):
+                insns = insns[2:]
+            if size <= 64 and len(insns) == 1 and insns[0][0] in ("jmp", "jmpq", "b"):
                 return "FOLDED"
-        names = set(m for m, _, _ in overloads)
-        for mangled, _, _ in overloads:
-            if any(i[0] in ("call", "callq", "bl") and i[2] in names and i[2] != mangled
-                    for i in self.instructions(mangled)):
-                return "OVERLOAD-CALL"
+        # calls between overloads, from clones and .cold fragments, to clones; a .part clone is SPLIT
+        unclone = lambda name: re.sub(r"\s*\[clone [^\]]*\]", "", name)
+        for mangled, demangled, _, _, _ in self.symbols:
+            if not self.is_function(func, demangled) or "[clone .part." in demangled:
+                continue
+            for i in self.instructions(mangled):
+                if i[0] in ("call", "callq", "bl") and i[2] and self.is_function(func, i[2]) \
+                        and "[clone .part." not in i[2] and unclone(i[2]) != unclone(demangled):
+                    return "OVERLOAD-CALL"
         return None
+
 
 # a body that GCC compiles to the same code wherever it is used, so that identical code folding merges its copies
 ICF_BODY = """
@@ -635,6 +665,46 @@ int dyn_alloca(int x) { char* p = (char*)__builtin_alloca(x); memset(p, x, x); u
 int fixed(int x) { char buf[100]; memset(buf, x, sizeof buf); use(buf); return buf[3]; }
 """
 
+# static functions merged by identical code folding, compiled with -ffunction-sections: the wrapper of sb branches to
+# the section of sa
+LOCAL_FOLDED_CPP = """
+#include <cstring>
+extern void use(char*);
+static int sa(int x) {%(body)s}
+static int sb(int x) {%(body)s}
+int (*pa)(int) = sa;
+int (*pb)(int) = sb;
+""" % {"body": ICF_BODY}
+
+# K::f(int) calls K::f(double, int) with a constant, so that GCC calls a .constprop clone of it, which is the only
+# symbol of that overload (internal linkage)
+OVERLOAD_CLONE_CPP = """
+#include <cstring>
+extern void use(char*);
+namespace { struct K { static int f(int x); static int f(double x, int y); }; }
+__attribute__((noinline)) int K::f(double x, int y) { char buf[500]; memset(buf, (int)x + y, sizeof buf); use(buf);
+    return buf[3]; }
+int K::f(int x) { char buf[600]; memset(buf, x, sizeof buf); use(buf); int r = f((double)x, 7); use(buf + r);
+    return buf[r] + r; }
+int entry(int x) { return K::f(x) + 1; }
+"""
+
+# K::f(int) calls K::f(double) only on a path that calls a cold function, which GCC moves into a .cold fragment
+OVERLOAD_COLD_CPP = """
+#include <cstring>
+extern void use(char*);
+extern void report(int) __attribute__((cold));
+namespace { struct K { static int f(int x); static int f(double x); }; }
+__attribute__((noinline)) int K::f(double x) { char buf[500]; memset(buf, (int)x, sizeof buf); use(buf);
+    return buf[3]; }
+int K::f(int x) {
+    char buf[600]; memset(buf, x, sizeof buf); use(buf);
+    if (x == 12345) { report(x); int r = f((double)x); use(buf + r); return r; }
+    use(buf + 1); return buf[x & 63];
+}
+int entry(int x) { return K::f(x) + 1; }
+"""
+
 # overloads: K::f(int) calls K::f(double) and uses the result (both frames on the stack); K::g(int) only branches to
 # K::g(double) (a tail call, which reuses the frame)
 OVERLOAD_CPP = """
@@ -660,30 +730,37 @@ int K::g(int x) { return g((double)(x + 1)); }
 class ObjectCodeTest(unittest.TestCase):
     """Functions compiled with g++ -O3 whose records do not show their stack use"""
 
-    def compile(self, tmp, source):
+    def compile(self, tmp, source, flags=()):
         (tmp / "t.cpp").write_text(source)
-        subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "t.cpp", "-o", "t.cpp.o"], cwd=str(tmp), check=True)
+        subprocess.run(["g++", "-O3", "-fstack-usage"] + list(flags) + ["-c", "t.cpp", "-o", "t.cpp.o"], cwd=str(tmp),
+            check=True)
 
-    def check(self, source, funcs):
+    def check(self, source, funcs, flags=()):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            self.compile(tmp, source)
+            self.compile(tmp, source, flags)
             return {r[0]: r for r in csu.check([(f, 100000, 1) for f in funcs], csu.collect_frames(tmp))}
 
     def test_agrees_with_compiler_output(self):
         # on any target: the check's results for these sources agree with the compiler's output (see SampleOracle);
         # the tests below check the results themselves where the code GCC emits is known
-        for source, funcs in ((FOLDED_CPP, ["A::a", "B::b", "sa", "sb", "other"]),
-                (DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"]), (OVERLOAD_CPP, ["K::f", "K::g"])):
+        folded = ["A::a", "B::b", "sa", "sb", "other"]
+        cases = [(FOLDED_CPP, folded, ()), (FOLDED_CPP, folded, ("-ffunction-sections",)),
+            (FOLDED_CPP, folded, ("-fpatchable-function-entry=8",)), (DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"], ()),
+            (OVERLOAD_CPP, ["K::f", "K::g"], ()), (OVERLOAD_CLONE_CPP, ["{anonymous}::K::f", "entry"], ()),
+            (OVERLOAD_COLD_CPP, ["{anonymous}::K::f", "entry"], ())]
+        if platform.machine() in ("x86_64", "AMD64"):
+            cases.append((FOLDED_CPP, folded, ("-pg", "-mfentry")))
+        for source, funcs, flags in cases:
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
-                self.compile(tmp, source)
+                self.compile(tmp, source, flags)
                 results = {r[0]: r for r in csu.check([(f, 100000, 1) for f in funcs], csu.collect_frames(tmp))}
                 oracle = SampleOracle(tmp / "t.cpp.su", tmp / "t.cpp.o")
                 statuses = set()
                 for func in funcs:
                     _, _, frame, _, part, problem = results[func]
-                    label = "%s: %r" % (func, results[func])
+                    label = "%s %s: %r" % (" ".join(flags), func, results[func])
                     records = oracle.records(func)
                     self.assertEqual(max(size for size, _ in records) if records else None, frame, label)
                     self.assertEqual(bool(oracle.part_clones(func)), part is not None, label)
@@ -699,12 +776,14 @@ class ObjectCodeTest(unittest.TestCase):
         results = self.check(FOLDED_CPP, ["A::a", "B::b", "sa", "sb", "other"])
         # the record of a merged function is that of its wrapper (a few bytes), not of the code it runs
         self.assertLess(results["B::b"][2], 64)
-        self.assertEqual(("FOLDED", "B::b was merged by identical code folding into A::a(int); budget A::a(int) or "
-            "make the bodies differ"), results["B::b"][5])
+        # the advice names the budget as the budget file takes it: the function's name without its parameters
+        self.assertEqual(("FOLDED", "B::b runs entirely in the frame of A::a(int) (merged into it by identical code "
+            "folding, or a function that only forwards to it); budget A::a or make the bodies differ"),
+            results["B::b"][5])
         # static functions whose addresses are taken: wrappers of the same function
         for func in ("sa", "sb"):
             self.assertEqual("FOLDED", results[func][5][0], results[func])
-            self.assertIn("%s was merged by identical code folding into A::a(int)" % func, results[func][5][1])
+            self.assertIn("%s runs entirely in the frame of A::a(int) " % func, results[func][5][1])
         for func in ("A::a", "other"):
             self.assertIsNone(results[func][5], results[func])
         # the status is printed, and the check fails
@@ -716,9 +795,35 @@ class ObjectCodeTest(unittest.TestCase):
             budgets.write_text("@compiler GNU\n@build-type Release\n@target x86_64-linux-gnu\n100000 A::a\n64 B::b\n")
             code, out, err = run(["--budgets", str(budgets), str(tmp)], allow_no_symbols=False)
             self.assertEqual(1, code, out + err)
-            self.assertRegex(out, r"FOLDED +B::b +budget +64 B: B::b was merged by identical code folding into "
-                r"A::a\(int\); budget A::a\(int\) or make the bodies differ")
+            self.assertRegex(out, r"FOLDED +B::b +budget +64 B: B::b runs entirely in the frame of A::a\(int\) "
+                r"\(merged into it by identical code folding, or a function that only forwards to it\); budget A::a "
+                r"or make the bodies differ")
             self.assertRegex(out, r"OK +A::a ")
+            # the budget that the advice names is one the budget file takes
+            csu.parse_budgets("@compiler GNU\n@build-type Release\n@target t\n100 A::a\n")
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the wrapper of identical code folding is that of "
+        "x86_64 (endbr64; jmp)")
+    def test_folded_section_relocation(self):
+        # with -ffunction-sections, the branch of a static function's wrapper refers to the section of the function it
+        # was merged into (".text._ZL2sai"), which is resolved to that function
+        results = self.check(LOCAL_FOLDED_CPP, ["sa", "sb"], ("-ffunction-sections",))
+        self.assertEqual(("FOLDED", "sb runs entirely in the frame of sa(int) (merged into it by identical code "
+            "folding, or a function that only forwards to it); budget sa or make the bodies differ"), results["sb"][5])
+        self.assertIsNone(results["sa"][5], results["sa"])
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the wrapper of identical code folding is that of "
+        "x86_64 (endbr64; jmp)")
+    def test_folded_instrumented(self):
+        # wrappers with the padding of -fpatchable-function-entry (larger than 16 bytes) and with the profiling call
+        # of -pg -mfentry (and the stack alignment around it)
+        for flags in (("-fpatchable-function-entry=8",), ("-pg", "-mfentry")):
+            results = self.check(FOLDED_CPP, ["A::a", "B::b", "sb", "other"], flags)
+            for func in ("B::b", "sb"):
+                self.assertEqual("FOLDED", results[func][5][0] if results[func][5] else None, (flags, results[func]))
+                self.assertIn("in the frame of A::a(int)", results[func][5][1])
+            for func in ("A::a", "other"):
+                self.assertIsNone(results[func][5], (flags, results[func]))
 
     def test_dynamic(self):
         results = self.check(DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"])
@@ -734,6 +839,39 @@ class ObjectCodeTest(unittest.TestCase):
             "budget is checked against the larger; budget the sum or avoid the call"), results["K::f"][5])
         # a tail call
         self.assertIsNone(results["K::g"][5], results["K::g"])
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the clones that GCC makes on x86_64")
+    def test_overload_call_clone(self):
+        # K::f(int) calls the .constprop clone of K::f(double, int), the only symbol of that overload
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.compile(tmp, OVERLOAD_CLONE_CPP)
+            symbols = [sym.name for sym in csu.object_symbols(tmp / "t.cpp.su", {})]
+            self.assertIn("{anonymous}::K::f(double, int) [clone .constprop.0]", symbols)
+            self.assertNotIn("{anonymous}::K::f(double, int)", symbols)
+            results = {r[0]: r for r in csu.check([("{anonymous}::K::f", 100000, 1)], csu.collect_frames(tmp))}
+        self.assertEqual(("OVERLOAD-CALL", "{anonymous}::K::f(int) calls {anonymous}::K::f(double, int) [clone "
+            ".constprop.0]: both frames are on the stack, while the budget is checked against the larger; budget the "
+            "sum or avoid the call"), results["{anonymous}::K::f"][5])
+
+    @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the .cold fragments that GCC makes on x86_64")
+    def test_overload_call_from_cold_fragment(self):
+        # only the .cold fragment of K::f(int) (the path that calls a cold function) calls K::f(double)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.compile(tmp, OVERLOAD_COLD_CPP)
+            cache = {}
+            symbols = {sym.name: sym for sym in csu.object_symbols(tmp / "t.cpp.su", cache)}
+            cold = symbols["{anonymous}::K::f(int) [clone .cold]"]
+            hot = symbols["{anonymous}::K::f(int)"]
+            callee = lambda sym: [t for m, _, t in csu.disassemble(sym, cache) if m in csu.CALLS and t
+                and "K::f(double)" in t]
+            self.assertTrue(callee(cold))
+            self.assertFalse(callee(hot))
+            results = {r[0]: r for r in csu.check([("{anonymous}::K::f", 100000, 1)], csu.collect_frames(tmp))}
+        problem = results["{anonymous}::K::f"][5]
+        self.assertEqual("OVERLOAD-CALL", problem[0] if problem else None, results["{anonymous}::K::f"])
+        self.assertTrue(problem[1].startswith("{anonymous}::K::f(int) calls {anonymous}::K::f(double)"), problem)
 
 
 if __name__ == "__main__":

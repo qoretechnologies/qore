@@ -31,10 +31,13 @@ stack, and GCC records the clone in ways that cannot be attributed reliably.  So
 clone in the object file's symbol table (objdump -t; .cold fragments, which share their function's frame, do not
 count) fails the check as SPLIT: an unsplit function's frame is fully in its own record, and a split one is never
 passed.  A SPLIT function needs a review: a budget for its head and part, or code that GCC does not split.  A function
-that is only a branch to another one (identical code folding merged it) fails as FOLDED, as it runs in the other
-function's frame, and one with a "dynamic" record that is not "bounded" (alloca(), variable-length arrays) as DYNAMIC.
+that is only a branch to another one (identical code folding merged it, or it only forwards) fails as FOLDED, as it
+runs in the other function's frame, and one with a "dynamic" record that is not "bounded" (alloca(), variable-length
+arrays) as DYNAMIC.
 Overloads of a function are charged the largest of their frames, not the sum: this assumes that an overload does not
-call another, which the check verifies for direct calls (OVERLOAD-CALL; a tail call reuses the frame and is allowed).
+call another, which the check verifies for direct calls (OVERLOAD-CALL: from an overload, its clones or its .cold
+fragments to another overload or its clone, found by name, also in another object file; a tail call reuses the frame
+and is allowed; a call through a pointer or another function is not found).
 The check needs the object files (an error without them, unless --allow-no-symbols is given).
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
@@ -231,6 +234,11 @@ class Symbol:
     def __repr__(self):
         return self.name
 
+    def overload(self):
+        """Returns the name without its clone suffix: the overload (function and parameters) that it is or is a clone
+        of"""
+        return re.sub(r"\s*\[clone [^\]]*\]", "", self.name).strip()
+
     def function(self):
         """Returns the qualified name of the function without template arguments and ABI tags, or None"""
         if not hasattr(self, "_function"):
@@ -275,17 +283,13 @@ def object_symbols(su_path, cache):
     return rv
 
 
-# the largest function that can be a wrapper of identical code folding: a branch to the function it was merged into,
-# with an endbr64 (x86_64, 4 bytes, and a jmp of up to 5) or bti (aarch64, 4 bytes, and a b of 4) before it
-WRAPPER_MAX_SIZE = 16
-
-
 def disassemble(sym, cache):
     """Returns the instructions of a function as a list of (mnemonic, operands, branch target or None), the target
     being the demangled name of the function a branch or call goes to (from its relocation, or from objdump's
     "<name>" for one the assembler resolved); or None if the object file cannot be disassembled.  Padding and branch
     target markers (endbr64 on x86_64, bti and paciasp on aarch64) are left out."""
-    key = ("disassembly", sym.obj, sym.address)
+    # addresses are offsets in their sections (with -ffunction-sections, every function is at 0 in its own)
+    key = ("disassembly", sym.obj, sym.section, sym.address)
     if key in cache:
         return cache[key]
     rv = None
@@ -296,11 +300,12 @@ def disassemble(sym, cache):
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True, check=True).stdout
             rv = []
             for line in out.splitlines():
-                m = re.match(r"^\s*[0-9a-f]+:\s+R_\S+\s+(.*?)(-0x[0-9a-f]+)?$", line)
+                m = re.match(r"^\s*[0-9a-f]+:\s+(R_\S+)\s+(.*?)([+-]0x[0-9a-f]+)?$", line)
                 if m:
                     # the relocation of the instruction before it names its target
                     if rv:
-                        rv[-1] = (rv[-1][0], rv[-1][1], m.group(1).replace("(anonymous namespace)", "{anonymous}"))
+                        rv[-1] = (rv[-1][0], rv[-1][1], relocation_target(sym.obj, m.group(1), m.group(2),
+                            int(m.group(3), 16) if m.group(3) else 0, cache))
                     continue
                 m = re.match(r"^\s*[0-9a-f]+:\s+([a-z][a-z0-9.]*)\s*(.*)$", line)
                 if not m or m.group(1) in ("endbr64", "endbr32", "bti", "paciasp", "hint") \
@@ -315,22 +320,46 @@ def disassemble(sym, cache):
     return rv
 
 
+def relocation_target(obj, rtype, name, addend, cache):
+    """Returns the demangled name of the function that a relocation of a branch or call in obj refers to.  A
+    relocation against a section (a call of a local function with -ffunction-sections, or one that the assembler
+    resolved to its section) is resolved with the object file's symbol table: the function at the section offset
+    that it refers to (the addend, plus the 4 bytes that an x86_64 PC-relative relocation subtracts)."""
+    if name.startswith("."):
+        offset = addend + (4 if rtype in ("R_X86_64_PC32", "R_X86_64_PLT32") else 0)
+        found = [sym for sym in cache.get(obj) or () if sym.section == name and sym.address == offset]
+        if found:
+            found.sort(key=lambda sym: (sym.is_cold, "[clone " in sym.name))
+            return found[0].name
+        return "%s+0x%x" % (name, offset)
+    return name.replace("(anonymous namespace)", "{anonymous}")
+
+
 # x86_64 and aarch64 mnemonics of an unconditional direct branch and of a call
 BRANCHES = ("jmp", "jmpq", "b")
 CALLS = ("call", "callq", "bl")
 
-# the largest function that can be a wrapper of identical code folding: a branch to the function it was merged into,
-# with an endbr64 (x86_64, 4 bytes, and a jmp of up to 5) or bti (aarch64, 4 bytes, and a b of 4) before it
-WRAPPER_MAX_SIZE = 16
+# the functions that profiling (-pg, -mfentry) calls at the start of every function
+PROFILING_CALLS = ("__fentry__", "mcount", "_mcount", "__mcount")
+
+# the largest function that is examined as a wrapper: a branch to another function, with an endbr64 (x86_64) or bti
+# (aarch64) before it, and the padding of -fpatchable-function-entry or a profiling call (-pg -mfentry, x86_64); the
+# disassembly decides
+WRAPPER_MAX_SIZE = 64
 
 
 def wrapper_target(sym, cache):
-    """Returns the function that sym only branches to (a wrapper that identical code folding left of a function
-    merged into an identical one: "endbr64; jmp f" on x86_64, "bti c; b f" on aarch64), or None"""
+    """Returns the function that sym only branches to, or None: a wrapper that identical code folding left of a
+    function merged into an identical one ("endbr64; jmp f" on x86_64, "bti c; b f" on aarch64), or a function that
+    only forwards to another"""
     if sym.size is None or sym.size > WRAPPER_MAX_SIZE:
         return None
-    insns = disassemble(sym, cache)
-    if not insns or len(insns) != 1 or insns[0][0] not in BRANCHES:
+    insns = [i for i in disassemble(sym, cache) or () if not (i[0] in CALLS and i[2] in PROFILING_CALLS)]
+    # with a profiling call, x86_64 aligns the stack for it and restores it before the branch
+    if len(insns) == 3 and re.match(r"^sub\s*$", insns[0][0]) and insns[1][0] == "add" \
+            and re.match(r"^\$0x[0-9a-f]+,%rsp$", insns[0][1]) and insns[0][1] == insns[1][1]:
+        insns = insns[2:]
+    if len(insns) != 1 or insns[0][0] not in BRANCHES:
         return None
     return insns[0][2] or insns[0][1]
 
@@ -338,15 +367,20 @@ def wrapper_target(sym, cache):
 def overload_call(func, symbols, cache):
     """Returns (caller, callee) if one overload of func calls another (not as a tail call, which reuses the caller's
     frame): both frames are then on the stack, while the check charges only the larger; or None.  symbols are the
-    functions of func in an object file."""
-    overloads = [sym for sym in symbols if not sym.is_cold and "[clone " not in sym.name]
-    if len(overloads) < 2:
-        return None
-    names = set(sym.name for sym in overloads)
-    for sym in overloads:
+    functions of func in an object file.  The callers are its overloads, their .constprop and .isra clones and their
+    .cold fragments; a callee is any function of the same name with other parameters, a clone of it included (a call
+    of another function, or of a function in another object file, is found by its name; a .part clone is not a
+    callee here, as SPLIT fails the function).  A call through a pointer or another function is not found."""
+    for sym in symbols:
+        if sym.is_part:
+            continue
         for mnemonic, _, target in disassemble(sym, cache) or ():
-            if mnemonic in CALLS and target in names and target != sym.name:
-                return sym.name, target
+            if mnemonic not in CALLS or not target:
+                continue
+            callee = Symbol(target)
+            if callee.is_part or callee.function() != func or callee.overload() == sym.overload():
+                continue
+            return sym.overload(), target
     return None
 
 
@@ -450,11 +484,13 @@ def check(budgets, frames):
       attributed reliably (as "0(...)", under the function's name, or once for several functions whose clones
       identical code folding merged); the clone is returned;
     - as FOLDED if the function is only a branch to another function (identical code folding merged it into an
-      identical one, and it runs in that function's frame, which its own record does not show);
+      identical one, or it only forwards to it), as it runs in that function's frame, which its own record does not
+      show;
     - as DYNAMIC if one of its records is "dynamic" but not "bounded" (stack of a size known only at run time, which
-      the record does not include).
-    - as OVERLOAD-CALL if one of its overloads calls another (other than as a tail call): both frames are on the
-      stack, while the function is charged only the larger.
+      the record does not include);
+    - as OVERLOAD-CALL if one of its overloads (a clone or .cold fragment of it included) calls another overload or
+      a clone of one (other than as a tail call): both frames are on the stack, while the function is charged only
+      the larger.
     Overloads are charged the largest frame, not the sum, on the assumption that an overload does not call another
     one; OVERLOAD-CALL finds direct calls, not a call through another function (which a recursion of interpreted
     code does not make between overloads of the per-call path)."""
@@ -484,8 +520,10 @@ def check(budgets, frames):
                 elif not problem and not sym.is_cold and "[clone " not in sym.name:
                     target = wrapper_target(sym, sym_cache)
                     if target:
-                        problem = ("FOLDED", "%s was merged by identical code folding into %s; budget %s or make the "
-                            "bodies differ" % (func, target, target))
+                        name = Symbol(target).function() or target
+                        problem = ("FOLDED", "%s runs entirely in the frame of %s (merged into it by identical code "
+                            "folding, or a function that only forwards to it); budget %s or make the bodies differ"
+                            % (func, target, name))
             call = None if problem else overload_call(func, symbols, sym_cache)
             if call:
                 problem = ("OVERLOAD-CALL", "%s calls %s: both frames are on the stack, while the budget is checked "
