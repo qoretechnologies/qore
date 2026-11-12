@@ -4228,6 +4228,8 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    // the frame of the top-level code is a frame of this context (see getContextFrame())
+    tch.setTopLevel();
 
     // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
     // builtin Program::run() method, has the Program object and class and the calling Program as its context, which

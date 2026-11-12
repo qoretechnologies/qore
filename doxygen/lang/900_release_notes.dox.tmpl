@@ -2382,6 +2382,10 @@
     - a function first referenced in a method was parse-initialized in the method's class, namespace and local
       variables, so its body and default argument values could call the class's private methods or read the
       method's locals, also when called from elsewhere; see @ref private_methods
+    - the frame of the top-level code of a Program, including the main Program, was not reachable by
+      @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
+      from the calls it makes or from a debugger's callbacks in the same thread
+      (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

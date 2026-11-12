@@ -2212,6 +2212,14 @@ public:
         return restore || entry_frame.isActive();
     }
 
+    //! marks the context as the one that runs the top-level code of the Program
+    /** The top-level code has no frame boundary: its frame is the bottom of the thread's local variable stack in the
+        Program, below the frames of the calls it makes (see getContextFrame()); when the Program is already on the
+        thread's stack (its top-level code runs again in a call that it makes), that bottom belongs to the first entry
+        into the Program, and the frame of the top-level code is that of the call
+    */
+    DLLLOCAL void setTopLevel();
+
     //! returns the program active before this context was entered
     DLLLOCAL QoreProgram* getOldProgram() const {
         return old_pgm;
@@ -2297,6 +2305,9 @@ protected:
     unsigned saved_dtor_defer;
     bool restore = false;
     bool init_tlpd = false;
+    //! true if the context runs the top-level code of the Program in the thread's first entry into it; see
+    //! setTopLevel()
+    bool top_level = false;
     bool thread_count_incremented = false;
     //! true if the context entered a Program with module lifetime without its thread count; see
     //! qore_module_uncounted_entry()

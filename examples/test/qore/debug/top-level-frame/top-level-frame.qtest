@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the executable whose top-level frame is checked
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class TopLevelFrameTest
+
+#! Tests that get_local_vars() and set_local_var_value() reach the frame of the top-level code of the main Program
+/** The script reads and sets the local variables of the frame of its top-level code from the functions that the
+    top-level code calls and from the step callback of a debugger, and those of a child Program run with
+    Program::run() from the functions of the child Program; the frame of the top-level code of the main Program is
+    reached as that of a child Program is, and the values set are those that the top-level code uses afterwards.  A
+    Program whose top-level code runs again in a call that it makes has only the frame of its first entry.
+*/
+class TopLevelFrameTest inherits QUnit::Test {
+    public {
+        #! the script, in the directory of the test
+        const Script = "top-level-frame-script.q";
+
+        #! the top-level local variables of the main Program, sorted
+        const TopLevelVars = "[\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"top\"]";
+
+        #! the output of the script
+        const Expected = (
+            "top: call frame 2: " + TopLevelVars,
+            "top: call frame 3: {}",
+            "top: 42",
+            "ctop: call frame 2: " + TopLevelVars,
+            "ctop: call frame 3: {}",
+            "step frame 1: " + TopLevelVars,
+            "step frame 1 dtop: 7",
+            "dtop: 7",
+            "ctop: 43",
+            "child frame 2 x: 1",
+            "child frame 3: " + TopLevelVars,
+            "child frame 3 top: 42",
+            "child x: 43",
+            "top: 44",
+            # the top-level code of the second entry into the Program has no frame of its own
+            "reentrant frame 1: [\"argv\", \"rl\"]",
+            "reentrant frame 2: [\"argv\", \"rfl\"]",
+            "reentrant frame 3: [\"argv\", \"rl\"]",
+            "reentrant frame 4: [\"argv\", \"rfl\"]",
+            "reentrant frame 5: [\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"rx\", \"top\"]",
+            "reentrant frame 6: " + TopLevelVars,
+            "reentrant frame 7: []",
+        );
+
+        #! the output of the AOT-compiled executable, which skips the checks of the calls without a debugger, of the
+        #! step callback and of the Program entered again (see the script)
+        const ExpectedAot = (
+            "ctop: call frame 2: " + TopLevelVars,
+            "ctop: call frame 3: {}",
+            "dtop: 1",
+            "ctop: 43",
+            "child frame 2 x: 1",
+            "child frame 3: " + TopLevelVars,
+            "child frame 3 top: 1",
+            "child x: 43",
+            "top: 44",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("TopLevelFrame", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + Script;
+
+        addTestCase("the top-level frame in every execution mode", \modeTest());
+        addTestCase("the top-level frame of AOT-compiled code", \aotTest());
+
+        set_return_value(main());
+    }
+
+    # there is no run of tiered execution on the IR tier (ExecModeHarness::run_ir_tier()): the callbacks of the
+    # debugger and the calls made while it is attached run on the AST tier, which that run refuses; the IR interpreter
+    # runs the functions with --exec-mode=ir
+    modeTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, getLines(ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, script))), mode);
+        }
+    }
+
+    aotTest() {
+        TmpDir tmp("qore-top-level-frame-");
+        foreach int opt in (0, 3) {
+            string exe = sprintf("%s%stop-level-frame-O%d", tmp.path, DirSep, opt);
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                script));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            assertEq(ExpectedAot, getLines(ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s aot", libqore_dir, libqore_dir, exe))), sprintf("-O%d", opt));
+        }
+    }
+
+    #! returns the lines of the output
+    private static list<string> getLines(string out) {
+        return select out.split("\n"), $1 != "";
+    }
+}

@@ -4751,6 +4751,11 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     }
 }
 
+void ProgramThreadCountContextHelper::setTopLevel() {
+    // only a context that switched to the Program is on the thread's chain of contexts
+    top_level = restore && isFirstThreadLocalProgramData(ctx_td->tlpd);
+}
+
 bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const{
     /* find if tlpd is in lower context, i.e. the first usage of particular tlpd
         Not sure if may be substituted with init_tlpd when calling dbgXX event.
@@ -4787,10 +4792,13 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         because when used together in multi inheritance is put at "righter" position. Starting with
         frameCount = -1, so the first pushFrameBoundary increments to 0.
     */
-    while (ch && frame >= frameCount - ch->save_frameCount + (ch->init_tlpd ? 1 : 0) ) {
+    while (ch && frame >= frameCount - ch->save_frameCount + (ch->init_tlpd || ch->top_level ? 1 : 0) ) {
         frame -= frameCount - ch->save_frameCount;
-        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1)
-        if (ch->init_tlpd) {
+        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1), as has the context of the
+        // top-level code in the thread's first entry into the Program, whose frame has no frame boundary; the
+        // thread's data in the Program is normally created before the top-level code runs (when the Program is
+        // parsed, for example), so the context of the top-level code is not always the initial instance
+        if (ch->init_tlpd || ch->top_level) {
             frame--;
         }
         // The context we are ABOUT to pop past: its `old_pgm` is the
