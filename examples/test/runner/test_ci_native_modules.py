@@ -220,9 +220,12 @@ class NativeModuleFarmTest(unittest.TestCase):
                 self.assertNotIn("done", result.stdout)
                 self.assertEqual({}, self.linked())
 
-    NOTICE = ("!!! native modules: QORE_CI_NATIVE_MODULE_API_TRANSITION=1: the image's native modules uuid xml were "
-              "built only for another module API (uuid-api-2.0 xml-api-1.9 xml-api-2.0) than the 2.1 that this qore "
-              "loads, so their tests would be skipped; this job does not test them\n")
+    NOTICE = ("!!! native modules: QORE_CI_NATIVE_MODULE_API_TRANSITION=1: native modules of the image built only "
+              "for module APIs other than 2.1, which this qore loads, so that their tests would be skipped: uuid xml "
+              "(uuid-api-2.0 xml-api-1.9 xml-api-2.0); this job does not test them\n")
+
+    UNNEEDED = ("!!! native modules: QORE_CI_NATIVE_MODULE_API_TRANSITION is set but not needed, as every native "
+                "module of the image has a build for module API 2.1: remove it from .gitlab-ci.yml\n")
 
     def stale_image(self):
         """Makes the modules of an image whose xml and uuid modules were built for other module APIs only, while
@@ -242,11 +245,12 @@ class NativeModuleFarmTest(unittest.TestCase):
                     result = self.run_farm(self.fake_qore("2.1"), mods, shell=shell, transition=transition)
                     self.assertNotEqual(0, result.returncode, result.stdout)
                     self.assertNotIn("done", result.stdout)
-                    self.assertEqual("qore_ci_native_module_farm: the image's native modules uuid xml were built only "
-                                     "for another module API (uuid-api-2.0 xml-api-1.9 xml-api-2.0) than the 2.1 that "
-                                     "this qore loads, so their tests would be skipped: rebuild the image's native "
-                                     "modules for module API 2.1, or set QORE_CI_NATIVE_MODULE_API_TRANSITION=1 in a "
-                                     "batch that changes the module API (see ci-native-modules.sh)\n", result.stderr)
+                    self.assertEqual("qore_ci_native_module_farm: native modules of the image built only for module "
+                                     "APIs other than 2.1, which this qore loads, so that their tests would be "
+                                     "skipped: uuid xml (uuid-api-2.0 xml-api-1.9 xml-api-2.0); rebuild the image's "
+                                     "native modules for module API 2.1, or set QORE_CI_NATIVE_MODULE_API_TRANSITION=1 "
+                                     "in a batch that changes the module API (see ci-native-modules.sh)\n",
+                                     result.stderr)
                     # the coverage is printed before the job fails
                     self.assertIn("-- native modules: 2 exposed, 4 left out (built for another module API): "
                                   "pgsql-api-2.0 uuid-api-2.0 xml-api-1.9 xml-api-2.0 --", result.stdout)
@@ -256,8 +260,8 @@ class NativeModuleFarmTest(unittest.TestCase):
         mods = self.module_dir("mods", ("process-api-2.0.qmod", "sqlite3-api-2.0.qmod"))
         result = self.run_farm(self.fake_qore("2.1"), mods)
         self.assertNotEqual(0, result.returncode, result.stdout)
-        self.assertIn("native modules process sqlite3 were built only for another module API (process-api-2.0 "
-                      "sqlite3-api-2.0) than the 2.1", result.stderr)
+        self.assertIn("so that their tests would be skipped: process sqlite3 (process-api-2.0 sqlite3-api-2.0); ",
+                      result.stderr)
         self.assertEqual({}, self.linked())
 
     def test_api_transition(self):
@@ -278,16 +282,60 @@ class NativeModuleFarmTest(unittest.TestCase):
                 self.assertTrue(end.startswith("!!!!"), end)
 
     def test_no_notice(self):
-        """A job whose modules all have a build for the loaded API prints no notice, also with the override"""
+        """A job whose modules all have a build for the loaded API prints no notice without the override"""
         mods = self.module_dir("mods", ("pgsql-api-2.0.qmod", "pgsql-api-2.1.qmod"))
-        for transition in (None, "1"):
+        result = self.run_farm(self.fake_qore("2.1"), mods)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(result.stdout.endswith("done\n"), result.stdout)
+        self.assertNotIn("!!!", result.stdout)
+
+    def test_unneeded_override(self):
+        """An override that is set while every module has a build for the loaded API is reported at the start and
+        at the end of the job, so that it is not left set"""
+        mods = self.module_dir("mods", ("pgsql-api-2.0.qmod", "pgsql-api-2.1.qmod"))
+        for transition in ("1", "0", "yes"):
             with self.subTest(transition=transition):
                 for f in self.farm.iterdir():
                     f.unlink()
                 result = self.run_farm(self.fake_qore("2.1"), mods, transition=transition)
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertTrue(result.stdout.endswith("done\n"), result.stdout)
-                self.assertNotIn("!!!", result.stdout)
+                start, end = result.stdout.split("done\n")
+                self.assertIn(self.UNNEEDED, start)
+                self.assertIn(self.UNNEEDED, end)
+
+    def test_duplicate_file_named_once(self):
+        """A stale file of the same name in two directories is named once"""
+        first = self.module_dir("first", ("xml-api-2.0.qmod",))
+        second = self.module_dir("second", ("xml-api-2.0.qmod",))
+        result = self.run_farm(self.fake_qore("2.1"), first, second)
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertIn("would be skipped: xml (xml-api-2.0); ", result.stderr)
+
+    def test_name_prefix_of_another(self):
+        """A module whose name is the start of another one's name before "-api-" (my and my-api-tool) is missing
+        although the other one is exposed"""
+        mods = self.module_dir("mods", ("my-api-2.0.qmod", "my-api-tool-api-2.1.qmod"))
+        result = self.run_farm(self.fake_qore("2.1"), mods)
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertIn("would be skipped: my (my-api-2.0); ", result.stderr)
+        self.assertEqual({"my-api-tool-api-2.1.qmod"}, set(self.linked()))
+
+    def test_missing_names_split_at_spaces(self):
+        """The modules left out are matched to the exposed ones whatever the caller's IFS is: a module with a build
+        for the loaded API next to a stale one is not missing"""
+        mods = self.module_dir("mods", ("pgsql-api-2.0.qmod", "pgsql-api-2.1.qmod", "xml-api-2.0.qmod"))
+        for shell in SHELLS:
+            for setup in ("IFS=:;", "IFS=;", "unset IFS;", "IFS=-;"):
+                with self.subTest(shell=shell, setup=setup):
+                    for f in self.farm.iterdir():
+                        f.unlink()
+                    result = subprocess.run(
+                        [shell, "-c", '. "$1"; shift; ' + setup + ' qore_ci_native_module_farm "$@"; echo "rc=$?"',
+                         shell, str(HELPER), str(self.fake_qore("2.1")), str(self.farm), str(mods)],
+                        capture_output=True, text=True, timeout=60,
+                        env={k: v for k, v in os.environ.items() if k != "QORE_CI_NATIVE_MODULE_API_TRANSITION"})
+                    self.assertTrue(result.stdout.endswith("rc=1\n"), result.stdout)
+                    self.assertIn("would be skipped: xml (xml-api-2.0); ", result.stderr)
 
     def test_stale_shell_state_restored(self):
         """The caller's IFS and pathname expansion setting are kept when the job fails for a stale image and when

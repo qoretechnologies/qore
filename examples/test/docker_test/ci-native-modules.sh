@@ -33,7 +33,10 @@ qore_ci_nmf_restore_glob() {
 #   FARM: the directory to link the modules into
 #   DIR...: the directories of the native modules; a module in more than one is linked from the first
 # Keeps the caller's IFS and pathname expansion setting.  Prints the modules that are not linked and why, then a
-# summary; returns non-zero if the qore does not give a valid list of module APIs.
+# summary; returns non-zero if the qore does not give a valid list of module APIs, or if a module of the directories
+# has no build for a module API that the qore loads, unless QORE_CI_NATIVE_MODULE_API_TRANSITION is 1, which then
+# sets the notice of qore_ci_native_module_notice and prints it; the notice also says when that variable is set but not
+# needed.
 qore_ci_native_module_farm() {
     qore_ci_nmf_qore=$1
     qore_ci_nmf_farm=$2
@@ -150,7 +153,14 @@ qore_ci_native_module_farm() {
             fi
         done
         if [ -z "${qore_ci_nmf_exposed}" ]; then
-            qore_ci_nmf_missing_files="${qore_ci_nmf_missing_files:+${qore_ci_nmf_missing_files} }${qore_ci_nmf_base}"
+            # a file of the same name in more than one directory is named once
+            case " ${qore_ci_nmf_missing_files} " in
+                *" ${qore_ci_nmf_base} "*)
+                    ;;
+                *)
+                    qore_ci_nmf_missing_files="${qore_ci_nmf_missing_files:+${qore_ci_nmf_missing_files} }${qore_ci_nmf_base}"
+                    ;;
+            esac
             case " ${qore_ci_nmf_missing} " in
                 *" ${qore_ci_nmf_name} "*)
                     ;;
@@ -169,26 +179,36 @@ qore_ci_native_module_farm() {
     # the coverage of the run: the tests of the modules left out are skipped
     echo "-- native modules: ${qore_ci_nmf_linked} exposed, ${qore_ci_nmf_skipped} left out (built for another" \
         "module API)${qore_ci_nmf_skipped_names:+:${qore_ci_nmf_skipped_names}} --"
+    qore_ci_native_module_notice_text=
     if [ -n "${qore_ci_nmf_missing}" ]; then
-        qore_ci_nmf_msg="the image's native modules ${qore_ci_nmf_missing} were built only for another module API"
-        qore_ci_nmf_msg="${qore_ci_nmf_msg} (${qore_ci_nmf_missing_files}) than the ${qore_ci_nmf_apis} that this"
-        qore_ci_nmf_msg="${qore_ci_nmf_msg} qore loads, so their tests would be skipped"
+        qore_ci_nmf_msg="native modules of the image built only for module APIs other than ${qore_ci_nmf_apis}, which"
+        qore_ci_nmf_msg="${qore_ci_nmf_msg} this qore loads, so that their tests would be skipped:"
+        qore_ci_nmf_msg="${qore_ci_nmf_msg} ${qore_ci_nmf_missing} (${qore_ci_nmf_missing_files})"
         if [ "${QORE_CI_NATIVE_MODULE_API_TRANSITION:-}" = "1" ]; then
             qore_ci_native_module_notice_text="QORE_CI_NATIVE_MODULE_API_TRANSITION=1: ${qore_ci_nmf_msg}; this job"
             qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} does not test them"
             qore_ci_native_module_notice
             return 0
         fi
-        echo "qore_ci_native_module_farm: ${qore_ci_nmf_msg}: rebuild the image's native modules for module API" \
+        echo "qore_ci_native_module_farm: ${qore_ci_nmf_msg}; rebuild the image's native modules for module API" \
             "${qore_ci_nmf_apis}, or set QORE_CI_NATIVE_MODULE_API_TRANSITION=1 in a batch that changes the module" \
             "API (see ci-native-modules.sh)" >&2
         return 1
     fi
+    # an override that is left set would let the next stale image pass: it is reported as loudly as one that is used
+    if [ -n "${QORE_CI_NATIVE_MODULE_API_TRANSITION:-}" ]; then
+        qore_ci_native_module_notice_text="QORE_CI_NATIVE_MODULE_API_TRANSITION is set but not needed, as every"
+        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} native module of the image has a build"
+        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} for module API ${qore_ci_nmf_apis}:"
+        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} remove it from .gitlab-ci.yml"
+        qore_ci_native_module_notice
+    fi
     return 0
 }
 
-# Prints the notice of a job whose native modules were left out under QORE_CI_NATIVE_MODULE_API_TRANSITION=1, if any:
-# the test scripts call it after the tests, so that the job's summary names them
+# Prints the notice of qore_ci_native_module_farm about QORE_CI_NATIVE_MODULE_API_TRANSITION, if any: the native
+# modules that the job does not test, or that the variable is set but not needed; the test scripts call it at the end
+# of the job, so that the job's summary has it
 qore_ci_native_module_notice() {
     if [ -n "${qore_ci_native_module_notice_text:-}" ]; then
         echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"

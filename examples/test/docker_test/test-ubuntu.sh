@@ -318,8 +318,6 @@ gosu qore:qore env \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh || TEST_RC=$?
 qore_ci_resource_report "after the tests"
-# the native modules whose tests were skipped under QORE_CI_NATIVE_MODULE_API_TRANSITION=1, in the job's summary
-qore_ci_native_module_notice
 # the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
 # database servers; a server that cannot be reached is reported, and the cleanup never fails the job
 # the script needs modules that the build makes (yaml, json and reflection, through Util and the isolation modules):
@@ -342,6 +340,9 @@ gosu qore:qore env \
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"
+# the notice of QORE_CI_NATIVE_MODULE_API_TRANSITION (the native modules whose tests were skipped, or that it is not
+# needed), at the end of the job's log
+qore_ci_native_module_notice
 if [ "${TEST_RC}" != "0" ]; then
     qore_ci_end_job_processes || true
     exit ${TEST_RC}
