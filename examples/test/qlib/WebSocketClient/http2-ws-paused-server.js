@@ -8,7 +8,7 @@
 // - prints "READY <port>" once listening
 // - a line "release" on stdin resumes reading the WebSocket streams; a line "close <code>[:<reason>][,...]" writes a
 //   close frame for each code (with its reason) in one write; a line "ping <payload>[,...]" writes a ping frame for
-//   each payload in one write
+//   each payload in one write; a line "big-header" writes the header of a binary frame announcing 1 GiB
 // - prints "PONG <payload>" for each pong received
 // - prints "MSG <size> <first byte> <last byte>" for each message received, and "CLOSE <code>" for a close frame,
 //   which it answers
@@ -147,6 +147,16 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       }
     }
     console.log('SENT PING ' + cmd[1]);
+  } else if (cmd[0] === 'big-header') {
+    // writes only the header of a binary frame announcing 1 GiB, which the client rejects with 1009
+    const lenBuf = Buffer.alloc(8);
+    lenBuf.writeBigUInt64BE(BigInt(1024 * 1024 * 1024));
+    for (const s of streams) {
+      if (!s.destroyed && s.writable) {
+        s.write(Buffer.concat([Buffer.from([0x82, 127]), lenBuf]));
+      }
+    }
+    console.log('SENT BIG-HEADER');
   }
 });
 

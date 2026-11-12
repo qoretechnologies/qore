@@ -34,6 +34,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires Logger
 %requires FsUtil
 %requires WebSocketUtil
 %requires WebSocketClient
@@ -51,15 +52,40 @@ const Size = 3 * 1024 * 1024;
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! Pushes the client's message about the start of an error close, so that a test can wait for it
+class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue lines();
+    }
+
+    constructor() : LoggerAppenderWithLayout("error-close", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /closing the connection for an error/) {
+            lines.push(params);
+        }
+    }
+}
+
 class WebSocketControlFrameQueueTest inherits QUnit::Test {
     constructor() : QUnit::Test("WebSocketControlFrameQueue", "1.0") {
         addTestCase("HTTP/2 client: the pong of the latest ping is sent when the send buffer has room",
             \testPong());
+        addTestCase("HTTP/2 client: the close frame of an error is sent although the send buffer is full",
+            \testErrorClose(), True);
+        addTestCase("HTTP/2 client: an error close that the server does not answer ends at the close timeout",
+            \testErrorClose(), False);
         set_return_value(main());
     }
 
 %ifdef NoProcess
     testPong() {
+        testSkip("the process module is not available");
+    }
+
+    testErrorClose(bool answer) {
         testSkip("the process module is not available");
     }
 %else
@@ -92,6 +118,57 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
         assertEq("PONG p2", readLine(\node), "the pong of the latest ping arrives");
         wsc.send(binary("done"));
         assertEq("MSG 4 100 101", readLine(\node), "the next message follows the pong");
+    }
+
+    #! The client rejects a frame with 1009 while its send buffer is full: its close frame reaches the server
+    /** The frame state queues the close frame past the send buffer's limit (issue #5900), and the client waits for
+        the server to end the stream instead of tearing the connection down, which discarded the buffered data with
+        the close frame (issue #5910); the close is reported with 1009 when the server has answered it
+    */
+    testErrorClose(bool answer) {
+        hash<auto> node = startNode();
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        on_exit stopNode(node.process);
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push(wsc.getCloseCode());
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            # the close timeout of the client is its I/O timeout: when the server does not answer, the close ends then
+            "timeout": answer ? HangGuard : 2s,
+            "logger": logger,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        wsc.send(binary(strmul("a", Size)));
+        node.process.write("big-header\n");
+        assertEq("SENT BIG-HEADER", readLine(\node), "the server announced a frame over the limit");
+        # the client has rejected the frame and queued its close frame: the server reads from now on (the old client
+        # tore the connection down then, discarding the buffered data with the close frame)
+        assertRegex("close code 1009", capture.lines.get(HangGuard), "the client starts the close for the error");
+        if (!answer) {
+            # the server neither reads nor answers: the close ends at the close timeout with the error's code
+            assertEq(WSCC_MessageTooBig, closed.get(HangGuard), "the client closes with 1009");
+            return;
+        }
+        node.process.write("release\n");
+        assertEq(sprintf("MSG %d 97 97", Size), readLine(\node), "the buffered message arrives");
+        assertEq(sprintf("CLOSE %d", WSCC_MessageTooBig), readLine(\node), "the client's close frame arrives");
+        # the server answered the close frame and ended the stream: the client reports the error's code
+        assertEq(WSCC_MessageTooBig, closed.get(HangGuard), "the client closes with 1009");
     }
 
     #! Starts the server that grants no credit until it is released; skips the test without node
