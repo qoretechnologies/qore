@@ -3671,6 +3671,11 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
 }
 
 bool qore_aot_value_container_is_typed(const AbstractQoreNode* node) {
+    // a container whose elements are evaluated, as the argument list of a call (new buffer<bool>(mask)), is an
+    // expression and not a value
+    if (!node || node->needs_eval()) {
+        return false;
+    }
     if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
         if (hash->getHashDecl()) {
             return true;
