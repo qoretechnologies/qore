@@ -53,13 +53,17 @@ sub call_with_reference(reference r) {
     o2.m(r);
 }
 
-#! a class without members: a reference to a member of one of its objects raises INVALID-MEMBER when it is read
-class NoMembers {
+#! a class with a declared member: a reference to an undeclared member of one of its objects raises INVALID-MEMBER
+#! when it is read (a class without declared members gives no value instead)
+class Declared {
+    public {
+        auto y;
+    }
 }
 
 #! a local assigned a reference holds the reference: reading it raises INVALID-MEMBER
 sub local_reference() {
-    object g = new NoMembers();
+    object g = new Declared();
     auto x = \g.q;
     C o();
     C o2 = o;
@@ -69,7 +73,7 @@ sub local_reference() {
 
 #! the same with a local declared as a reference
 sub typed_local_reference() {
-    object g = new NoMembers();
+    object g = new Declared();
     reference x = \g.q;
     C o();
     C o2 = o;
@@ -148,7 +152,7 @@ sub cases() {
     check("local assigned a reference", \local_reference());
     check("local declared as a reference", \typed_local_reference());
     check("closure reading a reference parameter", sub () {
-        object g = new NoMembers();
+        object g = new Declared();
         captured_reference(\g.q);
     });
     # a call reference given by a call, by an immediate closure and in a map expression
