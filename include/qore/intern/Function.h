@@ -692,13 +692,16 @@ public:
 
         saves current program location in case there's an exception
     */
+    /** @param n_closure the closure called, if any: the default values of its parameters are evaluated with the
+        variables that it captured (issue #5923)
+    */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            bool n_defer_domain_po = false, const QoreClosureBase* n_closure = nullptr);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -902,6 +905,8 @@ protected:
     // call references, closures) the switch happens before the dom check, so the check runs against the
     // target/creation Program's options.
     bool defer_domain_po = false;
+    //! the closure called, if any, whose captured variables its default values are evaluated with (issue #5923)
+    const QoreClosureBase* closure = nullptr;
 
 #ifdef DEBUG
     //! the resolved variant, recorded once init() has committed to actually running the call

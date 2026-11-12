@@ -971,12 +971,13 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        const QoreClosureBase* n_closure)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     if (self && !self->isValid()) {
@@ -1478,6 +1479,22 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
+//! Evaluates a default value of a closure's parameter with the variables that the closure captured
+/** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
+    Program is the closure's here, whose closure variables they are.  The value is evaluated by the callee, as a
+    statement of its own (see design/temporary-lifetime.md)
+*/
+static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(const QoreClosureBase& closure,
+        const QoreValue& exp, ExceptionSink* xsink) {
+    CVecInstantiator closure_vars(closure.getCvec(), xsink);
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(&closure);
+    QoreScopedEvalHolder dv(exp, true, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dv.takeReferencedValue();
+}
+
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
         AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
         std::unique_ptr<arg_restore_vec_t>* saved) {
@@ -1524,7 +1541,13 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                {
+                if (closure && closure->getCvec() && !closure->getCvec()->empty()) [[unlikely]] {
+                    // a default value of a closure that captured variables is evaluated with them (issue #5923)
+                    p = qore_eval_closure_default_arg(*closure, defaultArgList[i], xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                } else {
                     // the default value is evaluated by the callee, as a statement of its own: a value that it reads
                     // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
                     QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
@@ -8671,7 +8694,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // so it will stay valid, if the closure code itself refers to the object, it will fail then if the object is invalid
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm);
+        false, nullptr, pgm, nullptr, nullptr, false, &closure_base);
     if (*xsink) {
         return QoreValue();
     }
@@ -8709,7 +8732,14 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
     source_qf = f;
     UserClosureFunction* cf = static_cast<UserClosureFunction*>(f);
 
-    int err = signature.resolve();
+    int err;
+    {
+        // the default values of the closure's parameters are evaluated when the closure is called, possibly after the
+        // code that created it has returned: the variables of that code that they use are captured by the closure,
+        // as those that its code uses are (issue #5923)
+        ClosureParseEnvironment cenv(cf->getVList(), cf);
+        err = signature.resolve();
+    }
 
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
