@@ -20,8 +20,10 @@
     handler that was left by an exception destroyed its IR-only locals first declared first (<tt>a b c</tt>) in the
     IR, JIT and tiered execution modes, where the AST interpreter and AOT code destroy them last declared first
     (<tt>c b a</tt>).  The slots of IR-only locals are now left to the release of the frame's locals at its exit.
-    The script runs every case twice, in every execution mode, on the IR tier of tiered execution and as qcc
-    executables compiled at -O0 and -O3 (see ExecModeOutputTest).
+    Blocks without handlers nested in the frame and a frame left by thread_exit, which runs its on_success handlers,
+    keep the order as well.  The script runs every case twice, in every execution mode, on the IR tier of tiered
+    execution and as qcc executables compiled at -O0 and -O3 (see ExecModeOutputTest); handlers that assign to or
+    remove a local are checked in ExceptionExitHandlerLocalUpdate.qtest.
 */
 class ExceptionExitHandlerLocalOrderTest inherits ExecModeOutputTest {
     public {
@@ -80,6 +82,28 @@ sub loop() {
         }
     }
 }
+# a block nested in another, neither with a handler, left by the exception, in a function with a handler
+sub nested() {
+    T a("na");
+    on_exit { printf("nested on_exit\n"); }
+    {
+        T b("nb");
+        {
+            T c("nc");
+            printf("%s%s%s\n", c.n, b.n, a.n);
+            throw "N";
+        }
+    }
+}
+# a function with on_success and on_error handlers left by thread_exit, which is not an exception
+sub threadExit() {
+    T a("ta");
+    on_success { printf("on_success\n"); }
+    on_error { printf("on_error\n"); }
+    T b("tb");
+    printf("%s%s\n", b.n, a.n);
+    thread_exit;
+}
 # a function with a handler left normally
 sub normal() {
     T a("na");
@@ -95,6 +119,13 @@ for (int i = 0; i < 2; ++i) {
     try { inner(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
     try { loop(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
     normal();
+    try { nested(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    Counter thread_done(1);
+    background sub () {
+        on_exit thread_done.dec();
+        threadExit();
+    }();
+    thread_done.waitForZero();
     printf("done\n");
 }
 ';
@@ -135,6 +166,16 @@ for (int i = 0; i < 2; ++i) {
             "dtor nc",
             "dtor nb",
             "dtor na",
+            "ncnbna",
+            "dtor nc",
+            "dtor nb",
+            "nested on_exit",
+            "dtor na",
+            "caught N",
+            "tbta",
+            "on_success",
+            "dtor tb",
+            "dtor ta",
             "done",
         );
     }
