@@ -66,6 +66,10 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
+    - @ref ws_read_message() raises \c WEBSOCKET-FRAME-ERROR for a 64-bit frame length with its most significant
+      bit set (RFC 6455 section 5.2), which it read as a negative length, reading the socket until the peer closed
+      it
+      (<a href="https://github.com/qoretechnologies/qore/issues/5878">issue 5878</a>)
     - added pluggable WebSocket extension framework
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added @ref WsExtensionParamInfo hashdecl for extension parameters
@@ -275,6 +279,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c rsv3: the RSV3 bit (reserved for extensions)
         - \c info: user-defined info; may include debug-only metadata
 
+        @throw WEBSOCKET-FRAME-ERROR the 64-bit frame length has its most significant bit set (RFC 6455 section 5.2)
+        @throw WEBSOCKET-FRAME-TOO-LARGE the frame's length exceeds \a max_frame_size; the payload is not read
+
         @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
     */
     public hash<WsMsgInfo> sub ws_read_message(Socket sock, *timeout to, *int max_frame_size) {
@@ -301,6 +308,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             data_len = sock.recvu2(to);
         } else {
             data_len = sock.recvi8(to);
+            # the most significant bit of a 64-bit length must be 0 (RFC 6455 section 5.2); read as a signed value
+            # it would be negative and pass the size check (issue #5878)
+            if (data_len < 0) {
+                throw "WEBSOCKET-FRAME-ERROR", "WebSocket frame length has its most significant bit set";
+            }
         }
 
         # Check frame size against limit before reading payload

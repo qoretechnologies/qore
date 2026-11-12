@@ -67,7 +67,36 @@ int WebSocketStreamFrameState::feedData(const void* data, size_t len) {
 
 int WebSocketStreamFrameState::processFrames() {
     int pushed_before = messages_pushed;
-    while (decoder.hasCompleteFrame() && !error_state) {
+    while (!error_state) {
+        // a data frame whose declared length is over the limit is rejected on its header, before its payload is
+        // buffered; the error state discards the rest of the stream's data as it arrives (issue #5878)
+        WsFrameHeader h;
+        if (decoder.peekHeader(h)) {
+            bool data = h.opcode == WSOP_TEXT || h.opcode == WSOP_BINARY || h.opcode == WSOP_CONTINUATION;
+            bool control = h.opcode == WSOP_CLOSE || h.opcode == WSOP_PING || h.opcode == WSOP_PONG;
+            // an invalid length, a control frame over 125 bytes (RFC 6455 section 5.5) or a reserved opcode is a
+            // protocol error, rejected on the header before anything is buffered
+            if (h.invalid_length || (!data && !control) || (control && h.payload_len > 125)) {
+                decoder.clear();
+                fragment_bytes = 0;
+                setError(h.invalid_length ? "Invalid WebSocket frame length"
+                    : (control ? "WebSocket control frame too big" : "Reserved WebSocket opcode"),
+                    WSCC_ProtocolError);
+                break;
+            }
+            // the size of the message so far plus the frame's, without overflow
+            uint64_t so_far = h.opcode == WSOP_CONTINUATION ? fragment_bytes : 0;
+            if (data && (h.payload_len > max_message_size || so_far > max_message_size - h.payload_len)) {
+                decoder.clear();
+                fragment_bytes = 0;
+                setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+                    + " bytes", WSCC_MessageTooBig);
+                break;
+            }
+        }
+        if (!decoder.hasCompleteFrame()) {
+            break;
+        }
         ExceptionSink xs;
         WsFrame frame = decoder.nextFrame(&xs);
         if (xs) {
