@@ -123,7 +123,7 @@ f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
         /** the events are those of the AST interpreter; a dismissal ends the function, which returns no value
             (temporary: https://github.com/qoretechnologies/qore/issues/5825), and the local of a block that has
             handlers and no exception path of its own (f_dtor_order) is released when the frame ends, after the events
-            of the statements that contain the block (temporary: https://github.com/qoretechnologies/qore/issues/5855)
+            of the statements that contain the block (temporary: https://github.com/qoretechnologies/qore/issues/5867)
         */
         const ExpectedFunctionsAot = {
             "run": "f_throw: [\"B@73\"]

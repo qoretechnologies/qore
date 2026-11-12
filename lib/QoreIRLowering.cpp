@@ -4229,6 +4229,29 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 // landing pad.
                 if (!exception_stack.empty()) {
                     se_inst->exception_target = exception_stack.back();
+                    // the locals of the block are released before the exception reaches the enclosing target, as
+                    // the AST interpreter releases them when it leaves the block, before a catch block runs (#5855);
+                    // the scope is closed already, so the block's own exception path, which closes it, is not used
+                    if (lvars) {
+                        QoreIRBasicBlock* outer_target = exception_stack.back();
+                        QoreIRBasicBlock* raise_block = createBlock("block.handlers.raise.lvars");
+                        if (!raise_block) {
+                            error = "IR builder failed to create block handler exception cleanup block";
+                            return false;
+                        }
+                        se_inst->exception_target = raise_block;
+                        QoreIRBasicBlock* cont_block = builder.getBlock();
+                        builder.getFunction()->moveBlockToEnd(raise_block);
+                        builder.setBlock(raise_block);
+                        for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
+                            auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+                            ui->is_block_exit = true;
+                        }
+                        auto* check_inst = builder.createCheckException(block->loc);
+                        check_inst->exception_target = outer_target;
+                        builder.createBranch(outer_target, block->loc);
+                        builder.setBlock(cont_block);
+                    }
                 }
             }
         }
