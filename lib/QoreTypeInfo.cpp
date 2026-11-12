@@ -1864,19 +1864,20 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         return false;
     }
 
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    // a container of a type parameter, also an or-nothing one (*list<T>, *hash<string, T>, *reference<T>; qore#5849)
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (subtype && qore_type_contains_type_parameter(subtype)) {
         ti->setContainsTypeParameterCache(true);
         return true;
     }
 
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (subtype && qore_type_contains_type_parameter(subtype)) {
         ti->setContainsTypeParameterCache(true);
         return true;
     }
 
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     bool rv = subtype && qore_type_contains_type_parameter(subtype);
     ti->setContainsTypeParameterCache(rv);
     return rv;
@@ -2848,7 +2849,8 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         return changed ? qore_get_union_type(members, uti->isOrNothing()) : ti;
     }
 
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    // a container of a type parameter, also an or-nothing one (qore#5849)
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (subtype) {
         const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
@@ -2858,7 +2860,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         }
     }
 
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (subtype) {
         const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
@@ -2872,7 +2874,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         }
     }
 
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     if (subtype) {
         const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
