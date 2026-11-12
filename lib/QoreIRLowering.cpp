@@ -866,8 +866,10 @@ bool QoreIRLowering::changesThroughLValue(const VarRefNode* var) const {
         return false;
     }
     // the variable of a foreach loop, and a variable assigned with := or @=, can hold a weak reference, which an
-    // operator that changes the variable sees as it is held (see LocalVar::parseWeakAssigned())
-    return foreach_element_locals.count(var->ref.id) || var->ref.id->isWeakAssigned();
+    // operator that changes the variable sees as it is held (see LocalVar::parseWeakAssigned()); a variable that a
+    // weak reference is taken of is changed in place, so that the reference keeps designating its container (see
+    // LocalVar::parseWeakSource())
+    return foreach_element_locals.count(var->ref.id) || var->ref.id->isWeakAssigned() || var->ref.id->isWeakSource();
 }
 
 static bool qoreIrCallHasNoArgs(const FunctionCallBase* call) {
