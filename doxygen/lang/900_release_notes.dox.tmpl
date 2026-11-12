@@ -342,6 +342,12 @@
     a constant must require the module declaring it, unless a module it requires reexports it; see
     @ref user_module_exports.
 
+    @par HttpServer::stop() Lets the Requests in Progress Finish
+    @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and
+    @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" now drain the connections first, waiting at most the
+    new \c drain_timeout option, and @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once as
+    \c stop() did before.
+
     @par HttpServer Labels Responses by Their Data and With Registered Charset Names
     @ref httpserverintro "HttpServer" sends a binary response body without a \c Content-Type as
     \c application/octet-stream without a charset, and labels text with the registered charset name in lower case

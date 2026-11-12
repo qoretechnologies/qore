@@ -1987,6 +1987,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             return -1;
         }
 
+        // a draining server takes no new connection; the client's handshake fails when the listener closes
+        // (qore#5899)
+        if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+            return 0;
+        }
+
         // Enforce maximum session count to prevent memory exhaustion from
         // a flood of Initial packets
         if (sessions_.size() >= MAX_QUIC_SERVER_SESSIONS) {
@@ -2219,6 +2225,47 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
     }
 }
 
+void SocketQuicServerPollOperation::drainSessions() {
+    int fd = sock->priv->socket->getDescriptor();
+    uint8_t close_buf[1280];
+    for (auto& entry : sessions_) {
+        QuicSession& session = *entry.second;
+        if (session.isClosed()) {
+            continue;
+        }
+        // the client opens no new request stream (RFC 9114 section 5.2)
+        {
+            ExceptionSink notice_xsink;
+            session.submitDrainNotice(&notice_xsink);
+            notice_xsink.clear();
+        }
+        if (session.hasActiveApplicationStreams() || session.hasCompletedStreams()
+                || session.hasDispatchedStreams()) {
+            continue;
+        }
+        // the session has no request left: the final GOAWAY, then CONNECTION_CLOSE (RFC 9000 section 10.2), as
+        // abort() does; best effort, as the peer may be gone
+        {
+            ExceptionSink shutdown_xsink;
+            session.submitShutdown(&shutdown_xsink);
+            shutdown_xsink.clear();
+        }
+        if (fd >= 0) {
+            ssize_t close_len = session.writeConnectionClose(close_buf, sizeof(close_buf));
+            if (close_len > 0) {
+                struct sockaddr_storage remote_addr;
+                socklen_t remote_addrlen;
+                session.getRemoteAddrCopy(remote_addr, remote_addrlen);
+                (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
+                    reinterpret_cast<const struct sockaddr*>(&remote_addr), remote_addrlen);
+            }
+        }
+        session.markClosed();
+    }
+    // the closed sessions are reaped and their close reported
+    cleanupClosedSessions();
+}
+
 void SocketQuicServerPollOperation::collectResponseSendResults(int64_t session_id, QuicSession& session) {
     for (auto& r : session.takeResponseSendResults()) {
         lifecycle_send_results_.push_back({session_id, r.first, r.second});
@@ -2268,6 +2315,13 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 }
 
                 if (sessions_.empty()) {
+                    // a draining server with no session left is done (qore#5899)
+                    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
                     // Didn't get a valid Initial packet yet
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
@@ -2316,6 +2370,18 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 // on a multiplexed connection.  Done before the early-return
                 // completed-stream checks so it runs on every READING poll.
                 collectSessionLifecycleEvents();
+
+                // a draining server closes each session that has no request left, and is done when none is left
+                // (qore#5899)
+                if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                    drainSessions();
+                    if (sessions_.empty()) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+                }
 
                 // Headers-only mode: check for streams with HEADERS complete
                 // (either from this drain or a previous cycle)

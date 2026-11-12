@@ -177,6 +177,10 @@ public class HttpAsyncSocketIoController {
         #! Counts the HTTP/1.1 requests dispatched to a handler; such a connection has no entry until its result
         Counter dispatch_count();
 
+        #! The drain tokens of the HTTP/3 listeners: listener hash -> token, released when the listener's operation
+        #! ends after its last session has been drained
+        hash<string, HttpDrainToken> h3_drain_tokens = {};
+
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
 
@@ -385,6 +389,7 @@ public class HttpAsyncSocketIoController {
         list<Http2PollOperation> h2ops = ();
         list<Socket> idle_socks = ();
         list<Socket> fused_socks = ();
+        list<Socket> h3_socks = ();
         {
             AutoWriteLock al(m);
             if (draining || stopping) {
@@ -394,6 +399,10 @@ public class HttpAsyncSocketIoController {
             foreach hash<auto> i in (listeners.pairIterator()) {
                 if (i.value.http_version != HttpVersionMode::H3) {
                     push accept_owners, i.key;
+                } else {
+                    # the listener's operation drains its sessions and ends when none is left
+                    h3_drain_tokens{i.key} = new HttpDrainToken(drain_conns);
+                    push h3_socks, i.value.listener;
                 }
             }
             foreach string uh in (keys connections) {
@@ -421,8 +430,9 @@ public class HttpAsyncSocketIoController {
                 }
             }
         }
-        log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle",
-            drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size());
+        log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle, %d HTTP/3 "
+            "listener(s)", drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size(),
+            h3_socks.size());
         # stop accepting: the accept operations of the TCP listeners are canceled, and none is submitted again
         foreach string owner in (accept_owners) {
             try {
@@ -445,6 +455,12 @@ public class HttpAsyncSocketIoController {
             }
         }
         foreach Socket sock in (fused_socks) {
+            wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
+        }
+        # HTTP/3: each session is sent a GOAWAY notice and is closed when its requests end; the operation is woken to
+        # start at once
+        foreach Socket sock in (h3_socks) {
+            sock.drainHttpConnection();
             wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
         }
         foreach Socket sock in (idle_socks) {
@@ -488,6 +504,23 @@ public class HttpAsyncSocketIoController {
         return !drain_conns.waitForZero(remaining_ms);
     }
 
+    #! Ends the drain of an HTTP/3 listener whose operation completed while draining
+    /** @return @ref True if the server drains, in which case the listener's operation is not submitted again
+    */
+    private bool endH3Drain(string owner) {
+        if (!draining) {
+            return False;
+        }
+        *HttpDrainToken token;
+        {
+            AutoWriteLock al(m);
+            token = remove h3_drain_tokens{owner};
+        }
+        # the token is released here, outside the lock: its destructor decrements the drain's Counter
+        delete token;
+        return True;
+    }
+
     #! Returns @ref True if a drain was started (see startDrain())
     /** @since HttpServerAsyncIo 1.0
     */
@@ -523,6 +556,7 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             stopping = False;
             draining = False;
+            h3_drain_tokens = {};
         } catch (hash<ExceptionInfo> ex) {
             logShutdownException("resetting shutdown flag", ex);
         }
@@ -1951,6 +1985,10 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
             }
+            # a draining listener's operation ends when its sessions are drained (qore#5899)
+            if (endH3Drain(owner)) {
+                return;
+            }
             submitQuicAcceptOp(listener, target, owner);
             return;
         }
@@ -1964,6 +2002,10 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
             }
+            # a draining listener's operation ends when its sessions are drained (qore#5899)
+            if (endH3Drain(owner)) {
+                return;
+            }
             submitQuicAcceptOp(listener, target, owner);
             return;
         }
@@ -1975,6 +2017,10 @@ public class HttpAsyncSocketIoController {
                 if (stopping || !listeners{owner}) {
                     return;
                 }
+            }
+            # a draining listener's operation ends when its sessions are drained (qore#5899)
+            if (endH3Drain(owner)) {
+                return;
             }
             submitQuicAcceptOp(listener, target, owner);
             return;
@@ -3292,6 +3338,9 @@ public class HttpAsyncSocketIoController {
                         AutoWriteLock al(m);
                         remove connections{uh};
                     }
+                    # the operation of a draining listener ends when its sessions are drained (qore#5899); for
+                    # HTTP/3, cinfo.sock is the listener's UDP socket
+                    endH3Drain(cinfo.sock.uniqueHash());
                 }
                 break;
             }

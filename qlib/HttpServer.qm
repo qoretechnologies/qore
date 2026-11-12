@@ -343,6 +343,11 @@ log("started listener on %s", lh.desc);
       handler that never returns; the no-argument call is unchanged
     - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
       can report what is still in flight after a bounded wait times out
+    - @ref HttpServer::HttpServer::stop() "stop()" lets the requests in progress finish before it closes the
+      connections (HTTP/2 and HTTP/3 \c GOAWAY, HTTP/1.1 \c Connection: \c close), waiting at most the new
+      \c drain_timeout option (the \c quic_drain_timeout option is a deprecated alias);
+      @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" does the same in the background, and the new
+      @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once, as \c stop() did before
     - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
       connection option, or to a request with the \c close option (RFC 9112 section 9.3): a handler can close a
       connection, but a handler response can no longer keep open a connection that the request requires to close

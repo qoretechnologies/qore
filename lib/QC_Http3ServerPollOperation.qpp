@@ -334,6 +334,12 @@ QoreHashNode* Http3ServerPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return poll_info;
     }
 
+    // the server drained all the sessions of the listener: the operation ends (qore#5899)
+    if (read_op->isDrained()) {
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        return nullptr;
+    }
+
     // continuePoll() returned nullptr but no output available
     ++empty_read_count;
     if (empty_read_count > MAX_EMPTY_READS) {

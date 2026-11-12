@@ -2341,6 +2341,20 @@ private:
     //! Clean up closed sessions (called periodically, not every poll cycle)
     DLLLOCAL void cleanupClosedSessions();
 
+    //! Drains the sessions of a server that stops (qore#5899; called on the I/O thread with the socket lock held)
+    /** Sends each session the GOAWAY notice once, and closes (final GOAWAY, then CONNECTION_CLOSE) each session that
+        has no request left; the operation ends (isDrained()) when no session is left
+    */
+    DLLLOCAL void drainSessions();
+
+public:
+    //! Returns true if the operation ended because the server drained all its sessions
+    DLLLOCAL bool isDrained() const {
+        return qcs_state == QCS::CLOSED;
+    }
+
+private:
+
     //! Accumulate peer-reset and session-close events into the lifecycle buffers
     /** Iterates all sessions on the I/O thread (socket lock held), draining each
         session's one-shot peer-reset reports and detecting newly-closed sessions.

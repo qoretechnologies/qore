@@ -1223,6 +1223,17 @@ public:
     */
     DLLLOCAL ssize_t writeConnectionClose(uint8_t* buf, size_t buflen);
 
+    //! Submits the GOAWAY notice of a server drain, once per session (qore#5899)
+    /** The client opens no new request stream; the session is closed when the streams that it has end (see
+        SocketQuicServerPollOperation::drainSessions())
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int submitDrainNotice(ExceptionSink* xsink);
+
+    //! Returns true if any application-visible request or response stream is active
+    DLLLOCAL bool hasActiveApplicationStreams() const;
+
     //! Clear the stored qore_socket_private pointer
     /** Called after session creation to avoid dangling pointer,
         since sock_ is only needed during initialization for TLS context.
@@ -1833,6 +1844,8 @@ private:
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
+    //! true once submitDrainNotice() submitted the notice; protected by mtx_
+    bool drain_notice_sent_ = false;
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> closed_{false};                //!< true when session is being torn down (abort); wakes blocked handlers
     //! True when ngtcp2 reported NGTCP2_ERR_IDLE_CLOSE from handleExpiryLocked.
