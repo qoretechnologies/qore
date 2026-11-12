@@ -4249,6 +4249,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 // landing pad.
                 if (!exception_stack.empty()) {
                     se_inst->exception_target = exception_stack.back();
+                    // the locals of the block are released before the exception reaches the enclosing target, as
+                    // the AST interpreter releases them when it leaves the block, before a catch block runs (#5855):
+                    // the exception goes to the continuation of the block's own exception path, which releases them
+                    // after its ScopeExit, as the scope is closed already; a block with locals inside an exception
+                    // region has that path (see lvar_exception_cleanup_block above)
+                    if (lvars) {
+                        assert(lvar_exception_cleanup_continue_block);
+                        if (lvar_exception_cleanup_continue_block) {
+                            se_inst->exception_target = lvar_exception_cleanup_continue_block;
+                        }
+                    }
                 }
             }
         }

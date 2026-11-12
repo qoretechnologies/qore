@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the exception paths of blocks with handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class BlockLocalsBeforeCatchTest
+
+#! The locals of a block whose handlers raise an exception on its normal exit are released before a catch block (#5855)
+/** A block with both on_error and on_exit handlers runs them at its normal exit through a runtime ScopeExit; when they
+    raised an exception, IR, JIT and AOT code went to the enclosing exception target directly, and the block's locals
+    were released only when the frame ended, after the catch block ran.  The AST interpreter releases them when it
+    leaves the block.  BlockLocalsBeforeCatch.q gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
+*/
+class BlockLocalsBeforeCatchTest inherits QUnit::Test {
+    public {
+        #! the output of BlockLocalsBeforeCatch.q with the AST interpreter
+        const Expected = "dtor v1
+caught v1
+end v1
+dtor v2
+caught v2
+end v2
+dtor v3
+caught v3
+end v3
+dtor v4
+caught v4
+end v4
+dtor v5-inner
+dtor v5-outer
+caught v5
+end v5
+dtor v6
+caught v6
+end v6
+dtor v7
+caught v7
+end v7
+v8 on_error
+dtor v8
+dtor-raise v8
+caught v8 V8-EXIT next=\"DTOR-v8\"
+end v8
+v9 on_error 0
+caught v9 0
+v9 on_error 1
+caught v9 1
+v9 on_error 2
+caught v9 2
+v9 closure: 0 v9-0
+v9 closure: 10 v9-1
+v9 closure: 20 v9-2
+end v9
+dtor v9-0
+dtor v9-1
+dtor v9-2
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("BlockLocalsBeforeCatchTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/BlockLocalsBeforeCatch.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": block locals before the catch block", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: block locals before the catch block", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-block-locals-before-catch-");
+        string exe = tmp.path + DirSep + "block-locals-before-catch";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}
