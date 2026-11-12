@@ -1661,6 +1661,13 @@
     - a @ref closure "closure" whose parameter's default value used a local variable of the code that created it
       (for example in a closure as the default value) crashed when it was called after that variable's scope was left;
       the closure now captures the variables that its default values use
+    - the @ref logical_less_than_operator "<", @ref logical_less_than_or_equals_operator "<=",
+      @ref logical_greater_than_operator ">" and @ref logical_greater_than_or_equals_operator ">=" operators compared a
+      \c float with an or-nothing \c number (\c *number, \c *softnumber) as floats, losing the precision of the number
+      (issue #5875)
+    - the @ref logical_equality_operator "==" and @ref logical_inequality_operator "!=" operators compared an \c int or a
+      \c bool with an or-nothing \c float or \c int (ex: \c *float) as an \c int or \c bool (ex: \c 2 \c == \c 2.5
+      was @ref True; issue #5875)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
