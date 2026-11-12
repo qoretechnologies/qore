@@ -7962,6 +7962,35 @@ public class WebSocketClientHcioPollOp {
         FrameStateAction::complete / executeError.
         @return True if any frames were processed
     */
+    #! Closes the connection when its stream ended without a close frame, or failed
+    /** After an error that the client closed the connection for, the server answered the client's close frame (see
+        startErrorClose()), and the close is reported with the error's code; a connection that was closed already keeps
+        its close code and reason (issue #5880).  A stream that failed (\a stream_error) is reported as an error with
+        the failure as the reason, unless the client had started an error close (issue #5862).
+
+        @param stream_error the error of the stream, if it failed
+    */
+    private closeOnStreamEnd(*string stream_error) {
+        int close_c = WSCC_AbnormalClosure;
+        string close_r = stream_error ?? "stream ended";
+        bool error = exists stream_error;
+        string cause;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (error_close) {
+                close_c = error_close_code;
+                close_r = error_close_reason;
+                error = True;
+            }
+            # the cause of a close that the client started (for example "idle-timeout") is reported also when the
+            # server ends the stream instead of answering the close frame
+            if (ws_close_sent) {
+                cause = pending_close_cause;
+            }
+        }
+        markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
+    }
+
     private bool drainMsgQueue() {
         bool processed = False;
         int max_entries = 1000;
@@ -7973,27 +8002,8 @@ public class WebSocketClientHcioPollOp {
             auto entry = wrap.value;
             if (!exists entry) {
                 # NOTHING sentinel from FrameStateAction::complete/executeError: the stream ended without a close
-                # frame; after an error that the client closed the connection for, the server answered the client's
-                # close frame (see startErrorClose()), and the close is reported with the error's code; a connection
-                # that was closed already keeps its close code and reason (issue #5880)
-                int close_c = WSCC_AbnormalClosure;
-                string close_r = "stream ended";
-                bool error;
-                string cause;
-                {
-                    AutoLock al(heartbeat_mutex);
-                    if (error_close) {
-                        close_c = error_close_code;
-                        close_r = error_close_reason;
-                        error = True;
-                    }
-                    # the cause of a close that the client started (for example "idle-timeout") is reported also when
-                    # the server ends the stream instead of answering the close frame
-                    if (ws_close_sent) {
-                        cause = pending_close_cause;
-                    }
-                }
-                markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
+                # frame
+                closeOnStreamEnd();
                 processed = True;
                 break;
             }
@@ -8057,6 +8067,14 @@ public class WebSocketClientHcioPollOp {
 
         if (t == "error") {
             startErrorClose(h.code ?? WSCC_ProtocolError, h.reason ?? "");
+            return;
+        }
+
+        # a transport error of the stream (an entry without a type: the stream action failed, for example when the
+        # server reset the stream): the connection is lost, and the close reports the error (issue #5862)
+        if (!t.val() && h.err) {
+            logError("the stream failed: %s: %s", h.err, h.desc ?? "");
+            closeOnStreamEnd(sprintf("%s: %s", h.err, h.desc ?? ""));
             return;
         }
 
