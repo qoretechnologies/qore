@@ -153,15 +153,20 @@ public class Http2ClientConnection inherits HttpClientConnection {
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be string or binary)
         @param end_stream if True, signals end of stream
+        @param drain_timeout the time to wait for the stream's send buffer to drain when it is full (the peer has not
+        granted enough flow-control credit for the data buffered): the data is sent once there is room; with a
+        timeout of zero or less, a full buffer raises \c HTTP2-FLOW-CONTROL at once.  A send that raises took none of
+        the data, so it can be made again
 
         @throw HTTP2-ERROR if the stream ID is not found
+        @throw HTTP2-FLOW-CONTROL if the stream's send buffer did not drain within \a drain_timeout; nothing was sent
         @throw HTTP2-STATE-ERROR if the connection is neither ready nor draining (a draining connection completes the
         streams in progress)
         @throw HTTP2-STREAM-CLOSED if the stream closed without an error and \a data is not empty or
         \a end_stream is not set; an empty send with \a end_stream set on such a stream is a no-op
         @throw HTTP2-STREAM-RESET if the server reset the stream with an error
     */
-    sendStreamData(int stream_id, data data, bool end_stream = False) {
+    sendStreamData(int stream_id, data data, bool end_stream = False, timeout drain_timeout = 0) {
         # a draining connection completes the streams in progress
         if (!self.canSendOnStreams()) {
             throw "HTTP2-STATE-ERROR",
@@ -175,7 +180,51 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
-        poll_op.sendStreamData(stream_id, data, end_stream);
+        # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, as on HTTP/3;
+        # the wait is woken by the I/O thread when it hands the stream's data to the transport, and when the stream
+        # closes or is reset, so a cancel or a reset ends it at once (issue #5879)
+        *date deadline;
+        while (True) {
+            try {
+                poll_op.sendStreamData(stream_id, data, end_stream);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "HTTP2-FLOW-CONTROL" || drain_timeout <= 0) {
+                    rethrow;
+                }
+                if (!deadline) {
+                    deadline = now_us() + milliseconds(drain_timeout);
+                }
+                int remaining = (deadline - now_us()).durationMilliseconds();
+                if (remaining <= 0) {
+                    throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
+                        "data was not sent", stream_id, drain_timeout);
+                }
+                # the buffered data is sent by the I/O thread
+                if (ctl) {
+                    ctl.wakeSocket(sock: getSocket());
+                }
+                # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send
+                # is made again in each case, and reports a closed or reset stream
+                try {
+                    getSocket().waitForHttp2StreamDrain(stream_id, remaining);
+                } catch (hash<ExceptionInfo> wait_ex) {
+                    # the wait failed (for example, the session is gone, or the wait was made on the I/O thread):
+                    # the send is made once more, so that it reports the stream's state, or the data is sent; if
+                    # the buffer is still full, HTTP2-FLOW-CONTROL is raised with the reason the wait failed
+                    try {
+                        poll_op.sendStreamData(stream_id, data, end_stream);
+                        break;
+                    } catch (hash<ExceptionInfo> ex2) {
+                        if (ex2.err == "HTTP2-FLOW-CONTROL") {
+                            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: the send buffer is full and cannot be "
+                                "waited for (%s: %s); the data was not sent", stream_id, wait_ex.err, wait_ex.desc);
+                        }
+                        rethrow;
+                    }
+                }
+            }
+        }
 
         if (ctl) {
             ctl.wakeSocket(sock: getSocket());

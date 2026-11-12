@@ -106,13 +106,8 @@ class WebSocketMessageTooBigTest inherits QUnit::Test {
         foreach string ver in (("1.1", "2.0", "3.0")) {
             addTestCase(sprintf("HTTP/%s: the client sends a message that is too big", ver), \testTooBig(),
                 (ver, "client"));
-            # the HTTP/2 client can raise HTTP2-FLOW-CONTROL when it sends several large messages or fragments in a
-            # row before the stream's send buffer drains (the HTTP/3 client waits for it), so this case does not run
-            # on HTTP/2
-            if (ver != "2.0") {
-                addTestCase(sprintf("HTTP/%s: the client sends a fragmented message that is too big", ver),
-                    \testTooBig(), (ver, "client-fragments"));
-            }
+            addTestCase(sprintf("HTTP/%s: the client sends a fragmented message that is too big", ver),
+                \testTooBig(), (ver, "client-fragments"));
             addTestCase(sprintf("HTTP/%s: the server sends a message that is too big", ver), \testTooBig(),
                 (ver, "big"));
             addTestCase(sprintf("HTTP/%s: the server sends a fragmented message that is too big", ver),

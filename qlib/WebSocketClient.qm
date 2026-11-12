@@ -2368,6 +2368,9 @@ ws.connect();
 
         @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the I/O timeout; see
         @ref websocketclient_lifecycle
+
+        @note over HTTP/2 and HTTP/3, the close frame waits for flow-control credit as a message that is sent does,
+        before the close handshake starts
     */
     disconnect(int cmd = WSCC_GoingAway) {
         # an explicit disconnect stops automatic reconnects once it holds the action; see disconnectIntern()
@@ -3016,6 +3019,11 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
+        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(string str) {
         logDebug("sending string: %y (open: %y)", LoggerUtil::getArgSummary(str), isOpen());
@@ -3039,6 +3047,11 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
+        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(binary bin) {
         logDebug("sending binary: %y (open: %y)", LoggerUtil::getArgSummary(bin), isOpen());
@@ -3059,6 +3072,11 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it: over HTTP/2 for at most the \c timeout option, after which
+        \c HTTP2-FLOW-CONTROL is raised; over HTTP/3 for a limited number of retries, after which
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(data msg, int op, bool fin) {
         logDebug("sending message: %y op: %d/%y fin: %y (open: %y)", LoggerUtil::getArgSummary(msg), op,
