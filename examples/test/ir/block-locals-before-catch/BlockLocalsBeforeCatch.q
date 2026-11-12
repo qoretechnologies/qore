@@ -7,6 +7,12 @@ class Rec {
     private { string n; }
     constructor(string n) { self.n = n; }
     destructor() { printf("dtor %s\n", n); }
+    string name() { return n; }
+}
+class Bad {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor-raise %s\n", n); throw "DTOR-" + n; }
 }
 # v1: on_error + on_exit (runtime handlers), in a try
 sub v1(int x) {
@@ -103,7 +109,42 @@ sub v7(int x) {
     }
     printf("end v7\n");
 }
+# v8: a destructor that raises an exception when the locals are released
+sub v8() {
+    try {
+        if (True) {
+            on_error { printf("v8 on_error\n"); }
+            on_exit { throw "V8-EXIT"; }
+            Bad b("v8");
+            Rec t("v8");
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught v8 %s next=%y\n", ex.err, ex.next.err);
+    }
+    printf("end v8\n");
+}
+# v9: a loop whose blocks' locals are captured by closures that are called after the loop
+sub v9() {
+    list<code> cl = ();
+    for (int i = 0; i < 3; ++i) {
+        try {
+            {
+                on_error { printf("v9 on_error %d\n", i); }
+                on_exit { throw "V9"; }
+                int x = i * 10;
+                Rec r("v9-" + i);
+                cl += string sub () { return sprintf("%d %s", x, r.name()); };
+            }
+        } catch () {
+            printf("caught v9 %d\n", i);
+        }
+    }
+    foreach code c in (cl) {
+        printf("v9 closure: %s\n", c());
+    }
+    printf("end v9\n");
+}
 v1(1); v2(1); v3(1);
 try { v4(1); } catch () { printf("caught v4\n"); }
 printf("end v4\n");
-v5(1); v6(1); v7(1);
+v5(1); v6(1); v7(1); v8(); v9();

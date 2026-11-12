@@ -46,6 +46,24 @@ end v6
 dtor v7
 caught v7
 end v7
+v8 on_error
+dtor v8
+dtor-raise v8
+caught v8 V8-EXIT next=\"DTOR-v8\"
+end v8
+v9 on_error 0
+caught v9 0
+v9 on_error 1
+caught v9 1
+v9 on_error 2
+caught v9 2
+v9 closure: 0 v9-0
+v9 closure: 10 v9-1
+v9 closure: 20 v9-2
+end v9
+dtor v9-0
+dtor v9-1
+dtor v9-2
 ";
 
         #! the optimization levels of the AOT compiles
