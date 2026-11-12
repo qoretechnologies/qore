@@ -1065,18 +1065,14 @@ static constexpr const char* aot_ref_type_arg_marker = "\ntypeargs:";
 
 // the name of the function of a call reference without the explicit type arguments
 static std::string getAOTFunctionRefBaseName(const LocalFunctionCallReferenceNode* fcr) {
-    const QoreFunction* f = fcr->getFunction();
-    // the bare name of a function of the root namespace would find the builtin of that name when the reference is
-    // loaded
+    // a function is named by the path of its namespace: when the reference is loaded, the bare name of a function of
+    // the root namespace would find the builtin of that name, and that of a function of another namespace the
+    // function of that name in the root namespace (\Other::step() would call ::step())
     const FunctionEntry* fe = fcr->getFunctionEntry();
     if (fe && fe->getNamespace()) {
-        std::string path;
-        fe->getNamespace()->getPath(path);
-        if (path.empty()) {
-            return qore_aot_get_function_identity_name(fe);
-        }
+        return qore_aot_get_function_identity_name(fe);
     }
-    return f->getName();
+    return fcr->getFunction()->getName();
 }
 
 std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {

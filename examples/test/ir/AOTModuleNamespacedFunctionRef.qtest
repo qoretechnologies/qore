@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleNamespacedFunctionRefTest
+
+#! Regression test: call references to functions of namespaces in the code of a qcc-compiled module
+/** AOT code named the function of a call reference to a function of a namespace other than the root namespace by
+    its bare name, and a reference made without a namespace path had no namespace at all, so that the loader resolved
+    them to the functions of the same names in the root namespace of the Program that loaded the module.  The module
+    here makes unqualified references to functions of its namespace (<tt>\\step()</tt>, <tt>\\Sub::step()</tt>),
+    keeps them in constants and member initializers, and references a function of its root namespace that it does
+    not export (<tt>\\helper()</tt>, <tt>\\::helper()</tt>) and functions of the same name in its namespace and its
+    root namespace (<tt>\\twin()</tt>, <tt>\\::twin()</tt>), and calls them itself and returns them to the script that
+    loads it, which defines functions with the same names and calls them.  The module is compiled with qcc at -O0 and at -O3, and the script runs with each image in every
+    execution mode; every result must be that of the module loaded from source with the AST interpreter.  See
+    AOTNamespacedFunctionRef.qtest for references in a qcc executable.
+*/
+class AOTModuleNamespacedFunctionRefTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AotNsRefMod";
+
+        #! the module
+        const ModuleSource = '%modern
+module AotNsRefMod {
+    version = "1.0";
+    desc = "call references to functions of namespaces in module code";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+# a function of the root namespace of the module, not exported
+int sub helper(int x) { return x + 1000; }
+# an exported function of the root namespace of the module with the name of a function of its namespace
+public int sub twin(int x) { return x - 100; }
+public namespace AotNsRefMod {
+    # a function of the namespace of the module, not exported
+    int sub step(int x) { return x * 10; }
+    namespace Sub {
+        int sub step(int x) { return x * 100; }
+    }
+    int sub twin(int x) { return x * 4; }
+    const StepRef = \step();
+    class Holder {
+        public {
+            code ref = \Sub::step();
+        }
+    }
+    # references that the script calls
+    public const SubRef = \Sub::step();
+    public class PubHolder {
+        public {
+            code ref = \step();
+        }
+    }
+    public code sub localRef() { return \step(); }
+    public code sub subRef() { return \Sub::step(); }
+    public code sub helperRef() { return \helper(); }
+    public code sub rootHelperRef() { return \::helper(); }
+    public code sub twinRef() { return \twin(); }
+    public code sub rootTwinRef() { return \::twin(); }
+    # references that the module calls itself
+    public hash<string, int> sub nsref_run(int x) {
+        return {
+            "local": (\step())(x),
+            "sub": (\Sub::step())(x),
+            "const": StepRef(x),
+            "member": (new Holder()).ref(x),
+            "helper": (\helper())(x),
+            "root helper": (\::helper())(x),
+            "twin": (\twin())(x),
+        };
+    }
+}
+';
+
+        #! the script that loads the module; it defines functions with the names of those of the module
+        const Script = '%modern
+%requires AotNsRefMod
+int sub step(int x) { return x - 100; }
+int sub helper(int x) { return x + 5; }
+namespace Sub {
+    int sub step(int x) { return x - 200; }
+}
+hash<string, int> h = nsref_run(2);
+map printf("%s: %d\n", $1.key, $1.value), h.pairIterator();
+printf("script local: %d\n", localRef()(2));
+printf("script sub: %d\n", subRef()(2));
+printf("script helper: %d\n", helperRef()(2));
+printf("script root helper: %d\n", rootHelperRef()(2));
+printf("script const: %d\n", AotNsRefMod::SubRef(2));
+printf("script member: %d\n", (new PubHolder()).ref(2));
+printf("script twin: %d\n", twinRef()(2));
+printf("script root twin: %d\n", rootTwinRef()(2));
+';
+
+        #! the results of the module loaded from source with the AST interpreter
+        const Expected = (
+            "local: 20",
+            "sub: 200",
+            "const: 20",
+            "member: 200",
+            "helper: 1002",
+            "root helper: 1002",
+            "twin: 8",
+            "script local: 20",
+            "script sub: 200",
+            "script helper: 1002",
+            "script root helper: 1002",
+            "script const: 200",
+            "script member: 20",
+            "script twin: 8",
+            "script root twin: -98",
+        );
+
+        #! the execution modes the script runs in
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModuleNamespacedFunctionRef", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("the module loaded from source gives the expected results", \testSource());
+        addTestCase("the module compiled with qcc gives the results of the module loaded from source", \testAot());
+        set_return_value(main());
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    private string moduleDirs(string dir) {
+        return ENV.QORE_MODULE_DIR ? dir + ":" + ENV.QORE_MODULE_DIR : dir;
+    }
+
+    #! runs the script of the directory with the module of the directory in an execution mode
+    private string run(string dir, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s -b --enable-debug --exec-mode=%s "
+            "%s 2>&1", libqore_dir, libqore_dir, libqore_dir, moduleDirs(dir), qore_bin, mode,
+            dir + DirSep + "probe.qr"));
+    }
+
+    private static string expected() {
+        return (map $1 + "\n", Expected).join("");
+    }
+
+    testSource() {
+        TmpDir tmp("qore-aot-module-nsref-src-");
+        write(tmp.path + DirSep + ModuleName + ".qm", ModuleSource);
+        write(tmp.path + DirSep + "probe.qr", Script);
+        assertEq(expected(), run(tmp.path, "ast"));
+    }
+
+    testAot() {
+        TmpDir tmp("qore-aot-module-nsref-aot-");
+        hash<string, string> actual();
+        hash<string, string> wanted();
+        foreach string opt in ("-O0", "-O3") {
+            string dir = tmp.path + DirSep + opt.substr(1);
+            mkdir(dir);
+            string src = dir + DirSep + ModuleName + ".qm";
+            string qmod = dir + DirSep + ModuleName + ".qmod";
+            write(src, ModuleSource);
+            write(dir + DirSep + "probe.qr", Script);
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+                "%s --module %s -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, moduleDirs(dir), qcc_bin, opt,
+                qmod, src));
+            assertTrue(is_file(qmod), "qcc " + opt + " compiled the module: " + out);
+            # only the AOT image can satisfy the module requirement
+            unlink(src);
+            foreach string mode in (Modes) {
+                string key = opt + " " + mode;
+                actual{key} = run(dir, mode);
+                wanted{key} = expected();
+            }
+        }
+        assertEq(wanted, actual);
+    }
+}
