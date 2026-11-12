@@ -1772,8 +1772,9 @@
       yet, of a class that declares no members, crashed the process
     - resolving a long chain of references, as made by a recursion that passes on a reference, could overflow the
       stack and crash the process instead of raising \c STACK-LIMIT-EXCEEDED, seen in JIT and AOT code on Linux
-    - each level of a recursion of interpreted method calls uses less stack, so that a deeper recursion fits in a
-      thread's stack before \c STACK-LIMIT-EXCEEDED is raised, as on Alpine Linux, whose threads have 8 MB stacks
+    - each level of a recursion of interpreted function, method and closure calls uses less stack (on Alpine Linux,
+      a third less with the IR interpreter), so that a deeper recursion fits in a thread's stack before
+      \c STACK-LIMIT-EXCEEDED is raised, as on Alpine Linux, whose threads have 8 MB stacks
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date

@@ -68,6 +68,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cassert>
 #include <cctype>
 #include <chrono>
@@ -1113,12 +1114,24 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     }
 }
 
-void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
-    if (qc) {
-        callName = qc->name.c_str();
-        callName += "::";
+const std::string& CodeEvaluationCallName::build(const qore_class_private* qc, const QoreFunction* func) const {
+    // the name of a frame of a call that did not start (see CodeEvaluationHelper::setCallName())
+    static const std::string no_name;
+    if (!func) {
+        return no_name;
     }
-    callName += func->getName();
+    std::unique_ptr<std::string> n(new std::string);
+    if (qc) {
+        *n = qc->name.c_str();
+        *n += "::";
+    }
+    *n += func->getName();
+    std::string* expected = nullptr;
+    if (name.compare_exchange_strong(expected, n.get(), std::memory_order_acq_rel, std::memory_order_acquire)) {
+        return *n.release();
+    }
+    // another thread installed the same name first
+    return *expected;
 }
 
 namespace {
@@ -1427,7 +1440,7 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation,
             explicit_type_param_instantiation)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
-            callName.c_str(), sig ? sig->getSignatureText() : "");
+            getCallName().c_str(), sig ? sig->getSignatureText() : "");
         return -1;
     }
 
@@ -7484,9 +7497,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                         val = statements->exec(xsink);
                     }
                 } else {
-                    QoreValue result;
-                    std::memcpy(&result, &result_bits, sizeof(result));
-                    val = result;
+                    // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
+                    val = std::bit_cast<QoreValue>(result_bits);
                 }
 
                 // Restore thread-local parse options
@@ -7902,21 +7914,24 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         const qore_class_private* qc, bool ref_obj) const {
     QORE_TRACE("UserVariantBase::eval()");
 
-    assert(!self || (ceh ? ceh->getClass() : qc));
+    if (!ceh) {
+        return evalWithoutHelper(name, self, xsink, qc, ref_obj);
+    }
+    assert(!self || ceh->getClass());
 
     // the effective options of the caller, before the call switched to the Program the variant runs in
-    QoreParseOptions caller_po = ceh ? ceh->getCallerRuntimeParseOptions()
-        : runtime_get_effective_program_parse_options();
+    const QoreParseOptions& caller_po = ceh->getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
-    // a call that entered a module's Program from another Program has the override of the crossing already
-    RuntimeParseOptionsOverrideHelper po_override;
-    if (!ceh || !ceh->hasModuleCallOverride()) {
-        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    // a call that entered a module's Program from another Program has the override of the crossing already;
+    // otherwise the override of the variant's code is set in the call's helper, and restored when this returns
+    CodeEvaluationPoOverrideBorrow po_override(*ceh);
+    if (po_override.get()) {
+        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     // This is a normal function/method call, not a closure invocation.  If the
@@ -7924,7 +7939,29 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     // callee's own closure-use locals when evalIntern() dispatches to AOT/JIT code.
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
 
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : ceh->getClass(), ref_obj);
+    return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
+}
+
+QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self, ExceptionSink* xsink,
+        const qore_class_private* qc, bool ref_obj) const {
+    assert(!self || qc);
+
+    // the effective options of the caller, before the call switched to the Program the variant runs in
+    QoreParseOptions caller_po = runtime_get_effective_program_parse_options();
+    // the Program making the call, before the call switches to the Program the variant runs in
+    const QoreProgram* caller_pgm = getProgram();
+    UserVariantExecHelper uveh(this, nullptr, xsink);
+    if (!uveh) {
+        return QoreValue();
+    }
+    RuntimeParseOptionsOverrideHelper po_override;
+    qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+
+    // see eval()
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc, ref_obj);
     return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
 }
 
@@ -7939,17 +7976,18 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
         return QoreValue();
     }
 
-    QoreParseOptions caller_po = ceh.getCallerRuntimeParseOptions();
+    const QoreParseOptions& caller_po = ceh.getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
-    // a call that entered a module's Program from another Program has the override of the crossing already
-    RuntimeParseOptionsOverrideHelper po_override;
-    if (!ceh.hasModuleCallOverride()) {
-        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    // a call that entered a module's Program from another Program has the override of the crossing already;
+    // otherwise the override of the closure's code is set in the call's helper (see UserVariantBase::eval())
+    CodeEvaluationPoOverrideBorrow po_override(ceh);
+    if (po_override.get()) {
+        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);

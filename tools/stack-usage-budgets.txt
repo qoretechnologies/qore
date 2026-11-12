@@ -39,19 +39,20 @@
 # a method call evaluated as an expression (IR and AST)
 96 AbstractQoreNode::eval
 192 AbstractMethodCallNode::exec
-928 NormalMethodFunction::evalMethodTmpArgs
-848 StaticMethodFunction::evalMethodTmpArgs
-896 qore_method_private::evalNormalVariant
+832 NormalMethodFunction::evalMethodTmpArgs
+832 StaticMethodFunction::evalMethodTmpArgs
+880 qore_method_private::evalNormalVariant
 96 UserMethodVariant::evalMethod
 
 # the evaluation of a user variant
-576 UserVariantBase::eval
+432 UserVariantBase::eval
+480 UserClosureVariant::evalClosure
 320 UserVariantBase::evalTiered
 160 UserVariantBase::evalIntern
 
 # AST execution: function calls and the statements of a function body
-1104 QoreFunction::evalFunction
-1120 QoreFunction::evalFunctionTmpArgs
+1088 QoreFunction::evalFunction
+1104 QoreFunction::evalFunctionTmpArgs
 64 UserFunctionVariant::evalFunction
 176 FunctionCallNode::evalImpl
 224 StaticMethodCallNode::evalImpl

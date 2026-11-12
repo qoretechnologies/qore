@@ -972,6 +972,15 @@ public:
         return active;
     }
 
+    //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
+    //! without one, so that it can be set again
+    DLLLOCAL void reset() {
+        if (active) {
+            restore();
+            active = false;
+        }
+    }
+
 private:
     //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
     //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant

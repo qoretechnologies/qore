@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class PoOverrideBorrowTest
+
+/*  The runtime parse options override of the code of a user variant is set in the helper of its call (issue #5852).
+
+    A call that did not enter a module's Program has no override of its own, and the evaluation of the variant
+    (UserVariantBase::eval(), UserClosureVariant::evalClosure()) borrows the call's helper for the override of its
+    code; a call that entered a module's Program keeps the override of the crossing.  Whether the call has the
+    override of a crossing must be asked before the helper is borrowed: debug builds assert that it is not asked
+    after.  This test makes every kind of call that borrows the helper or keeps the override of a crossing, in every
+    execution mode: functions, methods, static and synchronized methods, closures, call references, destructors,
+    calls into module code that call back into the caller's code, recursion through module code, and exceptions that
+    leave all of them; in a debug build, a call path that asked after borrowing fails here.
+*/
+
+public class PoOverrideBorrowTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+public class DestroyCount {
+    public {
+        int destroyed;
+    }
+}
+
+public class Tracked {
+    private {
+        DestroyCount counter;
+    }
+
+    constructor(DestroyCount counter) {
+        self.counter = counter;
+    }
+
+    destructor() {
+        # user code run by a destructor, which has no call helper of its own
+        counter.destroyed += plain(1);
+    }
+}
+
+public class Callee {
+    public int method(int n) {
+        return n ? method(n - 1) + 1 : 0;
+    }
+
+    public static int staticMethod(int n) {
+        return n ? Callee::staticMethod(n - 1) + 1 : 0;
+    }
+
+    public synchronized int synchronizedMethod(int n) {
+        return n ? synchronizedMethod(n - 1) + 1 : 0;
+    }
+
+    public int throwing(int n) {
+        if (!n) {
+            throw \"BORROW-TEST\", \"deep\", n;
+        }
+        return throwing(n - 1);
+    }
+}
+
+int sub plain(int n) {
+    return n ? plain(n - 1) + 1 : 0;
+}
+
+# calls of user code from user code
+int sub user_calls() {
+    Callee c();
+    code closure = int sub (int n) { return plain(n) + c.method(n); };
+    code ref = \\c.method();
+    return plain(3) + c.method(3) + Callee::staticMethod(3) + c.synchronizedMethod(3) + closure(3) + ref(3)
+        + call_function(\"plain\", 3);
+}
+
+# calls into module code that call back into user code, and recursion through module code
+int sub module_calls() {
+    Callee c();
+    ModuleCaller mc();
+    code cb = int sub (int n) { return plain(n) + c.method(n); };
+    int rv = call_back(cb, 3) + mc.callBack(cb, 3) + mc.callBackSynchronized(cb, 3);
+    # module code that calls back into user code that calls into module code again
+    rv += call_back(int sub (int n) { return mc.callBack(cb, n) + call_back(\\c.method(), n); }, 2);
+    rv += module_recurse(int sub () { return plain(4); }, 5);
+    return rv;
+}
+
+# destructors that run user code
+int sub destructor_calls() {
+    DestroyCount counter();
+    for (int i = 0; i < 5; ++i) {
+        Tracked t(counter);
+        delete t;
+    }
+    {
+        Tracked t(counter);
+    }
+    return counter.destroyed;
+}
+
+# exceptions that leave user code, module code and callbacks; returns the depth reported by each
+list<int> sub exception_calls() {
+    Callee c();
+    ModuleCaller mc();
+    list<int> rv = ();
+    try {
+        c.throwing(4);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    try {
+        call_back(int sub (int n) { return c.throwing(n); }, 3);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    try {
+        mc.callBackSynchronized(int sub (int n) { return call_back(\\c.throwing(), n); }, 2);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    # the calls work as before after the exceptions
+    rv += user_calls() + module_calls();
+    return rv;
+}
+";
+
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        # plain 3, method 3, static 3, synchronized 3, closure 3 + 3, call ref 3, call_function 3
+        const UserCalls = 24;
+        # 6 * 3 callbacks of (3 + 3), nested (2 + 2) * 2 + 2, recursion 4 + 5
+        const ModuleCalls = 3 * 6 + 2 + 2 + 2 + 4 + 5;
+    }
+
+    constructor() : Test("PoOverrideBorrowTest", "1.0") {
+        addTestCase("calls that borrow the override helper", \testCalls());
+        set_return_value(main());
+    }
+
+    testCalls() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            if ((m.value == EM_JIT || m.value == EM_TIERED) && !inlist("JIT", get_feature_list())) {
+                continue;
+            }
+            Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            pgm.setExecMode(m.value);
+            pgm.loadModule(get_script_dir() + "PoOverrideBorrowHelper.qm");
+            pgm.parse(Code, "po-override-borrow");
+            pgm.run();
+            # each kind of call twice: the second calls use what the first calls compiled or cached
+            for (int i = 0; i < 2; ++i) {
+                string label = sprintf("%s %d", m.key, i);
+                assertEq(UserCalls, pgm.callFunction("user_calls"), label + ": user calls");
+                assertEq(ModuleCalls, pgm.callFunction("module_calls"), label + ": module calls");
+                assertEq(6, pgm.callFunction("destructor_calls"), label + ": destructors");
+                assertEq((0, 0, 0, UserCalls + ModuleCalls), pgm.callFunction("exception_calls"),
+                    label + ": exceptions");
+            }
+        }
+    }
+}

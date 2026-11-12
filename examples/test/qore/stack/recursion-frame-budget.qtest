@@ -125,25 +125,25 @@ int sub run(string f) {
         /** measured with GCC 15.2 on x86_64; see the comment at the top
         */
         const Budgets = {
-            # measured: ast 2783, 2590, 2641; ir 4355, 5489, 4396
+            # measured: ast 2639, 2448, 2496; ir 4355, 5343, 4396
             "glibc release": {
-                "ast": {"function": 2980, "method": 2780, "static method": 2830},
-                "ir": {"function": 4650, "method": 5850, "static method": 4700},
+                "ast": {"function": 2820, "method": 2620, "static method": 2670},
+                "ir": {"function": 4650, "method": 5700, "static method": 4700},
             },
-            # measured: ast 2766, 2702, 2624; ir 4369, 5857, 4369
+            # measured: ast 2639, 2576, 2496; ir 4369, 5729, 4369
             "glibc debug": {
-                "ast": {"function": 2960, "method": 2890, "static method": 2810},
-                "ir": {"function": 4670, "method": 6250, "static method": 4670},
+                "ast": {"function": 2820, "method": 2750, "static method": 2670},
+                "ir": {"function": 4670, "method": 6120, "static method": 4670},
             },
-            # measured: ast 2783, 2592, 2639; ir 4350, 5504, 4401
+            # measured: ast 2639, 2448, 2496; ir 4350, 5343, 4401
             "musl release": {
-                "ast": {"function": 2980, "method": 2780, "static method": 2830},
-                "ir": {"function": 4650, "method": 5850, "static method": 4700},
+                "ast": {"function": 2820, "method": 2620, "static method": 2670},
+                "ir": {"function": 4650, "method": 5700, "static method": 4700},
             },
-            # measured: ast 2766, 2704, 2623; ir 4369, 5857, 4369
+            # measured: ast 2639, 2576, 2496; ir 4364, 5722, 4364
             "musl debug": {
-                "ast": {"function": 2960, "method": 2890, "static method": 2810},
-                "ir": {"function": 4670, "method": 6250, "static method": 4670},
+                "ast": {"function": 2820, "method": 2750, "static method": 2670},
+                "ir": {"function": 4670, "method": 6120, "static method": 4670},
             },
         };
     }
