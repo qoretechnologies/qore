@@ -2000,6 +2000,25 @@ llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
 // pointer value (tag == TAG_POINTER) or an opaque reference (the 0xFFD tag family), which owns its node like a pointer
 // value; a node held through an opaque reference must be referenced and released like any other
 // Uses bit operations to extract tag and check for pointer type
+llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
+    // Extract tag: tag = qv & 0xFFFF000000000000
+    llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
+    // Check if tag == TAG_POINTER (0xFFFA000000000000) or the top 12 bits are the opaque tag family (0xFFD)
+    llvm::Value* is_ptr_tag = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER));
+    llvm::Value* tag12 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52));
+    llvm::Value* is_opaque = builder->CreateICmpEQ(tag12, llvm::ConstantInt::get(i64_type, TAG12_OPAQUE));
+    llvm::Value* is_pointer = builder->CreateOr(is_ptr_tag, is_opaque);
+
+    // Extract pointer: ptr = qv & 0x0000FFFFFFFFFFFF
+    llvm::Value* payload = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+    // Check if pointer is non-null
+    llvm::Value* ptr_not_null = builder->CreateICmpNE(payload, llvm::ConstantInt::get(i64_type, 0));
+
+    // Return (is_pointer && ptr_not_null)
+    return builder->CreateAnd(is_pointer, ptr_not_null);
+}
+
+// documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout,
         llvm::Function* llvm_func) {
     // JIT only: the layout is the running libqore's (issue #5784)
@@ -2010,8 +2029,9 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     llvm::Value* is_node = builder->CreateAnd(
         builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER >> 48)),
         builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "obj.is.node");
-    llvm::Value* is_opaque_object = builder->CreateICmpEQ(tag,
-        llvm::ConstantInt::get(i64_type, TAG16_OPAQUE_OBJECT), "obj.is.opaque");
+    llvm::Value* is_opaque_object = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG16_OPAQUE_OBJECT)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "obj.is.opaque");
     llvm::BasicBlock* node_block = llvm::BasicBlock::Create(ctx, "obj.node", llvm_func);
     llvm::BasicBlock* other_block = llvm::BasicBlock::Create(ctx, "obj.other", llvm_func);
     llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "obj.status", llvm_func);
@@ -2048,24 +2068,6 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     result->addIncoming(builder->getFalse(), other_block);
     result->addIncoming(valid, status_block);
     return result;
-}
-
-llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
-    // Extract tag: tag = qv & 0xFFFF000000000000
-    llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
-    // Check if tag == TAG_POINTER (0xFFFA000000000000) or the top 12 bits are the opaque tag family (0xFFD)
-    llvm::Value* is_ptr_tag = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER));
-    llvm::Value* tag12 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52));
-    llvm::Value* is_opaque = builder->CreateICmpEQ(tag12, llvm::ConstantInt::get(i64_type, TAG12_OPAQUE));
-    llvm::Value* is_pointer = builder->CreateOr(is_ptr_tag, is_opaque);
-
-    // Extract pointer: ptr = qv & 0x0000FFFFFFFFFFFF
-    llvm::Value* payload = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
-    // Check if pointer is non-null
-    llvm::Value* ptr_not_null = builder->CreateICmpNE(payload, llvm::ConstantInt::get(i64_type, 0));
-
-    // Return (is_pointer && ptr_not_null)
-    return builder->CreateAnd(is_pointer, ptr_not_null);
 }
 
 llvm::Value* QoreIRToLLVM::emitIsBoxedInt48(llvm::Value* qv) {
