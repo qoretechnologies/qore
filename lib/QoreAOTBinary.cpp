@@ -4740,6 +4740,32 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
     return false;
 }
 
+//! the variables that the expressions in values read on this thread bind to (see QoreAOTValueLocalsHelper)
+static thread_local LocalVar** aot_value_locals = nullptr;
+static thread_local int aot_value_num_locals = 0;
+static thread_local Var** aot_value_globals = nullptr;
+static thread_local int aot_value_num_globals = 0;
+static thread_local QoreProgram* aot_value_local_owner_pgm = nullptr;
+
+QoreAOTValueLocalsHelper::QoreAOTValueLocalsHelper(LocalVar** locals, int num_locals, Var** globals,
+        int num_globals, QoreProgram* local_owner_pgm) : old_locals(aot_value_locals),
+        old_num_locals(aot_value_num_locals), old_globals(aot_value_globals),
+        old_num_globals(aot_value_num_globals), old_local_owner_pgm(aot_value_local_owner_pgm) {
+    aot_value_locals = locals;
+    aot_value_num_locals = num_locals;
+    aot_value_globals = globals;
+    aot_value_num_globals = num_globals;
+    aot_value_local_owner_pgm = local_owner_pgm;
+}
+
+QoreAOTValueLocalsHelper::~QoreAOTValueLocalsHelper() {
+    aot_value_locals = old_locals;
+    aot_value_num_locals = old_num_locals;
+    aot_value_globals = old_globals;
+    aot_value_num_globals = old_num_globals;
+    aot_value_local_owner_pgm = old_local_owner_pgm;
+}
+
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
     const uint8_t* start = ptr;
@@ -5428,8 +5454,10 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             const uint8_t* ep = blob;
+            // the variables of the context that the value is read in, if any (see QoreAOTValueLocalsHelper)
             QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
-                nullptr, 0, nullptr, 0);
+                aot_value_locals, aot_value_num_locals, aot_value_globals, aot_value_num_globals,
+                aot_value_local_owner_pgm);
             if (!error.empty()) {
                 rv.discard(nullptr);
                 return QoreValue();
@@ -13828,8 +13856,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     writer.writeU8(has_default ? 1 : 0);
                     if (has_default) {
                         std::string default_error;
+                        // in the slot domain of the closure's parent, so that a closure in the default value binds
+                        // the variables that it captures by their slots, as the closure's own captures do (#5903)
                         if (!qoreAOTWriteDefaultArgValuePayload(writer, sig->getDefaultArgList()[p],
-                                "closure", ucf->getName(), pname, &default_error)) {
+                                "closure", ucf->getName(), pname, &default_error, &parent_locals)) {
                             qoreAOTSetExprSerializationError(std::move(default_error));
                             return false;
                         }

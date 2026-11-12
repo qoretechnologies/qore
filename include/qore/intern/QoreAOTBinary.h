@@ -4526,6 +4526,24 @@ QoreValue readOneExpr(
         Var** globals, int num_globals,
         QoreProgram* local_owner_pgm = nullptr);
 
+//! Sets the variables that the expressions in values read by QoreAOTBinaryReader::readValue() bind to, for its scope
+/** The default value of a closure's parameter can be a closure that captures a variable of the code that creates the
+    closure: it binds to the variables of that code's context, as the closure's own captures do (issue #5903)
+*/
+class QoreAOTValueLocalsHelper {
+public:
+    DLLLOCAL QoreAOTValueLocalsHelper(LocalVar** locals, int num_locals, Var** globals, int num_globals,
+            QoreProgram* local_owner_pgm);
+    DLLLOCAL ~QoreAOTValueLocalsHelper();
+
+private:
+    LocalVar** old_locals;
+    int old_num_locals;
+    Var** old_globals;
+    int old_num_globals;
+    QoreProgram* old_local_owner_pgm;
+};
+
 //! Read one top-level serialized IR instruction expression field.
 //!
 //! Legacy GENERIC_EVAL is allowed only at this top level when reading old AOT
