@@ -182,7 +182,7 @@ qore_ci_native_module_farm() {
     qore_ci_native_module_notice_text=
     if [ -n "${qore_ci_nmf_missing}" ]; then
         qore_ci_nmf_msg="native modules of the image built only for module APIs other than ${qore_ci_nmf_apis}, which"
-        qore_ci_nmf_msg="${qore_ci_nmf_msg} this qore loads, so that their tests would be skipped:"
+        qore_ci_nmf_msg="${qore_ci_nmf_msg} this qore loads, so their tests would be skipped:"
         qore_ci_nmf_msg="${qore_ci_nmf_msg} ${qore_ci_nmf_missing} (${qore_ci_nmf_missing_files})"
         if [ "${QORE_CI_NATIVE_MODULE_API_TRANSITION:-}" = "1" ]; then
             qore_ci_native_module_notice_text="QORE_CI_NATIVE_MODULE_API_TRANSITION=1: ${qore_ci_nmf_msg}; this job"
@@ -200,7 +200,8 @@ qore_ci_native_module_farm() {
         qore_ci_native_module_notice_text="QORE_CI_NATIVE_MODULE_API_TRANSITION is set but not needed, as every"
         qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} native module of the image has a build"
         qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} for module API ${qore_ci_nmf_apis}:"
-        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} remove it from .gitlab-ci.yml"
+        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} remove it (.gitlab-ci.yml or the"
+        qore_ci_native_module_notice_text="${qore_ci_native_module_notice_text} pipeline's variables)"
         qore_ci_native_module_notice
     fi
     return 0

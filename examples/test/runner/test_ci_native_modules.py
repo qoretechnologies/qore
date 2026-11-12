@@ -221,11 +221,12 @@ class NativeModuleFarmTest(unittest.TestCase):
                 self.assertEqual({}, self.linked())
 
     NOTICE = ("!!! native modules: QORE_CI_NATIVE_MODULE_API_TRANSITION=1: native modules of the image built only "
-              "for module APIs other than 2.1, which this qore loads, so that their tests would be skipped: uuid xml "
+              "for module APIs other than 2.1, which this qore loads, so their tests would be skipped: uuid xml "
               "(uuid-api-2.0 xml-api-1.9 xml-api-2.0); this job does not test them\n")
 
     UNNEEDED = ("!!! native modules: QORE_CI_NATIVE_MODULE_API_TRANSITION is set but not needed, as every native "
-                "module of the image has a build for module API 2.1: remove it from .gitlab-ci.yml\n")
+                "module of the image has a build for module API 2.1: remove it (.gitlab-ci.yml or the pipeline's "
+                "variables)\n")
 
     def stale_image(self):
         """Makes the modules of an image whose xml and uuid modules were built for other module APIs only, while
@@ -246,7 +247,7 @@ class NativeModuleFarmTest(unittest.TestCase):
                     self.assertNotEqual(0, result.returncode, result.stdout)
                     self.assertNotIn("done", result.stdout)
                     self.assertEqual("qore_ci_native_module_farm: native modules of the image built only for module "
-                                     "APIs other than 2.1, which this qore loads, so that their tests would be "
+                                     "APIs other than 2.1, which this qore loads, so their tests would be "
                                      "skipped: uuid xml (uuid-api-2.0 xml-api-1.9 xml-api-2.0); rebuild the image's "
                                      "native modules for module API 2.1, or set QORE_CI_NATIVE_MODULE_API_TRANSITION=1 "
                                      "in a batch that changes the module API (see ci-native-modules.sh)\n",
@@ -260,7 +261,7 @@ class NativeModuleFarmTest(unittest.TestCase):
         mods = self.module_dir("mods", ("process-api-2.0.qmod", "sqlite3-api-2.0.qmod"))
         result = self.run_farm(self.fake_qore("2.1"), mods)
         self.assertNotEqual(0, result.returncode, result.stdout)
-        self.assertIn("so that their tests would be skipped: process sqlite3 (process-api-2.0 sqlite3-api-2.0); ",
+        self.assertIn("so their tests would be skipped: process sqlite3 (process-api-2.0 sqlite3-api-2.0); ",
                       result.stderr)
         self.assertEqual({}, self.linked())
 
@@ -288,6 +289,15 @@ class NativeModuleFarmTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(result.stdout.endswith("done\n"), result.stdout)
         self.assertNotIn("!!!", result.stdout)
+        # a notice in the caller's environment is not printed
+        result = subprocess.run(["sh", "-c", 'set -e; . "$1"; shift; qore_ci_native_module_farm "$@"; '
+                                 'qore_ci_native_module_notice', "sh", str(HELPER), str(self.fake_qore("2.1")),
+                                 str(self.farm), str(mods)], capture_output=True, text=True, timeout=60,
+                                env={**{k: v for k, v in os.environ.items()
+                                        if k != "QORE_CI_NATIVE_MODULE_API_TRANSITION"},
+                                     "qore_ci_native_module_notice_text": "stale"})
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("stale", result.stdout)
 
     def test_unneeded_override(self):
         """An override that is set while every module has a build for the loaded API is reported at the start and
