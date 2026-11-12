@@ -46,7 +46,10 @@ class DapClient {
         list<string> stray = ();
 
         #! the maximum time to wait for a message before the test fails
-        const MessageTimeout = 30s;
+        /** Long enough for an adapter that is starved under load, short enough that a missing message fails the test
+            case well within the time limit of run_tests.sh
+        */
+        const MessageTimeout = 60s;
     }
 
     private {
@@ -76,16 +79,22 @@ class DapClient {
     }
 
     #! Returns the next message that matches, including messages that were received before
-    hash<auto> waitFor(code<bool(hash<auto>)> pred, string what) {
+    /** @throw DAP-ERROR the adapter did not send the message within \a timeout_ms or ended without it
+    */
+    hash<auto> waitFor(code<bool(hash<auto>)> pred, string what, timeout timeout_ms = MessageTimeout) {
         for (int i = 0; i < backlog.size(); ++i) {
             if (pred(backlog[i])) {
                 return (extract backlog, i, 1)[0];
             }
         }
+        date deadline = now_us() + milliseconds(timeout_ms);
         while (True) {
-            *hash<auto> msg = readMessage();
+            *hash<auto> msg = readMessage(deadline);
             if (!msg) {
-                throw "DAP-ERROR", sprintf("no %s from the adapter", what);
+                throw "DAP-ERROR", sprintf("no %s from the adapter %s; the messages received and not taken: %y; "
+                    "stray output: %y; adapter stderr: %y", what,
+                    proc.running() ? sprintf("within %y", milliseconds(timeout_ms)) : "before it ended",
+                    summarizeBacklog(), stray, readStderr());
             }
             if (pred(msg)) {
                 return msg;
@@ -95,10 +104,10 @@ class DapClient {
     }
 
     #! Returns the next event with the given name
-    hash<auto> waitForEvent(string event) {
+    hash<auto> waitForEvent(string event, timeout timeout_ms = MessageTimeout) {
         return waitFor(bool sub (hash<auto> m) {
             return m.type == "event" && m.event == event;
-        }, event + " event");
+        }, event + " event", timeout_ms);
     }
 
     #! Returns the events with the given name received so far and not yet taken by waitFor()
@@ -111,8 +120,8 @@ class DapClient {
         return map $1.body.output, backlog, $1.event == "output" && $1.body.category == category;
     }
 
-    #! Reads the next message; returns NOTHING if the adapter does not send one in time
-    private *hash<auto> readMessage() {
+    #! Reads the next message; returns NOTHING if the adapter does not send one before the deadline
+    private *hash<auto> readMessage(date deadline) {
         while (True) {
             int end = buf.find(<0d0a0d0a>);
             if (end >= 0) {
@@ -130,7 +139,7 @@ class DapClient {
                     continue;
                 }
                 while (buf.size() < end + 4 + len) {
-                    if (!fill()) {
+                    if (!fill(deadline)) {
                         return NOTHING;
                     }
                 }
@@ -138,22 +147,26 @@ class DapClient {
                 splice buf, 0, end + 4 + len;
                 return msg;
             }
-            if (!fill()) {
+            if (!fill(deadline)) {
                 return NOTHING;
             }
         }
     }
 
-    #! Reads more output of the adapter; returns False only when the adapter's stdout is at end of file
-    /** readStdoutBinary() returns nothing both at end of file and when nothing arrives within the timeout.  The
-        latter is not the end of the stream: under load the adapter can be starved and produce no output for a
-        while, which must not be mistaken for a missing message.  Wait on the real signal - data, or the adapter
-        actually exiting - by reading again while the adapter is still running; give up only once it has exited
-        (then readStdoutBinary() returns nothing at once, so this does not spin).
+    #! Reads more output of the adapter; returns False when the adapter's stdout is at end of file or at the deadline
+    /** readStdoutBinary() returns nothing both at end of file and when nothing arrives within the timeout, and a
+        read can return early, so it is repeated until data arrives, the adapter has exited (then readStdoutBinary()
+        returns nothing at once, so this does not spin) or the deadline passes: an adapter that keeps running without
+        sending the message fails the test case instead of blocking it (qore#5834)
     */
-    private bool fill() {
+    private bool fill(date deadline) {
         while (True) {
-            *binary data = proc.readStdoutBinary(65536, MessageTimeout);
+            int remaining_us = (deadline - now_us()).durationMicroseconds();
+            if (remaining_us <= 0) {
+                return False;
+            }
+            # rounded up, so that the wait does not end before the deadline
+            *binary data = proc.readStdoutBinary(65536, (remaining_us + 999) / 1000);
             if (data) {
                 buf += data;
                 return True;
@@ -161,6 +174,41 @@ class DapClient {
             if (!proc.running()) {
                 return False;
             }
+        }
+    }
+
+    #! Returns the messages received and not taken, for the message of a failure; repeated messages are counted
+    private list<string> summarizeBacklog() {
+        list<string> summary = ();
+        string last;
+        int count = 0;
+        foreach hash<auto> msg in (backlog) {
+            string desc = msg.type == "event"
+                ? sprintf("event %s%s", msg.event, msg.event == "stopped" ? sprintf(" (%y)", msg.body.reason) : "")
+                : sprintf("%s %s", msg.type, msg.command ?? "");
+            if (desc == last) {
+                ++count;
+                continue;
+            }
+            if (count) {
+                push summary, count > 1 ? sprintf("%s x%d", last, count) : last;
+            }
+            last = desc;
+            count = 1;
+        }
+        if (count) {
+            push summary, count > 1 ? sprintf("%s x%d", last, count) : last;
+        }
+        return summary;
+    }
+
+    #! Returns what the adapter wrote to stderr so far, for the message of a failure
+    private string readStderr() {
+        try {
+            *string err = proc.readStderr(65536, 0);
+            return err ?? "";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("(not readable: %s: %s)", ex.err, ex.desc);
         }
     }
 }
@@ -345,6 +393,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("exception breakpoints", \exceptionTest());
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
         addTestCase("uncaught exceptions", \uncaughtExceptionTest());
+        addTestCase("a message that the adapter does not send fails the wait", \missingMessageTest());
 %endif
         # needs no adapter process
         addTestCase("the exception filters that stop a thread", \exceptionFilterTest());
@@ -803,6 +852,31 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     # with the "uncaught" filter, only an exception that no try statement catches stops the thread
+    #! a running adapter that does not send the message fails the wait in time, with what it did send (qore#5834)
+    missingMessageTest() {
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        # the adapter sends no stopped event before a program is launched
+        date start = now_us();
+        assertThrows("DAP-ERROR", "^no stopped event from the adapter within <time: 2 seconds>; the messages received "
+            "and not taken: .*; stray output: .*; adapter stderr: ", \dap.waitForEvent(), ("stopped", 2s));
+        date elapsed = now_us() - start;
+        assertTrue(elapsed >= 2s, sprintf("%y", elapsed));
+        assertTrue(elapsed < 30s, sprintf("%y", elapsed));
+        # the adapter is still running: the wait ended at the deadline, not at the end of the adapter's output
+        assertTrue(proc.running());
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
     uncaughtExceptionTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, UncaughtProgram);
