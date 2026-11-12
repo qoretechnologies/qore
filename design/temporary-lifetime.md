@@ -250,10 +250,45 @@ map-select run with the element as the implicit argument (`$1`) and its index as
 expression, as for the AST interpreter's receivers: the code records a temp scope that no `PushTempMark` opens
 (`QoreIRBuilder::allocateUnmarkedTempScopeId()`), so the normal path has no per-element mark or drain, an exception
 that the code raises releases nothing before the operator's cleanup, and the arguments that it creates for a call are
-still the call's.
+still the call's.  A map-select sets the implicit argument once for its predicate and its map expression, as the AST
+interpreter does.  The IR interpreter's slot of a `PushImplicitArg` borrows the context that it restores: the context
+does not change hands until the `PopImplicitArg`, or the frame's exit, restores it, so the loop takes no reference
+per element.  Whether code over a list, a map expression or a fused pipeline's stage needs the runtime implicit argument
+(because it reads `$2` or later, or delegates to the AST interpreter) is decided before it is lowered
+(`qore_ir_body_needs_implicit_context()`); code that needs it is lowered with `lowerWithImplicitContext()`, whose
+exception cleanup block restores the implicit argument and element before the operator's cleanup or the handler, as the
+AST interpreter's helpers restore them when an exception unwinds the operator; the argument list holds a reference to
+the element, which was otherwise released after the handler.  Code that does not need it runs with the virtual
+implicit argument only.
 
-An exception that leaves the operator releases, in the AST interpreter's order, the element, the value that a map
-expression gave last, the list built so far, the iterator and the source, then the statement's temporaries
+A fused pipeline's stages run the same way, with the virtual implicit argument.  When a map stage gives a value that
+can hold an object, the `IteratorNext` instruction releases the previous element and then the values that the stages
+gave from it, in the order of the stages, before it asks the iterator for the next element
+(`QoreIRIteratorNextInstruction::release_values`, serialized in AOT IR from format `QORE_AOT_ITERATOR_RELEASES_VERSION`), and the pipeline's end
+releases them before the iterator and the source: the AST interpreter's functional map iterator releases the element
+when it has evaluated the value, and its consumer releases the value before it takes the next one.  The values are not
+operands, as the body defines them after the instruction: it releases what their slots hold, as `ReleaseOwnedTemp`
+does (native code emits the releases once the function is lowered, `QoreIRToLLVM::finalizeIteratorReleases()`), so
+the loop dispatches no instruction of its own for them.  A stage whose value holds no object adds nothing.  A map
+stage's input (the element, or the value of the stage before it) is released once the stage has given its value,
+before the stages after it, the consumer and a `foreach` body run, as the AST interpreter's functional map iterator
+releases it: a `ReleaseOwnedTemp` with the stage's value as a second operand, which keeps a value that is the stage's
+value at run time (an optimization can make `$1 ?? $1` the element itself, so a release list of `IteratorNext` drops
+a value that became the element, and the element's slot holds nothing once it is released).  Unlike the other
+releases of `ReleaseOwnedTemp`, which also run on the path of an exception, this one runs on the normal path only:
+an exception that the input's destructor raises leaves the pipeline to the instruction's exception target, and only
+a release that ran checks for one: in the body, the pipeline's exception cleanup; at the end of `first`, whose
+releases come after the pipeline's cleanup has closed, a block that releases the other values, the iterator and
+the source and then gives the exception to the enclosing handler or leaves the function.  The value of `first`
+replaces the code's previous value of the expression after the operator's iterator and source are released, as the
+AST interpreter returns it.  The value of a
+predicate that can hold an object is released when the element has been decided on
+(`QoreIRLowering::releasePredicateValue()`), as the AST interpreter's holder of the predicate's value releases it:
+as a statement temporary it outlived the element, and an exception released it after the operator's list.
+
+An exception that leaves the operator releases, in the AST interpreter's order, the element, the values that map
+expressions gave last (only those that can hold an object: native code keeps a released value in a cleanup slot on
+the normal path, see `qore_ir_observable_release()`), the list built so far, the iterator and the source, then the statement's temporaries
 (`FunctionalLoopExceptionCleanup`); an exception that the iterator's `next()` raises releases the iterator and the
 source before the list (`routeNext()`), as the AST interpreter's functional iterator ends as if the source were
 exhausted.  The cleanup exists only if a handler of the function encloses the operator: an exception target gives
@@ -261,8 +296,14 @@ the operator's calls and operations their invoke form, which the IR interpreter 
 with no handler keeps the form it has always had and an exception leaves the function directly.  The function's exit
 then restores the implicit arguments and elements open at the raising instruction, innermost first, before it
 releases the frame's values (`qore_ir_find_open_implicit_contexts()`: the IR interpreter's frame exit, native code's
-`QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only), and releases the
-operator's iterator before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).
+`QoreIRToLLVM::getImplicitContextRestoreEdge()`, which has the instructions on the error edge only, and
+`emitImplicitContextRestore()` on the exit of a `throw` and of an operator cleanup's synthetic rethrow, which also
+release the statement's temporaries in the order of an exception check's exit), and releases the operator's iterator
+before the handlers of the blocks left (`QoreIRInstruction::restore_on_exception_exit`).  Native code raises an integer
+or float division by zero where it happens, on the path that only a zero divisor takes, and the exception of an
+operation through a runtime helper (an untyped division, modulo, addition, subtraction or multiplication, a number
+division, a string concatenation) on the path where the helper returns NOTHING, which it returns when it raises: left
+pending, the exception let the code after it run, and the operator's `next()` then took it for its own.
 
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map

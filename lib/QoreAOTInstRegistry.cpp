@@ -2932,7 +2932,28 @@ static bool writeIteratorNext(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU16(it_d != ctx.block_idx.end() ? it_d->second : 0xFFFF);
     auto it_c = ctx.block_idx.find(ii->continue_target);
     ctx.writer.writeU16(it_c != ctx.block_idx.end() ? it_c->second : 0xFFFF);
+    // the values that it releases after the previous element (v23)
+    if (ii->release_values.size() > UINT16_MAX) {
+        return false;
+    }
+    ctx.writer.writeU16(static_cast<uint16_t>(ii->release_values.size()));
+    for (const QoreIRValue& rv : ii->release_values) {
+        ctx.writer.writeU32(rv.id);
+    }
     return true;
+}
+
+//! Reads the release values of a v23 IteratorNext record (see writeIteratorNext())
+static void readIteratorNextReleases(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        QoreIRIteratorNextInstruction& inst) {
+    if (reader.getHeader().version < QORE_AOT_ITERATOR_RELEASES_VERSION) {
+        return;
+    }
+    uint16_t count = QoreAOTBinaryReader::readU16(ptr);
+    inst.release_values.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        inst.release_values.push_back(QoreIRValue(QoreAOTBinaryReader::readU32(ptr)));
+    }
 }
 
 static std::unique_ptr<QoreIRInstruction> readIteratorNext(
@@ -2957,6 +2978,7 @@ static std::unique_ptr<QoreIRInstruction> readIteratorNext(
             QoreIRValue(iterator_id), ctx.resolveBlock(done_idx), ctx.resolveBlock(continue_idx));
         inst->opcode = opcode;
     }
+    readIteratorNextReleases(ctx.reader, ctx.ptr, *inst);
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;

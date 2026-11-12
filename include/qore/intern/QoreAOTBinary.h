@@ -376,6 +376,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v25: a ListIndexSlice step of an lvalue path (in a function record and in serialized IR) has, after its operand ids,
 //!      one byte per selector: 1 if the selector is a range (LVPathStep::slice_ranges).  A v9-v24 step has no such
 //!      bytes; each of its selectors is taken as a range, which selects every index of a list value, as before.
+//! v25: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
+//!      release_values).  A v9-v24 record has none.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -389,6 +392,10 @@ constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
 constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 25;
 //! First format version whose ListIndexSlice steps record which selectors are ranges (see v25 above).
 constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 25;
+//! First format version whose IteratorNext records have release values (see v25 above); the newest format change
+//! (qore#5670), so that it is the current version: a merge with another format change takes the next version
+//! after the other's, here and in the history above
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

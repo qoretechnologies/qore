@@ -3272,6 +3272,14 @@ public:
     QoreIRValue limit;                          //!< Source size captured at loop entry
     QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
     QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
+    //! Values that the loop derived from the previous element (the values of a fused pipeline's map stages that can
+    //! hold an object), released in this order after the previous element and before the iterator is asked for the
+    //! next one, as the AST interpreter's functional iterators release them
+    /** They are not operands: the loop's body defines them after this instruction, so this instruction releases the
+        reference that the frame holds in their slots, if any (an exhausted or skipped stage left none), as
+        ReleaseOwnedTemp releases a temporary.
+    */
+    std::vector<QoreIRValue> release_values;
 };
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {

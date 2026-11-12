@@ -406,6 +406,12 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
+    //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
+    //! with \a kept as a second operand
+    QoreIRInstruction* createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+            const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 

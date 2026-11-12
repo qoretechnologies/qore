@@ -3083,9 +3083,29 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
             qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
             break;
         case QoreIROpcode::IteratorNext:
-        case QoreIROpcode::IteratorNextSelectors:
-            qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
+        case QoreIROpcode::IteratorNextSelectors: {
+            auto& next = static_cast<QoreIRIteratorNextInstruction&>(inst);
+            qore_ir_rewrite_value(next.iterator, replacements);
+            // the values that it releases follow their replacements (QoreIRIteratorNextInstruction::release_values);
+            // a value replaced by the element (a stage value that a redundant Phi gave as the element, e.g. $1 ?? $1)
+            // or by another of the values is released once, with the element or with that value
+            for (QoreIRValue& rv : next.release_values) {
+                qore_ir_rewrite_value(rv, replacements);
+            }
+            {
+                std::vector<QoreIRValue> kept;
+                kept.reserve(next.release_values.size());
+                for (const QoreIRValue& rv : next.release_values) {
+                    if (rv.id == next.result.id || std::any_of(kept.begin(), kept.end(),
+                            [&rv](const QoreIRValue& k) { return k.id == rv.id; })) {
+                        continue;
+                    }
+                    kept.push_back(rv);
+                }
+                next.release_values.swap(kept);
+            }
             break;
+        }
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:

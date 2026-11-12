@@ -899,16 +899,27 @@ private:
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
-    /** Releases the element (if valid), the value that a map expression gave last (if valid: the list holds a
-        reference of its own), the partial result (if valid: the list that a functional operator built so far), the
+    /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their
+        order: the list holds a reference of its own), the partial result (if valid: the list that a functional operator built so far), the
         iterator (if valid), the list and the loop variables, in this order, as the AST's foreach statement and
         functional operators do when an exception unwinds them, before the handler of the enclosing try block or block
         with handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
     */
+    //! Releases the value of a functional operator's predicate once it has been converted to a bool, if it can
+    //! hold an object
+    /** The AST interpreter holds the value of the predicate for the element (ValueEvalOptimizedRefHolder) and
+        releases it when it has decided on the element; as a temporary of the statement, it was released when the
+        next element's value was, or with the statement's temporaries after the operator's values when an exception
+        left the operator.  Nothing is emitted for a value that cannot hold an object, whose release cannot be
+        observed, or that is the element (\a element) itself.
+    */
+    DLLLOCAL void releasePredicateValue(QoreIRValue value, const QoreValue& expr, QoreIRValue element,
+            const QoreProgramLocation* loc);
+
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
             const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
-            QoreIRValue element_value = QoreIRValue());
+            const std::vector<QoreIRValue>& element_values = {});
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise

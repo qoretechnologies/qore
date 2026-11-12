@@ -7714,6 +7714,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 next->opcode = opcode;
                 inst.reset(next);
             }
+            // the values that it releases after the previous element (see QORE_AOT_ITERATOR_RELEASES_VERSION)
+            if (reader.getHeader().version >= QORE_AOT_ITERATOR_RELEASES_VERSION) {
+                auto* next = static_cast<QoreIRIteratorNextInstruction*>(inst.get());
+                uint16_t count = QoreAOTBinaryReader::readU16(ptr);
+                next->release_values.reserve(count);
+                for (uint16_t i = 0; i < count; ++i) {
+                    next->release_values.push_back(QoreIRValue(QoreAOTBinaryReader::readU32(ptr)));
+                }
+            }
             break;
         }
 
