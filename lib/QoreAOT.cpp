@@ -26449,7 +26449,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
-        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink, QMRL_LOCK);
 
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
@@ -26871,7 +26871,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
-        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
@@ -30731,7 +30731,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
-            *qpgm, xsink);
+            *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink,
             QP_WARN_DEFAULT);
@@ -31301,7 +31301,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
-            qm_path.c_str(), *qpgm, xsink);
+            qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
@@ -31855,7 +31855,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
-            qm_path.c_str(), *qpgm, xsink);
+            qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);

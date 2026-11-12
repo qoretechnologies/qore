@@ -954,50 +954,33 @@ public:
         }
     }
 
-    //! Removes the dependencies that a failed load of \a name registered since \a saved was recorded
+    //! Records the dependency registration of \a name with the mutex locked; the mutex must not be held
+    DLLLOCAL void getUserModuleRegistrationLocked(const char* name, QoreUserModuleRegistration& reg) {
+        AutoLocker al(mutex);
+        getUserModuleRegistration(name, reg);
+    }
+
+    //! Removes the dependency records that a load of \a name made since \a saved was recorded
     /** The registration that \a saved records belongs to a module that is still loaded under the name (a module being
-        reloaded) and is kept; when it records none, this removes every registration of the name, as
-        removeUserModuleDependency() does
+        reloaded, or a module of the same name that is loaded while another is compiled) and is kept; when it records
+        none, this removes every registration of the name, as removeUserModuleDependency() does.
+
+        The mutex must be held.  This never throws, as it is called when a module definition context closes: a
+        record that cannot be released for lack of memory is kept, in both maps, so they stay consistent (#5953)
     */
-    DLLLOCAL void rollbackUserModuleDependency(const char* name, const QoreUserModuleRegistration& saved) {
-        md_map_t::iterator i = rmd_map.find(name);
-        if (i != rmd_map.end()) {
-            for (const std::string& req : i->second) {
-                if (saved.had_deps && saved.deps.find(req) != saved.deps.end()) {
-                    continue;
-                }
-                md_map_t::iterator di = md_map.find(req);
-                if (di == md_map.end()) {
-                    continue;
-                }
-                di->second.erase(name);
-                if (di->second.empty()) {
-                    umset.insert(req);
-                }
-            }
-            if (saved.had_deps) {
-                i->second = saved.deps;
-            } else {
-                rmd_map.erase(i);
-            }
+    DLLLOCAL void rollbackUserModuleDependency(const char* name, const QoreUserModuleRegistration& saved) noexcept {
+        try {
+            rollbackUserModuleDependencyIntern(std::string(name), saved);
+        } catch (...) {
+            // only std::bad_alloc can be raised; the records not yet released are kept, consistently
         }
-        if (!saved.had_dependents) {
-            md_map_t::iterator mi = md_map.find(name);
-            if (mi != md_map.end()) {
-                md_map.erase(mi);
-            }
-        }
-        // the binary modules that the failed load registered as required by the name
-        for (md_map_t::iterator bi = binary_user_dep_map.begin(); bi != binary_user_dep_map.end();) {
-            if (saved.binary_deps.find(bi->first) == saved.binary_deps.end()) {
-                bi->second.erase(name);
-                if (bi->second.empty()) {
-                    binary_user_dep_map.erase(bi++);
-                    continue;
-                }
-            }
-            ++bi;
-        }
+    }
+
+    //! Calls rollbackUserModuleDependency() with the mutex locked; the mutex must not be held
+    DLLLOCAL void rollbackUserModuleDependencyLocked(const char* name, const QoreUserModuleRegistration& saved)
+            noexcept {
+        AutoLocker al(mutex);
+        rollbackUserModuleDependency(name, saved);
     }
 
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
@@ -1035,6 +1018,15 @@ public:
             if (i != md_map.end())
                 md_map.erase(i);
         }
+    }
+
+    //! Copies the dependency records under the mutex: requirements (rmd_map), dependents (md_map) and the users of
+    //! binary modules (binary_user_dep_map); for tests
+    DLLLOCAL void getDependencyRecords(md_map_t& reqs, md_map_t& dependents, md_map_t& binary_users) {
+        AutoLocker al(mutex);
+        reqs.insert(rmd_map.begin(), rmd_map.end());
+        dependents.insert(md_map.begin(), md_map.end());
+        binary_users.insert(binary_user_dep_map.begin(), binary_user_dep_map.end());
     }
 
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
@@ -1095,6 +1087,56 @@ private:
     DLLLOCAL QoreModuleManager(const QoreModuleManager&) = delete;
     // not implemented
     DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&) = delete;
+
+    //! Implements rollbackUserModuleDependency(); can raise std::bad_alloc only where noted
+    DLLLOCAL void rollbackUserModuleDependencyIntern(const std::string& name, const QoreUserModuleRegistration& saved) {
+        // the steps that do not allocate memory come first
+        if (!saved.had_dependents) {
+            md_map_t::iterator mi = md_map.find(name);
+            if (mi != md_map.end()) {
+                md_map.erase(mi);
+            }
+        }
+        // the binary modules that the load registered as required by the name
+        for (md_map_t::iterator bi = binary_user_dep_map.begin(); bi != binary_user_dep_map.end();) {
+            if (saved.binary_deps.find(bi->first) == saved.binary_deps.end()) {
+                bi->second.erase(name);
+                if (bi->second.empty()) {
+                    binary_user_dep_map.erase(bi++);
+                    continue;
+                }
+            }
+            ++bi;
+        }
+        // the user modules that the load registered as required by the name, each released from both maps at once
+        md_map_t::iterator i = rmd_map.find(name);
+        if (i == rmd_map.end()) {
+            return;
+        }
+        strset_t& reqs = i->second;
+        for (strset_t::iterator ri = reqs.begin(); ri != reqs.end();) {
+            if (saved.had_deps && saved.deps.find(*ri) != saved.deps.end()) {
+                ++ri;
+                continue;
+            }
+            md_map_t::iterator di = md_map.find(*ri);
+            if (di != md_map.end()) {
+                strset_t::iterator dsi = di->second.find(name);
+                if (dsi != di->second.end()) {
+                    if (di->second.size() == 1) {
+                        // the required module has no dependent left; this can raise std::bad_alloc, before the
+                        // record is changed
+                        umset.insert(*ri);
+                    }
+                    di->second.erase(dsi);
+                }
+            }
+            ri = reqs.erase(ri);
+        }
+        if (reqs.empty() && !saved.had_deps) {
+            rmd_map.erase(i);
+        }
+    }
 
     // per-feature load/init state; absence from module_load_map encodes NOT_LOADED
     enum ModuleLoadState : unsigned char {
@@ -1510,9 +1552,24 @@ protected:
     const char* old_name;
 };
 
+//! How a user module definition context records and rolls back the dependency records of its module (#5953)
+enum QoreModuleRecordLock : unsigned char {
+    //! the module manager's mutex is held when the context is opened and when it is closed
+    QMRL_HELD,
+    //! the mutex is not held: the context locks it to record the registration and to roll it back
+    QMRL_LOCK,
+    //! the caller records and rolls back the registration itself (the initialization of a binary module, which runs
+    //! without the mutex and is registered only after the context closes; see loadBinaryModuleFromDesc())
+    QMRL_CALLER,
+};
+
 class QoreUserModuleDefContextHelper : public QoreModuleDefContextHelper {
 public:
-    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs);
+    //! Opens the module definition context of the user module \a name
+    /** @param rlock how the dependency records are reached; see QoreModuleRecordLock
+    */
+    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs,
+            QoreModuleRecordLock rlock);
 
     //! Closes the module definition context
     /** Unless the module was registered (see setRegistered()), the dependency registrations that its load made are
@@ -1524,7 +1581,11 @@ public:
         set_module_context_path(old_path);
 
         if (!registered && !dup) {
-            QMM.rollbackUserModuleDependency(name, saved_reg);
+            if (rlock == QMRL_HELD) {
+                QMM.rollbackUserModuleDependency(name, saved_reg);
+            } else if (rlock == QMRL_LOCK) {
+                QMM.rollbackUserModuleDependencyLocked(name, saved_reg);
+            }
         }
     }
 
@@ -1558,6 +1619,8 @@ protected:
 
     ExceptionSink& xsink;
     bool dup;
+    //! how the dependency records are reached
+    QoreModuleRecordLock rlock;
     //! true if the module was registered and keeps the dependency registrations of its load
     bool registered = false;
     //! the registration of the module name when its load began: a module being reloaded is still registered

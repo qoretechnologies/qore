@@ -1695,10 +1695,21 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 }
 
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
-        ExceptionSink& xs)
+        ExceptionSink& xs, QoreModuleRecordLock rlock)
         : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
-        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
-    QMM.getUserModuleRegistration(name, saved_reg);
+        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false), rlock(rlock) {
+    try {
+        if (rlock == QMRL_HELD) {
+            QMM.getUserModuleRegistration(name, saved_reg);
+        } else if (rlock == QMRL_LOCK) {
+            QMM.getUserModuleRegistrationLocked(name, saved_reg);
+        }
+    } catch (...) {
+        // the destructor does not run: restore the module context here
+        set_module_context_name(old_name);
+        set_module_context_path(old_path);
+        throw;
+    }
 }
 
 bool QoreModuleManager::isUserModuleContext(const char* name) {
@@ -3849,7 +3860,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     userModule->addParseOptionMask(load_mask);
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
@@ -4672,6 +4683,9 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
             omi = mi.release();
             addModule(omi);
             trySetUserModule(name);
+            // the module stays registered, so it keeps the records of its dependencies: the binary modules that it
+            // requires are not deleted before it in delUser()
+            qmd.setRegistered();
             return nullptr;
         }
         assert(!xsink);
@@ -4879,7 +4893,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     ON_BLOCK_EXIT(module_load_clear, td);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
@@ -4979,7 +4993,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     ModuleReExportHelper mrh(mi.get(), reexport);
 
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         // run initialization unlocked
@@ -5308,6 +5322,37 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 #define QORE_AOT_MODULE_INFO_CONTAINER "the ELF note section " QORE_AOT_MODULE_INFO_ELF_SECTION
 #endif
 
+namespace {
+//! Releases the dependency records made by the initialization of a binary module that is not registered (#5953)
+/** Created with the module manager's mutex held, before the initialization, which runs without it; destroyed without
+    it.  The initialization of an AOT user module runs its module code, which can load user modules and so record
+    dependencies of the module; its definition context leaves them to this helper (QMRL_CALLER), as the module is
+    registered only after the context closes, and its registration can still fail then.
+*/
+class BinaryModuleInitRecordHelper {
+public:
+    DLLLOCAL BinaryModuleInitRecordHelper(const char* name) : name(name) {
+        QMM.getUserModuleRegistration(name, saved);
+    }
+
+    DLLLOCAL ~BinaryModuleInitRecordHelper() {
+        if (!registered) {
+            QMM.rollbackUserModuleDependencyLocked(name, saved);
+        }
+    }
+
+    //! The module is registered: its records are kept
+    DLLLOCAL void setRegistered() {
+        registered = true;
+    }
+
+private:
+    const char* name;
+    QoreUserModuleRegistration saved;
+    bool registered = false;
+};
+}
+
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
         QoreModuleInfo& mod_info, const char* path, const char* feature, bool reexport,
         QoreProgram* mpgm, QoreProgram* path_pgm, unsigned load_opt, ModuleLoadMapHelper* load_guard) {
@@ -5542,6 +5587,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     try {
         assert(q_gettid());
+        // the initialization of an AOT user module runs its code, which can load user modules; the records of those
+        // dependencies are released if the module is not registered (#5953)
+        BinaryModuleInitRecordHelper init_records(name);
         // Run only module init code without the module-manager mutex; the in-progress
         // reservation remains active so concurrent loads of this module still wait.
         load_guard->unlock();
@@ -5563,6 +5611,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (xsink) {
             return nullptr;
         }
+        // nothing can fail from here until the module is registered below
+        init_records.setRegistered();
     } catch (AbstractException& e) {
         e.convert(&xsink);
         return nullptr;

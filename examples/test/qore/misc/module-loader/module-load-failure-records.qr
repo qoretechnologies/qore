@@ -1,0 +1,101 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Child script of module-load-failure-cleanup.qtest (#5953): loads and compiles modules that fail, and prints the
+# dependency records of the module manager that name them; a debug build is required (dbg_* functions)
+# usage: module-load-failure-records.qr load|compile <module dir> <output dir>
+
+%ifdef QoreDebug
+
+#! returns the records that name the module \a name, as "<kind>:<module>=<list>" strings
+list<string> sub mentions(string name) {
+    list<string> rv = ();
+    hash<auto> recs = dbg_get_module_dependency_records();
+    foreach string kind in (("requires", "dependents", "binary_users")) {
+        foreach hash<auto> i in (recs{kind}.pairIterator()) {
+            if (i.key == name || inlist(name, i.value)) {
+                rv += sprintf("%s:%s=%s", kind, i.key, (foldl $1 + "," + $2, i.value) ?? "");
+            }
+        }
+    }
+    return rv;
+}
+
+#! prints the records that name the module \a name
+sub check(string label, string name) {
+    list<string> l = mentions(name);
+    printf("%s: %s\n", label, l ? l.join(" ") : "none");
+}
+
+#! loads the module \a feature in a new Program and prints the result
+sub load(string label, string feature) {
+    try {
+        Program p();
+        p.parse("%requires " + feature + "\n", label);
+        printf("%s: loaded\n", label);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", label, ex.err);
+    }
+}
+
+#! compiles a module in this process as qcc does and prints the result
+sub compile(string label, string mode, string path, string output, *list<string> targets) {
+    *string err = dbg_aot_compile_module(mode, path, output, targets);
+    if (!err) {
+        printf("%s: compiled\n", label);
+    } else if (err =~ /parse error in main module file/ || err =~ /module parsing failed/) {
+        printf("%s: parse error\n", label);
+    } else {
+        printf("%s: %s\n", label, err);
+    }
+}
+
+string dir = ARGV[1];
+string out = ARGV[2];
+switch (ARGV[0]) {
+    case "load": {
+        # a directory module that fails after it loaded a user module
+        load("dir", "CleanupFailDir");
+        check("dir records", "CleanupFailDir");
+        # a module that fails after it loaded a binary module
+        load("bin", "CleanupFailBin");
+        check("bin records", "CleanupFailBin");
+        # a module whose initialization fails stays registered with its records
+        load("init", "InitFailBin");
+        check("init records", "InitFailBin");
+        # AOT modules: their initialization loads a user module, then fails, or succeeds
+        load("aot init", "AotInitFail");
+        check("aot init records", "AotInitFail");
+        load("aot ok", "AotInitOk");
+        check("aot ok records", "AotInitOk");
+        break;
+    }
+    case "compile": {
+        string mod_dir = dir + "/CleanupFailDir";
+        compile("separated", "separated", mod_dir, out + "/sep.qmod");
+        check("separated records", "CleanupFailDir");
+        compile("file", "file", mod_dir, out + "/Extra.qo", (mod_dir + "/Extra.qc",));
+        check("file records", "CleanupFailDir");
+        compile("objects", "objects", mod_dir, out + "/obj.qmod", (out + "/none.qo",));
+        check("objects records", "CleanupFailDir");
+        compile("archive", "archive", mod_dir, out + "/arch.qoa", (out + "/none.qo",));
+        check("archive records", "CleanupFailDir");
+        compile("single", "single", dir + "/CleanupFailSource.qm", out + "/single.qmod");
+        check("single records", "CleanupFailSource");
+        # a module is compiled under the name of a module that is loaded: the records of the loaded module are kept,
+        # whether the compilation fails or not
+        load("loaded", "CompiledLoaded");
+        check("loaded records", "CompiledLoaded");
+        compile("loaded separated", "separated", out + "/compile-src/CompiledLoaded", out + "/cl.qmod");
+        check("loaded separated records", "CompiledLoaded");
+        compile("loaded single", "single", dir + "/CompiledLoaded.qm", out + "/cl1.qmod");
+        check("loaded single records", "CompiledLoaded");
+        break;
+    }
+}
+
+%else
+print("no debug\n");
+%endif

@@ -18896,6 +18896,85 @@ static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* para
     return QoreValue();
 }
 
+//! returns a hash of module name -> sorted list of names for a dependency record map
+static QoreHashNode* dbg_dependency_record_hash(const md_map_t& m) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    for (const auto& i : m) {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), nullptr);
+        for (const std::string& n : i.second) {
+            l->push(new QoreStringNode(n), nullptr);
+        }
+        rv->setKeyValue(i.first.c_str(), l.release(), nullptr);
+    }
+    return rv.release();
+}
+
+//! Debug-only: returns the module manager's dependency records (#5953)
+/** @return a hash with the keys \c requires (user module -> the user modules it requires), \c dependents (user module
+    -> the user modules that require it) and \c binary_users (binary module -> the user modules that require it)
+*/
+static QoreValue f_dbg_get_module_dependency_records(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    md_map_t reqs, dependents, binary_users;
+    QMM.getDependencyRecords(reqs, dependents, binary_users);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("requires", dbg_dependency_record_hash(reqs), xsink);
+    rv->setKeyValue("dependents", dbg_dependency_record_hash(dependents), xsink);
+    rv->setKeyValue("binary_users", dbg_dependency_record_hash(binary_users), xsink);
+    return rv.release();
+}
+
+//! Debug-only: compiles a user module in this process as qcc does, to check the module manager's records after it
+/** @param mode \c "single" (a single-file module: compileModule()), \c "separated" (a directory module:
+    compileSeparatedModule()), \c "file" (one file of a directory module: compileSeparatedModuleFile()), \c "objects"
+    (a directory module from per-file objects: compileModuleFromObjects()) or \c "archive" (archiveModuleFromObjects())
+    @param path the module file or directory
+    @param output the output file
+    @param target the file compiled in \c "file" mode, the object files in \c "objects" and \c "archive" modes
+
+    @return the error, or NOTHING if the module was compiled
+*/
+static QoreValue f_dbg_aot_compile_module(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper mode(get_param_value(params, 0));
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    QoreStringNodeValueHelper output(get_param_value(params, 2));
+    std::vector<std::string> targets;
+    if (const QoreListNode* l = get_param_value(params, 3).get<const QoreListNode>()) {
+        ConstListIterator li(l);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            targets.emplace_back(str->c_str());
+        }
+    }
+    std::string error;
+    bool ok;
+    if (!strcmp(mode->c_str(), "single")) {
+        std::string src = QoreDir::get_file_content(path->c_str());
+        ok = QoreAOT::compileModule(src.c_str(), static_cast<int>(src.size()), path->c_str(), output->c_str(),
+            PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "separated")) {
+        ok = QoreAOT::compileSeparatedModule(path->c_str(), output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "file")) {
+        if (targets.size() != 1) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): \"file\" mode requires one target");
+            return QoreValue();
+        }
+        ok = QoreAOT::compileSeparatedModuleFile(path->c_str(), targets[0].c_str(), output->c_str(), PO_DEFAULT,
+            error);
+    } else if (!strcmp(mode->c_str(), "objects")) {
+        ok = QoreAOT::compileModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "archive")) {
+        ok = QoreAOT::archiveModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): unknown mode '%s'", mode->c_str());
+        return QoreValue();
+    }
+    if (ok) {
+        return QoreValue();
+    }
+    return new QoreStringNode(error);
+}
+
 //! returns the private data of a Counter argument, or raises an exception
 static Counter* get_counter_arg(const QoreListNode* params, size_t i, ExceptionSink* xsink) {
     QoreObject* obj = get_param_value(params, i).get<QoreObject>();
@@ -21847,6 +21926,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
+    qns.addBuiltinVariant("dbg_get_module_dependency_records", f_dbg_get_module_dependency_records, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_compile_module", f_dbg_aot_compile_module, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringOrNothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "mode", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "path", stringTypeInfo, QORE_PARAM_NO_ARG, "output", listOrNothingTypeInfo, QORE_PARAM_NO_ARG, "targets");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

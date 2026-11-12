@@ -1681,7 +1681,9 @@
       loaded another module and then failed to parse, which stopped a debug build with an assertion at exit
       (\c SIGABRT); the records that a module's load makes are now released whenever the module is not registered,
       including when it is only compiled or when the error was already handled, and the binary modules it required
-      are released with them (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
+      are released with them, while a module whose initialization fails, which stays registered, keeps them, so the
+      binary modules it requires are not deleted before it at exit
+      (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
     - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
       @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
       and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output

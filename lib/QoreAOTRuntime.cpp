@@ -13487,7 +13487,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
     // the "module Name" declaration, and calling it twice triggers an assertion.
-    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink);
+    // the dependency records that the module's code makes are released by the loader if the module is not registered
+    // (see loadBinaryModuleFromDesc())
+    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink, QMRL_CALLER);
     {
         // Strip %requires directives from embedded source to avoid deadlock.
         // The module manager holds a lock when calling this init function, and
@@ -13628,8 +13630,6 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         aot_module_map[mod_name] = std::move(state);
     }
 
-    // the module keeps the dependencies that its initialization registered; a failure above rolls them back
-    mod_ctx.setRegistered();
     return nullptr;  // success
 }
 
