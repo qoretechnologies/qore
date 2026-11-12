@@ -37,6 +37,12 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/FunctionList.h"
 
+//! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
+/** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
+    of the parameters are); thread-safe
+*/
+DLLLOCAL const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names);
+
 class FunctionCallBase {
 protected:
     QoreParseListNode* parse_args = nullptr;
@@ -51,7 +57,10 @@ protected:
     //! the names of the arguments in source order ("" for a positional argument) of a named call whose variant is
     //! resolved at run time by parameter name; the arguments are then kept in source order (see
     //! QoreFunction::runtimeFindVariant())
-    std::shared_ptr<const name_vec_t> runtime_arg_names;
+    /** interned (qore_intern_call_arg_names()): the list lives as long as the library, so a copy of the call (made for
+        each call by the IR interpreter, or for a background thread) takes the pointer without owning it
+    */
+    const name_vec_t* runtime_arg_names = nullptr;
     bool has_explicit_type_args = false;
     //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
     bool allow_runtime_arg_names = false;
@@ -107,11 +116,11 @@ public:
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
 
     //! the names of the arguments in source order of a named call resolved at run time by parameter name, if any
-    DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names.get(); }
+    DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names; }
 
     //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)
     DLLLOCAL void setRuntimeArgNames(name_vec_t&& names) {
-        runtime_arg_names = std::make_shared<const name_vec_t>(std::move(names));
+        runtime_arg_names = qore_intern_call_arg_names(std::move(names));
     }
 
     //! sets the positions of the parameters of the arguments of a named call bound at parse time (AOT

@@ -993,7 +993,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init(func, variant, is_copy, cctx, self, pgm_ctx);
+    init<false>(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
@@ -1022,7 +1022,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init(func, variant, is_copy, cctx, self, pgm_ctx);
+    init<false>(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
@@ -1043,7 +1043,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init(func, variant, false, nullptr, nullptr, pgm_ctx);
+    init<true>(func, variant, false, nullptr, nullptr, pgm_ctx);
 }
 
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
@@ -1062,7 +1062,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init(func, variant, false, nullptr, nullptr, pgm_ctx);
+    init<true>(func, variant, false, nullptr, nullptr, pgm_ctx);
 }
 
 #ifdef DEBUG
@@ -1208,6 +1208,7 @@ private:
 };
 }
 
+template <bool NAMED>
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
     sandbox_provenance.set(self);
@@ -1303,7 +1304,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             // them, not as they were converted for the variant that does not match (issue #5686).
             saved.restore(tmp);
             // if no match can be found, return with the exception raised
-            if (findVariant(func, variant, cctx)) {
+            if (findVariant<NAMED>(func, variant, cctx)) {
                 xsink2.clear();
                 return;
             }
@@ -1346,7 +1347,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             return;
         }
     } else {
-        if (findVariant(func, variant, cctx)) {
+        if (findVariant<NAMED>(func, variant, cctx)) {
             return;
         }
         // get default argument list of variant
@@ -1441,6 +1442,7 @@ __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const
     return 0;
 }
 
+template <bool NAMED>
 int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx) {
     const qore_class_private* class_ctx = qc ? (cctx ? cctx : runtime_get_class()) : nullptr;
@@ -1448,7 +1450,7 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    if (__builtin_expect(arg_names != nullptr, 0)) {
+    if constexpr (NAMED) {
         if (findVariantNamed(func, variant, class_ctx)) {
             return -1;
         }
@@ -2838,6 +2840,19 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
     return true;
 }
 
+// the parameter positions of the arguments of a call with positional arguments: none are recorded, as each argument
+// is at its own position
+struct qore_no_named_positions {
+    DLLLOCAL bool operator!=(const qore_no_named_positions&) const {
+        return false;
+    }
+};
+
+// true for a call with positional arguments, whose arguments are at their own positions
+static constexpr bool qore_named_position_filled(const qore_no_named_positions&, size_t) {
+    return true;
+}
+
 // true if an argument of a named call is bound to the parameter position
 static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi) {
     for (size_t p : source_to_param) {
@@ -3484,7 +3499,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
     // arguments to other positions
     const AbstractQoreFunctionVariant* tie_variant = nullptr;
     // for a named call: the parameter positions of the arguments for the candidate and for the selected variant
-    std::vector<size_t> positions, best_positions;
+    std::conditional_t<NAMED, std::vector<size_t>, qore_no_named_positions> positions, best_positions;
     // every argument counts toward the number of arguments, also one with no value (issue #1897: an omitted
     // argument does not count, but an explicit NOTHING does, whether a literal or a variable); the parse-time
     // resolution counts the same arguments, except a lone literal NOTHING, which the parser drops (see make_args())
@@ -3658,7 +3673,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
                     // do not count default matches with non-existent arguments
                     // a parameter that no named argument is bound to is given no value: its match is not
                     // counted, as for a parameter after the arguments of a positional call
-                    if (pi >= vnargs || (NAMED && !qore_named_position_filled(positions, pi))) {
+                    if (pi >= vnargs || !qore_named_position_filled(positions, pi)) {
                         rc = QTI_IGNORE;
                     }
                 }

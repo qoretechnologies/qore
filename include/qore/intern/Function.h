@@ -878,8 +878,10 @@ protected:
     const QoreProgramLocation** hidden_call_site_slot = nullptr;
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
-    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name
-    const name_vec_t* arg_names = nullptr;
+    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name; set
+    //! only by the constructors for named calls and read only by init<true>() (a call with positional arguments does
+    //! not set it, so that it costs nothing)
+    const name_vec_t* arg_names;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
@@ -933,12 +935,15 @@ protected:
     bool dbg_no_exception_on_entry = false;
 #endif
 
+    //! NAMED: a named call whose variant is resolved at run time by parameter name (arg_names is set)
+    template <bool NAMED>
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx);
 
+    template <bool NAMED>
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 

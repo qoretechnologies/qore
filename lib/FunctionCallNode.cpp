@@ -43,6 +43,8 @@
 
 #include <string>
 #include <vector>
+#include <mutex>
+#include <set>
 
 static int raise_missing_new_constructor(QoreProgram* pgm, const QoreProgramLocation* loc,
         const QoreClass& qclass, const char* written_name) {
@@ -600,6 +602,14 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
     return err;
 }
 
+const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names) {
+    // a set does not move its elements, so the pointer to an interned list stays valid
+    static std::mutex m;
+    static std::set<name_vec_t> lists;
+    std::lock_guard<std::mutex> lock(m);
+    return &*lists.insert(std::move(names)).first;
+}
+
 void FunctionCallBase::setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size) {
     assert(args);
     qore_list_private::setNeedsEval(*args);
@@ -731,7 +741,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 // the return type is that of the variants that the names can be bound to (deferred_rt)
                 assert(allow_runtime_arg_names);
                 assert(!variant);
-                runtime_arg_names = std::make_shared<const name_vec_t>(std::move(arg_names));
+                runtime_arg_names = qore_intern_call_arg_names(std::move(arg_names));
                 type_param_instantiation.clear();
             } else if (!variant && !named_binding.variant) {
                 if (!err) {
@@ -1120,7 +1130,7 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
     const bool defer_domain_po = (pgm != nullptr);
-    if (__builtin_expect(static_cast<bool>(runtime_arg_names), 0)) {
+    if (__builtin_expect(runtime_arg_names != nullptr, 0)) {
         return evalNamed(func, call_pgm, rc, defer_domain_po, xsink);
     }
     if (tmp_args) {
