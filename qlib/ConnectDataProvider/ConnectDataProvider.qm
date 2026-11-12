@@ -32,7 +32,8 @@
 
 module ConnectDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    # and starts the background thread of its datagram event provider
+    domains = "PROCESS,THREAD_CONTROL";
     version = "1.0";
     desc = "Data provider module for Connect RPC protocol, providing DataProvider and "
         "ConnectionProvider integration for Connect services including datagram support";

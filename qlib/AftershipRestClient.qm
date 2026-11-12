@@ -42,6 +42,8 @@ module AftershipRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("aftership", AftershipRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage AftershipRestClient Module

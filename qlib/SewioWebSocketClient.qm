@@ -47,6 +47,8 @@ module SewioWebSocketClient {
         ConnectionSchemeCache::registerScheme("sewiows", SewioWebSocketConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("sewiowss", SewioWebSocketConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage SewioWebSocketClient Module

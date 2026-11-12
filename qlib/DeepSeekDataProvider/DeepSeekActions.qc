@@ -149,7 +149,7 @@ public class DeepSeekActions {
 
     #! Registers documented REST actions
     /** @throw DATA-PROVIDER-ACTION-ERROR invalid action metadata */
-    static registerActions() {
+    static registerActions() [dom=PROCESS] {
         foreach hash<auto> entry in (Operations.pairIterator()) {
             hash<DeepSeekActionInfo> op = entry.value;
             string action = entry.key;

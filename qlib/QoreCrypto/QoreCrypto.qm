@@ -32,6 +32,8 @@ module QoreCrypto {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code waits between retries with usleep() (ResilientKeyProvider)
+    domains = "PROCESS";
 }
 
 /** @mainpage QoreCrypto Module

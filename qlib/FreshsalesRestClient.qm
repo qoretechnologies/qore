@@ -43,6 +43,8 @@ module FreshsalesRestClient {
         ConnectionSchemeCache::registerScheme("freshsalesrest",
             FreshsalesRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage FreshsalesRestClient Module

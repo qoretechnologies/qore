@@ -46,6 +46,9 @@ module ProviderIndexUtil {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code sets the index directory environment variable (ProviderIndexUtil::setEnvironmentVariable(),
+    # which declares the domain, so a restricted caller cannot)
+    domains = "PROCESS";
 }
 
 /** @mainpage ProviderIndexUtil Module

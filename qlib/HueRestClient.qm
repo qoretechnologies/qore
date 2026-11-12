@@ -48,6 +48,8 @@ module HueRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("hue", HueRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage HueRestClient Module

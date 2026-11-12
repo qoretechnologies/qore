@@ -128,6 +128,55 @@ stay (a sandbox does not imply `PO_NO_PROCESS_CONTROL`).  The 150 modules that c
 `domains = "PROCESS"`.  Not tagged (no refusal today, decision pending): `AbstractDataProvider::registerChild()`,
 `DataProviderActionCatalog::registerLazyValue()`, `addCatalogChangeListener()`.
 
+### qlib module audit (PO_NO_PROCESS_CONTROL, PO_NO_THREAD_CONTROL)
+
+A module declares the domains its own code uses so that a Program restricted like a Qorus interface
+(`PO_NO_PROCESS_CONTROL | PO_NO_THREAD_CONTROL`) can load it; before, such a Program could use these modules only if
+a less restricted Program had loaded them first (a loaded module is not checked again: `QoreUserModule::addToProgramImpl()`).
+A declaration must not turn the module's public API into a bypass, so for each module:
+
+- **tag** (`[dom=...]`) the public functions and methods whose effect is the restricted capability itself:
+  process-wide state (environment variables, registrations, process-wide limits and settings), exiting the process,
+  signal handlers; a restricted caller is then refused at the API, at parse time or at run time;
+- **declare without tagging** what the module does for its own work: threads it starts for its own operations
+  (`background`, timers and tasks: the scheduling builtins are `MODULE_OWNED` and refuse a restricted caller's own
+  code, and `background` in module code is checked against the module's options, see `222_sandboxing.dox.tmpl`),
+  thread data it keeps, waits between retries or polls (`usleep()`, `sleep()`: these let a caller wait, as
+  `Counter::waitForZero()` with a timeout already does; open decision C1 in the review findings below);
+- **guard** module code that would use a capability for its caller: QUnit exits the process for a usage error and
+  installs its `SIGUSR1` handler only if no Program in the call stack restricts process control
+  (`QUnit::Priv::callersMayControlProcess()`), as `ConnectionSchemeCache::deregisterScheme()` and
+  `DataProviderRetryUtil::setTransportRetryDelayUnit()` already did;
+- the scheduling wrappers `AsyncSocketIoController::submitTask()`, `addTimer()` and `cancelTimer()` are not tagged:
+  module code arms its own timers for restricted callers (`ir/ModuleOwnedAsync.qtest`; WebSocketClient and
+  DiscordWebSocketClient do), and for a sandboxed caller (a Qorus interface has a `SandboxManager`) the
+  `MODULE_OWNED` checks of the builtins refuse the caller's own code and timers; a Program restricted only with
+  parse options has no such composition, so its closures can run on module threads (open decision C4); modules with
+  `%ifdef PO_NO_THREAD_CONTROL` workarounds (QoreAgentStrategies, QoreStructuredExtraction, WebSocketClient, ...)
+  do not declare `THREAD_CONTROL`, which would disable the workaround (C1);
+- open decision C3: DataProvider declares `THREAD_CONTROL` for its own `background` threads, but its default
+  `*Async()` methods and `DataProviderPipeline` run the caller's code (overrides, callbacks) on them; the same holds
+  for overridable methods that other declared modules run on their threads (`HttpServerUtil`'s
+  `StreamResponseProducer::run()`, the `eventLoop()` methods of the OpenAI and Anthropic stream providers,
+  ConnectDataProvider's `streamLoop()`/`datagramLoop()`, `McpClient::handleServerRequest()`), and a
+  `SandboxManager` does not stop it, as `background` in module code is checked against the module's options;
+- open decision C5: a module that module code loads at run time (`load_module()`, the on-demand factory and type
+  loading of DataProvider) is loaded with the restrictions that the loading module's Program has, which a
+  `domains` declaration relaxes, not with those of the restricted caller; the explicit "load everything" APIs
+  (`ProviderIndexUtil::tryLoadModule()`, `DataProvider::registerKnownFactories*()`) declare `PROCESS`, but the root
+  fix is in the core (add the caller's restrictions to a run-time module load made for it);
+- the core `AsyncIoController::setLogger()`, `setAutostop()` and `cancelByOwner()` act on the process-wide
+  singleton but are only `dom=NETWORK` (`set_async_io_logger()` is `PROCESS`); the AsyncSocketIo wrappers
+  `setLogger()` and `setAutostop()` declare `PROCESS`, and the builtins should too (follow-up);
+- **leave undeclared** (refused to restricted loaders) a module that is not meant for them: QLS, QoreRepl,
+  DebugUtil, DebugCmdLine, DebugProgramControl, VscDebugAdapter, the servers HttpServer, HttpServerAsyncIo and MllpUtil
+  (its listener) with the handlers that require them (A2aServerHandler, GraphQLHandler, McpServerHandler,
+  ServerSentEventHandler, WebSocketHandler, DebugHandler, DebugMcpServer), UrlDownloader (its public `cancel()` cancels the thread running a download with `cancel_thread()`),
+  and QoreMLUtils, whose searches reseed the process-wide random number generator with `srand()`.
+
+The audit loads every qlib module, with its own header removed, in a Program restricted with each of the two
+options, in a process of its own (so that no earlier load hides a use), and lists the uses in the module's own files.
+
 Follow-up (per module, needs approval): modules with `%ifdef PO_NO_PROCESS_CONTROL` / `PO_NO_THREAD_CONTROL`
 workarounds (e.g. `WebSocketClient`) can declare the domains instead.
 

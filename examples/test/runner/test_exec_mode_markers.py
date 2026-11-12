@@ -167,12 +167,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   programs and modules it compiles in child processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - RestSchemaModuleLazyTypes: the modules are loaded and compared in child processes
+        # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
+        #   module is not checked again for the next Program (#5803)
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
                          sorted(non_harness_children))
 

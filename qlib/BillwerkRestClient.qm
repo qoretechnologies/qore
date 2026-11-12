@@ -40,6 +40,8 @@ module BillwerkRestClient {
         ConnectionSchemeCache::registerScheme("billwerkrest", BillwerkRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("billwerkrests", BillwerkRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage BillwerkRestClient Module

@@ -62,7 +62,7 @@ public class BedrockActions {
 
     #! Registers all explicit Bedrock actions
     /** @param app application name */
-    static registerActions(string app = AppName) {
+    static registerActions(string app = AppName) [dom=PROCESS] {
         map DataProviderActionCatalog::registerAction($1), getActionInfoList(app);
     }
 

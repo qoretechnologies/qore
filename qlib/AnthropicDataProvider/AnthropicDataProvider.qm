@@ -38,7 +38,8 @@
 
 module AnthropicDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    # the module's own code starts the background thread that produces a streamed response
+    domains = "PROCESS,THREAD_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Anthropic Claude services";
     author = "David Nichols <david@qore.org>";

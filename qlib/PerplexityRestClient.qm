@@ -52,6 +52,8 @@ module PerplexityRestClient {
         ConnectionSchemeCache::registerScheme("perplexity", PerplexityRestConnection::ConnectionScheme);
         QoreLlmUtils::LlmProviderRegistry::registerFactory(new PerplexityLlmProviderFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 # try importing JSON for SSE parsing

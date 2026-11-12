@@ -50,6 +50,8 @@ module SendCloudRestClient {
         ConnectionSchemeCache::registerScheme("sendcloudrest", SendCloudRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("sendcloudrests", SendCloudRestConnection::ConnectionScheme);
     };
+    # the module's own code waits for rate limits and retries with sleep() or usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage SendCloudRestClient Module

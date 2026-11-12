@@ -42,6 +42,8 @@ module IntercomRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("intercom", IntercomRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage IntercomRestClient Module

@@ -43,6 +43,8 @@ module ChargebeeRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("chargebee", ChargebeeRestConnection::ConnectionScheme);
     };
+    # the module's own code waits for rate limits and retries with sleep() or usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage ChargebeeRestClient Module

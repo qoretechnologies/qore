@@ -458,7 +458,7 @@ public class ConnectionSchemeCache {
     /** @param scheme the scheme to register
         @param init the initialization code that will register the scheme
     */
-    static registerPendingScheme(string scheme, code init) {
+    static registerPendingScheme(string scheme, code init) [dom=PROCESS] {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -486,7 +486,7 @@ public class ConnectionSchemeCache {
         @return True if the connection was reigstered, False if there is already a registered connection with this
         scheme
     */
-    static bool registerScheme(string scheme, hash<ConnectionSchemeInfo> entry) {
+    static bool registerScheme(string scheme, hash<ConnectionSchemeInfo> entry) [dom=PROCESS] {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();

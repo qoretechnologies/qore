@@ -43,6 +43,8 @@ module InsightlyRestClient {
         ConnectionSchemeCache::registerScheme("insightlyrest",
             InsightlyRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage InsightlyRestClient Module

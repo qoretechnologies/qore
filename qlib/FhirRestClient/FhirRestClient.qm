@@ -44,6 +44,8 @@ module FhirRestClient {
         ConnectionSchemeCache::registerScheme("fhir", FhirRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("fhirs", FhirRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage FhirRestClient Module

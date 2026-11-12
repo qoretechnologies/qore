@@ -49,6 +49,8 @@ module ShipStationRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("shipstation", ShipStationRestConnection::ConnectionScheme);
     };
+    # the module's own code waits for rate limits and retries with sleep() or usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage ShipStationRestClient Module

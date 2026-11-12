@@ -48,6 +48,8 @@ module OllamaRestClient {
         QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
             new OllamaEmbedderFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage OllamaRestClient Module

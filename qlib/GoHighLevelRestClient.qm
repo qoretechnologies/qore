@@ -45,6 +45,8 @@ module GoHighLevelRestClient {
         ConnectionSchemeCache::registerScheme("gohighlevelres",
             GoHighLevelRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage GoHighLevelRestClient Module

@@ -32,6 +32,8 @@ module QoreAsyncJobUtils {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code waits between status polls with usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage QoreAsyncJobUtils Module

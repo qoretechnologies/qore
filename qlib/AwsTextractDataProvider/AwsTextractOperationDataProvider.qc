@@ -47,7 +47,7 @@ public class AwsTextractOperationDataProvider inherits AwsTextractDataProviderCo
 public class AwsTextractActions {
     #! Registers operations not already provided by the compatible document actions
     /** Metadata is registered through the shared catalog. */
-    static registerNativeActions() {
+    static registerNativeActions() [dom=PROCESS] {
         foreach hash<auto> entry in (AwsTextractManifest::Operations.pairIterator()) {
             if (inlist(entry.key, ("analyze-document", "detect-document-text"))) { continue; }
             hash<auto> op = entry.value;

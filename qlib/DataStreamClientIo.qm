@@ -46,6 +46,8 @@ module DataStreamClientIo {
         ConnectionSchemeCache::registerScheme("dsio", DataStreamConnectionIo::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("dsios", DataStreamConnectionIo::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage DataStreamClientIo Module

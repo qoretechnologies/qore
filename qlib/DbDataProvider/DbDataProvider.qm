@@ -758,7 +758,7 @@ public hashdecl DbVendorInfo {
 
     @since %DbDataProvider 2.4
 */
-public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
+public sub registerDbVendorApp(hash<DbVendorInfo> vendor) [dom=PROCESS] {
     # build allowed driver values from vendor capabilities
     # NOTE: we do not check dbi_get_driver_list() here because DBI drivers may not be loaded yet
     # at module init time; driver availability is validated at connection creation time

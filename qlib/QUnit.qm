@@ -42,6 +42,10 @@ module QUnit {
     author = "Zdenek Behan <zdenek.behan@qoretechnologies.com>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code uses process control: exit() for usage errors and the SIGUSR1 stack dump handler, only
+    # when no caller restricts it (QUnit::Priv::callersMayControlProcess()); and thread control: the test case it
+    # keeps in thread data and gives to the threads a test starts (set_thread_init())
+    domains = "PROCESS,THREAD_CONTROL";
 }
 
 /** @mainpage QUnit Module
@@ -184,6 +188,9 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
 
     @section qunit_v0_5_2 Version 0.5.2
+    - a @ref Qore::Program "Program" restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can
+      load the module (it declares the \c PROCESS domain); a test created there raises \c TEST-OPTION-ERROR
+      instead of exiting the process for a usage error, and does not install the \c SIGUSR1 handler
     - a test prints the call stacks of all its threads when it receives \c SIGUSR1 (for example
       <tt>kill -USR1 \<pid\></tt> on a test that hangs); \c run_tests.sh sends it to a test that exceeds its
       time limit before ending it, so the log shows where the test hangs, and aborts a test without the handler
@@ -322,8 +329,18 @@ namespace Priv {
         if (cs[i].programid != cs.last().programid) {
             return False;
         }
-        # frame n here is frame n of cs, as both calls are made from this function
-        for (int n = 0; n < cs.size(); ++n) {
+        return callersMayControlProcess();
+    }
+
+    #! Returns @ref True if no Program in the call stack restricts process control
+    /** A Program restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can use this module, as
+        it declares the \c PROCESS domain, but the module never uses process control on its behalf: it does not exit
+        the process or install a signal handler when a restricted Program is in the call stack.
+    */
+    bool sub callersMayControlProcess() {
+        # frame n here is frame n of the call stack, as both calls are made from this function
+        int frames = get_thread_call_stack().size();
+        for (int n = 0; n < frames; ++n) {
             if (Program::getCallerCapabilityMask(n) & PO_NO_PROCESS_CONTROL) {
                 return False;
             }
@@ -794,7 +811,7 @@ public class TestCase {
 
         @since QUnit 0.5.2
     */
-    setupNewThread() {
+    final setupNewThread() {
         save_thread_data("tc", self);
     }
 
@@ -802,9 +819,12 @@ public class TestCase {
     /** The code is a closure of this object, which this module creates, so it can still run when the Program of the
         test that this object belongs to has been deleted
 
+        @note final: a test case of a restricted Program cannot replace the code that the module gives to
+        @ref Qore::set_thread_init() "set_thread_init()"
+
         @since QUnit 0.5.2
     */
-    code<nothing()> getNewThreadInit() {
+    final code<nothing()> getNewThreadInit() {
         return sub () { setupNewThread(); };
     }
 
@@ -949,7 +969,16 @@ public class TestReporter {
 
     private usage() {
         usageIntern();
-        exit(1);
+        exitOptionError("usage information requested or an invalid option given");
+    }
+
+    #! Exits the process with status 1, or raises \c TEST-OPTION-ERROR when a caller restricts process control
+    private exitOptionError(string reason) {
+        if (QUnit::Priv::callersMayControlProcess()) {
+            exit(1);
+        }
+        throw "TEST-OPTION-ERROR", sprintf("%s; the test cannot exit the process, as a Program that calls it restricts "
+            "process control (PO_NO_PROCESS_CONTROL)", reason);
     }
 
     private processOptions(reference<list<string>> p_argv) {
@@ -972,7 +1001,7 @@ public class TestReporter {
 
         if (m_options.verbose && m_options.quiet && m_options.format) {
             printf("Please only select one format type\n");
-            exit(1);
+            exitOptionError("more than one format type selected");
         }
 
         if (p_argv) {
@@ -1152,7 +1181,7 @@ public class TestReporter {
     private printJunitSummary() {
 %ifdef NO_XML
         stderr.printf("No XML module found. Use --format=plain instead.\n");
-        exit(1);
+        exitOptionError("the junit format requires the xml module");
 %else
         hash junit;
         junit.testsuites."^attributes^" = (

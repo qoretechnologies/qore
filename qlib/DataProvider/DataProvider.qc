@@ -1063,7 +1063,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     }
 
     #! Registers all known data provider factories
-    static registerKnownFactories() {
+    static registerKnownFactories() [dom=PROCESS] {
         # load known modules
         map DataProvider::tryLoad($1, True), FactoryModuleList;
     }
@@ -1079,7 +1079,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @since DataProvider 3.8
     */
     static list<hash<DataProviderFactoryModuleLoadFailureInfo>>
-            registerKnownFactoriesWithReport() {
+            registerKnownFactoriesWithReport() [dom=PROCESS] {
         list<hash<DataProviderFactoryModuleLoadFailureInfo>> failures
             = new list<hash<DataProviderFactoryModuleLoadFailureInfo>>();
         foreach string module_name in (sort(FactoryModuleList)) {
@@ -1702,7 +1702,7 @@ if (errors) {
     }
 
     #! Registers all known data provider types
-    static registerKnownTypes() {
+    static registerKnownTypes() [dom=PROCESS] {
         # register basic qore types
         DataProvider::registerType("qore/hash", new HashDataType());
         DataProvider::registerType("qore/string", new QoreStringDataType());

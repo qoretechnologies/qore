@@ -418,7 +418,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @note Worker processes run in their own process groups, so they are not stopped by a signal sent to the
         process building the index; call this method when that process is asked to stop
     */
-    static int cancelWorkers() {
+    static int cancelWorkers() [dom=PROCESS] {
 %ifdef NoProcess
         {
             AutoLock al(worker_lock);
@@ -496,7 +496,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @since %ProviderIndex 1.0
     */
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
-            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) {
+            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) [dom=PROCESS] {
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -1386,7 +1386,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
 
         @since %ProviderIndex 1.2
     */
-    static prepareIndexWorker(string batch_path) {
+    static prepareIndexWorker(string batch_path) [dom=PROCESS] {
         getWorkerBatch(batch_path);
     }
 
@@ -1418,7 +1418,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @since %ProviderIndex 1.2
     */
-    static int runIndexWorker(string batch_path, *code<nothing()> setup) {
+    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS] {
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {

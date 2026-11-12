@@ -45,7 +45,8 @@
 
 module AwsS3DataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    # the module's own code starts the background I/O thread of its file location handler streams
+    domains = "PROCESS,THREAD_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Amazon S3 object storage";
     author = "David Nichols <david@qore.org>";

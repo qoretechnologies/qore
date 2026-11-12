@@ -43,6 +43,8 @@ module SystemeIoRestClient {
         ConnectionSchemeCache::registerScheme("systemeio",
             SystemeIoRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage SystemeIoRestClient Module

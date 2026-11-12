@@ -44,6 +44,8 @@ module WeaviateRestClient {
         QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
             new WeaviateVectorStoreFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage WeaviateRestClient Module

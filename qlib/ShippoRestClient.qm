@@ -48,6 +48,8 @@ module ShippoRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("shippo", ShippoRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage ShippoRestClient Module

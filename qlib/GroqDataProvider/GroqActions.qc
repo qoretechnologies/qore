@@ -262,7 +262,7 @@ public class GroqActions {
     /** @throw OPTION-ERROR action metadata is invalid
         @throw DATA-PROVIDER-ACTION-ERROR action registration fails
     */
-    static registerActions() {
+    static registerActions() [dom=PROCESS] {
         foreach hash<auto> entry in (Operations.pairIterator()) {
             hash<GroqActionInfo> op = entry.value;
             string action = entry.key;

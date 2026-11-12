@@ -48,6 +48,8 @@ module BflRestClient {
         QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
             new BflVideoGeneratorFactory());
     };
+    # the module's own code waits between job status polls with usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage BflRestClient Module

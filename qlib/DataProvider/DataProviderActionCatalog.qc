@@ -4512,7 +4512,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
 
         @return the number of applications added to the cache
     */
-    static int cacheAllRegisteredApps() {
+    static int cacheAllRegisteredApps() [dom=PROCESS] {
         int count = 0;
         foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
             try {

@@ -45,6 +45,8 @@ module DeepgramRestClient {
         QoreSpeechUtils::SpeechProviderRegistry::registerSynthesizerFactory(
             new DeepgramSynthesizerFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage DeepgramRestClient Module

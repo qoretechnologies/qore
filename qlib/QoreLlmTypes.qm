@@ -35,6 +35,8 @@ module QoreLlmTypes {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code waits between request retries with usleep()
+    domains = "PROCESS";
 }
 
 /** @mainpage QoreLlmTypes Module
@@ -946,7 +948,7 @@ public class LlmProviderRegistry {
 
         @throw LLM-CONFIG-ERROR a factory for the same mode is already registered
     */
-    static registerFactory(AbstractLlmProviderFactory factory) {
+    static registerFactory(AbstractLlmProviderFactory factory) [dom=PROCESS] {
         factory_cache_lock.lock();
         on_exit factory_cache_lock.unlock();
 
@@ -969,7 +971,7 @@ public class LlmProviderRegistry {
 
         @param mode the mode string previously registered via @ref registerFactory()
     */
-    static deregisterFactory(string mode) {
+    static deregisterFactory(string mode) [dom=PROCESS] {
         factory_cache_lock.lock();
         on_exit factory_cache_lock.unlock();
 

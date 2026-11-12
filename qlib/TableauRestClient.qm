@@ -41,6 +41,8 @@ module TableauRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("tableaures", TableauRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS";
 }
 
 /** @mainpage TableauRestClient Module

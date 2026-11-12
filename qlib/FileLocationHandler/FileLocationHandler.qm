@@ -47,6 +47,10 @@ module FileLocationHandler {
         # setup default handlers
         FileLocationHandler::init();
     };
+    # the module's own code registers its default handlers (process-wide: the handler registration and connection
+    # filter APIs declare PROCESS, so a restricted caller cannot use them) and starts the background threads of its
+    # stream I/O
+    domains = "PROCESS,THREAD_CONTROL";
 }
 
 /** @mainpage FileLocationHandler Module

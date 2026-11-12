@@ -49,8 +49,9 @@
 %endtry
 
 module DataProvider {
-    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS";
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks), and starts
+    # the background threads of its asynchronous operations (ex: AbstractDataProvider::searchRecordsAsync())
+    domains = "PROCESS,THREAD_CONTROL";
     version = "3.12";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
