@@ -18121,6 +18121,30 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     return QoreValue();
 }
 
+//! lets a held background compile that the end of the process abandons end before the process does (qore#5842)
+/** Without this, a compile held at the end of the process stays held, and the process ends with \c _exit().  With
+    \c "shutdown", the compile is let go when it is abandoned, and QoreJIT::shutdown() waits for it, so that it
+    releases the JIT; with \c "exit", it is let go at the end of the process, which waits for it and releases the JIT
+    then (QoreJIT::exitQuickly()).
+
+    @throw DBG-ARGUMENT-ERROR the point is neither \c "shutdown" nor \c "exit"
+*/
+static QoreValue f_dbg_finish_abandoned_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* where = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreJIT::DbgFinishAbandoned w;
+    if (where && *where == "shutdown") {
+        w = QoreJIT::DbgFinishAbandoned::Shutdown;
+    } else if (where && *where == "exit") {
+        w = QoreJIT::DbgFinishAbandoned::Exit;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the point must be \"shutdown\" or \"exit\"");
+        return QoreValue();
+    }
+    QoreJIT::instance().dbgFinishAbandonedCompile(w);
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler is stopped at the given point; returns False on timeout
 static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::BgCompileHoldPoint point;
@@ -21069,6 +21093,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_finish_abandoned_bg_compile", f_dbg_finish_abandoned_bg_compile, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "where");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
