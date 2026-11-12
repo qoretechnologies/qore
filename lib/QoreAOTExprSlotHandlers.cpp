@@ -1097,8 +1097,10 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         ctx.writer.writeU8(has_default ? 1 : 0);
         if (has_default) {
             std::string default_error;
+            // in the slot domain of the closure's parent, so that a closure in the default value binds the variables
+            // that it captures by their slots, as the closure's own captures do (issue #5903)
             if (!qoreAOTWriteDefaultArgValuePayload(ctx.writer, sig->getDefaultArgList()[p],
-                    "closure", ucf->getName(), pname, &default_error)) {
+                    "closure", ucf->getName(), pname, &default_error, &ctx.parent_locals)) {
                 return false;
             }
         }

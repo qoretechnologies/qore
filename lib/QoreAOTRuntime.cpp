@@ -5854,6 +5854,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
                     ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
 
+                // the closure's Program is the current one from here: also for the default values of its parameters,
+                // which can be closures, whose functions take the parse options of the current Program (issue
+                // #5903); see the comment on the class resolution below
+                QoreProgramContextHelper closure_pch(pgm);
+
                 // Read params
                 uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ptr);
                 std::vector<std::string> param_names(closure_num_params);
@@ -5867,8 +5872,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ? type_resolver.resolve(ptype, type_error) : nullptr;
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
                     if (has_default) {
+                        // a closure in the default value binds to the variables of this context, as the closure's
+                        // own captures do (issue #5903)
+                        QoreAOTValueLocalsHelper value_locals(ctx->locals, ctx->num_locals, ctx->globals,
+                            ctx->num_globals, local_owner_pgm);
                         std::string val_error;
                         defaults[p] = reader.readValue(ptr, end, val_error);
+                        if (!val_error.empty()) {
+                            printd(0, "AOT v2: cannot read the default value of closure parameter '%s' for slot %d: "
+                                "%s\n", param_names[p].c_str(), i, val_error.c_str());
+                            has_unsupported = true;
+                        }
                     }
                 }
                 bool closure_sig_has_varargs = false;
@@ -5935,8 +5949,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // AOT slot-map reconstruction can run while the global AOT init lock
                 // is held, and taking a Program parse lock here can invert lock order
                 // with another loader thread that already holds the Program parse lock
-                // and is waiting for AOT init.
-                QoreProgramContextHelper closure_pch(pgm);
+                // and is waiting for AOT init.  The context is set before the parameter defaults are read (above).
 
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {

@@ -1366,6 +1366,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
         ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
 
+    // the closure's Program is the current one from here (see below): also for the default values of its parameters,
+    // which can be closures, whose functions take the parse options of the current Program (issue #5903)
+    QoreProgramContextHelper closure_program_context(ctx.pgm);
+
     // Read params
     uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> param_names(closure_num_params);
@@ -1379,8 +1383,20 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             ? type_resolver.resolve(ptype, type_error) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
+            // a closure in the default value binds to the variables of this context, as the closure's own captures
+            // do (issue #5903)
+            QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
+                ctx.local_owner_pgm);
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            if (!val_error.empty()) {
+                for (QoreValue& v : defaults) {
+                    v.discard(nullptr);
+                }
+                ctx.error = "cannot read the default value of closure parameter '" + param_names[p] + "': "
+                    + val_error;
+                return QoreValue();
+            }
         }
     }
     bool closure_sig_has_varargs = false;
@@ -1422,7 +1438,6 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // loader can own parsing while waiting for this thread.  The caller keeps the
     // Program alive, and the Program's runtime metadata lock protects the
     // locations, strings, and locals that the closure signature allocates.
-    QoreProgramContextHelper closure_program_context(ctx.pgm);
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
