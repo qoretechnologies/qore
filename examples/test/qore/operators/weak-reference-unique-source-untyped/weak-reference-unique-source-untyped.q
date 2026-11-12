@@ -181,6 +181,17 @@ sub statics() {
     printf("method: %s\n", o.fromMethod());
 }
 
+# a local of the top level, read by a function
+auto top_list = (1, 2);
+auto top_hash = {"a": 1};
+sub topLevelLocal() {
+    auto w := top_list;
+    top_list[2] = 3;
+    auto hw := top_hash;
+    top_hash.b = 2;
+    printf("top level local from a function: %y %y\n", w, hw);
+}
+
 literalLocal();
 sharedLocal();
 twoWeakReferences();
@@ -192,6 +203,7 @@ printf("parameter shared: %y\n", fromParameter(gl));
 closureBound();
 globals();
 statics();
+topLevelLocal();
 
 # the top level
 auto tl = (1, 2);

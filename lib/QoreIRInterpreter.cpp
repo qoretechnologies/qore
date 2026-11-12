@@ -15571,12 +15571,15 @@ load_local_done:
                         clearLoadSlots(sid);
                         if (sid < local_init_slots.size() && local_init_slots[sid] != UINT32_MAX) {
                             uint32_t init_slot = local_init_slots[sid];
-                            if (init_slot < values.size()) {
-                                removeCleanupEntry(cleanup, init_slot);
-                                values[init_slot].discard(xsink);
-                                values[init_slot] = QoreValue();
+                            // a value that a later instruction of the block reads is kept (see UninstantiateLocal)
+                            if (!valueUsedLaterInCurrentBlock(init_slot)) {
+                                if (init_slot < values.size()) {
+                                    removeCleanupEntry(cleanup, init_slot);
+                                    values[init_slot].discard(xsink);
+                                    values[init_slot] = QoreValue();
+                                }
+                                local_init_slots[sid] = UINT32_MAX;
                             }
-                            local_init_slots[sid] = UINT32_MAX;
                         }
                         bool copied = false;
                         // raw slot: the value that the local holds is replaced by a unique copy of it

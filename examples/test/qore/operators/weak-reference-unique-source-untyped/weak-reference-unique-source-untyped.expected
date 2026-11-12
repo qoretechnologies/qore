@@ -29,5 +29,6 @@ static typed list: [1, 2, 3]
 static shared hash: other={a: 1} w3={a: 1, c: 3}
 static method: {a: 1, b: 2}
 method: [1, 2, 3]
+top level local from a function: [1, 2, 3] {a: 1, b: 2}
 top level local: [1, 2, 3]
 top level static: {a: 1, b: 2, c: 3}

@@ -622,8 +622,11 @@ bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
     if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
         return var->getType() != VT_IMMEDIATE && qore_weak_source_type_may_hold_container(var->getTypeInfo());
     }
-    auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
-    return static_var && qore_weak_source_type_may_hold_container(static_var->getTypeInfo());
+    if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        return qore_weak_source_type_may_hold_container(static_var->getTypeInfo());
+    }
+    // a static or global variable that AOT source parsing has not resolved (its type is not known)
+    return dynamic_cast<const DeferredStaticClassMemberRefNode*>(node) != nullptr;
 }
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,

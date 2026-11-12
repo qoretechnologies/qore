@@ -7987,7 +7987,8 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         if (source_var) {
             qore_var_t vt = source_var->getType();
             shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
-                || ((vt == VT_LOCAL) && source_var->ref.id && source_var->ref.id->closureUse());
+                || ((vt == VT_LOCAL) && source_var->ref.id
+                    && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
         }
         if (shared_source) {
             unique_source = unique;
