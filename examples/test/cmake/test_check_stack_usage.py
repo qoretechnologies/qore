@@ -21,6 +21,7 @@ import importlib.util
 import io
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -214,7 +215,9 @@ class ParseTest(unittest.TestCase):
         good = "@compiler GNU\n@build-type Release\n@target x86_64-linux-gnu\n"
         for bad in ("@compiler\n@build-type Release\n@target t\n100 f\n", good + "big f\n", good + "100 f g\n",
                 good + "100 f(int)\n", good + "100 f\n200 f\n", "@build-type Release\n@target t\n100 f\n",
-                "@compiler GNU\n@build-type Release\n100 f\n"):
+                "@compiler GNU\n@build-type Release\n100 f\n",
+                # budgets are for Release builds only
+                "@compiler GNU\n@build-type Debug\n@target t\n100 f\n"):
             with self.assertRaises(csu.InputError, msg=bad):
                 csu.parse_budgets(bad)
         settings, budgets = csu.parse_budgets(good + "# comment\n\n100 A::f\n")
@@ -315,6 +318,9 @@ class CheckTest(unittest.TestCase):
                 rc, out, _ = run(["--budgets", b, str(d)])
                 self.assertEqual(0, rc, out)
                 self.assertIn("SKIPPED", out)
+                if build_type == "Debug":
+                    self.assertIn("SKIPPED: frame budgets are calibrated for Release builds only; per-level growth "
+                        "in debug builds is covered by recursion-frame-budget.qtest (build type Debug)", out)
                 # --force checks it anyway
                 rc, out, _ = run(["--budgets", b, "--force", str(d)])
                 self.assertEqual(1, rc, out)
@@ -395,36 +401,45 @@ class CheckTest(unittest.TestCase):
             self.assertIn("MISSING", out)
 
     @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
+    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "needs g++ and objdump")
     def test_samples_with_gcc(self):
-        # GCC's clones in the samples (examples/test/cmake/stack-usage-samples), with g++ -O3: a function that
-        # partial inlining split is SPLIT (also when identical code folding merged its .part clone with another
-        # function's, when its head is inlined into all callers, for template instances and members of class
-        # templates, with an ABI tag, and next to .cold fragments and .constprop variants); an unsplit function's
-        # frame is its largest record, also with .constprop and .isra clones.  The frames are those of GCC 15, so
-        # other versions are skipped
-        version = subprocess.run(["g++", "-dumpversion"], stdout=subprocess.PIPE, universal_newlines=True).stdout
-        if version.strip().split(".")[0] != "15":
-            self.skipTest("the frames are those of GCC 15, and g++ is %s" % version.strip())
+        # GCC's clones in the samples (examples/test/cmake/stack-usage-samples), compiled with g++ -O3 for the host:
+        # the check's result for each function must agree with what the compiler's own output shows, found here
+        # independently of the check (see SampleOracle): its frame is the largest of its own records in the .su file,
+        # it is SPLIT iff the symbol table has a .part clone of it (not a .cold fragment), FOLDED iff it is only a
+        # branch, DYNAMIC iff a record is "dynamic" and not "bounded", OVERLOAD-CALL iff an overload calls another.
+        # The byte counts differ between targets and compiler versions, so none is fixed here.
+        #
+        # The samples were written to produce these shapes with GCC 15 on x86_64: a function that partial inlining
+        # splits (also when identical code folding merged its .part clone with another function's, when its head is
+        # inlined into all callers, for template instances and members of class templates, with an ABI tag, and next
+        # to .cold fragments and .constprop variants), and unsplit functions with .constprop and .isra clones.  That
+        # each sample still produces its shape is checked there only; other targets and versions may not split the
+        # same functions.
         split = "split"
+        whole = "whole"
         expected = {
-            "abi-tag.cpp": {"K::big": split, "c3": 16},
+            "abi-tag.cpp": {"K::big": split, "c3": whole},
             "anonymous-namespace.cpp": {"{anonymous}::K::f": split},
-            "cold-fragment.cpp": {"K::f": split, "g": split, "c": 48},
-            "folded-into-class-template.cpp": {"S::h": split, "g": split, "z": split, "c3": 32},
-            "folded-into-inlined-static-template.cpp": {"tf": split, "z": split, "c2": 32},
-            "folded-into-inlined-static.cpp": {"g": split, "z": split, "call": 32},
-            "folded-larger-own.cpp": {"K::f": split, "K::z": split, "c": 64},
-            "folded-overload.cpp": {"K::f": split, "K::z": split, "Q::g": split, "c": 48},
+            "cold-fragment.cpp": {"K::f": split, "g": split, "c": whole},
+            "folded-into-class-template.cpp": {"S::h": split, "g": split, "z": split, "c3": whole},
+            "folded-into-inlined-static-template.cpp": {"tf": split, "z": split, "c2": whole},
+            "folded-into-inlined-static.cpp": {"g": split, "z": split, "call": whole},
+            "folded-larger-own.cpp": {"K::f": split, "K::z": split, "c": whole},
+            "folded-overload.cpp": {"K::f": split, "K::z": split, "Q::g": split, "c": whole},
             "folded-same-arity.cpp": {"K::f": split},
-            "inlined-head-zero-record.cpp": {"{anonymous}::L::f": split, "K::f": 96, "call2": 48},
+            "inlined-head-zero-record.cpp": {"{anonymous}::L::f": split, "K::f": whole, "call2": whole},
             "member-const-char.cpp": {"K::b": split},
             # an overload split next to one with .constprop/.isra clones; template instances
-            "overloads-templates.cpp": {"N::K::big": split, "tf": split, "tf2": 304, "M::K::big": 352, "v2": 16},
+            "overloads-templates.cpp": {"N::K::big": split, "tf": split, "tf2": whole, "M::K::big": whole,
+                "v2": whole},
             # a .part clone with a .constprop variant (member and free function); a static function with a
             # .constprop clone, not split
-            "part-constprop.cpp": {"K::f": split, "g": 1264},
+            "part-constprop.cpp": {"K::f": split, "g": whole},
             "part-constprop-free.cpp": {"K::f": split, "g": split},
         }
+        version = subprocess.run(["g++", "-dumpversion"], stdout=subprocess.PIPE, universal_newlines=True).stdout
+        calibrated = version.strip().split(".")[0] == "15" and platform.machine() in ("x86_64", "AMD64")
         samples = ROOT / "examples" / "test" / "cmake" / "stack-usage-samples"
         self.assertEqual(sorted(expected), sorted(p.name for p in samples.glob("*.cpp")))
         for name, funcs in expected.items():
@@ -434,16 +449,105 @@ class CheckTest(unittest.TestCase):
                 subprocess.run(["g++", "-O3", "-fstack-usage", "-c", name, "-o", name + ".o"], cwd=str(tmp),
                     check=True)
                 results = {r[0]: r for r in csu.check([(f, 1, 1) for f in funcs], csu.collect_frames(tmp))}
-            for func, value in funcs.items():
-                label = "%s: %s: %r" % (name, func, results[func])
-                self.assertIsNone(results[func][5], label)
-                if value == split:
-                    self.assertIsNotNone(results[func][4], label)
-                    self.assertIn("[clone .part.", results[func][4], label)
-                else:
-                    self.assertIsNone(results[func][4], label)
-                    self.assertEqual(value, results[func][2], label)
+                oracle = SampleOracle(tmp / (name + ".su"), tmp / (name + ".o"))
+                for func, shape in funcs.items():
+                    _, _, frame, _, part, problem = results[func]
+                    label = "%s: %s: %r" % (name, func, results[func])
+                    # a function without records (its head inlined into all callers) has no frame of its own
+                    records = oracle.records(func)
+                    self.assertEqual(max(size for size, _ in records) if records else None, frame, label)
+                    parts = oracle.part_clones(func)
+                    if parts:
+                        self.assertIn(part, parts, label)
+                    else:
+                        self.assertIsNone(part, label)
+                    self.assertEqual(oracle.status(func), problem[0] if problem else None, label)
+                    if calibrated:
+                        self.assertEqual(shape == split, bool(parts), label)
 
+
+# markers of a branch target and padding, which are not part of what a function does
+MARKERS = ("endbr64", "endbr32", "bti", "paciasp", "hint")
+
+
+class SampleOracle:
+    """What the compiler's output for a sample shows about its functions, found from the .su file and objdump without
+    the check's code: the expected results of the check"""
+
+    def __init__(self, su_path, obj):
+        self.su = []
+        for line in su_path.read_text().splitlines():
+            fields = line.split("\t")
+            signature = fields[0].split(":", 3)[3]
+            self.su.append((signature, int(fields[1]), fields[2].split(",")))
+        out = subprocess.run(["objdump", "-t", str(obj)], stdout=subprocess.PIPE, universal_newlines=True,
+            check=True).stdout
+        # "address flags section<TAB>size name" lines of functions
+        table = [line.split("\t")[1].split() for line in out.splitlines() if " F " in line]
+        mangled = [fields[-1] for fields in table]
+        out = subprocess.run(["c++filt"] + mangled, stdout=subprocess.PIPE, universal_newlines=True,
+            check=True).stdout
+        # (mangled, demangled, size) of each function in the symbol table
+        self.symbols = [(fields[-1], d.replace("(anonymous namespace)", "{anonymous}"), int(fields[0], 16))
+            for fields, d in zip(table, out.splitlines())]
+        self.obj = obj
+
+    @staticmethod
+    def untemplated(text):
+        """text without template arguments, ABI tags and the return type"""
+        while True:
+            stripped = re.sub(r"<[^<>]*>", "", text)
+            if stripped == text:
+                break
+            text = stripped
+        return re.sub(r"\[abi:\w+\]", "", text)
+
+    def is_function(self, func, name):
+        """True if name (a .su signature or a demangled symbol) is one of func, a clone of it included"""
+        return re.search(r"(^|[\s*&])%s\(" % re.escape(func), self.untemplated(name)) is not None
+
+    def records(self, func):
+        """(bytes, qualifiers) of each record of func; a record of a .part clone ("0(...)") is not its own"""
+        return [(size, quals) for signature, size, quals in self.su
+            if not re.match(r"^\d+\(", signature) and self.is_function(func, signature)]
+
+    def part_clones(self, func):
+        return [d for _, d, _ in self.symbols if self.is_function(func, d) and "[clone .part." in d
+            and ".cold" not in d]
+
+    def functions(self, func):
+        """(mangled, demangled, size) of func's overloads (not clones)"""
+        return [s for s in self.symbols if self.is_function(func, s[1]) and "[clone " not in s[1]]
+
+    def instructions(self, mangled):
+        out = subprocess.run(["objdump", "-dr", "--no-show-raw-insn", "--disassemble=" + mangled, str(self.obj)],
+            stdout=subprocess.PIPE, universal_newlines=True, check=True).stdout
+        rv = []
+        for line in out.splitlines():
+            m = re.match(r"^\s*[0-9a-f]+:\s+R_\S+\s+(\S+?)(-0x[0-9a-f]+)?$", line)
+            if m:
+                rv[-1][2] = m.group(1)
+                continue
+            m = re.match(r"^\s*[0-9a-f]+:\s+([a-z][a-z0-9.]*)\s*(.*)$", line)
+            if m and m.group(1) not in MARKERS and not m.group(1).startswith("nop"):
+                target = re.search(r"<([^+>]*)(\+0x[0-9a-f]+)?>\s*$", m.group(2))
+                rv.append([m.group(1), m.group(2), target.group(1) if target else None])
+        return rv
+
+    def status(self, func):
+        """the status that the check gives func, or None"""
+        if any("dynamic" in quals and "bounded" not in quals for _, quals in self.records(func)):
+            return "DYNAMIC"
+        overloads = self.functions(func)
+        for mangled, _, size in overloads:
+            insns = self.instructions(mangled)
+            if size <= 16 and len(insns) == 1 and insns[0][0] in ("jmp", "b"):
+                return "FOLDED"
+        names = set(m for m, _, _ in overloads)
+        for mangled, _, _ in overloads:
+            if any(i[0] in ("call", "bl") and i[2] in names and i[2] != mangled for i in self.instructions(mangled)):
+                return "OVERLOAD-CALL"
+        return None
 
 # a body that GCC compiles to the same code wherever it is used, so that identical code folding merges its copies
 ICF_BODY = """
@@ -511,6 +615,29 @@ class ObjectCodeTest(unittest.TestCase):
             tmp = Path(tmp)
             self.compile(tmp, source)
             return {r[0]: r for r in csu.check([(f, 100000, 1) for f in funcs], csu.collect_frames(tmp))}
+
+    def test_agrees_with_compiler_output(self):
+        # on any target: the check's results for these sources agree with the compiler's output (see SampleOracle);
+        # the tests below check the results themselves where the code GCC emits is known
+        for source, funcs in ((FOLDED_CPP, ["A::a", "B::b", "sa", "sb", "other"]),
+                (DYNAMIC_CPP, ["vla", "dyn_alloca", "fixed"]), (OVERLOAD_CPP, ["K::f", "K::g"])):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                self.compile(tmp, source)
+                results = {r[0]: r for r in csu.check([(f, 100000, 1) for f in funcs], csu.collect_frames(tmp))}
+                oracle = SampleOracle(tmp / "t.cpp.su", tmp / "t.cpp.o")
+                statuses = set()
+                for func in funcs:
+                    _, _, frame, _, part, problem = results[func]
+                    label = "%s: %r" % (func, results[func])
+                    records = oracle.records(func)
+                    self.assertEqual(max(size for size, _ in records) if records else None, frame, label)
+                    self.assertEqual(bool(oracle.part_clones(func)), part is not None, label)
+                    status = oracle.status(func)
+                    self.assertEqual(status, problem[0] if problem else None, label)
+                    statuses.add(status)
+                # each source has functions the check passes
+                self.assertIn(None, statuses, source)
 
     @unittest.skipUnless(platform.machine() in ("x86_64", "AMD64"), "the wrapper of identical code folding is that of "
         "x86_64 (endbr64; jmp)")

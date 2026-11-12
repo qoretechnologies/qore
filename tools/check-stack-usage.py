@@ -19,6 +19,11 @@ and the target (the compiler's -dumpmachine triple, which names the C library) n
 checked for a build that matches them all (any other build, such as one made with a multi-config generator, is
 reported, not checked, unless --force is given).
 
+Budgets exist for Release builds only (a budget file for another build type is an error): CI checks them in the
+build-perf job (x86_64 Release), and the frames of debug builds, whose code is not what users run, are not budgeted.
+Per-level growth in debug builds is covered by examples/test/qore/stack/recursion-frame-budget.qtest, which the debug
+test jobs run on every target and which enforces the bytes per level of a recursion of interpreted code.
+
 The frame of a function is the largest of its records (all overloads; GCC records its .constprop and .isra clones,
 which are alternatives to it, under its own name), which is all of its frame as long as GCC did not split it: a
 function that partial inlining split into a head and a ".part" clone, which the head calls, has both frames on the
@@ -86,6 +91,9 @@ def parse_budgets(text, name="<budgets>"):
     for key in ("compiler", "build-type", "target"):
         if key not in settings:
             raise InputError("%s: missing setting @%s" % (name, key))
+    if settings["build-type"].lower() != "release":
+        raise InputError("%s: @build-type %s: frame budgets are calibrated for Release builds only" % (name,
+            settings["build-type"]))
     return settings, budgets
 
 
@@ -570,6 +578,10 @@ def main(argv=None):
             build_type, target, settings["compiler"], settings["build-type"], settings["target"]))
         mismatch = calibration_mismatch(settings, config)
         if mismatch:
+            if build_type.lower() != "release" and not args.force:
+                print("stack usage: SKIPPED: frame budgets are calibrated for Release builds only; per-level growth in "
+                    "debug builds is covered by recursion-frame-budget.qtest (build type %s)" % build_type)
+                return 0
             if not args.force:
                 print("stack usage: SKIPPED: the budgets are not calibrated for this build: %s (use --force to check "
                     "them anyway)" % mismatch)

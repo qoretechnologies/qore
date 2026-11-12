@@ -13,6 +13,9 @@
 # (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit.  A function that is MISSING was renamed or
 # inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
 #
+# The budgets are for Release builds only; debug builds are not checked here (their per-level growth is covered by
+# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target).
+#
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
 # the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
 # .constprop and .isra clones under its name), as an overload is assumed not to call another (checked for direct
