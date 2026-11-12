@@ -5202,6 +5202,14 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 // For CONNECT tunnel streams, set body_complete directly without
                 // re-dispatching via markStreamComplete()
                 sit->second->body_complete = true;
+                // on the client, the close of a tunnel (also when the peer reset it without END_STREAM) ends it: the
+                // stream is reported once more, so that takeCompletedStream() releases its record and the reader
+                // gets the end of the stream, or the reset recorded above as an error (issue #5862)
+                if (!session->is_server_ && sit->second->connect_tunnel_active) {
+                    sit->second->connect_tunnel_active = false;
+                    session->completed_streams_.push(stream_id);
+                    session->has_completed_streams_.store(true, std::memory_order_release);
+                }
             } else {
                 session->markStreamComplete(stream_id);
             }
