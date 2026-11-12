@@ -1627,11 +1627,6 @@ extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeI
     qore_rt_accept_return_statement_nothing(ti, xsink).discard(xsink);
 }
 
-//! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
-//! return statement (ReturnStatement::execImpl()); see QoreIROpcode::CheckReturnValue
-/** Raises "<return statement> expects type ..." if the type does not accept the value; the value is not changed, as
-    the caller applies the declared return type to it, which converts it for a type that converts it.
-*/
 //! Returns true if @a target is an object that has not been deleted (issue #5784)
 /** With the inline accessors of the value: the check is made for every call that it is emitted for.
 */
@@ -1691,6 +1686,11 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
     qore_rt_check_call_target(ctx->exprs[slot], target_bits, xsink);
 }
 
+//! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
+//! return statement (ReturnStatement::execImpl()); see QoreIROpcode::CheckReturnValue
+/** Raises "<return statement> expects type ..." if the type does not accept the value; the value is not changed, as
+    the caller applies the declared return type to it, which converts it for a type that converts it.
+*/
 extern "C" DLLEXPORT void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink) {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
