@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ArithParseResultTypesTest
+
+#! issue #5663 (and #5876): the parse result types of +, -, * and / allow every value that the operator gives at runtime
+/** The parse result type of an arithmetic operator was taken from the type of one operand when it had one value type,
+    whatever values the other operand could have (ex: int for <tt>*float + int</tt>, float for <tt>number * float</tt>),
+    so the AST interpreter raised RUNTIME-TYPE-ERROR for a typed container built from the result, and the compiled
+    modes, which trust the type, did too.  The result type is now the union of the runtime results of every combination
+    of the values that the operand types allow (QoreArithmeticParseType.h).
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class ArithParseResultTypesTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "arith-result-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("parse result types of +, -, * and /", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        list<string> lines = select astOutput().split("\n"), $1 =~ / => /;
+        assertEq(2304, lines.size(), "every case ran");
+        # no result type refuses the value of the operator
+        assertEq((), (select lines, $1 =~ /RUNTIME-TYPE-ERROR/), "result types allow every result");
+        hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
+        assertEq("[6.25]", res."number * float (2.5, 2.5)");
+        assertEq("[<time: 2 hours 30 minutes>]", res."date * float (<time: 1 hour>, 2.5)");
+        assertEq("[6.25]", res."*number * float (2.5, 2.5)");
+        assertEq("[4.5]", res."*float + int (2.5, 2)");
+        assertEq("[2]", res."*float + int (null, 2)");
+        assertEq("[4.5]", res."union<int, float> + int (2.5, 2)");
+        assertEq("[\"32\"]", res."union<int, string> + int (\"3\", 2)");
+        assertEq("[0.5]", res."*union<int, number> - int (2.5, 2)");
+        assertEq("[-2]", res."*union<int, number> - int (null, 2)");
+        # container results: the rules of an operator for operands of one type each that give another value are not
+        # used (bool + hash was typed nothing, object + object hash)
+        assertEq("[{a: 1}]", res."bool + hash<auto> (True, {a: 1})");
+        assertEq("[{a: 1}]", res."binary + hash<auto> (!!binary AQ==, {a: 1})");
+        assertEq("[\"object<C>\"]", res."C + C (object<C>, object<C>)");
+        assertEq("[\"object<C>\"]", res."C - *int (object<C>, null)");
+        assertEq("[{a: 1}]", res."hash<auto> - string ({a: 1}, \"3\")");
+        # division: an int result where both operands are ints at runtime, a number where either is a number
+        assertEq("[1]", res."*int / int (2, 2)");
+        assertEq("[1]", res."union<int, float> / int (2, 2)");
+        assertEq("[1]", res."*number / float (2.5, 2.5)");
+        assertEq("[1]", res."float / *union<int, number> (2.5, 2.5)");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    /** The cases with an operand of an or-nothing type are left out: AOT code takes NOTHING as 0 in arithmetic on
+        such operands (qore#5889)
+    */
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        list<string> exp = select astOutput().split("\n"), $1 !~ /(^|\s)\*[a-z]/;
+        TmpDir dir("arith-parse-result-types-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            list<string> actual = select ExecModeHarness::run_any(sprintf("%s %s", env, exe)).split("\n"),
+                $1 !~ /(^|\s)\*[a-z]/;
+            assertEq(exp, actual, "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

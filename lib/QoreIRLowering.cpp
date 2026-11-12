@@ -15729,7 +15729,11 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, std::str
                 constant_val = right;
                 return QoreIROpcode::MapHashKeyOffsetInt;
             }
-            if (!q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")) {
+            // the untyped variant builds a list<auto>, as the AST interpreter builds the result of a map whose
+            // expression has no parse type; a typed result (ex: union<int, float> for a *float key + 1, qore#5663)
+            // is built by the generic map lowering with the element type of the AST's result
+            if (!q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")
+                    && (!QoreTypeInfo::hasType(rtype) || rtype == autoTypeInfo)) {
                 key_name = k;
                 constant_val = right;
                 return QoreIROpcode::MapHashKeyOffsetAny;

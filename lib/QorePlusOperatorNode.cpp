@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
@@ -362,6 +363,31 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
             // only return type nothing if both types are available and return a single type
             returnTypeInfo = nothingTypeInfo;
+        }
+    }
+
+    // the result type of every combination of the values that the operand types allow, as the operator gives it at
+    // runtime (qore#5663): the rules above take the type of one operand when it has one value type, whatever values
+    // the other operand can have
+    {
+        const QoreTypeInfo* arith_ti;
+        bool single;
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single)) {
+            case QoreArithParseResult::Scalar:
+                returnTypeInfo = arith_ti;
+                break;
+            case QoreArithParseResult::Container:
+                // with one value type on each side, the rules above give a container type more precisely (ex: its
+                // element type), if they give the container that the operator returns
+                if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
+                    returnTypeInfo = arith_ti;
+                }
+                break;
+            case QoreArithParseResult::Untyped:
+                if (!bufferResultTypeInfo) {
+                    returnTypeInfo = nullptr;
+                }
+                break;
         }
     }
 

@@ -111,8 +111,10 @@ string disabled_exe = root + "/disabled";
 string enabled_compile = compile(enabled_exe, "");
 string disabled_compile = compile(disabled_exe,
     "QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION=1");
+# mix(): the six products of the *int operand are specialized; their sums and the & take int operands, as the
+# product of an *int and an int is an int (qore#5663), so they are int operations without a specialization
 if (enabled_compile
-            !~ /IR-OPT-AOT-EFFECTS: mix[^:]*:.*native-specializations=12/
+            !~ /IR-OPT-AOT-EFFECTS: mix[^:]*:.*native-specializations=6/
         || disabled_compile
             =~ /IR-OPT-AOT-EFFECTS: (intOps|floatOps|mix)[^:]*:.*native-specializations=[1-9]/) {
     printf("unexpected optional scalar specialization stats:\nenabled:\n%sdisabled:\n%s",
