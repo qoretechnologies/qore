@@ -1479,15 +1479,23 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
-//! Evaluates a default value of a closure's parameter with the variables that the closure captured
+//! Evaluates a default value of a closure's parameter with the variables that the closure captured and its object
 /** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
-    Program is the closure's here, whose closure variables they are.  The value is evaluated by the callee, as a
-    statement of its own (see design/temporary-lifetime.md)
+    Program is the closure's here, whose closure variables they are.  The self of a closure created in a method is its
+    object, which an AOT image does not capture as a variable, and which a closure created by the default value takes
+    as its object (issue #5931).  The value is evaluated by the callee, as a statement of its own (see
+    design/temporary-lifetime.md)
 */
 static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(const QoreClosureBase& closure,
         const QoreValue& exp, ExceptionSink* xsink) {
     CVecInstantiator closure_vars(closure.getCvec(), xsink);
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(&closure);
+    // the closure's object and class context, as for the closure's code: a closure created by the default value takes
+    // the object of the closure and not that of the caller (issue #5931)
+    std::optional<ObjectSubstitutionHelper> closure_self;
+    if (QoreObject* obj = closure.getObject()) {
+        closure_self.emplace(obj, closure.getClassCtx());
+    }
     QoreScopedEvalHolder dv(exp, true, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1541,8 +1549,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                if (closure && closure->getCvec() && !closure->getCvec()->empty()) [[unlikely]] {
-                    // a default value of a closure that captured variables is evaluated with them (issue #5923)
+                if (closure && ((closure->getCvec() && !closure->getCvec()->empty())
+                        || closure->getClosureParseNode()->isSelfNotCaptured())) [[unlikely]] {
+                    // a default value of a closure that captured variables or uses a self that it did not capture is
+                    // evaluated with them (issues #5923, #5931)
                     p = qore_eval_closure_default_arg(*closure, defaultArgList[i], xsink);
                     if (*xsink) {
                         return -1;

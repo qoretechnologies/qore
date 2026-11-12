@@ -1353,7 +1353,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
 
-    bool is_lambda = false, is_in_method = false;
+    bool is_lambda = false, is_in_method = false, self_not_captured = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
@@ -1561,6 +1561,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             if (!lv->closureUse()) {
                 lv->setClosureUse();
             }
+        } else if (lv) {
+            // a closure that uses the self of the method that it is in takes the object when it is created, as a
+            // closure of the method does (issue #5931): a closure in a default value of a method's closure, for one
+            is_in_method = true;
+            self_not_captured = true;
         }
     }
 
@@ -1626,6 +1631,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    if (self_not_captured) {
+        closure_node->setSelfNotCaptured();
+    }
     return QoreValue(closure_node);
 }
 

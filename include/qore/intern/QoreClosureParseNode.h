@@ -109,6 +109,12 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
+    //! Marks a closure read from an AOT image that uses the self of its method without capturing it (issue #5931)
+    DLLLOCAL void setSelfNotCaptured() { self_not_captured = true; }
+
+    //! Returns true if the closure uses the self of its method without capturing it, so its object is its self
+    DLLLOCAL bool isSelfNotCaptured() const { return self_not_captured; }
+
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
@@ -137,7 +143,9 @@ private:
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
     bool lambda, in_method,
-        is_deferred = false;
+        is_deferred = false,
+        //! the closure uses the self of its method, which an AOT image does not capture (see setSelfNotCaptured())
+        self_not_captured = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
