@@ -13518,7 +13518,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                 if (type == OBE_Error) {
                     if (qore_es_private::get(obe_xsink)->rethrown) {
                         if (xsink) {
-                            xsink->clear();
+                            qore_es_private::clearForRethrow(*xsink);
                         }
                     }
                 }
