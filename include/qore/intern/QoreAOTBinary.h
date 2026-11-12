@@ -429,6 +429,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      QORE_AOT_LOCAL_SLOT_NATIVE_WRITES), which get_local_vars() and set_local_var_value() refuse (issue #5890).  A
 //!      v9-v28 record has no such flags: every parameter and local variable of the function that is neither
 //!      closure-bound nor a reference is taken to have both.
+//! v30: a ScopeEnter instruction ends with the locals of its block that an exception leaving the scope releases
+//!      (QoreIRScopeEnterInstruction::locals: u32 count + N x (name stringref + slot u32)), so that the debug IR
+//!      releases them before the debugger's exception events of the statements that contain the block (#5867).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -444,9 +447,11 @@ constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 27;
 constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
 //! First format version whose local slot records flag the variables kept in native storage (see v29 above).
 constexpr uint16_t QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION = 29;
+//! First format version whose ScopeEnter instructions record the locals of their block (see v30 above).
+constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 30;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SCOPE_LOCALS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

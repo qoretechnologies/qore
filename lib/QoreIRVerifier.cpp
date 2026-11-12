@@ -2915,6 +2915,16 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     local_inst->is_ref = localMayHoldReference(local_inst->local,
                         creates_reference, body_local_keys);
                 }
+            } else if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                // the slots of the locals that an exception leaving the scope releases (#5867)
+                auto* se = static_cast<QoreIRScopeEnterInstruction*>(inst.get());
+                se->local_slots.assign(se->locals.size(), UINT32_MAX);
+                for (size_t i = 0; i < se->locals.size(); ++i) {
+                    auto it = slot_map.find(se->locals[i]);
+                    if (it != slot_map.end()) {
+                        se->local_slots[i] = it->second;
+                    }
+                }
             } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
                 auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
                 if (hks->container && hks->container->ref.id) {

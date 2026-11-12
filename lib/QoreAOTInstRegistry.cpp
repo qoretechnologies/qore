@@ -2391,6 +2391,13 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
 static bool writeScopeEnter(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeEnterInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
+    // the locals of the block, by name and slot, as a local instruction gives its local (#5867)
+    ctx.writer.writeU32(static_cast<uint32_t>(si->locals.size()));
+    for (size_t i = 0; i < si->locals.size(); ++i) {
+        const LocalVar* lv = si->locals[i];
+        ctx.writer.writeStringRef(lv ? lv->getName() : "");
+        ctx.writer.writeU32(i < si->local_slots.size() ? si->local_slots[i] : UINT32_MAX);
+    }
     return true;
 }
 
@@ -2400,6 +2407,22 @@ static std::unique_ptr<QoreIRInstruction> readScopeEnter(
         AOTInstReadCtx& ctx) {
     uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto inst = std::make_unique<QoreIRScopeEnterInstruction>(scope_id);
+    if (ctx.reader.getHeader().version >= QORE_AOT_SCOPE_LOCALS_VERSION) {
+        uint32_t count = QoreAOTBinaryReader::readU32(ctx.ptr);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* lname = ctx.reader.readStringRef(ctx.ptr);
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+            // a local that the function does not have is not released
+            LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+            if (!lv) {
+                lv = ctx.resolveLocal(lname);
+            }
+            if (lv) {
+                inst->locals.push_back(lv);
+                inst->local_slots.push_back(slot_id);
+            }
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
