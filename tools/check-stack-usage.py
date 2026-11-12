@@ -23,10 +23,10 @@ A function that GCC splits into a head and a ".part" clone (partial inlining) ca
 the head calls the clone, and its frame is counted as the head's plus the clone's.  GCC records the clone of a free or
 static member function as "0(<params>)" at the head's own file:line:col, and that of a non-static member function or
 a template instance under the function's own name at the same location, as it does .constprop and .isra clones, which
-are alternatives to the function: such records are added only if nm lists a ".part" clone of the function (the same
-name and number of parameters) in the object file (or the object file cannot be read, conservatively).  A .part clone
-that nm lists for a function but no record accounts for (identical code folding merged it with another function's)
-fails the check as UNACCOUNTED, as its frame is unknown; see check().
+are alternatives to the function: the clones are therefore accounted for with the symbol table of the object file
+(objdump -t), including those that identical code folding merged with another function's (the same address), and a
+.part clone that no record accounts for fails the check as UNACCOUNTED, as its frame is unknown; without the object
+file, records that may be a head and its clone are added (conservative).  See check().
 
 usage: check-stack-usage.py [--budgets FILE] [--force] [--verbose] BUILD_DIR
 exit status: 0 when every budget is met or the build is not one the budgets are for, 1 when a budget is exceeded,
@@ -226,25 +226,36 @@ def is_part_clone_of(func, signature, part_name):
     return own is not None and len(split_params(part[0])) == len(split_params(own[0])) and part[1] == own[1]
 
 
+class Symbol:
+    """A function defined in an object file: its name as objdump -C writes it (with "(anonymous namespace)" written
+    as .su records write it, "{anonymous}"), and the section, address and size of its code, which identical code
+    folding gives to every function it merges"""
+
+    def __init__(self, name, section, address, size):
+        self.name = name.replace("(anonymous namespace)", "{anonymous}")
+        self.key = (section, address, size)
+        self.is_part = "[clone .part." in name
+
+    def __repr__(self):
+        return self.name
+
+
 def object_symbols(su_path, cache):
-    """Returns (".part" clones, other functions) defined in the object file of a .su file, as nm names them, or None
-    if they cannot be read (no object file, as when a build removed it, or no nm)."""
+    """Returns the functions (Symbol) defined in the object file of a .su file, or None if they cannot be read (no
+    object file, as when a build removed it, or no objdump)."""
     obj = su_path.with_suffix(".o") if su_path else None
     if obj in cache:
         return cache[obj]
     rv = None
-    if obj and obj.exists() and shutil.which("nm"):
+    if obj and obj.exists() and shutil.which("objdump"):
         try:
-            out = subprocess.run(["nm", "-C", "--defined-only", str(obj)], stdout=subprocess.PIPE,
+            out = subprocess.run(["objdump", "-t", "-C", str(obj)], stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, universal_newlines=True, check=True).stdout
-            parts = []
-            others = []
+            rv = []
             for line in out.splitlines():
-                if line.count(" ") < 2:
-                    continue
-                name = line.split(" ", 2)[2]
-                (parts if "[clone .part." in name else others).append(name)
-            rv = (parts, others)
+                m = re.match(r"^([0-9a-fA-F]+) (.{7}) (\S+)\t([0-9a-fA-F]+) +(.*)$", line)
+                if m and "F" in m.group(2):
+                    rv.append(Symbol(m.group(5), m.group(3), int(m.group(1), 16), int(m.group(4), 16)))
         except (OSError, subprocess.CalledProcessError):
             rv = None
     cache[obj] = rv
@@ -252,10 +263,60 @@ def object_symbols(su_path, cache):
 
 
 def object_part_clones(su_path, cache):
-    """Returns the names of the ".part" clones defined in the object file of a .su file, from nm, or None if they
-    cannot be read; see object_symbols()."""
+    """Returns the names of the ".part" clones defined in the object file of a .su file, or None if they cannot be
+    read; see object_symbols()."""
     symbols = object_symbols(su_path, cache)
-    return symbols[0] if symbols else None
+    return None if symbols is None else [sym.name for sym in symbols if sym.is_part]
+
+
+def symbol_function(name):
+    """Returns the qualified name of the function of a symbol name as objdump -C writes it, without its return type
+    (which template instances have), template arguments, ABI tags, parameters, qualifiers and clone suffixes, or
+    None if it cannot be determined."""
+    name = re.sub(r"\s*\[clone [^\]]*\]", "", name).strip()
+    # the parameter list: the last top-level parenthesis
+    depth = 0
+    end = None
+    for i in range(len(name) - 1, -1, -1):
+        c = name[i]
+        if c == ")":
+            if not depth:
+                end = i
+            depth += 1
+        elif c == "(":
+            depth -= 1
+            if not depth and end is not None:
+                head = name[:i]
+                break
+    else:
+        return None
+    # ABI tags and template arguments at the end of the name
+    while True:
+        h = re.sub(r"\[abi:[^\]]*\]$", "", head)
+        if h.endswith(">"):
+            depth = 0
+            for j in range(len(h) - 1, -1, -1):
+                if h[j] == ">":
+                    depth += 1
+                elif h[j] == "<":
+                    depth -= 1
+                    if not depth:
+                        h = h[:j]
+                        break
+        if h == head:
+            break
+        head = h
+    # a return type before the name (template instances): the last top-level space
+    depth = 0
+    for j in range(len(head) - 1, -1, -1):
+        c = head[j]
+        if c in ">)":
+            depth += 1
+        elif c in "<(":
+            depth -= 1
+        elif c == " " and not depth:
+            return head[j + 1:]
+    return head
 
 
 def collect_frames(build_dir):
@@ -273,77 +334,177 @@ def collect_frames(build_dir):
     return frames
 
 
+def arity_quals(func, signature):
+    """Returns (number of parameters, qualifiers) of func in signature, or None; see match_signature()."""
+    m = match_signature(func, signature)
+    return (len(split_params(m[0])), m[1]) if m else None
+
+
+class ObjectRecords:
+    """The frame records of one .su file and the functions of its object file, for the accounting of .part clones"""
+
+    def __init__(self, path, records, symbols):
+        self.path = path
+        # (signature, bytes, location)
+        self.records = records
+        # location -> the largest "0(...)" record there
+        self.zero = {}
+        for signature, size, location in records:
+            if location and is_part_clone(signature):
+                self.zero[location] = max(size, self.zero.get(location, 0))
+        self.symbols = symbols
+
+    def groups(self, func, shape=None):
+        """Returns the records of func, optionally only those with the given (number of parameters, qualifiers):
+        (location, signature) -> sizes, largest first"""
+        rv = {}
+        for signature, size, location in self.records:
+            if is_part_clone(signature):
+                continue
+            aq = arity_quals(func, signature)
+            if aq is None or (shape is not None and aq != shape):
+                continue
+            rv.setdefault((location, signature), []).append(size)
+        for sizes in rv.values():
+            sizes.sort(reverse=True)
+        return rv
+
+    def has_head(self, func, shape):
+        """True if the object file defines func itself (not a clone) with the given shape"""
+        return any(not sym.is_part and "[clone " not in sym.name and arity_quals(func, sym.name) == shape
+            for sym in self.symbols)
+
+    def part_records(self, func, shape):
+        """Returns the frames that records of func with the given shape give for .part clones: a "0(...)" record at
+        the location of a record of the function, the larger of two records of its signature at one location, or its
+        only record if the object file does not define the function itself (the head was inlined into all callers)"""
+        rv = []
+        for (location, signature), sizes in self.groups(func, shape).items():
+            if location in self.zero:
+                rv.append(self.zero[location])
+            elif len(sizes) > 1:
+                # the head and the clone: the larger record is charged to the clone (conservative)
+                rv.append(sizes[0])
+            elif not self.has_head(func, shape):
+                rv.append(sizes[0])
+        return rv
+
+    def account(self, func):
+        """Accounts for the .part clones of the budgeted function func: returns (frames of its clones by shape,
+        unaccounted clone or None).
+
+        A clone that identical code folding merged with the clone of another function (the same code) is accounted
+        for by that function's records.  The others are accounted for by the records of func with their shape, which
+        do not tell overloads with as many parameters apart: they must give a frame for each such clone, or the excess
+        clones are unaccounted, and each is charged the largest (conservative)."""
+        frames = {}
+        unaccounted = None
+        own = {}
+        for part in self.symbols:
+            if not part.is_part or match_signature(func, part.name) is None:
+                continue
+            shape = arity_quals(func, part.name)
+            folded = []
+            for other in self.symbols:
+                if other is part or not other.is_part or other.key != part.key:
+                    continue
+                other_func = symbol_function(other.name)
+                other_shape = arity_quals(other_func, other.name) if other_func else None
+                if other_shape is None or (other_func == func and other_shape == shape):
+                    continue
+                folded += self.part_records(other_func, other_shape)
+            if folded:
+                frames.setdefault(shape, []).append((max(folded), part.name, True))
+            else:
+                own.setdefault(shape, []).append(part)
+        for shape, parts in own.items():
+            records = self.part_records(func, shape)
+            if len(parts) > len(records):
+                unaccounted = unaccounted or parts[len(records)].name
+            if records:
+                for part in parts[:len(records)]:
+                    frames.setdefault(shape, []).append((max(records), part.name, False))
+        return frames, unaccounted
+
+
 def check(budgets, frames):
     """Checks frames against budgets: returns a list of (func, budget, worst frame or None, signature or None,
     unaccounted .part clone or None).
 
     frames are (signature, bytes, path, location) records.  A function split by partial inlining has its head and its
-    ".part" clone, which the head calls, on the stack: their frames add.  GCC records the clone in two ways:
-    - for a free function or a static member function, as "0(<params>)" at the function's file:line:col, which is
-      added to the largest record of the function there;
-    - for a non-static member function or a template instance, under the function's own name at the same location;
-      GCC records .constprop and .isra clones that way as well, and they are alternatives to the function, not
-      frames on top of it, so two records of the same signature at the same location are added (the two largest)
-      only when nm lists a ".part" clone of that function (see is_part_clone_of())
-      in the object file, or when the object file cannot be read (conservative); otherwise the largest counts.
-    A .part clone that nm lists for a function whose records account for none (identical code folding merged it
-    with the clone of another function, which GCC recorded at that function's location) is reported as unaccounted:
-    its frame cannot be read from the records."""
-    zero_parts = {}
+    ".part" clone, which the head calls, on the stack: their frames add.  GCC records the clone of a free or static
+    member function as "0(<params>)" at the function's file:line:col, and that of a non-static member function or a
+    template instance under the function's own name at the same location, as it records .constprop and .isra clones,
+    which are alternatives to the function and not frames on top of it.  The clones are therefore accounted from
+    the symbols of the object file (objdump -t): every .part clone of a budgeted function (the same name, number of
+    parameters and qualifiers; overloads with as many parameters are not told apart) must be accounted for (see
+    ObjectRecords.account()) by
+    - the records of the clone of another function that identical code folding merged it with (the same section,
+      address and size), which GCC records once, at that function's location, or
+    - a record of its own: a "0(...)" record at the location of a record of its function, a second record of its
+      function's signature at the same location (the larger is charged to the clone), or its function's only record
+      if the object file does not define the function itself (the head was inlined into all of its callers); the
+      overloads with as many parameters must have as many such records as clones;
+    otherwise a clone is UNACCOUNTED and fails the check, as its frame is unknown.  The frame of each group of records
+    of the function is its head plus its clone (the largest clone of its shape for a folded one, conservatively), and
+    the largest counts.  Template instances, which .su records name by
+    their template parameters and the symbol table by their template arguments, are matched by name only and are
+    not checked for unaccounted clones.  Without the object file (or objdump), two records of the same signature at
+    the same location and a "0(...)" record at the location are added (conservative), and clones cannot be checked."""
+    by_path = {}
     for signature, size, path, location in frames:
-        if location and is_part_clone(signature):
-            key = (path, location)
-            if key not in zero_parts or size > zero_parts[key][0]:
-                zero_parts[key] = (size, signature)
-    nm_cache = {}
+        by_path.setdefault(path, []).append((signature, size, location))
+    sym_cache = {}
+    objects = [ObjectRecords(path, records, object_symbols(path, sym_cache)) for path, records in by_path.items()]
     results = []
     for func, budget, _ in budgets:
-        # the records of the function: (path, location, signature) -> sizes
-        groups = {}
-        for signature, size, path, location in frames:
-            if matches(func, signature):
-                groups.setdefault((path, location, signature), []).append(size)
         worst = None
         worst_sig = None
-        # whether each group accounts for a .part clone of the function
-        accounted = []
-        for (path, location, signature), sizes in groups.items():
-            sizes = sorted(sizes, reverse=True)
-            total = sizes[0]
-            note = ""
-            zero_part = zero_parts.get((path, location))
-            if zero_part:
-                total += zero_part[0]
-                note = " + .part clone %s at %s" % (zero_part[1], location)
-                accounted.append(True)
-            elif len(sizes) > 1:
-                part_names = object_part_clones(path, nm_cache)
-                if part_names is None or any(is_part_clone_of(func, signature, n) for n in part_names):
-                    total += sizes[1]
-                    accounted.append(True)
-                    note = " + .part clone recorded under the same name at %s%s" % (location,
-                        "" if part_names is not None else " (assumed: no object file to tell it from a .constprop "
-                        "or .isra clone)")
-            if worst is None or total > worst:
-                worst = total
-                worst_sig = signature + note
-        # a .part clone that nm lists for the function without a record that accounts for it: identical code folding
-        # merges identical .part clones of several functions into one, and GCC records it once, at the location of
-        # one of them; the frame of the clone cannot then be told from the records of this function
-        # (when nm does not list the function itself, its head was inlined into all of its callers, and its only
-        # record is that of the clone)
         unaccounted = None
-        if groups and not any(accounted):
-            for (path, location, signature), sizes in groups.items():
-                if "[with " in signature:
-                    continue
-                symbols = object_symbols(path, nm_cache)
-                if not symbols:
-                    continue
-                clones = [n for n in symbols[0] if is_part_clone_of(func, signature, n)]
-                if clones and any(is_part_clone_of(func, signature, n) for n in symbols[1]):
-                    unaccounted = clones[0]
-                    break
+        for obj in objects:
+            groups = obj.groups(func)
+            parts = [] if obj.symbols is None else [sym for sym in obj.symbols if sym.is_part
+                and match_signature(func, sym.name) is not None]
+            # every clone of the function must be accounted for
+            part_frames = {}
+            if obj.symbols is not None:
+                part_frames, obj_unaccounted = obj.account(func)
+                unaccounted = unaccounted or obj_unaccounted
+            for (location, signature), sizes in groups.items():
+                total = sizes[0]
+                note = ""
+                if location in obj.zero:
+                    total += obj.zero[location]
+                    note = " + .part clone recorded as 0(...) at %s" % location
+                elif "[with " in signature:
+                    # a template instance: by name (conservative)
+                    if len(sizes) > 1 and (obj.symbols is None or parts):
+                        total = sizes[0] + sizes[1]
+                        note = " + .part clone recorded under the same name at %s" % location
+                elif obj.symbols is None:
+                    if len(sizes) > 1:
+                        total = sizes[0] + sizes[1]
+                        note = (" + .part clone recorded under the same name at %s (assumed: no object file to tell "
+                            "it from a .constprop or .isra clone)" % location)
+                else:
+                    shape = arity_quals(func, signature)
+                    clones = part_frames.get(shape, [])
+                    if clones:
+                        if len(sizes) > 1:
+                            # the head and the clone
+                            total = sizes[0] + sizes[1]
+                            note = " + .part clone recorded under the same name at %s" % location
+                        if obj.has_head(func, shape):
+                            # a clone recorded elsewhere (folded): the head plus that clone
+                            frame, name, folded = max(clones)
+                            # the head: the smaller record if the clone of this group is recorded here too
+                            head = sizes[-1]
+                            if folded and head + frame > total:
+                                total = head + frame
+                                note = " + .part clone %s (%d B, recorded with a folded clone)" % (name, frame)
+                if worst is None or total > worst:
+                    worst = total
+                    worst_sig = signature + note
         results.append((func, budget, worst, worst_sig, unaccounted))
     return results
 
@@ -423,9 +584,9 @@ def main(argv=None):
     failed = 0
     for func, budget, worst, signature, unaccounted in check(budgets, frames):
         if unaccounted:
-            print("UNACCOUNTED %-52s budget %5d B: nm lists the .part clone %r, which no record of the function "
-                "accounts for (identical code folding merged it with the clone of another function); its frame is "
-                "unknown" % (func, budget, unaccounted))
+            print("UNACCOUNTED %-52s budget %5d B: the object file has the .part clone %r, which no record accounts "
+                "for (as when GCC records it only as \"0(...)\" at a location without a record of the function, or "
+                "for overloads with as many parameters); its frame is unknown" % (func, budget, unaccounted))
             failed += 1
             continue
         if worst is None:

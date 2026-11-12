@@ -185,29 +185,70 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(csu.is_part_clone_of("tf", "int tf(T) [with T = int]", "int tf<char>(char) [clone .part.0]"))
         self.assertEqual("int, int", csu.match_params("N::K::big", "int N::K::big(int,  int) const"))
 
-    def test_part_clone_from_nm_fixture(self):
-        # the records of an overload whose .part clone nm lists are added; those of an overload with .constprop and
-        # .isra clones are not (nm output as a fixture, so that this runs without g++)
+    def test_part_clone_from_symbol_fixture(self):
+        # the records of an overload whose .part clone the symbol table lists are added; those of an overload with
+        # .constprop and .isra clones are not (symbols as a fixture, so that this runs without g++)
         su = ("/src/d.cpp:15:5:int N::K::big(int)\t576\tstatic\n"
             "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n"
             "/src/d.cpp:15:5:int N::K::big(int)\t8\tstatic\n"
             "/src/d.cpp:16:31:int N::K::big(int, int)\t1632\tstatic\n")
-        nm = ["N::K::big(int) [clone .part.0]", "N::K::big(int, int) [clone .constprop.0] [clone .isra.0]"]
-        nm = [n for n in nm if "[clone .part." in n]
+        symbols = [csu.Symbol("N::K::big(int) [clone .part.0]", ".text", 0, 0x190),
+            csu.Symbol("N::K::big(int, int) [clone .constprop.0] [clone .isra.0]", ".text", 0x200, 0x80),
+            csu.Symbol("N::K::big(int)", ".text", 0x300, 0x17),
+            csu.Symbol("N::K::big(int, int)", ".text", 0x320, 0x40)]
         frames = frames_of(su, Path("/src/d.cpp.su"))
-        with unittest.mock.patch.object(csu, "object_part_clones", return_value=nm):
+        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
             results = csu.check([("N::K::big", 1, 1)], frames)
         self.assertEqual(1632, results[0][2])
-        with unittest.mock.patch.object(csu, "object_part_clones", return_value=nm):
+        self.assertIsNone(results[0][4])
+        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
             results = csu.check([("N::K::big", 1, 1)], [f for f in frames if f[1] != 1632])
         self.assertEqual(584, results[0][2])
+        # without the object file the two records of the overload are added (conservative)
+        self.assertEqual(3264, csu.check([("N::K::big", 1, 1)], frames)[0][2])
 
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("nm"), "g++ or nm is not available")
+    def test_folded_clone_fixture(self):
+        # identical code folding merged the clone of K::f(long) with that of K::z(long), which GCC recorded at z's
+        # location: f(long)'s frame is its head plus that clone, although its overload f(int) has a smaller clone
+        su = ("/src/o.cpp:14:5:int K::z(long int)\t1264\tstatic\n"
+            "/src/o.cpp:15:5:int K::f(int)\t368\tstatic\n"
+            "/src/o.cpp:14:5:int K::z(long int)\t8\tstatic\n"
+            "/src/o.cpp:15:5:int K::f(int)\t8\tstatic\n"
+            "/src/o.cpp:16:5:int K::f(long int)\t8\tstatic\n")
+        symbols = [csu.Symbol("K::z(long) [clone .part.0]", ".text", 0, 0x18b),
+            csu.Symbol("K::f(long) [clone .part.0]", ".text", 0, 0x18b),
+            csu.Symbol("K::f(int) [clone .part.0]", ".text", 0x190, 0x190),
+            csu.Symbol("K::z(long)", ".text", 0x650, 0x18),
+            csu.Symbol("K::f(int)", ".text", 0x670, 0x17),
+            csu.Symbol("K::f(long)", ".text", 0x690, 0x18)]
+        frames = frames_of(su, Path("/src/o.cpp.su"))
+        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
+            results = {r[0]: r for r in csu.check([("K::f", 1, 1), ("K::z", 1, 2)], frames)}
+        self.assertEqual(1272, results["K::f"][2])
+        self.assertIn("folded", results["K::f"][3])
+        self.assertIsNone(results["K::f"][4])
+        self.assertEqual(1272, results["K::z"][2])
+        # a clone at another address is not folded with z's: it is unaccounted
+        symbols[1] = csu.Symbol("K::f(long) [clone .part.0]", ".text", 0x400, 0x18b)
+        with unittest.mock.patch.object(csu, "object_symbols", return_value=symbols):
+            results = {r[0]: r for r in csu.check([("K::f", 1, 1)], frames)}
+        # the two clones of the overloads with one parameter cannot be told apart: one of them is unaccounted
+        self.assertIn(results["K::f"][4], ("K::f(long) [clone .part.0]", "K::f(int) [clone .part.0]"))
+
+    def test_symbol_names(self):
+        self.assertEqual("{anonymous}::K::f",
+            csu.symbol_function(csu.Symbol("(anonymous namespace)::K::f(int) [clone .part.0]", ".text", 0, 1).name))
+        self.assertEqual("N::K::tbig", csu.symbol_function("int N::K::tbig<char>(char) [clone .part.0]"))
+        self.assertEqual("K::big", csu.symbol_function("K::big[abi:cxx11](int) const [clone .part.0]"))
+        self.assertEqual("K::f", csu.symbol_function("K::f(int (*)(int), std::map<int, int> const&)"))
+        self.assertIsNone(csu.symbol_function("not a function"))
+
+    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
     def test_part_clone_types_and_folding_with_gcc(self):
         # nm and .su records spell parameter types differently ("char const*" and "const char*", std::string with its
         # template arguments): the clones of split members with such parameters are matched by their number; and two
-        # identical .part clones folded into one by identical code folding are recorded once, so that the frame of
-        # the other function's clone is unknown and reported
+        # identical .part clones folded into one by identical code folding are recorded once, at one function's
+        # location, and charged to both functions
         source = """#include <cstring>
 #include <string>
 extern void use(char*);
@@ -253,29 +294,124 @@ int c3(K* k, int n) { return k->f1(n) + k->f1(n * 2) + k->f2(n) + k->f2(n * 3); 
             self.assertEqual(2, len(r), func)
             self.assertEqual(r[0] + r[1], results[func][2], func)
             self.assertIsNone(results[func][4], func)
-        # one of the folded clones is recorded at the location of its function, the other is unaccounted
+        # one of the folded clones is recorded at the location of its function; the other function's frame is its
+        # head plus that record
         folded = [f for f in ("K::f1", "K::f2") if len(records(f)) == 1]
         if len(folded) != 1:
             self.skipTest("this g++ does not fold the identical .part clones")
-        self.assertIsNotNone(results[folded[0]][4])
-        self.assertIn("[clone .part.", results[folded[0]][4])
+        recorded = "K::f2" if folded[0] == "K::f1" else "K::f1"
+        self.assertIsNone(results[folded[0]][4])
+        self.assertEqual(records(folded[0])[0] + records(recorded)[0], results[folded[0]][2])
+        self.assertEqual(results[recorded][2], results[folded[0]][2])
 
     def test_unaccounted_reported(self):
         # a function with a .part clone that no record accounts for fails the check, with the clone named
         su = "/src/d.cpp:15:5:int K::f2(int)\t8\tstatic\n"
         with build_dir(su) as d:
             b = write_budgets(d, "100 K::f2\n")
-            with unittest.mock.patch.object(csu, "object_symbols",
-                    return_value=(["K::f2(int) [clone .part.0]"], ["K::f2(int)"])):
+            with unittest.mock.patch.object(csu, "object_symbols", return_value=[
+                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190), csu.Symbol("K::f2(int)", ".text", 0x200, 0x17)]):
                 rc, out, _ = run(["--budgets", b, str(d)])
         self.assertEqual(1, rc, out)
         self.assertRegex(out, r"UNACCOUNTED\s+K::f2")
         # its head inlined into all of its callers, the function's only record is that of its clone: accounted
         with build_dir(su) as d:
             b = write_budgets(d, "100 K::f2\n")
-            with unittest.mock.patch.object(csu, "object_symbols", return_value=(["K::f2(int) [clone .part.0]"], [])):
+            with unittest.mock.patch.object(csu, "object_symbols", return_value=[
+                    csu.Symbol("K::f2(int) [clone .part.0]", ".text", 0, 0x190)]):
                 rc, out, _ = run(["--budgets", b, str(d)])
         self.assertEqual(0, rc, out)
+
+    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
+    def test_overloads_folding_and_internal_with_gcc(self):
+        # an overload whose clone identical code folding merged with another function's while the other overload
+        # has a smaller clone of its own; a function in an anonymous namespace (objdump writes "(anonymous
+        # namespace)", .su records "{anonymous}"); and one whose head is inlined into all of its callers, whose clone
+        # GCC records only as "0(int)" with no record of the function at that location, so that it is unaccounted
+        source = """#include <cstring>
+extern void use(char*);
+extern void usep(void*);
+#define BODY(test, k, N) if (test) return 1; \\
+    char buf[N]; memset(buf, x, sizeof buf); usep(this); use(buf); use(buf+1); use(buf+2); use(buf+k); \\
+    for (int i = 0; i < x; ++i) { char b2[200]; memset(b2, i, sizeof b2); use(b2); use(b2+1); use(b2+2);} \\
+    use(buf+4); use(buf+5); use(buf+6); use(buf+7); use(buf+8); return buf[k];
+struct K {
+    int m;
+    int f(int x);
+    int f(long x);
+    int z(long x);
+};
+int K::z(long x) { BODY(m, 9, 1000) }
+int K::f(int x) { BODY(m, 9, 100) }
+int K::f(long x) { BODY(m, 9, 1000) }
+int c1(K* k, int n) {
+    int r = 0;
+    for (int j = 0; j < 2; ++j) r += k->f(n + j) + k->f((long)n + j) + k->z((long)n + j);
+    return r;
+}
+namespace {
+struct A {
+    int m;
+    int f(int x);
+};
+int A::f(int x) { BODY(m, 3, 1000) }
+struct L {
+    int m;
+    int f(int x);
+    int f(long x);
+};
+int L::f(int x) { BODY(m, 1, 1000) }
+__attribute__((noinline)) int L::f(long x) {
+    usep(this); int y = m; if (x > y) { char b[50]; memset(b, x, 50); use(b); } return y;
+}
+}
+int c2(A* a, int n) { int r = 0; for (int j = 0; j < 2; ++j) r += a->f(n + j); return r; }
+int (A::*ap)(int) = &A::f;
+void* app = &ap;
+void* mk();
+int c3(int n) {
+    L* l = (L*)mk();
+    int r = 0;
+    for (int j = 0; j < 2; ++j) r += l->f(n + j) + l->f((long)n + j);
+    return r;
+}
+int c4(int n) { L* l = (L*)mk(); return l->f(n * 3) + l->f(n * 5); }
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "p.cpp").write_text(source)
+            subprocess.run(["g++", "-O3", "-fstack-usage", "-c", "p.cpp", "-o", "p.cpp.o"], cwd=str(tmp), check=True)
+            frames = csu.collect_frames(tmp)
+            symbols = csu.object_symbols(tmp / "p.cpp.su", {})
+            results = {r[0]: r for r in csu.check([("K::f", 1, 1), ("K::z", 1, 2), ("{anonymous}::A::f", 1, 3),
+                ("{anonymous}::L::f", 1, 4)], frames)}
+
+        def location_total(sig):
+            # the records at the location of the function's record: its head and its clone, which GCC records as
+            # "0(...)" or under the function's name there
+            location = [f[3] for f in frames if f[0] == sig][0]
+            return sum(f[1] for f in frames if f[3] == location)
+
+        def key(name):
+            return [sym.key for sym in symbols if sym.name == name]
+
+        if not key("K::f(long) [clone .part.0]") or key("K::f(long) [clone .part.0]") != key("K::z(long) [clone .part.0]"):
+            self.skipTest("this g++ does not split and fold the functions")
+        z = location_total("int K::z(long int)")
+        self.assertEqual(z, results["K::z"][2])
+        # f(long): its head and z's clone, more than f(int)'s head and clone
+        self.assertEqual(z, results["K::f"][2])
+        self.assertGreater(results["K::f"][2], location_total("int K::f(int)"))
+        self.assertIsNone(results["K::f"][4])
+        self.assertIsNone(results["K::z"][4])
+        # the anonymous namespace
+        self.assertEqual(location_total("int {anonymous}::A::f(int)"), results["{anonymous}::A::f"][2])
+        self.assertGreater(results["{anonymous}::A::f"][2], 1000)
+        self.assertIsNone(results["{anonymous}::A::f"][4])
+        # the clone recorded only as "0(int)", at a location without a record of its function
+        if any(sym.name == "{anonymous}::L::f(int)" for sym in symbols):
+            self.skipTest("this g++ does not inline L::f(int) into all of its callers")
+        self.assertEqual("{anonymous}::L::f(int) [clone .part.0]", results["{anonymous}::L::f"][4])
 
     def test_same_location_records_without_object(self):
         # two records of the same signature at the same location are a .part clone and its head, or a .constprop or
@@ -378,13 +514,13 @@ class CheckTest(unittest.TestCase):
         self.assertFalse(csu.is_part_clone("int big(int)"))
         results = csu.check([("big", 600, 1), ("c1", 100, 2)], frames)
         self.assertEqual(584, results[0][2])
-        self.assertIn(".part clone 0(int) at /src/p.cpp:4:5", results[0][3])
+        self.assertIn(".part clone recorded as 0(...) at /src/p.cpp:4:5", results[0][3])
         self.assertEqual(16, results[1][2])
         # the same location in another .su file is another function
         frames2 = [(f[0], f[1], Path("other.su") if f[0] == "0(int)" else f[2], f[3]) for f in frames]
         self.assertEqual(8, csu.check([("big", 600, 1)], frames2)[0][2])
 
-    @unittest.skipUnless(shutil.which("g++") and shutil.which("nm"), "g++ or nm is not available")
+    @unittest.skipUnless(shutil.which("g++") and shutil.which("objdump"), "g++ or objdump is not available")
     def test_part_clones_with_gcc(self):
         # functions that GCC splits by partial inlining at -O3: the cold part with the large arrays becomes a .part
         # clone that the callers call after the inlined head; GCC records the clone of a free function as "0(int)",

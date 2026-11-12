@@ -311,7 +311,7 @@ list<string> sub exception_frames() {
         return (uProbe(),);
     }
 
-    #! uFrame() as a synchronized method, which is not called through the fast call path of native code
+    #! uFrame() as a synchronized method, whose call goes through UserMethodVariant::evalSynchronizedMethod()
     synchronized list<string> uFrameSynchronized(int n) {
         return (uProbe(),);
     }
