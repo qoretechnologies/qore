@@ -10995,8 +10995,15 @@ static const char* qoreIROpcodeDiagnosticName(QoreIROpcode op) {
     return getOpcodeName(static_cast<int>(op));
 }
 
+//! Returns the explicit type arguments of a dot-eval method call instruction
+/** From the instruction, which has them also when it was read from serialized IR, whose instructions have no
+    expression (qore#5865); otherwise from its expression
+*/
 static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_instantiation(
-        const QoreValue& expr) {
+        const QoreTypeParamInstantiation* inst, const QoreValue& expr) {
+    if (inst) {
+        return inst;
+    }
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
     if (!dot_eval) {
         return nullptr;
@@ -23936,7 +23943,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result = nullptr;
             const QoreTypeParamInstantiation* explicit_inst =
-                qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr);
+                qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->explicit_type_param_inst,
+                    direct_inst->expr);
             llvm::Value* explicit_inst_ptr = explicit_inst
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
@@ -24298,7 +24306,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 bool object_fast_path = !direct_inst->pseudo && !has_arg_cleanups
                     && !q_env_is_set("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH")
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->explicit_type_param_inst,
+                        direct_inst->expr)
                     && base_facts
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
@@ -24849,7 +24858,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             const QoreTypeParamInstantiation* explicit_inst =
-                qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr);
+                qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->explicit_type_param_inst,
+                    invoke_inst->expr);
             llvm::Value* explicit_inst_ptr = explicit_inst
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
@@ -25112,7 +25122,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 bool object_fast_path = !invoke_inst->pseudo && !has_arg_cleanups
                     && !q_env_is_set("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH")
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->explicit_type_param_inst,
+                        invoke_inst->expr)
                     && base_facts
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
