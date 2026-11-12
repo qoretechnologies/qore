@@ -1604,7 +1604,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       loading modules) declare the domain too, so that a restricted caller cannot call them, and module code that would
       use the capability for its caller checks the caller first
       (@ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()"); what the module does for its
-      own work (its threads, waits and thread data) needs no such declaration.  Since %Qore 3.0
+      own work (its threads, waits and thread data) needs no such declaration.  The module's own code may use the
+      functionality of the declared domains also when a call is resolved at run time
+      (@ref Qore::call_function() "call_function()", a method call on an untyped value, a call reference that the
+      module's code creates), for a sandboxed caller too; the same calls that the caller's code makes are checked
+      against the caller's restrictions.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be

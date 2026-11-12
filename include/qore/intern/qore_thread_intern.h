@@ -342,6 +342,8 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+//! returns the module Program whose code runs with the restrictions of a sandboxed caller on this thread, if any
+DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
@@ -518,6 +520,8 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
     that call is made on behalf of the helper's Program, so the options are those of that Program
 */
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
+//! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program

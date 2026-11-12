@@ -62,6 +62,11 @@ ifdef: False
 ref_module_args: 2
 ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS
 override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS
+own_cf: 1
+thread_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS
+yield_direct: yielded
+yield_cf: yielded
+yield_ref: yielded
 ";
 
         #! the output of the parse-time case
@@ -197,6 +202,34 @@ public string sub call_own_dyn() {
     return l.join(\",\");
 }
 
+# a call of the module's own tagged code that is resolved at run time (#5803 C2)
+public int sub call_own_cf() {
+    return call_function(\"DomMod::tagged\");
+}
+
+# runs the caller's code on a thread of the module
+public auto sub run_in_thread(code c) {
+    Queue q();
+    background sub () {
+        try {
+            q.push((\"v\": c()));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push((\"ex\": ex));
+        }
+    }();
+    hash<auto> h = q.get();
+    if (h.ex) {
+        throw h.ex.err, h.ex.desc;
+    }
+    return h.v;
+}
+
+# not tagged: uses a PROCESS builtin for any caller, as the module declares the domain
+public string sub my_yield() {
+    Qore::thread_yield();
+    return \"yielded\";
+}
+
 public code sub get_closure() {
     return auto sub () { return tagged(); };
 }
@@ -278,11 +311,16 @@ auto sub ref_static_by_name() { code c = get_call_reference(\"DomMod::Api::s\");
 # a call through a base class type that dispatches to an override with a domain
 int sub base_call(Base2 b) { return b.m(); }
 auto sub override_dispatch() { return base_call(get_over()); }
+auto sub own_cf() { return call_own_cf(); }
+auto sub thread_cf() { return run_in_thread(auto sub () { return call_function(\"DomMod::tagged\"); }); }
+auto sub yield_direct() { return my_yield(); }
+auto sub yield_cf() { return call_function(\"DomMod::my_yield\"); }
+auto sub yield_ref() { code r = \\my_yield(); return r(); }
 ";
     }
 
     #! the driver: runs the cases in a restricted Program with the execution mode given as the first argument
-    private string driverScript(string code_name) {
+    private string driverScript(string code_name, bool sandbox = False) {
         return sprintf("%%modern
 
 hash<string, ExecMode> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED};
@@ -298,6 +336,11 @@ string sub ex_str(hash<ExceptionInfo> ex) {
 }
 
 Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+SandboxManager mgr();
+if (%s) {
+    # a sandboxed caller: its restrictions are passed on to the module code that it calls
+    p.setSandboxManager(mgr);
+}
 p.setExecMode(modes{mode} ?? EM_AST);
 try {
     p.parse(code, \"cases\");
@@ -314,7 +357,7 @@ foreach string f in (ARGV[1..]) {
         printf(\"%%s: %%s\\n\", f, ex_str(ex));
     }
 }
-", code_name);
+", code_name, sandbox ? "True" : "False");
     }
 
     #! the driver for the parse-time case
@@ -427,6 +470,10 @@ try {
         string script = writeFile(tmp.path + "/runtime.q", driverScript("runtime-cases.q"));
         list<string> cases = map ($1 =~ x/^([a-z_]+):/)[0], ExpectedRuntimeOutput.split("\n"), $1.val();
         checkAllModes(script, ExpectedRuntimeOutput, cases);
+        # with a SandboxManager, module code runs with the caller's restrictions, and still uses the domains that the
+        # module declares, also in calls of its own code that are resolved at run time
+        string sb_script = writeFile(tmp.path + "/runtime-sandbox.q", driverScript("runtime-cases.q", True));
+        checkAllModes(sb_script, ExpectedRuntimeOutput, cases);
     }
 
     testParse() {

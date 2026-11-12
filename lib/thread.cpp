@@ -5871,15 +5871,22 @@ QoreParseOptions runtime_get_effective_program_parse_options() {
 }
 
 QoreParseOptions runtime_take_call_caller_parse_options() {
+    const QoreProgram* code_pgm;
+    return runtime_take_call_caller_parse_options(code_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm) {
     ThreadData* td = thread_data.get();
     if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
         const QoreProgram* caller = td->callback_caller_pgm;
         // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
+        code_pgm = caller;
         return caller->getParseOptions();
     }
-    return runtime_get_effective_program_parse_options();
+    code_pgm = td->current_pgm;
+    return runtime_get_effective_parse_options_for(td, td->current_pgm);
 }
 
 QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(RuntimeConfig& n_rc, const QoreListNode* args,
@@ -5953,6 +5960,10 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
         return po;
     }
     return po & ~td->runtime_po_caller_restrictions;
+}
+
+const QoreProgram* runtime_get_module_call_program() {
+    return thread_data.get()->runtime_po_module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {

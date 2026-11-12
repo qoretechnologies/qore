@@ -915,6 +915,10 @@ public:
     //! the functional domains that a user module declares in its module header (\c domains), which its Program does
     //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
     int64 module_own_dom = QDOM_DEFAULT;
+    //! the domains of \c module_own_dom that apply, as the module is library code (see setModuleOwnDomains()): the
+    //! module's own code may use the functionality of these domains for any caller, also when a call is resolved at
+    //! run time (see qore_relieve_module_declared_domains())
+    int64 module_trusted_dom = QDOM_DEFAULT;
     //! the restrictions that a user module header adds to the module's Program while its header is parsed
     //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
     //! qore_program_private::parseDeniedDomains())
@@ -4635,6 +4639,12 @@ public:
     //! Returns the functional domains that a user module declares in its module header (\c domains)
     DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
         return pgm.priv->module_own_dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header and that apply to it, as it is
+    //! library code
+    DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_trusted_dom;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

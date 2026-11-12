@@ -875,6 +875,9 @@ protected:
     QoreParseOptions old_rc_po;
     //! the effective runtime parse options of the caller
     QoreParseOptions caller_runtime_po;
+    //! the Program of the code making the call: the domains that its module declares are allowed in the check of
+    //! the functional domains declared on the called user variant (see qore_relieve_module_declared_domains())
+    const QoreProgram* caller_code_pgm = nullptr;
     //! the creator's parse options if the call is made through a call reference (see QoreCallReferenceCallHelper)
     const QoreParseOptions* call_ref_po = nullptr;
     //! the runtime parse options override of code entered in a module Program from another Program; see init()
@@ -1118,19 +1121,23 @@ private:
 
 //! see qore_get_variant_denied_domains(); \a vflags is the variant's functionality, which is not QDOM_DEFAULT
 DLLLOCAL int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* variant, int64 vflags,
-        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po);
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po, const QoreProgram* user_dom_code_pgm);
 
 //! Returns the functional domain bits of \a variant that are not allowed (QDOM_DEFAULT if the call is allowed)
 /** @param ppo the runtime parse options of the call
     @param user_dom_po the options that the domains declared on a user variant are checked against; if nullptr,
     \a ppo is used
+    @param user_dom_code_pgm the Program of the code making the call, if known: the domains that its module declares
+    in its module header are allowed (see qore_relieve_module_declared_domains())
 
     Code without functional domains (nearly all) costs one virtual call and a test
 */
 DLLLOCAL inline int64 qore_get_variant_denied_domains(const AbstractQoreFunctionVariant* variant,
-        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po = nullptr) {
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po = nullptr,
+        const QoreProgram* user_dom_code_pgm = nullptr) {
     int64 vflags = variant->getFunctionality();
-    return vflags ? qore_get_variant_denied_domains_intern(variant, vflags, ppo, user_dom_po) : QDOM_DEFAULT;
+    return vflags ? qore_get_variant_denied_domains_intern(variant, vflags, ppo, user_dom_po, user_dom_code_pgm)
+        : QDOM_DEFAULT;
 }
 
 class VRMutex;
@@ -1162,6 +1169,15 @@ DLLLOCAL QoreParseOptions get_module_own_access_parse_options();
 
 //! returns true if the Program holds the code of a user module
 DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
+
+//! returns \a po without the restrictions of the functional domains that the module of \a code_pgm declares in its
+//! module header, if \a code_pgm is the Program of a library module (one that the declaration applies to)
+/** Module code that declares a domain may use the functionality of that domain for any caller: at parse time, its
+    Program does not have the restriction, and at run time, the restrictions of a sandboxed caller that its code runs
+    with do not apply to the domains declared on the user code that it calls (directly, through a call resolved at
+    run time, or through a call reference that it creates)
+*/
+DLLLOCAL QoreParseOptions qore_relieve_module_declared_domains(const QoreParseOptions& po, const QoreProgram* code_pgm);
 
 //! sets the runtime parse options override for a call of a user variant; see qore_get_user_call_runtime_po_override()
 /** The part of qore_get_user_call_runtime_po_override() for module code and for code that runs in a Program other
@@ -2363,7 +2379,8 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
-            bool* content_dependent = nullptr, const QoreParseOptions* user_dom_po = nullptr) const;
+            bool* content_dependent = nullptr, const QoreParseOptions* user_dom_po = nullptr,
+            const QoreProgram* user_dom_code_pgm = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

@@ -1191,7 +1191,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 #endif
 
-    caller_runtime_po = runtime_take_call_caller_parse_options();
+    // the code making the call runs in the current Program, which the call has not changed yet
+    caller_runtime_po = runtime_take_call_caller_parse_options(caller_code_pgm);
 
     // set the program context if necessary
     QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
@@ -1397,7 +1398,7 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
     // call reference, against the context that created the reference
     variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
         &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent,
-        call_ref_po ? call_ref_po : &caller_runtime_po);
+        call_ref_po ? call_ref_po : &caller_runtime_po, call_ref_po ? nullptr : caller_code_pgm);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -3277,7 +3278,7 @@ static int64 qore_denied_domains(int64 dom, const QoreParseOptions& po) {
 }
 
 int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* variant, int64 vflags,
-        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po) {
+        const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po, const QoreProgram* user_dom_code_pgm) {
     assert(vflags);
     int64 rv = QDOM_DEFAULT;
     // the domains declared on a user variant in Qore source are checked against the restrictions of the caller (or,
@@ -3286,7 +3287,11 @@ int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* 
     if (variant->isUser()) {
         int64 declared = variant->getUserVariantBase()->getDeclaredDomain();
         if (declared) {
-            rv = qore_denied_domains(declared, user_dom_po ? *user_dom_po : ppo);
+            const QoreParseOptions& dom_po = user_dom_po ? *user_dom_po : ppo;
+            // code of a module that declares a domain may use it, also in a call resolved at run time
+            rv = user_dom_code_pgm
+                ? qore_denied_domains(declared, qore_relieve_module_declared_domains(dom_po, user_dom_code_pgm))
+                : qore_denied_domains(declared, dom_po);
             vflags &= ~declared;
             if (!vflags) {
                 return rv;
@@ -3313,7 +3318,7 @@ static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFuncti
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
-        bool* content_dependent, const QoreParseOptions* user_dom_po) const {
+        bool* content_dependent, const QoreParseOptions* user_dom_po, const QoreProgram* user_dom_code_pgm) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3574,7 +3579,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         // pgm could be zero if called from a foreign thread with no current Program
         if (pgm) {
             // check the functional domains of the variant
-            if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po)) {
+            if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po, user_dom_code_pgm)) {
                 if (!only_user) {
                     raise_invalid_function_access(xsink, this, variant, denied);
                 }
@@ -5645,6 +5650,14 @@ static QoreParseOptions keep_module_own_access_parse_options(const QoreParseOpti
         const QoreProgram* module_pgm) {
     const QoreParseOptions own_access = get_module_own_access_parse_options();
     return (po & ~own_access) | (qore_program_private::getParseOptions(*module_pgm) & own_access);
+}
+
+QoreParseOptions qore_relieve_module_declared_domains(const QoreParseOptions& po, const QoreProgram* code_pgm) {
+    if (!code_pgm) {
+        return po;
+    }
+    int64 trusted = qore_program_private::getModuleTrustedDomains(*code_pgm);
+    return trusted ? po & ~QoreParseOptions(trusted) : po;
 }
 
 bool qore_program_is_module(const QoreProgram* pgm) {

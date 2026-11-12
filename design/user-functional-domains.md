@@ -72,6 +72,22 @@ rest (class domain, builtins) is checked as before.
   are evaluated and re-targets it to the evaluated list (`QoreCallReferenceArgEvalHelper`).  In-place references
   (parse-tree `Local*`/`Deferred*` nodes) record nothing.
 - Variants bound at parse time are not checked again (as builtins); module-internal calls are therefore free.
+- **Module code may use the domains its module declares** (C2, David 2026-11-12: a header declaration means the
+  module itself ensures safety for restricted callers): the restrictions that a declared domain is checked against
+  do not include the domains that the module of the **calling code** declares in its header and that apply to it
+  (`module_trusted_dom`, set when the declaration applies: library code).  The calling code's Program is taken with
+  the caller's options before `init()` switches Programs (`runtime_take_call_caller_parse_options(code_pgm)`, one
+  thread-data lookup for both, so the call path got cheaper: release callgrind on the call benchmark, ast -0.61%,
+  ir -0.28% outside malloc) and kept in `CodeEvaluationHelper::caller_code_pgm`; the relief is computed only for a
+  variant with declared domains (`qore_relieve_module_declared_domains()` in
+  `qore_get_variant_denied_domains_intern()`).  A reference that module code creates while it runs with a sandboxed
+  caller's restrictions (`runtime_get_module_call_program()` is its Program) is relieved too; one that the caller's
+  code creates to module code is not, although the current Program can be the module's then.  The current Program
+  at the check (already the callee's) and the stack location's Program do not tell the calling code; the first
+  attempt used the former and let the caller's own `call_function()` of a tagged module function through.  Test:
+  `user-functional-domains-modes.qtest`, with and without a `SandboxManager` (the module's own `call_function()`,
+  untyped calls and references of its tagged code; the caller's closure run on a module thread stays refused; an
+  untagged method using `thread_yield()` works for the restricted caller by every route).
 - Implicit base class constructors are resolved at run time and checked against the code running `new`.
 - No-domain fast path: `qore_get_variant_denied_domains()` returns at once for functionality 0.
 

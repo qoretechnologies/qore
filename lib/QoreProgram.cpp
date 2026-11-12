@@ -1304,6 +1304,7 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
     if (!apply) {
         return QDOM_DEFAULT;
     }
+    module_trusted_dom |= n_dom;
     int64 removed = n_dom & pwo.parse_options.getLo();
     if (!removed) {
         return QDOM_DEFAULT;
