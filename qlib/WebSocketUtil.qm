@@ -66,6 +66,8 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
+    - added the optional \c max_frame_size parameter to @ref ws_read_message(): a frame whose length exceeds it raises
+      \c WEBSOCKET-FRAME-TOO-LARGE before its payload is read
     - @ref ws_read_message() raises \c WEBSOCKET-FRAME-ERROR for a 64-bit frame length with its most significant
       bit set (RFC 6455 section 5.2), which it read as a negative length, reading the socket until the peer closed
       it
@@ -283,6 +285,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         @throw WEBSOCKET-FRAME-TOO-LARGE the frame's length exceeds \a max_frame_size; the payload is not read
 
         @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
+        @since WebSocketUtil 1.6 added the \c max_frame_size parameter
     */
     public hash<WsMsgInfo> sub ws_read_message(Socket sock, *timeout to, *int max_frame_size) {
         int b0 = sock.recvu1(to);
