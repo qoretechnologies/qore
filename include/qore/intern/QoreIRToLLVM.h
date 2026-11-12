@@ -2114,6 +2114,9 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
+    // on every path (see clearLocalCachedValue())
+    void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
     void ensureLocalCacheFresh(const void* key, llvm::Module& module,
             llvm::Function* llvm_func);
 

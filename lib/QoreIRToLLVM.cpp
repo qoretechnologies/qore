@@ -5570,6 +5570,14 @@ void QoreIRToLLVM::markLocalCacheFresh(const void* key, llvm::Function* llvm_fun
     builder->CreateStore(epoch, valid_epoch);
 }
 
+void QoreIRToLLVM::markLocalCacheStale(const void* key, llvm::Function* llvm_func) {
+    if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
+        return;
+    }
+    // the current epoch only grows, so it never reaches this value
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, UINT64_MAX), getOrCreateLocalValidEpoch(key, llvm_func));
+}
+
 void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         llvm::Function* llvm_func) {
     if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
@@ -6102,6 +6110,11 @@ void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca_it->second.storage());
     }
+    // the cache is empty until the local is reloaded, which the caller does after its operation on the normal path
+    // only: the exception path of an operation that raised (a member assignment whose memberNotification() throws,
+    // a key or element store that is rejected) must reload it before it reads or publishes it, or the handlers that
+    // the exception runs, which are given the cache, and the catch block read the local as NOTHING (issue #5950)
+    markLocalCacheStale(key, llvm_func);
 }
 
 void QoreIRToLLVM::clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func) {
