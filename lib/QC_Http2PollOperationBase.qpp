@@ -717,13 +717,11 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
     ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), xsink);
     close_entry->setKeyValue("type", new QoreStringNode("close"), xsink);
     if (!*xsink) {
-        // Queue::push takes the ref on success; on error the caller derefs
-        // (mirrors drainStreamQueues()).
-        QoreHashNode* entry = close_entry.release();
-        q->push(xsink, entry);
-        if (*xsink) {
-            entry->deref(xsink);
-        }
+        // the queue takes the reference, also when it refuses the value; a queue that refuses it (one in an error
+        // state) has its error for the consumer already (issue #5840)
+        ExceptionSink push_xsink;
+        q->push(&push_xsink, close_entry.release());
+        push_xsink.clear();
     }
     q->deref(xsink);
     if (qobj) {
