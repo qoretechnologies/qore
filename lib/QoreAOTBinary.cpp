@@ -1476,7 +1476,7 @@ static bool readDeferredMemberDefault(
         }
         uint32_t nargs = QoreAOTBinaryReader::readU32(ptr);
         std::vector<QoreValue> args;
-        args.reserve(nargs);
+        args.reserve(std::min<size_t>(nargs, end - ptr));
         for (uint32_t i = 0; i < nargs; ++i) {
             QoreValue arg = reader.readValue(ptr, end, error);
             if (!error.empty()) {
@@ -1584,7 +1584,7 @@ static bool readDeferredMemberDefault(
     // Read constructor arguments regardless — args don't forward-reference
     // classes in practice (they're usually simple constant values).
     std::vector<QoreValue> args;
-    args.reserve(nargs);
+    args.reserve(std::min<size_t>(nargs, end - ptr));
     for (uint32_t i = 0; i < nargs; ++i) {
         QoreValue arg = reader.readValue(ptr, end, error);
         if (!error.empty()) {
@@ -1749,10 +1749,31 @@ static bool checkAOTSerializedValueSkipCancel(uint32_t i, std::string& error,
     return true;
 }
 
+//! The maximum nesting of the containers and arguments of a serialized value: a deeper value is malformed and fails
+//! instead of overflowing the stack of the reader (qore#5848)
+static constexpr unsigned QORE_AOT_MAX_VALUE_DEPTH = 256;
+
+//! Counts the nesting of the value that the thread reads or skips; a reader can be used by several threads at once
+struct QoreAOTValueDepthHelper {
+    static thread_local unsigned depth;
+    bool ok;
+    QoreAOTValueDepthHelper() : ok(++depth <= QORE_AOT_MAX_VALUE_DEPTH) {
+    }
+    ~QoreAOTValueDepthHelper() {
+        --depth;
+    }
+};
+thread_local unsigned QoreAOTValueDepthHelper::depth = 0;
+
 static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end, std::string& error) {
     if (ptr >= end) {
         error = "unexpected end of data skipping value tag";
+        return false;
+    }
+    QoreAOTValueDepthHelper depth_helper;
+    if (!depth_helper.ok) {
+        error = "serialized value nested too deeply";
         return false;
     }
     QoreAOTValueTag tag = static_cast<QoreAOTValueTag>(
@@ -4488,12 +4509,61 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
+    const uint8_t* start = ptr;
+    QoreValue rv = readValueIntern(ptr, end, error);
+    if (error.empty()) {
+        return rv;
+    }
+    // a value that cannot be read can stop inside itself (in an element of a list or a hash, or in an argument of a
+    // constructor): the value is skipped as a whole, so that a reader that reads on after the error reads the data that
+    // follows it, or the read pointer is at the end of the data if the value is malformed (qore#5848)
+    rv.discard(nullptr);
+    ptr = start;
+    std::string skip_error;
+    if (ptr >= end || !skipAOTSerializedValue(*this, ptr, end, skip_error)) {
+        ptr = end;
+    }
+    return QoreValue();
+}
+
+bool QoreAOTBinaryReader::skipValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const {
+    return skipAOTSerializedValue(*this, ptr, end, error);
+}
+
+QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_t* end,
+        std::string& error) const {
     if (ptr >= end) {
         error = "unexpected end of data reading value tag";
         return QoreValue();
     }
+    QoreAOTValueDepthHelper depth_helper;
+    if (!depth_helper.ok) {
+        error = "serialized value nested too deeply";
+        return QoreValue();
+    }
 
     QoreAOTValueTag tag = static_cast<QoreAOTValueTag>(readU8(ptr));
+    // the values that are resolved in the current Program: a reader that reads them without one fails (qore#5827)
+    switch (tag) {
+        case QoreAOTValueTag::VT_ENUM:
+        case QoreAOTValueTag::VT_NEW_OBJECT:
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT:
+        case QoreAOTValueTag::VT_CONST_REF:
+        case QoreAOTValueTag::VT_EXPR_TREE:
+            if (!getProgram()) {
+                error = "no current Program to resolve value tag " + std::to_string(static_cast<int>(tag));
+                return QoreValue();
+            }
+            break;
+        case QoreAOTValueTag::VT_EXPR_NATIVE:
+            if (!expr_native_capture && !getProgram()) {
+                error = "no current Program to resolve value tag " + std::to_string(static_cast<int>(tag));
+                return QoreValue();
+            }
+            break;
+        default:
+            break;
+    }
     switch (tag) {
         case QoreAOTValueTag::VT_NOTHING:
             return QoreValue();
@@ -4548,9 +4618,9 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             }
             uint32_t len = readU32(ptr);
             uint32_t str_offset = readU32(ptr);
-            const char* str = getString(str_offset);
+            const char* str = getString(str_offset, len);
             if (!str) {
-                error = "invalid string offset in value";
+                error = "invalid string offset or length in value";
                 return QoreValue();
             }
             return QoreValue::makeStringValue(str, len, QCS_UTF8);
@@ -4564,10 +4634,10 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             uint32_t len = readU32(ptr);
             uint32_t str_offset = readU32(ptr);
             uint32_t enc_offset = readU32(ptr);
-            const char* str = getString(str_offset);
+            const char* str = getString(str_offset, len);
             const char* enc_name = getString(enc_offset);
             if (!str || !enc_name || !*enc_name) {
-                error = "invalid string offset in encoded string value";
+                error = "invalid string offset or length in encoded string value";
                 return QoreValue();
             }
             return QoreValue::makeStringValue(str, len, QEM.findCreate(enc_name));
@@ -4749,7 +4819,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                     error = "AOT container value decoding cancelled";
                     return QoreValue();
                 }
-                QoreValue elem = readValue(ptr, end, error);
+                QoreValue elem = readValueIntern(ptr, end, error);
                 if (!error.empty()) {
                     elem.discard(nullptr);
                     return QoreValue();
@@ -4796,7 +4866,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                     error = "invalid string offset for hash key";
                     return QoreValue();
                 }
-                QoreValue val = readValue(ptr, end, error);
+                QoreValue val = readValueIntern(ptr, end, error);
                 if (!error.empty()) {
                     val.discard(nullptr);
                     return QoreValue();
@@ -4882,7 +4952,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             if (nargs > 0) {
                 parse_args = new QoreParseListNode(&loc_builtin);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    QoreValue arg = readValue(ptr, end, error);
+                    QoreValue arg = readValueIntern(ptr, end, error);
                     if (!error.empty()) {
                         delete parse_args;
                         return QoreValue();
@@ -4963,9 +5033,10 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             uint32_t nargs = readU32(ptr);
             // Read args (always, even if type resolution fails — must advance ptr)
             std::vector<QoreValue> args;
-            args.reserve(nargs);
+            // each argument has one byte at least: a malformed count allocates no more than the data has
+            args.reserve(std::min<size_t>(nargs, end - ptr));
             for (uint32_t i = 0; i < nargs; ++i) {
-                QoreValue arg = readValue(ptr, end, error);
+                QoreValue arg = readValueIntern(ptr, end, error);
                 if (!error.empty()) {
                     for (auto& v : args) v.discard(nullptr);
                     return QoreValue();
@@ -5126,7 +5197,11 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             const uint8_t* ep = blob;
             QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
                 nullptr, 0, nullptr, 0);
-            if (error.empty() && ep != blob_end) {
+            if (!error.empty()) {
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            if (ep != blob_end) {
                 error = "native expr default did not consume its payload";
                 rv.discard(nullptr);
                 return QoreValue();
@@ -16404,7 +16479,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
         std::vector<PendingInstanceMember> instance_members;
         if (!class_already_existed) {
-            instance_members.reserve(num_members);
+            // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+            instance_members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
         }
         for (uint32_t j = 0; j < num_members; ++j) {
             const char* mname = reader.readStringRef(ptr);
@@ -17776,7 +17852,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Constant names are registered batch-wide before resolving defaults.
         std::vector<PendingHashdeclMember> members;
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
-        members.reserve(num_members);
+        // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+        members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
 
         for (uint32_t j = 0; j < num_members; ++j) {
             if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT hashdecl member deserialization")) {
@@ -17928,7 +18005,8 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         std::vector<EnumMemberInfo> members;
 
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
-        members.reserve(num_members);
+        // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
+        members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
         for (uint32_t j = 0; j < num_members; ++j) {
             EnumMemberInfo emi;
             emi.name = makeDeferredStringRef(reader.readStringRef(ptr));

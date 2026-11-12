@@ -1355,10 +1355,36 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // closure signature allocates.
     QoreProgramContextHelper closure_program_context(ctx.pgm);
 
+    // the record is read with its bounds checked: a malformed record, or one that a default that cannot be read
+    // left at the end of the data (QoreAOTBinaryReader::readValue()), fails with the read pointer at the end of the
+    // data (qore#5848); the error of a default comes first
+    std::vector<QoreValue> defaults;
+    std::string default_error;
+    auto have = [&ctx](size_t n) -> bool {
+        return ctx.ptr <= ctx.end && static_cast<size_t>(ctx.end - ctx.ptr) >= n;
+    };
+    auto fail = [&ctx, &defaults, &default_error](const char* what) -> QoreValue {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ctx.end;
+        if (!default_error.empty()) {
+            ctx.error = std::move(default_error);
+        } else {
+            ctx.error = "unexpected end of data reading closure ";
+            ctx.error += what;
+        }
+        return QoreValue();
+    };
+
+    const bool has_native_body_key = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0;
+    if (!have(has_native_body_key ? 16 : 12)) {
+        return fail("flags");
+    }
     // Read flags
     const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
     const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+    if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
 
@@ -1379,14 +1405,17 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner) : nullptr;
 
     // Read params
+    if (!have(2)) {
+        return fail("parameter count");
+    }
     uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> param_names(closure_num_params);
     std::vector<const QoreTypeInfo*> param_types(closure_num_params);
-    std::vector<QoreValue> defaults(closure_num_params);
-    // the error of a default that cannot be read; the record is read to its end before the error is returned, so that
-    // a reader that reads more expressions after this one stays at their start
-    std::string default_error;
+    defaults.resize(closure_num_params);
     for (uint16_t p = 0; p < closure_num_params; ++p) {
+        if (!have(9)) {
+            return fail("parameter");
+        }
         const char* pname = ctx.reader.readStringRef(ctx.ptr);
         param_names[p] = pname ? pname : "";
         const char* ptype = ctx.reader.readStringRef(ctx.ptr);
@@ -1404,7 +1433,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     }
     bool closure_sig_has_varargs = false;
     bool closure_needs_extra_args = false;
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+    const bool has_varargs_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0;
+    if (!have(has_varargs_flags ? 4 : 3)) {
+        return fail("flags and captures");
+    }
+    if (has_varargs_flags) {
         uint16_t closure_flags = QoreAOTBinaryReader::readU16(ctx.ptr);
         closure_needs_extra_args = (closure_flags & 0x0001) != 0;
         closure_sig_has_varargs = (closure_flags & 0x0004) != 0;
@@ -1419,21 +1452,30 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     std::vector<std::string> captured_names(num_captured);
     std::vector<int32_t> captured_parent_slots(num_captured, -1);
     for (uint16_t c = 0; c < num_captured; ++c) {
+        if (!have(8)) {
+            return fail("capture");
+        }
         const char* cname = ctx.reader.readStringRef(ctx.ptr);
         captured_names[c] = cname ? cname : "";
         captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
     }
 
     // Read closure body IR
+    if (!have(1)) {
+        return fail("IR flag");
+    }
     uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!has_ir) {
         for (QoreValue& v : defaults) {
             v.discard(nullptr);
         }
-        ctx.error = "closure has no IR data";
+        ctx.error = default_error.empty() ? std::string("closure has no IR data") : std::move(default_error);
         return QoreValue();
     }
 
+    if (!have(4)) {
+        return fail("IR size");
+    }
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
     // the IR must be in the data, as in the slot-map reader (buildContextFromSlotMap())
     if (ctx.ptr > ctx.end || ir_size > static_cast<size_t>(ctx.end - ctx.ptr)) {

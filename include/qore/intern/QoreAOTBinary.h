@@ -1441,6 +1441,14 @@ public:
         return string_pool + offset;
     }
 
+    //! Get a string of the given length from the string pool, or nullptr if it does not fit in the pool (qore#5848)
+    const char* getString(uint32_t offset, uint32_t len) const {
+        if (!string_pool || offset >= string_pool_size || len > string_pool_size - offset) {
+            return nullptr;
+        }
+        return string_pool + offset;
+    }
+
     //! Get the decoded string-pool bytes.
     const uint8_t* getStringPoolData() const {
         return reinterpret_cast<const uint8_t*>(string_pool);
@@ -1524,14 +1532,24 @@ public:
         @param end pointer past the end of valid data
         @param error receives error message on failure
         @return the deserialized value, or NOTHING on failure
+
+        @note After an error, the read pointer is past the value, or at \a end if the value is malformed: a reader
+        that reads on after the error must check it against \a end (qore#5848)
     */
     QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+
+    //! Skip a serialized QoreValue without reading it; returns false if it is malformed
+    bool skipValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 
     //! Check if a data pointer range is valid
     bool checkRange(const uint8_t* ptr, uint32_t needed) const {
         return ptr && data_area && ptr >= data_area
             && (ptr + needed) <= (data_area + data_area_size);
     }
+
+private:
+    //! Reads a value for readValue(), which places the read pointer after an error
+    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 };
 
 //! Serializes a source line number in the current wire format.
