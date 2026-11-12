@@ -302,8 +302,9 @@ public:
     }
 
     //! sets the function entry that the parser resolved the reference to
-    /** The entry says which namespace the function is in, which the function does not (an AOT image names a function
-        of the root namespace so that it is not taken for the builtin of the same name)
+    /** The entry says which namespace the function is in, which the function does not: an AOT image names the
+        function by the path of its namespace, so that a function of the root namespace is not taken for the builtin
+        of the same name, nor a function of another namespace for the function of the same name in the root namespace
     */
     DLLLOCAL void setFunctionEntry(const FunctionEntry* n_fe) {
         fe = n_fe;
