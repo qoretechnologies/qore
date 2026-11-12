@@ -3329,7 +3329,12 @@ static bool write_expr_const_value(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     std::string value_error;
-    QoreValue rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+    // the Program resolves the hashdecls and types of typed container values (#5895)
+    QoreValue rv;
+    {
+        QoreProgramContextHelper value_pch(ctx.pgm);
+        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+    }
     if (!value_error.empty()) {
         ctx.error = value_error;
     }

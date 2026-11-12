@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the expression slots of hash values
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotHashdeclHashValueTest
+
+#! Hashdecl and complex hash values in the expression slots of AOT code (#5895)
+/** qcc serialized a hash value of a hashdecl in an expression slot (the hash<ExceptionInfo> of a %try-module error
+    variable) only as an expression tree, which native AOT code refuses, so the program did not compile; the value is
+    written as the construction of the hashdecl from its members.  AotHashdeclHashValue.q gives the output of the AST
+    interpreter in every execution mode and compiled with qcc.
+*/
+class AotHashdeclHashValueTest inherits QUnit::Test {
+    public {
+        #! the output of AotHashdeclHashValue.q with the AST interpreter
+        const Expected = "err: hash
+err.callstack: list
+LOAD-MODULE-ERROR System -1 0 Qore
+desc ok: True
+keys: [\"type\", \"file\", \"line\", \"endline\", \"source\", \"offset\", \"lang\", \"callstack\", \"err\", \"desc\"]
+C1: hash<string, int>
+C2: hash<ExceptionInfo>
+C3: list<hash<string, int>>
+C3[0]: hash<string, int>
+{a: 1} {desc: \"d\", err: \"X\"} [{b: 2}]
+C4: hash<CallStackInfo>
+{end_column: -1, endline: 1, file: \"x\", function: \"f\", lang: \"Qore\", line: 1, offset: 0, source: \"x\", type: \"user\", typecode: 0}
+THROWING-INIT init failed
+init_err.callstack: list
+callstack: [{end_column: -1, start_column: -1, function: \"<anonymous closure>\", line: -1, endline: -1, file: \"<builtin>\", offset: 0, lang: \"Qore\", typecode: 0, type: \"user\"}]
+removed: hash
+{end_column: -1, endline: 1, file: \"x\", function: \"f\", lang: \"Qore\", line: 1, offset: 0, source: \"x\", type: \"user\", typecode: 0}
+reordered: hash
+{end_column: -1, endline: 1, file: \"x\", function: \"f\", lang: \"Qore\", offset: 0, source: \"x\", start_column: -1, type: \"user\", typecode: 0, line: 5}
+own: hash
+{x: 2, y: 3}
+typed_list: list
+[{a: 1}]
+objects: list
+[]
+{z: \"p\"}
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AotHashdeclHashValueTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AotHashdeclHashValue.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": hash values in AOT expression slots", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: hash values in AOT expression slots", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-hashdecl-hash-value-");
+        string exe = tmp.path + DirSep + "aot-hashdecl-hash-value";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

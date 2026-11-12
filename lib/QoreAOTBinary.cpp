@@ -3477,6 +3477,33 @@ static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
     writer.writeStringRef(type_path ? type_path : "", len);
 }
 
+//! Returns true if the reader can resolve the type of a typed container value in the Program that is serialized
+/** The reader resolves it in the Program that loads the image (qoreAOTApplyContainerValueType()); a type that the
+    Program does not have, as a hashdecl of a module that failed to load in a %try-module, whose error hash has values
+    of it, is written as no type, as the image could not be loaded otherwise; a value of such a type in a Program has
+    no type that its code could name (#5895)
+*/
+static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& writer,
+        QoreAOTContainerValueType kind, const char* type_path, const TypedHashDecl* hd, const QoreTypeInfo* ti) {
+    QoreProgram* pgm = writer.value_type_program ? writer.value_type_program : writer.serialization_program;
+    if (!pgm) {
+        return true;
+    }
+    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs
+    QoreProgramContextHelper pch(pgm);
+    // the type that the reader finds must be the value's own: a hashdecl or class of the same name that the Program
+    // has is another type, and a type that the Program does not have resolves to a deferred type that is not the
+    // value's
+    if (kind == QoreAOTContainerValueType::HashDecl) {
+        const QoreNamespace* pns = nullptr;
+        return pgm->findHashDecl(type_path, pns) == hd;
+    }
+    QoreAOTTypeResolver resolver(pgm);
+    std::string type_error;
+    const QoreTypeInfo* rti = resolver.resolve(type_path, type_error);
+    return rti && QoreTypeInfo::equal(rti, ti);
+}
+
 static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
         const QoreListNode* list) {
     if ((writer.feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
@@ -3486,11 +3513,29 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(ti);
     if (vt && vt != anyTypeInfo) {
         std::string type_path = getAOTSerializableTypePath(ti);
-        qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
-            type_path.c_str());
-        return;
+        if (qoreAOTContainerValueTypeResolvable(writer, QoreAOTContainerValueType::Complex, type_path.c_str(),
+                nullptr, ti)) {
+            qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
+                type_path.c_str());
+            return;
+        }
     }
     qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
+}
+
+bool qore_aot_value_container_is_typed(const AbstractQoreNode* node) {
+    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
+        if (hash->getHashDecl()) {
+            return true;
+        }
+        const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(hash->getTypeInfo());
+        return vt && vt != anyTypeInfo;
+    }
+    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
+        const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(list->getTypeInfo());
+        return vt && vt != anyTypeInfo;
+    }
+    return false;
 }
 
 static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
@@ -3501,17 +3546,24 @@ static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
     if (hash) {
         if (const TypedHashDecl* hd = hash->getHashDecl()) {
             std::string path = hd->getNamespacePath();
-            qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::HashDecl,
-                path.c_str());
-            return;
-        }
-        const QoreTypeInfo* ti = hash->getTypeInfo();
-        const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
-        if (vt && vt != anyTypeInfo) {
-            std::string type_path = getAOTSerializableTypePath(ti);
-            qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
-                type_path.c_str());
-            return;
+            if (qoreAOTContainerValueTypeResolvable(writer, QoreAOTContainerValueType::HashDecl, path.c_str(), hd,
+                    nullptr)) {
+                qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::HashDecl,
+                    path.c_str());
+                return;
+            }
+        } else {
+            const QoreTypeInfo* ti = hash->getTypeInfo();
+            const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+            if (vt && vt != anyTypeInfo) {
+                std::string type_path = getAOTSerializableTypePath(ti);
+                if (qoreAOTContainerValueTypeResolvable(writer, QoreAOTContainerValueType::Complex,
+                        type_path.c_str(), nullptr, ti)) {
+                    qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
+                        type_path.c_str());
+                    return;
+                }
+            }
         }
     }
     qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
@@ -3570,6 +3622,14 @@ static bool qoreAOTApplyContainerValueType(QoreValue& v,
             error = "cannot resolve hashdecl '" + std::string(type_path)
                 + "' while reading typed AOT container value";
             return false;
+        }
+        // the value was written from a hash of the hashdecl, so the hash that was read has its keys, in their order,
+        // and values of the types of its members: it takes the hashdecl as it is, as a conversion to the hashdecl would
+        // order the keys as the hashdecl does and give the members that the value does not have their default values
+        // (#5895)
+        if (v.getType() == NT_HASH && v.get<const QoreHashNode>()->is_unique()) {
+            qore_hash_private::get(*v.get<QoreHashNode>())->setHashDecl(hd);
+            return true;
         }
         ti = hd->getTypeInfo();
     } else if (kind == QoreAOTContainerValueType::Complex) {
@@ -10611,6 +10671,7 @@ static bool aotRecordAggregateDeclarationDigest(QoreAOTBinaryWriter& writer, con
     digest_writer.available_const_ref_fqns = writer.available_const_ref_fqns;
     digest_writer.ir_local_binding_source = writer.ir_local_binding_source;
     digest_writer.serialization_program = writer.serialization_program;
+    digest_writer.value_type_program = writer.value_type_program;
     digest_writer.serialization_module_name = writer.serialization_module_name;
     digest_writer.serialization_keep_modules = writer.serialization_keep_modules;
     if (!writer.type_path_table.empty()) {
@@ -12714,32 +12775,16 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return true;
     }
 
+    // a hash or list value of a hashdecl or a complex type is the value itself, which keeps its type, keys and key
+    // order (#5895)
+    if (qore_aot_value_container_is_typed(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+        return writer.writeValue(expr);
+    }
+
     // QoreHashNode: already-evaluated hash (e.g., {}, {"key": "val"}) — serialize as HASH_LITERAL
     // Only handles string-keyed hashes with simple values for safety; empty hash is the common case.
     if (auto* qhn = dynamic_cast<const QoreHashNode*>(node)) {
-        // If this is a hashdecl-typed hash, serialize as HASHDECL_NEW to preserve the type.
-        // The reader creates a NewHashDeclNode which evaluates to a properly typed hash.
-        const TypedHashDecl* qhd = qhn->getHashDecl();
-        if (qhd) {
-            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
-            writer.writeStringRef(qhd->getNamespacePath().c_str());
-            if (qhn->empty()) {
-                writer.writeU8(0);  // no args
-            } else {
-                // Non-empty hashdecl hash: serialize the hash contents as a single HASH_LITERAL arg
-                writer.writeU8(1);  // 1 arg (the hash contents)
-                writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
-                writer.writeU8(static_cast<uint8_t>(qhn->size()));
-                ConstHashIterator it(qhn);
-                while (it.next()) {
-                    writer.writeStringRef(it.getKey());
-                    if (!write_inline_expr(it.get())) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
         if (qhn->size() <= 255) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
             writer.writeU8(static_cast<uint8_t>(qhn->size()));
@@ -13840,7 +13885,20 @@ static bool serializeCallRelocations(QoreAOTBinaryWriter& writer,
 }
 
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
-        const AOTConstantReverseMap* const_reverse_map, std::string& error) {
+        const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm) {
+    struct ValueTypeProgramScope {
+        QoreAOTBinaryWriter& writer;
+        QoreProgram* old_pgm;
+        ValueTypeProgramScope(QoreAOTBinaryWriter& n_writer, QoreProgram* pgm)
+                : writer(n_writer), old_pgm(n_writer.value_type_program) {
+            if (pgm) {
+                writer.value_type_program = pgm;
+            }
+        }
+        ~ValueTypeProgramScope() {
+            writer.value_type_program = old_pgm;
+        }
+    } value_type_program_scope(writer, pgm);
     std::string registry_error;
     if (!qore_aot_validate_expr_registries(registry_error)) {
         error = "AOT expression registry validation failed: " + registry_error;

@@ -6219,7 +6219,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                QoreValue value = reader.readValue(ptr, end, value_error);
+                // the Program resolves the hashdecls and types of typed container values (#5895)
+                QoreValue value;
+                {
+                    QoreProgramContextHelper value_pch(pgm);
+                    value = reader.readValue(ptr, end, value_error);
+                }
                 if (!value_error.empty()) {
                     printd(0, "AOT v2: error reading const value for '%s' expr slot %d: %s\n",
                         name, i, value_error.c_str());
