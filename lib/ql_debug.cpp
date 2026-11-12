@@ -20293,6 +20293,14 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 
 QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
 
+std::atomic<int64_t> qore_dbg_quic_connect_buffered{0};
+
+//! returns the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (issue #5821)
+static QoreValue f_dbg_quic_connect_buffered_bytes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_connect_buffered.load();
+}
+
 namespace {
 //! wakes the threads waiting in dbg_http_stream_credit_wait_deferred()
 std::mutex dbg_stream_credit_m;
@@ -21794,6 +21802,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_connect_buffered_bytes", f_dbg_quic_connect_buffered_bytes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_wait_deferred", f_dbg_http_stream_credit_wait_deferred,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "total",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");

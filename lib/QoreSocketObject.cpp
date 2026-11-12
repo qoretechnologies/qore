@@ -947,7 +947,12 @@ public:
             return nullptr;
         }
 
-        QoreValue rv = session->readConnectStreamData(stream_id, xsink);
+        bool credit_due;
+        QoreValue rv = session->readConnectStreamData(stream_id, xsink, &credit_due);
+        if (credit_due) {
+            // the credit granted is sent by the session's poll operation, which the wake-up runs again (issue #5821)
+            qore_http_stream_wake_socket(sock->getIoIdentityHash());
+        }
         if (*xsink) {
             done = true;
             return nullptr;

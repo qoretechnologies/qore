@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 WebSocket (extended CONNECT) connections over QUIC and their receive buffering
+
+/*  WebSocketH3ConnectBuffer.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5821: the HTTP/3 client kept a second copy of every byte received on an extended-CONNECT stream (a
+    WebSocket over HTTP/3), which only the low-level Socket::readQuicConnectStreamData() drained: a long-lived tunnel
+    held everything it received.  Each received byte is now held once, by the path that delivers it, and its stream
+    credit is granted as the application takes the messages (as for other streaming responses, issue #5820).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketH3ConnectBufferTest
+
+#! Echoes every message
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+class WebSocketH3ConnectBufferTest inherits QUnit::Test {
+    private {
+        #! a hang guard only, never a timing assertion
+        const HangGuard = 60s;
+        #! the messages echoed: far more data than any buffer bound
+        const Messages = 20;
+        const MessageSize = 1024 * 1024;
+    }
+
+    constructor() : QUnit::Test("WebSocketH3ConnectBuffer", "1.0") {
+        addTestCase("HTTP/3: data received on a WebSocket is held once", \testHeldOnce());
+        set_return_value(main());
+    }
+
+    testHeldOnce() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the CONNECT buffer accounting is only in debug builds");
+        }
+        # the CONNECT buffers of every session, which the server's and the client's sessions add to
+        int start = call_function("dbg_quic_connect_buffered_bytes");
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit {
+            server.stop();
+        }
+        server.setDefaultHandler("ws", new EchoHandler());
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        });
+        server.waitForAsyncIo();
+
+        Queue received();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                received.push(msg);
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d", linfo.port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp3(), "the WebSocket uses HTTP/3");
+
+        int before = call_function("dbg_quic_connect_buffered_bytes");
+        hash<auto> credit_before = call_function("dbg_http_stream_credit_stats");
+        foreach int i in (xrange(Messages)) {
+            binary msg = binary(strmul(sprintf("%d", i % 10), MessageSize));
+            wsc.send(msg);
+            auto echo = received.get(HangGuard);
+            assertEq(msg.size(), echo.size(), sprintf("message %d: the echo arrives whole", i));
+        }
+        # every echo was delivered to the application: no CONNECT buffer holds any of it
+        assertEq(0, call_function("dbg_quic_connect_buffered_bytes") - before,
+            "no received data is held by the CONNECT stream buffers");
+        # the stream credit of the data received was deferred until the application took the messages, and all of
+        # it was granted then (issues #5820 and #5821)
+        hash<auto> credit = call_function("dbg_http_stream_credit_stats");
+        int deferred = credit.deferred - credit_before.deferred;
+        assertGe(Messages * MessageSize, deferred, "the stream credit of every message was deferred");
+        assertEq(deferred, credit.credited - credit_before.credited, "the deferred stream credit was granted");
+        assertEq(0, credit.excess - credit_before.excess, "no credit was reported beyond what was deferred");
+
+        # the buffers of the streams and sessions are released when the WebSocket and the server end
+        wsc.disconnect();
+        server.stop();
+        assertEq(start, call_function("dbg_quic_connect_buffered_bytes"),
+            "the CONNECT stream buffers are released with their streams and sessions");
+    }
+}
