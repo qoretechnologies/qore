@@ -13324,6 +13324,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     {
         std::unordered_map<uint32_t, uint32_t> phi_uses;
         std::unordered_set<uint32_t> used_elsewhere;
+        //! the blocks of the uses of each value of used_elsewhere outside its defining block
+        std::unordered_map<uint32_t, std::vector<const QoreIRBasicBlock*>> elsewhere_use_blocks;
         std::vector<const QoreIRPhiInstruction*> phis;
         // the normal continuation of an IR invoke (in a try block), which ends its block: the code after the call,
         // such as the test of ??, is there, which is the defining block for this purpose
@@ -13377,10 +13379,40 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     auto cont_it = invoke_continuations.find(operand.id);
                     if (cont_it == invoke_continuations.end() || cont_it->second != block.get()) {
                         used_elsewhere.insert(operand.id);
+                        elsewhere_use_blocks[operand.id].push_back(block.get());
                     }
                 });
             }
         }
+        // an incoming value that is used in other blocks too can still be taken over if the Phi's block cannot reach
+        // any of these uses without the value being defined again: the accumulator of map, select and foldl, which
+        // the loop updates and the Phi of the operator's final block takes, so that a call that takes the operator's
+        // value releases it when it returns, as the AST interpreter does (f(map ..., l); qore#5801)
+        std::unordered_map<const QoreIRInstruction*, const QoreIRBasicBlock*> phi_blocks;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode == QoreIROpcode::Phi) {
+                    phi_blocks[inst_ptr.get()] = block.get();
+                }
+            }
+        }
+        std::unique_ptr<QoreIRBlockReachability> reachability;
+        auto taken_over_after_uses = [&](const QoreIRPhiInstruction* phi, uint32_t id) -> bool {
+            auto phi_it = phi_blocks.find(phi);
+            auto def_it = value_def_block.find(id);
+            auto uses_it = elsewhere_use_blocks.find(id);
+            if (phi_it == phi_blocks.end() || def_it == value_def_block.end() || uses_it == elsewhere_use_blocks.end()) {
+                return false;
+            }
+            const std::vector<const QoreIRBasicBlock*>& uses = uses_it->second;
+            if (std::find(uses.begin(), uses.end(), phi_it->second) != uses.end()) {
+                return false;
+            }
+            if (!reachability) {
+                reachability = std::make_unique<QoreIRBlockReachability>(func);
+            }
+            return !reachability->reachesAnyAvoiding(phi_it->second, def_it->second, uses);
+        };
         for (const QoreIRPhiInstruction* phi : phis) {
             if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.empty()) {
                 continue;
@@ -13388,7 +13420,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             bool temps = true;
             for (const auto& inc : phi->incoming) {
                 auto uses_it = phi_uses.find(inc.value.id);
-                if (uses_it == phi_uses.end() || uses_it->second != 1 || used_elsewhere.count(inc.value.id)) {
+                if (uses_it == phi_uses.end() || uses_it->second != 1
+                        || (used_elsewhere.count(inc.value.id) && !taken_over_after_uses(phi, inc.value.id))) {
                     temps = false;
                     break;
                 }

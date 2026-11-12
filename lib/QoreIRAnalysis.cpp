@@ -2685,6 +2685,145 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
     return true;
 }
 
+// documented in QoreIRAnalysis.h
+QoreIRBlockReachability::QoreIRBlockReachability(const QoreIRFunction& func) {
+    const size_t n = func.blocks.size();
+    block_ids.reserve(n);
+    for (size_t b = 0; b < n; ++b) {
+        block_ids[func.blocks[b].get()] = static_cast<uint32_t>(b);
+    }
+    successors.resize(n);
+    for (size_t b = 0; b < n; ++b) {
+        auto add = [&](const QoreIRBasicBlock* target) {
+            auto it = block_ids.find(target);
+            if (it != block_ids.end()) {
+                successors[b].push_back(it->second);
+            }
+        };
+        const auto& insts = func.blocks[b]->instructions;
+        if (!insts.empty()) {
+            qore_ir_visit_successors(*insts.back(), [&](QoreIRBasicBlock* target) { add(target); });
+        }
+        for (const auto& inst : insts) {
+            if (inst->exception_target) {
+                add(inst->exception_target);
+            }
+            if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (throw_inst->exception_target) {
+                    add(throw_inst->exception_target);
+                }
+            }
+        }
+    }
+    // Tarjan's algorithm, iteratively
+    constexpr uint32_t unvisited = UINT32_MAX;
+    std::vector<uint32_t> index(n, unvisited);
+    std::vector<uint32_t> lowlink(n, 0);
+    std::vector<uint8_t> on_stack(n, 0);
+    std::vector<uint32_t> stack;
+    component.assign(n, 0);
+    uint32_t next_index = 0;
+    uint32_t next_component = 0;
+    // (block, next successor to visit)
+    std::vector<std::pair<uint32_t, size_t>> call_stack;
+    for (uint32_t root = 0; root < n; ++root) {
+        if (index[root] != unvisited) {
+            continue;
+        }
+        call_stack.emplace_back(root, 0);
+        index[root] = lowlink[root] = next_index++;
+        stack.push_back(root);
+        on_stack[root] = 1;
+        while (!call_stack.empty()) {
+            uint32_t v = call_stack.back().first;
+            size_t& i = call_stack.back().second;
+            if (i < successors[v].size()) {
+                uint32_t w = successors[v][i++];
+                if (index[w] == unvisited) {
+                    index[w] = lowlink[w] = next_index++;
+                    stack.push_back(w);
+                    on_stack[w] = 1;
+                    call_stack.emplace_back(w, 0);
+                } else if (on_stack[w] && index[w] < lowlink[v]) {
+                    lowlink[v] = index[w];
+                }
+                continue;
+            }
+            // v is done
+            if (lowlink[v] == index[v]) {
+                uint32_t w;
+                do {
+                    w = stack.back();
+                    stack.pop_back();
+                    on_stack[w] = 0;
+                    component[w] = next_component;
+                } while (w != v);
+                ++next_component;
+            }
+            call_stack.pop_back();
+            if (!call_stack.empty()) {
+                uint32_t parent = call_stack.back().first;
+                if (lowlink[v] < lowlink[parent]) {
+                    lowlink[parent] = lowlink[v];
+                }
+            }
+        }
+    }
+}
+
+// documented in QoreIRAnalysis.h
+bool QoreIRBlockReachability::reachesAnyAvoiding(const QoreIRBasicBlock* from, const QoreIRBasicBlock* avoid,
+        const std::vector<const QoreIRBasicBlock*>& targets) const {
+    auto from_it = block_ids.find(from);
+    if (from_it == block_ids.end()) {
+        return true;
+    }
+    const uint32_t start = from_it->second;
+    const uint32_t start_component = component[start];
+    // a target of a component that finished later than the start's cannot be reached; one of the start's own component
+    // is reached within the component; one of a component that finished earlier needs a walk of the function
+    std::vector<uint8_t> is_target(successors.size(), 0);
+    bool any = false;
+    bool within_component = true;
+    for (const QoreIRBasicBlock* t : targets) {
+        auto it = block_ids.find(t);
+        if (it == block_ids.end()) {
+            return true;
+        }
+        uint32_t c = component[it->second];
+        if (c > start_component) {
+            continue;
+        }
+        if (c < start_component) {
+            within_component = false;
+        }
+        is_target[it->second] = 1;
+        any = true;
+    }
+    if (!any) {
+        return false;
+    }
+    auto avoid_it = block_ids.find(avoid);
+    const uint32_t avoid_id = avoid_it == block_ids.end() ? UINT32_MAX : avoid_it->second;
+    std::vector<uint8_t> visited(successors.size(), 0);
+    std::vector<uint32_t> work(successors[start].begin(), successors[start].end());
+    while (!work.empty()) {
+        uint32_t b = work.back();
+        work.pop_back();
+        if (visited[b] || b == avoid_id || (within_component && component[b] != start_component)) {
+            continue;
+        }
+        visited[b] = 1;
+        if (is_target[b]) {
+            return true;
+        }
+        for (uint32_t succ : successors[b]) {
+            work.push_back(succ);
+        }
+    }
+    return false;
+}
+
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg) {
     if (cfg.cancelled) {
         return {};
@@ -17976,6 +18115,10 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
             case QoreIROpcode::MakeHashConstKeys:
             case QoreIROpcode::HashKeyAccess:
             case QoreIROpcode::AddAny:
+            // hash - key and a list or hash cast take the values of their operand as well (qore#5801)
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::CastList:
+            case QoreIROpcode::CastHash:
                 return true;
             default:
                 return false;
@@ -18072,12 +18215,17 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
         }
     }
     observable.assign(max_id + 1, 0);
+    // a temporary that holds the values of its operands: a list or hash literal, the result of list + list, hash + hash
+    // (AddAny), hash - key (SubAny), and a list or hash cast, which gives a new container or its operand (qore#5801)
     auto is_temp_container = [](const QoreIRInstruction* inst) -> bool {
         switch (inst->opcode) {
             case QoreIROpcode::MakeList:
             case QoreIROpcode::MakeHash:
             case QoreIROpcode::MakeHashConstKeys:
             case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::CastList:
+            case QoreIROpcode::CastHash:
                 return true;
             default:
                 return false;

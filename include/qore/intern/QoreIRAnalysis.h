@@ -66,6 +66,34 @@ struct QoreIRControlFlowGraph {
     bool cancelled = false;
 };
 
+//! Answers whether a block of a function can reach any of a set of blocks without passing a given block
+/** The control-flow edges are the normal successors and the exception targets of the instructions (a throw's too).
+    The strongly connected components of the graph are computed once (iteratively, in linear time); Tarjan's algorithm
+    finishes a component after every component that it reaches, so a block of a component that finished later than
+    the start's cannot be reached from it, which answers the common case - the uses of an operator's accumulator in its
+    loop, and the operator's final block after the loop - in constant time; only a block of the start's own component
+    (an operator in an enclosing loop) needs a walk, which stays within the component, and a block of a component that
+    finished earlier a walk of the function.
+
+    Built without check points: the IR interpreter caches the results of its analysis for every thread that runs the
+    function, so they must not depend on a cancellation pending in the thread that computes them
+*/
+class QoreIRBlockReachability {
+public:
+    explicit QoreIRBlockReachability(const QoreIRFunction& func);
+
+    //! returns true if \a from reaches a block of \a targets through a path of at least one edge that does not pass
+    //! \a avoid (a path that comes back to \a from counts)
+    bool reachesAnyAvoiding(const QoreIRBasicBlock* from, const QoreIRBasicBlock* avoid,
+            const std::vector<const QoreIRBasicBlock*>& targets) const;
+
+private:
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> block_ids;
+    std::vector<std::vector<uint32_t>> successors;
+    //! the component of each block: the order in which Tarjan's algorithm finished it
+    std::vector<uint32_t> component;
+};
+
 struct QoreIRNaturalLoop {
     size_t header = 0;
     size_t preheader = 0;

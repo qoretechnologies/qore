@@ -328,6 +328,30 @@ static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
         || dynamic_cast<const QoreHashMapSelectOperatorNode*>(node));
 }
 
+//! returns true for a type whose values hold no object: a scalar, or a list or hash of such values (recursively)
+/** Releasing such a value runs no destructor, so releasing it earlier cannot be observed and costs only instructions
+*/
+static bool qore_ir_type_holds_only_immediates(const QoreTypeInfo* ti, unsigned depth = 0) {
+    if (!ti || !QoreTypeInfo::hasType(ti) || depth > 8) {
+        return false;
+    }
+    if (ti == bigIntTypeInfo || ti == floatTypeInfo || ti == boolTypeInfo || ti == stringTypeInfo
+            || ti == dateTypeInfo || ti == binaryTypeInfo || ti == numberTypeInfo || ti == softBigIntTypeInfo
+            || ti == softFloatTypeInfo || ti == softBoolTypeInfo || ti == softStringTypeInfo
+            || ti == bigIntOrNothingTypeInfo || ti == floatOrNothingTypeInfo || ti == boolOrNothingTypeInfo
+            || ti == stringOrNothingTypeInfo || ti == dateOrNothingTypeInfo || ti == binaryOrNothingTypeInfo
+            || ti == numberOrNothingTypeInfo) {
+        return true;
+    }
+    if (const QoreTypeInfo* elem = QoreTypeInfo::getReturnComplexListOrNothing(ti)) {
+        return elem != autoTypeInfo && qore_ir_type_holds_only_immediates(elem, depth + 1);
+    }
+    if (const QoreTypeInfo* value = QoreTypeInfo::getReturnComplexHashOrNothing(ti)) {
+        return value != autoTypeInfo && qore_ir_type_holds_only_immediates(value, depth + 1);
+    }
+    return false;
+}
+
 //! Releases the temporary sequence of a slice once the slice has been made
 /** The AST interpreter evaluates the sequence of a slice into a holder that the slice releases when it returns; the
     compiled modes release a statement's temporaries when the statement ends, unless an instruction releases them
@@ -5771,7 +5795,27 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (!functional_source_captures.empty() && rv.isValid() && expr.hasNode()) {
         FunctionalSourceCapture& capture = functional_source_captures.back();
         if (capture.node && capture.node == expr.getInternalNode() && !capture.value.isValid()) {
-            capture.value = rv;
+            // a read of a local variable is released only if it is a plain read, whose value the frame holds with a
+            // reference of its own: a read through a reference and one of a closure-bound or top-level local keep
+            // their value to the end of the statement (see FunctionalSourceRelease::sourceNode())
+            if (!dynamic_cast<const VarRefNode*>(capture.node)) {
+                capture.value = rv;
+            } else if (QoreIRBasicBlock* block = builder.getBlock()) {
+                if (!block->instructions.empty()) {
+                    const QoreIRInstruction* last = block->instructions.back().get();
+                    // a local whose type admits a reference (an untyped local, which can hold the reference that a
+                    // caller gave or that the function created) can be read through it, and the value read through a
+                    // reference lives to the end of the statement (ReferenceReadLifetime.qtest)
+                    // the release of a value that holds no object cannot be observed: it costs only instructions
+                    if (last->opcode == QoreIROpcode::LoadLocal && last->result.id == rv.id) {
+                        const auto* load = static_cast<const QoreIRLocalInstruction*>(last);
+                        if (qore_ir_is_plain_local_read(*load) && !qore_ir_local_may_hold_reference(load->local)
+                                && !qore_ir_type_holds_only_immediates(load->local->getTypeInfo())) {
+                            capture.value = rv;
+                        }
+                    }
+                }
+            }
         }
     }
     return rv;
@@ -5785,13 +5829,17 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     source expression gave is recorded by lowerExpression() while the operator is lowered, and released with
     ReleaseOwnedTemp at the end of the operator's lowering, where the operator's value is (the iterator of a loop
     holds its own reference, released when the iterator is exhausted).  The instruction releases a value only when the
-    frame owns it as a temporary, so a source read from a variable is left alone.
+    frame owns it as a temporary.  A plain read of a local variable holds a reference of the frame, while the AST
+    interpreter's operator borrows the variable's value, so such a read is released after the operator too, as a call
+    argument is (<tt>f(map $1, l) + (l = NOTHING)</tt> destroys the list's objects before the rest of the statement
+    runs; qore#5801); a read through a reference, one of a closure-bound or a top-level local, and one of a local whose
+    type admits a reference (an untyped local) live until the statement ends.
 
-    The operator's value must not borrow from the source: a source that is known to be a list gives a new list or hash
-    of the values that the operator's expressions gave, each with a reference of its own, but over a single value the
-    compiled modes give the value itself, and a fold gives one of the source's elements; so only a source of a list
-    type is released (for a fused pipeline of stages, its base source), and the source of foldl and foldr, and a source
-    of another type, are left to the statement's release.
+    The operator's value must not borrow from the source: a source that is known to be a list (or NOTHING) gives a new
+    list or hash of the values that the operator's expressions gave, each with a reference of its own, or NOTHING, but
+    over a single value the compiled modes give the value itself, and a fold gives one of the source's elements; so
+    for a fold and a source of another type, lowerWithSourceRelease() gives the operator's value a reference of its own
+    (RefSelf, and the value's own slot then gives its reference up) before the source is released.
 */
 class QoreIRLowering::FunctionalSourceRelease {
 public:
@@ -5831,19 +5879,28 @@ private:
 public:
     //! returns the node of a source of a list type, whose value is released, or nullptr
     DLLLOCAL static const AbstractQoreNode* sourceNode(const QoreValue& source) {
-        // a temporary list (qore_ir_expr_is_temporary()): a variable's value is not a temporary, and an implicit
-        // argument's is the element slot, which the operator's expressions read again
-        if (!qore_ir_expr_is_temporary(source)) {
-            return nullptr;
+        // a temporary list (qore_ir_expr_is_temporary()) or a read of a local variable, which is released only if it
+        // is a plain read (see lowerExpressionImpl()); an implicit argument's value is the element slot, which the
+        // operator's expressions read again
+        if (qore_ir_expr_is_temporary(source)) {
+            return source.getInternalNode();
         }
-        return source.getInternalNode();
+        const VarRefNode* var = source.hasNode() ? dynamic_cast<const VarRefNode*>(source.getInternalNode()) : nullptr;
+        return var && var->getType() == VT_LOCAL ? source.getInternalNode() : nullptr;
     }
 
-    //! returns true if the source is known to be a list, so that the operator's value is a new container
+    //! returns true if the source is known to be a list or NOTHING, so that the operator's value is a new container
+    //! or NOTHING, never the source's value
     DLLLOCAL static bool isListSource(const QoreValue& source) {
-        return QoreTypeInfo::isType(getExprTypeInfo(source), NT_LIST);
+        const QoreTypeInfo* ti = getExprTypeInfo(source);
+        return QoreTypeInfo::isType(ti, NT_LIST) || ti == listOrNothingTypeInfo
+            || QoreTypeInfo::getReturnComplexListOrNothing(ti);
     }
 };
+
+bool QoreIRLowering::functionalSourceReleased() const {
+    return !functional_source_captures.empty() && functional_source_captures.back().value.isValid();
+}
 
 void QoreIRLowering::setFunctionalBaseSource(const QoreValue& base_source) {
     if (!functional_source_captures.empty()) {
@@ -16184,7 +16241,12 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
             && (always_ref || capture.may_alias) && !qore_ir_type_is_immediate_scalar(getExprTypeInfo(expr))) {
         QoreIRBasicBlock* block = builder.getBlock();
         if (block && (block->instructions.empty() || !isTerminator(block->instructions.back()->opcode))) {
-            result = builder.createRefSelf(result, loc)->result;
+            QoreIRValue value = result;
+            result = builder.createRefSelf(value, loc)->result;
+            // the value's own slot gives its reference up, so that the new value is its only owner, which a call that
+            // takes it as its argument releases when it returns (f(foldl $1 + $2, l); qore#5801); a value that the
+            // frame does not own (an element of the source) is left alone
+            builder.createReleaseOwnedTemp(value, loc);
         }
     }
     return result;
@@ -18368,6 +18430,14 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.createBranch(final_block, map->loc);
 
     builder.setBlock(loop_exit_block);
+    // the operator's iterator ends with the operator, as the AST interpreter's functional iterator does, when the
+    // operator's source is released after the operator (a temporary or a plain read of a local, see
+    // FunctionalSourceRelease): it held the source, whose objects are then destroyed before the rest of the statement
+    // runs (qore#5801); a source read through a reference keeps its value, and the iterator, to the end of the
+    // statement
+    if (functionalSourceReleased()) {
+        builder.createIteratorRelease(iter_val, map->loc);
+    }
     if (type_state_phi) {
         withExceptionTarget(
             builder.createListSetCommonType(result_list, type_state_phi->result, map->getMapExpType(), map->loc));
@@ -18831,6 +18901,14 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     // Loop exit block: iterator exhausted → decide whether to return list or unwrap
     builder.setBlock(loop_exit_block);
+    // the operator's iterator ends with the operator, as the AST interpreter's functional iterator does, when the
+    // operator's source is released after the operator (a temporary or a plain read of a local, see
+    // FunctionalSourceRelease): it held the source, whose objects are then destroyed before the rest of the statement
+    // runs (qore#5801); a source read through a reference keeps its value, and the iterator, to the end of the
+    // statement
+    if (functionalSourceReleased()) {
+        builder.createIteratorRelease(iter_val, select->loc);
+    }
     // the AST interpreter gives the list the common type of its values, or else the value type of the source
     // (QoreSelectOperatorNode::evalImpl())
     builder.createListSetScannedType(result_list, nullptr, input_list, select->loc);
@@ -19170,6 +19248,14 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
 
     auto* result_phi = builder.createPhi(result_incoming, foldl->loc);
+    // the operator's iterator ends with the operator, as the AST interpreter's functional iterator does, when the
+    // operator's source is released after the operator (a temporary or a plain read of a local, see
+    // FunctionalSourceRelease): it held the source, whose objects are then destroyed before the rest of the statement
+    // runs (qore#5801); a source read through a reference keeps its value, and the iterator, to the end of the
+    // statement
+    if (functionalSourceReleased()) {
+        builder.createIteratorRelease(iter_val, foldl->loc);
+    }
 
     return result_phi->result;
 }
