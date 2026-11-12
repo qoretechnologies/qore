@@ -38,6 +38,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRAnalysis.h"
@@ -15534,6 +15535,43 @@ static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode*
     return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
 }
 
+//! Debug-only: sets the number of responses that an HTTP/2 or HTTP/3 client dispatches in one read pass; 0: the default
+static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t limit = get_param_value(params, 0).getAsBigInt();
+    if (limit < 0 || limit > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_drain_limit(): invalid limit %lld",
+            (long long)limit);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().drain_limit.store(static_cast<int>(limit), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: holds the completed responses of HTTP/2 and HTTP/3 clients from now on (True), or not (False)
+/** While held, the responses accumulate; the read pass after the hold dispatches them all
+*/
+static QoreValue f_dbg_http_client_hold_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().setHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a read pass of a client found at least the given number of responses held
+/** @return False if the wait timed out
+*/
+static QoreValue f_dbg_http_client_wait_held_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return QoreHttpClientDrainDebug::get().waitHeld(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the number of HTTP/2 and HTTP/3 client read passes that left responses without an immediate re-poll
+static QoreValue f_dbg_http_client_stranded_passes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(QoreHttpClientDrainDebug::get().stranded_passes.load(std::memory_order_relaxed));
+}
+
 //! Debug-only: the number of system events that matched no event loop registration in the process
 /** See QoreEventLoop::dbgUnmatchedKernelEvents(): a registration left in the kqueue or the epoll set wakes every poll
     at once
@@ -21878,6 +21916,18 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_hold_outputs", f_dbg_http_client_hold_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_outputs", f_dbg_http_client_wait_held_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_stranded_passes", f_dbg_http_client_stranded_passes,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);

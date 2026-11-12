@@ -462,6 +462,11 @@ private:
     //! Inner C++ QUIC client poll operation (ref'd)
     SocketQuicClientPollOperation* inner_op;
 
+#ifdef DEBUG
+    //! True if the test hook held the responses during the last read pass; I/O thread only (issue #5839)
+    bool dbg_read_pass_held = false;
+#endif
+
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
 

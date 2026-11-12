@@ -575,6 +575,10 @@ private:
     //! Serializes multiplex reads against submitRequest's stream-id registration window
     mutable QoreThreadLock submission_lock;
 
+    //! Set by a read pass that found submission_lock held: submitRequest() wakes the operation once it has released
+    //! the lock, so that the pass runs again (issue #5839)
+    std::atomic<bool> read_pass_skipped{false};
+
     //! Stream completion actions: stream_id string -> ref'd action
     /** Actions are pure C++ (no Qore interpreter) — execute/executeError
         are called directly on the I/O thread without execValue().
@@ -763,6 +767,14 @@ private:
         @return \a poll_info, for use as a return-value wrapper
     */
     DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Counts a read pass that left responses without an immediate re-poll; see dbg_http_client_stranded_passes()
+    DLLLOCAL void dbgCheckReadPass(const QoreHashNode* poll_info);
+
+    //! True if the last read pass was skipped on the submission lock or held by the test hook; I/O thread only
+    bool dbg_read_pass_exempt = false;
+#endif
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxySslUpgrade(ExceptionSink* xsink);
