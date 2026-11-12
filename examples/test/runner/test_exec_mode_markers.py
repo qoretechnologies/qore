@@ -166,6 +166,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
+        # - JitTeardownAtExit: JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - RestSchemaModuleLazyTypes: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
@@ -176,6 +177,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
                          sorted(non_harness_children))

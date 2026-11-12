@@ -2410,6 +2410,11 @@ bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms)
     });
 }
 
+void QoreJIT::dbgFinishAbandonedCompile(DbgFinishAbandoned where) {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    dbg_finish_abandoned = where;
+}
+
 bool QoreJIT::dbgBgCompileHeld() {
     std::lock_guard<std::mutex> lock(bg_queue_mutex);
     return dbg_bg_held >= 0;
@@ -2999,6 +3004,13 @@ void QoreJIT::stopBackgroundCompiler() {
         }
         if (abandon) {
             bg_thread_abandoned.store(true, std::memory_order_release);
+#ifdef DEBUG
+            // a test lets the held compile go on, so that its thread ends before shutdown() releases the engine
+            if (dbg_finish_abandoned == DbgFinishAbandoned::Shutdown && dbg_bg_held >= 0) {
+                dbg_bg_hold_release = true;
+                bg_queue_empty_cv.notify_all();
+            }
+#endif
         }
     }
     if (was_running) {
@@ -3009,7 +3021,8 @@ void QoreJIT::stopBackgroundCompiler() {
         // the thread finishes the work without touching the JIT (see bgDiscardModule()) and ends.  It stays joinable:
         // exit() must not destroy LLVM's static objects while it runs, so the process either ends with _exit() if it
         // still runs at the end (see exitQuickly()), or the atexit() handler of the library joins it (see
-        // joinAbandonedCompileThread()).  shutdown() does not destroy the JIT under it.
+        // joinAbandonedCompileThread()).  The JIT is not destroyed under it: shutdown() or, at the end of the process,
+        // exitQuickly() releases it once the thread has ended (qore#5842).
         if (!abandon && bg_compile_thread.joinable()) {
             // Join the background thread (it should exit quickly since bg_thread_running is false)
             bg_compile_thread.join();
@@ -3058,12 +3071,31 @@ bool QoreJIT::exitQuickly() {
     if (!jit || !jit->bg_thread_abandoned.load(std::memory_order_acquire)) {
         return false;
     }
+#ifdef DEBUG
+    // a test lets the held compile go on now and waits for it, as when it ends before the process
+    // (see dbgFinishAbandonedCompile())
+    bool finish;
+    {
+        std::lock_guard<std::mutex> lock(jit->bg_queue_mutex);
+        finish = jit->dbg_finish_abandoned == DbgFinishAbandoned::Exit;
+        if (finish && jit->dbg_bg_held >= 0) {
+            jit->dbg_bg_hold_release = true;
+            jit->bg_queue_empty_cv.notify_all();
+        }
+    }
+    if (finish) {
+        jit->joinAbandonedCompileThread();
+        jit->releaseDeferredEngineNoThrow();
+        return false;
+    }
+#endif
     if (!jit->bg_thread_done.load(std::memory_order_acquire)) {
         // the abandoned compile still runs in LLVM: exit() would destroy LLVM's static objects under it
         return true;
     }
     // the thread has left its loop and only ends now; once it is joined, exit() can run as usual
     jit->joinAbandonedCompileThread();
+    jit->releaseDeferredEngineNoThrow();
     return false;
 }
 
@@ -3074,18 +3106,77 @@ void QoreJIT::joinAbandonedCompileThread() {
     }
 }
 
+void QoreJIT::releaseDeferredEngineNoThrow() noexcept {
+    // called by exitQuickly() through qore_jit_exit_quickly() from qore_fork_child_quick_exit(), an exported C
+    // function, at the end of the process: a failure to release the engine (a lock error, for example) leaves it to the
+    // operating system, as an abandoned compile does
+    try {
+        releaseDeferredEngine();
+    } catch (const std::exception& e) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] the JIT was not released at the end of the process: %s\n", e.what());
+        }
+    } catch (...) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] the JIT was not released at the end of the process\n");
+        }
+    }
+}
+
+void QoreJIT::releaseDeferredEngine() {
+    // shutdown() left the engine to this point, as a compile ran in it; with its thread joined, the engine is released
+    // before exit(), which also deregisters the EH frames of the compiled code: libgcc frees its table of registered
+    // frames when the process exits, after which the memory that it allocated for each frame would be lost
+    // (qore#5842).  Not in the atexit() handler: LLVM's function-local statics are destroyed before it runs.
+    if (shutdown_deferred.exchange(false, std::memory_order_acq_rel)) {
+        releaseEngine();
+        if (q_env_is_set("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] released the JIT at the end of the process after the abandoned compile ended\n");
+        }
+    }
+}
+
 void QoreJIT::shutdown() {
     stopBackgroundCompiler();
+
+#ifdef DEBUG
+    {
+        // a test waits for the abandoned compile that it let go, so that the engine is released here
+        // (see dbgFinishAbandonedCompile())
+        bool wait;
+        {
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
+            wait = dbg_finish_abandoned == DbgFinishAbandoned::Shutdown;
+        }
+        if (wait) {
+            joinAbandonedCompileThread();
+        }
+    }
+#endif
 
     if (bg_thread_abandoned.load(std::memory_order_acquire)) {
         // A detached compile can still be running in LLVM on the abandoned compile thread, which holds compile_mutex
         // and uses the LLJIT's ExecutionSession: the ExecutionSession cannot be destroyed under an active compile, and
-        // waiting for compile_mutex would wait for LLVM without bound.  shutdown() is called by qore_cleanup() when
-        // the process ends, so the engine, its code and the caches are left to the operating system, as after a
-        // direct exit().
+        // waiting for compile_mutex would wait for LLVM without bound.  A thread that has ended already is joined,
+        // and the engine is released now.  Otherwise it is released at the end of the process if the thread has ended
+        // by then (exitQuickly() calls releaseDeferredEngine()); if it still runs then, the process ends with _exit(),
+        // and the engine, its code and the caches are left to the operating system.
+        if (bg_thread_done.load(std::memory_order_acquire)) {
+            joinAbandonedCompileThread();
+            releaseEngine();
+            if (q_env_is_set("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended\n");
+            }
+            return;
+        }
+        shutdown_deferred.store(true, std::memory_order_release);
         return;
     }
 
+    releaseEngine();
+}
+
+void QoreJIT::releaseEngine() {
     // Release LLVM only after every function that can hold a published entry point is gone.
     // Acquiring compile_mutex also documents and enforces serialization with compilation even if
     // shutdown() is called independently of the normal two-phase qore_cleanup() path.
@@ -3137,6 +3228,7 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     // and neither does a thread that waited for compile_mutex for a synchronous compile
     sync_compile_waiters = 0;
     bg_thread_abandoned.store(false, std::memory_order_relaxed);
+    shutdown_deferred.store(false, std::memory_order_relaxed);
     bg_thread_done.store(false, std::memory_order_relaxed);
     // it pointed at the stack of the compile thread, which does not exist in the child
     bg_compile_ctx = nullptr;
