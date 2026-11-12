@@ -1658,6 +1658,10 @@
     - a @ref foreach "foreach" loop over a slice of a list read from a variable (ex:
       <tt>foreach auto v in (l[1..2])</tt>) read freed memory when its body removed or assigned the variable; the loop
       now keeps the list until it ends (issue #5770)
+    - @ref Qore::Program::getCallReference() "Program::getCallReference()" resolved a name as a method of the
+      @ref Qore::Program "Program" object first, so a function of the Program with the name of a method of the class
+      (ex: \c run()) could not be referenced; a class path naming a non-static method of the Program class no longer
+      returns a reference bound to the Program object (issue #5863)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
