@@ -7877,6 +7877,10 @@ public class WebSocketClientHcioPollOp {
     notifyIo() {
         AutoLock al(process_mutex);
         if (isClosed()) {
+            # the frames that arrive after the connection was closed (for example a close frame after the close
+            # handshake timed out) are discarded, and a close frame is logged, as when it arrives with the frames
+            # before it (see processFrameHash())
+            discardMsgQueue();
             return;
         }
         # the frames that arrived before start() are delivered by initialDrain(), which the client calls without its
@@ -7895,6 +7899,17 @@ public class WebSocketClientHcioPollOp {
         # up by the initial scheduleDelivery() call in startAsyncIo().
         if (have_frames && started && on_poll_complete) {
             on_poll_complete();
+        }
+    }
+
+    #! Discards the frames that arrived after the connection was closed; logs a close frame among them
+    private discardMsgQueue() {
+        while (*hash<auto> wrap = msg_queue.tryGet()) {
+            auto entry = wrap.value;
+            if (entry.typeCode() == NT_HASH && entry.type == "close") {
+                logDebug("discarding a close frame (code %d) that arrived after the connection was closed",
+                    entry.code ?? WSCC_NormalClosure);
+            }
         }
     }
 
@@ -7936,6 +7951,7 @@ public class WebSocketClientHcioPollOp {
                 int close_c = WSCC_AbnormalClosure;
                 string close_r = "stream ended";
                 bool error;
+                string cause;
                 {
                     AutoLock al(heartbeat_mutex);
                     if (error_close) {
@@ -7943,8 +7959,13 @@ public class WebSocketClientHcioPollOp {
                         close_r = error_close_reason;
                         error = True;
                     }
+                    # the cause of a close that the client started (for example "idle-timeout") is reported also when
+                    # the server ends the stream instead of answering the close frame
+                    if (ws_close_sent) {
+                        cause = pending_close_cause;
+                    }
                 }
-                markClosedAndEnqueue(close_c, close_r, NOTHING, error ? "error" : "closed");
+                markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
                 processed = True;
                 break;
             }
@@ -8640,6 +8661,7 @@ public class WebSocketClientHcioPollOp {
             cancelCloseTimerLocked();
             closed_counter.dec();
         }
+        logDebug("the connection is closed: close code %d: %s", code, reason);
 
         if (event_type == "error") {
             recv_channel.send({"type": "error", "error": {"code": code, "reason": reason}});
