@@ -20183,6 +20183,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
         // Load element at current index
         QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hm->loc)->result;
+        // an element of a list whose element type excludes NOTHING is never NOTHING (see the lowering of $$)
+        if (QoreTypeInfo::parseReturns(elem_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+            never_nothing_values.insert(element_val.id);
+        }
 
         // the key and value expressions run with the element as the implicit argument list also at run time when
         // either needs it, decided before they are lowered, and the hash takes references of its own to the key and
