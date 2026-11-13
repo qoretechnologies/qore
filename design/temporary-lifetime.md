@@ -354,12 +354,22 @@ accumulator's Phi of a pipeline with a select stage has itself as an incoming va
 the stage skips: in native code, the Phi's own value is not a use of it, and a Phi among its own incoming values has
 a slot of its own unless all its values are constants (any other value can be released in the loop: an iterator's
 element, the value of a call or of an operator, which the next execution of the instruction replaces in its slot, or a
-value read from a variable, which code in the loop can assign), which keeps its value on that edge, and no call consumes it; it had none, and
-borrowed the element that the next `IteratorNext` released, or the value that the next element's operator replaced.  A
-loop header's Phi that can hold such a value owns it the same way when it is not a Phi of temporaries.  Since the
-accumulator's Phi owns its value, the `IteratorNext` of a fold releases the values of its map stages as it does for
-the other roots (`stage_values`): a value that a select stage skipped, or that the fold's expression only read, is
-released before the next element, as the AST interpreter releases it, and not when the statement ends (qore#5883).
+value read from a variable, which code in the loop can assign), which keeps its value on that edge, and no call
+consumes it; it had none, and borrowed the element that the next `IteratorNext` released, or the value that the next
+element's operator replaced.  A loop header's Phi that can hold such a value owns it the same way when it is not a Phi
+of temporaries.  The Phi that gives the accumulator its value releases nothing when it gets its next one, as the
+accumulator's Phi took its slot over (`QoreIRToLLVM::emptied_phi_slots`), and a Phi that takes a reference of its own
+to a value gives the value with the reference as its own, so that the code generator keeps one value in the loop.
+Since the accumulator's Phi owns its value, the `IteratorNext` of a fold releases the values of its map stages before
+a stage that can skip an element or stop the pipeline as it does for the other roots (`stage_values`): a value that a
+select stage skipped is released before the next element, as the AST interpreter releases it, and not when the
+statement ends.  A value read from a local of the function (not a top-level one) that no code in the loop assigns is
+not released: the local holds it,
+so its release cannot be observed, and the IR interpreter's read, which takes a reference of its own, keeps it when
+the next element's read gives the same value, where a release per element cost a reference and a release (a write
+through a reference or by a closure is not an assignment there: the AST interpreter keeps the value read until the
+next element)
+(qore#5883).
 The releases of a functional operator's exception cleanup
 (`QoreIRInstruction::exception_cleanup_release`, set by `FunctionalLoopExceptionCleanup`) are not uses that keep a
 value from being taken over by a Phi or moved into a container (`qore_ir_is_exception_only_release()`, in the IR

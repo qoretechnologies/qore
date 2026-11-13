@@ -57,7 +57,7 @@ class NativeReleaseOrderTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(34, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         foreach string c in ("map", "select", "map select", "hash map") {
             assertTrue(regex(out,
                 sprintf("(^|\n)%s: released h2; released h3; released h1; catch STAGE; after(\n|$)", c)), c);
@@ -105,6 +105,10 @@ class NativeReleaseOrderTest inherits QUnit::Test {
             "a select stage that assigns the local that a map stage reads");
         assertTrue(out =~ /\nfoldl pipeline select global: released c1; released c2; released c3; r c0; released c4; /,
             "a select stage that calls a function that assigns the global that a map stage reads");
+        assertTrue(out =~ /\nfoldl pipeline select local next: next; next; released x1; next; released x2; next; released x3; next; r x0; /,
+            "a select stage that assigns the local that a map stage reads, with an iterator");
+        assertTrue(out =~ /\nfoldl pipeline select reference: next; next; next; released x1; next; released x2; next; released x3; r x0; /,
+            "a select stage that assigns the local that a map stage reads through a reference");
         assertTrue(out =~ /\nfoldl pipeline select raises: released i1; released i2; released wi2; released i3; released wi3; released wi1; itdone it; catch STAGE; after/,
             "a select stage raises");
         assertTrue(out =~ /\nfoldl pipeline next raises: released i1; itdone it; released i2; catch NEXT \$1 unset; /,

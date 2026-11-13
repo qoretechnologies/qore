@@ -166,6 +166,35 @@ bool sub fail_on_w(Holder h, string name) {
     return True;
 }
 
+#! an iterator whose next() logs
+class LogIt inherits AbstractIterator {
+    public {
+        Log log;
+        int i = 0;
+    }
+
+    constructor(Log l) {
+        log = l;
+    }
+
+    bool next() {
+        log.add("next");
+        return ++i <= 4;
+    }
+
+    auto getValue() {
+        return i;
+    }
+
+    bool valid() {
+        return i > 0 && i <= 4;
+    }
+}
+
+sub set_ref(reference<auto> r, Log log, int k) {
+    r = new Holder(log, "x" + k);
+}
+
 our Holder cur;
 our Log cur_log;
 
@@ -564,6 +593,33 @@ sub foldl_pipeline_select_global() {
     out("foldl pipeline select global", log);
 }
 
+# the value that a map stage read from a local that a select stage's predicate assigns is released when the stage skips
+# the element, before the next one; the AST interpreter keeps one that it assigns through a reference until the next
+# element (qore#5883)
+sub foldl_pipeline_select_local_next() {
+    Log log();
+    {
+        Holder x = new Holder(log, "x0");
+        int k = 0;
+        auto r = foldl $1, (select (map x, new LogIt(log)), (x = new Holder(log, "x" + ++k)) && $1.n != "x1");
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline select local next", log);
+}
+
+sub foldl_pipeline_select_reference() {
+    Log log();
+    {
+        Holder x = new Holder(log, "x0");
+        int k = 0;
+        auto r = foldl $1, (select (map x, new LogIt(log)), (set_ref(\x, log, ++k), $1.n != "x1")[1]);
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline select reference", log);
+}
+
 # a select stage's predicate raises: the value of the map stage is released before the accumulator, as the AST
 # interpreter's functional iterators release it before the fold releases its value (qore#5883)
 sub foldl_pipeline_select_raises() {
@@ -670,6 +726,8 @@ sub main() {
     foldl_pipeline_select_local();
     foldl_pipeline_select_global();
     foldl_pipeline_select_raises();
+    foldl_pipeline_select_local_next();
+    foldl_pipeline_select_reference();
     foldl_pipeline_next_raises();
     foldl_nested_raises();
     foldl_next_raises();

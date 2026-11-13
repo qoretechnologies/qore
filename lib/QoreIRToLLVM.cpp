@@ -12736,6 +12736,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_boolean_result_values.clear();
     consumable_phis.clear();
     owning_phis.clear();
+    emptied_phi_slots.clear();
     single_use_phi_incoming.clear();
     // the values read from a local that a write to the local can release before their last use take a reference of
     // their own
@@ -13500,6 +13501,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             for (const auto& inc : phi->incoming) {
                 if (inc.value.id != phi->result.id && single_use_phi_incoming.count(inc.value.id)) {
                     owning_phis.insert(phi->result.id);
+                    // when its block goes on to the block of the Phi that uses it, that Phi takes its slot over on
+                    // every path before it gets its next value: its slot is empty then, and nothing is released
+                    auto def_it = value_def_block.find(phi->result.id);
+                    auto user_def_it = value_def_block.find(user_it->second);
+                    if (def_it != value_def_block.end() && user_def_it != value_def_block.end()
+                            && def_it->second && !def_it->second->instructions.empty()) {
+                        const QoreIRInstruction* term = def_it->second->instructions.back().get();
+                        if (term->opcode == QoreIROpcode::Br
+                                && static_cast<const QoreIRBranchInstruction*>(term)->target
+                                    == user_def_it->second) {
+                            emptied_phi_slots.insert(phi->result.id);
+                        }
+                    }
                     break;
                 }
             }
@@ -14555,6 +14569,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
             }
             if (phi_temp_cleanup && !phi_self_incoming) {
+                // the slot of a Phi whose value is an incoming Phi that gives it its slot every time (see
+                // emptied_phi_slots) is taken over at the start of the predecessor, which is the incoming Phi's block
+                // and goes on to this block only, before the code of its branch: the release of the Phi's previous
+                // value then comes where the incoming Phi's slot released it before the incoming Phi had none
+                // (qore#5883)
+                llvm::IRBuilderBase::InsertPointGuard insert_guard(*builder);
+                if (emptied_phi_slots.count(inc.value.id) && bb->getSingleSuccessor() == phi_bb
+                        && llvm::isa<llvm::PHINode>(val)
+                        && llvm::cast<llvm::PHINode>(val)->getParent() == bb) {
+                    builder->SetInsertPoint(bb, bb->getFirstNonPHIIt());
+                }
                 // the Phi's cleanup slot takes the incoming temporary's reference over when the temporary owns it in a
                 // cleanup slot of its own; an incoming value that does not (a temporary whose cleanup is SSA-direct)
                 // gives the slot a reference of its own, and a native scalar none; a value that a jump past the end
@@ -14581,13 +14606,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), element_it->second);
                 } else if (nanboxed_values.count(inc.value.id)) {
                     owned = emitHelperRef(module, val);
+                    // the value with the reference that the slot takes is the incoming value: the Phi of a slot
+                    // that owns its value gives it as its value too, so that the code generator can see that the
+                    // Phi's value and its slot's are the same, and keeps one of them in a loop (qore#5883)
+                    if (owning_phis.count(phi_inst->result.id)) {
+                        val = owned;
+                    }
                 } else {
                     owned = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                 }
-                llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
-                builder->CreateStore(owned, phi_temp_cleanup);
-                builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
-                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {old_val, xsink_arg});
+                if (emptied_phi_slots.count(phi_inst->result.id)) {
+                    // the Phi that uses this one took the slot's value over (see emptied_phi_slots)
+                    builder->CreateStore(owned, phi_temp_cleanup);
+                } else {
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
+                    builder->CreateStore(owned, phi_temp_cleanup);
+                    builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {old_val, xsink_arg});
+                }
             }
             phi_node->addIncoming(val, bb);
         }

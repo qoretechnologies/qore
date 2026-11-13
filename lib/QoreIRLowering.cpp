@@ -14,6 +14,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
 #include <qore/intern/QorePluginRegistry.h>
 
@@ -21435,6 +21436,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a fold releases the values of the map stages before the last stage that can skip an element or stop the
     // pipeline (see stage_value())
     size_t fold_release_stages = 0;
+    // the values of a fold's map stages read from a local of the function, and the local
+    std::unordered_map<uint32_t, const LocalVar*> fold_local_reads;
     if (root_accumulator) {
         for (size_t i = 0; i < stages.size(); ++i) {
             if (stages[i].kind != LazyPipelineStage::Map) {
@@ -21454,6 +21457,24 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 || (root_accumulator && stage_index >= fold_release_stages)
                 || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
             return;
+        }
+        // a fold's stage value read from a local of the function (not a top-level local) is checked once the body is
+        // lowered (see fold_local_reads)
+        if (root_accumulator) {
+            const auto& insts = builder.getBlock()->instructions;
+            for (auto it = insts.rbegin(); it != insts.rend(); ++it) {
+                if ((*it)->result.id != v.id) {
+                    continue;
+                }
+                if ((*it)->opcode == QoreIROpcode::LoadLocal || (*it)->opcode == QoreIROpcode::LoadArg
+                        || (*it)->opcode == QoreIROpcode::LoadClosure) {
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(it->get());
+                    if (load->local && !load->local->isTopLevel()) {
+                        fold_local_reads.emplace(v.id, load->local);
+                    }
+                }
+                break;
+            }
         }
         for (const QoreIRValue& sv : stage_values) {
             if (sv.id == v.id) {
@@ -21860,6 +21881,32 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     body_scope.end();
     // the next element is taken once the previous one and the values that the stages gave from it are released
+    // a fold's stage value read from a local of the function that no code in the loop assigns is not released: the local holds
+    // the value, so its release cannot be observed, and the IR interpreter, whose read takes a reference of its own,
+    // keeps the one that it has when the next element's read gives the same value; one that the loop's code assigns
+    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element.
+    // A write through a reference (\x) or by a closure is not one: the AST interpreter keeps the value read then
+    // until the next element (qore#5883)
+    if (!fold_local_reads.empty()) {
+        std::unordered_set<const LocalVar*> written;
+        const auto& blocks = builder.getFunction()->blocks;
+        // the loop's body: its first block and the blocks that the stages and the root created
+        auto scan_writes = [&](const QoreIRBasicBlock* b) {
+            for (const auto& inst : b->instructions) {
+                if (const LocalVar* lv = qore_ir_get_written_local(inst.get())) {
+                    written.insert(lv);
+                }
+            }
+        };
+        scan_writes(body_block);
+        for (size_t bi = body_block_count; bi < blocks.size(); ++bi) {
+            scan_writes(blocks[bi].get());
+        }
+        stage_values.erase(std::remove_if(stage_values.begin(), stage_values.end(), [&](const QoreIRValue& v) {
+            auto it = fold_local_reads.find(v.id);
+            return it != fold_local_reads.end() && !written.count(it->second);
+        }), stage_values.end());
+    }
     next_inst->release_values = stage_values;
 
     for (size_t i = 0; i < stage_phis.size(); ++i) {
