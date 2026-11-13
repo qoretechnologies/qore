@@ -205,7 +205,7 @@ public:
     DLLLOCAL QoreModuleDefContext() {
     }
 
-    DLLLOCAL ~QoreModuleDefContext() {
+    DLLLOCAL virtual ~QoreModuleDefContext() {
         init_c.discard(nullptr);
         del_c.discard(nullptr);
     }
@@ -217,6 +217,26 @@ public:
     strmap_t vmap;
 
     DLLLOCAL int set(const QoreProgramLocation* loc, const char* key, QoreValue val);
+
+    //! sets the \c domains key: the functional domains that the module declares (see
+    //! qore_program_private::setModuleOwnDomains())
+    DLLLOCAL int setDomains(const QoreProgramLocation* loc, QoreValue val);
+
+    //! applies the functional domains that the module declares (\c domains) to its Program; returns the inherited
+    //! restrictions that were removed
+    DLLLOCAL virtual int64 applyDomains(int64 dom);
+
+    //! returns the Program of the module that this context defines, if known; the context applies only to the parse of
+    //! that Program, not to another Program parsed while the module is loaded (ex: from its init closure)
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const {
+        return nullptr;
+    }
+
+protected:
+    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
+    int64 dom_removed = QDOM_DEFAULT;
+
+public:
 
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
@@ -328,6 +348,8 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+//! returns the module Program whose code runs with the restrictions of a sandboxed caller on this thread, if any
+DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
@@ -429,6 +451,17 @@ DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_d
 //! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
 DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc);
+//! Returns true if the location is the call stack frame of a call that AOT-compiled code makes directly to native code
+/** Such a call has no frame on the stack of local variables (see ProgramThreadCountContextHelper::getContextFrame())
+*/
+DLLLOCAL bool qore_is_aot_native_call_frame(const QoreStackLocation* loc);
+//! Returns true if the location is one where AOT-compiled native code runs, or if it is not known
+/** The location of a frame where code runs is one of AOT-compiled native code when the code runs as such, and one of
+    the AST or the IR interpreter when the code runs there, as AOT-compiled code does with a debugger attached; the
+    variables that AOT-compiled code keeps in native storage are on the stack of local variables only in the latter
+    (see LocalVar::getAOTNativeStorage())
+*/
+DLLLOCAL bool qore_is_aot_code_location(const QoreProgramLocation* loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 //! Sets the runtime statement, location and parse options of the current thread, and returns the previous ones
@@ -514,6 +547,8 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
     that call is made on behalf of the helper's Program, so the options are those of that Program
 */
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
+//! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
@@ -900,6 +935,60 @@ private:
     qore_program_id_t old_app_pgm_id;
     bool old_sandboxed;
     const QoreProgram* old_override_pgm;
+};
+
+//! Makes the next call on the current thread a call made through a call reference
+/** A call reference runs with the permissions of the context that created it, like a closure: the functional domains
+    declared on a user function or method in Qore source (\c [dom=...]) are checked against the effective parse
+    options of the context that created the reference value, not against the code that calls the reference.  The call
+    with the reference's arguments takes the marker (runtime_take_call_reference_call()); a call with other arguments,
+    such as one in an argument expression, does not.  A path that passes other arguments to the reference's call
+    leaves the marker, and the call is then checked against its caller, the stricter check.  The helper restores the
+    previous state when the reference's call returns.
+*/
+class RuntimeConfig;
+
+class QoreCallReferenceCallHelper {
+public:
+    //! marks the next call on the thread of \a rc with the given arguments as the call of a call reference created
+    //! with \a creator_po
+    /** if \a creator_po is nullptr (a reference that its own code calls in place), nothing is marked
+    */
+    DLLLOCAL QoreCallReferenceCallHelper(RuntimeConfig& rc, const QoreListNode* args,
+            const QoreParseOptions* creator_po);
+    DLLLOCAL ~QoreCallReferenceCallHelper();
+
+    QoreCallReferenceCallHelper(const QoreCallReferenceCallHelper&) = delete;
+    QoreCallReferenceCallHelper& operator=(const QoreCallReferenceCallHelper&) = delete;
+
+private:
+    RuntimeConfig* rc = nullptr;
+    const QoreParseOptions* old_po = nullptr;
+    const QoreListNode* old_args = nullptr;
+};
+
+//! Hides the pending call of a call reference while the arguments of that call are evaluated
+/** Calls made while the arguments are evaluated are not the reference's call; afterwards the pending call is for the
+    evaluated arguments (see evaluated())
+*/
+class QoreCallReferenceArgEvalHelper {
+public:
+    //! hides the pending call on the thread of \a rc while \a args are evaluated
+    DLLLOCAL QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args);
+    //! restores the pending call
+    DLLLOCAL ~QoreCallReferenceArgEvalHelper();
+
+    //! the call is made with \a evaluated_args instead of the arguments given to the constructor
+    DLLLOCAL void evaluated(const QoreListNode* evaluated_args);
+
+    QoreCallReferenceArgEvalHelper(const QoreCallReferenceArgEvalHelper&) = delete;
+    QoreCallReferenceArgEvalHelper& operator=(const QoreCallReferenceArgEvalHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    const QoreParseOptions* saved_po;
+    const QoreListNode* saved_args;
+    const QoreListNode* args;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -2221,7 +2310,17 @@ public:
 
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
-    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink);
+    //! Returns the data of the thread in the Program of the given frame and the index of the frame there
+    /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
+        on the stack of local variables of the data returned
+        @param xsink for an exception
+        @param aot_code if not null, set to true if the frame runs AOT-compiled native code, or if it is not known
+        whether it does (see qore_is_aot_code_location()), false if it runs in the AST or the IR interpreter
+
+        @return the data, or nullptr if the frame cannot be accessed or does not exist
+    */
+    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink,
+            bool* aot_code = nullptr);
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
 

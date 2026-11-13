@@ -247,6 +247,110 @@ std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po) {
     return rv;
 }
 
+namespace {
+//! a functional domain as named in a \c [dom=...] attribute list and a module's \c domains key
+/** The names are those of the \c DOM_* constants and of the reflection API (getDomainStringList()); qore#5843
+*/
+struct SourceDomainName {
+    const char* name;
+    int64 dom;
+    //! the parse option that restricts the domain, or that is required for an "allow" domain
+    const char* po_name;
+    //! true for domains that require a PO_ALLOW_* option instead of being restricted by a PO_NO_* option
+    bool allow;
+};
+
+constexpr SourceDomainName source_domain_names[] = {
+    {"DEFAULT", QDOM_DEFAULT, "PO_DEFAULT", false},
+    {"PROCESS_CONTROL", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"NETWORK", QDOM_NETWORK, "PO_NO_NETWORK", false},
+    {"EXTERNAL_PROCESS", QDOM_EXTERNAL_PROCESS, "PO_NO_EXTERNAL_PROCESS", false},
+    {"FILESYSTEM", QDOM_FILESYSTEM, "PO_NO_FILESYSTEM", false},
+    {"THREAD_CLASS", QDOM_THREAD_CLASS, "PO_NO_THREAD_CLASSES", false},
+    {"THREAD_CONTROL", QDOM_THREAD_CONTROL, "PO_NO_THREAD_CONTROL", false},
+    {"DATABASE", QDOM_DATABASE, "PO_NO_DATABASE", false},
+    {"GUI", QDOM_GUI, "PO_NO_GUI", false},
+    {"TERMINAL_IO", QDOM_TERMINAL_IO, "PO_NO_TERMINAL_IO", false},
+    {"EXTERNAL_INFO", QDOM_EXTERNAL_INFO, "PO_NO_EXTERNAL_INFO", false},
+    {"THREAD_INFO", QDOM_THREAD_INFO, "PO_NO_THREAD_INFO", false},
+    {"LOCALE_CONTROL", QDOM_LOCALE_CONTROL, "PO_NO_LOCALE_CONTROL", false},
+    {"MODULE", QDOM_MODULES, "PO_NO_MODULES", false},
+    {"IN_MODULE", QDOM_IN_MODULE, "PO_IN_MODULE", false},
+    {"EMBEDDED_LOGIC", QDOM_EMBEDDED_LOGIC, "PO_NO_EMBEDDED_LOGIC", false},
+    {"REFLECTION", QDOM_REFLECTION, "PO_NO_REFLECTION", false},
+    {"UNCONTROLLED_API", QDOM_UNCONTROLLED_API, "PO_NO_UNCONTROLLED_APIS", false},
+    {"INJECTION", QDOM_INJECTION, "PO_ALLOW_INJECTION", true},
+    {"DEBUGGER", QDOM_DEBUGGER, "PO_ALLOW_DEBUGGER", true},
+};
+
+//! other names accepted for a domain in Qore source: the names that qpp uses
+constexpr SourceDomainName source_domain_aliases[] = {
+    {"PROCESS", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"MODULES", QDOM_MODULES, "PO_NO_MODULES", false},
+};
+
+constexpr int64 source_domain_union() {
+    int64 rv = 0;
+    for (const SourceDomainName& i : source_domain_names) {
+        rv |= i.dom;
+    }
+    return rv;
+}
+
+// every functional domain can be declared in Qore source
+static_assert(source_domain_union() == QDOM_ALL, "source_domain_names does not match QDOM_ALL");
+}
+
+int64 qore_get_source_domain(const char* name) {
+    assert(name);
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    for (const SourceDomainName& i : source_domain_aliases) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    return -1;
+}
+
+std::string qore_get_source_domain_names(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ',';
+        }
+        rv += i.name;
+    }
+    return rv;
+}
+
+std::string q_describe_functional_domains(int64 dom) {
+    return qore_describe_source_domains(dom);
+}
+
+std::string qore_describe_source_domains(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ", ";
+        }
+        rv += i.name;
+        rv += i.allow ? " (requires " : " (restricted by ";
+        rv += i.po_name;
+        rv += ')';
+    }
+    return rv;
+}
+
 ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_GLOBAL_VARS, "PO_NO_GLOBAL_VARS");
     doMap(PO_NO_SUBROUTINE_DEFS, "PO_NO_SUBROUTINE_DEFS");
@@ -468,6 +572,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
+    // the holds of the parent's other threads, which do not exist in the child
+    compile_holds = 0;
     // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
     // while it was being constructed, after it was registered, has no hub yet
     if (thread_hub) {
@@ -1223,6 +1329,29 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
     }
 
     return *i;
+}
+
+int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool apply) {
+    module_own_dom |= n_dom;
+    if (!apply) {
+        return QDOM_DEFAULT;
+    }
+    module_trusted_dom |= n_dom;
+    int64 removed = n_dom & pwo.parse_options.getLo();
+    if (!removed) {
+        return QDOM_DEFAULT;
+    }
+    pwo.parse_options &= ~QoreParseOptions(removed);
+    // the module's %ifdef directives see the options it has
+    for (auto& i : pomaps.pomap) {
+        if (i.first && (removed & i.first) == i.first) {
+            dmap_t::iterator di = dmap.find(i.second);
+            if (di != dmap.end()) {
+                dmap.erase(di);
+            }
+        }
+    }
+    return removed;
 }
 
 void qore_program_private_base::setDefines() {
@@ -3032,14 +3161,16 @@ void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
 void qore_program_private::del(ExceptionSink* xsink) {
     printd(5, "qore_program_private::del() pgm: %p (base_object: %d)\n", pgm, base_object);
 
-    // Idempotent guard: del() may be called twice — once from ModuleManager at
-    // shutdown to break cross-program Type strong refs (issue #4816), and
-    // again from ~qore_program_private() if refcount eventually reaches 0.
-    // RootNS is set to nullptr at the end of del() so this flag detects the
-    // second call and short-circuits.
+    // Idempotent guard: del() is called only from waitForTerminationAndClear(), which can run twice: once from
+    // ModuleManager at shutdown to break cross-program Type strong refs (issue #4816), and again when the reference
+    // count reaches 0.  RootNS is set to nullptr at the end of del() so this flag detects the second call and
+    // short-circuits.
     if (!RootNS) {
         return;
     }
+    // waitForTerminationAndClear() waited for the batch JIT compiles that read the Program's code, after it had set
+    // ptid, which refuses new ones (qore#5874)
+    assert(!compile_holds);
 
     // dereference all external data, once no child Program copies it
     {

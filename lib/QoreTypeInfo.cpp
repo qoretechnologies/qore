@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/QoreArithmeticParseType.h"
 #include <qore/QoreRWLock.h>
 #include <optional>
 #include <unordered_set>
@@ -7049,6 +7050,25 @@ bool QoreTypeInfo::outputSuperSetOf(const QoreTypeInfo* t) const {
     return true;
 }
 
+bool QoreTypeInfo::outputAccepts(const QoreTypeInfo* t) const {
+    for (auto& ti : t->return_vec) {
+        bool found = false;
+        for (auto& i : return_vec) {
+            bool may_not_match = false;
+            bool may_need_filter = false;
+            if (i.spec.match(ti.spec, may_not_match, may_need_filter) != QTI_NOT_EQUAL && !may_not_match
+                && !may_need_filter) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
         const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts) const {
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
@@ -7162,4 +7182,210 @@ bool QoreParseTypeInfo::paramTypesIdentical(
     }
     // Both untyped (nullptr): identical
     return true;
+}
+
+namespace {
+// a result of an arithmetic operator that has no parse type here (a buffer, or SQL NULL)
+constexpr qore_type_t QORE_ARITH_UNTYPED = -1;
+
+// the value types that can be the value of an operand of the given type, as their runtime type codes
+// returns false if the type does not restrict them: then every type is possible
+bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_type_t>& types) {
+    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo) {
+        return false;
+    }
+    for (const QoreReturnSpec& r : ti->return_vec) {
+        qore_type_t t = r.spec.getType();
+        if (t == NT_ALL || t < 0) {
+            return false;
+        }
+        if (std::find(types.begin(), types.end(), t) == types.end()) {
+            types.push_back(t);
+        }
+    }
+    return !types.empty();
+}
+
+// every value type, for an operand whose type does not restrict its values
+const std::vector<qore_type_t>& qore_arith_all_value_types() {
+    static const std::vector<qore_type_t> all = {
+        NT_NOTHING, NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH,
+        NT_OBJECT, NT_NULL, NT_BUFFER,
+    };
+    return all;
+}
+
+bool qore_arith_is_int(qore_type_t t) {
+    return t == NT_INT || t == NT_CHAR;
+}
+
+// the runtime result type of the operator for operand values of the given types, mirroring the evalImpl() of each
+// operator (QorePlusOperatorNode, QoreMinusOperatorNode, QoreMultiplicationOperatorNode)
+qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_type_t rt) {
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return QORE_ARITH_UNTYPED;
+    }
+    switch (op) {
+        case QoreArithParseOp::Plus:
+            if (lt == NT_LIST || rt == NT_LIST) {
+                return NT_LIST;
+            }
+            if (lt == NT_STRING || rt == NT_STRING) {
+                return NT_STRING;
+            }
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            if (lt == NT_HASH) {
+                return NT_HASH;
+            }
+            if (lt == NT_OBJECT) {
+                return rt == NT_HASH ? NT_HASH : NT_OBJECT;
+            }
+            if (rt == NT_HASH || rt == NT_OBJECT) {
+                return rt;
+            }
+            if (lt == NT_BINARY || rt == NT_BINARY) {
+                return NT_BINARY;
+            }
+            return NT_NOTHING;
+
+        case QoreArithParseOp::Minus:
+            if (rt == NT_NOTHING) {
+                // the left value itself
+                if (lt == NT_NULL) {
+                    return QORE_ARITH_UNTYPED;
+                }
+                return qore_arith_is_int(lt) ? NT_INT : lt;
+            }
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            if (lt == NT_HASH && (rt == NT_LIST || rt == NT_STRING)) {
+                return NT_HASH;
+            }
+            return NT_NOTHING;
+
+        case QoreArithParseOp::Divide:
+            // QoreDivisionOperatorNode::doDivision()
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (qore_arith_is_int(lt) && qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            return NT_FLOAT;
+
+        case QoreArithParseOp::Multiply:
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            return NT_NOTHING;
+    }
+    assert(false);
+    return QORE_ARITH_UNTYPED;
+}
+
+// the parse type of a runtime result type, or nullptr if it has none here
+const QoreTypeInfo* qore_arith_result_type(qore_type_t t) {
+    switch (t) {
+        case NT_INT: return bigIntTypeInfo;
+        case NT_FLOAT: return floatTypeInfo;
+        case NT_NUMBER: return numberTypeInfo;
+        case NT_STRING: return stringTypeInfo;
+        case NT_DATE: return dateTypeInfo;
+        case NT_BOOLEAN: return boolTypeInfo;
+        case NT_BINARY: return binaryTypeInfo;
+        case NT_LIST: return autoListTypeInfo;
+        case NT_HASH: return autoHashTypeInfo;
+        case NT_OBJECT: return objectTypeInfo;
+        default: return nullptr;
+    }
+}
+
+bool qore_arith_is_container(qore_type_t t) {
+    return t == NT_LIST || t == NT_HASH || t == NT_OBJECT;
+}
+}
+
+QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const QoreTypeInfo* lti,
+        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single) {
+    result = nullptr;
+    std::vector<qore_type_t> lv, rv;
+    bool lk = qore_arith_value_types(lti, lv);
+    bool rk = qore_arith_value_types(rti, rv);
+    const std::vector<qore_type_t>& lvals = lk ? lv : qore_arith_all_value_types();
+    const std::vector<qore_type_t>& rvals = rk ? rv : qore_arith_all_value_types();
+    single = lk && rk && lv.size() == 1 && rv.size() == 1;
+
+    type_vec_t types;
+    bool has_nothing = false;
+    bool container = false;
+    for (qore_type_t lt : lvals) {
+        for (qore_type_t rt : rvals) {
+            qore_type_t t = qore_arith_runtime_result(op, lt, rt);
+            if (t == NT_NOTHING) {
+                has_nothing = true;
+                continue;
+            }
+            const QoreTypeInfo* ti = qore_arith_result_type(t);
+            if (!ti) {
+                return QoreArithParseResult::Untyped;
+            }
+            if (qore_arith_is_container(t)) {
+                container = true;
+            }
+            if (std::find(types.begin(), types.end(), ti) == types.end()) {
+                types.push_back(ti);
+            }
+        }
+    }
+    // the members are ordered so that a value of each result type is taken by its own member: a union takes a value
+    // with its first member that accepts it, and a float accepts an int by converting it, so an int result type comes
+    // before a float result type (ex: union<int, float> for *float + int, not union<float, int>, which made 2.0 of 2)
+    static const std::vector<const QoreTypeInfo*> order = {
+        bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, dateTypeInfo, boolTypeInfo, binaryTypeInfo,
+        autoListTypeInfo, autoHashTypeInfo, objectTypeInfo,
+    };
+    std::sort(types.begin(), types.end(), [](const QoreTypeInfo* a, const QoreTypeInfo* b) {
+        return std::find(order.begin(), order.end(), a) < std::find(order.begin(), order.end(), b);
+    });
+    result = types.empty() ? nothingTypeInfo : qore_get_union_type(types, has_nothing);
+    return container ? QoreArithParseResult::Container : QoreArithParseResult::Scalar;
+}
+
+bool qore_arith_container_rule_matches(const QoreTypeInfo* rule_ti, const QoreTypeInfo* arith_ti) {
+    for (qore_type_t t : {NT_LIST, NT_HASH, NT_OBJECT}) {
+        if (QoreTypeInfo::isType(arith_ti, t)) {
+            return QoreTypeInfo::isType(rule_ti, t);
+        }
+    }
+    return false;
 }

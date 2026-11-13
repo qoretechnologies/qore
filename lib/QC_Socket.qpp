@@ -6140,11 +6140,14 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout tim
     @throw SSE-EVENT-TOO-LARGE the event exceeds \a max_event_size
     @throw COMPRESS-ERROR the content coding is not supported
 
+    @note The return type is \c *hash<SseMessageInfo>: this method returns an event or throws an exception, but a
+    subclass (@ref Qore::HTTPClient "HTTPClient") returns @ref nothing at the end of the stream (issue #5838)
+
     @since
     - %Qore 2.0
     - %Qore 3.0 added the \a max_event_size parameter
 */
-hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+*hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
         int max_event_size = 0) [flags=NAMED_ARGS] {
     return socket_exec_read_server_sent_event(self, s, content_encoding, max_event_size, timeout_ms, xsink);
 }
@@ -6163,9 +6166,12 @@ hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeo
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
 
+    @note The return type is \c *hash<SseMessageInfo>: this method returns an event or throws an exception, but a
+    subclass (@ref Qore::HTTPClient "HTTPClient") returns @ref nothing at the end of the stream (issue #5838)
+
     @since %Qore 2.0
 */
-hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
+*hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
     return socket_exec_read_server_sent_event(self, s, nullptr, 0, timeout_ms, xsink);
 }
 
@@ -6862,6 +6868,45 @@ if (sock.hasHttpFastRoutes()) {
 */
 bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
     return (bool)qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getFastRoutes();
+}
+
+//! Makes the HTTP keep-alive poll operations of the socket close the connection instead of waiting for another request
+/** Used by an HTTP server that drains its connections before it stops.  With \a idle @ref False (the default), an
+    operation started with @ref startPollSendHttpResponseAndReadHeader() or the streaming variant of it ends after
+    the response that it sends, in a state that tells the server to close the connection, unless a request has
+    arrived, which is read and answered on the server's ordinary path (no fast route answers it); the first request
+    of a new connection (an operation started with @ref startPollIdleAndReadHttpHeader() or
+    @ref startPollReadHttpHeader()) is still served.
+
+    With \a idle @ref True, in addition, an operation that waits for a request ends at once if none has arrived, even
+    on a connection that has not had one (one that waited for its request when the server started to drain), as does
+    an operation started with @ref startPollReadHttpHeader() that has received no byte of a request.
+
+    An operation that is waiting must be woken to see the change (see
+    @ref Qore::AsyncIoController::wakeSocket() "AsyncIoController::wakeSocket()").  On the UDP socket of an HTTP/3
+    listener, the change makes the server's QUIC operation drain its sessions.
+
+    The change cannot be undone: a later call with \a idle @ref True makes it stronger, and a call with \a idle
+    @ref False after one with @ref True changes nothing.
+
+    @param idle if @ref True, an operation that waits for a request ends at once if none has arrived, even on a
+    connection that has not had a request yet
+
+    @par Example:
+    @code{.py}
+sock.drainHttpConnection(True);
+controller.wakeSocket(sock);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::drainHttpConnection(bool idle = False) [flags=CONSTANT] {
+    std::atomic<int>& draining = my_socket_priv::getPriv(*s)->http_draining;
+    int level = idle ? 2 : 1;
+    int cur = draining.load(std::memory_order_acquire);
+    // the level is only ever raised
+    while (cur < level && !draining.compare_exchange_weak(cur, level, std::memory_order_acq_rel)) {
+    }
 }
 
 //! Starts a poll operation that waits for the first HTTP request of a connection and reads its header

@@ -41,6 +41,8 @@ module GoogleCloudStorageRestClient {
         ConnectionSchemeCache::registerScheme("gcs",
             GoogleCloudStorageRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage GoogleCloudStorageRestClient Module
@@ -469,7 +471,7 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
         The request cannot be expressed with the \c ping_method / \c ping_path / \c ping_headers
         options, because those are static configuration and a GcpAuth bearer token expires.  The
         \c ping_method option is deliberately left unset so that the *polling* ping
-        (@ref RestClient::RestConnection::startPollConnect() "startPollConnect()") falls back to a
+        (@ref RestClient::AbstractRestConnection::startPollConnect() "startPollConnect()") falls back to a
         connect-level check rather than issuing an unauthenticated HTTP request that would always
         fail with HTTP 401.
     */

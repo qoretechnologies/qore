@@ -705,7 +705,7 @@ public class SharePointDriveItemsDataProvider inherits SharePointDataProviderBas
     #! Reads the matching items, which OneDriveListItemsDataProvider builds from the drive
     /** Forwarded for the same reason as doRequestImpl() in the request providers above.
     */
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return OneDriveListItemsDataProvider::searchRecordsImpl(where_cond, search_options);
     }

@@ -79,6 +79,29 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional-Domain Attribute Lists
+    <tt>[dom=</tt> after a parameter list starts a @ref function_domains "functional-domain attribute list", so an
+    index expression that assigns to a variable named \c dom (<tt>x[dom = y]</tt>) must be written
+    <tt>x[(dom = y)]</tt>; the process-wide registration and setter APIs of the @ref dataproviderintro "DataProvider"
+    module declare \c PROCESS, so a Program with @ref Qore::PO_NO_PROCESS_CONTROL cannot call them, and the
+    \c INVALID-FUNCTION-ACCESS and parse errors for code a Program may not use name the restricted functional domain.
+
+
+    @par Adding a Value in Front of a Typed List Keeps Its Type
+    The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
+    as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
+    \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
+
+    @par Child Class Methods Must Return a Type Compatible With the Parent Class Method
+    A child class method variant that overrides a parent class variant, or that a call typed against the parent class
+    can select, must return the parent class variant's type or a narrower one, or the class raises a
+    \c PARSE-TYPE-ERROR; see @ref override_return_types.
+
+    @par Builtin Methods That Subclasses Override Return Wider Types
+    @ref Qore::HTTPClient::get() "HTTPClient::get()" and @ref Qore::HTTPClient::post() "HTTPClient::post()" return
+    <tt>union&lt;*data, hash&lt;auto&gt;&gt;</tt>, @ref Qore::HTTPClient::getDefaultHeaders() "HTTPClient::getDefaultHeaders()"
+    <tt>hash&lt;auto&gt;</tt> and @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" an or-nothing
+    hash, as subclasses return; code that assigns their results to narrower types must accept the wider ones.
 
     @par Plain Function Bodies No Longer Inherit a Caller's Class Context
     A plain function's body could be parse-initialized in the class context of the method that first called it, which
@@ -90,21 +113,16 @@
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
     the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
-    @par No-Op Builtin Variants Are Not Called With Strict Arguments
-    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
-    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
-    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
-
     @par Debugger Callbacks Run With the Cancellation Deferred
     The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
     deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
     debugger resumes it (issue #5794).
 
-    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
-    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
-    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
-    The most common cases keep their results with regular variants:
+    flagged @ref NOOP are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and a no-op call at run
+    time, for example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR; common cases keep their
+    results with regular variants:
     - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
     - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
       no value (such as \c keys of an unassigned hash) return no value; as these calls are resolved at run time, a
@@ -351,6 +369,12 @@
     or loaded at runtime are no longer exported to the importing @ref Qore::Program "Program"; a program using such
     a constant must require the module declaring it, unless a module it requires reexports it; see
     @ref user_module_exports.
+
+    @par HttpServer::stop() Lets the Requests in Progress Finish
+    @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and
+    @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" now drain the connections first, waiting at most the
+    new \c drain_timeout option, and @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once as
+    \c stop() did before.
 
     @par HttpServer Labels Responses by Their Data and With Registered Charset Names
     @ref httpserverintro "HttpServer" sends a binary response body without a \c Content-Type as
@@ -644,6 +668,13 @@
     \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
     @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
     handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
+
+    @par Functional-Domain Declarations on Functions and Methods
+    Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
+    attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
+    user module declares the domains its own code uses with the \c domains key of its
+    @ref user_module_declarations "module declaration"
+    (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>).
 
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -1078,6 +1109,8 @@
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
+      - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
@@ -1285,6 +1318,9 @@
         killed (ex: during RAC rolling patching) or the connection is lost
       - see @ref sqlutilv3_11_0 for all changes
 
+    - @ref tablemapperintro "TableMapper" module
+      - see @ref tablemapperv1_3_1 for all changes
+
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
         use @ref httpclientiointro "HttpClientIo"
@@ -1318,6 +1354,9 @@
       - @ref WebUtil::FileHandler "FileHandler" sends caching headers, answers conditional and range requests, and
         serves pre-compressed files
       - see @ref webutil_v1_8_1 for all changes
+
+    - @ref zeyosrestclientintro "ZeyosRestClient" module
+      - see @ref Zeyosrestclientv1_2 for all changes
 
     @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
 
@@ -1654,6 +1693,56 @@
     - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
       context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
       \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
+    - in the IR, JIT and AOT @ref execution_modes "execution modes", a method call or a call through a method call
+      reference evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED for an object that had been
+      deleted, or \c PSEUDO-METHOD-DOES-NOT-EXIST for a value without the method; as in the AST interpreter, no
+      argument is evaluated then
+    - a @ref closure "closure" whose parameter's default value used a local variable of the code that created it
+      (for example in a closure as the default value) crashed when it was called after that variable's scope was left;
+      the closure now captures the variables that its default values use
+    - the @ref logical_less_than_operator "<", @ref logical_less_than_or_equals_operator "<=",
+      @ref logical_greater_than_operator ">" and @ref logical_greater_than_or_equals_operator ">=" operators compared a
+      \c float with an or-nothing \c number (\c *number, \c *softnumber) as floats, losing the precision of the number
+      (issue #5875)
+    - the @ref logical_equality_operator "==" and @ref logical_inequality_operator "!=" operators compared an \c int or a
+      \c bool with an or-nothing \c float or \c int (ex: \c *float) as an \c int or \c bool (ex: \c 2 \c == \c 2.5
+      was @ref True; issue #5875)
+    - a weak assignment from a variable that holds a hash or a list shared with another owner (a literal of the
+      program, another variable) now gives the variable a copy of its own first, so that later changes made through
+      the variable are seen through the weak reference in every execution mode; previous releases shared the value,
+      and the weak reference then kept the old one; see the @ref weak_assignment_operator "weak assignment operator"
+
+    - a \c copy() call run by the @ref background "background operator" (ex: <tt>background obj.copy()</tt>, or
+      <tt>background copy()</tt> in a method) crashed the process; it now copies the object in every execution mode
+      and in programs compiled with \c qcc (issue #5917)
+    - a qualified call of a method of the object (<tt>Base::method()</tt>) raised \c BACKGROUND-ERROR in the
+      background in programs compiled with \c qcc, and \c METHOD-DOES-NOT-EXIST for an abstract method; it calls the
+      method of the class that it names, or that the object's class implements for an abstract method; programs
+      compiled with \c qcc before must be recompiled (issue #5933)
+    - a background call of a method of the object that compiled code dispatches by name (a call that the AOT runtime
+      could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
+      such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
+      method, and a qualified call calls the method of the class that it names (issue #5917)
+    - the default values of a @ref closure "closure" created in a method did not see the closure's object in qcc code
+      or in a closure that they created; they are now in the object's context, as the closure's code is (see
+      @ref closure_default_values "closure default values")
+    - a @ref closure "closure" in the default value of a static method's parameter ran in the class context of the
+      caller, so it could not access the private members and methods of the class that declares it, as a closure in the
+      static method's code can
+    - a @ref closure "closure" in a namespace constant whose value was first evaluated for a class constant or a static
+      member initializer, or in a member initializer of a hashdecl first used in a class's code, ran in the class
+      context of that class, so it could access the class's private members
+    - a sandboxed Program could not load a compiled (qcc) library module whose source has a
+      \c %%module-cmd directive (\c MODULE-LOAD-ERROR: "AOT module-command replay error"), although it
+      could load the module's source: the directive recorded in the compiled module was replayed in the module's
+      Program as a command from the sandboxed loader to another Program; it now runs in the module's Program, with
+      the sandbox that the module's Program gets from the loader, as when its source is parsed there, and sandboxed
+      code still cannot issue a module command to another Program with
+      @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()" (issue #5905)
+    - a compiled (qcc) module that sandboxed code loaded from outside the module path (by path, for example) ran
+      without the sandbox of that code, both its own code and the \c %%module-cmd directives replayed in its
+      Program, whereas the source module is governed by that sandbox; the compiled module's Program now gets the
+      sandbox that its source module's Program gets (issue #5913)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
@@ -1683,12 +1772,20 @@
     - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
       significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
       limit; such a frame is now an error (issue #5878)
+    - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
+      and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
+      for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
+      AST interpreter gave a \c float instead of a \c number for \c / of a \c float and a \c *number (issue #5663)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
     - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
       dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
       at exit; the records of the module that the reload replaces are now kept until the module is deleted
+    - a debug build of \c qcc or <tt>qore --compile-module</tt> stopped with an assertion at exit after a directory
+      module that loaded another module failed to parse; a failed module load now always releases its dependency
+      records, and an AOT module compiled by an older \c qcc no longer keeps the modules that its initialization
+      loads (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
     - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
       @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
       and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output

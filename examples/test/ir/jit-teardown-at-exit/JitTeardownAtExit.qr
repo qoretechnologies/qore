@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Functions compiled in the background register the EH frames of their code with libgcc.  A compile that is still in
+# LLVM when the process ends is abandoned, and the JIT is not released under it; when it ends before the process does,
+# the JIT must be released then, which deregisters the frames (issue #5842): otherwise libgcc frees its table of
+# registered frames at exit, and the memory that it allocated for each frame is lost.  The compile of held() is held
+# in LLVM at the end, and a test hook lets it end before the process does: with the argument "shutdown", when it is
+# abandoned (QoreJIT::shutdown() then waits for it and releases the JIT), with "exit", at the end of the process
+# (which waits for it and releases the JIT then).  Needs a debug libqore (dbg_finish_abandoned_bg_compile()); see
+# JitTeardownAtExit.qtest.
+
+int sub f1(int x) { int s; for (int i = 0; i < x; ++i) { s += i * 2; } return s; }
+int sub f2(int x) { int s; for (int i = 0; i < x; ++i) { s += i * 3; } return s; }
+int sub held(int x) { int s; for (int i = 0; i < x; ++i) { s += i * 4; } return s; }
+
+# f1 and f2 are compiled in the background, so that their code is in the JIT
+int t = f1(10) + f2(10);
+t += f1(10) + f2(10);
+call_function("dbg_wait_bg_compile_idle");
+# the compile of held() is still in LLVM at the end of the process
+call_function("dbg_hold_bg_compile", "llvm", "held");
+t += held(10);
+t += held(10);
+bool h = call_function("dbg_wait_bg_compile_held", "llvm", 60000);
+call_function("dbg_finish_abandoned_bg_compile", ARGV[0] ?? "exit");
+printf("held: %y result: %d\n", h, t);

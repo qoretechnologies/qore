@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include UnionComparisons.qc
+
+%exec-class UnionComparisonsPart2
+
+#! runs part 2 of 4 of the cases of UnionComparisonsBase: the union cases as AOT executables
+class UnionComparisonsPart2 inherits UnionComparisonsBase {
+    constructor() : UnionComparisonsBase("UnionComparisonsPart2", 2) {
+    }
+}

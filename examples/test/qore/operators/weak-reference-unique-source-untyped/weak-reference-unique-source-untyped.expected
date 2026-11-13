@@ -1,0 +1,34 @@
+literal list: [1, 2, 3]
+literal hash: {a: 1, b: 2}
+shared list: a=[1, 2] w=[1, 2, 3]
+shared hash: ha={a: 1} hw={a: 1, b: 2}
+other owner: c=[1, 2] d=[1, 2, 3] w=[1, 2]
+two weak references: [1, 2, 3] [1, 2, 3]
+two typed weak references: [1, 2, 3] [1, 2, 3]
+loop 0: [10, 20, 0]
+loop 1: [10, 20, 1]
+loop 2: [10, 20, 2]
+weak of weak: [1, 2, 3] [1, 2, 3]
+nothing: null
+int: 5
+string: "text"
+object: 10
+referenced: [1, 2, 3]
+global object 10 int 5 nothing null
+parameter: [1, 2, 3]
+parameter shared: [1, 2, 3]
+closure-bound: [1, 2, 3] [1, 2, 3]
+global typed hash: {a: 1, b: 2}
+global untyped hash: {a: 1, b: 2}
+global untyped list: [1, 2, 3]
+global typed list: [1, 2, 3]
+global shared hash: other={a: 1} w5={a: 1, c: 3}
+weak of weak global: {a: 1, b: 2, d: 4} {a: 1, b: 2, d: 4}
+static typed hash: {a: 1, b: 2}
+static typed list: [1, 2, 3]
+static shared hash: other={a: 1} w3={a: 1, c: 3}
+static method: {a: 1, b: 2}
+method: [1, 2, 3]
+top level local from a function: [1, 2, 3] {a: 1, b: 2}
+top level local: [1, 2, 3]
+top level static: {a: 1, b: 2, c: 3}

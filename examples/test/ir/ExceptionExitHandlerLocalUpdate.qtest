@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ExceptionExitHandlerLocalUpdateTest
+
+#! Test: a handler that assigns to or removes a local of a function left by an exception
+/** The value that a handler of a function left by an exception replaces or removes is released where the handler
+    does so, and the value it assigns is released with the frame's locals, as with the AST interpreter.  The local is
+    referenced by the handler, so it is never IR-only (QoreIRFunction::computeIROnlyLocals()); the test covers the
+    semantics of assignment and remove in handlers, not the release of IR-only locals (see
+    ExceptionExitHandlerLocalOrder.qtest).  The script runs with the AST interpreter, with <tt>--exec-mode=ir</tt> and
+    on the IR tier of tiered execution; JIT execution, native code with tiered execution and qcc executables are left
+    out because of qore#5942 and should be added back once it is fixed.
+*/
+class ExceptionExitHandlerLocalUpdateTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = '%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# a handler that assigns to a local while an exception leaves the function
+sub assign() {
+    T a("ga");
+    on_exit { printf("on_exit assign\n"); a = new T("ga2"); printf("after assign\n"); }
+    T b("gb");
+    printf("%s%s\n", b.n, a.n);
+    throw "A";
+}
+# a handler that removes a local while an exception leaves the function
+sub removeLocal() {
+    T a("ra");
+    on_error { printf("on_error remove\n"); remove a; printf("after remove\n"); }
+    T b("rb");
+    printf("%s%s\n", b.n, a.n);
+    throw "R";
+}
+for (int i = 0; i < 2; ++i) {
+    try { assign(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { removeLocal(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+}
+';
+
+        #! the AST interpreter's output of one iteration of the script's loop
+        const ExpectedOnce = (
+            "gbga",
+            "on_exit assign",
+            "dtor ga",
+            "after assign",
+            "dtor gb",
+            "dtor ga2",
+            "caught A",
+            "rbra",
+            "on_error remove",
+            "dtor ra",
+            "after remove",
+            "dtor rb",
+            "caught R",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ExceptionExitHandlerLocalUpdate", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the AST interpreter, the IR interpreter and the IR tier release the locals that handlers update "
+            "as the AST interpreter does", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-exceptionexithandlerlocalupdate-");
+        string path = tmp.path + DirSep + "update.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string expected = (map $1 + "\n", ExpectedOnce + ExpectedOnce).join("");
+        hash<string, string> actual();
+        foreach string mode in ("ast", "ir", ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, libqore_dir, qore_bin, ir_tier ? "tiered" : mode, path);
+            actual{mode} = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
+        }
+        assertEq({"ast": expected, "ir": expected, ExecModeHarness::IRTierName: expected}, actual);
+    }
+}
