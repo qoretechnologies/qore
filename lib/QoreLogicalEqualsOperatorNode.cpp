@@ -336,7 +336,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
             case NT_CHAR:
                 return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->equals(**rn);
             }
         }
@@ -352,7 +352,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
             case NT_CHAR:
                 return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->equals(**ln);
             }
         }

@@ -79,6 +79,11 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
         needs_deref = false;
         return;
     }
+    // the arguments of a named call bound at parse time are placed at the positions of their parameters
+    if (qore_list_private::get(*exp)->hasCallArgEvalMap()) {
+        evalInternMapped(exp);
+        return;
+    }
     // a list whose values need no evaluation (the arguments that compiled code evaluated) is used as it is: the
     // holder takes its values over and edits it in place (see tmp_source) instead of moving them to a new list, which
     // allocated a list and its entries for each call; the caller keeps its reference and releases the list
@@ -118,6 +123,33 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
         }
     }
     assert(exp->size() == val->size());
+}
+
+// the arguments of a named call bound at parse time (a copy of the call, such as the copy of a background expression):
+// they are evaluated in source order and placed at the positions of their parameters, as qore_list_private::eval()
+// places them
+void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
+    const qore_list_private* ep = qore_list_private::get(*exp);
+    const std::vector<size_t>& pos_map = *ep->getCallArgEvalMap();
+    assert(pos_map.size() == exp->size());
+    needs_deref = true;
+    val = new QoreListNode(autoTypeInfo);
+    qore_list_private* vl = qore_list_private::get(*val);
+    vl->resize(ep->getCallArgEvalResultSize());
+    for (size_t i = 0, e = exp->size(); i < e; ++i) {
+        QoreValue& ev = exp->getEntryReference(i);
+        assert(pos_map[i] < val->size());
+        QoreValue& vv = val->getEntryReference(pos_map[i]);
+        if (!ev.needsEval() || ev.getType() == NT_REFERENCE || ev.getType() == NT_WEAKREF
+            || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
+            vv.swap(ev);
+            continue;
+        }
+        vv = ev.eval(xsink);
+        if (*xsink) {
+            return;
+        }
+    }
 }
 
 int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink) {
