@@ -298,14 +298,6 @@ int qore_hash_private::parseCheckComplexHashInitialization(const QoreProgramLoca
     if (vti2) {
         if (!QoreTypeInfo::hasType(vti2)) {
             switch (exp.getType()) {
-                // a hash literal with a closure of a constant expression has no common value type, as it is typed
-                // from its values at run time; its values are checked with their own types, as for a literal with a
-                // narrower type (qore#5972)
-                case NT_PARSE_HASH:
-                    if (exp.get<const QoreParseHashNode>()->hasDeferredClosure()) {
-                        return parseCheckTypedAssignment(loc, exp, valueTypeInfo, context_action, strict_check);
-                    }
-                    break;
                 case NT_HASH: {
                     ConstHashIterator i(exp.get<const QoreHashNode>());
                     while (i.next()) {

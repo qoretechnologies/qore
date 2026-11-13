@@ -1792,24 +1792,6 @@ bool qore_type_contains_wildcard(const QoreTypeInfo* ti) {
     return false;
 }
 
-// documented in QoreTypeInfo.h
-bool qore_type_contains_deferred_closure(const QoreTypeInfo* ti) {
-    for (unsigned depth = 0; ti && depth < 16; ++depth) {
-        if (ti == runTimeClosureTypeInfo) {
-            return true;
-        }
-        if (!QoreTypeInfo::hasType(ti)) {
-            return false;
-        }
-        const QoreTypeInfo* elem = QoreTypeInfo::getReturnComplexListOrNothing(ti);
-        if (!elem) {
-            elem = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
-        }
-        ti = elem;
-    }
-    return false;
-}
-
 bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
     if (!ti || !QoreTypeInfo::hasType(ti)) {
         return false;

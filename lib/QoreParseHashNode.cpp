@@ -31,7 +31,6 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreParseHashNode.h"
-#include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/SelfVarrefNode.h"
@@ -239,13 +238,6 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         // For lvalue-like refs, clear type info to prevent baking declared or
         // narrowed types into the hash literal; the actual runtime value may
         // be NOTHING, so the type must be determined at runtime.
-        // a value with a closure of a constant expression, which has the generic closure type until its deferred
-        // initialization, gives the hash no common value type: the hash is typed from its values at run time, as
-        // outside a constant expression (qore#5972); the value's own type is kept for the checks of a hashdecl
-        bool deferred_closure = qore_parse_value_has_deferred_closure(values[i], vtypes[i]);
-        if (deferred_closure) {
-            has_deferred_closure = true;
-        }
         if (vtypes[i] && typed_varref_may_be_nothing) {
             vtypes[i] = nullptr;
         }
@@ -260,10 +252,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
         // the value type of the container is that of the run-time values: a date has no subtype then, while the
         // type of each value keeps it (call arguments are checked with it) (issue #5722)
-        if (deferred_closure) {
-            vtype = nullptr;
-            vcommon = false;
-        } else if (!i) {
+        if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {
                 vtype = QoreTypeInfo::getRuntimeValueType(vtypes[0]);
                 vcommon = true;
@@ -447,23 +436,4 @@ QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink)
     }
 
     return rv.release();
-}
-
-// documented in QoreTypeInfo.h
-bool qore_parse_value_has_deferred_closure(const QoreValue& v, const QoreTypeInfo* vt) {
-    if (vt && qore_type_contains_deferred_closure(vt)) {
-        return true;
-    }
-    const AbstractQoreNode* n = v.getInternalNode();
-    if (!n) {
-        return false;
-    }
-    switch (n->getType()) {
-        case NT_PARSE_HASH:
-            return static_cast<const QoreParseHashNode*>(n)->has_deferred_closure;
-        case NT_PARSE_LIST:
-            return static_cast<const QoreParseListNode*>(n)->has_deferred_closure;
-        default:
-            return false;
-    }
 }

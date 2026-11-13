@@ -41,7 +41,6 @@
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 
 class QoreParseListNode : public ParseNode {
-    friend bool qore_parse_value_has_deferred_closure(const QoreValue& v, const QoreTypeInfo* vt);
 public:
     typedef std::deque<QoreValue> nvec_t;
     typedef std::deque<std::string> arg_name_vec_t;
@@ -289,9 +288,6 @@ protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // flag for a list expression in curly brackets for the list version of the map operator
     bool finalized = false;
-    //! the literal holds a closure of a constant expression, which has the generic closure type until its deferred
-    //! initialization, also in a nested container literal (qore#5972)
-    bool has_deferred_closure = false;
     // is this a variable list declaration?
     bool vlist = false;
     // true if any entry has a call-site argument name

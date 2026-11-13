@@ -13,8 +13,9 @@
 %exec-class ConstantClosureListTypeTest
 
 #! lists of closures nested in constant expressions have the type of their closures in every mode and in AOT (qore#5972)
-/** A closure of a constant expression has the generic closure type at parse time, until its deferred initialization;
-    a hash literal kept it as its value type (list<closure>), and qcc gave list<code>.
+/** A closure of a constant expression had the generic closure type at parse time, until its deferred initialization;
+    a hash literal kept it as its value type (list<closure>), and qcc gave list<code>.  The closure now has the code
+    type of its signature when it is parsed (qore#6046).
 */
 class ConstantClosureListTypeTest inherits QUnit::Test {
     private {

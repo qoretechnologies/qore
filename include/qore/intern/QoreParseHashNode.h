@@ -43,7 +43,6 @@
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 
 class QoreParseHashNode : public ParseNode {
-    friend bool qore_parse_value_has_deferred_closure(const QoreValue& v, const QoreTypeInfo* vt);
 public:
     DLLLOCAL static QoreParseHashNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
         bool curly = false);
@@ -146,11 +145,6 @@ public:
         return values;
     }
 
-    //! returns true if the literal holds a closure of a constant expression (see has_deferred_closure)
-    DLLLOCAL bool hasDeferredClosure() const {
-        return has_deferred_closure;
-    }
-
     DLLLOCAL const tvec_t& getValueTypes() const {
         return vtypes;
     }
@@ -209,9 +203,6 @@ protected:
     bool curly;
     // error happened in parsing
     bool parse_error = false;
-    //! the literal holds a closure of a constant expression, which has the generic closure type until its deferred
-    //! initialization, also in a nested container literal (qore#5972)
-    bool has_deferred_closure = false;
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
