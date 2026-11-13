@@ -20,7 +20,8 @@
 
     The IR interpreter and native code kept the first element of a fold over a fused pipeline until the statement
     ended, where the AST interpreter releases it when the accumulator is replaced, and native code's accumulator of
-    a fold over a pipeline with a select stage borrowed the element, which the next element released (issue #5883).
+    a fold over a pipeline with a select stage borrowed the element or the value of an operator, which the next element
+    released or replaced (issue #5883).
 
     The script next to the test runs in every execution mode (its functions compiled before they run, with
     QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output, which shows each release, must be
@@ -55,7 +56,7 @@ class NativeReleaseOrderTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(23, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(28, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         foreach string c in ("map", "select", "map select", "hash map") {
             assertTrue(regex(out,
                 sprintf("(^|\n)%s: released h2; released h3; released h1; catch STAGE; after(\n|$)", c)), c);
@@ -86,6 +87,16 @@ class NativeReleaseOrderTest inherits QUnit::Test {
         }
         assertTrue(out =~ /\nfoldl pipeline select: released i2; released i1; itdone it; r i3; released i3; after/,
             "a fold over a pipeline with a select stage");
+        # the values of an operator in a map stage or of the fold's expression
+        assertTrue(out =~ /\nfoldl pipeline select string: r pa,qa,ya; r xa\n/, "a select stage after an operator");
+        assertTrue(out =~ /\nfoldl pipeline select list: released i2; released i3; itdone it; r i1; released i1; after/,
+            "a select stage after a list");
+        assertTrue(out =~ /\nfoldl pipeline select concat: released i3; itdone it; r i1,i2; released i1; released i2; /,
+            "an operator as the fold's expression with a select stage");
+        assertTrue(out =~ /\nfoldl pipeline concat: itdone it; r i1,i2,i3; released i1; released i2; released i3; /,
+            "an operator as the fold's expression");
+        assertTrue(out =~ /\nfoldl pipeline takewhile: released i1; released i3; itdone it; r i2; released i2; after/,
+            "a takewhile stage");
         assertTrue(out =~ /\nfoldl pipeline next raises: released i1; itdone it; released i2; catch NEXT \$1 unset; /,
             "a fold over a pipeline whose iterator's next() raises");
         assertTrue(out =~ /\nfoldl nested raises: released x; released h1; released h2; released h3; catch STAGE /,

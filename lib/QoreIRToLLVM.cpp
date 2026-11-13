@@ -13396,10 +13396,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 });
             }
         }
-        // returns true for a Phi whose value can be a temporary that is released in the loop: an iterator's element,
-        // which the next IteratorNext releases, or a value that a call or RefSelf gives, whose slot the next
-        // execution of the instruction replaces
-        auto phi_carries_temporary = [&](const QoreIRPhiInstruction* phi) {
+        // returns false for a Phi whose values are all borrowed from a variable or a constant, and true for a Phi whose
+        // value can be any other value: an iterator's element, which the next IteratorNext releases, or the value of
+        // a call or an operator (a string concatenation, a list), which the next execution of the instruction
+        // replaces in its slot (qore#5883)
+        auto phi_may_hold_temporary = [&](const QoreIRPhiInstruction* phi) {
             std::unordered_set<uint32_t> seen{phi->result.id};
             std::vector<const QoreIRPhiInstruction*> todo{phi};
             while (!todo.empty()) {
@@ -13411,17 +13412,36 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                     auto def_it = value_definitions.find(inc.value.id);
                     if (def_it == value_definitions.end() || !def_it->second) {
-                        continue;
-                    }
-                    const QoreIRInstruction* def = def_it->second;
-                    if (def->opcode == QoreIROpcode::IteratorNext || def->opcode == QoreIROpcode::RefSelf
-                            || value_defined_by_call.count(inc.value.id)) {
                         return true;
                     }
-                    if (def->opcode == QoreIROpcode::Phi
-                            && static_cast<const QoreIRPhiInstruction*>(def)->value_kind
-                                == QoreIRPhiValueKind::QoreValue) {
-                        todo.push_back(static_cast<const QoreIRPhiInstruction*>(def));
+                    const QoreIRInstruction* def = def_it->second;
+                    switch (def->opcode) {
+                        case QoreIROpcode::ConstBool:
+                        case QoreIROpcode::ConstDate:
+                        case QoreIROpcode::ConstEnum:
+                        case QoreIROpcode::ConstFloat:
+                        case QoreIROpcode::ConstInt:
+                        case QoreIROpcode::ConstNothing:
+                        case QoreIROpcode::ConstNull:
+                        case QoreIROpcode::ConstString:
+                        case QoreIROpcode::LoadConstant:
+                        case QoreIROpcode::LoadLocal:
+                        case QoreIROpcode::LoadArg:
+                        case QoreIROpcode::LoadClosure:
+                        case QoreIROpcode::LoadGlobal:
+                        case QoreIROpcode::LoadThreadLocal:
+                        case QoreIROpcode::LoadSelfMember:
+                        case QoreIROpcode::LoadStaticVar:
+                            continue;
+                        case QoreIROpcode::Phi:
+                            if (static_cast<const QoreIRPhiInstruction*>(def)->value_kind
+                                    != QoreIRPhiValueKind::QoreValue) {
+                                continue;
+                            }
+                            todo.push_back(static_cast<const QoreIRPhiInstruction*>(def));
+                            continue;
+                        default:
+                            return true;
                     }
                 }
             }
@@ -13448,11 +13468,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!self_incoming) {
                 if (temps) {
                     consumable_phis.insert(phi->result.id);
+                    continue;
+                }
+                // a loop header's Phi that can hold a temporary owns its value, which the loop otherwise released
+                // under it: the accumulator of a fold over a fused pipeline, whose value can be the value of a map
+                // stage or of the fold's expression in a slot that the next element replaces (qore#5883)
+                auto def_it = value_def_block.find(phi->result.id);
+                if (def_it != value_def_block.end() && def_it->second && def_it->second->is_loop_header
+                        && phi_may_hold_temporary(phi)) {
+                    owning_phis.insert(phi->result.id);
                 }
                 continue;
             }
             // a Phi among its own incoming values that holds no temporary borrows its value, as it always did
-            if (phi_carries_temporary(phi)) {
+            if (phi_may_hold_temporary(phi)) {
                 owning_phis.insert(phi->result.id);
                 if (temps) {
                     consumable_phis.insert(phi->result.id);

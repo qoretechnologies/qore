@@ -21428,11 +21428,26 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // the code of the stages and of the root releases nothing on an exception before the pipeline's cleanup does (see
     // UnmarkedExceptionTempScope)
     UnmarkedExceptionTempScope body_scope(builder, pipeline_cleanup.get() != nullptr);
+    // a fold releases the values of the map stages before the last stage that can skip an element or stop the
+    // pipeline (see stage_value())
+    size_t fold_release_stages = 0;
+    if (root_accumulator) {
+        for (size_t i = 0; i < stages.size(); ++i) {
+            if (stages[i].kind != LazyPipelineStage::Map) {
+                fold_release_stages = i;
+            }
+        }
+    }
     // records the value of a map stage for its release (see stage_values), unless it is the element or a value of
-    // an earlier stage, or a fold uses the values (its accumulator can be one of them), or it cannot hold an object,
-    // whose release cannot be observed
-    auto stage_value = [&](QoreIRValue v, const QoreValue& stage_expr) {
-        if (root_accumulator || v.id == iter_element.id
+    // an earlier stage, or it cannot hold an object, whose release cannot be observed.  A fold uses the values of its
+    // last map stages, which its accumulator can be: they are released by the code that uses them, or replaced by
+    // their next value.  A value of a stage before one that can skip an element (select) or stop the pipeline may not
+    // reach the fold: it is released before the next element, as the AST interpreter releases it, and not when the
+    // statement ends; the accumulator's Phi owns its value, which it takes over from the slot or takes a reference of
+    // its own to (qore#5883)
+    auto stage_value = [&](QoreIRValue v, const QoreValue& stage_expr, size_t stage_index) {
+        if (v.id == iter_element.id
+                || (root_accumulator && stage_index >= fold_release_stages)
                 || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
             return;
         }
@@ -21578,7 +21593,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
-                stage_value(map_result, *stage.primary);
+                stage_value(map_result, *stage.primary, i);
                 release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
@@ -21616,7 +21631,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
-                stage_value(map_result, *stage.primary);
+                stage_value(map_result, *stage.primary, i);
                 release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
@@ -22072,10 +22087,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a pipeline that stops before its iterator is exhausted (a take, takewhile or takeuntil stage, or first, any and
     // all at the root) releases the element that the iterator gave last and then the iterator, which holds the base
     // source, when it returns, as the AST interpreter releases the operators' functional iterators; an exhausted
-    // iterator has released both already (qore#5670).  The element is not released when it can be the pipeline's
-    // value: the accumulator of a fold; the value of first, which can be the element or a value that a map stage
-    // gives from it ($1), gets a reference of its own first.  The values that map stages gave from the element last
-    // are released after it, before the iterator (see stage_values)
+    // iterator has released both already (qore#5670).  The value of first, which can be the element or a value that
+    // a map stage gives from it ($1), gets a reference of its own first; the accumulator of a fold, which can be them
+    // too, has its own in its Phi (qore#5883).  The values that map stages gave from the element last are released
+    // after it, before the iterator (see stage_values)
     QoreIRValue result = result_phi->result;
     if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First) {
         // the AST interpreter's first operator returns its value when its functional iterators are released, so
@@ -22127,11 +22142,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         return owned;
     }
-    if (!root_accumulator) {
-        builder.createReleaseOwnedTemp(iter_element, loc);
-        for (const QoreIRValue& v : stage_values) {
-            builder.createReleaseOwnedTemp(v, loc);
-        }
+    builder.createReleaseOwnedTemp(iter_element, loc);
+    for (const QoreIRValue& v : stage_values) {
+        builder.createReleaseOwnedTemp(v, loc);
     }
     builder.createIteratorRelease(iter_val, loc);
     return result;

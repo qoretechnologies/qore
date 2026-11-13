@@ -1263,12 +1263,16 @@ private:
         temporaries that it is the only user of (single_use_phi_incoming) and takes a reference of its own to its
         other incoming values (qore#5883), when it is:
         - a loop header's Phi among its own incoming values (the accumulator of a fold at the root of a fused pipeline
-          with a select stage, which keeps its value for an element that the stage skips) whose value can be a
-          temporary released in the loop: an iterator's element, which the next IteratorNext releases, or the value of
-          a call or RefSelf, whose slot the next execution of the instruction replaces.  It keeps its value in its slot
-          on the edge back to the header; without the slot, it borrowed the element that the next IteratorNext
-          released.  A Phi of temporaries among its own incoming values is one too, as its value can reach the header
+          with a select stage, which keeps its value for an element that the stage skips) unless all its values are
+          borrowed from a variable or a constant: any other value can be a temporary released in the loop, such as an
+          iterator's element, which the next IteratorNext releases, or the value of a call or an operator (a string
+          concatenation, a list), whose slot the next execution of the instruction replaces.  It keeps its value in its
+          slot on the edge back to the header; without the slot, it borrowed the element that the next IteratorNext
+          released, or the value that the next element's operator replaced.  A Phi of temporaries among its own incoming values is one too, as its value can reach the header
           again, and no call consumes it
+        - a loop header's Phi that is not a Phi of temporaries and that can hold such a value (the accumulator of a fold
+          over a fused pipeline, whose value can be the value of a map stage, which the next IteratorNext releases, or
+          of an operator, which the next element replaces)
         - a Phi whose only use is an incoming value of a Phi with a slot of its own and that has an incoming temporary
           that it is the only user of: the value of a fold over a fused pipeline on the edge that gives the
           accumulator, which is the first element or the value of the fold's expression.  The reference of its own

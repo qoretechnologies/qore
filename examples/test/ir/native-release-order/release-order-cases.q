@@ -147,6 +147,18 @@ bool sub keep(Holder h) {
     return h.n != "i2";
 }
 
+bool sub keep_list(list<auto> l) {
+    return l[0].n != "i3";
+}
+
+bool sub before_i3(Holder h) {
+    return h.n != "i3";
+}
+
+string sub names(list<auto> l) {
+    return (map $1.n, l).join(",");
+}
+
 Holder sub fail_on(Holder h, string name) {
     if (h.n == name) {
         throw "STAGE", h.n;
@@ -440,6 +452,59 @@ sub foldl_pipeline_select() {
     out("foldl pipeline select", log);
 }
 
+# the values of an operator in a map stage before a select stage, whose instruction replaces the value of the element
+# before in its slot: native code's accumulator borrowed it (qore#5883)
+sub foldl_pipeline_select_string() {
+    Log log();
+    auto r = foldl $1 + "," + $2, (select (map $1 + "a", ("p", "q", "x", "y")), $1 != "xa");
+    log.add("r " + r);
+    auto r2 = foldl $2, (select (map $1 + "a", ("p", "q", "x", "y")), $1 != "ya");
+    log.add("r " + r2);
+    out("foldl pipeline select string", log);
+}
+
+sub foldl_pipeline_select_list() {
+    Log log();
+    {
+        auto r = foldl ($1[0].n == "i1" ? $1 : $2), (select (map ($1,), new HolderIt(log)), keep_list($1));
+        log.add("r " + names(r));
+    }
+    log.add("after");
+    out("foldl pipeline select list", log);
+}
+
+# the fold's expression is an operator
+sub foldl_pipeline_select_concat() {
+    Log log();
+    {
+        auto r = foldl $1 + $2, (select (map ($1,), new HolderIt(log)), keep_list($1));
+        log.add("r " + names(r));
+    }
+    log.add("after");
+    out("foldl pipeline select concat", log);
+}
+
+sub foldl_pipeline_concat() {
+    Log log();
+    {
+        auto r = foldl $1 + $2, (map ($1,), new HolderIt(log));
+        log.add("r " + names(r));
+    }
+    log.add("after");
+    out("foldl pipeline concat", log);
+}
+
+# a takewhile stage stops the pipeline at an element that the fold does not get, which is released before the iterator
+sub foldl_pipeline_takewhile() {
+    Log log();
+    {
+        auto r = foldl $2, (takewhile before_i3($1), (map id($1), new HolderIt(log)));
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline takewhile", log);
+}
+
 # the same when the iterator's next() raises: the first element is released when the accumulator is replaced, and the
 # iterator before the accumulator
 sub foldl_pipeline_next_raises() {
@@ -522,6 +587,11 @@ sub main() {
     foldl_pipeline();
     foldl_pipeline_call();
     foldl_pipeline_select();
+    foldl_pipeline_select_string();
+    foldl_pipeline_select_list();
+    foldl_pipeline_select_concat();
+    foldl_pipeline_concat();
+    foldl_pipeline_takewhile();
     foldl_pipeline_next_raises();
     foldl_nested_raises();
     foldl_next_raises();
