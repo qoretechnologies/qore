@@ -597,6 +597,9 @@ private:
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
     // can be decref'd at exit (matching the IR interpreter's cleanup vector).
     std::vector<llvm::Value*> invoke_result_allocas;
+    //! the slot of each of invoke_result_allocas in invoke_cleanup_array, if it has one: a long release sequence is
+    //! emitted as one call of qore_rt_cleanup_release_slots() with a table of the slots (qore#5962)
+    std::unordered_map<llvm::Value*, unsigned> invoke_cleanup_slot;
 
     // Entry-block array of pointers to invoke_result_allocas slots.  Large
     // functions use qore_rt_cleanup_run_allocas() to avoid emitting thousands
@@ -746,6 +749,35 @@ private:
         size_t iterator_count = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
+    //! The release code of the exception edges to each handler block (see getExceptionEdgeTarget())
+    /** An edge releases the temporaries of the temp scopes that the exception leaves, in the order in which the AST
+        interpreter unwinds them: those of argument lists, then the receivers (qore_ir_order_exception_release()).  The
+        edges of the checks of a statement to the same handler release the temporaries registered up to each check, and
+        each of the two parts of a later check's order is mostly that of an earlier check with the temporaries
+        registered after it in front.  So each part is a chain of blocks, each of which releases the temporaries that a
+        check adds and continues with the block of the earlier check, instead of each edge releasing all of its
+        temporaries itself, which made the code of a statement quadratic in its size (qore#5962).  The chain of the
+        argument lists ends in a block that continues with the receivers of the edge, which the edge stores in \c
+        selector; that of the receivers ends in the handler.
+    */
+    struct ExceptionEdgeChain {
+        //! the temporaries that the last block of the chain releases with the blocks that it continues with
+        std::vector<llvm::Value*> temps;
+        //! the last block of the chain
+        llvm::BasicBlock* block = nullptr;
+    };
+    struct ExceptionEdges {
+        ExceptionEdgeChain lists;
+        ExceptionEdgeChain receivers;
+        //! the end of the chain of the argument lists: a switch on \c selector to the receivers of the edge
+        llvm::BasicBlock* lists_end = nullptr;
+        llvm::SwitchInst* lists_end_switch = nullptr;
+        //! the receivers of the edge (0: none, then the handler), stored by each edge
+        llvm::AllocaInst* selector = nullptr;
+        //! the case of each block of the receivers' chain in lists_end_switch
+        std::unordered_map<llvm::BasicBlock*, uint32_t> receiver_cases;
+    };
+    std::unordered_map<llvm::BasicBlock*, ExceptionEdges> exception_edges;
     //! the number of invoke_result_allocas when the mark of each temp scope was closed (see emitDiscardTemps())
     std::unordered_map<uint32_t, size_t> temp_scope_end;
 
@@ -1594,10 +1626,24 @@ private:
     // when an exception leaves the statement (see qore_ir_order_exception_release()); returns true if it differs from
     // the reverse of the registration order.  \a observable_only leaves out the values whose release cannot run a
     // destructor
-    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps);
+    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps,
+            size_t* receivers = nullptr);
+    //! Emits, at the insertion point, the release of \a temps from \a begin to \a end in their order: one call with a
+    //! table of their slots in invoke_cleanup_array for a long sequence, as each release inline would make the code of
+    //! a large statement large (qore#5962)
+    void emitTempReleaseSequence(llvm::Module& module, const std::vector<llvm::Value*>& temps, size_t begin,
+            size_t end);
+    //! Emits a block that releases \a temps from \a begin to \a end in their order and continues with \a next
+    llvm::BasicBlock* emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
+            const std::vector<llvm::Value*>& temps, size_t begin, size_t end, llvm::BasicBlock* next);
+    //! Returns the block of \a chain that releases \a temps from \a begin to \a end and continues with \a tail,
+    //! continuing the chain (see ExceptionEdges)
+    llvm::BasicBlock* getExceptionEdgeChainBlock(llvm::Module& module, llvm::Function* llvm_func,
+            ExceptionEdgeChain& chain, const std::vector<llvm::Value*>& temps, size_t begin, size_t end,
+            llvm::BasicBlock* tail);
     //! the same for the cleanup allocas of \a indices (positions in invoke_result_allocas, in increasing order)
     bool orderExceptionTemps(const std::vector<size_t>& indices, bool observable_only,
-            std::vector<llvm::Value*>& temps);
+            std::vector<llvm::Value*>& temps, size_t* receivers = nullptr);
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.

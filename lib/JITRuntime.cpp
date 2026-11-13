@@ -408,6 +408,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
+    { "qore_rt_cleanup_release_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_slots) },
     { "qore_rt_object_slot_release", reinterpret_cast<void*>(&qore_rt_object_slot_release) },
     { "qore_rt_object_slot_replace", reinterpret_cast<void*>(&qore_rt_object_slot_replace) },
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
@@ -1149,6 +1150,20 @@ extern "C" DLLEXPORT void qore_rt_object_slot_replace(uint64_t old_value, uint64
         qore_object_private::get(*v.get<QoreObject>())->setRealReference();
     }
     qore_rt_object_slot_release(old_value, xsink);
+}
+
+//! Releases the temporaries of the cleanup slots given by \a order, in its order (see
+//! QoreIRToLLVM::emitTempReleaseSequence()): as the inline sequence does for each, the value is taken from the slot,
+//! which is cleared, and released
+extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count,
+        ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        uint64_t* slot = slots[order[i]];
+        uint64_t val = *slot;
+        // NOTHING (VAL_NOTHING)
+        *slot = 0;
+        qore_rt_decref(val, xsink);
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
