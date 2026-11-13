@@ -965,6 +965,8 @@ find_test_survivors() {
                 }
             }'; } 2>/dev/null`
     fi
+    # the processes that hold the test's output (found above), which no namespace excuses
+    survivor_output_holders=" $TEST_SURVIVORS "
     TEST_SURVIVORS="$TEST_SURVIVORS"`awk -v mark="QORE_TEST_PROCESS_MARK=$1" 'BEGIN {
         RS = "\0"
         for (i = 1; i < ARGC; ++i) {
@@ -984,6 +986,33 @@ find_test_survivors() {
     # a process found both ways is listed once
     if [ -n "$TEST_SURVIVORS" ]; then
         TEST_SURVIVORS=`printf '%s\n' $TEST_SURVIVORS | sort -un | tr '\n' ' '`
+    fi
+    # A process in a user namespace of its own that has the test's mark but does not hold the test's output is not
+    # reported: it is most likely a per-user helper that a container runtime made as a side effect of a command the
+    # test ran, which outlives the command and is shared by every later command of the user.  Rootless podman does
+    # this: its first command starts a pause process (catatonit -P) that holds the user's namespaces for all of the
+    # user's containers, and ending it breaks every one of them, also those of other jobs on the machine.  It is
+    # found by the namespace (a test's own processes share the runner's user namespace), not by its name.  What stays
+    # undetected: a leak inside a child user namespace that holds none of the test's output (it cannot keep a CI job
+    # from ending).  A process that holds the test's output is always a survivor, whatever its namespace, and so is
+    # one whose namespace cannot be read.
+    if [ -n "$TEST_SURVIVORS" ] && survivor_runner_ns=`readlink /proc/$$/ns/user 2>/dev/null` \
+        && [ -n "$survivor_runner_ns" ]; then
+        survivors_reported=""
+        for survivor_pid in $TEST_SURVIVORS; do
+            survivor_ns=`readlink /proc/$survivor_pid/ns/user 2>/dev/null`
+            case "$survivor_output_holders" in
+                *" $survivor_pid "*) survivor_ns="" ;;
+            esac
+            if [ -z "$survivor_ns" ] || [ "$survivor_ns" = "$survivor_runner_ns" ]; then
+                survivors_reported="$survivors_reported$survivor_pid "
+            else
+                survivor_cmd=`tr '\0' ' ' < /proc/$survivor_pid/cmdline 2>/dev/null`
+                echo "note: not ending process $survivor_pid: $survivor_cmd: it is in a user namespace of its own" \
+                    "and holds no output of the test" >&2
+            fi
+        done
+        TEST_SURVIVORS=$survivors_reported
     fi
 }
 
