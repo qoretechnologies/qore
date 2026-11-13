@@ -33,13 +33,16 @@ generic same names runtime: GOS::id
 generic or nothing: GOS::opt / GOS::opt
 generic other names: GO::id / GOR::id
 const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
-static through object same names: SBS::sm(float f) / SBS::sm(float f)
-static through object other names: SA::sm(float f) / SBR::sm(float g)
-static through object runtime: SBS::sm(float f)
+static through object or nothing: SA::sm(float f) / SA::sm(float f)
+static through untyped receiver: SBS::sm(float f) / SBS::sm(float f)
+static through declared child: SBS::sm(float f) / SBS::sm(float f)
+static through object same names: SA::sm(float f) / SA::sm(float f)
+static through object other names: SA::sm(float f) / SA::sm(float f)
+static through object runtime: SA::sm(float f)
 static self: SA::sm(float f) / SA::sm(float f)
 static scoped: SA::sm(float f)
 generic class override: GC::m(int x) / GC::m(int x)
 generic class override runtime: GC::m(int x)
-typed results: 42 41
+typed results: 42 41 42
 background: CS::sw(int count, string label) count=1 label="x"
 background other names: B::sw(int count, string label) count=1 label="x"

@@ -234,10 +234,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         // a call with named arguments through a receiver that is an object of a single class or no value (*X): bind
         // the arguments by name with the signature of the class's method; the method is not saved for the call, so
         // it is still dispatched at runtime, and a receiver with no value is handled as before
+        // a static method called through such a receiver is bound to its declared class, as Class::method() is, with
+        // positional arguments too (qore#5990)
         const QoreParseListNode* parse_args = m->getParseArgs();
-        const QoreClass* nqc = parse_args && parse_args->hasNamedArgs()
-            ? QoreTypeInfo::getUniqueReturnClassOrNothing(typeInfo)
-            : nullptr;
+        bool named_args = parse_args && parse_args->hasNamedArgs();
+        const QoreClass* nqc = QoreTypeInfo::getUniqueReturnClassOrNothing(typeInfo);
         if (nqc) {
             qore_class_private::parseInitPartial(*const_cast<QoreClass*>(nqc));
             qore_class_private* class_ctx = parse_get_class_priv();
@@ -245,15 +246,28 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 class_ctx = nullptr;
             }
             meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
-            if (meth && strcmp(mname, "copy")) {
+            if (meth && strcmp(mname, "copy") && meth->isStatic()) {
+                m->parseSetClassAndMethod(nqc, meth);
+                parse_context.typeInfo = nullptr;
+                m->setAllowRuntimeArgNames();
+                if (m->parseArgs(parse_context, qore_method_private::get(*meth)->getFunction(), nullptr) && !err) {
+                    err = -1;
+                }
+                // a receiver with no value raises an error: the result has the type of the variant
+                returnTypeInfo = parse_context.typeInfo;
+                return err;
+            }
+            if (meth && strcmp(mname, "copy") && named_args) {
                 parse_context.typeInfo = nullptr;
                 QoreFunction* func = qore_method_private::get(*meth)->getFunction();
                 // the arguments are bound by name at run time when the variants that could be selected name their
                 // parameters differently (see AbstractMethodCallNode::execNamed())
                 m->setAllowRuntimeArgNames();
-                // a named call is resolved at run time on the class of the object, as a positional call, also of a
-                // static method called through an object (qore#5990)
-                m->setVirtualNamedDispatch();
+                // a named call of a normal method is resolved at run time on the class of the object, as a positional
+                // call; a static method called through an object is bound to the receiver's declared class (qore#5990)
+                if (!meth->isStatic()) {
+                    m->setVirtualNamedDispatch();
+                }
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
@@ -441,9 +455,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
     if (!m->isPseudo()) {
         m->setAllowRuntimeArgNames();
-        // a named call is resolved at run time on the class of the object, as a positional call, also of a static
-        // method called through an object (qore#5990)
-        m->setVirtualNamedDispatch();
+        // a named call of a normal method is resolved at run time on the class of the object, as a positional call;
+        // a static method called through an object is bound to the receiver's declared class, as Class::method() is
+        // (qore#5990)
+        if (!meth->isStatic()) {
+            m->setVirtualNamedDispatch();
+        }
     }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;

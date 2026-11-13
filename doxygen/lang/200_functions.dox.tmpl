@@ -287,7 +287,8 @@ string str = show(label: l, count: n);
     overrides, which is called instead, and an implementation of an abstract method with other parameter names cannot
     be called by the names of the abstract method (\c RUNTIME-OVERLOAD-ERROR).  A call with an explicit class name,
     such as <tt>Base::method()</tt>, and an unqualified call of a static method in a class are resolved on that class,
-    and a static method called through an object on the class of the object, as with positional arguments.  A
+    and a static method called through an object on the receiver's declared class (see @ref static_methods), as with
+    positional arguments.  A
     receiver declared with an or-nothing class type that has no value at runtime raises the error of the same call
     with positional arguments.
     @code{.py}

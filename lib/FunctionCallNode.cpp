@@ -444,7 +444,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
         check and make sure that search would be quicker than the quick check
         implemented below on average
     */
-    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass())) {
+    // a static method called through an object is bound to the receiver's declared class, whatever the class of the
+    // object, as Class::method() is (qore#5990)
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic())) {
         //printd(5, "AbstractMethodCallNode::exec() using parse info for %s::%s() qc: %s (o: %s) v: %p\n",
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
@@ -1932,7 +1934,7 @@ void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, c
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
     // the exception that AbstractMethodCallNode::exec() raises: through the method saved at parse time, or through
     // the dynamic dispatch of qore_class_private::evalMethod()
-    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass())) {
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic())) {
         if (variant) {
             qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
                 "already been deleted", qc->getName(), method->getName(),

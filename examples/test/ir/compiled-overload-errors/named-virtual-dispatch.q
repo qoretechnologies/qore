@@ -108,8 +108,9 @@ class KC {
     string callConst() const { return cm(x: 1) + " / " + self.cm(x: 2); }
 }
 
-# static methods: called through an object, they are resolved on the class of the object; called in the class, on
-# the class of the call
+# static methods: called through an object whose class is declared (also with "*"), they are bound to the declared
+# class, as Class::method() is; through an untyped receiver, they are resolved on the class of the object; called in
+# the class, on the class of the call
 class SA {
     static string sm(int x) { return "SA::sm(int x)"; }
     static string sm(float f) { return "SA::sm(float f)"; }
@@ -131,6 +132,14 @@ class TB {
 }
 class TC inherits TB {
     int m(string b, int a) { return 2; }
+}
+
+# a static method that a child class redeclares with another return type
+class TSA {
+    static int sm(int x) { return 1; }
+}
+class TSB inherits TSA {
+    static string sm(int x) { return "TSB"; }
 }
 
 # a variant of a specialization of a generic class and its override
@@ -241,9 +250,16 @@ printf("generic other names: %s / %s\n", gor.id(x: 2), gor.id(2));
 # a named call in a const method calls the const variant that the names select
 printf("const method: %s\n", (new KC()).callConst());
 
-# static methods
+# static methods: bound to the declared class of the receiver
 SA sas = new SBS();
 SA sar = new SBR();
+*SA osas = sas;
+auto usas = sas;
+object obsas = sas;
+printf("static through object or nothing: %s / %s\n", osas.sm(f: 1.5), osas.sm(1.5));
+printf("static through untyped receiver: %s / %s\n", usas.sm(1.5), obsas.sm(1.5));
+SBS sbs = new SBS();
+printf("static through declared child: %s / %s\n", sbs.sm(f: 1.5), sbs.sm(1.5));
 printf("static through object same names: %s / %s\n", sas.sm(f: 1.5), sas.sm(1.5));
 printf("static through object other names: %s / %s\n", sar.sm(f: 1.5), sar.sm(1.5));
 printf("static through object runtime: %s\n", sas.sm(f: value_of(1.5)));
@@ -258,8 +274,10 @@ printf("generic class override runtime: %s\n", gb.m(x: i));
 # typed results of calls resolved on the class of the object
 TB tb = new TC();
 int tn = tb.m(a: 1, b: "x") + 40;
+TSA tsa = new TSB();
+int tsn = tsa.sm(x: 1) + tsa.sm(1) + 40;
 int tp = tb.m(1, "x") + 40;
-printf("typed results: %y %y\n", tn, tp);
+printf("typed results: %y %y %y\n", tn, tp, tsn);
 
 # a call made in a background thread
 Queue q();

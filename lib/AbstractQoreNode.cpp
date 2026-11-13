@@ -561,6 +561,9 @@ static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctio
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
     return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *n, na));
 }
@@ -569,6 +572,9 @@ static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNo
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
     return crlr_call_copy_done(n->copyWithArgs(na));
 }

@@ -13834,9 +13834,15 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     || (method_func->numVariants() != 1 && variant->isUser())
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
-                method = nullptr;
-                qc = nullptr;
-                variant = nullptr;
+                // a static method called through an object is bound to the receiver's declared class (qore#5990):
+                // the method is kept, and only its variant is resolved at run time
+                if (method && qc && method->isStatic()) {
+                    variant = nullptr;
+                } else {
+                    method = nullptr;
+                    qc = nullptr;
+                    variant = nullptr;
+                }
             }
             // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
             // AOT deserialization) don't need to extract it from the AST expr field.

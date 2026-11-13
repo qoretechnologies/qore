@@ -19296,7 +19296,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
         return false;
     }
-    if (o->getClass() != qc && o->getClass() != method->getClass()) {
+    // a static method called through an object is bound to the receiver's declared class (qore#5990)
+    if (o->getClass() != qc && o->getClass() != method->getClass() && !method->isStatic()) {
         return false;
     }
     if (!o->isValid()) {
@@ -19501,7 +19502,11 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     if (!strcmp(method->getName(), "copy")) {
         return toBits(o->getClass()->execCopy(o, xsink));
     }
-    if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
+    // a static method called through an object is bound to the receiver's declared class, whatever the class of the
+    // object, as Class::method() is (qore#5990)
+    const bool static_bound = method->isStatic();
+    if (static_bound || qore_rt_same_class(o->getClass(), qc)
+            || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
             // as the AST interpreter raises it (issue #5784)
             qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
@@ -19515,7 +19520,7 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
         // and the AST interpreter resolves the variant again among the class's own and inherited variants when the
         // arguments do not match it (issue #5686)
         const QoreMethod* call_method = method;
-        if (method->getClass() != o->getClass()) {
+        if (!static_bound && method->getClass() != o->getClass()) {
             if (const QoreMethod* own = o->getClass()->findLocalMethod(method->getName())) {
                 call_method = own;
             }
@@ -20199,8 +20204,9 @@ static bool qore_rt_aot_object_method_needs_runtime_dispatch(
     // a class is compared by its ID: the copy of a class in another Program (a builtin class, or a class imported
     // from a module) is the same class; only a subclass needs the variant resolved for it by name, which checks it
     // against the runtime options, where the parser checked the bound one against the code's (#5556)
+    // a static method called through an object is bound to the receiver's declared class (qore#5990)
     return !target.method || target.is_pseudo
-        || (!qore_rt_same_class(object->getClass(), target.qc)
+        || (!target.method->isStatic() && !qore_rt_same_class(object->getClass(), target.qc)
             && !qore_rt_same_class(object->getClass(), target.method->getClass()));
 }
 

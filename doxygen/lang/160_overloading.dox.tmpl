@@ -189,8 +189,9 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     - in a class that inherits an instantiation of a generic class, the type arguments are substituted in the return
       types of the generic class's methods (<tt>T get()</tt> of <tt>Box&lt;int&gt;</tt> returns \c int); a generic child class that passes its own type parameter to the parent class must return it where the parent class
       method returns the type parameter, as an instantiation can bind it to any type
-    - variants without a declared return type, static methods, and \c private:internal parent class methods (which
-      are not inherited) are not checked
+    - variants without a declared return type, static methods (a static method called through an object is bound to
+      the receiver's declared class; see @ref static_methods_through_object), and \c private:internal parent class
+      methods (which are not inherited) are not checked
     - an overload that a parent class call cannot select, as its parameter types do not intersect and it does not
       accept the names of the parent class variant's parameters, can return any type
 
