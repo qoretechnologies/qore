@@ -714,6 +714,11 @@ sub test() {
             "id<code<int(int)>>(c);",
             "id<>(i);",
             "ns::id<*int>(i);",
+            # whitespace after the '<' and before the '>' belongs to the type arguments
+            "id< *int >(i);",
+            "id<  code<*int(int)> >(c);",
+            # a call whose type arguments are simple names
+            "a<b>(c);",
         );
         foreach string call in (calls) {
             string code = "%modern\nauto sub t(auto c, auto i) {\n    " + call + "\n}\n";
@@ -724,6 +729,26 @@ sub test() {
             string text = treeText(tree);
             assertRegex("call_expression function: \\(generic_type", text, "the call has generic type arguments: " + call);
             assertTrue(text !~ /binary_expression/, "not a comparison chain: " + call);
+        }
+
+        # a generic declaration, a new expression and a scoped call at the start of a statement: the immediate '<' of
+        # the type arguments does not change them
+        {
+            string code = "%modern\n"
+                + "class Box<T> {\n"
+                + "    static Box<T> make(T v) {\n"
+                + "        return new Box<T>(v);\n"
+                + "    }\n"
+                + "}\n"
+                + "sub t(int i) {\n"
+                + "    Box<int> bi = new Box<int>(i);\n"
+                + "    Box<*int> bn = Box<*int>::make(i);\n"
+                + "}\n";
+            AstParser parser();
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "generic declarations and new expressions still parse");
+            string text = treeText(tree);
+            assertRegex("new_expression", text, "the new expressions are new expressions");
         }
 
         # the comparison chain with whitespace before the '<' (lib/scanner.lpp reads word<args> only without it)
