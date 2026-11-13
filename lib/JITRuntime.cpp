@@ -1792,7 +1792,10 @@ extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext*
     return qore_call_target_needs_no_check(fromBits(ctx->exprs[slot]), fromBits(target_bits));
 }
 
-int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+//! qore_check_call_target(); @a runtime_location is a template parameter, so that the JIT and IR paths, which use
+//! the false instance, run the code that they ran before it was added (issue #5835)
+template <bool runtime_location>
+static int qore_check_call_target_impl(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
     const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
     // the common case first: see qore_call_target_needs_no_check()
     if (qore_call_target_needs_no_check(call, target)) {
@@ -1809,7 +1812,8 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
             return 0;
         }
         if (target_type != NT_FUNCREF) {
-            qore_raise_not_call_reference(xsink, static_cast<const CallReferenceCallNode*>(node)->loc, target);
+            qore_raise_not_call_reference(xsink,
+                runtime_location ? nullptr : static_cast<const CallReferenceCallNode*>(node)->loc, target);
             return -1;
         }
         // a resolved call reference (as qore_rt_call_closure_fast_impl() dispatches it): an unresolved one is a parse
@@ -1829,6 +1833,10 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
         return dot->checkReceiver(target, xsink);
     }
     return 0;
+}
+
+int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+    return qore_check_call_target_impl<false>(call, target, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
@@ -1863,7 +1871,9 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
         }
         return;
     }
-    qore_rt_check_call_target(ctx->exprs[slot], target_bits, xsink);
+    // the call expression that the loader rebuilt has no source location (loc_builtin): the error is raised with the
+    // runtime location, which the compiled code sets to the location of the call (issue #5835)
+    qore_check_call_target_impl<true>(fromBits(ctx->exprs[slot]), fromBits(target_bits), xsink);
 }
 
 //! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
