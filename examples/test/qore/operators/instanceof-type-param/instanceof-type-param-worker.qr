@@ -51,6 +51,11 @@ class Holder<T> {
 
     #! the type parameter as the type argument of a generic function
     bool viaFunction(auto v) {
+        return isUFn<T>(v);
+    }
+
+    #! the type parameter as the type argument of a generic method of the class
+    bool viaMethod(auto v) {
         return isU<T>(v);
     }
 
@@ -63,13 +68,13 @@ class Holder<T> {
 class IntHolder inherits Holder<int> {
 }
 
-bool sub isU<U>(auto v) {
+bool sub isUFn<U>(auto v) {
     return v instanceof U;
 }
 
 #! calls of generic code from generic code: the type argument is the caller's type parameter
 bool sub isUIndirect<U>(auto v) {
-    return isU<U>(v);
+    return isUFn<U>(v);
 }
 
 #! the type parameter in a closure of a generic function
@@ -115,9 +120,9 @@ hash<string, bool> sub checks() {
         "inherited-other": ih.isT("x"),
         "method-param": hi.isU<string>("x"),
         "method-param-other": hi.isU<string>(1),
-        "function": isU<int>(1),
-        "function-other": isU<string>(1),
-        "function-subclass": isU<Base>(new Derived()),
+        "function": isUFn<int>(1),
+        "function-other": isUFn<string>(1),
+        "function-subclass": isUFn<Base>(new Derived()),
         "function-indirect": isUIndirect<int>(1),
         "function-indirect-other": isUIndirect<int>("x"),
         "function-closure": closureIsU<int>(1),
@@ -130,6 +135,8 @@ hash<string, bool> sub checks() {
         "class-background-other": hi.backgroundIsT("x"),
         "class-via-function": hi.viaFunction(1),
         "class-via-function-other": hi.viaFunction("x"),
+        "class-via-method": hi.viaMethod(1),
+        "class-via-method-other": hi.viaMethod("x"),
     };
     # static calls of generic classes in separate statements (see qore#6037)
     rv."static" = Holder<int>::staticIsT(1);

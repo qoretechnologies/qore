@@ -56,6 +56,8 @@ class InstanceofTypeParamTest inherits QUnit::Test {
             "class-background-other": "False",
             "class-via-function": "True",
             "class-via-function-other": "False",
+            "class-via-method": "True",
+            "class-via-method-other": "False",
             "static": "True",
             "static-other": "False",
         };
