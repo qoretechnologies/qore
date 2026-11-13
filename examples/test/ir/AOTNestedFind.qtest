@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - the checks run the interpreter and compiled executables as child processes
+# test-platform: macos - qcc compiles the program to native code (executables and a linked script object)
 
 %modern
 %no-child-restrictions
