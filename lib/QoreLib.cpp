@@ -632,6 +632,29 @@ private:
 };
 }
 
+//! Raises the parse error for an expression that parse_init_value() cannot initialize in the thread's stack
+/** The node is not parse-initialized, so it must not stay where the code containing it continues its own parse
+    initialization: that code would use it as an initialized expression (the values of a hash that has no value types,
+    a variable reference that is not resolved; issue #6047).  The parse has failed, and the expression is replaced
+    with NOTHING of no known type.
+
+    Out of line, so that it does not add to the code of parse_init_value() on its path for every expression
+
+    @return -1
+*/
+static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
+        QoreParseContext& parse_context) {
+    const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+    int rc = parse_check_stack(pn ? pn->loc : nullptr);
+    {
+        ParseExceptionSink xsink;
+        val.discard(*xsink);
+        val = QoreValue();
+    }
+    parse_context.typeInfo = nullptr;
+    return rc;
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -639,8 +662,7 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
         // parse initialization recurses with the nesting of the code: it stops while enough stack remains
         if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-            return parse_check_stack(pn ? pn->loc : nullptr);
+            return parse_init_value_stack_exceeded(n, val, parse_context);
         }
         // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
         // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of

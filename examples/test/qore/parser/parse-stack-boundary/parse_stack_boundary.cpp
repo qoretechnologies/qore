@@ -1,0 +1,231 @@
+/* Copyright (c) 2026 Qore Technologies, s.r.o.
+ * SPDX-License-Identifier: MIT
+ */
+// Parses nested code in foreign threads with a range of stack sizes: parse initialization stops where the stack
+// runs short, and each parse must then fail with a parse exception, never crash (issue #6047).  In each kind of code,
+// every level of nesting is an expression that inspects the expression it contains after parse-initializing it (a
+// list assignment checks its lvalues, a cast to a hashdecl checks the keys of its hash), so wherever the stack runs
+// short, the expression containing the one that was not parse-initialized inspects it.  With a module name and a
+// stack size, it parses code that requires the module, whose source requires others: each module is parsed while
+// the parse that requires it waits, so the parses nest in the thread's stack.
+#include <qore/Qore.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <pthread.h>
+
+//! the smallest and the largest stack size tried, and the step between them
+static constexpr size_t MIN_STACK_SIZE = 160 * 1024;
+static constexpr size_t MAX_STACK_SIZE = 640 * 1024;
+static constexpr size_t STACK_SIZE_STEP = 4 * 1024;
+
+//! the parse error raised when parse initialization runs short of stack
+static const char* stack_parse_error = "the code is nested too deeply to be parsed within the stack of this thread";
+
+static unsigned failures = 0;
+
+//! repeats a string n times
+static std::string repeat(const char* str, int n) {
+    std::string rv;
+    for (int i = 0; i < n; ++i) {
+        rv += str;
+    }
+    return rv;
+}
+
+//! returns the start of n nested list assignments, each declaring variables of its own
+static std::string list_assignments(int n) {
+    std::string rv;
+    for (int i = 0; i < n; ++i) {
+        rv += "(auto a" + std::to_string(i) + ", auto b" + std::to_string(i) + ") = (";
+    }
+    return rv;
+}
+
+//! a kind of nested code
+struct Kind {
+    const char* name;
+    std::string source;
+    //! the number of sizes where parsing ran short of stack
+    unsigned stack_errors = 0;
+    //! the number of sizes where the code was parsed and run
+    unsigned parsed = 0;
+};
+
+static Kind kinds[] = {
+    // a list assignment that declares its lvalues, whose right-hand side is a list assignment: its lvalues are
+    // checked after they are parse-initialized
+    {"list assignment", "auto sub run() { " + list_assignments(200) + "1" + repeat(", 2)", 200)
+        + "; return 1; }\n"},
+    // a cast to a hashdecl of a hash whose value is a cast: the keys of the hash are checked after it is
+    // parse-initialized; the hash is at every odd level of nesting here and at every even level below
+    {"hashdecl cast", "hashdecl H { auto a; }\nauto sub run() { auto v = "
+        + repeat("cast<hash<H>>({\"a\": ", 150) + "1" + repeat("})", 150) + "; return 1; }\n"},
+    {"hash of a hashdecl cast", "hashdecl H { auto a; }\nauto sub run() { auto v = {\"a\": "
+        + repeat("cast<hash<H>>({\"a\": ", 150) + "1" + repeat("})", 150) + "}; return 1; }\n"},
+};
+
+static std::string describe(ExceptionSink& xsink) {
+    QoreValue err = xsink.getExceptionErr();
+    QoreValue desc = xsink.getExceptionDesc();
+    return std::string(err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "?") + ": "
+        + (desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "?");
+}
+
+//! the stack size of the thread running work()
+static size_t current_size = 0;
+
+static void* work(void*) {
+    QoreForeignThreadHelper foreign;
+    for (Kind& kind : kinds) {
+        ExceptionSink xsink;
+        QoreProgramHelper program(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS, xsink);
+        QoreExternalProgramContextHelper context(&xsink, *program);
+        if (xsink) {
+            std::fprintf(stderr, "%zuK %s: program context: %s\n", current_size / 1024, kind.name,
+                describe(xsink).c_str());
+            xsink.clear();
+            ++failures;
+            continue;
+        }
+        {
+            ProgramRuntimeExternalParseContextHelper parse(*program);
+            if (!parse) {
+                std::fprintf(stderr, "%zuK %s: the program cannot be parsed\n", current_size / 1024, kind.name);
+                ++failures;
+                continue;
+            }
+            program->parse(kind.source.c_str(), kind.name, &xsink);
+        }
+        if (xsink) {
+            std::string desc = describe(xsink);
+            xsink.clear();
+            if (desc == std::string("PARSE-EXCEPTION: ") + stack_parse_error) {
+                ++kind.stack_errors;
+            } else {
+                std::fprintf(stderr, "%zuK %s: unexpected parse error: %s\n", current_size / 1024, kind.name,
+                    desc.c_str());
+                ++failures;
+            }
+            continue;
+        }
+        ValueHolder rv(program->callFunction("run", nullptr, &xsink), &xsink);
+        if (xsink) {
+            // code that was parsed can still run short of stack
+            std::string desc = describe(xsink);
+            xsink.clear();
+            if (desc.compare(0, strlen("STACK-LIMIT-EXCEEDED"), "STACK-LIMIT-EXCEEDED")) {
+                std::fprintf(stderr, "%zuK %s: run: %s\n", current_size / 1024, kind.name, desc.c_str());
+                ++failures;
+            }
+            continue;
+        }
+        if (rv->getAsBigInt() != 1) {
+            std::fprintf(stderr, "%zuK %s: run() returned a wrong value\n", current_size / 1024, kind.name);
+            ++failures;
+            continue;
+        }
+        ++kind.parsed;
+    }
+    return nullptr;
+}
+
+//! runs work() in a thread with the given stack size; returns 0 if the thread ran
+static int run_in_thread(size_t size, void* (*work)(void*)) {
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr)) {
+        std::fprintf(stderr, "pthread_attr_init() failed\n");
+        return -1;
+    }
+    pthread_t thread;
+    int rc = pthread_attr_setstacksize(&attr, size);
+    if (!rc) {
+        rc = pthread_create(&thread, &attr, work, nullptr);
+    }
+    pthread_attr_destroy(&attr);
+    if (rc || pthread_join(thread, nullptr)) {
+        std::fprintf(stderr, "a thread with a %zu byte stack cannot be run\n", size);
+        return -1;
+    }
+    return 0;
+}
+
+//! the module that load_module() requires
+static const char* module_name = nullptr;
+
+//! Parses code that requires module_name in a foreign thread: the module and the modules that it requires are parsed
+//! from their sources in the thread's stack, each while the parse that requires it waits
+static void* load_module(void*) {
+    QoreForeignThreadHelper foreign;
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, xsink);
+    QoreExternalProgramContextHelper context(&xsink, *program);
+    if (xsink) {
+        std::fprintf(stderr, "%zuK modules: program context: %s\n", current_size / 1024, describe(xsink).c_str());
+        xsink.clear();
+        ++failures;
+        return nullptr;
+    }
+    std::string code = std::string("%requires ") + module_name + "\n";
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        if (!parse) {
+            std::fprintf(stderr, "%zuK modules: the program cannot be parsed\n", current_size / 1024);
+            ++failures;
+            return nullptr;
+        }
+        program->parse(code.c_str(), "modules", &xsink);
+    }
+    if (!xsink) {
+        std::puts("parsed");
+        return nullptr;
+    }
+    std::string desc = describe(xsink);
+    xsink.clear();
+    // the error of the module that cannot be parsed is reported as the error of its load
+    if (desc.find(stack_parse_error) != std::string::npos) {
+        std::puts("stack error");
+    } else {
+        std::fprintf(stderr, "%zuK modules: unexpected parse error: %s\n", current_size / 1024, desc.c_str());
+        ++failures;
+    }
+    return nullptr;
+}
+
+//! parse_stack_boundary: parses the nested code with each stack size
+//! parse_stack_boundary <module> <stack KB>: parses code that requires the module with the given stack size, and
+//! prints "parsed" or "stack error" (a process can load a module once, so each size runs in a process of its own)
+int main(int argc, char** argv) {
+    qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
+    if (argc > 2) {
+        module_name = argv[1];
+        current_size = strtoul(argv[2], nullptr, 10) * 1024;
+        if (run_in_thread(current_size, load_module)) {
+            ++failures;
+        }
+        qore_cleanup();
+        return failures ? 1 : 0;
+    }
+    for (current_size = MIN_STACK_SIZE; current_size <= MAX_STACK_SIZE; current_size += STACK_SIZE_STEP) {
+        if (run_in_thread(current_size, work)) {
+            ++failures;
+            break;
+        }
+    }
+    // each kind of code ran short of stack at some size, and was parsed and run with a larger one
+    for (const Kind& kind : kinds) {
+        if (!kind.stack_errors || !kind.parsed) {
+            std::fprintf(stderr, "%s: %u stack errors, parsed %u times: the sizes do not cover the boundary\n",
+                kind.name, kind.stack_errors, kind.parsed);
+            ++failures;
+        }
+    }
+    qore_cleanup();
+    if (failures) {
+        return 1;
+    }
+    std::puts("parse-stack-boundary: ok");
+    return 0;
+}

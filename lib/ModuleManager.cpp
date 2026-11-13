@@ -4238,6 +4238,21 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
 
     assert(!xsink);
 
+    // a module that is loaded from its source is parsed in the stack of the parse that requires it, and the parses
+    // nest with the modules that require each other, with the parser's large frames and no stack check of its own:
+    // the load stops while enough stack remains (issue #6047)
+    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        if (loc) {
+            // a parse error of the parse that requires the module, which the parse directive of the scanner does not
+            // treat as a module that is not available (as for %try-module)
+            parse_check_stack(loc);
+        } else {
+            xsink.raiseException("PARSE-EXCEPTION", "the code is nested too deeply to be parsed within the stack of "
+                "this thread");
+        }
+        return -1;
+    }
+
     QoreString str;
     mod_op_e mo;
     version_list_t iv;

@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - thread stack sizes and the parse-time stack limit
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ParseStackBoundaryTest
+
+#! Parsing that runs short of stack in a foreign thread fails with a parse exception at every stack size (issue #6047)
+/** The fixture parses nested code in foreign threads with stack sizes from 160KB to 640KB in 4KB steps; each level of
+    the code is an expression that inspects the expression it contains after parse-initializing it (a list assignment
+    checks its lvalues, a cast to a hashdecl checks the keys of its hash).  Where the stack runs short, parse
+    initialization stops, and the expression containing the one that it did not initialize used to inspect it as if
+    it were initialized and crash; each parse must instead succeed or fail with the parse exception for code nested
+    too deeply for the thread's stack, and each kind of code must do both within the range of sizes.
+*/
+public class ParseStackBoundaryTest inherits QUnit::Test {
+    constructor() : Test("ParseStackBoundaryTest", "1.0") {
+        addTestCase("parse-time stack boundary", \check());
+        addTestCase("nested module loads", \moduleCheck());
+        set_return_value(main());
+    }
+
+    #! the number of modules in the chain of modules that require each other
+    const ChainLength = 40;
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! builds the fixture in the given directory and returns the path of the executable
+    private string build(string dir, string root, string libdir) {
+        string exe = dir + "/parse-stack-boundary";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
+            "-I" + libdir + "/include", get_script_dir() + "/parse_stack_boundary.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return exe;
+    }
+
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-boundary-");
+        string exe = build(dir.path, root, libdir);
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + quote(exe) + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertEq("parse-stack-boundary: ok\n", output);
+    }
+
+    #! Modules that require each other are parsed from their sources in a foreign thread with each stack size
+    /** Each module is parsed while the parse that requires it waits, so the parses nest in the thread's stack with the
+        parser's frames; the parse of the code that requires the first module must succeed or fail with the parse
+        exception for code nested too deeply for the thread's stack, and must do both within the range of sizes.  A
+        process loads a module once, so each size runs in a process of its own.
+    */
+    private moduleCheck() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-modules-");
+        string exe = build(dir.path, root, libdir);
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        for (int i = 0; i < ChainLength; ++i) {
+            File f();
+            f.open2(sprintf("%s/StackChain%d.qm", mdir, i), O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%%modern\n%s"
+                "module StackChain%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+                "public namespace StackChain%d {\n"
+                "public bool sub matches(string s) { return s =~ /^a(b+)c[0-9]{2,}(x|y|z)*$/; }\n"
+                "public hash<auto> sub make(int n) { return {\"n\": n, \"l\": (n, n + 1), \"s\": sprintf(\"%%d\", n)}; }\n"
+                "}\n",
+                i + 1 < ChainLength ? sprintf("%%requires StackChain%d\n", i + 1) : "", i, i));
+        }
+        int parsed;
+        int stack_errors;
+        for (int kb = 128; kb <= 1024; kb += 32) {
+            int status;
+            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe) + " StackChain0 " + kb + " 2>&1", \status);
+            string label = sprintf("%dK", kb);
+            assertEq(0, status, label + ": " + output);
+            if (output == "parsed\n") {
+                ++parsed;
+            } else {
+                assertEq("stack error\n", output, label);
+                ++stack_errors;
+            }
+        }
+        assertGt(0, parsed, "the chain is parsed with a large stack");
+        assertGt(0, stack_errors, "the chain runs short of a small stack");
+    }
+}
