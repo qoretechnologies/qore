@@ -28,6 +28,20 @@ class Holder<T> {
     }
 }
 
+class Cell<T> {
+    public {
+        auto v;
+    }
+
+    constructor(bool b, auto w) {
+        self.v = w;
+    }
+
+    constructor(auto v) {
+        self.v = v;
+    }
+}
+
 class Plain {
     static auto echo(auto v) {
         return v;
@@ -48,8 +62,18 @@ hash<string, auto> sub checks() {
         "generic-then-plain": (Holder<int>::echo(1), Plain::echo("x")),
         "nested-type-args": (Holder<list<int>>::echo(1), Holder<hash<string, int>>::echo(2)),
         "callable-type-arg": (Holder<code<int(string)>>::echo(1), Holder<int>::echo(2)),
-        "method-type-args": (Ns::Box<int>::id<string>("a"), Ns::Box<int>::id<int>(1)),
-        "method-type-args-then-call": (Holder<int>::typed<string>("s"), Holder<int>::echo(3)),
+        # numeric arguments: the characters of a string argument end the match of the scanner before the next call
+        "method-type-args": (Ns::Box<int>::id<int>(1), Ns::Box<int>::id<int>(2)),
+        "method-type-args-string": (Ns::Box<int>::id<string>("a"), Ns::Box<int>::id<int>(1)),
+        "method-type-args-then-call": (Holder<int>::typed<int>(1), Holder<int>::echo(2)),
+        "call-then-method-type-args": (Holder<int>::echo(1), Holder<int>::typed<int>(2)),
+        # a match that is not a static call is scanned again
+        "new-with-call": (new Cell<int>(Holder<string>::echo(1))).v,
+        "cast-with-call": cast<list<int>>(Holder<int>::echo((1, 2))),
+        # a comparison in the arguments: the angle brackets of the match are not balanced
+        "new-with-comparison": (new Cell<int>(1 < 2, Holder<int>::echo(1))).v,
+        "cast-with-comparison": cast<int>(1 < 2 ? Holder<int>::echo(3) : 0),
+        "root-qualified-method-type-args": (::Ns::Box<int>::id<int>(1), ::Ns::Box<int>::id<int>(2)),
         "root-qualified": (::Holder<int>::echo(1), ::Holder<string>::echo("y")),
         "or-nothing-type-arg": (Holder<*int>::echo(NOTHING), Holder<int>::echo(5)),
         "nested-call": (Holder<int>::echo(Holder<string>::echo("in")), 7),

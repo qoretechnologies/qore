@@ -10,6 +10,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
+%requires json
 
 %exec-class GenericStaticCallListTest
 
@@ -31,19 +32,40 @@ class GenericStaticCallListTest inherits QUnit::Test {
             "generic-then-plain": "[1, \"x\"]",
             "nested-type-args": "[1, 2]",
             "callable-type-arg": "[1, 2]",
-            "method-type-args": "[\"id:\\\"a\\\"\", \"id:1\"]",
-            "method-type-args-then-call": "[\"typed:\\\"s\\\"\", 3]",
+            "method-type-args": "[\"id:1\", \"id:2\"]",
+            "method-type-args-string": "[\"id:\\\"a\\\"\", \"id:1\"]",
+            "method-type-args-then-call": "[\"typed:1\", 2]",
+            "call-then-method-type-args": "[1, \"typed:2\"]",
+            "new-with-call": "1",
+            "cast-with-call": "[1, 2]",
+            "new-with-comparison": "1",
+            "cast-with-comparison": "3",
+            "root-qualified-method-type-args": "[\"id:1\", \"id:2\"]",
             "root-qualified": "[1, \"y\"]",
             "or-nothing-type-arg": "[null, 5]",
             "nested-call": "[\"in\", 7]",
             "operator": "3",
         };
 
-        #! malformed calls that must be refused, with the start of the error
+        #! malformed calls that must be refused, with the error each gives
         const Refused = {
-            "unclosed type argument in a list": "(Holder<list<int>::echo(1), Holder<int>::echo(2))",
-            "unclosed type argument": "Holder<list<int>::echo(1)",
-            "extra closing bracket": "(Holder<int>>::echo(1), 2)",
+            "unclosed type argument in a list": {
+                "src": "(Holder<list<int>::echo(1), Holder<int>::echo(2))",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            "unclosed type argument": {
+                "src": "Holder<list<int>::echo(1)",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            "unclosed method type argument": {
+                "src": "(Holder<int>::typed<list<int>(1), Holder<int>::echo(2))",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            # the type arguments of Holder end at their first '>', and the second one is an operator without operand
+            "extra closing bracket": {
+                "src": "(Holder<int>>::echo(1), 2)",
+                "error": "PARSE-EXCEPTION: syntax error, unexpected '>'",
+            },
         };
 
         #! the execution modes that the worker is run in
@@ -69,6 +91,7 @@ class GenericStaticCallListTest inherits QUnit::Test {
         addTestCase("each execution mode", \testExecModes());
         addTestCase("compiled program", \testCompiledProgram());
         addTestCase("malformed calls are refused", \testRefused());
+        addTestCase("the locations of the tokens after a call", \testLocations());
 
         set_return_value(main());
     }
@@ -96,11 +119,36 @@ class GenericStaticCallListTest inherits QUnit::Test {
             string path = tmp.path + DirSep + "refused.q";
             File f();
             f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
-            f.printf("%%modern\nclass Holder<T> {\n    static auto echo(auto v) {\n        return v;\n    }\n}\n"
-                "printf(\"%%y\\n\", %s);\n", i.value);
+            f.printf("%%modern\nclass Holder<T> {\n    static auto echo(auto v) {\n        return v;\n    }\n"
+                "    static auto typed<U>(U v) {\n        return v;\n    }\n}\nprintf(\"%%y\\n\", %s);\n", i.value.src);
             f.close();
-            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1", libqore_dir, qore_bin, path));
-            assertRegex("PARSE-EXCEPTION: unterminated type specification in static method call", out, i.key);
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1", libqore_dir, qore_bin,
+                path));
+            assertTrue(out.find(i.value.error) >= 0, sprintf("%s: %y in %y", i.key, i.value.error, out));
+        }
+    }
+
+    #! the location of an error after a call that the scanner cut back or scanned again is its own
+    testLocations() {
+        TmpDir tmp("qore-generic-static-call-loc-");
+        hash<string, string> lines = {
+            "cut": "auto l = (Holder<int>::echo(1), Holder<int>::echo(2)); auto x = unknown_fn();",
+            "rescan": "auto c = (new Cell<int>(Holder<string>::echo(1))); auto y = unknown_fn();",
+        };
+        foreach hash<auto> i in (lines.pairIterator()) {
+            # each line in a file of its own, so that an error of one does not hide the other
+            string path = tmp.path + DirSep + i.key + ".q";
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.printf("%%modern\nclass Holder<T> {\n    static auto echo(auto v) {\n        return v;\n    }\n}\n"
+                "class Cell<T> {\n    constructor(auto v) {\n    }\n}\n%s\n", i.value);
+            f.close();
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --enable-debug --diag-format=json %s 2>&1",
+                libqore_dir, qore_bin, path));
+            list<auto> diags = parse_json(out);
+            assertEq(1, diags.size(), sprintf("%s: one diagnostic in %y", i.key, out));
+            assertEq(11, diags[0].startLine, i.key + ": line");
+            assertEq(i.value.find("unknown_fn"), diags[0].startColumn, i.key + ": column");
         }
     }
 
