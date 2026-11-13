@@ -7454,9 +7454,34 @@ namespace {
 // a result of an arithmetic operator that has no parse type here (a buffer, or SQL NULL)
 constexpr qore_type_t QORE_ARITH_UNTYPED = -1;
 
-// the value types that can be the value of an operand of the given type, as their runtime type codes
+// a value type that can be the value of an operand, with the type of the member of the operand type that gives it
+struct qore_arith_value_t {
+    qore_type_t type;
+    //! the type of the member: a type of values of this value type only (ex: hash<X>), or nullptr if it is not known
+    //! more precisely than the base type
+    const QoreTypeInfo* member;
+};
+
+// the member type of an operand type for its values of one value type, if a value of the member type has that type
+// itself: a base type, a hash type, a hashdecl, a class or a list type, but not a soft list type (ex: softlist<int>),
+// whose values are lists of another type
+const QoreTypeInfo* qore_arith_member_type(const QoreTypeSpec& spec) {
+    switch (spec.getTypeSpec()) {
+        case QTS_TYPE:
+        case QTS_CLASS:
+        case QTS_HASHDECL:
+        case QTS_COMPLEXHASH:
+        case QTS_COMPLEXLIST:
+            return spec.getTypeInfo();
+        default:
+            return nullptr;
+    }
+}
+
+// the value types that can be the value of an operand of the given type, as their runtime type codes, with the member
+// types that give them
 // returns false if the type does not restrict them: then every type is possible
-bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_type_t>& types) {
+bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_arith_value_t>& types) {
     if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo) {
         return false;
     }
@@ -7465,18 +7490,31 @@ bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_type_t>& ty
         if (t == NT_ALL || t < 0) {
             return false;
         }
-        if (std::find(types.begin(), types.end(), t) == types.end()) {
-            types.push_back(t);
+        const QoreTypeInfo* member = t == NT_NOTHING ? nothingTypeInfo : qore_arith_member_type(r.spec);
+        bool found = false;
+        for (qore_arith_value_t& v : types) {
+            if (v.type == t) {
+                found = true;
+                // two members of one value type: the value type is not known more precisely
+                if (v.member != member) {
+                    v.member = nullptr;
+                }
+                break;
+            }
+        }
+        if (!found) {
+            types.push_back({t, member});
         }
     }
     return !types.empty();
 }
 
 // every value type, for an operand whose type does not restrict its values
-const std::vector<qore_type_t>& qore_arith_all_value_types() {
-    static const std::vector<qore_type_t> all = {
-        NT_NOTHING, NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH,
-        NT_OBJECT, NT_NULL, NT_BUFFER,
+const std::vector<qore_arith_value_t>& qore_arith_all_value_types() {
+    static const std::vector<qore_arith_value_t> all = {
+        {NT_NOTHING, nothingTypeInfo}, {NT_INT, nullptr}, {NT_FLOAT, nullptr}, {NT_NUMBER, nullptr},
+        {NT_STRING, nullptr}, {NT_DATE, nullptr}, {NT_BOOLEAN, nullptr}, {NT_BINARY, nullptr}, {NT_LIST, nullptr},
+        {NT_HASH, nullptr}, {NT_OBJECT, nullptr}, {NT_NULL, nullptr}, {NT_BUFFER, nullptr},
     };
     return all;
 }
@@ -7602,21 +7640,23 @@ bool qore_arith_is_container(qore_type_t t) {
 }
 
 QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const QoreTypeInfo* lti,
-        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single) {
+        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single,
+        qore_arith_container_rule_t container_rule) {
     result = nullptr;
-    std::vector<qore_type_t> lv, rv;
+    std::vector<qore_arith_value_t> lv, rv;
     bool lk = qore_arith_value_types(lti, lv);
     bool rk = qore_arith_value_types(rti, rv);
-    const std::vector<qore_type_t>& lvals = lk ? lv : qore_arith_all_value_types();
-    const std::vector<qore_type_t>& rvals = rk ? rv : qore_arith_all_value_types();
+    const std::vector<qore_arith_value_t>& lvals = lk ? lv : qore_arith_all_value_types();
+    const std::vector<qore_arith_value_t>& rvals = rk ? rv : qore_arith_all_value_types();
     single = lk && rk && lv.size() == 1 && rv.size() == 1;
 
-    type_vec_t types;
+    // the result types with the value types that they are types of
+    std::vector<std::pair<qore_type_t, const QoreTypeInfo*>> types;
     bool has_nothing = false;
     bool container = false;
-    for (qore_type_t lt : lvals) {
-        for (qore_type_t rt : rvals) {
-            qore_type_t t = qore_arith_runtime_result(op, lt, rt);
+    for (const qore_arith_value_t& l : lvals) {
+        for (const qore_arith_value_t& r : rvals) {
+            qore_type_t t = qore_arith_runtime_result(op, l.type, r.type);
             if (t == NT_NOTHING) {
                 has_nothing = true;
                 continue;
@@ -7627,23 +7667,50 @@ QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const Qor
             }
             if (qore_arith_is_container(t)) {
                 container = true;
+                // the container that the operator gives for the members, if it is known more precisely (ex: the
+                // left hash of hash<X> - string has the type of the left operand)
+                if (container_rule) {
+                    const QoreTypeInfo* member_ti = container_rule(l.type, l.member, r.type, r.member);
+                    if (member_ti && QoreTypeInfo::isType(member_ti, t)) {
+                        ti = member_ti;
+                    }
+                }
             }
-            if (std::find(types.begin(), types.end(), ti) == types.end()) {
-                types.push_back(ti);
+            std::pair<qore_type_t, const QoreTypeInfo*> entry(t, ti);
+            if (std::find(types.begin(), types.end(), entry) == types.end()) {
+                types.push_back(entry);
             }
         }
     }
+    // a result of a value type with the base type of the value type takes every value of the value type, so the other
+    // result types of the value type are not needed
+    std::vector<qore_type_t> base_types;
+    for (const auto& e : types) {
+        if (e.second == qore_arith_result_type(e.first)) {
+            base_types.push_back(e.first);
+        }
+    }
+    types.erase(std::remove_if(types.begin(), types.end(), [&base_types](const std::pair<qore_type_t,
+            const QoreTypeInfo*>& e) {
+        return e.second != qore_arith_result_type(e.first)
+            && std::find(base_types.begin(), base_types.end(), e.first) != base_types.end();
+    }), types.end());
     // the members are ordered so that a value of each result type is taken by its own member: a union takes a value
     // with its first member that accepts it, and a float accepts an int by converting it, so an int result type comes
     // before a float result type (ex: union<int, float> for *float + int, not union<float, int>, which made 2.0 of 2)
-    static const std::vector<const QoreTypeInfo*> order = {
-        bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, dateTypeInfo, boolTypeInfo, binaryTypeInfo,
-        autoListTypeInfo, autoHashTypeInfo, objectTypeInfo,
+    static const std::vector<qore_type_t> order = {
+        NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH, NT_OBJECT,
     };
-    std::sort(types.begin(), types.end(), [](const QoreTypeInfo* a, const QoreTypeInfo* b) {
-        return std::find(order.begin(), order.end(), a) < std::find(order.begin(), order.end(), b);
+    std::stable_sort(types.begin(), types.end(), [](const std::pair<qore_type_t, const QoreTypeInfo*>& a,
+            const std::pair<qore_type_t, const QoreTypeInfo*>& b) {
+        return std::find(order.begin(), order.end(), a.first) < std::find(order.begin(), order.end(), b.first);
     });
-    result = types.empty() ? nothingTypeInfo : qore_get_union_type(types, has_nothing);
+    type_vec_t result_types;
+    result_types.reserve(types.size());
+    for (const auto& e : types) {
+        result_types.push_back(e.second);
+    }
+    result = result_types.empty() ? nothingTypeInfo : qore_get_union_type(result_types, has_nothing);
     return container ? QoreArithParseResult::Container : QoreArithParseResult::Scalar;
 }
 
