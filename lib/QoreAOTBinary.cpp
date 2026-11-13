@@ -2724,6 +2724,9 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
         if (pending_class_path[0] == ':' && pending_class_path[1] == ':') {
             pending_class_path += 2;
         }
+        // the parse lookup reads the parse options of the current Program, which is not set on a thread that loads a
+        // compiled program; the options of the target Program apply (qore#6026)
+        QoreProgramContextHelper pch(pgm);
         qc = qore_root_ns_private::parseFindClass(
             *pp->RootNS, &loc_builtin, pending_class_path);
     }
@@ -3206,7 +3209,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
         return;
     }
 
-    const char* second_sep = strrchr(payload, '\n');
+    // the variant's class reference ends the payload's first line, or its second one for a class of a module; the
+    // signature text that follows has the default values of the parameters, whose strings can have newlines
+    // (qore#6026)
+    const char* second_sep = qore_aot_find_class_ref_end(payload);
     if (!second_sep) {
         sig_text = payload;
         return;

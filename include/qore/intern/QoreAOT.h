@@ -828,6 +828,13 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink);
  */
 DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo = false);
 
+//! Returns the newline that ends the class reference at the start of @a ref, or nullptr if there is none
+/** A class reference of qore_aot_encode_class_ref() has no newline but the one after the module of a module class
+    ("@qore-module:<module>\n<path>"), while the text that follows it in a method variant reference (the signature
+    text, with the default values of the parameters) can have newlines (qore#6026)
+*/
+DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
+
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
