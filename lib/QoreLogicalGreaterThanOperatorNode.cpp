@@ -240,6 +240,12 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
         return ls->compare(*rs) > 0;
     }
 
+    // a char is compared with any other value but a string as its code point, as an int is, and as the == and <=>
+    // operators compare it (a char with a string is compared as a one-character string, above)
+    if (lt == NT_CHAR || rt == NT_CHAR) {
+        return l.getAsBigInt() > r.getAsBigInt();
+    }
+
     if (lt == NT_DATE || rt == NT_DATE) {
         DateTimeValueHelper ld(l);
         DateTimeValueHelper rd(r);

@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CharRelationalComparisonTest
+
+#! Regression test for qore#6040: the relational operators compare a char with a date as its code point
+/** The \c <, \c <=, \c > and \c >= operators compared a char with a date as dates, as they chose the integer
+    comparison only for an \c int operand, while \c == and \c <=> compared the char's code point; so with
+    <tt>d = 1970-01-01T00:01:37Z</tt> and <tt>c = c'a'</tt> (code point 97), <tt>c < d</tt> and <tt>c == d</tt> were
+    both \c True.  A char is now compared with every value but a string as an \c int with its code point is, and with
+    a string as a one-character string, in every relational operator, as \c == and \c <=> compare it.
+
+    The script compares <tt>c'a'</tt> with dates, bools, \c NOTHING, \c NULL, binary values, chars, floats, ints
+    and strings with every relational, equality and comparison operator in both operand orders, beside the same
+    comparisons of a control value (the int \c 97, or the string \c "a" for a string operand), with untyped and typed
+    operands; each function is called three times, in every execution mode and as qcc executables compiled with
+    \c -O0 and \c -O3 (see ExecModeOutputTest).  The expected output is the AST interpreter's, each of whose char
+    results must equal its control's, and the results of the dates are pinned.
+*/
+class CharRelationalComparisonTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+string sub ops(auto a, auto b) {
+    return sprintf("%y %y %y %y %y %y %y | %y %y %y %y %y", a < b, a <= b, a > b, a >= b, a == b, a != b, a <=> b,
+        b < a, b <= a, b > a, b >= a, b <=> a);
+}
+
+# typed operands
+string sub typedChar(char c, date d) {
+    return sprintf("%y %y %y %y %y %y | %y %y %y %y", c < d, c <= d, c > d, c >= d, c == d, c <=> d, d < c, d <= c,
+        d > c, d >= c);
+}
+
+string sub typedInt(int c, date d) {
+    return sprintf("%y %y %y %y %y %y | %y %y %y %y", c < d, c <= d, c > d, c >= d, c == d, c <=> d, d < c, d <= c,
+        d > c, d >= c);
+}
+
+# (name, operand, control): the control is compared with the operand as the char must be
+const Operands = (
+    ("date-96s", 1970-01-01T00:01:36Z, 97),
+    ("date-97s", 1970-01-01T00:01:37Z, 97),
+    ("date-98s", 1970-01-01T00:01:38Z, 97),
+    ("bool-true", True, 97),
+    ("bool-false", False, 97),
+    ("nothing", NOTHING, 97),
+    ("null", NULL, 97),
+    ("binary", <61>, 97),
+    ("char-a", c"a", 97),
+    ("char-b", c"b", 97),
+    ("float", 97.0, 97),
+    ("int", 98, 97),
+    ("string-a", "a", "a"),
+    ("string-b", "b", "a"),
+    ("string-97", "97", "a"),
+);
+
+for (int i = 0; i < 3; ++i) {
+    foreach list o in (Operands) {
+        printf("%d %s char: %s control: %s\n", i, o[0], ops(c"a", o[1]), ops(o[2], o[1]));
+    }
+    printf("%d typed char: %s control: %s\n", i, typedChar(c"a", 1970-01-01T00:01:37Z),
+        typedInt(97, 1970-01-01T00:01:37Z));
+    printf("%d typed-later char: %s control: %s\n", i, typedChar(c"a", 1970-01-01T00:01:38Z),
+        typedInt(97, 1970-01-01T00:01:38Z));
+}
+';
+
+        #! the results of the dates, which must hold in the AST interpreter's output
+        const Pinned = (
+            "0 date-96s char: False False True True False True 1 | True True False False -1"
+                + " control: False False True True False True 1 | True True False False -1",
+            "0 date-97s char: False True False True True False 0 | False True False True 0"
+                + " control: False True False True True False 0 | False True False True 0",
+            "0 date-98s char: True True False False False True -1 | False False True True 1"
+                + " control: True True False False False True -1 | False False True True 1",
+            "0 typed char: False True False True True 0 | False True False True"
+                + " control: False True False True True 0 | False True False True",
+            "0 typed-later char: True True False False False -1 | False False True True"
+                + " control: True True False False False -1 | False False True True",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CharRelationalComparison", Script,
+            ExecModeOutputTest::ast_output("CharRelationalComparison", Script),
+            "compares a char as its code point or as a one-character string", Pinned,
+            \CharRelationalComparisonTest::checkRows(), ("-O0", "-O3")) {
+    }
+
+    #! returns the lines of the output whose char results differ from their control's
+    static list<string> checkRows(string output) {
+        list<string> rv = ();
+        foreach string line in (output.split("\n")) {
+            if (!line) {
+                continue;
+            }
+            *list<*string> m = (line =~ x/^[0-9]+ \S+ char: (.*) control: (.*)$/);
+            if (!m || m[0] != m[1]) {
+                rv += line;
+            }
+        }
+        return rv;
+    }
+}
