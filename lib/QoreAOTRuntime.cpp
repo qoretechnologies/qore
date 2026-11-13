@@ -5459,6 +5459,62 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::REGEX_SUBST:
+            case AOTExprKind::TRANSLIT: {
+                // issue #5947
+                const char* s1 = reader.readStringRef(ptr);
+                const char* s2 = reader.readStringRef(ptr);
+                int64_t options = 0;
+                bool global = false;
+                if (kind == AOTExprKind::REGEX_SUBST) {
+                    options = QoreAOTBinaryReader::readI64(ptr);
+                    global = QoreAOTBinaryReader::readU8(ptr) != 0;
+                }
+                std::string err;
+                QoreValue operand = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                    num_globals, local_owner_pgm);
+                if (!err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                QoreValue node = kind == AOTExprKind::REGEX_SUBST
+                    ? qore_aot_make_regex_subst(s1, s2, options, global, operand, err)
+                    : qore_aot_make_transliteration(s1, s2, operand);
+                if (!err.empty()) {
+                    has_unsupported = true;
+                    continue;
+                }
+                ctx->exprs[i] = toBitsNB(node);
+                continue;
+            }
+            case AOTExprKind::SPLICE:
+            case AOTExprKind::EXTRACT: {
+                // lvalue, offset, length, new value (issue #5947)
+                QoreValue v[4];
+                bool read_error = false;
+                for (unsigned j = 0; j < 4; ++j) {
+                    std::string err;
+                    v[j] = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                        num_globals, local_owner_pgm);
+                    if (!err.empty()) {
+                        read_error = true;
+                    }
+                }
+                if (read_error) {
+                    for (QoreValue& x : v) {
+                        x.discard(nullptr);
+                    }
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::SPLICE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new QoreSpliceOperatorNode(&loc_builtin, v[0], v[1], v[2],
+                        v[3])));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new QoreExtractOperatorNode(&loc_builtin, v[0], v[1], v[2],
+                        v[3])));
+                }
+                continue;
+            }
             case AOTExprKind::PUSH:
             case AOTExprKind::UNSHIFT: {
                 std::string left_err;

@@ -1761,6 +1761,19 @@ public:
 private:
     const UserSignature* old;
 };
+//! Returns a regex substitution operator node read from an AOT image (issue #5947), or NOTHING with an error
+DLLLOCAL QoreValue qore_aot_make_regex_subst(const char* pattern, const char* replacement, int64_t options,
+        bool global, QoreValue operand, std::string& error);
+
+//! Returns a transliteration operator node read from an AOT image (issue #5947)
+DLLLOCAL QoreValue qore_aot_make_transliteration(const char* source, const char* target, QoreValue operand);
+
+//! Returns true if a string of a regex substitution or transliteration can be written as a string reference
+/** a string reference is read as a C string, which ends at a NUL character
+*/
+static inline bool qore_aot_regex_string_ok(const QoreString* str) {
+    return !str || strlen(str->c_str()) == str->size();
+}
 
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
 /** In batch mode (multiple AOT blobs registered into one Program),
@@ -2313,6 +2326,15 @@ enum class AOTExprKind : uint8_t {
     //! the source location of the expression that follows (from format version 26): the location
     //! (qore_aot_write_source_location()) + the expression (AOTExprKind), which gets the location
     SOURCE_LOCATION    = 122,
+    //! splice operator: lvalue + offset + length + new value (AOTExprKind each; NOTHING if absent)
+    SPLICE             = 123,
+    //! extract operator: lvalue + offset + length + new value (AOTExprKind each; NOTHING if absent)
+    EXTRACT            = 124,
+    //! regex substitution (=~ s///): pattern(stringref) + replacement(stringref) + options(i64) + global(u8)
+    //! + lvalue(AOTExprKind)
+    REGEX_SUBST        = 125,
+    //! transliteration (=~ tr///): source(stringref) + target(stringref) + lvalue(AOTExprKind)
+    TRANSLIT           = 126,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

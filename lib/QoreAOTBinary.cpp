@@ -5149,10 +5149,9 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
         }
 
         case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
-            // Complex expression default (e.g. function call) that couldn't be
-            // serialized. Return boolean True as a placeholder to mark the parameter
-            // as optional in the function signature. The actual default is evaluated
-            // by the compiled function code at runtime.
+            // A default value that an earlier writer could not serialize: the parameter is optional, but its
+            // default value is lost (the value True is returned in its place).  The writer no longer emits this
+            // marker: a default value that cannot be serialized fails the compilation (issue #5947)
             return QoreValue(true);
 
         case QoreAOTValueTag::VT_ENUM: {
@@ -10366,9 +10365,8 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             QoreValue dv = defaults[i];
             // Check if the default value is a serializable constant type.
             // AST expression nodes (function calls, variable refs, etc.) have types
-            // not in the switch list and would be serialized as VT_NOTHING, which
-            // would make the parameter appear required. Use VT_OPAQUE_DEFAULT instead
-            // to preserve the "has default" semantics.
+            // not in the switch list; they are written as expressions below, and one
+            // that cannot be written fails the compilation (issue #5947).
             qore_type_t dt = dv.getType();
             if (dt == NT_SCOPE_REF) {
                 const AbstractQoreNode* node = dv.getInternalNode();
@@ -10535,18 +10533,23 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     }
                 }
 
-                // Prefer native expression metadata; otherwise keep the legacy
-                // opaque default marker instead of fabricating an executable fallback.
+                // a default value is written as native expression metadata; one that cannot be written fails the
+                // compilation: the legacy opaque default marker is read as the value True, which loses the default
+                // value and its side effects (issue #5947)
                 if (write_native_expr_default(dv)) {
                     continue;
                 }
-
-                writer.writeU8(1);
-                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                error = "AOT cannot serialize the default value of parameter '";
+                error += pname ? pname : "<unknown>";
+                error += "': ";
+                error += qoreAOTDescribeExpr(dv);
+                return false;
             } else {
-                // Unknown type — write opaque placeholder
-                writer.writeU8(1);
-                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                error = "AOT cannot serialize the default value of parameter '";
+                error += pname ? pname : "<unknown>";
+                error += "': ";
+                error += qoreAOTDescribeExpr(dv);
+                return false;
             }
         } else {
             writer.writeU8(0);
@@ -13330,6 +13333,39 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* op = dynamic_cast<const QoreShiftRightEqualsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHR_EQ));
         return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    // regex substitution and transliteration, which modify their lvalue (issue #5947)
+    if (auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(node)) {
+        QoreRegexSubst* rs = op->getRegexSubst();
+        const QoreString* repl = rs ? rs->getNewStr() : nullptr;
+        if (rs && rs->getPatternCStr() && qore_aot_regex_string_ok(repl)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::REGEX_SUBST));
+            writer.writeStringRef(rs->getPatternCStr());
+            writer.writeStringRef(repl ? repl->c_str() : "");
+            writer.writeI64(rs->getOptions());
+            writer.writeU8(rs->isGlobal() ? 1 : 0);
+            return write_inline_expr(op->getExp());
+        }
+    }
+    if (auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(node)) {
+        QoreTransliteration* tr = op->getTransliteration();
+        if (tr && qore_aot_regex_string_ok(&tr->getSource()) && qore_aot_regex_string_ok(&tr->getTarget())) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRANSLIT));
+            writer.writeStringRef(tr->getSource().c_str());
+            writer.writeStringRef(tr->getTarget().c_str());
+            return write_inline_expr(op->getExp());
+        }
+    }
+    // splice and extract: lvalue, offset, length, new value (NOTHING if absent; issue #5947)
+    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SPLICE));
+        return write_inline_expr(op->getLValue()) && write_inline_expr(op->getOffset())
+            && write_inline_expr(op->getLength()) && write_inline_expr(op->getNewValue());
+    }
+    if (auto* op = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXTRACT));
+        return write_inline_expr(op->getLValue()) && write_inline_expr(op->getOffset())
+            && write_inline_expr(op->getLength()) && write_inline_expr(op->getNewValue());
     }
 
     // Plus operator: used inside hash/list/constructor argument literals.
