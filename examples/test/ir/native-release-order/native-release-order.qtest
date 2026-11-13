@@ -21,7 +21,8 @@
     The IR interpreter and native code kept the first element of a fold over a fused pipeline until the statement
     ended, where the AST interpreter releases it when the accumulator is replaced, and native code's accumulator of
     a fold over a pipeline with a select stage borrowed the element or the value of an operator, which the next element
-    released or replaced (issue #5883).
+    released or replaced, or a value read from a variable that code in the loop assigned, and released the accumulator
+    before the value of a map stage when a select stage raised (issue #5883).
 
     The script next to the test runs in every execution mode (its functions compiled before they run, with
     QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output, which shows each release, must be
@@ -56,7 +57,7 @@ class NativeReleaseOrderTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(28, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         foreach string c in ("map", "select", "map select", "hash map") {
             assertTrue(regex(out,
                 sprintf("(^|\n)%s: released h2; released h3; released h1; catch STAGE; after(\n|$)", c)), c);
@@ -97,6 +98,15 @@ class NativeReleaseOrderTest inherits QUnit::Test {
             "an operator as the fold's expression");
         assertTrue(out =~ /\nfoldl pipeline takewhile: released i1; released i3; itdone it; r i2; released i2; after/,
             "a takewhile stage");
+        # a map stage reads a variable that code in the loop assigns
+        assertTrue(out =~ /\nfoldl pipeline drop local: released x0; released x1; released x3; r x2; released x2; released x4; /,
+            "a drop stage after a map stage that reads a local");
+        assertTrue(out =~ /\nfoldl pipeline select local: released x1; released x0; released x2; r x3; x x4; released x3; /,
+            "a select stage that assigns the local that a map stage reads");
+        assertTrue(out =~ /\nfoldl pipeline select global: released c1; released c2; released c3; r c0; released c4; /,
+            "a select stage that calls a function that assigns the global that a map stage reads");
+        assertTrue(out =~ /\nfoldl pipeline select raises: released i1; released i2; released wi2; released i3; released wi3; released wi1; itdone it; catch STAGE; after/,
+            "a select stage raises");
         assertTrue(out =~ /\nfoldl pipeline next raises: released i1; itdone it; released i2; catch NEXT \$1 unset; /,
             "a fold over a pipeline whose iterator's next() raises");
         assertTrue(out =~ /\nfoldl nested raises: released x; released h1; released h2; released h3; catch STAGE /,

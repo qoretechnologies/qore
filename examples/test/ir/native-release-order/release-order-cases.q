@@ -155,6 +155,25 @@ bool sub before_i3(Holder h) {
     return h.n != "i3";
 }
 
+Holder sub wrap(Log log, Holder h) {
+    return new Holder(log, "w" + h.n);
+}
+
+bool sub fail_on_w(Holder h, string name) {
+    if (h.n == name) {
+        throw "STAGE", h.n;
+    }
+    return True;
+}
+
+our Holder cur;
+our Log cur_log;
+
+bool sub advance(int i) {
+    cur = new Holder(cur_log, "c" + i);
+    return i != 2;
+}
+
 string sub names(list<auto> l) {
     return (map $1.n, l).join(",");
 }
@@ -505,6 +524,61 @@ sub foldl_pipeline_takewhile() {
     out("foldl pipeline takewhile", log);
 }
 
+# a map stage reads a variable that code in the loop assigns, which releases the value that it held: the accumulator
+# has a reference of its own to it (qore#5883)
+sub foldl_pipeline_drop_local() {
+    Log log();
+    {
+        Holder x = new Holder(log, "x0");
+        auto r = foldl $1, (drop 1, (map x, (map (x = new Holder(log, "x" + $1)), (1, 2, 3, 4))));
+        log.add("r " + r.n);
+    }
+    log.add("after");
+    out("foldl pipeline drop local", log);
+}
+
+sub foldl_pipeline_select_local() {
+    Log log();
+    {
+        Holder x = new Holder(log, "x0");
+        int k = 0;
+        auto r = foldl ($1.n == "x1" ? $1 : $2), (select (map x, (1, 2, 3, 4)),
+            (x = new Holder(log, "x" + ++k)) && $1.n != "x1");
+        log.add("r " + r.n);
+        log.add("x " + x.n);
+    }
+    log.add("after");
+    out("foldl pipeline select local", log);
+}
+
+sub foldl_pipeline_select_global() {
+    Log log();
+    cur_log = log;
+    {
+        cur = new Holder(log, "c0");
+        auto r = foldl $1, (select (map cur, (1, 2, 3, 4)), advance($1.n == "c0" ? 1 : $1.n.substr(1).toInt() + 1));
+        log.add("r " + r.n);
+        remove cur;
+    }
+    log.add("after");
+    out("foldl pipeline select global", log);
+}
+
+# a select stage's predicate raises: the value of the map stage is released before the accumulator, as the AST
+# interpreter's functional iterators release it before the fold releases its value (qore#5883)
+sub foldl_pipeline_select_raises() {
+    Log log();
+    try {
+        auto r = foldl $2, (select (map wrap(log, $1), new HolderIt(log)),
+            $1.n == "wi3" ? fail_on_w($1, "wi3") : $1.n != "wi2");
+        log.add("r " + r.n);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("foldl pipeline select raises", log);
+}
+
 # the same when the iterator's next() raises: the first element is released when the accumulator is replaced, and the
 # iterator before the accumulator
 sub foldl_pipeline_next_raises() {
@@ -592,6 +666,10 @@ sub main() {
     foldl_pipeline_select_concat();
     foldl_pipeline_concat();
     foldl_pipeline_takewhile();
+    foldl_pipeline_drop_local();
+    foldl_pipeline_select_local();
+    foldl_pipeline_select_global();
+    foldl_pipeline_select_raises();
     foldl_pipeline_next_raises();
     foldl_nested_raises();
     foldl_next_raises();

@@ -13396,10 +13396,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 });
             }
         }
-        // returns false for a Phi whose values are all borrowed from a variable or a constant, and true for a Phi whose
-        // value can be any other value: an iterator's element, which the next IteratorNext releases, or the value of
-        // a call or an operator (a string concatenation, a list), which the next execution of the instruction
-        // replaces in its slot (qore#5883)
+        // returns false for a Phi whose values are all constants, and true for a Phi whose value can be any other
+        // value: an iterator's element, which the next IteratorNext releases, the value of a call or an operator (a
+        // string concatenation, a list), which the next execution of the instruction replaces in its slot, or a value
+        // read from a variable, which code in the loop can assign (a select stage's predicate, a called function or a
+        // closure), releasing the value that it held (qore#5883)
         auto phi_may_hold_temporary = [&](const QoreIRPhiInstruction* phi) {
             std::unordered_set<uint32_t> seen{phi->result.id};
             std::vector<const QoreIRPhiInstruction*> todo{phi};
@@ -13425,13 +13426,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         case QoreIROpcode::ConstNull:
                         case QoreIROpcode::ConstString:
                         case QoreIROpcode::LoadConstant:
-                        case QoreIROpcode::LoadLocal:
-                        case QoreIROpcode::LoadArg:
-                        case QoreIROpcode::LoadClosure:
-                        case QoreIROpcode::LoadGlobal:
-                        case QoreIROpcode::LoadThreadLocal:
-                        case QoreIROpcode::LoadSelfMember:
-                        case QoreIROpcode::LoadStaticVar:
                             continue;
                         case QoreIROpcode::Phi:
                             if (static_cast<const QoreIRPhiInstruction*>(def)->value_kind

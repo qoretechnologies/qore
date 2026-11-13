@@ -352,9 +352,9 @@ Phi has one (`QoreIRToLLVM::owning_phis`): it takes the value of the expression 
 to the first element, which the accumulator's Phi takes over in turn, so a fold costs no reference per element.  The
 accumulator's Phi of a pipeline with a select stage has itself as an incoming value, on the path of an element that
 the stage skips: in native code, the Phi's own value is not a use of it, and a Phi among its own incoming values has
-a slot of its own unless all its values are borrowed from a variable or a constant (any other value can be a temporary
-that the loop releases: an iterator's element, the value of a call or of an operator, which the next execution of the
-instruction replaces in its slot), which keeps its value on that edge, and no call consumes it; it had none, and
+a slot of its own unless all its values are constants (any other value can be released in the loop: an iterator's
+element, the value of a call or of an operator, which the next execution of the instruction replaces in its slot, or a
+value read from a variable, which code in the loop can assign), which keeps its value on that edge, and no call consumes it; it had none, and
 borrowed the element that the next `IteratorNext` released, or the value that the next element's operator replaced.  A
 loop header's Phi that can hold such a value owns it the same way when it is not a Phi of temporaries.  Since the
 accumulator's Phi owns its value, the `IteratorNext` of a fold releases the values of its map stages as it does for

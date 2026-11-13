@@ -21077,6 +21077,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (!pipeline_cleanup.init("pipeline.fused.exception.cleanup", error)) {
         return QoreIRValue();
     }
+    // the exception target of a fold's expression, if the pipeline has an exception cleanup, and the fold's argument
+    // list, which it releases before the pipeline's cleanup (qore#5883)
+    QoreIRBasicBlock* fold_expr_exception_block = nullptr;
+    std::vector<QoreIRValue> fold_expr_exception_values;
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
@@ -21743,7 +21747,24 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 {{start_result, join_start_exit}, {append_result, join_append_exit}}, loc)->result;
             fold_exit_block = join_cont_block;
         } else {
+            // an exception that the fold's expression raises releases the fold's argument list, the accumulator and
+            // then the element, first, as the AST interpreter's fold does, and then the pipeline's values (see
+            // fold_expr_exception_block)
+            if (pipeline_cleanup.get() && !fold_expr_exception_block) {
+                fold_expr_exception_block = createBlock("stream.fused.fold.expr.exception");
+                if (!fold_expr_exception_block) {
+                    error = "IR builder failed to create the fused fold expression exception block";
+                    return QoreIRValue();
+                }
+                fold_expr_exception_values = {state.fold_accum, element_val};
+            }
+            if (fold_expr_exception_block) {
+                exception_stack.push_back(fold_expr_exception_block);
+            }
             fold_result = lower_fold_expr(state.fold_accum, element_val);
+            if (fold_expr_exception_block) {
+                exception_stack.pop_back();
+            }
             if (!fold_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22074,12 +22095,31 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         ? qore_ir_observable_release(iter_element, base_source_element_type) : iter_element;
     std::vector<QoreIRValue> partial_values;
     if (fold_accum_phi) {
-        // the AST interpreter's fold releases its argument list, which holds the accumulator and then the element
-        // (see lowerFoldlNative()), and releases its accumulator after its functional iterator when next() raises
+        // an exception that a stage raises releases the element and the values that the stages gave from it, as the
+        // AST interpreter's functional iterators do, and then the fold's accumulator (qore#5883); one that the fold's
+        // expression raises releases the fold's argument list, which holds the accumulator and then the element (see
+        // lowerFoldlNative()), first, in a block of its own, which goes on to the pipeline's cleanup; and the fold
+        // releases its accumulator after its functional iterator when next() raises
         cleanup_values.insert(cleanup_values.begin(), cleanup_element);
-        cleanup_values.insert(cleanup_values.begin(), fold_accum_phi->result);
+        cleanup_values.push_back(fold_accum_phi->result);
         cleanup_element = QoreIRValue();
         partial_values.push_back(fold_accum_phi->result);
+        if (fold_expr_exception_block) {
+            QoreIRBasicBlock* after_block = builder.getBlock();
+            builder.getFunction()->moveBlockToEnd(fold_expr_exception_block);
+            builder.setBlock(fold_expr_exception_block);
+            qore_ir_create_value_releases(builder, fold_expr_exception_values, QoreIRValue(), loc);
+            for (const auto& inst : fold_expr_exception_block->instructions) {
+                if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    inst->exception_cleanup_release = true;
+                }
+            }
+            QoreIRBasicBlock* cleanup_block = pipeline_cleanup.get();
+            auto* check_inst = builder.createCheckException(loc);
+            check_inst->exception_target = cleanup_block;
+            builder.createBranch(cleanup_block, loc);
+            builder.setBlock(after_block);
+        }
     }
     pipeline_cleanup.finish(iter_val, source, cleanup_element, result_list, loc, cleanup_values, partial_values);
     builder.setBlock(final_block);

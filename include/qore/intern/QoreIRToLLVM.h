@@ -1264,9 +1264,10 @@ private:
         other incoming values (qore#5883), when it is:
         - a loop header's Phi among its own incoming values (the accumulator of a fold at the root of a fused pipeline
           with a select stage, which keeps its value for an element that the stage skips) unless all its values are
-          borrowed from a variable or a constant: any other value can be a temporary released in the loop, such as an
-          iterator's element, which the next IteratorNext releases, or the value of a call or an operator (a string
-          concatenation, a list), whose slot the next execution of the instruction replaces.  It keeps its value in its
+          constants: any other value can be released in the loop, such as an iterator's element, which the next
+          IteratorNext releases, the value of a call or an operator (a string concatenation, a list), whose slot the
+          next execution of the instruction replaces, or a value read from a variable, which code in the loop can
+          assign.  It keeps its value in its
           slot on the edge back to the header; without the slot, it borrowed the element that the next IteratorNext
           released, or the value that the next element's operator replaced.  A Phi of temporaries among its own incoming values is one too, as its value can reach the header
           again, and no call consumes it
