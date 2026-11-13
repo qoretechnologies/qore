@@ -4397,41 +4397,147 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     }
     // in the order in which the AST interpreter unwinds them
     std::vector<llvm::Value*> temps;
-    orderExceptionTemps(mark->invoke_alloca_count, false, temps);
+    size_t receivers = 0;
+    orderExceptionTemps(mark->invoke_alloca_count, false, temps, &receivers);
     if (temps.empty()) {
         return handler;
     }
+    // the release code is shared with the edges of the earlier checks to the same handler (see ExceptionEdges)
+    ExceptionEdges& edges = exception_edges[handler];
+    size_t lists = temps.size() - receivers;
+    // the receivers of the edge, then the handler
+    llvm::BasicBlock* receivers_block = receivers
+        ? getExceptionEdgeChainBlock(module, llvm_func, edges.receivers, temps, lists, temps.size(), handler)
+        : handler;
+    if (!lists) {
+        return receivers_block;
+    }
+    if (!edges.lists_end) {
+        // the end of the argument lists' chain continues with the receivers that the edge stored
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        edges.selector = ab.CreateAlloca(llvm::Type::getInt32Ty(ctx), nullptr, "exception_receivers");
+        llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+        auto saved_ip = builder->GetInsertPoint();
+        edges.lists_end = llvm::BasicBlock::Create(ctx, "exception_receivers", llvm_func);
+        builder->SetInsertPoint(edges.lists_end);
+        llvm::Value* sel = builder->CreateLoad(llvm::Type::getInt32Ty(ctx), edges.selector);
+        edges.lists_end_switch = builder->CreateSwitch(sel, handler);
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+    uint32_t selector = 0;
+    if (receivers) {
+        auto i = edges.receiver_cases.find(receivers_block);
+        if (i == edges.receiver_cases.end()) {
+            selector = static_cast<uint32_t>(edges.receiver_cases.size() + 1);
+            edges.receiver_cases.emplace(receivers_block, selector);
+            edges.lists_end_switch->addCase(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), selector),
+                receivers_block);
+        } else {
+            selector = i->second;
+        }
+    }
+    llvm::BasicBlock* lists_block = getExceptionEdgeChainBlock(module, llvm_func, edges.lists, temps, 0, lists,
+        edges.lists_end);
+    // the edge stores its receivers and enters the chain of the argument lists
     llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
     auto saved_ip = builder->GetInsertPoint();
     llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_temps", llvm_func);
     builder->SetInsertPoint(edge);
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    size_t count = 0;
-    for (llvm::Value* alloca_ptr : temps) {
-        if (!(++count % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
-        }
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
-    builder->CreateBr(handler);
+    builder->CreateStore(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), selector), edges.selector);
+    builder->CreateBr(lists_block);
     builder->SetInsertPoint(saved_insert, saved_ip);
     return edge;
 }
 
-bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps) {
+// the shortest release sequence that is emitted as a call with a table of its slots (see emitTempReleaseSequence())
+static constexpr size_t MinTableTempRelease = 16;
+
+void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vector<llvm::Value*>& temps, size_t begin,
+        size_t end) {
+    if (end - begin >= MinTableTempRelease && invoke_cleanup_array && !invoke_cleanup_array_overflow) {
+        std::vector<uint32_t> slots;
+        slots.reserve(end - begin);
+        for (size_t i = begin; i < end; ++i) {
+            auto it = invoke_cleanup_slot.find(temps[i]);
+            if (it == invoke_cleanup_slot.end()) {
+                break;
+            }
+            slots.push_back(it->second);
+        }
+        if (slots.size() == end - begin) {
+            llvm::Constant* data = llvm::ConstantDataArray::get(ctx, slots);
+            auto* table = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage,
+                data, "temp_release_slots");
+            table->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+            auto helper = module.getOrInsertFunction("qore_rt_cleanup_release_slots",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type}, false));
+            builder->CreateCall(helper, {invoke_cleanup_array, table,
+                llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(slots.size())), xsink_arg});
+            return;
+        }
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (size_t i = begin; i < end; ++i) {
+        if (!((i - begin + 1) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM temp release");
+        }
+        llvm::Value* alloca_ptr = temps[i];
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+}
+
+llvm::BasicBlock* QoreIRToLLVM::emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
+        const std::vector<llvm::Value*>& temps, size_t begin, size_t end, llvm::BasicBlock* next) {
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* block = llvm::BasicBlock::Create(ctx, "exception_release", llvm_func);
+    builder->SetInsertPoint(block);
+    emitTempReleaseSequence(module, temps, begin, end);
+    builder->CreateBr(next);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return block;
+}
+
+llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeChainBlock(llvm::Module& module, llvm::Function* llvm_func,
+        ExceptionEdgeChain& chain, const std::vector<llvm::Value*>& temps, size_t begin, size_t end,
+        llvm::BasicBlock* tail) {
+    size_t n = end - begin;
+    // the last block of the chain releases the same temporaries
+    if (chain.block && chain.temps.size() == n && std::equal(chain.temps.begin(), chain.temps.end(),
+            temps.begin() + begin)) {
+        return chain.block;
+    }
+    // it releases the last of them: this block releases those in front of them and continues there; otherwise this
+    // block releases them all and starts the chain again
+    size_t own = n;
+    llvm::BasicBlock* next = tail;
+    if (chain.block && chain.temps.size() < n && std::equal(chain.temps.begin(), chain.temps.end(),
+            temps.begin() + (end - chain.temps.size()))) {
+        own -= chain.temps.size();
+        next = chain.block;
+    }
+    llvm::BasicBlock* block = emitExceptionTempRelease(module, llvm_func, temps, begin, begin + own, next);
+    chain.temps.assign(temps.begin() + begin, temps.begin() + end);
+    chain.block = block;
+    return block;
+}
+
+bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps,
+        size_t* receivers) {
     std::vector<size_t> indices;
     for (size_t i = start; i < invoke_result_allocas.size(); ++i) {
         indices.push_back(i);
     }
-    return orderExceptionTemps(indices, observable_only, temps);
+    return orderExceptionTemps(indices, observable_only, temps, receivers);
 }
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::orderExceptionTemps(const std::vector<size_t>& indices, bool observable_only,
-        std::vector<llvm::Value*>& temps) {
+        std::vector<llvm::Value*>& temps, size_t* receivers) {
     temps.clear();
     std::vector<llvm::Value*> allocas;
     std::vector<uint32_t> ids;
@@ -4462,18 +4568,24 @@ bool QoreIRToLLVM::orderExceptionTemps(const std::vector<size_t>& indices, bool 
     for (size_t i : order) {
         temps.push_back(allocas[i]);
     }
+    // the receivers, which qore_ir_order_exception_release() releases last
+    if (receivers) {
+        size_t n = 0;
+        for (size_t k = order.size(); k > 0; --k) {
+            uint32_t id = ids[order[k - 1]];
+            if ((id < exception_release_groups.size() ? exception_release_groups[id] : 0) != QORE_IR_RELEASE_RECEIVER) {
+                break;
+            }
+            ++n;
+        }
+        *receivers = n;
+    }
     return reordered;
 }
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    for (llvm::Value* alloca_ptr : temps) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
+    emitTempReleaseSequence(module, temps, 0, temps.size());
 }
 
 // only temporaries whose release can run a destructor are released on the edge to the error return, and only if the
@@ -4702,15 +4814,16 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
-    for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
-        llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-        if (persistent_cleanup_allocas.count(alloca_ptr)) {
-            continue;
+    {
+        // last registered first
+        std::vector<llvm::Value*> release;
+        for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
+            llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
+            if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+                release.push_back(alloca_ptr);
+            }
         }
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-            alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
+        emitTempReleaseSequence(module, release, 0, release.size());
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
@@ -4940,6 +5053,7 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
         invoke_cleanup_array_overflow = true;
         return;
     }
+    invoke_cleanup_slot.emplace(alloca_ptr, invoke_cleanup_array_count);
     storeCleanupSlotAddress(invoke_cleanup_array, invoke_cleanup_array_count++, alloca_ptr);
 }
 
@@ -12864,8 +12978,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     owned_ir_local_allocas.clear();
     owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
+    invoke_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
+    exception_edges.clear();
     ir_block_predecessor_counts.clear();
     ir_block_predecessor_counts_valid = false;
     boxed_exit_cleanup_array = nullptr;

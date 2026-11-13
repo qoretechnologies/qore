@@ -476,6 +476,7 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
+void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count, ExceptionSink* xsink);
 
 //! Release every active iterator recorded in an array of cleanup slots.
 void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count);
