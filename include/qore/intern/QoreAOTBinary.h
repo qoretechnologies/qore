@@ -1761,6 +1761,7 @@ public:
 private:
     const UserSignature* old;
 };
+
 //! Returns a regex substitution operator node read from an AOT image (issue #5947), or NOTHING with an error
 DLLLOCAL QoreValue qore_aot_make_regex_subst(const char* pattern, const char* replacement, int64_t options,
         bool global, QoreValue operand, std::string& error);
