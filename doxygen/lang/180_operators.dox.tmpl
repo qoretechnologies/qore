@@ -1656,6 +1656,7 @@ if (x == y)
     |@ref number_type "number"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'\\x01' == True</tt> is @ref True "True", <tt>c'a' == True</tt> is @ref False "False")
     |@ref date_type "date"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If each hash has the same keys and the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -1690,6 +1691,7 @@ if (x != y)
     |@ref number_type "number"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'a' != True</tt> is @ref True "True")
     |@ref date_type "date"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If the hashes have different keys or the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
