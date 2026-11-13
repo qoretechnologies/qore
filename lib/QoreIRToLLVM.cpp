@@ -4051,7 +4051,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
         }
         // a recorded call is never the terminator of its block: the block that runs the handlers ends with the branch
         // of endPendingHandlerRun(), and every block of the lowered function has a terminator, so the call has a next
-        // instruction; a block without one would get the reloads at its end, after the call
+        // instruction; a block without one gets the reloads at its end, after the call, and is then rejected by the
+        // check for blocks without a terminator that lowerFunction() makes afterwards, so no invalid IR gets through
         llvm::Instruction* next = site.call->getNextNode();
         assert(next);
         if (next) {
@@ -4075,6 +4076,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             markLocalCacheFresh(key, llvm_func);
         }
     }
+    // no site is recorded while the sites are finalized
+    assert(handler_sites.empty());
 }
 
 void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
