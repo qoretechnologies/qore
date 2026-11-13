@@ -7333,8 +7333,27 @@ QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
     return do_op_background(rc, left, xsink);
 }
 
+//! raises THREAD-CREATION-FAILURE if no thread can be started because the library is being cleaned up
+/** qore_cleanup() waits for the threads that thread_counter counts before it sets qore_shutdown and never again, so
+    only an external-lifecycle thread can be started after that, until it has waited for those and stopped their
+    reaper; Qore code that runs afterwards (the destructors of the objects of a Program that outlives the modules: see
+    qore_program_private::clearRemainingPrograms()) cannot start a thread at all (qore#6045)
+*/
+static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
+    if (qore_thread_start_closed.load(std::memory_order_acquire)
+            || (qore_shutdown.load(std::memory_order_relaxed) && !(flags & QTF_EXTERNAL_LIFECYCLE))) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "cannot start a thread: the Qore library is being cleaned "
+            "up");
+        return -1;
+    }
+    return 0;
+}
+
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
     if (!left) {
+        return QoreValue();
+    }
+    if (q_check_thread_start_allowed(xsink, QTF_NONE)) {
         return QoreValue();
     }
 
@@ -7383,6 +7402,9 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 
 QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
         const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink) {
+    if (q_check_thread_start_allowed(xsink, QTF_NONE)) {
+        return QoreValue();
+    }
     // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
     // thread limit before anything else is done
     std::unique_ptr<QoreInheritedSandbox> sandbox;
@@ -7460,9 +7482,10 @@ static int q_capture_start_thread_sandbox(ExceptionSink* xsink, int flags,
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
-    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
-    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
-    assert(!qore_shutdown.load(std::memory_order_relaxed));
+    // see q_check_thread_start_allowed()
+    if (q_check_thread_start_allowed(xsink, QTF_NONE)) {
+        return -1;
+    }
     // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
     // thread limit
     std::unique_ptr<QoreInheritedSandbox> sandbox;
@@ -7520,9 +7543,10 @@ size_t q_thread_stack_tls_size() {
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags) {
-    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
-    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
-    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
+    // see q_check_thread_start_allowed()
+    if (q_check_thread_start_allowed(xsink, flags)) {
+        return -1;
+    }
     std::unique_ptr<QoreInheritedSandbox> sandbox;
     if (q_capture_start_thread_sandbox(xsink, flags, sandbox)) {
         return -1;
@@ -7573,9 +7597,10 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
-    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
-    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
-    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
+    // see q_check_thread_start_allowed()
+    if (q_check_thread_start_allowed(xsink, flags)) {
+        return -1;
+    }
     std::unique_ptr<QoreInheritedSandbox> sandbox;
     if (q_capture_start_thread_sandbox(xsink, flags, sandbox)) {
         return -1;
@@ -9049,8 +9074,10 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
         return QORE_COND_RESULT_INTERRUPTED;
     }
     int tid = q_gettid();
-    // a thread unknown to Qore cannot be cancelled, and nothing can be delivered while cancellation is deferred
-    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
+    // a thread unknown to Qore cannot be cancelled, and nothing can be delivered while cancellation is deferred or
+    // once no other thread can run (the condition waker has been stopped for good: see qore_thread_start_closed)
+    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()
+            || qore_thread_start_closed.load(std::memory_order_acquire)) {
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
     if (thread_list.registerCondWait(tid, &cond, m, qore_cancel_limits_only())) {

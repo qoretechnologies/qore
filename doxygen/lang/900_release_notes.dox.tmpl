@@ -1688,6 +1688,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the objects of a Program that outlives the library cleanup (such as a Program that a module holds in a static
+      object) are now destroyed while the library can run their destructors, which crashed at a normal process exit;
+      a thread started while the library is cleaned up now raises \c THREAD-CREATION-FAILURE (issue #6045)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
