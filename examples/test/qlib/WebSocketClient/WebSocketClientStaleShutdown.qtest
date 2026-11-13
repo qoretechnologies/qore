@@ -3630,6 +3630,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             release_hb.dec();
         }
         d.block_hb = True;
+        # the held beat is not sent: the server echoes what it gets, and a delivery task for the echo holds a reference
+        # to the client while it processes it, so it could release the last reference instead of the heartbeat
+        # thread (issue #5984)
+        d.drop_held_hb = True;
         # no HELLO, so no delivery task holds a reference: the heartbeat is started directly
         d.connect();
         d.startHeartbeatForTest(100);
@@ -4503,6 +4507,8 @@ class HbDiscord inherits DiscordWebSocketClient {
         #! hold the next heartbeat sent
         bool block_hb = False;
         Counter release_hb(1);
+        #! drop the heartbeat held with block_hb instead of sending it once it is released
+        bool drop_held_hb = False;
         #! hold the thread reporting a close after it waited for the heartbeat to end
         bool hold_closing_after_wait = False;
         Counter release_closing(1);
@@ -4583,7 +4589,12 @@ class HbDiscord inherits DiscordWebSocketClient {
             block_hb = False;
             hb_tids.push(gettid());
             events.push("hb-blocked");
+            # read before the wait, which the test ends by releasing its reference to the client
+            bool drop = drop_held_hb;
             release_hb.waitForZero(LifecycleWsClient::HandoffTimeout);
+            if (drop) {
+                return;
+            }
         }
         DiscordWebSocketClient::sendData(v);
     }
