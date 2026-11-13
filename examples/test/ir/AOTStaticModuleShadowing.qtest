@@ -140,14 +140,19 @@ public string sub value() {
         return m ? (m[0],) : ();
     }
 
-    #! returns the settings of the link configuration that the build wrote for qcc (aot-link.conf), if any
-    /** \c cxx is the C++ compiler that the build found (cmake's CMAKE_CXX_COMPILER), \c sanitize_flags the
-        sanitizer flags of a sanitizer build and \c dynamic_libs the libraries that dlopen() and dlsym() need; the
-        values are shell words, as qcc passes them to the shell
+    #! returns the settings of the link configuration that qcc links with (aot-link.conf), if any
+    /** The file is found as qcc finds it: \c QORE_AOT_LINK_CONF if set, else the one that the build wrote next to
+        libqore, else the installed one.  \c cxx is the path of the C++ compiler that the build found (cmake's
+        CMAKE_CXX_COMPILER), a single value that qcc quotes for the shell; \c sanitize_flags (the sanitizer flags of
+        a sanitizer build) and \c dynamic_libs (the libraries that dlopen() and dlsym() need) are lists of words
+        already quoted for the shell, which qcc passes as they are
     */
     private hash<string, string> linkConfig() {
         hash<string, string> rv;
-        foreach string path in (libqore_dir + "/aot-link.conf", libqore_dir + "/qore/aot-link.conf") {
+        list<string> paths = exists ENV.QORE_AOT_LINK_CONF
+            ? (ENV.QORE_AOT_LINK_CONF,)
+            : (libqore_dir + "/aot-link.conf", libqore_dir + "/qore/aot-link.conf");
+        foreach string path in (paths) {
             if (!is_file(path)) {
                 continue;
             }
@@ -163,6 +168,11 @@ public string sub value() {
             break;
         }
         return rv;
+    }
+
+    #! quotes a single value for the shell, as qcc quotes the compiler (quoteAOTLinkArgument())
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
     }
 
     private string run(string cmd) {
@@ -221,7 +231,8 @@ public string sub value() {
 
         # the compiler and the link flags that qcc links with, which the build recorded (see linkConfig())
         hash<string, string> conf = linkConfig();
-        string cxx = ENV.CXX ?? conf.cxx ?? "c++";
+        # CXX is a command, as for a build; the configured compiler is a path, quoted as qcc quotes it
+        string cxx = ENV.CXX ?? (conf.cxx ? AOTStaticModuleShadowingTest::shellQuote(conf.cxx) : "c++");
         # the target of libqore on macOS, and the sanitizer runtime of a sanitizer build, which every object linked
         # with libqore needs
         string flags = AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ") + " "
@@ -244,8 +255,8 @@ public string sub value() {
         }
         # the host, which exports its hook for the library module: see aot-static-shadowing/host.cpp; an ELF
         # executable puts its symbols in its dynamic symbol table only when linked with -rdynamic, while a Mach-O
-        # executable's external symbols are found by dlsym() as linked, and -export_dynamic keeps them from being
-        # stripped as unused
+        # executable's global symbols are found by dlsym() as linked; on ld64, -export_dynamic keeps them global
+        # also under link-time optimization, which could otherwise drop or hide a symbol that nothing references
         string export_flag = PlatformOS == "Darwin" ? "-Xlinker -export_dynamic" : "-rdynamic";
         string host_exe = tmp.path + "/static-host";
         out = run(sprintf("%s -std=c++17 %s %s %s/aot-static-shadowing/host.cpp %s %s -o %s %s", cxx, export_flag,
