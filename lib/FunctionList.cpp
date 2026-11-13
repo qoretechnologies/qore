@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,7 +35,11 @@
 #include <cstring>
 
 ResolvedCallReferenceNode* FunctionEntry::makeCallReference(const QoreProgramLocation* loc) const {
-   return new LocalFunctionCallReferenceNode(loc, func);
+    LocalFunctionCallReferenceNode* ref = new LocalFunctionCallReferenceNode(loc, func);
+    // the entry says which namespace the function is in, which names it in AOT code (\step() in namespace Other is
+    // Other::step())
+    ref->setFunctionEntry(this);
+    return ref;
 }
 
 ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin)

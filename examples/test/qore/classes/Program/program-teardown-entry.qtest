@@ -126,6 +126,66 @@ printf(\"held=%y waiting=%y\\n\", held, waiting);
         assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
         assertRegex("second=DBG-ARGUMENT-ERROR", r.output, sprintf("a second hold is refused: %s", r.output));
         assertRegex("held=True waiting=True", r.output, sprintf("the armed hold held the teardown: %s", r.output));
+
+        # continuing a hold that no teardown has reached disarms it: a teardown that reaches it later is not held
+        r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+call_function(\"dbg_hold_program_teardown\", t);
+try {
+    call_function(\"dbg_continue_program_teardown\", 100);
+    printf(\"continue=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"continue=%s\\n\", ex.err);
+}
+# before, the teardown blocked in the hold, so the child never got here
+delete t;
+printf(\"deleted=True\\n\");
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("continue=DBG-ARGUMENT-ERROR", r.output, sprintf("no teardown is held: %s", r.output));
+        assertRegex("deleted=True", r.output, sprintf("the disarmed hold does not hold the teardown: %s", r.output));
+
+        # a hold is not armed while the thread of the previous hold has not woken from it: arming it would reset the
+        # release that the thread waits for (a negative timeout releases the thread without waking it)
+        r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+call_function(\"dbg_hold_program_teardown\", t);
+Counter deleted(1);
+background sub () {
+    delete t;
+    deleted.dec();
+}();
+bool held = call_function(\"dbg_wait_program_teardown_held\", " + StepTimeout + ");
+printf(\"held=%y\\n\", held);
+try {
+    call_function(\"dbg_continue_program_teardown\", -1);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"release=%s: %s\\n\", ex.err, ex.desc);
+}
+Program t2(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+try {
+    call_function(\"dbg_hold_program_teardown\", t2);
+    printf(\"rearm=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"rearm=%s: %s\\n\", ex.err, ex.desc);
+}
+# wakes the thread, which continues, as it was released
+try {
+    call_function(\"dbg_continue_program_teardown\", 0);
+} catch (hash<ExceptionInfo> ex) {
+}
+deleted.waitForZero();
+printf(\"deleted=True\\n\");
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("held=True", r.output, sprintf("the teardown reached the hold: %s", r.output));
+        assertRegex("rearm=DBG-ARGUMENT-ERROR: the teardown of the previous hold has not continued yet", r.output,
+            sprintf("the hold is refused while the thread of the previous hold has not woken: %s", r.output));
+        assertRegex("deleted=True", r.output, sprintf("the released teardown continued: %s", r.output));
     }
 
     #! once a Program waits for the background compiles of its code, a compile of its code is refused

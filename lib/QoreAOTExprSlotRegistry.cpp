@@ -441,8 +441,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 102: SQUARE_BRACKET_RANGE
     {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
 
-    // 103: DOT_EVAL_EXPR
-    {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
+    // 103: AST_EXPR
+    {"AST_EXPR", 103, true, write_slot_AST_EXPR, "Full inline expression evaluated as an AST"},
     // 104: UNARY_MINUS
     {"UNARY_MINUS", 104, true, write_slot_UNARY_MINUS, "Unary minus operator"},
     // 105: LOG_AEQ
@@ -468,10 +468,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"SHL_EQ", 120, true, write_slot_SHL_EQ, "Shift-left-equals operator"},
     {"SHR_EQ", 121, true, write_slot_SHR_EQ, "Shift-right-equals operator"},
     {"SOURCE_LOCATION", 122, true, write_slot_SOURCE_LOCATION, "Source location of the call expression that follows"},
-    {nullptr, 123, false, nullptr, nullptr},
-    {nullptr, 124, false, nullptr, nullptr},
-    {nullptr, 125, false, nullptr, nullptr},
-    {nullptr, 126, false, nullptr, nullptr},
+    {"SPLICE", 123, true, write_slot_SPLICE, "Splice operator"},
+    {"EXTRACT", 124, true, write_slot_EXTRACT, "Extract operator"},
+    {"REGEX_SUBST", 125, true, write_slot_REGEX_SUBST, "Regex substitution operator"},
+    {"TRANSLIT", 126, true, write_slot_TRANSLIT, "Transliteration operator"},
     {nullptr, 127, false, nullptr, nullptr},
     {nullptr, 128, false, nullptr, nullptr},
     {nullptr, 129, false, nullptr, nullptr},

@@ -140,6 +140,31 @@ public string sub value() {
         return m ? (m[0],) : ();
     }
 
+    #! returns the settings of the link configuration that the build wrote for qcc (aot-link.conf), if any
+    /** \c cxx is the C++ compiler that the build found (cmake's CMAKE_CXX_COMPILER), \c sanitize_flags the
+        sanitizer flags of a sanitizer build and \c dynamic_libs the libraries that dlopen() and dlsym() need; the
+        values are shell words, as qcc passes them to the shell
+    */
+    private hash<string, string> linkConfig() {
+        hash<string, string> rv;
+        foreach string path in (libqore_dir + "/aot-link.conf", libqore_dir + "/qore/aot-link.conf") {
+            if (!is_file(path)) {
+                continue;
+            }
+            foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
+                if (!line.val() || line[0] == "#") {
+                    continue;
+                }
+                *int eq = line.find("=");
+                if (eq > 0) {
+                    rv{line.substr(0, eq)} = line.substr(eq + 1);
+                }
+            }
+            break;
+        }
+        return rv;
+    }
+
     private string run(string cmd) {
         return backquote(cmd + " 2>&1");
     }
@@ -194,14 +219,22 @@ public string sub value() {
             assertTrue(is_file(qmod), "compiled the module: " + out);
         }
 
-        string cxx = ENV.CXX ?? "c++";
-        string flags = AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ");
+        # the compiler and the link flags that qcc links with, which the build recorded (see linkConfig())
+        hash<string, string> conf = linkConfig();
+        string cxx = ENV.CXX ?? conf.cxx ?? "c++";
+        # the target of libqore on macOS, and the sanitizer runtime of a sanitizer build, which every object linked
+        # with libqore needs
+        string flags = AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ") + " "
+            + (conf.sanitize_flags ?? "");
         string includes = sprintf("-I%s -I%s", source_root + "/include", libqore_dir + "/include");
-        # the library module whose initialization calls the host: see aot-static-shadowing/liftlib-module.cpp
+        # as qcc links: -Xlinker passes the option to both the GNU and the macOS linker
+        string link = sprintf("-L%s -Xlinker -rpath -Xlinker %s -lqore", libqore_dir, libqore_dir);
+        # the library module whose initialization calls the host: see aot-static-shadowing/liftlib-module.cpp; it
+        # looks the hook up with dlsym(), which is in libdl on older glibc (the build's dynamic_libs) and in libSystem
+        # on macOS; -shared makes a loadable library on both, as for the modules that qcc links
         string liftlib = lib_dir + "/LiftLib.qmod";
         string out = run(sprintf("%s -std=c++17 -shared -fPIC %s -o %s %s/aot-static-shadowing/liftlib-module.cpp "
-            "-L%s -Wl,-rpath,%s -lqore %s", cxx, includes, liftlib, get_script_dir(), libqore_dir, libqore_dir,
-            flags));
+            "%s %s %s", cxx, includes, liftlib, get_script_dir(), link, conf.dynamic_libs ?? "", flags));
         if (!is_file(liftlib)) {
             if (out =~ /not found/) {
                 skip_reason = "no C++ compiler to build the library module: " + out;
@@ -209,10 +242,14 @@ public string sub value() {
             }
             assertTrue(False, "built the library module: " + out);
         }
-        # the host, which exports its hook for the library module: see aot-static-shadowing/host.cpp
+        # the host, which exports its hook for the library module: see aot-static-shadowing/host.cpp; an ELF
+        # executable puts its symbols in its dynamic symbol table only when linked with -rdynamic, while a Mach-O
+        # executable's external symbols are found by dlsym() as linked, and -export_dynamic keeps them from being
+        # stripped as unused
+        string export_flag = PlatformOS == "Darwin" ? "-Xlinker -export_dynamic" : "-rdynamic";
         string host_exe = tmp.path + "/static-host";
-        out = run(sprintf("%s -std=c++17 -rdynamic %s %s/aot-static-shadowing/host.cpp %s -L%s -Wl,-rpath,%s -lqore "
-            "-o %s %s", cxx, includes, get_script_dir(), objs.join(" "), libqore_dir, libqore_dir, host_exe, flags));
+        out = run(sprintf("%s -std=c++17 %s %s %s/aot-static-shadowing/host.cpp %s %s -o %s %s", cxx, export_flag,
+            includes, get_script_dir(), objs.join(" "), link, host_exe, flags));
         if (!is_file(host_exe)) {
             assertTrue(False, "linked the C++ host: " + out);
         }

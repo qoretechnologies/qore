@@ -288,6 +288,19 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.registerStreamListener(stream_id, listener);
     }
 
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** See
+        @ref Qore::Http2ClientPollOperationBase::markFrameStateCloseSent() "Http2ClientPollOperationBase::markFrameStateCloseSent()"
+
+        @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2
+        if the frame state sent a close frame before (the caller sends none)
+
+        @since HttpClientIo 1.0
+    */
+    int markFrameStateCloseSent(int stream_id) {
+        return poll_op.markFrameStateCloseSent(stream_id);
+    }
+
     #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
     /** @param stream_id the HTTP/2 stream ID
         @param msg_queue Queue to receive typed frame hashes

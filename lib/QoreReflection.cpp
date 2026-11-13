@@ -479,6 +479,18 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     );
 }
 
+//! returns the functional domains of \a dom that the caller or the target Program does not allow
+static int64 qore_reflection_denied_domains(const QoreReflectionCaller& caller, int64 dom, const QoreProgram* target) {
+    int64 denied = 0;
+    for (int i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(1ULL << i);
+        if ((dom & bit) && !caller.allowsDomain(bit, target)) {
+            denied |= bit;
+        }
+    }
+    return denied;
+}
+
 QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
         QoreProgram* pgm, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
     return evalFunction(variant, args, pgm, nullptr, caller, xsink);
@@ -516,10 +528,12 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // Check the fixed variant's domain, or the domains common to all variants before dynamic resolution.
     // Keep domain errors ahead of the Program-access error for a builtin that the caller already cannot use.
     bool caller_refused = false;
-    if (!caller.allowsDomain(variant ? variant->getDomain() : getDomain(), pgm, &caller_refused)) {
-        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
-            caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
-            variant ? variant->getSignatureText() : "...");
+    int64 dom = variant ? variant->getDomain() : getDomain();
+    if (!caller.allowsDomain(dom, pgm, &caller_refused)) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'; "
+            "functional domain: %s", caller_refused ? "parse options" : "the parse options of the Program it was "
+            "found in", getName(), variant ? variant->getSignatureText() : "...",
+            qore_describe_source_domains(qore_reflection_denied_domains(caller, dom, pgm)).c_str());
         return QoreValue();
     }
     // Builtins can enter user code or construct Programs as well (for example create_object()), so every call

@@ -228,10 +228,17 @@ QoreValue QoreParseListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         // issue #2791: ensure that type folding is performed at the source if necessary
         QoreValue val = v.takeReferencedValue();
         if (this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype) && QoreTypeInfo::hasComplexType(vt)) {
-            // this can never throw an exception; it's only used for type folding/stripping
+            // this only folds or strips the type, and cannot raise an exception if the parse type of the element
+            // expression allows its value; when the parse type is wrong (an expression whose type was computed
+            // incorrectly), it raises the type error: the list is not built, as for an exception raised by the
+            // evaluation of the element above (qore#5891)
             QoreTypeInfo::acceptAssignment(this->vtype, "<type folding>", val, xsink);
-            // can be called with xsink == nullptr when called at parse time
-            assert(!xsink || !*xsink);
+            if (xsink && *xsink) {
+                // the value was not taken by the list
+                val.discard(xsink);
+                needs_deref = false;
+                return QoreValue();
+            }
         }
 
         //printd(5, "QoreParseListNode::evalImpl() [%lu] (%p: %s) '%s'\n", i, this->vtype,

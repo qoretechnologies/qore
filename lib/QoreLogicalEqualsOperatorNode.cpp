@@ -185,15 +185,25 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
     // check for optimizations based on type, but only assign if neither side is a string or number (highest priority)
     // and types are known for both operands (if not, QoreTypeInfo::parseReturns(type, NT_STRING) will return a
-    // non-zero value
+    // non-zero value); a lower-priority comparison is not chosen when an operand can be a value of a higher-priority
+    // type (float, then int), which the generic comparison compares as that type: ex: int == union<int, float> and
+    // int == *float compare floats (an or-nothing or union type is not of a value type for QoreTypeInfo::isType();
+    // qore#5875)
     if (!QoreTypeInfo::parseReturns(lti, NT_STRING) && !QoreTypeInfo::parseReturns(rti, NT_STRING)
         && !QoreTypeInfo::parseReturns(lti, NT_NUMBER) && !QoreTypeInfo::parseReturns(rti, NT_NUMBER)) {
-        if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT))
+        bool can_be_float = QoreTypeInfo::parseReturns(lti, NT_FLOAT) || QoreTypeInfo::parseReturns(rti, NT_FLOAT);
+        bool can_be_int = QoreTypeInfo::parseReturns(lti, NT_INT) || QoreTypeInfo::parseReturns(rti, NT_INT);
+        if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
             pfunc = &QoreLogicalEqualsOperatorNode::floatSoftEqual;
-        else if (QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(rti, NT_INT))
-            pfunc = &QoreLogicalEqualsOperatorNode::bigIntSoftEqual;
-        else if (QoreTypeInfo::isType(lti, NT_BOOLEAN) || QoreTypeInfo::isType(rti, NT_BOOLEAN))
-            pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
+        } else if (QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(rti, NT_INT)) {
+            if (!can_be_float) {
+                pfunc = &QoreLogicalEqualsOperatorNode::bigIntSoftEqual;
+            }
+        } else if (QoreTypeInfo::isType(lti, NT_BOOLEAN) || QoreTypeInfo::isType(rti, NT_BOOLEAN)) {
+            if (!can_be_float && !can_be_int) {
+                pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
+            }
+        }
     }
 
     set_binary_analysis_eq(parse_context, left_analysis, right_analysis);

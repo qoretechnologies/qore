@@ -51,6 +51,8 @@ module GoogleRestClient {
         ConnectionSchemeCache::registerScheme("gmail", GmailRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("gdrive", GoogleDriveRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage GoogleRestClient Module
