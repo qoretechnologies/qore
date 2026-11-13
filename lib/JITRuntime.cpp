@@ -5056,11 +5056,60 @@ static bool qore_rt_type_path_is_builtin_only(const char* path) {
         "hash", "list", "string", "int", "float", "bool", "date", "number", "binary", "any", "auto", "nothing",
         "null", "softint", "softfloat", "softbool", "softstring", "softdate", "softnumber", "softlist",
     };
+    // a hash<X> with one argument can name a hashdecl (a hashdecl can have the name of a keyword), which depends on
+    // the namespaces of the Program: only hash<K, V>, hash<auto> and hash<auto!> are builtin-only
+    struct Level {
+        bool is_hash = false;
+        bool has_comma = false;
+        std::string content;
+    };
+    static constexpr size_t MAX_DEPTH = 16;
+    Level stack[MAX_DEPTH];
+    size_t depth = 0;
+    bool pending_hash = false;
     const char* p = path;
     size_t tokens = 0;
     while (*p) {
         char c = *p;
-        if (c == '<' || c == '>' || c == ',' || c == '*' || c == '|' || c == '!' || c == ' ') {
+        if (c == ' ') {
+            ++p;
+            continue;
+        }
+        if (c == '<') {
+            if (depth + 1 >= MAX_DEPTH) {
+                return false;
+            }
+            ++depth;
+            stack[depth] = Level();
+            stack[depth].is_hash = pending_hash;
+            pending_hash = false;
+            ++p;
+            continue;
+        }
+        pending_hash = false;
+        if (c == '>') {
+            if (!depth) {
+                return false;
+            }
+            const Level& level = stack[depth];
+            if (level.is_hash && !level.has_comma && level.content != "auto" && level.content != "auto!") {
+                return false;
+            }
+            --depth;
+            ++p;
+            continue;
+        }
+        if (c == ',') {
+            if (depth) {
+                stack[depth].has_comma = true;
+            }
+            ++p;
+            continue;
+        }
+        if (c == '*' || c == '|' || c == '!') {
+            if (depth) {
+                stack[depth].content += c;
+            }
             ++p;
             continue;
         }
@@ -5083,9 +5132,13 @@ static bool qore_rt_type_path_is_builtin_only(const char* path) {
         if (!found) {
             return false;
         }
+        if (depth) {
+            stack[depth].content.append(start, len);
+        }
+        pending_hash = len == 4 && !strncmp(start, "hash", 4);
         ++tokens;
     }
-    return tokens > 0;
+    return tokens > 0 && !depth;
 }
 
 //! the resolutions of the builtin-only type paths, found by the address of the path (qore#5979)
@@ -5106,7 +5159,8 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     // the type of a builtin-only path does not depend on the receiver, the instantiation or the generation
     const size_t builtin_slot = (reinterpret_cast<uintptr_t>(type_path) >> 4) % QORE_BUILTIN_TYPE_PATH_TABLE_SIZE;
     if (cache_enabled && type_path) {
-        const QoreBuiltinTypePathEntry* entry = qore_builtin_type_path_table[builtin_slot].load(std::memory_order_acquire);
+        const QoreBuiltinTypePathEntry* entry =
+            qore_builtin_type_path_table[builtin_slot].load(std::memory_order_acquire);
         if (entry && entry->address == type_path && !strcmp(entry->text.c_str(), type_path)) {
             return entry->type_info;
         }
@@ -5170,10 +5224,19 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     // as it is, and that path keeps the slower cache)
     if (qore_rt_type_path_is_builtin_only(type_path)) {
         const QoreBuiltinTypePathEntry* expected = nullptr;
-        auto* entry = new QoreBuiltinTypePathEntry{type_path, type_info, type_path};
-        if (!qore_builtin_type_path_table[builtin_slot].compare_exchange_strong(expected, entry,
-                std::memory_order_release, std::memory_order_relaxed)) {
-            delete entry;
+        // an allocation failure only means that the path is not kept
+        auto* entry = new (std::nothrow) QoreBuiltinTypePathEntry{type_path, type_info, std::string()};
+        if (entry) {
+            try {
+                entry->text = type_path;
+            } catch (...) {
+                delete entry;
+                return type_info;
+            }
+            if (!qore_builtin_type_path_table[builtin_slot].compare_exchange_strong(expected, entry,
+                    std::memory_order_release, std::memory_order_relaxed)) {
+                delete entry;
+            }
         }
     }
     return type_info;

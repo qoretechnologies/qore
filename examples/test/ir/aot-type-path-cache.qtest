@@ -31,7 +31,7 @@ class AotTypePathCacheTest inherits QUnit::Test {
         string dir = get_script_dir() + "/aot-type-path-cache";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("aot-type-path-cache",);
+        const Programs = ("aot-type-path-cache", "keyword-hashdecl");
     }
 
     constructor() : QUnit::Test("AotTypePathCacheTest", "1.0", \ARGV) {
