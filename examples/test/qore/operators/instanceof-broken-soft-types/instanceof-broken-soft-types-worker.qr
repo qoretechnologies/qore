@@ -16,7 +16,7 @@ hash<string, list> sub checks() {
     };
 }
 
-# called three times so that the checks also run on the IR tier and as native code with tiered execution
+# called three times, so that the checks run again after their first call, also on the IR tier with tiered execution
 hash<string, list> first = checks();
 bool stable = True;
 for (int i = 0; i < 2; ++i) {

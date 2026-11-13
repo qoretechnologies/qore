@@ -12424,8 +12424,9 @@ QoreIRValue QoreIRLowering::lowerInstanceOf(const QoreValue& expr, std::string& 
     if (!op) {
         return QoreIRValue();
     }
-    // the native instanceof of IR, JIT and AOT code does not apply %broken-soft-types: code with that policy is not
-    // %modern, and only %modern code is lowered (non-%modern module code runs the AST node, which applies it)
+    // the native instanceof of IR, JIT and AOT code does not apply %broken-soft-types: %modern refuses the option, so
+    // the scanner marks the code that has it as legacy (set_native_token_info()), and a legacy block is not lowered;
+    // it runs the AST node, which applies the policy (also in a function that changes the options in its body)
     assert(!op->getSemanticPolicy().brokenSoftTypes());
     QoreIRValue operand = lowerExpression(op->getExp(), error);
     if (!operand.isValid()) {
