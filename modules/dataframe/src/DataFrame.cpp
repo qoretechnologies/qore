@@ -357,7 +357,7 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
             case NT_BOOLEAN:
                 return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->equals(**rn);
             }
         }
@@ -370,7 +370,7 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
             case NT_BOOLEAN:
                 return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->equals(**ln);
             }
         }
@@ -406,10 +406,11 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
             case NT_FLOAT:
                 return l.get<const QoreNumberNode>()->lessThan(r.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return l.get<const QoreNumberNode>()->lessThan(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->lessThan(**rn);
             }
         }
@@ -419,10 +420,11 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
             case NT_FLOAT:
                 return r.get<const QoreNumberNode>()->greaterThan(l.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return r.get<const QoreNumberNode>()->greaterThan(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->greaterThan(**ln);
             }
         }

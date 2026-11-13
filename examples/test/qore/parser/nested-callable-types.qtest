@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run the script in child processes that set their own execution modes and qcc
+# test-platform: macos - JIT and AOT code generation and linking of code with nested callable types
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Callable types nested in the parameter list or the return type of another callable type (#6022): a nested callable
+    whose return type is a complex type, so that its signature has '>(' or '>>(' and the outer type closes with '>)>',
+    parsed as the complex return type and lost its parameter list ("invalid callable signature").  The script declares
+    parameters, variables, typedefs and return types with such types, calls through them, and checks that a type is
+    the same as the one given by a typedef, in every execution mode and compiled with qcc.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class NestedCallableTypesTest
+
+class NestedCallableTypesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! The script: nested callable types in every position, with '>(', '>>(' and '>)>' sequences
+        const Script = "%modern
+
+typedef KeptKindsTaker = code<*hash<auto>()>;
+typedef StrListHashMaker = code<*hash<string, list<string>>()>;
+
+# a parameter whose callable type takes a callable that returns a complex type ('>()' and '>)>')
+string sub g(*code<*hash<auto>(code<*hash<auto>()>)> a) {
+    return sprintf(\"g: %y\", a(*hash<auto> sub () { return {\"k\": 1}; }));
+}
+
+# the same type given by typedefs
+string sub f(*code<*hash<auto>(KeptKindsTaker)> a) {
+    return sprintf(\"f: %y\", a(*hash<auto> sub () { return {\"k\": 2}; }));
+}
+
+# a nested callable whose return type has '>>(' and closes with '>)>'
+string sub h(code<int(code<*hash<string, list<string>>()>)> a) {
+    return sprintf(\"h: %d\", a(*hash<string, list<string>> sub () { return {\"a\": (\"x\", \"y\")}; }));
+}
+
+# a callable type as the return type of a callable type, and as the return type of a function
+code<code<*hash<auto>()>()> sub maker() {
+    return code<*hash<auto>()> sub () {
+        return *hash<auto> sub () { return {\"made\": True}; };
+    };
+}
+
+# commas in the parameter list of a nested callable, and several parameters
+int sub multi(code<int(code<int(string, bool)>, code<*hash<string, int>(int)>, int)> a) {
+    return a(int sub (string s, bool b) { return s.size() + (b ? 1 : 0); },
+        *hash<string, int> sub (int i) { return {\"i\": i}; }, 10);
+}
+
+# a variable of a nested callable type, given and by typedef
+code<*hash<auto>(code<*hash<auto>()>)> v1 = *hash<auto> sub (code<*hash<auto>()> c) { return c(); };
+code<*hash<auto>(KeptKindsTaker)> v2 = v1;
+code<nothing(StrListHashMaker)> v3 = sub (code<*hash<string, list<string>>()> c) { printf(\"v3: %y\\n\", c()); };
+
+printf(\"%s\\n\", g(v1));
+printf(\"%s\\n\", f(v2));
+printf(\"%s\\n\", g(v2));
+printf(\"%s\\n\", h(int sub (code<*hash<string, list<string>>()> c) { return c().a.size(); }));
+printf(\"maker: %y\\n\", maker()()());
+printf(\"multi: %d\\n\", multi(int sub (code<int(string, bool)> c1, code<*hash<string, int>(int)> c2, int n) {
+    return c1(\"abc\", True) + c2(n).i;
+}));
+v3(*hash<string, list<string>> sub () { return {\"b\": (\"z\",)}; });
+
+# the parse of a snippet in a Program of its own: OK or the error
+sub try_parse(string label, string code) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    try {
+        p.parse(code, label);
+        printf(\"%s: OK\\n\", label);
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s: %s\\n\", label, ex.err);
+    }
+}
+
+# commas in the parameter list of a nested callable with a complex return type
+try_parse(\"commas\", \"int sub t(code<int(code<*hash<auto>(string, bool)>)> a) { return a(*hash<auto> sub (string s, bool b) { return {}; }); }\");
+# the '...' of a nested callable is its own: a callable taking a variadic callable and an int is not a variadic callable
+try_parse(\"nested varargs\", \"code<int(code<int(string...)>, int)> x = int sub (code<int(string...)> c, int n) { return n; };\");
+try_parse(\"nested varargs mismatch\", \"code<int(code<int(string...)>, int)> x = int sub (string s) { return 1; };\");
+# malformed nested signatures are errors, not callables without the parameter
+try_parse(\"unbalanced\", \"code<int(code<hash<auto>(>)> x;\");
+try_parse(\"text after the parameters\", \"code<int() x> y;\");
+try_parse(\"text after nested parameters\", \"code<int(code<hash<auto>() x>)> y;\");
+";
+
+        #! The output of the script
+        const Expected = "g: {k: 1}
+f: {k: 2}
+g: {k: 1}
+h: 2
+maker: {made: True}
+multi: 14
+v3: {b: [\"z\"]}
+commas: OK
+nested varargs: OK
+nested varargs mismatch: PARSE-TYPE-ERROR
+unbalanced: PARSE-TYPE-ERROR
+text after the parameters: PARSE-TYPE-ERROR
+text after nested parameters: PARSE-TYPE-ERROR
+";
+    }
+
+    constructor() : QUnit::Test("NestedCallableTypesTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("nested callable types in every execution mode", \modesTest());
+        addTestCase("nested callable types compiled with qcc", \qccTest());
+
+        set_return_value(main());
+    }
+
+    #! Writes the script and returns its path
+    private string writeScript(string dir) {
+        string path = dir + "/nested.q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+        return path;
+    }
+
+    modesTest() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+        string script = writeScript(tmp_dir);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+                libqore_dir, qore_bin, mode, script));
+            assertEq(Expected, out, mode);
+        }
+    }
+
+    qccTest() {
+        string qcc = libqore_dir + "/qcc";
+        if (!is_file(qcc)) {
+            qcc = dirname(qore_bin) + "/qcc";
+        }
+        if (!is_file(qcc)) {
+            testSkip("no qcc next to the qore binary");
+        }
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+        string script = writeScript(tmp_dir);
+        string exe = tmp_dir + "/nested";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc, exe, script));
+        assertTrue(is_file(exe), "qcc compiled the script: " + compile_out);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+        assertEq(Expected, out, "the compiled script");
+    }
+}

@@ -167,13 +167,16 @@
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
-//! Removes the closure-bound locals that an on_block_exit handler declares from its pre-instantiated locals
+//! Removes the locals that an on_block_exit handler declares from its pre-instantiated locals
 /** A handler starts with the slots of the function it belongs to, all of them marked pre-instantiated, as its code
     reads the variables of the enclosing scope.  The function also has slots for the variables that the handler body
     declares, as it lowers the handler inline on its normal exit paths; a closure-bound one is instantiated at its
     block by the InstantiateLocal of the handler body, which the IR interpreter skips for a pre-instantiated local.
     The handler body run out of line, on an exception, then found no value container for the variable, and the
-    handler stopped at its first access with an LVALUE-ERROR (qore#5653).  As in the function itself (see
+    handler stopped at its first access with an LVALUE-ERROR (qore#5653).  The other locals that it declares are its
+    own too: taken for variables of the function, they were released with the function's when the handler raised an
+    exception, after the handlers that ran after it, while the AST interpreter releases them at the end of their
+    blocks (#6002).  As in the function itself (see
     UserVariantBase's IR compilation), a closure-bound body local is instantiated at its lexical scope, so it is not
     pre-instantiated; the InstantiateLocal makes it a local of the handler (see QoreIRInterpreter's own locals).
 */
@@ -186,11 +189,11 @@ static void qore_ir_reserve_handler_local_slots(QoreIRFunction& parent_func, con
     }
 }
 
-static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
+static void qore_ir_scope_handler_own_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
     std::vector<LocalVar*> handler_locals;
     collectAllStatementLocals(handler_code, handler_locals);
     for (LocalVar* lv : handler_locals) {
-        if (lv && lv->closureUse()) {
+        if (lv) {
             handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
             handler_func.pre_instantiated_cache.erase(lv);
             // serialized with the handler's IR, so that a handler read from it is not given them pre-instantiated
@@ -1711,6 +1714,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
                 return false;
             }
+            // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a
+            // return): the code after it is unreachable and is not lowered, as its values would have no definitions
+            // (#6030)
+            if (blockHasTerminator(builder.getBlock())) {
+                return true;
+            }
             // Emit CatchCleanup for all active catch scopes before returning
             for (int i = 0; i < catch_cleanup_depth; ++i) {
                 builder.createCatchCleanup(stmt->loc);
@@ -1794,6 +1803,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
             return false;
         }
+        // the Return is emitted even when a handler that the cleanups lowered inline ended the block (a throw or a
+        // thread_exit in it): it is unreachable then, but its value is defined before the cleanups, and it records the
+        // value of the return that the exception interrupts for the IR interpreter (its return slot) and for the try
+        // statements that can catch the exception (try_return_value_stack, qore#5941); emitBlockCleanups() lowers
+        // nothing after such a handler (#6030)
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -3358,6 +3372,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
         }
+        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -3400,6 +3419,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // releasing the temp scopes left on the way
         if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
+        }
+        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
@@ -4117,10 +4141,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // a block without an exception path of its own: an exception leaves the frame through the unwind path of the
     // interpreter, which releases the locals of the block that ScopeEnter records after its handlers, before the
     // events of the statements that contain it (#5867)
-    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget())) {
+    // the body of a handler lowered inline releases its locals, and those of the blocks in it, before the handlers
+    // that run after it when it raises an exception, those registered before it in its block and those of the
+    // enclosing blocks, as the AST interpreter releases them at the end of their blocks (#6002): it has an exception
+    // path of its own, which the blocks in it take as theirs
+    const bool inline_handler_body = inline_handler_block == block;
+    inline_handler_block = nullptr;
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body)) {
         scope_enter->locals = lvars->lv;
     }
-    if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())) {
+    if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())
+            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block)))) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
@@ -4497,6 +4528,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     assert(unwind_temp_depth == SIZE_MAX || unwind_temp_depth <= builder.getTempScopeDepth());
     size_t unwound_temp_depth = builder.getTempScopeDepth();
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
+        // a handler lowered inline for an entry ended the block (a throw, a thread_exit or a return in it): the
+        // cleanups of the remaining entries are unreachable here; the exception path of the block runs them (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
         // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
         // (when inlining handler bodies that push to cleanup_stack), which would
         // invalidate a reference into the vector.
@@ -4729,7 +4765,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -4865,7 +4901,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -4987,6 +5023,12 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     set_exception_target, handler_exception_target)) {
                 return false;
             }
+            // the handler ended the block (a throw, a thread_exit or a return in it): the handlers after it and the
+            // scope exit are unreachable here; the exception path of the block runs the handlers still registered
+            // (#6030)
+            if (blockHasTerminator(builder.getBlock())) {
+                return true;
+            }
         }
     }
 
@@ -5081,8 +5123,10 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         if (handler_exception_target) {
             exception_stack.push_back(handler_exception_target);
         }
+        inline_handler_block = handler.code;
         ok = lowerStatementBlock(handler.code, error);
     } else {
+        inline_handler_block = handler.code;
         ok = lowerStatementBlock(handler.code, error);
     }
 
@@ -6957,11 +7001,15 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     //
     // AOT compilation names the constant instead of embedding it, and excludes constants whose
     // value an initializer produces; see constantContainerLoadsByReference().
-    if ((expr.getType() == NT_LIST || expr.getType() == NT_HASH)
-            && expr.isValue()
-            && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries
-            && constantContainerLoadsByReference(expr)
-            && qoreIrConstantValueIsFullyConcrete(expr)) {
+    //
+    // A smaller container is rebuilt for the scalar replacement, and the constant is recorded on the
+    // MakeList/MakeHash, so that an instruction the scalar replacement cannot remove - a read
+    // through a run-time key, as in Labels{enc} - is loaded instead (qore#5977, qore_ir_optimize()).
+    const bool loadable_container = (expr.getType() == NT_LIST || expr.getType() == NT_HASH)
+        && expr.isValue()
+        && constantContainerLoadsByReference(expr)
+        && qoreIrConstantValueIsFullyConcrete(expr);
+    if (loadable_container && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries) {
         return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     if (expr.getType() == NT_LIST && expr.isValue()) {
@@ -6983,6 +7031,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             if (qoreIrContainerLiteralMayRaise(cti, false, list->size(),
                     [list](size_t i) { return list->retrieveEntry(i); })) {
                 inst->exception_target = getCurrentExceptionTarget();
+            }
+            if (loadable_container) {
+                static_cast<QoreIRMakeListInstruction*>(inst)->rebuilt_constant.set(expr);
             }
             return inst->result;
         }
@@ -7018,6 +7069,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             if (qoreIrContainerLiteralMayRaise(cti, true, entries.size(),
                     [&entries](size_t i) { return entries[i]; })) {
                 inst->exception_target = getCurrentExceptionTarget();
+            }
+            if (loadable_container) {
+                static_cast<QoreIRMakeHashInstruction*>(inst)->rebuilt_constant.set(expr);
             }
             return inst->result;
         }
@@ -12424,6 +12478,10 @@ QoreIRValue QoreIRLowering::lowerInstanceOf(const QoreValue& expr, std::string& 
     if (!op) {
         return QoreIRValue();
     }
+    // the native instanceof of IR, JIT and AOT code does not apply %broken-soft-types: %modern refuses the option, so
+    // the scanner marks the code that has it as legacy (set_native_token_info()), and a legacy block is not lowered;
+    // it runs the AST node, which applies the policy (also in a function that changes the options in its body)
+    assert(!op->getSemanticPolicy().brokenSoftTypes());
     QoreIRValue operand = lowerExpression(op->getExp(), error);
     if (!operand.isValid()) {
         return QoreIRValue();
@@ -12586,7 +12644,9 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
 
         // background self.method(args)
         if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
-            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic()
+            // a named call resolved at run time by parameter name is not decomposed: its call node binds its
+            // arguments by name, which the call made by the thread from the method alone would not
+            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic() && !sfcn->getRuntimeArgNames()
                     && qore_ir_background_args_are_start_values(sfcn->getParseArgs(), sfcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(sfcn->getParseArgs(), sfcn->getArgs(), operands, error)) {
@@ -12649,7 +12709,9 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         // background obj.method(args)
         else if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
             MethodCallNode* m = devn->getMethodCall();
-            if (m && m->getName() && qore_ir_is_background_start_value(devn->getExpression())
+            // a named call resolved at run time by parameter name is not decomposed (see above)
+            if (m && m->getName() && !m->getRuntimeArgNames()
+                    && qore_ir_is_background_start_value(devn->getExpression())
                     && qore_ir_background_args_are_start_values(m->getParseArgs(), m->getArgs())) {
                 QoreIRValue receiver_val = lowerExpression(devn->getExpression(), error);
                 if (!receiver_val.isValid()) {
@@ -13223,6 +13285,15 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
     return result;
 }
 
+//! returns true if a list literal whose parse element type is \a elem_type cannot hold a value of a more specific type
+/** A scalar type with a single return type that does not accept NOTHING: the run-time type of each value is then the
+    type itself, and the common type of the values is the parse type (qore#5970)
+*/
+static bool qoreIrListLiteralElementTypeIsExact(const QoreTypeInfo* elem_type) {
+    return elem_type == bigIntTypeInfo || elem_type == floatTypeInfo || elem_type == stringTypeInfo
+        || elem_type == boolTypeInfo || elem_type == numberTypeInfo || elem_type == binaryTypeInfo;
+}
+
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     // Phase 3b diag: trace the pre-dynamic_cast pointer so a crashing
@@ -13250,14 +13321,16 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     // Get parse-time type info from the QoreParseListNode
     // Pass nullptr for auto/unspecific types so the IR interpreter computes from runtime values
     // (lvalues can return NOTHING despite their declared type)
+    // the AST interpreter gives a list literal the common type of its values' run-time types, which can be more
+    // specific than the literal's parse type (a cast that gives a list the type of its closures, an or-nothing
+    // arithmetic result, a code value with a signature, an object of a subclass): the parse type is used only when
+    // the values cannot have a more specific type, a single scalar element type that does not accept NOTHING; the
+    // other literals are typed from their values at run time (qore#5970).  MakeList's declared type is exact
+    // otherwise (constants, typed local initialization)
     const QoreTypeInfo* parse_ti = list->getParseTypeInfo();
-    if (parse_ti == autoListTypeInfo) {
-        parse_ti = nullptr;
-    } else if (parse_ti) {
-        // Also clear for list types with auto element types (e.g., list<hash<auto>>)
+    if (parse_ti) {
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(parse_ti);
-        if (elem_type && (elem_type == autoTypeInfo || elem_type == autoHashTypeInfo
-            || elem_type == autoHashOrNothingTypeInfo)) {
+        if (!qoreIrListLiteralElementTypeIsExact(elem_type)) {
             parse_ti = nullptr;
         }
     }
@@ -13384,7 +13457,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // in a background expression, self is a value given to the new thread, which has no current object for it
     // (unlike an unqualified call, see lowerSelfCall()): the call is made on the value, as any method call is, which
     // checks it as the AST interpreter does (issue #5823)
-    if (m && m->getName() && self_base && !bg_helper) {
+    if (m && m->getName() && self_base && !bg_helper && !m->getRuntimeArgNames()) {
         const QoreMethod* method = m->getMethod();
         const QoreClass* qc = m->getClass();
         const AbstractQoreFunctionVariant* variant = m->getVariant();
@@ -13648,6 +13721,17 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
     }
 
+    // a named call resolved at run time by parameter name: the receiver and the arguments in source order are passed
+    // to the call node, which binds the arguments by name to the variant that it selects
+    // (QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs()); no direct call applies
+    if (m && m->getRuntimeArgNames()) {
+        std::vector<QoreIRValue> operands{base_val};
+        if (!lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        return finish_call(lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, op->loc, error));
+    }
+
     // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
     // This handles both resolved methods (class+method set) and abstract/unresolved methods
     // (null class/method). For unresolved methods, the runtime dispatches by name using the
@@ -13819,9 +13903,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     || (method_func->numVariants() != 1 && variant->isUser())
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
-                method = nullptr;
-                qc = nullptr;
-                variant = nullptr;
+                // a static method called through an object is bound to the receiver's declared class (qore#5990):
+                // the method and the variant resolved at parse time are kept, as the AST call keeps them; the call
+                // resolves the variant again if the arguments do not match it (see try_dispatch_method_fast())
+                if (!method || !qc || !method->isStatic()) {
+                    method = nullptr;
+                    qc = nullptr;
+                    variant = nullptr;
+                }
             }
             // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
             // AOT deserialization) don't need to extract it from the AST expr field.
@@ -15255,6 +15344,21 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (QoreIRValue hoisted = findLoopInvariantValue(expr); hoisted.isValid()) {
         return hoisted;
     }
+    // a named call resolved at run time by parameter name: its arguments are passed in source order to the call
+    // node, which binds them by name to the variant that it selects (FunctionCallNode::evalImpl()); no rewrite or
+    // direct call applies
+    if (call->getRuntimeArgNames()) {
+        std::vector<QoreIRValue> operands;
+        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    }
     const char* func_name = call->getName();
     // the rewrites below that are keyed on the name of a builtin apply only to a call of the Qore builtin, never to a
     // user or module function with the same name
@@ -15780,7 +15884,9 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    if (call->hasExplicitTypeArgs()) {
+    // a named call resolved at run time by parameter name passes its arguments in source order to the call node,
+    // which binds them by name (AbstractMethodCallNode::execNamed()); no direct call applies
+    if (call->hasExplicitTypeArgs() || call->getRuntimeArgNames()) {
         return finish_call(lowerExprOpOrInvoke(
             QoreIROpcode::CallMethod, expr, operands, call->loc, error));
     }

@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a return value on an exception
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnInFrameExceptionTest
+
+#! A return value interrupted by an exception that a handler of the frame catches is released after the locals (#6031)
+/** When an on_exit handler that runs at a return raised an exception, the IR interpreter branched to the exception
+    path of a block of the same function and released the statement's temporaries there, the value of the return
+    with them, before the locals of the enclosing blocks and the handlers that ran after it; the exit of the frame
+    keeps such a value until after the locals (#5920), as the AST interpreter does.  HandlerReturnInFrameException.q
+    gives the output of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class HandlerReturnInFrameExceptionTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnInFrameException.q with the AST interpreter
+        const Expected = "j1: [\"ix\", \"ox\", \"~j1-a\", \"~j1-z\", \"~j1-t\", \"caught:J1-INNER\"] live=0
+j1: [\"ix\", \"ox\", \"~j1-a\", \"~j1-z\", \"~j1-t\", \"caught:J1-INNER\"] live=0
+j2: [\"ix\", \"~j2-a\", \"~j2-t\", \"catch:J2\", \"after\", \"~j2-z\"] live=0
+j2: [\"ix\", \"~j2-a\", \"~j2-t\", \"catch:J2\", \"after\", \"~j2-z\"] live=0
+j3: [\"ix\", \"~j3-b\", \"ox\", \"~j3-z\", \"~j3-t\", \"caught:J3\"] live=0
+j3: [\"ix\", \"~j3-b\", \"ox\", \"~j3-z\", \"~j3-t\", \"caught:J3\"] live=0
+d1: [\"ix\", \"~d1-a\", \"~d1-t\", \"~d1-z\"] live=0
+d1: [\"ix\", \"~d1-a\", \"~d1-t\", \"~d1-z\"] live=0
+d3: [\"ix\", \"ox\", \"~d3-t\", \"~d3-z\"] live=0
+d3: [\"ix\", \"ox\", \"~d3-t\", \"~d3-z\"] live=0
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnInFrameExceptionTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnInFrameException.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a return value interrupted in the frame", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a return value interrupted in the frame", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-in-frame-exception-");
+        string exe = tmp.path + DirSep + "handler-return-in-frame-exception";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are AOT executables
+# test-platform: macos - JIT and AOT code generation of the check of a call's target before its arguments
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class CallRefNonCallableSideEffectArgsTest
+
+#! A call of a non-callable value whose arguments can have side effects raises what AST raises, at the call
+/** The AST interpreter raises \c REFERENCE-CALL-ERROR at the location of the call before it evaluates the arguments.
+    The optimized execution modes check the target of such a call before its arguments (qore_check_call_target(),
+    issue #5784); an AOT image rebuilds the call of the check without its location, and the error had the location
+    of the calling code (issue #5835).
+
+    callref-noncallable-error/side-effect-args.qr calls each type of value with an untyped local argument, a call
+    argument, a post-increment and a multi-line call with a call argument, and prints each exception with its location
+    and how many times the argument function ran; the output of each execution mode and of AOT executables compiled
+    with -O0 and -O3 must be that of the AST interpreter.
+*/
+class CallRefNonCallableSideEffectArgsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        string probe;
+        # the output of the AST interpreter
+        string ast;
+    }
+
+    constructor() : QUnit::Test("CallRefNonCallableSideEffectArgsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        probe = get_script_dir() + "/callref-noncallable-error/side-effect-args.qr";
+
+        addTestCase("the AST interpreter raises at the call before the arguments", \astTest());
+        addTestCase("IR matches AST", \modeTest(), "ir");
+        addTestCase("JIT matches AST", \modeTest(), "jit");
+        addTestCase("tiered matches AST", \modeTest(), "tiered");
+        addTestCase("the IR tier of tiered execution matches AST", \irTierTest());
+        addTestCase("AOT -O0 matches AST", \aotTest(), "-O0");
+        addTestCase("AOT -O3 matches AST", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    private string getAst() {
+        if (!ast) {
+            ast = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, probe));
+        }
+        return ast;
+    }
+
+    astTest() {
+        # each line, the first too, follows a newline
+        string out = "\n" + getAst();
+        # 8 values in four forms of call, each raising before its arguments run
+        list<string> errors = (map $1, out.split("\n"),
+            $1 =~ /^call[a-zA-Z0-9]+ .*: REFERENCE-CALL-ERROR: .*\(arguments run: 0\)$/);
+        assertEq(8 * 4, errors.size());
+        foreach string type in (("nothing", "integer", "float", "string", "hash<string, int>", "list<int>",
+                "object<Plain>", "bool")) {
+            string line = sprintf("\ncallCallArg %s: REFERENCE-CALL-ERROR: expression does not evaluate to a call "
+                "reference (evaluated to type '", type);
+            assertTrue(out.find(line) >= 0, type);
+        }
+        assertRegex("\ncallAutoLocal string: REFERENCE-CALL-ERROR: [^\n]* @ side-effect-args.qr:21-21 ", out);
+        assertRegex("\ncallCallArg hash<string, int>: REFERENCE-CALL-ERROR: [^\n]* @ side-effect-args.qr:26-26 ",
+            out);
+        assertRegex("\ncallPostIncrement float: REFERENCE-CALL-ERROR: [^\n]* @ side-effect-args.qr:32-32 ", out);
+        # the location of a call that spans more than one line is that of the whole call
+        assertRegex("\ncallMultiLineCallArg bool: REFERENCE-CALL-ERROR: [^\n]* @ side-effect-args.qr:37-40 ", out);
+        assertEq(-1, out.find("CALL-REFERENCE-ERROR"));
+        # a closure is called with its arguments, which run
+        assertRegex("\nclosure: \"closure 1 null\" \"closure 1 null\" \"closure 1 null\" \"closure 1 1\" "
+            "\\(arguments run: 2\\)\n", out);
+    }
+
+    modeTest(string mode) {
+        # the harness runs the command with QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1, which
+        # compiles the functions of tiered execution to native code at once
+        assertEq(getAst(), ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode,
+            probe)));
+    }
+
+    irTierTest() {
+        assertEq(getAst(), ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin,
+            probe)));
+    }
+
+    aotTest(string opt) {
+        TmpDir tmp("qore-callref-side-effect-args-");
+        string exe = tmp.path + "/side-effect-args";
+        string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, probe));
+        assertTrue(is_file(exe), out);
+        assertEq(getAst(), backquote(sprintf("%s %s -b 2>&1", env, exe)));
+    }
+}

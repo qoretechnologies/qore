@@ -26,6 +26,8 @@ class LexicalCompatibilityNativeTest inherits QUnit::Test {
         addTestCase("reflection invocations retain caller policy and argument filters", \probe(), ("reflection",));
         addTestCase("native container APIs retain the active invocation policy", \probe(), ("shared-values",));
         addTestCase("native copy and reflection copy retain source policy", \probe(), ("copy",));
+        addTestCase("named calls resolved at run time by parameter name retain invocation policy", \probe(),
+            ("named",));
         set_return_value(main());
     }
 

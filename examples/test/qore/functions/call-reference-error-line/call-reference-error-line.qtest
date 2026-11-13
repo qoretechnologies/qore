@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of call reference calls and the runtime locations of their errors
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CallReferenceErrorLineTest
+
+#! Regression test for issue #5835: REFERENCE-CALL-ERROR has the line of the call in every execution mode
+/** Programs compiled with qcc raised REFERENCE-CALL-ERROR for a call of a value that is not a call reference, with
+    arguments that can have side effects, with the line of the caller of the function that makes the call: the check
+    of the call's target before its arguments (QoreIROpcode::CheckCallTarget) raised it with the location of the call
+    expression that the AOT loader rebuilds, which has none, instead of the runtime location of the call.
+
+    CallReferenceErrorLine.q calls values that are not call references in functions and methods, with arguments that
+    have side effects (a local of type auto, a function call, a reference parameter), which the check covers, and
+    with a literal argument, typed locals, parameters and no argument, which the call itself raises for, through
+    closures and directly; its output must be the one in
+    CallReferenceErrorLine.expected, which the AST interpreter prints, in every execution mode, on the IR tier and in
+    programs compiled with qcc -O0 and -O3.
+*/
+class CallReferenceErrorLineTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/CallReferenceErrorLine.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/CallReferenceErrorLine.expected");
+    }
+
+    constructor() : QUnit::Test("call reference error line", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/call-reference-error-line";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

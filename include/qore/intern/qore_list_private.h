@@ -761,6 +761,15 @@ struct qore_list_private {
         return static_cast<bool>(eval_pos_map);
     }
 
+    //! gives this list (a copy of the argument list of a named call) the parameter positions of the arguments of
+    //! \a src, if any
+    DLLLOCAL void copyCallArgEvalMap(const qore_list_private& src) {
+        if (src.eval_pos_map) {
+            eval_pos_map = std::make_unique<std::vector<size_t>>(*src.eval_pos_map);
+            eval_result_size = src.eval_result_size;
+        }
+    }
+
     DLLLOCAL bool callArgEvalMapHasHoles() const {
         return eval_pos_map && eval_pos_map->size() < eval_result_size;
     }

@@ -40,6 +40,7 @@ class Base {
     constructor() : QUnit::Test("override return types", "1.0") {
         addTestCase("an override with an incompatible return type", \testRejectedOverride());
         addTestCase("an overload that a parent class call can select", \testRejectedOverload());
+        addTestCase("an overload that a named parent class call can select", \testNamedOverload());
         addTestCase("compatible return types", \testAccepted());
         addTestCase("multiple inheritance", \testMultipleInheritance());
         addTestCase("builtin parent classes", \testBuiltinParent());
@@ -100,6 +101,40 @@ class Base {
         assertRejected("class C inherits Base { float m(float f) { return f; } int a() { return 1; } }",
             "C::m\\(float f\\) returning float cannot overload parent class method Base::m\\(int i\\) "
             "returning int", "a float parameter for an int argument");
+    }
+
+    testNamedOverload() {
+        # qore#5990: a named call is resolved on the class of the object, which takes the first variant that accepts
+        # the names and the arguments: b.m(a: 1, b: "x") typed against NB can select NC::m(string b, int a)
+        string decl = "class NB { int m(int a, string b) { return 1; } }\n";
+        assertRejected(decl + "class NC inherits NB { string m(string b, int a) { return \"c\"; } }",
+            "child class method NC::m\\(string b, int a\\) returning string cannot overload parent class method "
+            "NB::m\\(int a, string b\\) returning int: it accepts the names of the parameters of the parent class "
+            "method and arguments that it accepts, so a named call of the parent class method can select it",
+            "an overload with the parameter names in another order");
+        # a required parameter that the parent class variant does not have: no named call of it can select it
+        Program p = parseAccepted(decl + "class NC inherits NB { string m(string c, int a) { return \"c\"; } }\n"
+            "class ND inherits NB { int m(string b, int a) { return 2; } }\n"
+            "class NE inherits NB { string m(float a, binary b) { return \"e\"; } }\n"
+            "int sub t() { NB o = new ND(); return o.m(a: 1, b: \"x\") + 40; }\n"
+            "int sub u() { NB o = new ND(); return o.m(1, \"x\"); }\n", "named overloads");
+        assertEq(42, p.callFunction("t"), "a compatible return type");
+        assertEq(1, p.callFunction("u"), "the positional call");
+        # a call with a positional argument and a named one: p.m(1, b: "s") binds the first argument by position in
+        # each variant and selects MC::m(int x, int y = 0, string b)
+        assertRejected("class MP { int m(int a, string b) { return 1; } } "
+            "class MC inherits MP { string m(int x, int y = 0, string b) { return \"c\"; } }",
+            "MC::m\\(int x, int y = 0, string b\\) returning string cannot overload parent class method "
+            "MP::m\\(int a, string b\\) returning int: it accepts the names", "a positional and a named argument");
+        # the types at the positions of the leading positional arguments do not intersect: no call can select it
+        Program pm = parseAccepted("class MP { int m(int a, string b) { return 1; } } "
+            "class MC inherits MP { string m(string x, int y = 0, string b) { return \"c\"; } }\n"
+            "int sub t() { MP o = new MC(); return o.m(1, b: \"s\"); }", "a positional argument of another type");
+        assertEq(1, pm.callFunction("t"));
+        # a call of the parent class variant without its optional parameter (by position or by name) can select it
+        assertRejected("class OB { int m(int a, *string b) { return 1; } } "
+            "class OC inherits OB { string m(int a, binary x = <00>) { return \"c\"; } }",
+            "OC::m\\(int a, binary x = <00>\\) returning string cannot overload", "an optional parameter");
     }
 
     testAccepted() {

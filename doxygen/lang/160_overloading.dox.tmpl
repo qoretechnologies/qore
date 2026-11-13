@@ -172,8 +172,13 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     class method, and its result is trusted to have that variant's declared return type; at run time the object's
     class can provide the variant that is called.  Therefore a child class method variant that such a call can select
     must return a compatible type, or the class is refused with a \c PARSE-TYPE-ERROR:
-    - a variant that overrides a parent class variant (with the same parameter types), or a variant that accepts
+    - a variant that overrides a parent class variant (with the same parameter types), a variant that accepts
       arguments that the parent class variant accepts (an overload with broader or additional optional parameters),
+      or a variant that a @ref named_arguments_virtual_dispatch "named call" of the parent class variant can select
+      (it accepts the names of the parameters of the parent class variant that such a call gives, after the
+      arguments that the call gives by position, with parameter types that can accept the same values, such as
+      <tt>m(string b, int a)</tt> for <tt>m(int a, string b)</tt>, or <tt>m(int x, int y = 0, string b)</tt> for a
+      call <tt>m(1, b: "s")</tt>),
       must return the parent class variant's type or a narrower type that it accepts without a conversion
       (covariant return types: a subclass of a returned class, \c int for \c *int); a type that would be converted,
       such as \c float for \c int, is refused
@@ -184,9 +189,11 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     - in a class that inherits an instantiation of a generic class, the type arguments are substituted in the return
       types of the generic class's methods (<tt>T get()</tt> of <tt>Box&lt;int&gt;</tt> returns \c int); a generic child class that passes its own type parameter to the parent class must return it where the parent class
       method returns the type parameter, as an instantiation can bind it to any type
-    - variants without a declared return type, static methods, and \c private:internal parent class methods (which
-      are not inherited) are not checked
-    - an overload that a parent class call cannot select, as its parameter types do not intersect, can return any type
+    - variants without a declared return type, static methods (a static method called through an object is bound to
+      the receiver's declared class; see @ref static_methods_through_object), and \c private:internal parent class
+      methods (which are not inherited) are not checked
+    - an overload that a parent class call cannot select, as its parameter types do not intersect and it does not
+      accept the names of the parent class variant's parameters, can return any type
 
     @par Example
     @code{.py}

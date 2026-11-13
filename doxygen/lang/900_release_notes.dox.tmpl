@@ -97,6 +97,11 @@
     can select, must return the parent class variant's type or a narrower one, or the class raises a
     \c PARSE-TYPE-ERROR; see @ref override_return_types.
 
+    @par Static Methods Called Through an Object Are Bound to the Receiver's Declared Class
+    A static method called through an object whose class is declared (<tt>o.method()</tt>) calls the method of the
+    receiver's declared class, as <tt>DeclaredClass::method()</tt> does, instead of a static method of the same name
+    that the object's class declares; see @ref static_methods_through_object.
+
     @par Builtin Methods That Subclasses Override Return Wider Types
     @ref Qore::HTTPClient::get() "HTTPClient::get()" and @ref Qore::HTTPClient::post() "HTTPClient::post()" return
     <tt>union&lt;*data, hash&lt;auto&gt;&gt;</tt>, @ref Qore::HTTPClient::getDefaultHeaders() "HTTPClient::getDefaultHeaders()"

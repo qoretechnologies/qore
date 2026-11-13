@@ -1697,16 +1697,17 @@ int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue&
     public:
         DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
             if (pgm) {
-                qore_program_private::setModuleHeaderClosureInit(*pgm, true);
+                prev = qore_program_private::setModuleHeaderClosureInit(*pgm, true);
             }
         }
         DLLLOCAL ~HeaderClosureInitHelper() {
             if (pgm) {
-                qore_program_private::setModuleHeaderClosureInit(*pgm, false);
+                qore_program_private::setModuleHeaderClosureInit(*pgm, prev);
             }
         }
     private:
         QoreProgram* pgm;
+        bool prev = false;
     } closure_init_helper(::getProgram());
     // initialize closure
     QoreParseContext parse_context;

@@ -106,7 +106,10 @@ QORE_JIT_SYNC_COMPILE=1 qore --exec-mode=jit script.qr
     @subsection jit_debugging Debugging JIT-Compiled Code
 
     JIT-compiled code registers symbols through the GDB JIT interface. Debuggers
-    can see JIT function symbols after code is compiled and registered.
+    can see JIT function symbols after code is compiled and registered.  The code
+    of a deleted Program is removed from the JIT and unregistered from the
+    interface (LLVM itself does not unregister it; see
+    <a href="https://github.com/llvm/llvm-project/issues/242224">llvm-project#242224</a>).
 
     @code{.sh}
 $ gdb --args qore --exec-mode=jit script.qr
