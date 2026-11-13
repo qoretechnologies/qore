@@ -42,6 +42,7 @@ class AOTDumpInfoPendingConstantsTest inherits QUnit::Test {
         addTestCase("pending class constants are dumped", \testPendingClassConstants());
         addTestCase("pending namespace constants are dumped", \testPendingNamespaceConstants());
         addTestCase("pending and plain constants together", \testMixedConstants());
+        addTestCase("unresolved static initializer is deferred", \testUnresolvedStaticInitializer());
         set_return_value(main());
     }
 
@@ -102,5 +103,25 @@ class AOTDumpInfoPendingConstantsTest inherits QUnit::Test {
             "}\n"
             "const NSV = (\"a\", \"b\");\n");
         checkDump("mixed constants", d, 5);
+    }
+
+    testUnresolvedStaticInitializer() {
+        if (system(sprintf("%s %s --version >/dev/null 2>&1", env, qcc_bin))) {
+            testSkip("qcc is not available: " + qcc_bin);
+        }
+        TmpDir tmp("qore-aot-pending-static-call-");
+        string src = tmp.path + "/consumer.qc";
+        string out = tmp.path + "/consumer.qo";
+        write(src, "%modern\npublic const Deferred = MissingStaticTarget::value();\n");
+        # -L enables source linking.  The target is unresolved while the constant is evaluated, so the static
+        # call must raise AOT-PENDING-FUNCTION and let constant initialization defer it, not fail the parse.
+        int status;
+        string compile_out = backquote(sprintf("%s %s -c -L %s -o %s %s 2>&1", env, qcc_bin, tmp.path, out,
+            src), \status);
+        assertEq(0, status, compile_out);
+        assertTrue(is_file(out), compile_out);
+        string d = backquote(sprintf("%s %s --dump-info %s 2>&1", env, qcc_bin, out), \status);
+        assertEq(0, status, d);
+        checkDump("unresolved static initializer", d, 1);
     }
 }
