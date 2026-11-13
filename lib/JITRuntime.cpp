@@ -12742,6 +12742,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -12950,6 +12954,10 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
         for (int i = (int)num_params - 1; i >= 0; --i) {
@@ -13167,6 +13175,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
@@ -13294,6 +13306,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
     }
@@ -13651,6 +13667,10 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -17660,6 +17680,11 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         if (sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }
+        // with an exception pending, the value of the return is released after $argv and before the parameters, which
+        // hold the only references to the arguments that the call consumed, as the AST interpreter releases it before
+        // the caller releases its arguments (#6039); the release below covers an exception raised by the release of a
+        // parameter
+        val = qore_release_value_with_exception(val, xsink);
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
         }
@@ -18217,12 +18242,16 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    result_bits = toBits(qore_release_value_with_exception(fromBits(result_bits), xsink));
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
     }
 
     // No return type coercion — self-recursive, same return type
-    return result_bits;
+    return toBits(qore_release_value_with_exception(fromBits(result_bits), xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn,
@@ -19439,6 +19468,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -20901,6 +20934,10 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
