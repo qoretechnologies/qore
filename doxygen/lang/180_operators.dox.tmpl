@@ -1550,6 +1550,21 @@ if (obj instanceof Qore::Mutex)
     |!Argument|!Processing
     |\a expression|If expression is an instance of the named type, which is defined as the type is able to accept the value, then the operator returns @ref True "True", otherwise returns @ref False "False".
 
+    In generic code, a type parameter of the @ref generic_class_type "generic class", function or method in the type
+    is the type argument of the instantiation that runs, as for a variable or parameter declared with it, in every
+    execution mode:
+    @code{.py}
+class Holder<T> {
+    bool isT(auto v) {
+        return v instanceof T;
+    }
+}
+
+Holder<int> h();
+h.isT(1);      # True
+h.isT("x");    # False
+    @endcode
+
     This operator does not throw any exceptions.
 
     <hr>

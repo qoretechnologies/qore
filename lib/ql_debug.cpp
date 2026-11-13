@@ -17218,6 +17218,21 @@ static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, 
     return QoreValue();
 }
 
+//! Debug-only: dbg_aot_split_method_ref(encoded): the parts of an encoded method variant reference, as the AOT
+//! loader reads them: a hash with "method", "class" (the variant's class reference) and "sig" (the signature text)
+/** The signature text has the default values of the parameters, whose strings can have newlines, and the class
+    reference of a class of a module has a newline of its own (qore#6026)
+*/
+static QoreValue f_dbg_aot_split_method_ref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* encoded = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreAOTStaticMethodRef ref(encoded->c_str());
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("method", ref.method_name ? new QoreStringNode(ref.method_name) : QoreValue(), xsink);
+    rv->setKeyValue("class", ref.variant_class_path ? new QoreStringNode(ref.variant_class_path) : QoreValue(), xsink);
+    rv->setKeyValue("sig", ref.sig_text ? new QoreStringNode(ref.sig_text) : QoreValue(), xsink);
+    return rv.release();
+}
+
 //! Debug-only: dbg_poll_wait_close_before_open_state(timeout_ms): waits until the hook armed with
 //! dbg_poll_close_before_open_state() fired; returns NOTHING on timeout (and disarms the hook), otherwise whether the
 //! operation was still closed right after the state store
@@ -19145,6 +19160,32 @@ static QoreValue f_dbg_get_region_walk_count(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_live_bigint_count();
+}
+
+//! returns the number of code units (modules) in the JIT, once the releases that wait for a compile are processed
+/** Each module added to the JIT is removed when its owners (the Programs whose functions it defines, or a generic
+    specialization) are gone and no other module links to it (qore#5772), so tests compare the count before and after
+    creating and deleting Programs whose code is compiled.
+*/
+static QoreValue f_dbg_get_jit_code_unit_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetCodeUnitCount());
+}
+
+//! returns the number of entries of the GDB JIT interface's list (qore#5772)
+/** The JIT registers each linked object there for debuggers, and unregisters it when its code is removed
+*/
+static QoreValue f_dbg_get_jit_debugger_entry_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetDebuggerEntryCount());
+}
+
+//! returns the number of compiled functions that the JIT can look up
+static QoreValue f_dbg_get_jit_compiled_function_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetCompiledFunctionCount());
 }
 
 //! returns the number of heap floats that exist in the process
@@ -22196,6 +22237,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_poll_wait_close_before_open_state", f_dbg_poll_wait_close_before_open_state,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_aot_split_method_ref", f_dbg_aot_split_method_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -22455,6 +22498,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_count_batch_collection_refusals", f_dbg_count_batch_collection_refusals,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_code_unit_count", f_dbg_get_jit_code_unit_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_compiled_function_count", f_dbg_get_jit_compiled_function_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_debugger_entry_count", f_dbg_get_jit_debugger_entry_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
