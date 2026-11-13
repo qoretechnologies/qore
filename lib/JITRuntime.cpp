@@ -13811,6 +13811,9 @@ struct JITOnBlockExitHandler {
     const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals (JIT)
     uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*) = nullptr;  //!< handler in AOT-compiled code
     QoreAOTContext* aot_ctx = nullptr;  //!< the AOT context that the AOT handler shares with its function
+    //! the number of catch scopes open when the handler was registered (catch_stack): the catch blocks opened after it
+    //! are in its block, and are left before it runs (#5969)
+    size_t catch_depth = 0;
 };
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
@@ -13922,13 +13925,14 @@ extern "C" DLLEXPORT void qore_rt_end_native_ir_slot_cache(void* guard_ptr, Exce
 extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, uint64_t (*compiled_fn)(ExceptionSink*),
         const QoreIRFunction* handler_func) {
     assert(compiled_fn);
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), compiled_fn, handler_func, nullptr, nullptr});
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), compiled_fn, handler_func, nullptr, nullptr,
+        catch_stack.size()});
 }
 
 extern "C" DLLEXPORT void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
         uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*)) {
     assert(ctx && aot_fn);
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), nullptr, nullptr, aot_fn, ctx});
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), nullptr, nullptr, aot_fn, ctx, catch_stack.size()});
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
@@ -13996,6 +14000,15 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
         // StatementBlock::execIntern() semantics.
         for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
             obe_type_e type = jit_obe_handlers[i].type;
+            // the catch blocks opened in the handler's block after it was registered are left before it runs, as the
+            // AST interpreter leaves them as the exception leaves them: the handler sees the exception that the
+            // enclosing catch block caught (td->catchException), not one that a catch block it does not run in caught
+            // (#5969); the handlers run last registered first, so the depths only go down.  Only with an exception or
+            // a thread_exit pending: handlers run on a break, continue or return out of a catch block run before the
+            // code closes the catch blocks that it leaves (qore_rt_catch_end())
+            if (catch_stack.size() > jit_obe_handlers[i].catch_depth && xsink && *xsink) {
+                qore_rt_catch_unwind(jit_obe_handlers[i].catch_depth, xsink);
+            }
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
                 // Instantiate exception for on_error blocks as an implicit arg
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
