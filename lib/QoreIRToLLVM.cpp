@@ -60,6 +60,7 @@ static_assert(QORE_IR_MAX_OPCODE == 431,
     boolean cannot, which is why every store site that asked for "not Normal" used to compile '@='
     as ':=' and drop the ownership that separates them.
 */
+
 static const char* qore_assignment_mode_value_helper(AssignmentMode mode) {
     assert(mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque);
     return mode == AssignmentMode::Opaque
@@ -462,6 +463,21 @@ static bool isFastMethodCallEligible(
 
 #include <cstdio>
 #include <cstring>
+
+//! the name of the method of an object method reference passed to qore_rt_create_object_method_ref_aot(): a static
+//! method of the receiver's declared class, to which the reference is bound (qore#5990), is given with the class, as
+//! "\x01<class reference>\x01<method name>"
+static std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
+    const QoreClass* qc = omr->getStaticBoundClass();
+    if (!qc) {
+        return omr->getMethodName();
+    }
+    std::string rv(1, '\x01');
+    rv += qore_aot_encode_class_ref(qc);
+    rv += '\x01';
+    rv += omr->getMethodName();
+    return rv;
+}
 
 //! Returns the runtime helper that a store to a local calls: for the assignment of an element to the variable of a
 //! foreach loop, the variant of a helper that checks the value's type which describes a type error as the AST
@@ -21337,7 +21353,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* obj_boxed = boxValue(obj_val, inv->operands[0].id);
                         llvm::Value* method_name =
                             qore_ir_create_global_string_ptr(builder,
-                                omr->getMethodName(), "object_method_ref_name");
+                                qore_aot_object_method_ref_name(omr), "object_method_ref_name");
                         auto mr_ft = llvm::FunctionType::get(i64_type,
                                 {i64_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
@@ -31153,7 +31169,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* obj_boxed = boxValue(obj_val, mrinst->operands[0].id);
                     llvm::Value* method_name =
                         qore_ir_create_global_string_ptr(builder,
-                            omr->getMethodName(), "object_method_ref_name");
+                            qore_aot_object_method_ref_name(omr), "object_method_ref_name");
                     auto mr_ft = llvm::FunctionType::get(i64_type,
                             {i64_type, ptr_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(

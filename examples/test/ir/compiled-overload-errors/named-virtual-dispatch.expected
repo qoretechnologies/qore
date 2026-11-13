@@ -36,6 +36,10 @@ const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
 static through object or nothing: SA::sm(float f) / SA::sm(float f)
 static through untyped receiver: SBS::sm(float f) / SBS::sm(float f)
 static through declared child: SBS::sm(float f) / SBS::sm(float f)
+static call references: SA::sm(float f) / SBS::sm(float f)
+static or nothing without a value: 1 0
+static or nothing with a value: "TPS" 7
+static through deleted object: OBJECT-ALREADY-DELETED: cannot call SA::sm(float f) on an object that has already been deleted
 static through object same names: SA::sm(float f) / SA::sm(float f)
 static through object other names: SA::sm(float f) / SA::sm(float f)
 static through object runtime: SA::sm(float f)

@@ -121,6 +121,11 @@ class Base {
             "class MC inherits MP { string m(int x, int y = 0, string b) { return \"c\"; } }",
             "MC::m\\(int x, int y = 0, string b\\) returning string cannot overload parent class method "
             "MP::m\\(int a, string b\\) returning int: it accepts the names", "a positional and a named argument");
+        # the types at the positions of the leading positional arguments do not intersect: no call can select it
+        Program pm = parseAccepted("class MP { int m(int a, string b) { return 1; } } "
+            "class MC inherits MP { string m(string x, int y = 0, string b) { return \"c\"; } }\n"
+            "int sub t() { MP o = new MC(); return o.m(1, b: \"s\"); }", "a positional argument of another type");
+        assertEq(1, pm.callFunction("t"));
         # a call of the parent class variant without its optional parameter (by position or by name) can select it
         assertRejected("class OB { int m(int a, *string b) { return 1; } } "
             "class OC inherits OB { string m(int a, binary x = <00>) { return \"c\"; } }",

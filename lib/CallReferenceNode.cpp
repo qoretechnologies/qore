@@ -474,7 +474,9 @@ QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, Exception
         }
     }
 
-    if (o->getClass() == m->getClass()) {
+    // a static method of the receiver's declared class is bound to that class, as a call through the object is
+    // (qore#5990)
+    if (o->getClass() == m->getClass() || (qc && m->isStatic())) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
     }
 

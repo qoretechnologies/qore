@@ -253,8 +253,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 if (m->parseArgs(parse_context, qore_method_private::get(*meth)->getFunction(), nullptr) && !err) {
                     err = -1;
                 }
-                // a receiver with no value raises an error: the result has the type of the variant
-                returnTypeInfo = parse_context.typeInfo;
+                // the result type is not known: a receiver with no value is dispatched to a pseudo-method of the
+                // value (such as typeCode()), not to the method
+                parse_context.typeInfo = returnTypeInfo = nullptr;
                 return err;
             }
             if (meth && strcmp(mname, "copy") && named_args) {

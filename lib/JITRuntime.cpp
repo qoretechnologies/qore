@@ -4479,6 +4479,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         return toBits(QoreValue());
     }
 
+    // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
+    // object, as a call through the object is (qore#5990); the name is "\x01<class reference>\x01<method name>" (see
+    // qore_aot_object_method_ref_name())
+    if (method_name[0] == '\x01') {
+        const char* end = strchr(method_name + 1, '\x01');
+        if (!end) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+            return toBits(QoreValue());
+        }
+        std::string class_ref(method_name + 1, end - method_name - 1);
+        const char* mname = end + 1;
+        QoreProgram* pgm = rc_get_current_ref().getProgram();
+        if (!pgm) {
+            pgm = getProgram();
+        }
+        const QoreClass* qc = pgm ? qore_aot_resolve_class_ref(pgm, class_ref.c_str()) : nullptr;
+        ClassAccess access = Public;
+        const QoreMethod* method = qc ? qc->findStaticMethod(mname, access) : nullptr;
+        if (!method) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "cannot resolve reference to static method "
+                "%s::%s()", qc ? qc->getName() : class_ref.c_str(), mname);
+            return toBits(QoreValue());
+        }
+        return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method)));
+    }
+
     const QoreClass* obj_class = obj->getClass();
     ClassAccess access = Public;
     const QoreMethod* method = obj_class->findMethod(method_name, access);
@@ -19283,6 +19309,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
     // copy() must go through dispatch_method_on_object → execCopy to create a new object
     if (!strcmp(method->getName(), "copy")) {
+        return false;
+    }
+    // the variant of an overloaded static method called through an object is the one resolved at parse time, which
+    // the arguments may not match at run time: the slow path resolves it again, as the AST call does (qore#5990)
+    if (method->isStatic() && qore_method_private::get(*method)->getFunction()->numVariants() != 1) {
         return false;
     }
     const UserVariantBase* uvb = variant->getUserVariantBase();

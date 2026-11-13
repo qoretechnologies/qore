@@ -13835,10 +13835,9 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
                 // a static method called through an object is bound to the receiver's declared class (qore#5990):
-                // the method is kept, and only its variant is resolved at run time
-                if (method && qc && method->isStatic()) {
-                    variant = nullptr;
-                } else {
+                // the method and the variant resolved at parse time are kept, as the AST call keeps them; the call
+                // resolves the variant again if the arguments do not match it (see try_dispatch_method_fast())
+                if (!method || !qc || !method->isStatic()) {
                     method = nullptr;
                     qc = nullptr;
                     variant = nullptr;

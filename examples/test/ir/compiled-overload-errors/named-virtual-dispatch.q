@@ -134,6 +134,12 @@ class TC inherits TB {
     int m(string b, int a) { return 2; }
 }
 
+# static methods whose names are also those of pseudo-methods of a value
+class TPS {
+    static string typeCode() { return "TPS"; }
+    static int size() { return 7; }
+}
+
 # a static method that a child class redeclares with another return type
 class TSA {
     static int sm(int x) { return 1; }
@@ -260,6 +266,26 @@ printf("static through object or nothing: %s / %s\n", osas.sm(f: 1.5), osas.sm(1
 printf("static through untyped receiver: %s / %s\n", usas.sm(1.5), obsas.sm(1.5));
 SBS sbs = new SBS();
 printf("static through declared child: %s / %s\n", sbs.sm(f: 1.5), sbs.sm(1.5));
+# a call reference through a declared receiver is bound to the declared class too
+code sref = \sas.sm();
+code usref = \usas.sm();
+printf("static call references: %s / %s\n", sref(1.5), usref(1.5));
+# a receiver declared with "*" that has no value calls the pseudo-method of the value, whose name a static method can
+# also have
+*TPS tps;
+auto tpsc = tps.typeCode() + 1;
+printf("static or nothing without a value: %y %y\n", tpsc, tps.size());
+tps = new TPS();
+printf("static or nothing with a value: %y %y\n", tps.typeCode(), tps.size());
+# a deleted object
+SA dsa = new SBS();
+SA dsa2 = dsa;
+delete dsa;
+try {
+    printf("static through deleted object: %s\n", dsa2.sm(1.5));
+} catch (hash<ExceptionInfo> ex) {
+    printf("static through deleted object: %s: %s\n", ex.err, ex.desc);
+}
 printf("static through object same names: %s / %s\n", sas.sm(f: 1.5), sas.sm(1.5));
 printf("static through object other names: %s / %s\n", sar.sm(f: 1.5), sar.sm(1.5));
 printf("static through object runtime: %s\n", sas.sm(f: value_of(1.5)));
