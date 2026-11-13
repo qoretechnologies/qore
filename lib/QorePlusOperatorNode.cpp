@@ -171,7 +171,9 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     // other value gives a UTF-8 string
     if (lt == NT_STRING || (lt == NT_CHAR && rt != NT_STRING)) {
         QoreStringNodeValueHelper lstr(*lh);
-        QoreStringNodeHolder str(new QoreStringNode(**lstr));
+        // a char gives a new string of its own, which is taken; a string is copied
+        QoreStringNodeHolder str(lt == NT_CHAR ? lstr.getReferencedValue() : new QoreStringNode(**lstr));
+        assert(str->is_unique());
 
         if (rt == NT_STRING) {
             QoreStringNodeValueHelper rstr(*rh);

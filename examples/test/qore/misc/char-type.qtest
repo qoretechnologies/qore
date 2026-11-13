@@ -160,6 +160,9 @@ class CharTypeTest inherits QUnit::Test {
         Program p3(PO_NEW_STYLE);
         assertThrows("PARSE-TYPE-ERROR", "will assign it a string value", \p3.parse(),
             ("sub t(char a) { a += c'b'; }", "char-lvalue-plus-equals"));
+        Program p5(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "lvalue has type '\\*char', but the \\+= operator will assign it a string value",
+            \p5.parse(), ("sub t(*char a) { a += c'b'; }", "or-nothing-char-lvalue-plus-equals"));
         Program p4(PO_NEW_STYLE);
         p4.parse("string sub t(char a, char b) { string x = a + b; return x; } "
             "softchar sub u(softchar a) { a += \"\"; return a; }", "char-plus-string");
