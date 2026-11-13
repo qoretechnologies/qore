@@ -653,9 +653,10 @@ DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObj
 
 //! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
-    NT_FUNCTION_CALL and its only subclass, ProgramFunctionCallNode, NT_PROGRAM_FUNC_CALL (the lexical variants made
-    by qore_make_function_call() keep the type of their base class).  A dynamic_cast searches the class hierarchy with
-    string comparisons of the type names, which is too slow for the interpreter's per-call paths.
+    NT_FUNCTION_CALL and ProgramFunctionCallNode NT_PROGRAM_FUNC_CALL; its other subclasses keep the type of their
+    base class (the lexical variants made by qore_make_function_call()) or of the call they copy
+    (RuntimeNamedFunctionCallNode), and no other class has either type.  A dynamic_cast searches the class hierarchy
+    with string comparisons of the type names, which is too slow for the interpreter's per-call paths.
 */
 DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const AbstractQoreNode* n) {
     if (!n) {
