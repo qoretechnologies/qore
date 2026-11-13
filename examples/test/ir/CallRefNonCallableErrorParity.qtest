@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are AOT executables
+# test-platform: macos - JIT and AOT code generation of indirect calls through the runtime call helpers
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class CallRefNonCallableErrorParityTest
+
+#! A call of a value that is not a call reference or closure raises the same exception in every execution mode
+/** The AST interpreter raises \c REFERENCE-CALL-ERROR with a description that names the type of the value, at the
+    location of the call.  IR, JIT and tiered execution and AOT executables check the target of a call before its
+    arguments (qore_check_call_target()) and call through the runtime call helpers (qore_rt_call_closure_0(),
+    qore_rt_call_closure_1(), qore_rt_call_closure_fast()), which raised \c CALL-REFERENCE-ERROR before issue #5784,
+    and called every value that is not a node (an integer, a float, a boolean) a NOTHING value.
+
+    callref-noncallable-error/probe.qr calls each type of value in each form of call and prints the exception with
+    its location; the output of each execution mode and of AOT executables compiled with -O0 and -O3 must be that of
+    the AST interpreter.
+*/
+class CallRefNonCallableErrorParityTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        string probe;
+        # the output of the AST interpreter
+        string ast;
+    }
+
+    constructor() : QUnit::Test("CallRefNonCallableErrorParityTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        probe = get_script_dir() + "/callref-noncallable-error/probe.qr";
+
+        addTestCase("the AST interpreter names the type of each value", \astTest());
+        addTestCase("IR matches AST", \modeTest(), "ir");
+        addTestCase("JIT matches AST", \modeTest(), "jit");
+        addTestCase("tiered matches AST", \modeTest(), "tiered");
+        addTestCase("the IR tier of tiered execution matches AST", \irTierTest());
+        addTestCase("AOT -O0 matches AST", \aotTest(), "-O0");
+        addTestCase("AOT -O3 matches AST", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    private string getAst() {
+        if (!ast) {
+            ast = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, probe));
+        }
+        return ast;
+    }
+
+    astTest() {
+        # each line, the first too, follows a newline
+        string out = "\n" + getAst();
+        # 13 values in seven forms of call
+        list<string> errors = (map $1, out.split("\n"), $1 =~ /^call[a-zA-Z0-9]+ .*: REFERENCE-CALL-ERROR: /);
+        assertEq(13 * 7, errors.size());
+        foreach string type in (("nothing", "integer", "float", "string", "hash<string, int>", "list<int>",
+                "object<Plain>", "bool", "number", "date", "binary", "NULL")) {
+            string line = sprintf("\ncall0 %s: REFERENCE-CALL-ERROR: expression does not evaluate to a call "
+                "reference (evaluated to type '", type);
+            assertTrue(out.find(line) >= 0, type);
+        }
+        # the location of a call that spans more than one line is that of the whole call
+        assertRegex("\ncallMultiLine integer: REFERENCE-CALL-ERROR: [^\n]* @ probe.qr:25-28 ", out);
+        assertRegex("\ncallLocalArgs float: REFERENCE-CALL-ERROR: [^\n]* @ probe.qr:56-56 ", out);
+        assertRegex("\ncallNothingRef: REFERENCE-CALL-ERROR: expression does not evaluate to a call reference "
+            "\\(evaluated to type 'nothing'\\) @ probe.qr:40-40 ", out);
+        assertEq(-1, out.find("CALL-REFERENCE-ERROR"));
+        # a closure and a call reference are called with their arguments
+        assertRegex("\nclosure: \"closure null null null\" \"closure 1 null null\" "
+            "\"closure 1 \\\\\"two\\\\\" 3.0\" \"closure 1 2 null\"\n", out);
+        assertRegex("\ncall reference: \"function null null null\" \"function 1 null null\" ", out);
+    }
+
+    modeTest(string mode) {
+        # the harness runs the command with QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1, which
+        # compiles the functions of tiered execution to native code at once
+        assertEq(getAst(), ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode,
+            probe)));
+    }
+
+    irTierTest() {
+        assertEq(getAst(), ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin,
+            probe)));
+    }
+
+    aotTest(string opt) {
+        TmpDir tmp("qore-callref-noncallable-");
+        string exe = tmp.path + "/probe";
+        string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, probe));
+        assertTrue(is_file(exe), out);
+        assertEq(getAst(), backquote(sprintf("%s %s -b 2>&1", env, exe)));
+    }
+}
