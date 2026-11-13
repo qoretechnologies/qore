@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/LexicalReflection.h"
 #include "qore/Qore.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/Function.h"
@@ -75,7 +76,7 @@ bool qore_type_is_assignable_from(const QoreTypeInfo* ti1, const QoreTypeInfo* t
 
 QoreValue qore_type_assign_value(const QoreTypeInfo* t, const QoreValue value, ExceptionSink* xsink) {
     ValueHolder rv(value.refSelf(), xsink);
-    QoreTypeInfo::acceptAssignment(t, "<type assignment>", *rv, xsink);
+    QoreTypeInfo::acceptAssignmentNative(t, "<type assignment>", *rv, xsink, nullptr);
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -108,7 +109,7 @@ bool qore_type_is_assignable_from(const QoreTypeInfo* ti1, const QoreTypeInfo* t
 
 int qore_type_is_assignable_from(const QoreTypeInfo* t, QoreValue value) {
     // an assignment folds the elements of a container that it can convert
-    return QoreTypeInfo::runtimeAcceptsValueOrFold(t, value);
+    return QoreTypeInfo::runtimeAcceptsValue(t, value, qore_get_native_semantic_policy(), true);
 }
 
 bool qore_type_can_convert_to_scalar(const QoreTypeInfo* ti) {
@@ -496,20 +497,22 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     return evalFunction(variant, args, pgm, nullptr, caller, xsink);
 }
 
-QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
-        QoreProgram* pgm, const QoreNamespace* ns, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
-    const QoreFunction* f = reinterpret_cast<const QoreFunction*>(this);
+template <bool Lexical>
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_reflection_function_impl(LexicalSemanticPolicy policy, const QoreExternalFunction& external,
+        const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm, const QoreNamespace* ns,
+        const QoreReflectionCaller& caller, ExceptionSink* xsink) {
+    const QoreFunction* f = reinterpret_cast<const QoreFunction*>(&external);
     RuntimeConfig& rc = rc_get_current_ref();
     // a function that a user module does not export, or that is in a namespace that it does not export, cannot be
     // called by a caller its export boundary applies to
-    if (caller.checkModuleExport(caller.canSeeDeclaration(pgm, ns, isModulePublic() || isBuiltin()),
-            "function", getName(), xsink)) {
+    if (caller.checkModuleExport(caller.canSeeDeclaration(pgm, ns, external.isModulePublic() || external.isBuiltin()),
+            "function", external.getName(), xsink)) {
         return QoreValue();
     }
     // nor can a variant that the module does not export (a function can have public and private variants)
     bool limited = caller.appliesModuleExports(pgm);
     if (variant && limited && caller.checkModuleExport(caller.canSeeVariant(pgm, variant), "function variant",
-            getName(), xsink)) {
+            external.getName(), xsink)) {
         return QoreValue();
     }
     // the call is deferred as a cross-Program call is (args evaluated in the caller's context, body under the
@@ -518,8 +521,13 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // the variant is selected for the arguments among the visible variants, as in a call from an importer of the
     // module: selecting among all variants could select a private one where an importer selects a public one
     if (!variant && limited) {
-        variant = reinterpret_cast<const QoreExternalVariant*>(f->runtimeFindVariant(xsink, args,
-            QRFV_EXPORTED_ONLY, nullptr));
+        if constexpr (Lexical) {
+            variant = reinterpret_cast<const QoreExternalVariant*>(f->runtimeFindVariant(xsink, args,
+                QRFV_EXPORTED_ONLY, nullptr, nullptr, nullptr, nullptr, nullptr, policy));
+        } else {
+            variant = reinterpret_cast<const QoreExternalVariant*>(f->runtimeFindVariant(xsink, args,
+                QRFV_EXPORTED_ONLY, nullptr));
+        }
         if (!variant) {
             assert(*xsink);
             return QoreValue();
@@ -528,11 +536,11 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // Check the fixed variant's domain, or the domains common to all variants before dynamic resolution.
     // Keep domain errors ahead of the Program-access error for a builtin that the caller already cannot use.
     bool caller_refused = false;
-    int64 dom = variant ? variant->getDomain() : getDomain();
+    int64 dom = variant ? variant->getDomain() : external.getDomain();
     if (!caller.allowsDomain(dom, pgm, &caller_refused)) {
         xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'; "
             "functional domain: %s", caller_refused ? "parse options" : "the parse options of the Program it was "
-            "found in", getName(), variant ? variant->getSignatureText() : "...",
+            "found in", external.getName(), variant ? variant->getSignatureText() : "...",
             qore_describe_source_domains(qore_reflection_denied_domains(caller, dom, pgm)).c_str());
         return QoreValue();
     }
@@ -544,9 +552,26 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // a caller that the boundary applies to can be given a public variant whose arguments only another variant
     // accepts: the variant is then selected among the public variants as well
     QORE_DBG_RUNTIME_CHOSEN_VARIANT();
-    return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
-        nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0));
+    if constexpr (Lexical) {
+        return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
+            nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0), policy);
+    } else {
+        return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
+            nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0));
+    }
 }
+
+QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
+        QoreProgram* pgm, const QoreNamespace* ns, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
+    return qore_reflection_function_impl<false>({}, *this, variant, args, pgm, ns, caller, xsink);
+}
+
+QoreValue qore_lexical_reflection_function(LexicalSemanticPolicy policy, const QoreExternalFunction& external,
+        const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm, const QoreNamespace* ns,
+        const QoreReflectionCaller& caller, ExceptionSink* xsink) {
+    return qore_reflection_function_impl<true>(policy, external, variant, args, pgm, ns, caller, xsink);
+}
+
 
 const QoreExternalVariant* QoreExternalFunction::getFirstVariant() const {
     return reinterpret_cast<const QoreExternalVariant*>(reinterpret_cast<const QoreFunction*>(this)->first());

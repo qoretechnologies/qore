@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
@@ -160,9 +161,27 @@ void qore_hash_private::merge(const qore_hash_private& h, ExceptionSink* xsink) 
     }
 }
 
+void qore_hash_private::mergeNative(const qore_hash_private& h, ExceptionSink* xsink) {
+    for (auto& i : h.member_list) {
+        hash_assignment_priv ha(*this, i->key.c_str());
+        ha.assignNative(i->val.refSelf(), xsink);
+    }
+}
+
 void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink) {
     for (auto& i : h.member_list) {
         setKeyValue(i->key, i->val.refSelf(), sdh, xsink);
+    }
+}
+
+void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    size_t count = 0;
+    for (auto& i : h.member_list) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "hash merge")) {
+            return;
+        }
+        setKeyValue(i->key.c_str(), i->val.refSelf(), sdh, xsink, policy);
     }
 }
 
@@ -384,8 +403,42 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
     return newComplexHashFromHash(typeInfo, init, xsink, true);
 }
 
+QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, const QoreParseListNode* args,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    assert(!args || args->empty() || args->size() == 1);
+
+    QoreHashNode* init = nullptr;
+
+    if (args && !args->empty()) {
+        ValueEvalOptimizedRefHolder a(args->get(0), xsink);
+        if (*xsink)
+            return nullptr;
+
+        if (a->getType() != NT_HASH) {
+            xsink->raiseException("HASH-INIT-ERROR", "typed hash initializer value must be a hash; got type '%s' "
+                "instead", a->getTypeName());
+            return nullptr;
+        }
+
+        init = a.takeReferencedNode<QoreHashNode>();
+    }
+
+    return newComplexHashFromHash(typeInfo, init, xsink, true, policy);
+}
+
 QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
         ExceptionSink* xsink, bool coerce_values) {
+    return newComplexHashFromHashImpl<false>(typeInfo, init_hash, xsink, coerce_values, {});
+}
+
+QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
+        ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy) {
+    return newComplexHashFromHashImpl<true>(typeInfo, init_hash, xsink, coerce_values, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreHashNode* qore_hash_private::newComplexHashFromHashImpl(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
+        ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy) {
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
     if (!init) {
@@ -417,11 +470,21 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
         while (i.next()) {
             HashAssignmentHelper hah(i);
             QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
-            if (!QoreTypeInfo::retypeValue(qv, vti, xsink)) {
+            bool accepted;
+            if constexpr (Lexical) {
+                accepted = QoreTypeInfo::retypeValue(qv, vti, xsink, policy);
+            } else {
+                accepted = QoreTypeInfo::retypeValue(qv, vti, xsink);
+            }
+            if (!accepted) {
                 hash_assignment_priv::get(hah)->swap(qv);
                 return nullptr;
             }
-            QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
+            if constexpr (Lexical) {
+                QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink, policy);
+            } else {
+                QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
+            }
             hash_assignment_priv::get(hah)->swap(qv);
             if (*xsink) {
                 return nullptr;
@@ -785,7 +848,41 @@ int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* x
     hash_assignment_priv ha(*priv, key);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
+    return ha.assignNative(value, xsink);
+}
+
+int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink) {
+    assert(hash.reference_count() == 1);
+    // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
+    if (!hash.priv->valid) {
+        if (xsink) {
+            hash.priv->checkValid(xsink);
+        }
+        value.discard(xsink);
+        return -1;
+    }
+    hash_assignment_priv ha(*hash.priv, key);
+    // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
+    // whenever the caller's sink already held an unrelated exception
     return ha.assign(value, xsink);
+}
+
+int qore_hash_private::setKeyValueLexical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    assert(hash.reference_count() == 1);
+    // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
+    if (!hash.priv->valid) {
+        if (xsink) {
+            hash.priv->checkValid(xsink);
+        }
+        value.discard(xsink);
+        return -1;
+    }
+    SafeDerefHelper sdh(xsink);
+    hash_assignment_priv ha(*hash.priv, key);
+    // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
+    // whenever the caller's sink already held an unrelated exception
+    return ha.assign(value, sdh, xsink, policy);
 }
 
 int QoreHashNode::setKeyValue(const QoreString& key, QoreValue value, ExceptionSink* xsink) {
@@ -818,7 +915,7 @@ QoreListNode* QoreHashNode::getValues() const {
 // hash passed alone
 // order is maintained
 void QoreHashNode::merge(const QoreHashNode* h, ExceptionSink* xsink) {
-    priv->merge(*h->priv, xsink);
+    priv->mergeNative(*h->priv, xsink);
 }
 
 #ifdef DEBUG
@@ -863,25 +960,7 @@ QoreValue QoreHashNode::evalImpl(bool &needs_deref, ExceptionSink* xsink) const 
 // does a "soft" compare (values of different types are converted if necessary and then compared)
 // 0 = equal, 1 = not equal
 bool QoreHashNode::compareSoft(const QoreHashNode* h, ExceptionSink* xsink) const {
-    if (h->priv->size() != priv->size()) {
-        return 1;
-    }
-    // comparing recurses with the nesting of the hashes, which is unbounded
-    if (xsink && q_check_stack(xsink)) {
-        return 1;
-    }
-
-    ConstHashIterator hi(this);
-    while (hi.next()) {
-        hm_hm_t::const_iterator j = h->priv->hm.find(hi.getKey());
-        if (j == h->priv->hm.end())
-            return 1;
-
-        if (!hi.get().isEqualSoft((*j->second)->val, xsink) || (xsink && *xsink)) {
-            return 1;
-        }
-    }
-    return 0;
+    return !QoreLogicalEqualsOperatorNode::softEqualNative(QoreValue(this), QoreValue(h), xsink);
 }
 
 // does a "hard" compare (types must be exactly the same)
@@ -1080,7 +1159,7 @@ int QoreHashNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
 
 bool QoreHashNode::getAsBoolImpl() const {
    // check if we should do perl-style boolean evaluation
-   if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+   if (qore_get_native_semantic_policy().strictBoolean())
       return false;
    return !empty();
 }
@@ -1468,10 +1547,15 @@ void hash_assignment_priv::removeMemberCreatedForAssignment() {
     h.takeKeyValueIntern(key.c_str(), exists);
 }
 
-int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
+template <bool Native>
+QORE_INTERN_ALWAYS_INLINE int hash_assignment_priv::assignNativeImpl(QoreValue v, ExceptionSink* xsink) {
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
-        if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
+        auto* hd = typed_hash_decl_private::get(*h.hashdecl);
+        int rc;
+        if constexpr (Native) rc = hd->runtimeAssignKey(om->key.c_str(), val, xsink, qore_get_native_semantic_policy());
+        else rc = hd->runtimeAssignKey(om->key.c_str(), val, xsink);
+        if (rc) {
             removeMemberCreatedForAssignment();
             return -1;
         }
@@ -1479,8 +1563,18 @@ int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
         // the outcome must reflect only this type check; see ScopedTypeCheckSink.  This also allows the function
         // to be called with xsink = nullptr without dereferencing it
         ScopedTypeCheckSink ts(xsink);
-        QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
-            *val, *ts);
+        const QoreTypeInfo* value_type = QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo);
+        if constexpr (Native) {
+            // Untyped native result builders do not need the invocation's conversion policy.
+            if (QoreTypeInfo::hasType(value_type)) {
+                QoreTypeInfo::acceptInputKey(value_type, om->key.c_str(), *val, *ts,
+                    qore_get_native_semantic_policy());
+            } else {
+                QoreTypeInfo::acceptInputKey(value_type, om->key.c_str(), *val, *ts);
+            }
+        } else {
+            QoreTypeInfo::acceptInputKey(value_type, om->key.c_str(), *val, *ts);
+        }
         if (ts.raised()) {
             removeMemberCreatedForAssignment();
             return -1;
@@ -1495,18 +1589,41 @@ int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
     return 0;
 }
 
-int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
+    return assignNativeImpl<false>(v, xsink);
+}
+
+int hash_assignment_priv::assignNative(QoreValue v, ExceptionSink* xsink) {
+    return assignNativeImpl<true>(v, xsink);
+}
+
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int hash_assignment_priv::assignImpl(QoreValue v, SafeDerefHelper& sdh,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
-        if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
+        auto* hd = typed_hash_decl_private::get(*h.hashdecl);
+        int rc;
+        if constexpr (Lexical) {
+            rc = hd->runtimeAssignKey(om->key.c_str(), val, xsink, policy);
+        } else {
+            rc = hd->runtimeAssignKey(om->key.c_str(), val, xsink);
+        }
+        if (rc) {
             removeMemberCreatedForAssignment();
             return -1;
         }
     } else if (h.complexTypeInfo) {
         // see the same block in the overload above
         ScopedTypeCheckSink ts(xsink);
-        QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
-            *val, *ts);
+        if constexpr (Lexical) {
+            QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
+                *val, *ts, policy);
+        } else {
+            QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
+                *val, *ts);
+        }
         if (ts.raised()) {
             removeMemberCreatedForAssignment();
             return -1;
@@ -1519,6 +1636,15 @@ int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSin
 
     sdh.deref(swapImpl(val.release()));
     return 0;
+}
+
+int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+    return assignImpl<false>(v, sdh, xsink, {});
+}
+
+int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return assignImpl<true>(v, sdh, xsink, policy);
 }
 
 QoreValue hash_assignment_priv::getImpl() const {
@@ -1578,7 +1704,7 @@ HashAssignmentHelper::operator bool() const {
 
 void HashAssignmentHelper::assign(QoreValue v, ExceptionSink* xsink) {
     assert(priv);
-    priv->assign(v, xsink);
+    priv->assignNative(v, xsink);
 }
 
 QoreValue HashAssignmentHelper::swap(QoreValue v, ExceptionSink* xsink) {

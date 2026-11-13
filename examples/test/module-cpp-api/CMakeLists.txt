@@ -94,8 +94,8 @@ target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_AT
 
 # --- the modules that declare a module API version -----------------------------------------------
 # (see module-api/apiprobe-module.cpp and module-api/module-api-version.qtest): one source built twice, declaring
-# the module API of the headers (apicur) and the module API 2.0 of the headers before qore#5519 (apiold); apiold has
-# the file name that a module built with the 2.0 headers has (apiold-api-2.0.qmod)
+# the module API of the headers (apicur) and its preceding minor (apiold); the latter has the file name
+# and descriptor of a module compiled with the previous headers.
 
 foreach(_apiprobe_module apicur apiold)
     add_library(${_apiprobe_module} MODULE module-api/apiprobe-module.cpp)
@@ -119,9 +119,10 @@ foreach(_apiprobe_module apicur apiold)
         target_link_options(${_apiprobe_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
     endif()
 endforeach()
-set_target_properties(apiold PROPERTIES SUFFIX "-api-2.0.qmod")
+math(EXPR _apiprobe_old_minor "${MODULE_API_MINOR} - 1")
+set_target_properties(apiold PROPERTIES SUFFIX "-api-${MODULE_API_MAJOR}.${_apiprobe_old_minor}.qmod")
 target_compile_definitions(apicur PRIVATE APIPROBE_MAJOR=QORE_MODULE_API_MAJOR APIPROBE_MINOR=QORE_MODULE_API_MINOR)
-target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=2 APIPROBE_MINOR=0)
+target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=${MODULE_API_MAJOR} APIPROBE_MINOR=${_apiprobe_old_minor})
 
 # --- the module that owns Programs, which it deletes when it is deleted ---------------------------
 # (see program-owner/tdpgmowner-module.cpp and program-owner/program-owner-teardown.qtest)

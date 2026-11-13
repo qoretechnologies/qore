@@ -36,6 +36,8 @@
 
 class QoreHashMapSelectOperatorNode : public QoreNOperatorNodeBase<4> {
 public:
+    DLLLOCAL static QoreHashMapSelectOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2, QoreValue p3);
     DLLLOCAL QoreHashMapSelectOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1, QoreValue p2, QoreValue p3) :
         QoreNOperatorNodeBase<4>(loc, p0, p1, p2, p3) {
     }
@@ -63,7 +65,9 @@ public:
         ValueHolder n_e3(copy_value_and_resolve_lvar_refs_bound_implicit(e[3], xsink), xsink);
         if (*xsink)
             return nullptr;
-        return new QoreHashMapSelectOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release(), n_e3.release());
+        auto* node = create(getSemanticPolicy(), loc, n_e0.release(), n_e1.release(), n_e2.release(), n_e3.release());
+        node->returnTypeInfo = returnTypeInfo;
+        return node;
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
@@ -75,6 +79,8 @@ public:
     }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
     DLLLOCAL static QoreString map_str;
@@ -88,6 +94,7 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    template <bool Lexical>
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* getNewHash() const;

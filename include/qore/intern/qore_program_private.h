@@ -2503,7 +2503,10 @@ public:
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
-        yyparse(lexer);
+        {
+            LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+            yyparse(lexer);
+        }
         // the parser returns before the end of the input if its stack is exhausted
         qore_scanner_end_input(lexer);
 
@@ -2780,7 +2783,10 @@ public:
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
-            yyparse(lexer);
+            {
+                LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+                yyparse(lexer);
+            }
             // the parser returns before the end of the input if its stack is exhausted
             qore_scanner_end_input(lexer);
 
@@ -4086,6 +4092,19 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! Compiled metadata keeps canonical lookup semantics, including pending declarations and parse access guards.
+    DLLLOCAL const QoreClass* findClassCanonical(const char* path, ExceptionSink* xsink) const;
+    DLLLOCAL const TypedHashDecl* findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const;
+    DLLLOCAL const QoreEnumDecl* findEnumCanonical(const char* path, const QoreNamespace*& pns) const;
+
+    template <bool Native>
+    DLLLOCAL const QoreClass* runtimeFindClassImpl(const char* path, ExceptionSink* xsink) const;
+    template <bool Native>
+    DLLLOCAL const TypedHashDecl* findHashDeclImpl(const char* path, const QoreNamespace*& pns) const;
+    template <bool Native>
+    DLLLOCAL const QoreEnumDecl* findEnumImpl(const char* path, const QoreNamespace*& pns) const;
+
+
     //! waits until no child Program copies the external data of this Program; plock must be held
     DLLLOCAL void waitForExternalDataCopiesIntern() {
         while (ext_copy_count) {
@@ -4317,6 +4336,14 @@ public:
 
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
+
+    //! Explicit invocation policy for source-bound dynamic forwarding; the public C++ entry is canonical.
+    DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

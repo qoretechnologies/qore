@@ -49,6 +49,15 @@ class QoreComplexBufferTypeInfo;
 class QoreProgramLocation;
 class QoreTypeInfo;
 class LValueHelper;
+class LexicalSemanticPolicy;
+
+//! Creates a code-owned initializer conversion target; an empty result means use the actual declared type.
+/** The descriptor is never a value's type, a public declaration type or an AOT artifact. */
+DLLLOCAL std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeInfo* type_info,
+        LexicalSemanticPolicy policy, bool instance_member);
+
+//! Explicit soft-boolean conversion used by legacy declaration and invocation filters.
+DLLLOCAL void qore_lexical_soft_bool_filter(QoreValue& value, ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
 //! The kind of container whose value type produced an lvalue's declared type, if any
 /** Carried into the runtime type-error path so a rejected assignment can be explained in terms of
@@ -284,6 +293,17 @@ public:
     */
     DLLLOCAL static qore_type_result_e runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n,
             int& quality, bool& content_dependent);
+
+    //! Explicit-policy counterpart used by declaration- and invocation-bound argument filters.
+    DLLLOCAL static qore_type_result_e runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n,
+            int& quality, bool& content_dependent, LexicalSemanticPolicy policy);
+
+    DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue& n,
+            LexicalSemanticPolicy policy, bool fold = false);
+
+    template <typename MatchPolicy>
+    DLLLOCAL static qore_type_result_e runtimeAcceptsCallArgImpl(const QoreTypeInfo* ti, const QoreValue& n,
+            int& quality, bool& content_dependent, MatchPolicy policy);
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
@@ -681,6 +701,9 @@ public:
         }
     }
 
+    DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name,
+            QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
     // static version of method, checking for null pointer
     DLLLOCAL static void acceptInputMember(const QoreTypeInfo* ti, const char* member_name, QoreValue& n,
             ExceptionSink* xsink) {
@@ -689,6 +712,18 @@ public:
                 return;
             }
             ti->acceptInputIntern(xsink, "member", true, -1, member_name, n);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink);
+        }
+    }
+
+    DLLLOCAL static void acceptInputMember(const QoreTypeInfo* ti, const char* member_name, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        if (hasType(ti)) {
+            if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+                return;
+            }
+            ti->acceptInputIntern(xsink, "member", true, -1, member_name, n, policy);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink);
         }
@@ -704,8 +739,17 @@ public:
         }
     }
 
+    DLLLOCAL static void acceptInputKey(const QoreTypeInfo* ti, const char* key, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "key", false, -1, key, n, policy);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink);
+        }
+    }
+
     // static version of method, checking for null pointer
-    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
@@ -720,15 +764,49 @@ public:
         }
     }
 
+    //! Native assignment APIs inherit only their active native invocation; untyped assignments need no lookup.
+    DLLLOCAL static void acceptAssignmentNative(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LValueHelper* lvhelper) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, qore_get_native_semantic_policy(), nullptr,
+                lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
+    //! Filters a source operation with its immutable compatibility policy.
+    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, LValueHelper* lvhelper = nullptr) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, policy, nullptr,
+                lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
     //! As above, for a caller that knows the container kind but has no LValueHelper
     /** compiled code stores container elements through runtime helpers instead of an LValueHelper, and must report
         the same diagnostic as the AST interpreter for the same assignment
     */
-    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, q_lvalue_vts_e vts) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
             ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, nullptr, vts);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, nullptr);
+        }
+    }
+
+    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, q_lvalue_vts_e vts) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, policy, nullptr, vts);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink, nullptr);
         }
@@ -755,6 +833,13 @@ public:
     //! Re-applies declared hash/list/hashdecl container metadata to a value.
     DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             ExceptionSink* xsink);
+
+    DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <typename FilterPolicy>
+    DLLLOCAL static bool retypeValueImpl(QoreValue& v, const QoreTypeInfo* target_ti,
+            ExceptionSink* xsink, FilterPolicy policy);
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool hasDefaultValue(const QoreTypeInfo* ti) {
@@ -1074,6 +1159,15 @@ public:
             const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr,
             q_lvalue_vts_e vts = QLVTS_None) const;
 
+    DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LexicalSemanticPolicy policy, LValueHelper* lvhelper = nullptr,
+            q_lvalue_vts_e vts = QLVTS_None) const;
+
+    template <typename FilterPolicy>
+    DLLLOCAL void acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts,
+            FilterPolicy policy) const;
+
     //! Returns the container kind an lvalue's type came from; QLVTS_None without a helper
     /** Defined in Variable.cpp, where LValueHelper is a complete type.
     */
@@ -1255,7 +1349,7 @@ protected:
         \c %broken-soft-types parse option (QoreParseOptions::BROKEN_SOFT_TYPES), as these types did before
         %Qore 3.0.
     */
-    DLLLOCAL bool acceptsBrokenSoftNull(const QoreValue& n) const;
+    DLLLOCAL bool acceptsBrokenSoftNull(const QoreValue& n, LexicalSemanticPolicy policy) const;
 
     // returns true if this type could contain an object or a closure
     DLLLOCAL virtual bool needsScanImpl() const {
@@ -1299,7 +1393,9 @@ protected:
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 
-    DLLLOCAL static void stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
+    // Keep scalar no-narrow assignments inline; their type-stripping switch has no effect.
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void stripTypeInfo(QoreValue& n, ExceptionSink* xsink,
+            LValueHelper* lvhelper = nullptr);
 
 public:
     //! Returns true for an AOT deferred placeholder type (QoreAOTDeferredTypeInfo in QoreTypeInfo.cpp)
@@ -2769,7 +2865,10 @@ DLLLOCAL void map_get_plain_hash(QoreValue&, ExceptionSink*);
 DLLLOCAL void map_get_plain_hash_lvalue(QoreValue&, ExceptionSink*, LValueHelper*);
 
 //! strips no-narrow (hash<auto!>/list<auto!>) container tags like LValueHelper::assign(); copies shared containers
-DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink);
+DLLLOCAL void q_apply_no_narrow_hash_type(QoreValue& val, ExceptionSink* xsink);
+DLLLOCAL void q_apply_no_narrow_list_type(QoreValue& val, ExceptionSink* xsink);
 
 class QoreHashTypeInfo : public QoreTypeInfo {
 public:
@@ -3608,29 +3707,23 @@ public:
    DLLLOCAL QoreSoftBoolTypeInfo() : QoreTypeInfo("softbool", q_accept_vec_t {
          {NT_BOOLEAN, nullptr, true},
          {NT_FLOAT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
       }, q_return_vec_t {{NT_BOOLEAN, true}}) {
    }
 
@@ -3664,29 +3757,23 @@ public:
    DLLLOCAL QoreSoftBoolOrNothingTypeInfo() : QoreTypeInfo("*softbool", q_accept_vec_t {
          {NT_BOOLEAN, nullptr},
          {NT_FLOAT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NOTHING, nullptr},
          {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
       }, q_return_vec_t {{NT_BOOLEAN}, {NT_NOTHING}}) {
@@ -4689,7 +4776,7 @@ public:
     //! Creates the helper for a type-acceptance call reporting into \a xs
     /** @param xs the caller's sink; may be nullptr, in which case no failure can be reported at all (as before)
     */
-    DLLLOCAL ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
         // only allocate on the slow path: with a clean sink, any exception raised below is unambiguously ours
         if (xs && *xs) {
             tmp.reset(new ExceptionSink);
@@ -4727,6 +4814,44 @@ private:
     //! only allocated when the caller's sink already held an exception on entry
     std::unique_ptr<ExceptionSink> tmp;
 };
+
+QORE_INTERN_ALWAYS_INLINE void QoreTypeInfo::stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper) {
+    // strips complex typeinfo for an assignment to an untyped lvalue
+    switch (n.getType()) {
+        case NT_HASH: {
+            if (lvhelper) {
+                map_get_plain_hash_lvalue(n, xsink, lvhelper);
+            } else {
+                map_get_plain_hash(n, xsink);
+            }
+            break;
+        }
+        case NT_LIST: {
+            if (lvhelper) {
+                map_get_plain_list_lvalue(n, xsink, lvhelper);
+            } else {
+                map_get_plain_list(n, xsink);
+            }
+            break;
+        }
+    }
+}
+
+// Keep the common scalar/no-coercion checks in the caller; container copies stay out of line.
+QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink) {
+    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+        if (val.getType() == NT_HASH) {
+            map_get_plain_hash(val, xsink);
+        } else if (val.getType() == NT_LIST) {
+            map_get_plain_list(val, xsink);
+        }
+    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        q_apply_no_narrow_hash_type(val, xsink);
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        q_apply_no_narrow_list_type(val, xsink);
+    }
+}
 
 #include "qore/intern/QoreParseTypeInfo.h"
 

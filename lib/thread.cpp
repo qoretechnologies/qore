@@ -4296,7 +4296,7 @@ QoreValue run_thread_entry_handler(ThreadData* td, ResolvedCallReferenceNode* ha
         ExceptionSink& xsink) {
     ThreadEntryHandlerRunHelper rh(td);
     try {
-        return handler->execValue(args, &xsink);
+        return handler->invoke(args, &xsink);
     } catch (AbstractException& e) {
         e.convert(&xsink);
     }

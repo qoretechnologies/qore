@@ -32,6 +32,25 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 
+namespace {
+class LexicalExtractOperatorNode : public QoreExtractOperatorNode {
+public:
+    using QoreExtractOperatorNode::QoreExtractOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreExtractOperatorNode* QoreExtractOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue lvalue, QoreValue offset, QoreValue length, QoreValue replacement) {
+    auto* node = policy.needsFilter()
+        ? static_cast<QoreExtractOperatorNode*>(new LexicalExtractOperatorNode(loc, lvalue, offset, length, replacement))
+        : new QoreExtractOperatorNode(loc, lvalue, offset, length, replacement);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
 QoreString QoreExtractOperatorNode::extract_str("extract operator expression");
 
 // if del is true, then the returned QoreString * should be extractd, if false, then it must not be
@@ -116,6 +135,11 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 }
 
 QoreValue QoreExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     printd(5, "QoreExtractOperatorNode::splice() lvalue_exp: %s, offset_exp: %s, length_exp: %s, new_exp: %s, " \
         "isEvent: %d\n", lvalue_exp.getTypeName(), offset_exp.getTypeName(), length_exp.getTypeName(),
         new_exp.getTypeName(), xsink->isEvent());
@@ -185,7 +209,12 @@ QoreValue QoreExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             if (!new_exp)
                 rv = vl->extract(offset, length);
             else
-                rv = vl->extract(offset, length, *exp, xsink);
+                if constexpr (Lexical) {
+                    rv = qore_list_private::replace(*vl, offset, length, *exp, true,
+                        xsink, getSemanticPolicy());
+                } else {
+                    rv = qore_list_private::replace(*vl, offset, length, *exp, true, xsink);
+                }
         }
     }
     else if (vt == NT_STRING) {

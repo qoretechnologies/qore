@@ -36,6 +36,8 @@
 
 class QoreHashMapOperatorNode : public QoreNOperatorNodeBase<3> {
 public:
+    DLLLOCAL static QoreHashMapOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2);
     DLLLOCAL QoreHashMapOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1, QoreValue p2) :
         QoreNOperatorNodeBase<3>(loc, p0, p1, p2) {
     }
@@ -59,7 +61,9 @@ public:
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);
         if (*xsink)
             return nullptr;
-        return new QoreHashMapOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release());
+        auto* node = create(getSemanticPolicy(), loc, n_e0.release(), n_e1.release(), n_e2.release());
+        node->returnTypeInfo = returnTypeInfo;
+        return node;
     }
 
     //! Compute the map operator's return type.
@@ -81,6 +85,8 @@ public:
     }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
     DLLLOCAL static QoreString map_str;
@@ -94,6 +100,7 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    template <bool Lexical>
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* getNewHash() const;

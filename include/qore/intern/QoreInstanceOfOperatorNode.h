@@ -35,6 +35,10 @@
 
 class QoreInstanceOfOperatorNode : public QoreSingleExpressionOperatorNode<QoreOperatorNode> {
 public:
+    DLLLOCAL static QoreInstanceOfOperatorNode* create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* type);
+    DLLLOCAL static QoreInstanceOfOperatorNode* create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, const QoreTypeInfo* type);
     DLLLOCAL QoreInstanceOfOperatorNode(const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* ref)
             : QoreSingleExpressionOperatorNode<QoreOperatorNode>(loc, exp), r(ref) {
     }
@@ -64,13 +68,15 @@ public:
         if (*xsink)
             return nullptr;
         assert(ti);
-        return new QoreInstanceOfOperatorNode(loc, n_exp.release(), ti);
+        return create(getSemanticPolicy(), loc, n_exp.release(), ti);
     }
 
     //! Returns the resolved type info for the instanceof check (for AOT serialization)
     DLLLOCAL const QoreTypeInfo* getInstanceTypeInfo() const { return ti; }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     QoreParseTypeInfo* r = nullptr;
     const QoreTypeInfo* ti = nullptr;
 

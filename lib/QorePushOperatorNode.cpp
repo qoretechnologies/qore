@@ -34,6 +34,15 @@
 QoreString QorePushOperatorNode::push_str("push operator expression");
 
 QoreValue QorePushOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QorePushOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QorePushOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
@@ -73,7 +82,11 @@ QoreValue QorePushOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
     QoreListNode* l = val.getValue().get<QoreListNode>();
 
-    l->push(res.getReferencedValue(), xsink);
+    if constexpr (Lexical) {
+        qore_list_private::push(*l, res.getReferencedValue(), xsink, getSemanticPolicy());
+    } else {
+        qore_list_private::pushCanonical(*l, res.getReferencedValue(), xsink);
+    }
 
     // reference for return value
     return ref_rv ? l->refSelf() : QoreValue();

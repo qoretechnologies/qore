@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/LexicalReflection.h"
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
@@ -224,18 +225,36 @@ QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const Abstr
     return call_pgm;
 }
 
-QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_method_private::evalNormalVariantImpl(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
         CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
-    return METHV_const(variant)->evalMethod(self, ceh, xsink);
+    if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(self, ceh, xsink);
+    else return METHV_const(variant)->evalMethod(self, ceh, xsink);
+}
+
+QoreValue qore_method_private::evalNormalVariant(
+        QoreObject* self, RuntimeConfig& rc,
+        const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const QoreTypeInfo* receiver_type_info) const {
+    return evalNormalVariantImpl<false>({}, self, rc, ev, args, xsink, explicit_type_param_instantiation, receiver_type_info);
+}
+
+QoreValue qore_method_private::evalNormalVariant(
+        LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc,
+        const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const QoreTypeInfo* receiver_type_info) const {
+    return evalNormalVariantImpl<true>(policy, self, rc, ev, args, xsink, explicit_type_param_instantiation, receiver_type_info);
 }
 
 int qore_method_private::parseInit() {
@@ -1762,7 +1781,7 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
-        const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getTypeInfo(),
+        const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getInitializerTypeInfo(),
             qore_object_private::get(o)->instantiated_type);
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
             member_name, QoreTypeInfo::getPath(member_type),
@@ -1789,13 +1808,15 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     return 0;
 }
 
-void qore_class_private::execBaseClassConstructor(QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
         ExceptionSink* xsink) const {
     //printd(5, "qore_class_private::execBaseClassConstructor() '%s' constructor: %p\n", name.c_str(), constructor);
     // if there is no constructor, execute the superclass constructors directly
     if (!constructor){
         if (scl) { // execute base class constructors if any
-            scl->execConstructors(self, bceal, rc, xsink);
+            if constexpr (Lexical) scl->execConstructors({}, self, bceal, rc, xsink);
+            else scl->execConstructors(self, bceal, rc, xsink);
         }
 
         return;
@@ -1804,11 +1825,23 @@ void qore_class_private::execBaseClassConstructor(QoreObject* self, BCEAList* bc
     bool already_executed;
     const AbstractQoreFunctionVariant* variant;
     const QoreProgramLocation* aloc = nullptr;
-    QoreListNode* args = bceal->findArgs(cls->getID(), &already_executed, variant, aloc);
+    QoreListNode* args;
+    if constexpr (Lexical) args = bceal->findArgs(policy, cls->getID(), &already_executed, variant, aloc);
+    else args = bceal->findArgs(cls->getID(), &already_executed, variant, aloc);
     if (!already_executed && !qore_object_private::get(*self)->checkData(cls->getID())) {
         QoreProgramOptionalLocationHelper plh(aloc);
-        constructor->priv->evalConstructor(variant, self, args, bceal, rc, xsink);
+        constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, bceal, rc, xsink);
     }
+}
+
+void qore_class_private::execBaseClassConstructor(QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    return execBaseClassConstructorImpl<false>({}, self, bceal, rc, xsink);
+}
+
+void qore_class_private::execBaseClassConstructor(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    return execBaseClassConstructorImpl<true>(policy, self, bceal, rc, xsink);
 }
 
 static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClass* object_class,
@@ -1845,7 +1878,8 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
     return object_class->getTypeInfo(args);
 }
 
-QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
         bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
 #ifdef DEBUG
@@ -1937,9 +1971,9 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
             if (!constructor) {
                 hm_method_t::const_iterator i = hm.find("constructor");
                 assert(i != hm.end());
-                i->second->priv->evalConstructor(variant, self, args, *bceal, rc, xsink, tmp_args);
+                i->second->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
             } else
-                constructor->priv->evalConstructor(variant, self, args, *bceal, rc, xsink, tmp_args);
+                constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
             printd(5, "qore_class_private::execConstructor() class: %p %s done\n", cls, name.c_str());
         }
     }
@@ -1954,6 +1988,18 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
 
     printd(5, "qore_class_private::execConstructor() this: %p %s::constructor() returning o: %p\n", this, name.c_str(), self);
     return self;
+}
+
+QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
+        bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
+    return execConstructorImpl<false>({}, xsink, rc, variant, args, obj_cls, allow_abstract, object_type_info, tmp_args);
+}
+
+QoreObject* qore_class_private::execConstructor(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
+        bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
+    return execConstructorImpl<true>(policy, xsink, rc, variant, args, obj_cls, allow_abstract, object_type_info, tmp_args);
 }
 
 void qore_class_private::parseCommit() {
@@ -2257,7 +2303,8 @@ void qore_class_private::setPublic() {
     pub = true;
 }
 
-QoreListNode* BCEAList::findArgs(qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreListNode* BCEAList::findArgsImpl(LexicalSemanticPolicy& policy, qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
     bceamap_t::iterator i = lower_bound(classid);
     // not found
     if (i == end() || i->first != classid) {
@@ -2279,10 +2326,21 @@ QoreListNode* BCEAList::findArgs(qore_classid_t classid, bool* aexeced, const Ab
     i->second->execed = true;
     variant = i->second->variant;
     loc = i->second->loc;
+    if constexpr (Lexical) policy = i->second->semantic_policy;
     return i->second->args;
 }
 
-int BCEAList::add(qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink) {
+QoreListNode* BCEAList::findArgs(qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
+    LexicalSemanticPolicy unused;
+    return findArgsImpl<false>(unused, classid, aexeced, variant, loc);
+}
+
+QoreListNode* BCEAList::findArgs(LexicalSemanticPolicy& policy, qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
+    return findArgsImpl<true>(policy, classid, aexeced, variant, loc);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int BCEAList::addImpl(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink) {
     // see if class already exists in the list
     bceamap_t::iterator i = lower_bound(classid);
     bool n = ((i == end() || i->first != classid));
@@ -2290,16 +2348,28 @@ int BCEAList::add(qore_classid_t classid, const QoreListNode* arg, const Abstrac
         return 0;
 
     // save arguments for evaluation in the constructor
-    if (n)
-        insert(i, bceamap_t::value_type(classid, new BCEANode(loc, arg ? arg->listRefSelf() : 0, variant)));
+    if (n) {
+        BCEANode* node = new BCEANode(loc, arg ? arg->listRefSelf() : nullptr, variant);
+        if constexpr (Lexical) node->semantic_policy = policy;
+        insert(i, bceamap_t::value_type(classid, node));
+    }
     else {
         assert(!i->second->args);
         assert(!i->second->variant);
         assert(!i->second->execed);
         i->second->args = arg ? arg->listRefSelf() : 0;
         i->second->variant = reinterpret_cast<const MethodVariant*>(variant);
+        if constexpr (Lexical) i->second->semantic_policy = policy;
     }
     return 0;
+}
+
+int BCEAList::add(qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink) {
+    return addImpl<false>({}, classid, arg, variant, loc, xsink);
+}
+
+int BCEAList::add(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink) {
+    return addImpl<true>(policy, classid, arg, variant, loc, xsink);
 }
 
 void BCEAList::deref(ExceptionSink* xsink) {
@@ -2803,13 +2873,23 @@ QoreVarInfo* BCNode::parseFindStaticVar(const char* vname, const QoreClass*& qc,
     return vi;
 }
 
-void BCNode::execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void BCNode::execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     //printd(5, "BCNode::execConstructors() %s::constructor() o: %p (for subclass %s) virtual: %d\n", sclass->getName(), o, o->getClass()->getName(), is_virtual);
 
     // do not execute constructors for virtual base classes
     if (is_virtual)
         return;
-    sclass->priv->execBaseClassConstructor(o, bceal, rc, xsink);
+    if constexpr (Lexical) sclass->priv->execBaseClassConstructor({}, o, bceal, rc, xsink);
+    else sclass->priv->execBaseClassConstructor(o, bceal, rc, xsink);
+}
+
+void BCNode::execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return execConstructorsImpl<false>({}, o, bceal, rc, xsink);
+}
+
+void BCNode::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
 }
 
 int BCNode::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
@@ -3037,12 +3117,22 @@ bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
     return false;
 }
 
-void BCList::execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void BCList::execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     for (auto& i : *this) {
-        (*i).execConstructors(o, bceal, rc, xsink);
+        if constexpr (Lexical) (*i).execConstructors({}, o, bceal, rc, xsink);
+        else (*i).execConstructors(o, bceal, rc, xsink);
         if (*xsink)
             break;
     }
+}
+
+void BCList::execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return execConstructorsImpl<false>({}, o, bceal, rc, xsink);
+}
+
+void BCList::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
 }
 
 bool BCList::parseCheckHierarchy(const QoreClass* cls, ClassAccess& access, bool toplevel) const {
@@ -3304,12 +3394,27 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
     return nullptr;
 }
 
-int BCAList::execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int BCAList::execBaseClassConstructorArgsImpl(LexicalSemanticPolicy policy, BCEAList* bceal, ExceptionSink* xsink) const {
     for (auto& i : *this) {
-        if (bceal->add(i->classid, i->getArgs(), i->getVariant(), i->loc, xsink))
+        int err;
+        if constexpr (Lexical) {
+            err = bceal->add(i->semantic_policy, i->classid, i->getArgs(), i->getVariant(), i->loc, xsink);
+        } else {
+            err = bceal->add(i->classid, i->getArgs(), i->getVariant(), i->loc, xsink);
+        }
+        if (err)
             return -1;
     }
     return 0;
+}
+
+int BCAList::execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink) const {
+    return execBaseClassConstructorArgsImpl<false>({}, bceal, xsink);
+}
+
+int BCAList::execBaseClassConstructorArgs(LexicalSemanticPolicy policy, BCEAList* bceal, ExceptionSink* xsink) const {
+    return execBaseClassConstructorArgsImpl<true>(policy, bceal, xsink);
 }
 
 QoreProgram* QoreClass::getProgram() const {
@@ -4467,9 +4572,24 @@ void BCSMList::execSystemDestructors(QoreObject* o, RuntimeConfig& rc, Exception
 }
 
 void BCSMList::execCopyMethods(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    execCopyMethodsImpl<false>({}, self, old, rc, xsink);
+}
+
+void BCSMList::execCopyMethods(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    execCopyMethodsImpl<true>(policy, self, old, rc, xsink);
+}
+
+template <bool Lexical>
+void BCSMList::execCopyMethodsImpl(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
     for (class_list_t::const_iterator i = begin(), e = end(); i != e; ++i) {
         if (!i->second) {
-            i->first->priv->execBaseClassCopy(self, old, rc, xsink);
+            if constexpr (Lexical) {
+                i->first->priv->execBaseClassCopy(policy, self, old, rc, xsink);
+            } else {
+                i->first->priv->execBaseClassCopy(self, old, rc, xsink);
+            }
             if (xsink->isEvent())
                 break;
         }
@@ -4789,7 +4909,8 @@ bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool topl
     return !scl ? false : scl->runtimeIsPrivateMember(str, toplevel);
 }
 
-QoreValue qore_class_private::evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
     printd(5, "qore_class_private::evalMethodGate() method: %s args: %p\n", nme, args);
 
     ReferenceHolder<QoreListNode> args_holder(xsink);
@@ -4814,7 +4935,16 @@ QoreValue qore_class_private::evalMethodGate(QoreObject* self, const char* nme, 
 
     args_holder->insert(new QoreStringNode(nme), nullptr);
 
-    return self->evalMethod(*methodGate, *args_holder, xsink);
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *methodGate, xsink,
+        rc_get_current_ref(), self, *args_holder);
+}
+
+QoreValue qore_class_private::evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
+    return evalMethodGateImpl<false>({}, self, nme, args, xsink);
+}
+
+QoreValue qore_class_private::evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
+    return evalMethodGateImpl<true>(policy, self, nme, args, xsink);
 }
 
 void qore_class_private::execMemberNotification(QoreObject* self, const char* mem, ExceptionSink* xsink) const {
@@ -4873,7 +5003,8 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
-QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
     QORE_TRACE("qore_class_private::evalMethod()");
@@ -4893,7 +5024,8 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
             xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
             return QoreValue();
         }
-        return execCopy(self, xsink);
+        if constexpr (Lexical) return execCopy(policy, self, xsink);
+        else return execCopy(self, xsink);
     }
 
     const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
@@ -4902,7 +5034,7 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
     }
 
     if (w) {
-        return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
             explicit_type_param_instantiation);
     }
 
@@ -4933,7 +5065,8 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
                 const ResolvedCallReferenceNode* ref =
                     dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
                 if (ref) {
-                    return ref->invoke(args, xsink);
+                    if constexpr (Lexical) return ref->invokeLexical(args, xsink, policy);
+                    else return ref->invoke(args, xsink);
                 }
             }
         }
@@ -4943,15 +5076,27 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
     QoreClass* qc = nullptr;
     w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
-        return qore_method_private::evalPseudoMethod(*w, xsink, rc, nullptr, self, args);
+        return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
     } else if (methodGate && !methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
-        return evalMethodGate(self, nme, args, xsink);
+        return evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
     }
 
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
         "<object>::%s() is available (class lang: %s)", self->getClassName(), nme, nme,
         self->getClass()->getLanguage());
     return QoreValue();
+}
+
+QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
+    return evalMethodImpl<false>({}, self, nme, args, class_ctx, rc, xsink, explicit_type_param_instantiation, pgm_ctx);
+}
+
+QoreValue qore_class_private::evalMethod(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
+    return evalMethodImpl<true>(policy, self, nme, args, class_ctx, rc, xsink, explicit_type_param_instantiation, pgm_ctx);
 }
 
 QoreObject* qore_class_private::execSystemConstructor(QoreObject* self, int code, va_list args) const {
@@ -5104,7 +5249,21 @@ QoreObject* QoreClass::execCopy(QoreObject* old, ExceptionSink* xsink) const {
     return priv->execCopy(old, xsink);
 }
 
+void qore_class_private::execBaseClassCopy(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    if (copyMethod) copyMethod->priv->evalBaseClassCopy(policy, self, old, rc, xsink);
+}
+
 QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) const {
+    return execCopyImpl<false>({}, old, xsink);
+}
+
+QoreObject* qore_class_private::execCopy(LexicalSemanticPolicy policy, QoreObject* old, ExceptionSink* xsink) const {
+    return execCopyImpl<true>(policy, old, xsink);
+}
+
+template <bool Lexical>
+QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreObject* old, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(old);
     // Compiled calls can enter here directly, bypassing normal method dispatch.  Reject a deleted source
     // before allocating the copy; otherwise a failed copy can run a destructor on an uninitialized object.
@@ -5133,9 +5292,11 @@ QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) 
     }
 
     if (copyMethod) {
-        copyMethod->priv->evalCopy(*self, old, rc, xsink);
+        if constexpr (Lexical) copyMethod->priv->evalCopy(policy, *self, old, rc, xsink);
+        else copyMethod->priv->evalCopy(*self, old, rc, xsink);
     } else if (scl) { // execute superclass copy methods
-        scl->sml.execCopyMethods(*self, old, rc, xsink);
+        if constexpr (Lexical) scl->sml.execCopyMethods(policy, *self, old, rc, xsink);
+        else scl->sml.execCopyMethods(*self, old, rc, xsink);
     }
 
     return *xsink ? nullptr : self.release();
@@ -5317,7 +5478,7 @@ void QoreClass::addMethod(const char* nme, q_method_t m, ClassAccess access, int
         va_end(args);
     }
 
-    priv->addBuiltinMethod(nme, new BuiltinNormalMethodValueVariant(m, access, false, flags, domain, returnTypeInfo,
+    priv->addBuiltinMethod(nme, BuiltinNormalMethodValueVariant::create(m, access, false, flags, domain, returnTypeInfo,
         typeList, defaultArgList, nameList));
 }
 
@@ -5333,7 +5494,7 @@ void QoreClass::addConstMethod(const char* nme, q_method_t m, ClassAccess access
         va_end(args);
     }
 
-    priv->addBuiltinMethod(nme, new BuiltinNormalMethodValueVariant(m, access, false, flags, domain, returnTypeInfo,
+    priv->addBuiltinMethod(nme, BuiltinNormalMethodValueVariant::create(m, access, false, flags, domain, returnTypeInfo,
         typeList, defaultArgList, nameList, true));
 }
 
@@ -6222,7 +6383,8 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
     return 0;
 }
 
-QoreValue qore_class_private::evalPseudoMethod(const QoreValue n, const char* nme, const QoreListNode* args,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalPseudoMethodImpl(LexicalSemanticPolicy policy, const QoreValue n, const char* nme, const QoreListNode* args,
         RuntimeConfig& rc, ExceptionSink* xsink) const {
    QORE_TRACE("qore_class_private::evalPseudoMethod()");
 
@@ -6233,12 +6395,33 @@ QoreValue qore_class_private::evalPseudoMethod(const QoreValue n, const char* nm
    //printd(5, "qore_class_private::evalPseudoMethod() %s::%s() found method %p class %s\n", priv->name, nme, w,
    //   w->getClassName());
 
-   return qore_method_private::evalPseudoMethod(*m, xsink, rc, 0, n, args);
+   return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *m, xsink, rc, nullptr, n, args);
+}
+
+QoreValue qore_class_private::evalPseudoMethod(const QoreValue n, const char* nme, const QoreListNode* args,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return evalPseudoMethodImpl<false>({}, n, nme, args, rc, xsink);
+}
+
+QoreValue qore_class_private::evalPseudoMethod(LexicalSemanticPolicy policy, const QoreValue n, const char* nme, const QoreListNode* args,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return evalPseudoMethodImpl<true>(policy, n, nme, args, rc, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalPseudoMethodImpl(LexicalSemanticPolicy policy, const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
+        const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *m, xsink, rc, variant, n, args);
 }
 
 QoreValue qore_class_private::evalPseudoMethod(const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
         const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
-    return qore_method_private::evalPseudoMethod(*m, xsink, rc, variant, n, args);
+    return evalPseudoMethodImpl<false>({}, m, variant, n, args, rc, xsink);
+}
+
+QoreValue qore_class_private::evalPseudoMethod(LexicalSemanticPolicy policy, const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
+        const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return evalPseudoMethodImpl<true>(policy, m, variant, n, args, rc, xsink);
 }
 
 bool qore_class_private::parseCheckPrivateClassAccess(const qore_class_private* opc) const {
@@ -7342,43 +7525,78 @@ QoreValue UserMethodVariant::evalSynchronizedMethod(QoreObject* self, CodeEvalua
     return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
 }
 
-void BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void BuiltinConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
-    if (constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink))
+    if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
         return;
 
     constructor(self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
 }
 
-void BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+void BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+void BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void BuiltinExternalConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
-    if (constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink))
+    if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
         return;
 
     constructor(*qmethod, ptr, self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
 }
 
-int ConstructorMethodVariant::constructorPrelude(const QoreClass& thisclass, CodeEvaluationHelper& ceh,
+void BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+void BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int ConstructorMethodVariant::constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, CodeEvaluationHelper& ceh,
         QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     if (bcl) {
         const BCAList* bcal = getBaseClassArgumentList();
         if (bcal) {
-            bcal->execBaseClassConstructorArgs(bceal, xsink);
+            if constexpr (Lexical) bcal->execBaseClassConstructorArgs({}, bceal, xsink);
+            else bcal->execBaseClassConstructorArgs(bceal, xsink);
             if (*xsink) {
                 return -1;
             }
         }
-        bcl->execConstructors(self, bceal, ceh.getRuntimeConfig(), xsink);
+        if constexpr (Lexical) bcl->execConstructors({}, self, bceal, ceh.getRuntimeConfig(), xsink);
+        else bcl->execConstructors(self, bceal, ceh.getRuntimeConfig(), xsink);
         if (*xsink) {
             return -1;
         }
     }
 
     return 0;
+}
+
+int ConstructorMethodVariant::constructorPrelude(const QoreClass& thisclass, CodeEvaluationHelper& ceh,
+        QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return constructorPreludeImpl<false>({}, thisclass, ceh, self, bcl, bceal, xsink);
+}
+
+int ConstructorMethodVariant::constructorPrelude(LexicalSemanticPolicy policy, const QoreClass& thisclass, CodeEvaluationHelper& ceh,
+        QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return constructorPreludeImpl<true>(policy, thisclass, ceh, self, bcl, bceal, xsink);
 }
 
 UserConstructorVariant::~UserConstructorVariant() {
@@ -7390,7 +7608,8 @@ void UserConstructorVariant::setBCAList(BCAList* n_bcal) {
     bcal = n_bcal;
 }
 
-void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh)
@@ -7412,7 +7631,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
         ArgvContextHelper argv_helper(argv ? argv->listRefSelf() : nullptr, xsink);
     }
 
-    if (!constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink)) {
+    if (!constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink)) {
         evalIntern("constructor", uveh.getArgv(), 0, xsink).discard(xsink);
     }
 
@@ -7421,6 +7640,16 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
         signature.argvid->uninstantiate(xsink);
 
     // self uninstantiation now handled by SelfInstantiationHelper RAII above
+}
+
+void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+void UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+    return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
 int UserConstructorVariant::parseInit(QoreFunction* f) {
@@ -7491,6 +7720,12 @@ void BuiltinExternalDestructorVariant::evalDestructor(const QoreClass &thisclass
 
 void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
         CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
+    evalCopyImpl<false>(thisclass, self, old, ceh, scl, xsink);
+}
+
+template <bool Lexical>
+void UserCopyVariant::evalCopyImpl(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
+        CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
     // there can only be max 1 param
     assert(signature.numParams() <= 1);
 
@@ -7506,7 +7741,11 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
     CodeContextHelper cch(xsink, CT_USER, "copy", self, qore_class_private::get(thisclass));
 
     if (scl) {
-        scl->sml.execCopyMethods(self, old, ceh.getRuntimeConfig(), xsink);
+        if constexpr (Lexical) {
+            scl->sml.execCopyMethods(signature.getDeclarationPolicy(), self, old, ceh.getRuntimeConfig(), xsink);
+        } else {
+            scl->sml.execCopyMethods(self, old, ceh.getRuntimeConfig(), xsink);
+        }
         if (*xsink) {
             return;
         }
@@ -7576,10 +7815,22 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
 
 void BuiltinCopyVariantBase::evalCopy(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
         CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
+    evalCopyImpl<false>({}, thisclass, self, old, ceh, scl, xsink);
+}
+
+void BuiltinCopyVariantBase::evalLexicalCopy(LexicalSemanticPolicy policy, const QoreClass& thisclass,
+        QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
+    evalCopyImpl<true>(policy, thisclass, self, old, ceh, scl, xsink);
+}
+
+template <bool Lexical>
+void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass,
+        QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "copy", self, qore_class_private::get(thisclass));
 
     if (scl) {
-        scl->sml.execCopyMethods(self, old, ceh.getRuntimeConfig(), xsink);
+        if constexpr (Lexical) scl->sml.execCopyMethods(policy, self, old, ceh.getRuntimeConfig(), xsink);
+        else scl->sml.execCopyMethods(self, old, ceh.getRuntimeConfig(), xsink);
         if (*xsink) {
             return;
         }
@@ -7588,7 +7839,8 @@ void BuiltinCopyVariantBase::evalCopy(const QoreClass& thisclass, QoreObject* se
     old->evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
 }
 
-void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVariant* variant,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
     // setup call, save runtime position, and evaluate arguments; a temporary list gives its values to the call (see
@@ -7598,9 +7850,9 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
     QoreSourceProgramHolder spgm_holder(xsink);
     QoreProgram* mpgm = qore_get_method_pgm_context(thisclass, spgm_holder);
     CodeEvaluationHelper ceh = tmp_args
-        ? CodeEvaluationHelper(xsink, rc, this, variant, "constructor", const_cast<QoreListNode*>(args), self,
+        ? CodeEvaluationHelper(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, "constructor", const_cast<QoreListNode*>(args), self,
             qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, mpgm)
-        : CodeEvaluationHelper(xsink, rc, this, variant, "constructor", args, self,
+        : CodeEvaluationHelper(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, "constructor", args, self,
             qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, mpgm);
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
@@ -7609,11 +7861,37 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
         return;
     }
 
-    CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    if constexpr (Lexical) CONMV_const(variant)->evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    else CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+}
+
+void ConstructorMethodFunction::evalConstructor(
+        const AbstractQoreFunctionVariant* variant,
+        const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
+        RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
+    return evalConstructorImpl<false>({}, variant, thisclass, self, args, bcl, bceal, rc, xsink, tmp_args);
+}
+
+void ConstructorMethodFunction::evalConstructor(
+        LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
+        const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
+        RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
+    return evalConstructorImpl<true>(policy, variant, thisclass, self, args, bcl, bceal, rc, xsink, tmp_args);
 }
 
 void CopyMethodFunction::evalCopy(const QoreClass& thisclass, QoreObject* self, QoreObject* old, BCList* scl,
         RuntimeConfig& rc, ExceptionSink* xsink) const {
+    evalCopyImpl<false>({}, thisclass, self, old, scl, rc, xsink);
+}
+
+void CopyMethodFunction::evalCopy(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        QoreObject* old, BCList* scl, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    evalCopyImpl<true>(policy, thisclass, self, old, scl, rc, xsink);
+}
+
+template <bool Lexical>
+void CopyMethodFunction::evalCopyImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        QoreObject* old, BCList* scl, RuntimeConfig& rc, ExceptionSink* xsink) const {
     assert(vlist.singular());
 
     const AbstractQoreFunctionVariant* variant = first();
@@ -7621,11 +7899,12 @@ void CopyMethodFunction::evalCopy(const QoreClass& thisclass, QoreObject* self, 
 
     // setup call, save runtime position
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, "copy", (QoreListNode*)nullptr, self,
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, "copy", (QoreListNode*)nullptr, self,
         qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) return;
 
-    COPYMV_const(variant)->evalCopy(thisclass, self, old, ceh, scl, xsink);
+    if constexpr (Lexical) COPYMV_const(variant)->evalLexicalCopy(policy, thisclass, self, old, ceh, scl, xsink);
+    else COPYMV_const(variant)->evalCopy(thisclass, self, old, ceh, scl, xsink);
 }
 
 void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreObject* self, RuntimeConfig& rc,
@@ -7650,7 +7929,8 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
 }
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
-QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
         const qore_class_private* cctx, QoreProgram* pgm_ctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
@@ -7660,7 +7940,7 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
     const qore_class_private* method_qc = qore_class_private::get(*qc);
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
         qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
@@ -7677,7 +7957,8 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     //  qore_class_private::runtimeCheckPrivateClassAccess(*mv->getClass()), runtime_get_class(),
     //  runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
 
-    return mv->evalMethod(self, ceh, xsink);
+    if constexpr (Lexical) return mv->evalLexicalMethod(self, ceh, xsink);
+    else return mv->evalMethod(self, ceh, xsink);
 }
 
 // raises the exception for a call of an abstract variant
@@ -7690,9 +7971,26 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+QoreValue NormalMethodFunction::evalMethod(
+        ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
+        const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+    return evalMethodImpl<false>({}, xsink, rc, variant, self, args, cctx, pgm_ctx, explicit_type_param_instantiation);
+}
+
+QoreValue NormalMethodFunction::evalMethod(
+        LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
+        const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+    return evalMethodImpl<true>(policy, xsink, rc, variant, self, args, cctx, pgm_ctx, explicit_type_param_instantiation);
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
-QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodTmpArgsImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
@@ -7702,7 +8000,7 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
 
     const qore_class_private* method_qc = qore_class_private::get(*qc);
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
         qore_get_method_pgm_context(*qc, spgm_holder), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
@@ -7721,12 +8019,30 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     //  variant, mv, mv->isPrivate(), qore_class_private::runtimeCheckPrivateClassAccess(*mv->getClass()),
     //  runtime_get_class(), runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
 
-    return mv->evalMethod(self, ceh, xsink);
+    if constexpr (Lexical) return mv->evalLexicalMethod(self, ceh, xsink);
+    else return mv->evalMethod(self, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalMethodTmpArgs(
+        ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
+    return evalMethodTmpArgsImpl<false>({}, xsink, rc, variant, self, args, cctx, explicit_type_param_instantiation, resolved_variant);
+}
+
+QoreValue NormalMethodFunction::evalMethodTmpArgs(
+        LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
+    return evalMethodTmpArgsImpl<true>(policy, xsink, rc, variant, self, args, cctx, explicit_type_param_instantiation, resolved_variant);
 }
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
-QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalPseudoMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
         const qore_class_private* cctx) const {
     //QORE_TRACE("NormalMethodFunction::evalPseudoMethod()");
@@ -7735,7 +8051,7 @@ QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeCo
     //    cctx ? cctx->name.c_str() : "n/a");
     const qore_class_private* method_qc = qc ? qore_class_private::get(*qc) : nullptr;
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, method_qc,
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, nullptr, method_qc,
         CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc, spgm_holder) : nullptr);
     if (*xsink)
         return QoreValue();
@@ -7743,15 +8059,30 @@ QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeCo
     return METHV_const(variant)->evalPseudoMethod(n, ceh, xsink);
 }
 
+QoreValue NormalMethodFunction::evalPseudoMethod(
+        ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
+        const qore_class_private* cctx) const {
+    return evalPseudoMethodImpl<false>({}, xsink, rc, variant, n, args, cctx);
+}
+
+QoreValue NormalMethodFunction::evalPseudoMethod(
+        LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
+        const qore_class_private* cctx) const {
+    return evalPseudoMethodImpl<true>(policy, xsink, rc, variant, n, args, cctx);
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
-QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* mname = getName();
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
         CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) {
@@ -7759,19 +8090,37 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     }
     // issue #4964: set class ctx
     ObjectSubstitutionHelper osh(nullptr, cctx);
-    return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+    if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
+    else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+}
+
+QoreValue StaticMethodFunction::evalMethod(
+        ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+    return evalMethodImpl<false>({}, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
+}
+
+QoreValue StaticMethodFunction::evalMethod(
+        LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+    return evalMethodImpl<true>(policy, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
 }
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
-QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodTmpArgsImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     const char* mname = getName();
     QoreSourceProgramHolder spgm_holder(xsink);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
         CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink)
@@ -7781,7 +8130,26 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     if (resolved_variant) {
         *resolved_variant = ceh.isVariantContentDependent() ? nullptr : variant;
     }
-    return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+    if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
+    else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+}
+
+QoreValue StaticMethodFunction::evalMethodTmpArgs(
+        ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
+    return evalMethodTmpArgsImpl<false>({}, xsink, rc, variant, args, cctx, receiver_type_info, explicit_type_param_instantiation, resolved_variant);
+}
+
+QoreValue StaticMethodFunction::evalMethodTmpArgs(
+        LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
+    return evalMethodTmpArgsImpl<true>(policy, xsink, rc, variant, args, cctx, receiver_type_info, explicit_type_param_instantiation, resolved_variant);
 }
 
 const qore_class_private* MethodVariantBase::getClassPriv() const {
@@ -7792,6 +8160,90 @@ const char* MethodVariantBase::getAbstractSignature() {
     if (asig.empty())
         getSignature()->addAbstractParameterSignature(asig);
     return asig.c_str();
+}
+
+thread_local const QoreLexicalMethodRegistrationHelper* QoreLexicalMethodRegistrationHelper::active = nullptr;
+
+QoreLexicalMethodRegistrationHelper::QoreLexicalMethodRegistrationHelper(const Entry* entries, size_t count)
+        : entries(entries), count(count), previous(active) {
+    active = this;
+}
+
+QoreLexicalMethodRegistrationHelper::~QoreLexicalMethodRegistrationHelper() {
+    assert(active == this);
+    active = previous;
+}
+
+q_method_t QoreLexicalMethodRegistrationHelper::find(q_method_t method) {
+    for (auto* scope = active; scope; scope = scope->previous) {
+        for (size_t i = 0; i < scope->count; ++i) {
+            if (scope->entries[i].first == method) return scope->entries[i].second;
+        }
+    }
+    return nullptr;
+}
+
+QoreObject* qore_lexical_reflection_copy(LexicalSemanticPolicy policy, const QoreClass& cls,
+        QoreObject* object, ExceptionSink* xsink) {
+    return qore_class_private::get(cls)->execCopy(policy, object, xsink);
+}
+
+QoreObject* qore_lexical_reflection_construct(LexicalSemanticPolicy policy, const QoreClass& cls,
+        const QoreExternalMethodVariant* variant, const QoreListNode* args, const QoreTypeInfo* object_type,
+        ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
+    return qore_class_private::get(cls)->execConstructor(policy, xsink, rc_get_current_ref(),
+        reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, nullptr, false, object_type);
+}
+
+QoreValue qore_lexical_reflection_method(LexicalSemanticPolicy policy, QoreObject* self,
+        const QoreMethod& method, const QoreClass* class_ctx, const QoreExternalMethodVariant* variant,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
+    auto invoke = [&]() -> QoreValue {
+        RuntimeConfig& rc = rc_get_current_ref();
+        if (variant) return qore_method_private::evalNormalVariant(policy, method, xsink, rc, self, variant, args);
+        return qore_method_private::eval(policy, method, xsink, rc, self, args);
+    };
+    if (class_ctx) {
+        ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
+        return invoke();
+    }
+    return invoke();
+}
+
+QoreValue qore_lexical_reflection_pseudo(LexicalSemanticPolicy policy, const QoreClass& cls,
+        const QoreMethod* method, const QoreExternalMethodVariant* variant, QoreValue value,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
+    assert(cls.isPseudoClass());
+    return qore_class_private::get(cls)->evalPseudoMethod(policy, method,
+        reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), value, args, rc_get_current_ref(), xsink);
+}
+
+BuiltinNormalMethodValueVariant* BuiltinNormalMethodValueVariant::create(q_method_t method,
+        ClassAccess access, bool final, int64 flags, int64 functionality, const QoreTypeInfo* return_type,
+        const type_vec_t& types, const arg_vec_t& defaults, const name_vec_t& names, bool const_method) {
+    q_method_t lexical = qore_get_lexical_program_method(method);
+    if (!lexical) lexical = QoreLexicalMethodRegistrationHelper::find(method);
+    if (lexical) {
+        return new LexicalForwardingMethodVariant(lexical, method, access, final, flags, functionality,
+            return_type, types, defaults, names, const_method);
+    }
+    return new BuiltinNormalMethodValueVariant(method, access, final, flags, functionality, return_type,
+        types, defaults, names, const_method);
+}
+
+QoreValue LexicalForwardingMethodVariant::evalLexicalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+        ExceptionSink* xsink) const {
+    CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), self, getClassPriv());
+    return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        ReferenceHolder<AbstractPrivateData> pd(qore_object_private::get(*self)->getReferencedPrivateData(
+            qore_class_private::get(*getClass())->methodID, xsink), xsink);
+        if (*xsink) return QoreValue();
+        assert(pd);
+        return lexical_method(self, *pd, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    });
 }
 
 QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
@@ -8020,6 +8472,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
 #ifdef DEBUG
     else assert(!parseTypeInfo);
 #endif
+    refreshInitializationFilter();
 
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
@@ -8073,6 +8526,7 @@ int QoreVarInfo::parseInit(const char* name) {
 #ifdef DEBUG
     else assert(!parseTypeInfo);
 #endif
+    refreshInitializationFilter();
 
     val.set(typeInfo);
 
@@ -8187,9 +8641,9 @@ int QoreVarInfo::assignInitFiltered(const char* name, QoreValue v, ExceptionSink
     ScopedTypeCheckSink ts(xsink);
     // a Qore initializer is always checked against a declared type, as with member initializers; the value of a
     // builtin class variable is supplied by its module, which is responsible for its type, and is only converted
-    if ((!builtin_value && QoreTypeInfo::hasType(getTypeInfo()))
-            || QoreTypeInfo::mayRequireFilter(getTypeInfo(), *holder)) {
-        QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *holder, *ts);
+    if ((!builtin_value && QoreTypeInfo::hasType(getInitializerTypeInfo()))
+            || QoreTypeInfo::mayRequireFilter(getInitializerTypeInfo(), *holder)) {
+        QoreTypeInfo::acceptInputMember(getInitializerTypeInfo(), name, *holder, *ts);
         if (ts.raised()) {
             return -1;
         }

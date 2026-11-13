@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - checks module defaults in children with explicit modes and a compiled executable
+# test-platform: macos - AOT module compilation, dynamic loading and deferred AST reconstruction
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class LexicalCompatibilityAotDefaultsTest
+
+class LexicalCompatibilityAotDefaultsTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC
+            ?? (libqore_dir + DirSep + "qcc");
+    }
+
+    const ModuleSource = '%modern
+module LexicalAotCanonical {
+    version = "1.0";
+    desc = "canonical AOT defaults under legacy parse context";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+public namespace LexicalAotCanonical {
+    public string sub text() { return "text"; }
+    public list<*int> sub items() { return (1,2); }
+    public bool sub truth(bool value = !!text()) { return value; }
+    public list<*int> sub slice(list<*int> value = items()[0..3]) { return value; }
+    public auto sub body_only<T = softint>() { return new list<T>("23"); }
+    public auto sub default_only<T = softint>(auto value = body_only<T>()) { return value; }
+    public class Base {}
+    public class Derived inherits Base {}
+    public enum Mode { Ready = 1 }
+    public hashdecl Options { int value = 17; }
+    public list<Base> sub objects() { return (new Derived(), new Derived()); }
+    public auto sub materialize(hash<Options> options = new hash<Options>(), Mode mode = Mode::Ready) {
+        list<Base> values = objects();
+        return ((map $1, values).size(), (select values, True).size(), (take 2, values).size(),
+            options.value, mode == Mode::Ready);
+    }
+    public class Probe {
+        private static string text() { return "text"; }
+        static bool truth(bool value = !!text()) { return value; }
+    }
+}
+';
+
+    const ConsumerSource = '%modern
+%no-child-restrictions
+auto sub invoke(Program target) { return target.callFunction("sample"); }
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE
+    | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
+# Load through a native builtin invoked by legacy code, while its namespace policy bridge is active.
+p.parsePending("sub preload() { load_module(\"LexicalAotCanonical\"); }", "legacy-native-module-loader");
+p.parseCommit();
+p.callFunction("preload");
+p.parsePending("%requires LexicalAotCanonical\n"
+    "auto sub sample() { return (LexicalAotCanonical::truth(), LexicalAotCanonical::slice(),"
+    "LexicalAotCanonical::Probe::truth(), LexicalAotCanonical::body_only(),"
+    "LexicalAotCanonical::default_only(), LexicalAotCanonical::materialize()); }", "legacy-module-consumer");
+p.parseCommit();
+foreach bool strict in (True, False, True) {
+    if (strict) {
+        p.setParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
+    } else {
+        p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
+    }
+    auto result = invoke(p);
+    if (result !== (True, (1,2), True, (23,), (23,), (2, 2, 2, 17, True))) throw "AOT-CANONICAL-POLICY", result;
+}
+printf("PASS\n");
+';
+
+    constructor() : QUnit::Test("LexicalCompatibilityAotDefaults", "1.0", \ARGV) {
+        addTestCase("canonical defaults reconstructed during legacy parsing", \defaults());
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private static writeSource(string path, string source) {
+        File file();
+        file.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        file.write(source);
+        file.close();
+    }
+
+    private checkRun(string command, string label) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command);
+        assertEq(0, result.rc, label + ": " + result.stderr);
+        if (result.mode) ExecModeHarness::check_native(result);
+        assertEq("PASS\n", result.stdout, label);
+    }
+
+    defaults() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("lexical-aot-defaults-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string module = src_dir + "/LexicalAotCanonical.qm";
+        string qmod = qmod_dir + "/LexicalAotCanonical.qmod";
+        string consumer = tmp.path + "/consumer.qr";
+        string executable = tmp.path + "/consumer";
+        writeSource(module, ModuleSource);
+        writeSource(consumer, ConsumerSource);
+        string env = "QORE_LIBDIR=" + shellQuote(libqore_dir) + " ";
+        hash<auto> compiled = ExecModeHarness::run_command(env + shellQuote(qcc_bin)
+            + " --module --strip-source -o " + shellQuote(qmod) + " " + shellQuote(module));
+        assertEq(0, compiled.rc, "qmod compile: " + compiled.stderr);
+        assertTrue(is_file(qmod), "stripped qmod was generated");
+
+        compiled = ExecModeHarness::run_command(env + shellQuote(qcc_bin)
+            + " -o " + shellQuote(executable) + " " + shellQuote(consumer));
+        assertEq(0, compiled.rc, "consumer compile: " + compiled.stderr);
+        assertTrue(is_file(executable), "AOT consumer was generated");
+
+        # Separate module paths ensure the binary case cannot fall back to the module source.
+        foreach string module_dir in (src_dir, qmod_dir) {
+            string path = module_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+            string module_env = env + "QORE_MODULE_DIR=" + shellQuote(path) + " ";
+            foreach string mode in ("ast", "ir", "jit", "tiered") {
+                checkRun(module_env + shellQuote(qore_bin) + " -b --enable-debug --exec-mode=" + mode
+                    + " " + shellQuote(consumer), module_dir + " " + mode);
+            }
+            checkRun(module_env + shellQuote(executable) + " -b --enable-debug", module_dir + " aot");
+        }
+    }
+}

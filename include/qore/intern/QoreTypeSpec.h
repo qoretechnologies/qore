@@ -38,6 +38,7 @@
 #include <qore/QoreClass.h>
 #include <qore/TypedHashDecl.h>
 #include <qore/QoreEnumDecl.h>
+#include <qore/intern/LexicalSemanticPolicy.h>
 
 // Forward declarations
 class QoreTypeInfo;
@@ -48,6 +49,7 @@ class QoreComplexBufferTypeInfo;
 class LValueHelper;
 class QoreHashNode;
 class QoreListNode;
+struct QoreAcceptSpec;
 
 #define NO_TYPE_INFO "any"
 
@@ -77,11 +79,14 @@ enum q_typespec_t : unsigned char {
     QTS_TYPEPARAM = 13,
     QTS_WILDCARD = 14,
     QTS_COMPLEXBUFFER = 15,
+    // Code-owned conversion descriptor; never a declared/value type or serialized AOT type.
+    QTS_INITIALIZER_FILTER,
 };
 
-static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_COMPLEXBUFFER) + 1;
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_INITIALIZER_FILTER) + 1;
 
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
+typedef std::function<void (QoreValue&, ExceptionSink*, LexicalSemanticPolicy)> q_type_lexical_map_t;
 
 // returns type info for base types
 DLLLOCAL const QoreTypeInfo* getTypeInfoForType(qore_type_t t);
@@ -228,6 +233,7 @@ public:
             case QTS_PARAMCLASS:
             case QTS_TYPEPARAM:
             case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
                 return u.ti;
 
             case QTS_TYPE:
@@ -273,6 +279,7 @@ public:
                 return u.ed->getBaseTypeInfo();
             case QTS_TYPEPARAM:
             case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
                 return u.ti;
         }
         assert(false);
@@ -329,15 +336,38 @@ public:
     */
     DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold = false) const;
 
+    //! Matches with the conversion operation's explicit source policy, including soft-list elements.
+    DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold,
+            LexicalSemanticPolicy policy) const;
+
+    template <typename MatchPolicy>
+    DLLLOCAL qore_type_result_e runtimeAcceptsValueImpl(const QoreValue& n, bool exact, bool fold,
+            MatchPolicy policy) const;
+
     DLLLOCAL qore_type_result_e checkMatchType(const QoreTypeSpec& t, bool& may_not_match,
             qore_type_result_e& max_result) const;
 
     DLLLOCAL qore_type_result_e tryMatchReferenceType(const QoreTypeSpec& t, bool& may_not_match) const;
 
     // returns true if there is a match or if an error has been raised
-    DLLLOCAL bool acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
+    DLLLOCAL bool acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
             const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
             LValueHelper* lvhelper = nullptr) const;
+
+    template <typename FilterPolicy>
+    DLLLOCAL bool acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
+            const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
+            LValueHelper* lvhelper, FilterPolicy policy) const;
+
+    template <typename FilterPolicy>
+    DLLLOCAL bool acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo,
+            const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
+            LValueHelper* lvhelper, QoreHashNode* h, bool& err, FilterPolicy policy) const;
+
+    template <typename FilterPolicy>
+    DLLLOCAL bool acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo,
+            const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
+            LValueHelper* lvhelper, QoreListNode* l, bool& err, FilterPolicy policy) const;
 
     DLLLOCAL bool operator==(const QoreTypeSpec& other) const;
     DLLLOCAL bool operator!=(const QoreTypeSpec& other) const;
@@ -366,6 +396,14 @@ protected:
 
     DLLLOCAL QoreTypeSpec(qore_type_t t, q_typespec_t ts) : typespec(ts) {
         u.t = t;
+    }
+};
+
+//! Internal conversion dispatch for a lexical initializer; not used for type matching.
+class QoreInitializerFilterTypeSpec : public QoreTypeSpec {
+public:
+    DLLLOCAL explicit QoreInitializerFilterTypeSpec(const QoreTypeInfo* descriptor)
+            : QoreTypeSpec(descriptor, QTS_INITIALIZER_FILTER) {
     }
 };
 
@@ -452,8 +490,12 @@ struct QoreAcceptSpec {
     const QoreTypeSpec spec;
     const q_type_map_t map;
     bool exact = false;
+    //! Optional explicit-policy conversion; the shared type never stores a particular invocation's policy.
+    const q_type_lexical_map_t lexical_map;
 
-    DLLLOCAL QoreAcceptSpec(const QoreTypeSpec&& spec, const q_type_map_t&& map, bool exact = false) : spec(spec), map(map), exact(exact) {
+    DLLLOCAL QoreAcceptSpec(const QoreTypeSpec&& spec, const q_type_map_t&& map, bool exact = false,
+            const q_type_lexical_map_t&& lexical_map = {})
+            : spec(spec), map(map), exact(exact), lexical_map(lexical_map) {
     }
 };
 typedef std::vector<QoreAcceptSpec> q_accept_vec_t;

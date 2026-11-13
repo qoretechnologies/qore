@@ -3,8 +3,7 @@
 
     a test module that declares a given module API version; built twice (see ../CMakeLists.txt):
     - apicur: the module API of the headers it is built with (QORE_MODULE_API_MAJOR / QORE_MODULE_API_MINOR)
-    - apiold: module API 2.0, the API of the headers before the enum value ownership change of qore#5519, whose
-      inline code a module compiled with them carries, so that Qore must refuse to load it
+    - apiold: the preceding module API minor; Qore must refuse to load it
 
     Qore Programming Language
 

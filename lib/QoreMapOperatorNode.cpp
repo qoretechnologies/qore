@@ -236,7 +236,7 @@ QoreValue QoreMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
                 vcommon = false;
             }
 
-            rv->push(val, xsink);
+            qore_list_private::pushCanonical(**rv, val, xsink);
         }
     }
 

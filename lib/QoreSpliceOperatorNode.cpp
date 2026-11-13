@@ -32,6 +32,25 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 
+namespace {
+class LexicalSpliceOperatorNode : public QoreSpliceOperatorNode {
+public:
+    using QoreSpliceOperatorNode::QoreSpliceOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreSpliceOperatorNode* QoreSpliceOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue lvalue, QoreValue offset, QoreValue length, QoreValue replacement) {
+    auto* node = policy.needsFilter()
+        ? static_cast<QoreSpliceOperatorNode*>(new LexicalSpliceOperatorNode(loc, lvalue, offset, length, replacement))
+        : new QoreSpliceOperatorNode(loc, lvalue, offset, length, replacement);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
 QoreString QoreSpliceOperatorNode::splice_str("splice operator expression");
 
 // if del is true, then the returned QoreString * should be spliced, if false, then it must not be
@@ -152,6 +171,11 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
 }
 
 QoreValue QoreSpliceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreSpliceOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     printd(5, "QoreSpliceOperatorNode::splice() lvalue_exp: %s, offset_exp: %s, length_exp: %s, new_exp: %s, " \
         "isEvent: %d\n", lvalue_exp.getTypeName(), offset_exp.getTypeName(), length_exp.getTypeName(),
         new_exp.getTypeName(), xsink->isEvent());
@@ -226,7 +250,12 @@ QoreValue QoreSpliceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
             if (!new_exp) {
                 holder = vl->splice(offset, length);
             } else {
-                holder = vl->splice(offset, length, *exp, xsink);
+                if constexpr (Lexical) {
+                    holder = qore_list_private::replace(*vl, offset, length, *exp, false,
+                        xsink, getSemanticPolicy());
+                } else {
+                    holder = qore_list_private::replace(*vl, offset, length, *exp, false, xsink);
+                }
             }
         }
     } else if (vt == NT_STRING) {

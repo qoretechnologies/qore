@@ -43,6 +43,7 @@ enum qore_var_t {
 };
 
 #include "qore/intern/RSet.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/VRMutex.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
@@ -1476,6 +1477,15 @@ public:
 
     DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true,
             AssignmentMode mode = AssignmentMode::Normal);
+
+    DLLLOCAL int assign(QoreValue val, const char* desc, LexicalSemanticPolicy policy,
+            bool check_types = true, AssignmentMode mode = AssignmentMode::Normal);
+
+    DLLLOCAL int assignNative(QoreValue val, const char* desc);
+
+    template <bool Lexical, bool Native = false>
+    DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL QoreValue removeValue(bool for_del);
     DLLLOCAL QoreValue remove(bool& static_assignment);

@@ -2406,7 +2406,10 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
         bool transfer = false, const char* desc = "<lvalue>") {
     QoreValue stored = !transfer && value.needsRef() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
-    ti = qore_substitute_type_params_if_needed(ti);
+    // Closed types cannot change with the receiver context. Unknown and symbolic types still use substitution.
+    if (QoreTypeInfo::hasType(ti) && ti->getContainsTypeParameterCache() != 0) {
+        ti = qore_substitute_type_params_if_needed(ti);
+    }
     QoreTypeInfo::acceptAssignment(ti, desc, stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
@@ -3639,7 +3642,7 @@ static __attribute__((noinline, cold)) void qore_ir_fast_call_param_mismatch(con
     }
     ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
     for (unsigned i = 0; i < nargs; ++i) {
-        arg_list->push(fromBits(args[i]).refSelf(), xsink);
+        qore_list_private::pushCanonical(**arg_list, fromBits(args[i]).refSelf(), xsink);
     }
     qore_fast_call_param_mismatch(func, receiver_type_info, *arg_list, xsink);
 }
@@ -7088,7 +7091,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue push_val = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             if (inv->list_push_in_place && list_val.getType() == NT_LIST) {
                 QoreListNode* l = list_val.get<QoreListNode>();
-                l->push(push_val.refSelf(), xsink);
+                qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
                 // refSelf: result shares same list pointer as operand; both are in
                 // cleanup, so both need their own reference
                 return xsink && *xsink ? QoreValue() : list_val.refSelf();
@@ -9577,7 +9580,7 @@ next_instruction:
                     } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                         vcommon = false;
                     }
-                    if (list->push(stored, xsink)) {
+                    if (qore_list_private::pushCanonical(**list, stored, xsink)) {
                         failed = true;
                         break;
                     }
@@ -9642,7 +9645,7 @@ next_instruction:
                         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                             vcommon = false;
                         }
-                        hash->setKeyValue(key.c_str(), stored, xsink);
+                        qore_hash_private::setKeyValueCanonical(**hash, key.c_str(), stored, xsink);
                     }
                     if (*xsink) {
                         break;
@@ -9702,7 +9705,7 @@ next_instruction:
                     if (mhck->unique_keys && qore_ir_interpreter_use_unique_hash_literal_insert()) {
                         hp->setKeyValueKnownAbsent(ckeys[i].c_str(), stored, xsink);
                     } else {
-                        hash->setKeyValue(ckeys[i].c_str(), stored, xsink);
+                        qore_hash_private::setKeyValueCanonical(**hash, ckeys[i].c_str(), stored, xsink);
                     }
                     if (xsink && *xsink) {
                         failed = true;
@@ -9761,7 +9764,7 @@ next_instruction:
                     // Track element type for correct list<T> type info at runtime
                     qore_list_private::get(*list)->setListTypeFromNewElementType(
                         push_val.getFullTypeInfo());
-                    list->push(push_val, xsink);
+                    qore_list_private::pushCanonical(*list, push_val, xsink);
                 }
                 ++ip;
                 break;
@@ -9772,7 +9775,7 @@ next_instruction:
                 QoreValue result;
                 if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
-                    l->push(push_val.refSelf(), xsink);
+                    qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
                     result = list_val;
                 } else {
                     const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
@@ -10803,7 +10806,7 @@ next_instruction:
                     debug_break_loop = false;
                     block = br->false_target;
                 } else {
-                    block = cond.getAsBool() ? br->true_target : br->false_target;
+                    block = LexicalSemanticPolicy::getAsBoolDefault(cond) ? br->true_target : br->false_target;
                 }
                 ip = 0;
                 // OSR: count back-edges to loop headers
@@ -11477,7 +11480,7 @@ load_local_done:
 
                         // Make the update with already-referenced value.
                         // (hash is already in TLS and will be cleaned up normally)
-                        h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(), xsink);
 
                         // Cleanup must happen AFTER modification completes and locks are released.
                         // Defer clearing refs that may trigger destructors.
@@ -11516,7 +11519,7 @@ load_local_done:
                             // cannot be reported to a catch block, so the instruction aborts
                             return new_h || (xsink && *xsink);
                         }
-                        new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        qore_hash_private::setKeyValueCanonical(*new_h, hks_inst->key_name.c_str(), val.refSelf(), xsink);
                         if (xsink && *xsink) {
                             // the hash was created for this store only, so the rejected store leaves no value behind
                             new_h->deref(xsink);
@@ -11623,7 +11626,7 @@ load_local_done:
                             }
                             h = new_h;
                         }
-                        h->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
+                        qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -11655,7 +11658,7 @@ load_local_done:
                             new_h->deref(xsink);
                             return;
                         }
-                        new_h->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
+                        qore_hash_private::setKeyValueCanonical(*new_h, key_str.c_str(), val.refSelf(), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
                             return;
@@ -12301,10 +12304,10 @@ load_local_done:
                             bool exists = false;
                             QoreValue val = qore_hash_private::get(*elem.get<const QoreHashNode>())
                                 ->getKeyValueExistenceIntern(mhk->key1.c_str(), exists);
-                            result->push(exists ? QoreValue(val.getAsBigInt()) : QoreValue(),
+                            qore_list_private::pushCanonical(**result, exists ? QoreValue(val.getAsBigInt()) : QoreValue(),
                                 xsink);
                         } else {
-                            result->push(QoreValue(), xsink);
+                            qore_list_private::pushCanonical(**result, QoreValue(), xsink);
                         }
                     }
                     out = result.release();
@@ -12332,12 +12335,12 @@ load_local_done:
                             // note: this opcode is only selected when the list element type is
                             // statically a hash with int values, so a hashdecl-typed element
                             // cannot reach it; the non-checking accessor cannot raise here
-                            result->push(
+                            qore_list_private::pushCanonical(**result,
                                 elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
                                     + offset,
                                 xsink);
                         } else {
-                            result->push(offset, xsink);
+                            qore_list_private::pushCanonical(**result, offset, xsink);
                         }
                     }
                     out = result.release();
@@ -12390,12 +12393,12 @@ load_local_done:
                             // note: this opcode is only selected when the list element type is
                             // statically a hash with int values, so a hashdecl-typed element
                             // cannot reach it; the non-checking accessor cannot raise here
-                            result->push(
+                            qore_list_private::pushCanonical(**result,
                                 elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
                                     * scale,
                                 xsink);
                         } else {
-                            result->push(0ll, xsink);
+                            qore_list_private::pushCanonical(**result, 0ll, xsink);
                         }
                     }
                     out = result.release();
@@ -12435,7 +12438,7 @@ load_local_done:
                             break;
                         }
                         if (value.getAsBigInt() > 0) {
-                            result->push(elem.refSelf(), xsink);
+                            qore_list_private::pushCanonical(**result, elem.refSelf(), xsink);
                         }
                     }
                     // the partially built result is discarded by the ReferenceHolder
@@ -13151,7 +13154,7 @@ load_local_done:
                     if (value_val.needsRef()) {
                         value_val.refSelf();
                     }
-                    hash->setKeyValue(key_str.c_str(), value_val, xsink);
+                    qore_hash_private::setKeyValueCanonical(*hash, key_str.c_str(), value_val, xsink);
                 }
                 // Do NOT discard key_val here - it's managed by the IR value map cleanup
                 if (*xsink) {
@@ -14332,7 +14335,7 @@ load_local_done:
                 QoreListNode* new_argv = nullptr;
                 if (!val.isNothing()) {
                     new_argv = new QoreListNode(autoTypeInfo);
-                    new_argv->push(val.refSelf(), xsink);
+                    qore_list_private::pushCanonical(*new_argv, val.refSelf(), xsink);
                 }
                 thread_set_implicit_args(new_argv);
                 // Store old context as result for later restoration
@@ -14673,7 +14676,7 @@ load_local_done:
                 } else if (inst->opcode == QoreIROpcode::TypedForeachNextFloat) {
                     setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(entry.getAsFloat()), xsink);
                 } else if (inst->opcode == QoreIROpcode::TypedForeachNextBool) {
-                    setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsBool()));
+                    setValueSlotDirect(values, inst->result.id, QoreValue(LexicalSemanticPolicy::getAsBoolDefault(entry)));
                 } else {
                     setValueSlotDirect(values, inst->result.id, entry);
                     trackBorrowedTemp(inst->result.id);
@@ -17103,9 +17106,9 @@ load_local_done:
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                 // the list takes the reference held for the value
                                 if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
-                                    l->push(rhs_holder.release(), xsink);
+                                    qore_list_private::pushCanonical(*l, rhs_holder.release(), xsink);
                                 } else {
-                                    l->insert(rhs_holder.release(), xsink);
+                                    qore_list_private::insertCanonical(*l, rhs_holder.release(), xsink);
                                 }
                                 if (!*xsink) {
                                     res = l->refSelf();
@@ -17267,7 +17270,7 @@ load_local_done:
                                     if (replacement_val.isNothing()) {
                                         removed_list = vl->splice(offset, length);
                                     } else {
-                                        removed_list = vl->splice(offset, length, replacement_val, xsink);
+                                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
                                     }
                                 }
                             } else if (vt == NT_STRING) {
@@ -17318,7 +17321,7 @@ load_local_done:
                                     if (replacement_val.isNothing()) {
                                         res = vl->extract(offset, length);
                                     } else {
-                                        res = vl->extract(offset, length, replacement_val, xsink);
+                                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
                                     }
                                 }
                             } else if (vt == NT_STRING) {
@@ -19451,13 +19454,13 @@ load_local_done:
 QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, ExceptionSink* xsink) {
     switch (op) {
         case QoreIROpcode::ToBool:
-            return QoreValue(value.getAsBool());
+            return QoreValue(LexicalSemanticPolicy::getAsBoolDefault(value));
         case QoreIROpcode::ToInt:
             return QoreValue(value.getAsBigInt());
         case QoreIROpcode::ToFloat:
             return QoreValue(value.getAsFloat());
         case QoreIROpcode::Not:
-            return QoreValue(!value.getAsBool());
+            return QoreValue(!LexicalSemanticPolicy::getAsBoolDefault(value));
         case QoreIROpcode::IsNullOrNothing:
             return QoreValue(value.isNullOrNothing());
         case QoreIROpcode::UnaryPlusAny: {
@@ -20289,7 +20292,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             if (!has_next) break;
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
-                            result->push(iv->getAsBigInt() * scale, xsink);
+                            qore_list_private::pushCanonical(**result, iv->getAsBigInt() * scale, xsink);
                         }
                         return result.release();
                     }
@@ -20305,7 +20308,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t scale = right.getAsBigInt();
             ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
-                result->push(l->retrieveEntry(i).getAsBigInt() * scale, xsink);
+                qore_list_private::pushCanonical(**result, l->retrieveEntry(i).getAsBigInt() * scale, xsink);
             }
             return result.release();
         }
@@ -20328,7 +20331,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             if (!has_next) break;
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
-                            result->push(iv->getAsFloat() * scale, xsink);
+                            qore_list_private::pushCanonical(**result, iv->getAsFloat() * scale, xsink);
                         }
                         return result.release();
                     }
@@ -20344,7 +20347,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double scale = right.getAsFloat();
             ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
-                result->push(l->retrieveEntry(i).getAsFloat() * scale, xsink);
+                qore_list_private::pushCanonical(**result, l->retrieveEntry(i).getAsFloat() * scale, xsink);
             }
             return result.release();
         }
@@ -20368,7 +20371,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             if (!has_next) break;
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
-                            result->push(iv->getAsBigInt() + offset, xsink);
+                            qore_list_private::pushCanonical(**result, iv->getAsBigInt() + offset, xsink);
                         }
                         return result.release();
                     }
@@ -20384,7 +20387,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t offset = right.getAsBigInt();
             ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
-                result->push(l->retrieveEntry(i).getAsBigInt() + offset, xsink);
+                qore_list_private::pushCanonical(**result, l->retrieveEntry(i).getAsBigInt() + offset, xsink);
             }
             return result.release();
         }
@@ -20407,7 +20410,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             if (!has_next) break;
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
-                            result->push(iv->getAsFloat() + offset, xsink);
+                            qore_list_private::pushCanonical(**result, iv->getAsFloat() + offset, xsink);
                         }
                         return result.release();
                     }
@@ -20423,7 +20426,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double offset = right.getAsFloat();
             ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
-                result->push(l->retrieveEntry(i).getAsFloat() + offset, xsink);
+                qore_list_private::pushCanonical(**result, l->retrieveEntry(i).getAsFloat() + offset, xsink);
             }
             return result.release();
         }
@@ -20447,7 +20450,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
                             int64_t val = iv->getAsBigInt();
-                            result->push(val * val, xsink);
+                            qore_list_private::pushCanonical(**result, val * val, xsink);
                         }
                         return result.release();
                     }
@@ -20462,7 +20465,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
-                result->push(val * val, xsink);
+                qore_list_private::pushCanonical(**result, val * val, xsink);
             }
             return result.release();
         }
@@ -20485,7 +20488,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                             ValueHolder iv(h.getValue(xsink), xsink);
                             if (*xsink) return QoreValue();
                             double val = iv->getAsFloat();
-                            result->push(val * val, xsink);
+                            qore_list_private::pushCanonical(**result, val * val, xsink);
                         }
                         return result.release();
                     }
@@ -20500,7 +20503,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
-                result->push(val * val, xsink);
+                qore_list_private::pushCanonical(**result, val * val, xsink);
             }
             return result.release();
         }
@@ -20524,7 +20527,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 if (val > 0) {
-                    result->push(val, xsink);
+                    qore_list_private::pushCanonical(**result, val, xsink);
                 }
             }
             return result.release();
@@ -20539,7 +20542,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val > 0.0) {
-                    result->push(val, xsink);
+                    qore_list_private::pushCanonical(**result, val, xsink);
                 }
             }
             return result.release();
@@ -20555,7 +20558,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 if (val != 0) {
-                    result->push(val, xsink);
+                    qore_list_private::pushCanonical(**result, val, xsink);
                 }
             }
             return result.release();
@@ -20570,7 +20573,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val != 0.0) {
-                    result->push(val, xsink);
+                    qore_list_private::pushCanonical(**result, val, xsink);
                 }
             }
             return result.release();
@@ -20589,7 +20592,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 if (val > 0) {
-                    result->push(val * scale, xsink);
+                    qore_list_private::pushCanonical(**result, val * scale, xsink);
                 }
             }
             return result.release();
@@ -20605,7 +20608,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val > 0.0) {
-                    result->push(val * scale, xsink);
+                    qore_list_private::pushCanonical(**result, val * scale, xsink);
                 }
             }
             return result.release();
@@ -20623,7 +20626,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 if (val > 0) {
-                    result->push(val + offset, xsink);
+                    qore_list_private::pushCanonical(**result, val + offset, xsink);
                 }
             }
             return result.release();
@@ -20639,7 +20642,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val > 0.0) {
-                    result->push(val + offset, xsink);
+                    qore_list_private::pushCanonical(**result, val + offset, xsink);
                 }
             }
             return result.release();
@@ -20656,7 +20659,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 if (val > 0) {
-                    result->push(val * val, xsink);
+                    qore_list_private::pushCanonical(**result, val * val, xsink);
                 }
             }
             return result.release();
@@ -20671,7 +20674,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             for (size_t i = 0; i < sz; ++i) {
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val > 0.0) {
-                    result->push(val * val, xsink);
+                    qore_list_private::pushCanonical(**result, val * val, xsink);
                 }
             }
             return result.release();
@@ -21133,7 +21136,16 @@ static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
 // documented in QoreIRInterpreter.h
-QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, ExceptionSink* xsink) {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, ValueHolder& right_holder,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    auto assign = [&](QoreValue value, const char* description) {
+        if constexpr (Lexical) {
+            return v.assign(value, description, policy);
+        } else {
+            return v.assign(value, description);
+        }
+    };
     const QoreValue right = *right_holder;
     // values requiring dereferencing must be dereferenced outside the lock
     SafeDerefHelper sdh(xsink);
@@ -21145,12 +21157,12 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
         const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
         if (has_compound_default_value(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
+            if (assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             vtype = v.getType();
         } else if (is_compound_container_type(typeInfo, NT_LIST)) {
-            if (v.assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
+            if (assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
                 return QoreValue();
             }
@@ -21158,12 +21170,12 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         } else if (right.isNothing()) {
             return QoreValue();
         } else if (plain_default_ti != typeInfo) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
+            if (assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             vtype = v.getType();
         } else if (is_compound_container_type(typeInfo, NT_HASH)) {
-            if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
+            if (assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
                 return QoreValue();
             }
@@ -21171,7 +21183,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         } else {
             // assign rhs to lhs
             // the reference held for the value is handed over to the lvalue, as the AST interpreter does
-            if (v.assign(right_holder.release(), "<lvalue for += operator>")) {
+            if (assign(right_holder.release(), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             return v.getReferencedValue();
@@ -21182,24 +21194,44 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         v.ensureUnique();
         QoreListNode* l = v.getValue().get<QoreListNode>();
         if (right.getType() == NT_LIST) {
-            l->merge(right.get<const QoreListNode>(), xsink);
+            if constexpr (Lexical) {
+                qore_list_private::get(*l)->merge(right.get<const QoreListNode>(), xsink, policy);
+            } else {
+                qore_list_private::mergeCanonical(*l, right.get<const QoreListNode>(), xsink);
+            }
         } else {
             // the reference held for the value is handed over to the list, as the AST interpreter does
-            l->push(right_holder.release(), xsink);
+            if constexpr (Lexical) {
+                qore_list_private::push(*l, right_holder.release(), xsink, policy);
+            } else {
+                qore_list_private::pushCanonical(*l, right_holder.release(), xsink);
+            }
         }
     } else if (vtype == NT_HASH) {
         if (right.getType() == NT_HASH) {
             v.ensureUnique();
-            qore_hash_private::get(*v.getValue().get<QoreHashNode>())
-                ->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink);
+            auto* hp = qore_hash_private::get(*v.getValue().get<QoreHashNode>());
+            if constexpr (Lexical) {
+                hp->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink, policy);
+            } else {
+                hp->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink);
+            }
         } else if (right.getType() == NT_OBJECT) {
             v.ensureUnique();
-            qore_object_private::get(*right.get<QoreObject>())->mergeDataToHash(
-                v.getValue().get<QoreHashNode>(), sdh, xsink);
+            auto* op = qore_object_private::get(*right.get<QoreObject>());
+            if constexpr (Lexical) {
+                op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink, policy);
+            } else {
+                op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink);
+            }
         }
     } else if (vtype == NT_OBJECT) {
         QoreObject* o = v.getValue().get<QoreObject>();
-        qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+        if constexpr (Lexical) {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink, policy);
+        } else {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+        }
     } else if (vtype == NT_STRING) {
         if (!right.isNullOrNothing()) {
             QoreStringValueHelper str(right);
@@ -21214,7 +21246,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
     } else if (vtype == NT_DATE) {
         if (!right.isNullOrNothing()) {
             DateTime date(right);
-            v.assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
+            assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
         }
     } else if (vtype == NT_BINARY) {
         if (!right.isNullOrNothing()) {
@@ -21244,6 +21276,15 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         return QoreValue();
     }
     return v.getReferencedValue();
+}
+
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, ExceptionSink* xsink) {
+    return doPlusEqualsOnLValueImpl<false>(v, right_holder, xsink, {});
+}
+
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return doPlusEqualsOnLValueImpl<true>(v, right_holder, xsink, policy);
 }
 
 static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
@@ -21475,7 +21516,7 @@ static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, Ex
 
     val.ensureUnique();
     QoreListNode* l = val.getValue().get<QoreListNode>();
-    l->insert(right.refSelf(), xsink);
+    qore_list_private::insertCanonical(*l, right.refSelf(), xsink);
 
     if (*xsink) {
         return QoreValue();
