@@ -432,6 +432,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v30: a ScopeEnter instruction ends with the locals of its block that an exception leaving the scope releases
 //!      (QoreIRScopeEnterInstruction::locals: u32 count + N x (name stringref + slot u32)), so that the debug IR
 //!      releases them before the debugger's exception events of the statements that contain the block (#5867).
+//! v31: a DebugBlock instruction of the debug IR ends with the locals of its block (QoreIRDebugStatementInstruction::
+//!      block_locals: u32 count + N x (name stringref + slot u32)), so that an exception that leaves a block without
+//!      an exception path of its own releases them before the debugger's exception event of the statement that
+//!      contains the block (#5921).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -449,9 +453,11 @@ constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
 constexpr uint16_t QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION = 29;
 //! First format version whose ScopeEnter instructions record the locals of their block (see v30 above).
 constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 30;
+//! First format version whose DebugBlock instructions record the locals of their block (see v31 above).
+constexpr uint16_t QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION = 31;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SCOPE_LOCALS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

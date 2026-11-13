@@ -4115,8 +4115,16 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     }
 
     if (!root_statement_block) {
-        // the event is for this block, which a step of a debugger can stop at, also when it is empty
-        builder.createDebugBlock(block->loc, block);
+        // the event is for this block, which a step of a debugger can stop at, also when it is empty; it records the
+        // locals of the block, which an exception that leaves the block releases before the debugger's exception event
+        // of the statement that contains it (#5921); only code with the statements' debug instructions, which record
+        // the statements that the frame is in, uses them
+        auto* dbg_block = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugBlock(block->loc, block));
+        if (lvars && !lvars->lv.empty()
+                && (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)) {
+            dbg_block->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
+            dbg_block->block_locals->locals = lvars->lv;
+        }
     } else if (handler_body && (builder.getFunction()->source_dpgm_addr
             || builder.getFunction()->emit_debug_statements)) {
         // the body of a handler compiled to an IR function of its own: the event of the handler's block, made where
