@@ -1695,36 +1695,60 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 }
 
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
-        ExceptionSink& xs)
+        ExceptionSink& xs, QoreModuleRecordLock rlock)
         : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
-        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
-    QMM.getUserModuleRegistration(name, saved_reg);
+        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false), rlock(rlock) {
+    try {
+        if (rlock == QMRL_HELD) {
+            QMM.getUserModuleRegistration(name, saved_reg);
+        } else {
+            QMM.getUserModuleRegistrationLocked(name, saved_reg);
+        }
+    } catch (...) {
+        // the destructor does not run: restore the module context here
+        set_module_context_name(old_name);
+        set_module_context_path(old_path);
+        throw;
+    }
 }
 
-bool QoreModuleManager::isUserModuleContext(const char* name) {
+bool QoreModuleManager::isUserModuleContext(const char* name, bool binary_context) {
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
         return mi->isUser();
     }
-    // a user module is registered only once its source has been parsed, and it loads the modules it requires while
-    // it is parsed: it is then the module of the thread's module definition context, which is always a user module
-    // definition context; the module context name set for the initialization of an AOT module does not change it
+    // a module is registered only once its source has been parsed, and it loads the modules it requires while it is
+    // parsed: it is then the module of the thread's module definition context; the module context name set for the
+    // initialization of an AOT module does not change it
     QoreModuleDefContext* qmd = get_module_def_context();
     if (!qmd) {
         return false;
     }
-    const char* def_name = static_cast<QoreUserModuleDefContextHelper*>(qmd)->getModuleName();
+    // every module definition context is a QoreUserModuleDefContextHelper, also that of a binary module (QMRL_BINARY)
+    const QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(qmd);
+    // the source of an AOT module initialized with the legacy entry point is parsed in a definition context, but the
+    // module is a binary module, which delUser() does not delete, so a user module dependency of it would never be
+    // released (#5953); the user modules that an AOT module requires are tracked by the AOT module state
+    if (!binary_context && uqmd->isBinaryModuleContext()) {
+        return false;
+    }
+    const char* def_name = uqmd->getModuleName();
     return def_name && !strcmp(def_name, name);
 }
 
 void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
+    // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+    assert(mutex.trylock());
     const char* old_name = get_module_context_name();
-    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name)) {
+    // a binary module that an AOT module requires is recorded as for a user module, so it is deleted after it
+    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name, true)) {
         binary_user_dep_map.addDep(name, old_name);
     }
 }
 
 void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi) {
+    // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+    assert(mutex.trylock());
     if (!mi->isUser()) {
         return;
     }
@@ -1824,8 +1848,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     } else {
         tpgm->addFeature(name.c_str());
     }
-    // a user module importing a binary module can hold objects of its classes, so it is deleted first
-    QMM.trySetUserBinaryModuleDependency(name.c_str());
+    // a user module importing a binary module can hold objects of its classes, so it is deleted first; a module is
+    // applied to a Program without the module manager's mutex, which the record takes (#5953)
+    QMM.trySetUserBinaryModuleDependencyLocked(name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from
@@ -2076,7 +2101,8 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
     // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
     qore_program_private::get(*tpgm)->commitFeature(name.c_str());
 
-    QMM.trySetUserModuleDependency(this);
+    // a module is applied to a Program without the module manager's mutex, which the record takes (#5953)
+    QMM.trySetUserModuleDependencyLocked(this);
 }
 
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
@@ -3849,7 +3875,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     userModule->addParseOptionMask(load_mask);
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
@@ -4362,64 +4388,6 @@ int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& 
     return rc;
 }
 
-int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
-    printd(5, "QoreModuleManager::importModuleNSUnlocked() name='%s' pgm=%p\n", name, pgm);
-
-    // Find the module (assumes lock is already held)
-    QoreAbstractModule* mi = findModuleUnlocked(name);
-    if (!mi) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
-            "cannot find module '%s' for namespace import", name);
-        return -1;
-    }
-
-    // Import the module's namespace into the program
-    // We do a direct namespace merge WITHOUT calling addToProgramImpl to avoid:
-    // 1. Module dependency tracking (causes cleanup assertion failures)
-    // 2. Reexport handling (can cause deadlock)
-    // This is specifically for AOT module initialization where dependencies
-    // are already handled by the module manager via qore_module_dependencies.
-
-    // Add the feature to the program
-    qore_program_private::get(*pgm)->addUserFeature(name);
-
-    // Get namespace pointers
-    RootQoreNamespace* target_root_ns = pgm->getRootNS();
-    RootQoreNamespace* source_root_ns = mi->isUser()
-        ? static_cast<QoreUserModule*>(mi)->getProgram()->getRootNS()
-        : nullptr;
-
-    if (source_root_ns) {
-        // For user modules, merge the namespace from the module's program
-        QoreModuleContext qmc(name, qore_root_ns_private::get(*target_root_ns), xsink);
-        // exclude runtime readers of the target namespace and runtime writers of the source while
-        // they are merged; parse ownership, held by the caller, excludes only other writers of the
-        // target
-        RuntimeNamespaceMergeLocker rnml(*target_root_ns, *source_root_ns);
-
-        qore_root_ns_private::scanMergeCommittedNamespace(*target_root_ns, *source_root_ns, qmc);
-
-        if (qmc.hasError()) {
-            qmc.rollback();
-            qore_program_private::get(*pgm)->removeUserFeature(name);
-            return -1;
-        }
-
-        qore_root_ns_private::copyMergeCommittedNamespace(*target_root_ns, *source_root_ns);
-    } else {
-        // For builtin modules, use the ns_init function to import
-        // This should not happen in typical AOT scenarios since qore_module_dependencies
-        // only lists user modules, but handle it for completeness
-        mi->addToProgramImpl(pgm, xsink);
-        if (xsink) {
-            return -1;
-        }
-    }
-
-    printd(2, "QoreModuleManager::importModuleNSUnlocked() imported '%s' into pgm %p\n", name, pgm);
-    return 0;
-}
-
 void QoreModuleManager::registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
         ExceptionSink& xsink) {
     OptLocker ol(&mutex);
@@ -4672,6 +4640,9 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
             omi = mi.release();
             addModule(omi);
             trySetUserModule(name);
+            // the module stays registered, so it keeps the records of its dependencies: the binary modules that it
+            // requires are not deleted before it in delUser()
+            qmd.setRegistered();
             return nullptr;
         }
         assert(!xsink);
@@ -4706,6 +4677,8 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     omi = mi.release();
     addModule(omi);
     trySetUserModule(name);
+    // the module keeps the dependencies that its load registered
+    qmd.setRegistered();
 
     return omi;
 }
@@ -4877,7 +4850,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     ON_BLOCK_EXIT(module_load_clear, td);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
@@ -4977,7 +4950,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     ModuleReExportHelper mrh(mi.get(), reexport);
 
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         // run initialization unlocked
