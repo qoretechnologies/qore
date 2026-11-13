@@ -314,6 +314,11 @@ static QoreValue probe_static(const QoreMethod&, const void*, const QoreListNode
     return args->retrieveEntry(0).getAsBool();
 }
 
+static QoreValue probe_soft_method(const QoreMethod&, const void*, QoreObject*, AbstractPrivateData*,
+        const QoreListNode* args, RuntimeConfig&, ExceptionSink*) {
+    return args->retrieveEntry(0).refSelf();
+}
+
 static void init(QoreModuleInitContext&, ExceptionSink&) {
     // Registered below after creating the namespace.
 
@@ -342,6 +347,11 @@ static void init(QoreModuleInitContext&, ExceptionSink&) {
         boolTypeInfo, {stringTypeInfo}, {}, {"value"});
     probe->addStaticMethod(nullptr, "named_static_bool", probe_static, Public, QCF_NAMED_ARGS, QDOM_DEFAULT,
         boolTypeInfo, {bigIntTypeInfo}, {}, {"value"});
+    // a soft parameter, whose argument is converted with the policy of the call before the variant runs
+    probe->addMethod(nullptr, "named_soft", probe_soft_method, Public, QCF_NAMED_ARGS, QDOM_DEFAULT,
+        boolTypeInfo, {softBoolTypeInfo}, {}, {"value"});
+    probe->addMethod(nullptr, "named_soft", probe_soft_method, Public, QCF_NAMED_ARGS, QDOM_DEFAULT,
+        boolTypeInfo, {hashTypeInfo}, {}, {"value"});
     probe_ns->addSystemClass(probe);
     probe_ns->addBuiltinVariant("native_copy", native_copy, QCF_NO_FLAGS, QDOM_DEFAULT,
         objectTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "object");
@@ -366,6 +376,10 @@ static void init(QoreModuleInitContext&, ExceptionSink&) {
         boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     probe_ns->addBuiltinVariant("named_bool", value_bool, QCF_NAMED_ARGS, QDOM_DEFAULT,
         boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "value");
+    probe_ns->addBuiltinVariant("named_soft", filtered_value, QCF_NAMED_ARGS, QDOM_DEFAULT,
+        boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "value");
+    probe_ns->addBuiltinVariant("named_soft", filtered_value, QCF_NAMED_ARGS, QDOM_DEFAULT,
+        boolTypeInfo, 1, hashTypeInfo, QORE_PARAM_NO_ARG, "value");
     probe_ns->addBuiltinVariant("callback", callback, QCF_NO_FLAGS, QDOM_DEFAULT,
         autoTypeInfo, 2, codeTypeInfo, QORE_PARAM_NO_ARG, "callback", autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     probe_ns->addBuiltinVariant("soft_bool", filtered_value, QCF_NO_FLAGS, QDOM_DEFAULT,

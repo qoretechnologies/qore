@@ -2748,12 +2748,42 @@ static bool qore_signature_overrides(const AbstractFunctionSignature& a, const A
     if (a.numParams() != b.numParams() || a.hasVarargs() != b.hasVarargs()) {
         return false;
     }
+    // the type parameters of generic methods are their own in each signature: a method that overrides a generic
+    // method declares as many type parameters, which correspond by position, so the type parameters of \a b are
+    // given those of \a a (id<U>(U y) overrides id<U>(U x))
+    const UserSignature* ua = a.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&a) : nullptr;
+    const UserSignature* ub = b.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&b) : nullptr;
+    // a type that uses them is compared with the type parameters of \a a substituted for those of both signatures,
+    // so that both are normalized alike
+    QoreTypeParamInstantiation a_inst, b_inst;
+    if (ua || ub) {
+        if (!ua || !ub || ua->getTypeParameterCount() != ub->getTypeParameterCount()) {
+            return false;
+        }
+        a_inst.owner = ua;
+        b_inst.owner = ub;
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            a_inst.type_args.push_back(ua->getTypeParameterType(i));
+        }
+        b_inst.type_args = a_inst.type_args;
+    }
     for (unsigned i = 0, e = a.numParams(); i < e; ++i) {
         const QoreTypeInfo* at = a.getParamTypeInfo(i);
         const QoreTypeInfo* bt = b.getParamTypeInfo(i);
-        if (receiver) {
-            at = qore_substitute_type_params_if_needed(at, receiver);
-            bt = qore_substitute_type_params_if_needed(bt, receiver);
+        if (ua) {
+            // a type parameter of each method itself: the same position, and both with or without "*"
+            const QoreTypeParameterTypeInfo* atp = qore_get_type_parameter_type_info(at);
+            const QoreTypeParameterTypeInfo* btp = qore_get_type_parameter_type_info(bt);
+            if (atp && btp && atp->getOwnerSignature() == ua && btp->getOwnerSignature() == ub) {
+                if (atp->getIndex() != btp->getIndex() || atp->isOrNothing() != btp->isOrNothing()) {
+                    return false;
+                }
+                continue;
+            }
+        }
+        if (receiver || ua) {
+            at = qore_substitute_type_params_if_needed(at, receiver, ua ? &a_inst : nullptr);
+            bt = qore_substitute_type_params_if_needed(bt, receiver, ub ? &b_inst : nullptr);
         }
         if (!QoreTypeInfo::equal(at, bt)) {
             return false;

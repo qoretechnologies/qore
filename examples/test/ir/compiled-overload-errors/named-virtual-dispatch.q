@@ -69,6 +69,20 @@ class GM {
 }
 class GMC inherits GM {}
 
+# the overrides of generic methods, whose type parameters are their own: they correspond by position
+class GO {
+    string id<U>(U x) { return "GO::id"; }
+    string opt<U>(*U x) { return "GO::opt"; }
+    string lst<U>(list<U> x) { return "GO::lst"; }
+    string two<U, V>(U a, V b) { return "GO::two"; }
+}
+class GOC inherits GO {
+    string id<U>(U y) { return "GOC::id"; }
+    string opt<U>(*U y) { return "GOC::opt"; }
+    string lst<U>(list<U> y) { return "GOC::lst"; }
+    string two<U, V>(U c, V d) { return "GOC::two"; }
+}
+
 # a named call in a const method
 class KC {
     string cm(int x) const { return sprintf("KC::cm(int x) const x=%y", x); }
@@ -168,6 +182,14 @@ GM gm = new GMC();
 int gi = gm.id(x: 2);
 string gs = gm.id(x: "g");
 printf("generic method: %y %y\n", gi, gs);
+
+# the override of a generic method, called with the names of the variant of the receiver's static type
+GO go = new GOC();
+printf("generic override: %s %s\n", go.id(2), go.id(x: 2));
+printf("generic override runtime: %s\n", go.id(x: i));
+printf("generic override or nothing: %s %s\n", go.opt(x: 2), go.opt(x: value_of(NOTHING)));
+printf("generic override list: %s\n", go.lst(x: (1, 2)));
+printf("generic override two: %s %s\n", go.two(1, "s"), go.two(b: "s", a: 1));
 
 # a named call in a const method calls the const variant that the names select
 printf("const method: %s\n", (new KC()).callConst());

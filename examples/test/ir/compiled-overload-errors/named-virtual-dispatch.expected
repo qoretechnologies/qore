@@ -30,6 +30,11 @@ positional: Q::m(int n)
 single variant swapped: SV::r x=1 y=2
 single variant: SV::one x=3
 generic method: 2 "g"
+generic override: GOC::id GOC::id
+generic override runtime: GOC::id
+generic override or nothing: GOC::opt GOC::opt
+generic override list: GOC::lst
+generic override two: GOC::two GOC::two
 const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
 static through object literal: SB::sm(float g)
 static through object runtime: SB::sm(float g)

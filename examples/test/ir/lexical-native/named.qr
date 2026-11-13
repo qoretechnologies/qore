@@ -5,7 +5,7 @@
 
 # named calls whose variant is resolved at run time by parameter name (the argument has no type at parse time) keep
 # the semantic policy of the call, as calls with positional arguments do: the value "text" given to a builtin converts
-# to False with strict boolean evaluation and to True without it
+# to False with strict boolean evaluation and to True without it, in the builtin's body and for a soft parameter
 const Source = '%requires compatprobe
 class Derived inherits CompatProbe::NativeProbe {
     constructor() : NativeProbe("text", "text") {}
@@ -15,6 +15,9 @@ class Derived inherits CompatProbe::NativeProbe {
 auto sub function() { auto v = "text"; return CompatProbe::named_bool(value: v); }
 auto sub method() { auto v = "text"; CompatProbe::NativeProbe obj("text", "text"); return obj.named_bool(value: v); }
 auto sub static_method() { auto v = "text"; return CompatProbe::NativeProbe::named_static_bool(value: v); }
+auto sub virtual_method() { auto v = "text"; CompatProbe::NativeProbe obj = new Derived(); return obj.named_bool(value: v); }
+auto sub soft_function() { auto v = "text"; return CompatProbe::named_soft(value: v); }
+auto sub soft_method() { auto v = "text"; CompatProbe::NativeProbe obj("text", "text"); return obj.named_soft(value: v); }
 auto sub self_method() { Derived obj(); return obj.self_named("text"); }
 auto sub scoped_method() { Derived obj(); return obj.scoped_named("text"); }
 ';
@@ -29,7 +32,8 @@ foreach bool legacy in (False, True) {
     if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
     p.parse(Source, "native-named-policy");
     foreach int invocation in (0, 1) {
-        foreach string name in ("function", "method", "static_method", "self_method", "scoped_method") {
+        foreach string name in ("function", "method", "static_method", "virtual_method",
+                "soft_function", "soft_method", "self_method", "scoped_method") {
             bool expected = !legacy;
             auto actual = invoke(p, name);
             bool passed = actual === expected;

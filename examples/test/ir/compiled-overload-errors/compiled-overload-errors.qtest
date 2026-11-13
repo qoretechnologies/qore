@@ -218,6 +218,13 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             p2.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(n: i, l: s); }\n",
                 "named-virtual-override-names");
             assertEq("C1", p2.callFunction("t", 1, "x"));
+            # the override of a generic method renames its parameter: the names of the overridden variant are unknown
+            # for a receiver of the overriding class, whose type parameters are its own
+            Program p3(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "id\\(x: int", \p3.parse(),
+                ("class GO { string id<U>(U x) { return \"GO\"; } } class GOC inherits GO { "
+                "string id<U>(U y) { return \"GOC\"; } } string sub t() { GOC g(); return g.id(x: 2); }",
+                "named-virtual-generic-overridden"));
         }
         {
             # the functional domain of the variant that the names select is checked at parse time, as for positional
