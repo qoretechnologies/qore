@@ -105,6 +105,12 @@ sub main() {
     show("duplicate member refuses", auto sub () { union<hash<H>, int, hash<H>> u = 1; u = Str; return u; });
     show("duplicate type only refuses", auto sub () { union<int, int> u = 1; u = Flt; return u; });
     show("list element type refuses", auto sub () { list<union<hash<H>, int>> l = (1,); l[0] = Str; return l; });
+    # the name of a union does not depend on the spelling that created it first (#5926)
+    show("spelling with a duplicate", auto sub () { return cast<list<union<int, string, int>>>((1,)); });
+    show("same union by typedef", auto sub () { return cast<list<U5926>>((1,)); });
+    show("or-nothing with a duplicate", auto sub () { return cast<list<*union<int, string, int>>>((1,)); });
 }
+
+typedef U5926 = union<int, string>;
 
 main();
