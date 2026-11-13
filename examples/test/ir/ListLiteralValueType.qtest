@@ -47,7 +47,15 @@ class ListLiteralValueTypeTest inherits QUnit::Test {
         assertRegex("(?m)^or-nothing sum NOTHING: \\[null\\] list<nothing>$", out, out);
         assertRegex("(?m)^or-nothing sum int: \\[4\\] list<int>$", out, out);
         assertRegex("(?m)^or-nothing concat NOTHING: \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^hashdecls: list<hash<auto>>$", out, out);
+        # an exact declared type is kept (constants, typed locals)
+        assertRegex("(?m)^typed constant: \\[null, 2\\] list<\\*int>$", out, out);
+        assertRegex("(?m)^typed local: \\[null, 2\\] list<\\*int>$", out, out);
+        assertRegex("(?m)^nested typed local: \\[\\[null, 2\\]\\] list<list<\\*int>>$", out, out);
+        assertRegex("(?m)^top typed local: \\[null, 2\\] list<\\*int>$", out, out);
+        assertRegex("(?m)^top typed constant: \\[null, 2\\] list<\\*int>$", out, out);
         # a literal that mixes a type parameter with another type (qore#6000)
+        assertRegex("(?m)^type parameter and int: \\[\\[1, 1\\], \\[2, 1\\]\\] list<list<int>>$", out, out);
         assertRegex("(?m)^type parameter and string: \\[\\[1, \"x\"\\], \\[2, \"x\"\\]\\] ", out, out);
         assertRegex("(?m)^type parameter and string in a hash: \\{k0: \\[1, \"x\"\\], k1: \\[2, \"x\"\\]\\} ", out,
             out);

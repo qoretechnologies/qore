@@ -60,22 +60,6 @@ struct qore_list_private {
     bool vlist : 1;
     bool valid : 1;
 
-    //! Returns the type of the value of a list literal from the common type of its values' run-time types
-    /** As the AST interpreter gives it (QoreParseListNode::evalImpl()); the IR interpreter (MakeList) and native code
-        (qore_rt_make_list()) use it too, also for a literal with a parse type, which can be less specific than its
-        values (qore#5970)
-
-        @param common_vtype the common type of the values' run-time types (QoreTypeInfo::matchCommonType()), or
-        nullptr if the literal has no values
-    */
-    DLLLOCAL static const QoreTypeInfo* getLiteralTypeInfo(const QoreTypeInfo* common_vtype) {
-        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
-        if (!common_vtype || common_vtype == anyTypeInfo) {
-            common_vtype = autoTypeInfo;
-        }
-        return qore_get_complex_list_type(common_vtype);
-    }
-
     DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true) {
     }
 

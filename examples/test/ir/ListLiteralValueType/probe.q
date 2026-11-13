@@ -65,6 +65,10 @@ class ListLiteralBox<T> {
     }
 }
 
+# a constant whose list MakeList rebuilds with the constant's exact type
+const ListLiteralTL = (1, 2);
+const list<*int> ListLiteralTypedTL = (1, 2);
+
 sub showv(string label, auto v) {
     printf("%s: %y %s\n", label, v, v.fullType());
 }
@@ -100,9 +104,30 @@ sub t() {
     showv("type parameter and string in a hash of a hash", tparam_hash_hash<int>((1, 2)));
     ListLiteralBox<string> box(("v",));
     showv("method type parameter and class type parameter", box.gm<int>((1, 2)));
+    # an exact declared type is kept: a typed constant and a typed local initialized with a literal
+    auto tc = ListLiteralTypedTL;
+    tc[0] = NOTHING;
+    showv("typed constant", tc);
+    showv("untyped constant", ListLiteralTL);
+    *int a = 1;
+    *int b = 2;
+    list<*int> tl = (a, b);
+    tl[0] = NOTHING;
+    showv("typed local", tl);
+    list<list<*int>> nl = ((a, b),);
+    nl[0][0] = NOTHING;
+    showv("nested typed local", nl);
 }
 
 t();
 # top-level code runs natively with --exec-mode=jit
+*int ta = 1;
+*int tb = 2;
+list<*int> ttl = (ta, tb);
+ttl[0] = NOTHING;
+showv("top typed local", ttl);
+auto ttc = ListLiteralTypedTL;
+ttc[0] = NOTHING;
+showv("top typed constant", ttc);
 show("top cast", (cast<list<code>>((sub () {},)),));
 show("top cast in hash", {"l": (cast<list<code>>((sub () {},)),)});
