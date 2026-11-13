@@ -19,8 +19,10 @@
     the JIT when the last of them is deleted.  Before, it stayed in the JIT until the process ended, so a process that
     created and deleted Programs grew without bound.
 
-    The script creates and deletes Programs and checks with debug builtins that the number of code units and compiled
-    functions returns to its base, also when another Program called a function of a deleted one.  With the AST
+    The script creates and deletes Programs and checks with debug builtins that the number of code units, compiled
+    functions and entries of the GDB JIT interface returns to its base, also when another Program called a function of
+    a deleted one: LLVM registers the objects of the code for debuggers but never unregisters them, which a plugin of
+    the JIT does when the code is removed.  With the AST
     interpreter and the IR interpreter nothing is compiled, and the counts stay the same.  It needs library debugging
     (dbg_get_jit_code_unit_count()).
 */
@@ -34,8 +36,11 @@ class JitCodeReleaseTest inherits QUnit::Test {
             "the callee deleted first: the call is refused",
             "the callee deleted first: no code left",
         );
-        #! the check that the script reports when the code is compiled (JIT and tiered execution)
-        const CompiledCheck = "the code of a live Program is compiled";
+        #! the checks that the script reports when the code is compiled (JIT and tiered execution)
+        const CompiledChecks = (
+            "the code of a live Program is compiled",
+            "the code of a live Program is registered for debuggers",
+        );
     }
 
     private {
@@ -71,7 +76,7 @@ class JitCodeReleaseTest inherits QUnit::Test {
     private checkOutput(string out, bool compiles, string what) {
         list<string> expected = Checks;
         if (compiles) {
-            expected = (Checks[0], CompiledCheck) + Checks[1..];
+            expected = (Checks[0],) + CompiledChecks + Checks[1..];
         }
         assertEq((map $1 + ": ok", expected), (out =~ x/^([^\n]+)$/gm), what);
     }

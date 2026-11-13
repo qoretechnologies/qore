@@ -3,7 +3,9 @@
 #
 # The native code compiled for a Program, and for a generic specialization made for its types, is removed from the
 # JIT when the Program is deleted, also when another Program called it (issue #5772); see JitCodeRelease.qtest.
-# Needs a debug libqore (dbg_get_jit_code_unit_count(), dbg_get_jit_compiled_function_count()).
+# The objects of the code are also unregistered from the GDB JIT interface, which LLVM does not do by itself.  Needs a
+# debug libqore (dbg_get_jit_code_unit_count(), dbg_get_jit_compiled_function_count(),
+# dbg_get_jit_debugger_entry_count()).
 
 # a generic function of this Program that the user Programs inherit and specialize for their own classes
 public T sub identity<T>(T value) { return value; }
@@ -57,6 +59,9 @@ hash<string, int> sub counts() {
     return {
         "units": dbg_get_jit_code_unit_count(),
         "functions": dbg_get_jit_compiled_function_count(),
+        # the entries of the GDB JIT interface: each code unit registers its objects there for debuggers, which are
+        # unregistered when it is removed
+        "debugger entries": dbg_get_jit_debugger_entry_count(),
     };
 }
 
@@ -88,6 +93,7 @@ hash<string, int> base = counts();
 {
     list<hash<string, int>> diffs;
     bool grew;
+    bool registered;
     for (int g = 0; g < 30; ++g) {
         {
             Program p = new_user();
@@ -99,6 +105,9 @@ hash<string, int> base = counts();
             if (live.units > base.units) {
                 grew = True;
             }
+            if (live."debugger entries" > base."debugger entries") {
+                registered = True;
+            }
         }
         hash<string, int> now = counts();
         if (now != base) {
@@ -108,6 +117,7 @@ hash<string, int> base = counts();
     check("deleted Programs leave no code", !diffs, {"base": base, "after": diffs});
     if (compiles) {
         check("the code of a live Program is compiled", grew, base);
+        check("the code of a live Program is registered for debuggers", registered, base);
     }
 }
 

@@ -943,6 +943,12 @@ public:
     //! For tests: the number of code units in the JIT, once the pending releases are processed
     size_t dbgGetCodeUnitCount();
 
+    //! Test hook: returns the number of entries of the GDB JIT interface's list (qore#5772)
+    /** Each linked object of the JIT is registered there while the debugger support is enabled, and unregistered when
+        its code is removed (see QoreGdbJitDeregistrationPlugin in QoreJIT.cpp)
+    */
+    size_t dbgGetDebuggerEntryCount();
+
     //! For tests: the number of compiled functions that can be looked up
     size_t dbgGetCompiledFunctionCount() const;
 #endif

@@ -43,6 +43,8 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
+#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -1050,6 +1052,136 @@ bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
     return true;
 }
 
+// The GDB JIT interface's descriptor and rendezvous function, defined and exported by LLVM's JITLoaderGDB
+extern "C" {
+extern struct jit_descriptor __jit_debug_descriptor;
+void __jit_debug_register_code();
+}
+
+namespace {
+//! Deregisters the debug objects of removed JIT code from the GDB JIT interface (qore#5772)
+/** LLVM's debugger support (ELFDebugObjectPlugin, installed by enableDebuggerSupport()) registers a copy of each
+    linked object with the GDB JIT interface (__jit_debug_descriptor), but ORC never deregisters it: when the code is
+    removed (ResourceTracker::remove(), or when the engine is released), the plugin frees the copy and the list entry
+    stays, pointing at freed memory, which a debugger that attaches later reads; each removed code unit leaked one.
+    This plugin, installed after LLVM's, records the entries that each emitted object added (keyed by its
+    ResourceKey, following merged resources) and unregisters them through the GDB JIT protocol when the resources are
+    removed or the materialization fails, as LLVM's GDBRegistrationListener for RuntimeDyld does: the entry is
+    unlinked, reported as JIT_UNREGISTER_FN in the descriptor, the debugger's breakpoint function is called, and the
+    entry, which LLVM allocated with new (appendJITDebugDescriptor() in JITLoaderGDB.cpp), is deleted.  The gap in
+    LLVM is https://github.com/llvm/llvm-project/issues/242224; this plugin can go once LLVM deregisters the objects.
+
+    LLVM registers an entry while the object is finalized, in the materialization of a lookup; the JIT only looks up
+    and removes code with QoreJIT::compile_mutex held, so the registrations, this plugin's callbacks and its changes
+    to the list are serialized by that lock.  An entry that LLVM added is identified as one at the head of the list
+    that this plugin has not seen yet: LLVM inserts entries at the head.
+*/
+class QoreGdbJitDeregistrationPlugin : public llvm::orc::ObjectLinkingLayer::Plugin {
+public:
+    QoreGdbJitDeregistrationPlugin() {
+        // entries registered before, by other code, are not this JIT's
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
+            known.insert(e);
+        }
+    }
+
+    llvm::Error notifyEmitted(llvm::orc::MaterializationResponsibility& MR) override {
+        std::vector<jit_code_entry*> added = takeNewEntries();
+        if (added.empty()) {
+            return llvm::Error::success();
+        }
+        llvm::Error err = MR.withResourceKeyDo([&](llvm::orc::ResourceKey K) {
+            std::lock_guard<std::mutex> lock(m);
+            std::vector<jit_code_entry*>& v = entries[K];
+            v.insert(v.end(), added.begin(), added.end());
+        });
+        if (err) {
+            // the resources were removed in the meantime: the entries go now
+            unregisterEntries(added);
+        }
+        return err;
+    }
+
+    llvm::Error notifyFailed(llvm::orc::MaterializationResponsibility& MR) override {
+        // an object that was finalized before the materialization failed was registered; its memory is freed now
+        unregisterEntries(takeNewEntries());
+        return llvm::Error::success();
+    }
+
+    llvm::Error notifyRemovingResources(llvm::orc::JITDylib& JD, llvm::orc::ResourceKey K) override {
+        std::vector<jit_code_entry*> removed;
+        {
+            std::lock_guard<std::mutex> lock(m);
+            auto i = entries.find(K);
+            if (i == entries.end()) {
+                return llvm::Error::success();
+            }
+            removed.swap(i->second);
+            entries.erase(i);
+        }
+        unregisterEntries(removed);
+        return llvm::Error::success();
+    }
+
+    void notifyTransferringResources(llvm::orc::JITDylib& JD, llvm::orc::ResourceKey DstKey,
+            llvm::orc::ResourceKey SrcKey) override {
+        std::lock_guard<std::mutex> lock(m);
+        auto i = entries.find(SrcKey);
+        if (i == entries.end()) {
+            return;
+        }
+        std::vector<jit_code_entry*>& dst = entries[DstKey];
+        dst.insert(dst.end(), i->second.begin(), i->second.end());
+        entries.erase(i);
+    }
+
+private:
+    //! protects the members; the list itself is serialized by QoreJIT::compile_mutex (see above)
+    std::mutex m;
+    //! the entries seen in the list
+    std::unordered_set<jit_code_entry*> known;
+    //! the entries that this JIT's objects registered, by their resource key
+    std::unordered_map<llvm::orc::ResourceKey, std::vector<jit_code_entry*>> entries;
+
+    //! returns the entries that were added at the head of the list since the last call
+    std::vector<jit_code_entry*> takeNewEntries() {
+        std::vector<jit_code_entry*> added;
+        std::lock_guard<std::mutex> lock(m);
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e && !known.count(e); e = e->next_entry) {
+            added.push_back(e);
+        }
+        known.insert(added.begin(), added.end());
+        return added;
+    }
+
+    //! unregisters the given entries from the GDB JIT interface and frees them
+    void unregisterEntries(const std::vector<jit_code_entry*>& removed) {
+        if (removed.empty()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        for (jit_code_entry* e : removed) {
+            known.erase(e);
+            if (e->prev_entry) {
+                e->prev_entry->next_entry = e->next_entry;
+            } else {
+                __jit_debug_descriptor.first_entry = e->next_entry;
+            }
+            if (e->next_entry) {
+                e->next_entry->prev_entry = e->prev_entry;
+            }
+            __jit_debug_descriptor.relevant_entry = e;
+            __jit_debug_descriptor.action_flag = JIT_UNREGISTER_FN;
+            // a debugger that is attached removes the entry's symbols at its breakpoint in this function
+            __jit_debug_register_code();
+            delete e;
+        }
+        __jit_debug_descriptor.relevant_entry = nullptr;
+        __jit_debug_descriptor.action_flag = JIT_NOACTION;
+    }
+};
+}
+
 bool QoreJIT::initialize(std::string& error) {
     qore_llvm_initialize_targets();
 
@@ -1086,6 +1218,10 @@ bool QoreJIT::initialize(std::string& error) {
         // Non-fatal: JIT works fine without debugger support
         printd(1, "QoreJIT::init() WARNING: failed to enable debugger support: %s\n",
             llvm::toString(std::move(err)).c_str());
+    } else if (auto* oll = llvm::dyn_cast<llvm::orc::ObjectLinkingLayer>(&jit->getObjLinkingLayer())) {
+        // LLVM never deregisters what its debugger support registers; this plugin does when the code is removed
+        // (qore#5772)
+        oll->addPlugin(std::make_unique<QoreGdbJitDeregistrationPlugin>());
     }
 
     if (!registerRuntimeSymbols(error)) {
@@ -1487,6 +1623,24 @@ size_t QoreJIT::dbgGetCodeUnitCount() {
     }
     std::lock_guard<std::mutex> lock(cache_mutex);
     return code_units.size();
+}
+
+size_t QoreJIT::dbgGetDebuggerEntryCount() {
+    // as dbgGetCodeUnitCount(): the removals pending for the compile lock are made first; the list is changed only
+    // with the compile lock held (see QoreGdbJitDeregistrationPlugin)
+    std::unique_lock<std::mutex> compile_lock(compile_mutex, std::try_to_lock);
+    if (!compile_lock && !bg_in_progress_detached.load(std::memory_order_acquire)
+            && !bg_thread_abandoned.load(std::memory_order_acquire)) {
+        compile_lock.lock();
+    }
+    if (compile_lock) {
+        processPendingCodeReleasesLocked();
+    }
+    size_t n = 0;
+    for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
+        ++n;
+    }
+    return n;
 }
 
 size_t QoreJIT::dbgGetCompiledFunctionCount() const {

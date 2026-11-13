@@ -19157,6 +19157,15 @@ static QoreValue f_dbg_get_jit_code_unit_count(const QoreListNode* params, Runti
     return static_cast<int64>(QoreJIT::instance().dbgGetCodeUnitCount());
 }
 
+//! returns the number of entries of the GDB JIT interface's list (qore#5772)
+/** The JIT registers each linked object there for debuggers, and unregisters it when its code is removed
+*/
+static QoreValue f_dbg_get_jit_debugger_entry_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetDebuggerEntryCount());
+}
+
 //! returns the number of compiled functions that the JIT can look up
 static QoreValue f_dbg_get_jit_compiled_function_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -22431,6 +22440,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_jit_compiled_function_count", f_dbg_get_jit_compiled_function_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_debugger_entry_count", f_dbg_get_jit_debugger_entry_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_hash_create_count", f_dbg_get_hash_create_count, QCF_NO_FLAGS,
