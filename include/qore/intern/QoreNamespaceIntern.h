@@ -1858,6 +1858,23 @@ protected:
     DLLLOCAL void parseWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
             const FunctionEntry* resolved) const;
 
+    //! Raises the language-traps warning for a function that unqualified calls cannot reach (qore#6034)
+    /** The unqualified resolution of a function name finds a function of the Qore namespace (or of one of its
+        namespaces) before any other, so a function of the same name that the program declares is reached only by a
+        call with a namespace path; this warns once, at the declaration of the first variant of the function.
+
+        Nothing is raised if the warning is off, in a user module, if the program uses
+        \c %broken-namespace-resolution (the declared function is found first then), or for a function of the Qore
+        namespace itself.
+
+        @param loc the location of the declaration
+        @param fname the name of the function
+        @param declaring_ns the namespace that declares the function
+        @param declared the entry of the function that is declared
+    */
+    DLLLOCAL void parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
+            const qore_ns_private* declaring_ns, const FunctionEntry* declared);
+
     DLLLOCAL const FunctionEntry* parseResolveFunctionEntryIntern(const QoreProgramLocation* loc, const char* fname) {
         QORE_TRACE("qore_root_ns_private::parseResolveFunctionEntryIntern()");
 

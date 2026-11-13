@@ -772,10 +772,20 @@ FunctionEntry* qore_ns_private::addPendingVariantIntern(const char* fname, Abstr
     FunctionEntry* fe = func_list.findNode(fname);
 
     if (!fe) {
+        // the location of the declaration, for the warning below (the variant is owned by the function afterwards)
+        const QoreProgramLocation* decl_loc = !imported && v->getUserVariantBase()
+            ? v->getUserVariantBase()->getUserSignature()->getParseLocation() : nullptr;
         QoreFunction* u = new QoreFunction(fname);
         u->addPendingVariant(vh.release());
         fe = func_list.add(u, this);
         new_func = true;
+        // qore#6034: a function that unqualified calls cannot reach, as the Qore namespace has one of its name
+        // (the namespace of the declaration need not be attached to the root yet: the root of the Program is used)
+        if (decl_loc) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseWarnShadowedByQoreFunction(decl_loc, fname, this, fe);
+            }
+        }
         return fe;
     }
 
@@ -3057,6 +3067,55 @@ void qore_root_ns_private::parseWarnAmbiguousFunctionCall(const QoreProgramLocat
 
     qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_AMBIGUOUS_CALL_RESOLUTION,
         "AMBIGUOUS-CALL-RESOLUTION", desc);
+}
+
+void qore_root_ns_private::parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
+        const qore_ns_private* declaring_ns, const FunctionEntry* declared) {
+    assert(loc);
+    assert(fname);
+    assert(declaring_ns);
+
+    // the check searches the Qore namespace: it is made only if the warning will be raised
+    if (!(qore_program_private::getParseWarningMask(*getProgram()) & QP_WARN_LANGUAGE_TRAPS)
+            || parse_check_parse_option(PO_IN_MODULE) || useBrokenNamespaceResolutionParse()) {
+        return;
+    }
+
+    const qore_ns_private* qore_ns = getQore();
+    if (!qore_ns || isUnderQoreNamespace(declaring_ns, qore_ns)) {
+        return;
+    }
+
+    const FunctionEntry* qore_fe = parseFindQoreFunctionEntryIntern(fname);
+    if (!qore_fe || qore_fe == declared) {
+        return;
+    }
+
+    std::string declared_path;
+    declaring_ns->getPath(declared_path, false, true);
+    std::string qore_path;
+    if (const qore_ns_private* resolved_ns = qore_fe->getNamespace()) {
+        resolved_ns->getPath(qore_path, false, true);
+    }
+    // the paths end with '::' or are empty for the root namespace
+    std::string declared_name = (declared_path.empty() ? std::string("::") : declared_path) + fname + "()";
+    std::string qore_name = qore_path + fname + "()";
+
+    QoreDiagnosticMetadata metadata("USER-SYMBOL-SHADOWED-BY-QORE",
+        "unqualified resolution of a function name selects the function of the Qore namespace first, so the "
+        "function that the program declares with the same name is reached only by a call with a namespace path");
+    metadata.addFact("kind", "function");
+    metadata.addFact("name", fname);
+    metadata.addFact("declared", declared_name.c_str());
+    metadata.addFact("shadowedBy", qore_name.c_str());
+    metadata.addSuggestion(declared_name.c_str());
+    metadata.addFix("call the function with its namespace path, or rename it", "review-required");
+
+    QoreStringNode* desc = new QoreStringNodeMaker("function '%s' declared in namespace '%s' is not reachable by an "
+        "unqualified call: unqualified resolution selects '%s' first; call it as '%s' or rename it", fname,
+        declared_path.empty() ? "::" : declared_path.c_str(), qore_name.c_str(), declared_name.c_str());
+    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc,
+        metadata);
 }
 
 AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern(

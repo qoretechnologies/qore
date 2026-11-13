@@ -672,6 +672,12 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Warning for a User Function that Unqualified Calls Cannot Reach
+    The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function
+    named like a function of the @ref Qore "Qore" namespace, which @ref unqualified_symbol_resolution "unqualified
+    calls" reach instead; it names both and says to call the function with its namespace path or rename it
+    (<a href="https://github.com/qoretechnologies/qore/issues/6034">issue 6034</a>).
+
     @par Debugger Exception IDs
     The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
     \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that

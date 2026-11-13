@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QoreNamespaceShadowWarningTest
+
+#! the language-traps warning for a user symbol that unqualified resolution never reaches (qore#6034)
+/** The Qore namespace is searched first when a name is used without a namespace path (@ref
+    unqualified_symbol_resolution), so a function that the program declares with the name of a function of the Qore
+    namespace is reached only by a call with a namespace path.  The strict language-traps warning says so, once, at
+    the declaration.
+*/
+class QoreNamespaceShadowWarningTest inherits QUnit::Test {
+    public {
+        #! the options of the Programs that test %broken-namespace-resolution: new style, types and strict arguments
+        #! without %modern, which does not allow the option (issue #5682)
+        const LegacyOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+    }
+
+    constructor() : QUnit::Test("Qore namespace shadow warning test", "1.0", \ARGV) {
+        addTestCase("a function in the root namespace", \testRootFunction());
+        addTestCase("a function in a user namespace", \testNamespacedFunction());
+        addTestCase("a function with several variants warns once", \testOverloads());
+        addTestCase("another function of the Qore namespace", \testOtherQoreFunction());
+        addTestCase("the warning is off unless language-traps is enabled", \testOff());
+        addTestCase("no warning with %broken-namespace-resolution", \testBrokenNamespaceResolution());
+        addTestCase("no warning for a function that does not clash", \testNoClash());
+        addTestCase("no warning in a user module", \testUserModule());
+        addTestCase("the function stays unreachable by an unqualified call", \testBehavior());
+        set_return_value(main());
+    }
+
+    private list<hash<ParseDiagnosticInfo>> parseWarnings(string source, int options = PO_MODERN,
+            int warnings = WARN_LANGUAGE_TRAPS) {
+        Program p(options | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(source, "<shadow-warning>", warnings);
+        return p.getParseDiagnostics();
+    }
+
+    testRootFunction() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings(
+            "string sub reverse(string s) { return \"user:\" + s; }");
+        assertEq(1, diags.size());
+        assertEq("warning", diags[0].severity);
+        assertEq("LANGUAGE-TRAP", diags[0].code);
+        assertEq("USER-SYMBOL-SHADOWED-BY-QORE", diags[0].id);
+        assertEq(WARN_LANGUAGE_TRAPS, diags[0].warningCode);
+        assertEq("function", diags[0].facts.kind);
+        assertEq("reverse", diags[0].facts.name);
+        assertEq("::reverse()", diags[0].facts.declared);
+        assertEq("Qore::reverse()", diags[0].facts.shadowedBy);
+        assertRegex("function 'reverse' declared in namespace '::' is not reachable by an unqualified call", diags[0].message);
+        assertRegex("selects 'Qore::reverse\\(\\)' first", diags[0].message);
+        assertRegex("call it as '::reverse\\(\\)' or rename it", diags[0].message);
+        assertEq(1, diags[0].startLine);
+    }
+
+    testNamespacedFunction() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings(
+            "namespace N {\n"
+            "    string sub reverse(string s) { return \"N-user:\" + s; }\n"
+            "}\n");
+        assertEq(1, diags.size());
+        assertEq("USER-SYMBOL-SHADOWED-BY-QORE", diags[0].id);
+        assertEq("N::reverse()", diags[0].facts.declared);
+        assertEq("Qore::reverse()", diags[0].facts.shadowedBy);
+        assertRegex("declared in namespace 'N::'", diags[0].message);
+        assertRegex("call it as 'N::reverse\\(\\)'", diags[0].message);
+        assertEq(2, diags[0].startLine, "the location of the declaration");
+    }
+
+    testOverloads() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings(
+            "string sub reverse(string s) { return \"s\"; }\n"
+            "string sub reverse(int i) { return \"i\"; }\n"
+            "string sub reverse(float f) { return \"f\"; }\n");
+        assertEq(1, diags.size(), "once, at the first declaration of the name");
+        assertEq(1, diags[0].startLine);
+    }
+
+    testOtherQoreFunction() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("int sub gettid() { return -1; }");
+        assertEq(1, diags.size());
+        assertEq("Qore::gettid()", diags[0].facts.shadowedBy);
+    }
+
+    testOff() {
+        string source = "string sub reverse(string s) { return \"user:\" + s; }";
+        assertEq(0, parseWarnings(source, PO_MODERN, WARN_NONE).size(), "no warnings enabled");
+        assertEq(0, parseWarnings(source, PO_MODERN, WARN_DEFAULT).size(), "the default warnings");
+        assertEq(0, parseWarnings(source, PO_MODERN, WARN_ALL).size(), "all but the strict warnings");
+        assertEq(1, parseWarnings(source, PO_MODERN, WARN_STRICT).size(), "the strict warnings");
+    }
+
+    testBrokenNamespaceResolution() {
+        string source = "string sub reverse(string s) { return \"user:\" + s; }";
+        assertEq(1, parseWarnings(source, LegacyOptions).size(), "the legacy options alone");
+        assertEq(0, parseWarnings(source, LegacyOptions | PO_BROKEN_NAMESPACE_RESOLUTION).size(),
+            "the option: the declared function is found first");
+        assertEq(0, parseWarnings("%broken-namespace-resolution\n" + source, LegacyOptions).size(), "the directive");
+        assertEq(1, parseWarnings("%broken-namespace-resolution\n%correct-namespace-resolution\n" + source,
+            LegacyOptions).size(), "%correct-namespace-resolution restores it");
+    }
+
+    testNoClash() {
+        assertEq(0, parseWarnings("string sub my_unique_function_name(string s) { return s; }\n"
+            "namespace N { string sub another_unique_name() { return \"\"; } }\n"
+            "class C { string reverse(string s) { return s; } static string chr(int i) { return \"\"; } }").size(),
+            "a function that the Qore namespace does not have, and methods, which are not resolved through "
+            "namespaces");
+    }
+
+    testUserModule() {
+        TmpDir tmp("qore-shadow-warning-");
+        File f();
+        f.open2(tmp.path + "/ShadowModule.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n"
+            "module ShadowModule {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"declares a function named like a Qore function\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "public namespace ShadowModule {\n"
+            "public string sub reverse(string s) { return \"module:\" + s; }\n"
+            "}\n");
+        f.close();
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings(
+            "%append-module-path " + tmp.path + "\n%requires ShadowModule\n"
+            "int sub f() { return 1; }");
+        assertEq(0, diags.size(), "a user module is not checked, as for ambiguous-call-resolution");
+    }
+
+    testBehavior() {
+        # the resolution order is unchanged: the unqualified call reaches the Qore function
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("string sub reverse(string s) { return \"user:\" + s; }\n"
+            "namespace N { string sub reverse(string s) { return \"N-user:\" + s; } }\n"
+            "list<string> sub results() { return (reverse(\"ab\"), ::reverse(\"ab\"), N::reverse(\"ab\")); }",
+            "<shadow-behavior>", WARN_NONE);
+        assertEq(("ba", "user:ab", "N-user:ab"), p.callFunction("results"));
+    }
+}
