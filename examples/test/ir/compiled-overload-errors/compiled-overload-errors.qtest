@@ -191,40 +191,49 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             "    string sw(int n, string l) { return \"C1\"; }\n"
             "}\n";
         {
-            # arguments whose types are known select the variant that matches them best; they were refused as
-            # ambiguous
+            # a named call is resolved as the positional call that it spells out, on the class of the object: the
+            # names rule out C::sw(int n, string l), so the variant of the parent class that has them is called; the
+            # arguments, whose types are known, select the variant that matches them best (they were refused as
+            # ambiguous)
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p.parse(decl + "string sub t() { B b = new C(); return b.sw(count: 1, label: \"x\"); }\n"
-                "string sub u() { B b(); return b.sw(count: 1, label: \"x\"); }\n", "named-virtual-literal");
-            assertEq("C1", p.callFunction("t"));
+                "string sub u() { B b(); return b.sw(count: 1, label: \"x\"); }\n"
+                "string sub v() { B b = new C(); return b.sw(1, \"x\"); }\n", "named-virtual-literal");
+            assertEq("B1", p.callFunction("t"));
             assertEq("B1", p.callFunction("u"));
+            assertEq("C1", p.callFunction("v"), "the positional call");
         }
         {
-            # a receiver declared with the child class takes the names of the override, not those of the variant of
-            # the parent class that it overrides: the names "count" and "label" are those of the inherited
-            # B::sw(string label, float count) only
+            # a receiver declared with the child class: the names of the variants of the parent class are accepted,
+            # also of a variant that the class overrides with other names
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(count: i, label: s); }\n",
                 "named-virtual-overridden-names");
-            assertEq("B2", p.callFunction("t", 1, "x"));
-            # with only the overridden variant, the names are unknown
+            assertEq("B1", p.callFunction("t", 1, "x"));
+            assertEq("B2", p.callFunction("t", 1.5, "x"));
             Program p1(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-            assertThrows("NAMED-ARG-UNKNOWN", "one\\(count: auto, label: auto\\)", \p1.parse(),
-                ("class B1 { string one(int count, string label) { return \"B\"; } } class C1 inherits B1 { "
-                "string one(int n, string l) { "
-                "return \"C\"; } } string sub t(auto i, auto s) { C1 c(); return c.one(count: i, label: s); }",
-                "named-virtual-overridden-only"));
+            p1.parse("class B1 { string one(int count, string label) { return \"B\"; } } class C1 inherits B1 { "
+                "string one(int n, string l) { return \"C\"; } } "
+                "string sub t(auto i, auto s) { C1 c(); return c.one(count: i, label: s); }",
+                "named-virtual-overridden-only");
+            assertEq("B", p1.callFunction("t", 1, "x"));
             Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p2.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(n: i, l: s); }\n",
                 "named-virtual-override-names");
             assertEq("C1", p2.callFunction("t", 1, "x"));
-            # the override of a generic method renames its parameter: the names of the overridden variant are unknown
-            # for a receiver of the overriding class, whose type parameters are its own
+            # the override of a generic method with another parameter name
             Program p3(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-            assertThrows("NAMED-ARG-UNKNOWN", "id\\(x: int", \p3.parse(),
-                ("class GO { string id<U>(U x) { return \"GO\"; } } class GOC inherits GO { "
-                "string id<U>(U y) { return \"GOC\"; } } string sub t() { GOC g(); return g.id(x: 2); }",
-                "named-virtual-generic-overridden"));
+            p3.parse("class GO { string id<U>(U x) { return \"GO\"; } } class GOC inherits GO { "
+                "string id<U>(U y) { return \"GOC\"; } } string sub t() { GOC g(); return g.id(x: 2); } "
+                "string sub u() { GOC g(); return g.id(y: 2); }", "named-virtual-generic-overridden");
+            assertEq("GO", p3.callFunction("t"));
+            assertEq("GOC", p3.callFunction("u"));
+            # names that no variant of the receiver's type has
+            Program p4(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "one\\(z: auto\\)", \p4.parse(),
+                ("class B1 { string one(int count) { return \"B\"; } } class C1 inherits B1 { "
+                "string one(int n) { return \"C\"; } } string sub t(auto i) { C1 c(); return c.one(z: i); }",
+                "named-virtual-unknown"));
         }
         {
             # the functional domain of the variant that the names select is checked at parse time, as for positional

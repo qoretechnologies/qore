@@ -278,30 +278,36 @@ string str = show(label: l, count: n);
     @endcode
 
     @anchor named_arguments_virtual_dispatch
-    The names of a call of a method of an object are bound to the parameters of the variants of the method in the
-    declared (static) type of the receiver (for a call of a method in the class, the class of the method making the
-    call), whether at parse time or at runtime; a variant of a parent class that the class overrides is not one of
-    them, whatever the names of its parameters, and a variant that is not accessible where the call is made is not a
-    candidate.  The names select that variant, and the call is dispatched to the class of the object, which calls the
-    variant's override (the variant of the class of the object or of the nearest class with the same parameter types)
-    with the arguments at the positions of its parameters, whatever the names of the override's parameters, as in C#;
-    another variant that would match the arguments better by position is not called (a call with an explicit class
-    name, such as <tt>Base::method()</tt>, calls the variant of that class, as with positional arguments).  A static
-    method call binds the names to the variants of the static method.  A receiver declared with an or-nothing class
-    type that has no value at runtime raises the error of the same call with positional arguments.
+    A named call of a method of an object is resolved as the call with positional arguments that it spells out: the
+    classes of the object are searched from the class of the object, and the first class with a variant that accepts
+    the names and the arguments is used, whether the variant is resolved at parse time or at runtime; a variant whose
+    parameters do not have the names of the arguments is not a candidate, and neither is a variant that is not
+    accessible where the call is made.  A named call therefore differs from the positional call only where the names
+    rule a variant out: an override with other parameter names is not called by the names of the variant that it
+    overrides, which is called instead, and an implementation of an abstract method with other parameter names cannot
+    be called by the names of the abstract method (\c RUNTIME-OVERLOAD-ERROR).  A call with an explicit class name,
+    such as <tt>Base::method()</tt>, and an unqualified call of a static method in a class are resolved on that class,
+    and a static method called through an object on the class of the object, as with positional arguments.  A
+    receiver declared with an or-nothing class type that has no value at runtime raises the error of the same call
+    with positional arguments.
     @code{.py}
 class Shape {
     string draw(int width, string color) { return sprintf("shape %d %s", width, color); }
 }
 class Box inherits Shape {
-    string draw(int w, string c) { return sprintf("box %d %s", w, c); }
+    string draw(int width, string color) { return sprintf("box %d %s", width, color); }
+}
+class Frame inherits Shape {
+    string draw(int w, string c) { return sprintf("frame %d %s", w, c); }
 }
 Shape s = new Box();
-# the names are those of Shape::draw(); Box::draw() is called, as for s.draw(2, "red")
+# Box::draw() has the names: it is called, as by s.draw(2, "red")
 string str = s.draw(color: "red", width: 2);
-Box b();
-# the names are those of Box::draw()
-str = b.draw(w: 2, c: "red");
+s = new Frame();
+# Frame::draw() does not have the names: Shape::draw() is called (s.draw(2, "red") calls Frame::draw())
+str = s.draw(color: "red", width: 2);
+# the names of Frame::draw()
+str = (new Frame()).draw(w: 2, c: "red");
     @endcode
     Arguments whose types are known select the variant that matches them best, as for positional arguments (an
     \c int argument matches an \c int parameter better than a \c float parameter); only arguments that two variants

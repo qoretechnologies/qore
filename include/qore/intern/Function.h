@@ -2859,33 +2859,15 @@ public:
 
     //! runtimeFindVariant() for a named call resolved by parameter name, with the semantic policy of the call
     /** @param invocation_policy the semantic policy of a legacy AST call (default for any other call)
-        @param bind_abstract abstract variants are candidates, as the selected variant is only used to bind the
-        arguments to the positions of its parameters (see AbstractMethodCallNode::execNamed())
     */
     DLLLOCAL QORE_INTERN_NOINLINE const AbstractQoreFunctionVariant* runtimeFindVariantNamed(ExceptionSink* xsink,
             const QoreListNode* args, unsigned variant_filter, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
             const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
             LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
-            const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args,
-            bool bind_abstract = false) const;
+            const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args)
+            const;
 
-    //! returns the variant of this function or of a function that it inherits that overrides \a v (the most derived
-    //! accessible variant with the parameter types of \a v, which can be \a v itself), or nullptr if there is none
-    /** for a named call, which binds its names to the variant \a v of the receiver's static type and calls its override
-        in the class of the object (qore#5990)
-    */
-    /** @param receiver_type_info the type of the object, whose parameterized base classes give the type arguments of
-        the type parameters in the signatures
-    */
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindOverride(const AbstractQoreFunctionVariant* v,
-            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const;
-
-    //! checks the functional domains of a variant that a call selected at run time without runtimeFindVariant(),
-    //! against the options of the code making the call, as runtimeFindVariant() checks the variant that it selects
-    /** @return -1 if the exception was raised
-    */
-    DLLLOCAL int runtimeCheckVariantDomains(const AbstractQoreFunctionVariant* v, ExceptionSink* xsink) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
@@ -2901,8 +2883,7 @@ public:
             QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
             bool* content_dependent, LexicalSemanticPolicy invocation_policy,
             const QoreParseOptions* user_dom_po = nullptr, const QoreProgram* user_dom_code_pgm = nullptr,
-            const name_vec_t* arg_names = nullptr, QoreListNode** named_bound_args = nullptr,
-            bool bind_abstract = false) const;
+            const name_vec_t* arg_names = nullptr, QoreListNode** named_bound_args = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

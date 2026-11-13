@@ -1,47 +1,44 @@
 base literal: B::sw(int count, string label) count=1 label="x"
 base literal float: B::sw(string label, float count) label="x" count=1.5
-virtual literal: C::sw(int n, string l) n=1 l="x"
-virtual runtime: C::sw(int n, string l) n=1 l="x"
-virtual runtime label first: C::sw(int n, string l) n=1 l="x"
-positional: C::sw(int n, string l) n=1 l="x"
-inherited: B::sw(string label, float count) label="x" count=1.5
-virtual one: C::one(int n, string l) n=1 l="x"
-virtual wrong types: RUNTIME-OVERLOAD-ERROR
-child names: C::one(int n, string l) n=1 l="x"
-child names literal: C::one(int n, string l) n=1 l="x"
-self: C::sw(int n, string l) n=1 l="x"
-self literal: C::sw(int n, string l) n=1 l="x"
+same names: CS::sw(int count, string label) count=1 label="x" / CS::sw(int count, string label) count=1 label="x"
+same names literal: CS::sw(int count, string label) count=1 label="x"
+same names inherited: B::sw(string label, float count) label="x" count=1.5
+other names: B::sw(int count, string label) count=1 label="x" / CR::sw(int n, string l) n=1 l="x"
+other names literal: B::sw(int count, string label) count=1 label="x"
+wrong types: RUNTIME-OVERLOAD-ERROR
+child class names: CR::sw(int n, string l) n=1 l="x" / B::sw(int count, string label) count=1 label="x"
+overload other name: M::m(string x) / MY::m(*string y)
+overload same name: MX::m(*string x) / MX::m(*string x)
+self same names: CS::sw(int count, string label) count=1 label="x" / CS::sw(int count, string label) count=1 label="x"
+self other names: B::sw(int count, string label) count=1 label="x" / CR::sw(int n, string l) n=1 l="x"
+self literal: CS::sw(int count, string label) count=1 label="x"
 scoped: B::sw(int count, string label) count=1 label="x"
-default: C::sw(int n, string l) n=1 l="v"
-abstract literal: AI::am(int n, string l) n=1 l="x"
-abstract runtime: AI::am(int n, string l) n=1 l="x"
-abstract runtime float: AI::am(string l, float n) l="x" n=1.5
-abstract self: AI::am(int n, string l) n=1 l="x"
-implementation names: AI::am(int n, string l) n=1 l="x"
-loop: ["C::sw(int n, string l) n=0 l=\"l0\"", "AI::am(int n, string l) n=0 l=\"a0\"", "C::sw(int n, string l) n=1 l=\"l1\"", "AI::am(int n, string l) n=1 l=\"a1\"", "C::sw(int n, string l) n=2 l=\"l2\"", "AI::am(int n, string l) n=2 l=\"a2\""]
-names select literal: Q::m(float x)
-names select runtime: Q::m(float x)
-names select base literal: P::m(float x)
-names select base runtime: P::m(float x)
-names select child literal: Q::m(float x)
-names select child runtime: Q::m(float x)
-names select other: Q::m(int n)
-positional: Q::m(int n)
+default: CS::sw(int count, string label) count=1 label="v" / B::sw(int count, string label) count=1 label="v"
+abstract same names: AS::am(int count, string label) count=1 label="x" / AS::am(int count, string label) count=1 label="x"
+abstract same names literal: AS::am(int count, string label) count=1 label="x"
+abstract self: AS::am(int count, string label) count=1 label="x"
+abstract other names positional: AR::am(int n, string l) n=1 l="x"
+abstract other names: RUNTIME-OVERLOAD-ERROR
+abstract other names self: RUNTIME-OVERLOAD-ERROR
+implementation names: AR::am(int n, string l) n=1 l="x"
+loop: ["CS::sw(int count, string label) count=0 label=\"s0\"", "B::sw(int count, string label) count=0 label=\"r0\"", "AS::am(int count, string label) count=0 label=\"a0\"", "CS::sw(int count, string label) count=1 label=\"s1\"", "B::sw(int count, string label) count=1 label=\"r1\"", "AS::am(int count, string label) count=1 label=\"a1\"", "CS::sw(int count, string label) count=2 label=\"s2\"", "B::sw(int count, string label) count=2 label=\"r2\"", "AS::am(int count, string label) count=2 label=\"a2\""]
+names select: Q::m(float x) / Q::m(float x)
+names select base: P::m(float x) / P::m(float x)
+names select other: Q::m(int n) / Q::m(int n)
 single variant swapped: SV::r x=1 y=2
 single variant: SV::one x=3
 generic method: 2 "g"
-generic override: GOC::id GOC::id
-generic override runtime: GOC::id
-generic override or nothing: GOC::opt GOC::opt
-generic override list: GOC::lst
-generic override two: GOC::two GOC::two
-generic other bound: GO::bnd GO::bnd
-generic other count: GO::cnt
-generic and non-generic: GO::gen
+generic same names: GOS::id / GOS::id
+generic same names runtime: GOS::id
+generic or nothing: GOS::opt / GOS::opt
+generic other names: GO::id / GOR::id
 const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
-static through object literal: SB::sm(float g)
-static through object runtime: SB::sm(float g)
+static through object same names: SBS::sm(float f) / SBS::sm(float f)
+static through object other names: SA::sm(float f) / SBR::sm(float g)
+static through object runtime: SBS::sm(float f)
+static self: SA::sm(float f) / SA::sm(float f)
 static scoped: SA::sm(float f)
-generic override literal: GC::m(int x)
-generic override runtime: GC::m(int x)
-background: C::sw(int n, string l) n=1 l="x"
+generic class override: GC::m(int x) / GC::m(int x)
+generic class override runtime: GC::m(int x)
+background: CS::sw(int count, string label) count=1 label="x"
+background other names: B::sw(int count, string label) count=1 label="x"

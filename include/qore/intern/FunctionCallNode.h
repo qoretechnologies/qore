@@ -68,14 +68,15 @@ protected:
     //! unqualified call in the class), whose named arguments are bound with the variants of the receiver's static
     //! type and passed to the override of the variant that they select (qore#5990)
     bool virtual_named_dispatch = false;
-    //! the variant of a named call of a method that a class can override that its names select at parse time, whose
-    //! checks are made at parse time (the call is resolved at run time; see parseCommitVirtualNamedCall())
+    //! the variant of the receiver's static type that the names of a named call select at parse time, whose checks
+    //! are made at parse time, when a child class can have another variant that the call selects (the call is
+    //! resolved at run time on the class of the object; see parseCommitVirtualNamedCall())
     const AbstractQoreFunctionVariant* named_bound_variant = nullptr;
     //! the names of the arguments of such a call until the call is made resolved at run time
     name_vec_t virtual_named_names;
 
-    //! makes a named call of a method that a class can override resolved at run time by parameter name after the
-    //! checks of its variant (qore#5990); returns 1 if it did
+    //! makes a named call of a method for which a child class can have another variant resolved at run time by
+    //! parameter name after the checks of its variant (qore#5990); returns 1 if it did
     DLLLOCAL int parseCommitVirtualNamedCall();
 
 public:
@@ -666,19 +667,19 @@ public:
     */
     DLLLOCAL int checkObject(QoreObject* o, const char* cstr, ExceptionSink* xsink) const;
     //! evaluates a named call of a method of an object resolved at run time by parameter name (qore#5990)
-    /** the names are bound to the parameters of the variants of \a bind_m, and the method is then called with the
-        arguments at those positions as a call with positional arguments is
+    /** the call is resolved as the call with positional arguments that it spells out: on the method of the class of
+        the object (or \a m), whose classes are searched from the first, and the first class with a variant that
+        accepts the names and the arguments is used
 
+        @param policy the semantic policy of a legacy AST call (default for any other call)
         @param o the object
-        @param bind_m the method of the receiver's static type, whose variants the names are bound to, or nullptr for
-        the method of the class of the object
-        @param dispatch_m the method called, or nullptr to look it up by name in the class of the object
+        @param m the method called (a call that names the class of the method, as Base::m() does, or the method of
+        the class of the object), or nullptr to look it up by name in the class of the object
         @param cstr the name of the method
         @param ctx the class context of the call
     */
-    DLLLOCAL QoreValue execNamed(LexicalSemanticPolicy policy, QoreObject* o, const QoreMethod* bind_m,
-            const QoreMethod* dispatch_m,
-            const char* cstr, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execNamed(LexicalSemanticPolicy policy, QoreObject* o, const QoreMethod* m, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return qc;

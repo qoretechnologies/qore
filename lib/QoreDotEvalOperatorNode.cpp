@@ -251,7 +251,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 // the arguments are bound by name at run time when the variants that could be selected name their
                 // parameters differently (see AbstractMethodCallNode::execNamed())
                 m->setAllowRuntimeArgNames();
-                // also a static method called through an object, which is dispatched on the class of the object
+                // a named call is resolved at run time on the class of the object, as a positional call, also of a
+                // static method called through an object (qore#5990)
                 m->setVirtualNamedDispatch();
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
@@ -440,7 +441,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
     if (!m->isPseudo()) {
         m->setAllowRuntimeArgNames();
-        // also a static method called through an object, which is dispatched on the class of the object
+        // a named call is resolved at run time on the class of the object, as a positional call, also of a static
+        // method called through an object (qore#5990)
         m->setVirtualNamedDispatch();
     }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {

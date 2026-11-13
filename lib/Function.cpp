@@ -2737,110 +2737,6 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
-//! returns true if a variant with signature \a a (of a child class) overrides one with signature \a b (of a parent
-//! class): the same parameter types (as the variant of a class with the parameter types of a variant of a parent
-//! class is called instead of it)
-/** @param receiver the type whose parameterized base classes give the type arguments of the type parameters in the
-    signatures (a variant of a specialization of a generic class is overridden by a variant with the type arguments),
-    if any
-*/
-static bool qore_signature_overrides(const AbstractFunctionSignature& a, const AbstractFunctionSignature& b,
-        const QoreTypeInfo* receiver) {
-    if (a.numParams() != b.numParams() || a.hasVarargs() != b.hasVarargs()) {
-        return false;
-    }
-    // the type parameters of generic methods are their own in each signature: a method that overrides a generic
-    // method declares as many type parameters, which correspond by position, so the type parameters of \a b are
-    // given those of \a a (id<U>(U y) overrides id<U>(U x))
-    const UserSignature* ua = a.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&a) : nullptr;
-    const UserSignature* ub = b.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&b) : nullptr;
-    // a type that uses them is compared with the type parameters of \a a substituted for those of both signatures,
-    // so that both are normalized alike
-    QoreTypeParamInstantiation a_inst, b_inst;
-    if (ua || ub) {
-        if (!ua || !ub || ua->getTypeParameterCount() != ub->getTypeParameterCount()) {
-            return false;
-        }
-        a_inst.owner = ua;
-        b_inst.owner = ub;
-        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
-            a_inst.type_args.push_back(ua->getTypeParameterType(i));
-        }
-        b_inst.type_args = a_inst.type_args;
-        // the type parameters accept the same types: the same bounds
-        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
-            const QoreTypeInfo* abound = qore_substitute_type_params_if_needed(ua->getTypeParameterBoundTypeInfo(i),
-                receiver, &a_inst);
-            const QoreTypeInfo* bbound = qore_substitute_type_params_if_needed(ub->getTypeParameterBoundTypeInfo(i),
-                receiver, &b_inst);
-            if (!QoreTypeInfo::equal(abound, bbound)) {
-                return false;
-            }
-        }
-    }
-    for (unsigned i = 0, e = a.numParams(); i < e; ++i) {
-        const QoreTypeInfo* at = a.getParamTypeInfo(i);
-        const QoreTypeInfo* bt = b.getParamTypeInfo(i);
-        if (ua) {
-            // a type parameter of each method itself: the same position, and both with or without "*"
-            const QoreTypeParameterTypeInfo* atp = qore_get_type_parameter_type_info(at);
-            const QoreTypeParameterTypeInfo* btp = qore_get_type_parameter_type_info(bt);
-            if (atp && btp && atp->getOwnerSignature() == ua && btp->getOwnerSignature() == ub) {
-                if (atp->getIndex() != btp->getIndex() || atp->isOrNothing() != btp->isOrNothing()) {
-                    return false;
-                }
-                continue;
-            }
-        }
-        if (receiver || ua) {
-            at = qore_substitute_type_params_if_needed(at, receiver, ua ? &a_inst : nullptr);
-            bt = qore_substitute_type_params_if_needed(bt, receiver, ub ? &b_inst : nullptr);
-        }
-        if (!QoreTypeInfo::equal(at, bt)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-//! the variants that a class overrides, for binding the arguments of a named call (qore#5990)
-/** the names of a named call are bound to the parameters of the variants of the receiver's static type: a variant of
-    a parent class that a class before it in the inheritance list overrides (a variant with the same parameter types)
-    is not one of them, whatever the names of its parameters
-*/
-class qore_named_override_filter {
-public:
-    //! adds the variants of a function that the iteration of the inheritance list has passed
-    DLLLOCAL void add(const QoreFunction* f) {
-        if (!f) {
-            return;
-        }
-        QoreFunctionIterator fi(*f);
-        while (fi.next()) {
-            if (const AbstractFunctionSignature* sig = fi.getVariant()->getSignature()) {
-                sigs.push_back(sig);
-            }
-        }
-    }
-
-    //! returns true if a variant that was added overrides \a v (see qore_signature_overrides() for \a receiver)
-    DLLLOCAL bool overridden(const AbstractQoreFunctionVariant* v, const QoreTypeInfo* receiver) const {
-        const AbstractFunctionSignature* sig = v->getSignature();
-        if (!sig) {
-            return false;
-        }
-        for (const AbstractFunctionSignature* s : sigs) {
-            if (qore_signature_overrides(*s, *sig, receiver)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-private:
-    std::vector<const AbstractFunctionSignature*> sigs;
-};
-
 static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx,
         bool internal_access) {
     assert(dynamic_cast<const MethodVariantBase*>(v));
@@ -4013,70 +3909,22 @@ static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFuncti
         variant->getSignature()->getSignatureText(), qore_describe_source_domains(denied).c_str());
 }
 
-const AbstractQoreFunctionVariant* QoreFunction::runtimeFindOverride(const AbstractQoreFunctionVariant* v,
-        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
-    const AbstractFunctionSignature* vsig = v->getSignature();
-    assert(vsig);
-    const qore_class_private* last_class = nullptr;
-    bool internal_access = false;
-    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        const QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
-        if (!aqf) {
-            break;
-        }
-        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (*i == v) {
-                return static_cast<const MethodVariantBase*>(v)->isAbstract() ? nullptr : v;
-            }
-            if (last_class && (skip_method_variant(*i, class_ctx, internal_access)
-                    || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
-                continue;
-            }
-            const AbstractFunctionSignature* sig = (*i)->getSignature();
-            if (sig && qore_signature_overrides(*sig, *vsig, receiver_type_info)) {
-                return *i;
-            }
-        }
-        if (stop) {
-            break;
-        }
-    }
-    return nullptr;
-}
-
-int QoreFunction::runtimeCheckVariantDomains(const AbstractQoreFunctionVariant* v, ExceptionSink* xsink) const {
-    // pgm could be zero if called from a foreign thread with no current Program (see runtimeFindVariant())
-    if (!getProgram()) {
-        return 0;
-    }
-    QoreParseOptions ppo = runtime_get_parse_options();
-    const QoreProgram* code_pgm = nullptr;
-    QoreParseOptions caller_po = runtime_peek_call_caller_parse_options(code_pgm);
-    if (int64 denied = qore_get_variant_denied_domains(v, ppo, &caller_po, code_pgm)) {
-        raise_invalid_function_access(xsink, this, v, denied);
-        return -1;
-    }
-    return 0;
-}
-
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantNamed(ExceptionSink* xsink,
         const QoreListNode* args, unsigned variant_filter, const qore_class_private* class_ctx,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
         const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
         LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
-        const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args,
-        bool bind_abstract) const {
+        const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args) const {
     assert(named_bound_args);
     // a legacy AST call resolves the variant with its own semantic policy, as a call with positional arguments
     if (invocation_policy.isDefault()) {
         return runtimeFindVariantImpl<false, true>(xsink, args, variant_filter, class_ctx, receiver_type_info,
             type_param_inst, explicit_type_param_inst, content_dependent, {}, user_dom_po, user_dom_code_pgm,
-            &arg_names, named_bound_args, bind_abstract);
+            &arg_names, named_bound_args);
     }
     return runtimeFindVariantImpl<true, true>(xsink, args, variant_filter, class_ctx, receiver_type_info,
         type_param_inst, explicit_type_param_inst, content_dependent, invocation_policy, user_dom_po,
-        user_dom_code_pgm, &arg_names, named_bound_args, bind_abstract);
+        user_dom_code_pgm, &arg_names, named_bound_args);
 }
 
 template <bool LexicalInvocation, bool NAMED>
@@ -4085,12 +3933,8 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
         const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
         LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
-        const QoreProgram* user_dom_code_pgm, const name_vec_t* arg_names, QoreListNode** named_bound_args,
-        bool bind_abstract) const {
+        const QoreProgram* user_dom_code_pgm, const name_vec_t* arg_names, QoreListNode** named_bound_args) const {
     assert(NAMED == static_cast<bool>(arg_names));
-    assert(NAMED || !bind_abstract);
-    // abstract variants are skipped, except for binding the names of a named call (see bind_abstract)
-    const bool skip_abstract = !(NAMED && bind_abstract);
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -4137,10 +3981,6 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
     int cnt = 0;
 
-    // for a named call: the variants of the classes passed in the inheritance list, which override those of their
-    // parents (qore#5990)
-    [[maybe_unused]] std::conditional_t<NAMED, qore_named_override_filter, qore_no_named_positions> override_filter;
-    [[maybe_unused]] const QoreFunction* prev_aqf = nullptr;
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -4149,13 +3989,9 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
         if (!aqf) {
             break;
         }
-        if constexpr (NAMED) {
-            override_filter.add(prev_aqf);
-            prev_aqf = aqf;
-        }
 
         // issue #3070: skip abstract methods
-        if (skip_abstract && last_class && static_cast<const MethodFunctionBase*>(aqf)->isAbstract()) {
+        if (last_class && static_cast<const MethodFunctionBase*>(aqf)->isAbstract()) {
             continue;
         }
 
@@ -4172,15 +4008,8 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
             // skip if the variant is not accessible or abstract
             if (last_class
                 && (skip_method_variant(*i, class_ctx, internal_access)
-                    || (skip_abstract && static_cast<const MethodVariantBase*>(*i)->isAbstract()))) {
+                    || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
-            }
-            // a named call binds the names to the variants of the receiver's static type, of which a variant of a
-            // parent class that a class overrides is not one (qore#5990)
-            if constexpr (NAMED) {
-                if (last_class && override_filter.overridden(*i, receiver_type_info)) {
-                    continue;
-                }
             }
 
             // get runtime parse options
@@ -4390,10 +4219,8 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
     } else if (variant) {
         QoreProgram* pgm = getProgram();
 
-        // pgm could be zero if called from a foreign thread with no current Program; a search that only binds the
-        // names of a named call (bind_abstract) does not call the variant: the call made afterwards checks the domains
-        // of the variant that it calls (see AbstractMethodCallNode::execNamed())
-        if (pgm && skip_abstract) {
+        // pgm could be zero if called from a foreign thread with no current Program
+        if (pgm) {
             // check the functional domains of the variant
             if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po, user_dom_code_pgm)) {
                 if (!(variant_filter & QRFV_ONLY_USER)) {
@@ -4800,9 +4627,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     // variant that matches worse leaves the selection to the resolution at run time, as for positional arguments
     bool tie = false;
     NamedArgBindFailure best_failure;
-    // the variants of the classes passed in the inheritance list, which override those of their parents (qore#5990)
-    qore_named_override_filter override_filter;
-    const QoreFunction* prev_aqf = nullptr;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
         bool stop;
@@ -4811,12 +4635,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             break;
         }
         assert(!aqf->vlist.empty());
-        override_filter.add(prev_aqf);
-        prev_aqf = aqf;
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && (skip_method_variant(*i, class_ctx, internal_access)
-                    || override_filter.overridden(*i, receiver_type_info))) {
+            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
                 continue;
             }
 

@@ -462,7 +462,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             // a named call resolved at run time by parameter name has no variant; a call with a variant pays nothing
             // for it
             if (!variant && runtime_arg_names) {
-                return execNamed(policy, o, method, method, c_str, ctx, rc, xsink);
+                return execNamed(policy, o, method, c_str, ctx, rc, xsink);
             }
             ReferenceHolder<QoreListNode> args_copy(xsink);
             return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, variant,
@@ -473,14 +473,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
         }
         return runtime_arg_names
-            ? execNamed(policy, o, method, method, c_str, ctx, rc, xsink)
+            ? execNamed(policy, o, method, c_str, ctx, rc, xsink)
             : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
                 explicit_inst);
     }
     // the method is looked up by name in the class of the object
     if (runtime_arg_names) {
-        // the names are bound with the method of the receiver's static type, if known (see execNamed())
-        return execNamed(policy, o, method, nullptr, c_str, ctx, rc, xsink);
+        // resolved on the method of the class of the object, as a call with positional arguments (see execNamed())
+        return execNamed(policy, o, nullptr, c_str, ctx, rc, xsink);
     }
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
@@ -518,14 +518,14 @@ QoreValue AbstractMethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject*
 
 // a named call resolved at run time by parameter name; outside of exec(), whose calls with positional arguments are
 // hot
-/* qore#5990: the names are bound to the parameters of the variants of the method of the receiver's static (declared)
-   type, and the call is then made with the arguments at those positions as the same call with positional arguments
-   is: dispatched on the class of the object, so that an override is called whatever the names of its parameters
-   (unless the call names the class of the method, as Base::m() does)
+/* qore#5990: a named call is resolved as the call with positional arguments that it spells out: on the method of the
+   class of the object (unless the call names the class of the method, as Base::m() does), whose classes are searched
+   from the class of the object, and the first class with a variant that accepts the names and the arguments is used;
+   a variant whose parameters do not have the names of the arguments is not a candidate
 */
 __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(LexicalSemanticPolicy policy,
-        QoreObject* o, const QoreMethod* bind_m, const QoreMethod* dispatch_m, const char* c_str,
-        const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+        QoreObject* o, const QoreMethod* m, const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
     assert(runtime_arg_names);
     assert(!variant);
     if (!o->isValid()) {
@@ -533,113 +533,26 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
             o->getClassName(), c_str);
         return QoreValue();
     }
-    // the variant is the override of the bound variant in the class of the object unless the method called is known
-    // (the class of the object is the class of the call, or the call names the class of the method)
-    const bool virtual_dispatch = !dispatch_m;
-    // the method of the class of the object, which inherits or overrides the method that the call was parsed with
-    if (!dispatch_m || !bind_m) {
-        const QoreMethod* w = qore_class_private::get(*o->getClass())->getMethodForEval(c_str, o->getProgram(), ctx,
-            xsink);
+    if (!m) {
+        // the method of the class of the object, which inherits or overrides the method that the call was parsed with
+        m = qore_class_private::get(*o->getClass())->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
         if (*xsink) {
             return QoreValue();
         }
-        if (!w) {
+        if (!m) {
             xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined",
                 o->getClassName(), c_str);
             return QoreValue();
         }
-        if (!dispatch_m) {
-            dispatch_m = w;
-        }
-        // a call restored without the method of its static type binds the names to the method of the object's class
-        if (!bind_m) {
-            bind_m = w;
-        }
     }
-
-    // the arguments in source order, evaluated
-    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
-    ReferenceHolder<QoreListNode> args_copy(xsink);
-    const QoreListNode* call_args;
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (tmp_args) {
-        call_args = getEvalTmpArgs(args_copy);
-    } else {
-        eval_args.assignEval(args);
-        if (*xsink) {
-            return QoreValue();
-        }
-        call_args = *eval_args;
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalNamed(*m, xsink, rc, o, getEvalTmpArgs(args_copy), true, ctx, nullptr,
+            explicit_inst, *runtime_arg_names, policy);
     }
-
-    // the variant of the static type that the names select, and the arguments at the positions of its parameters
-    const qore_class_private* bind_cls = qore_class_private::get(*bind_m->getClass());
-    const qore_class_private* class_ctx = ctx;
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*bind_m->getClass(), class_ctx)) {
-        class_ctx = nullptr;
-    }
-    const QoreFunction* bind_func = qore_method_private::get(*bind_m)->getFunction();
-    QoreTypeParamInstantiation type_param_inst;
-    bool content_dependent = false;
-    QoreListNode* bound_args = nullptr;
-    // only the parameter positions of the variant are used: the call made below selects and checks the variant
-    // that it calls (its variant filter and functional domains, as for a call with positional arguments)
-    const AbstractQoreFunctionVariant* bound_variant = bind_func->runtimeFindVariantNamed(xsink,
-        call_args, 0, class_ctx, qore_get_object_receiver_type_info(o), &type_param_inst,
-        getExplicitTypeParamInstantiation(), &content_dependent, policy, nullptr, nullptr, *runtime_arg_names,
-        &bound_args, true);
-    ReferenceHolder<QoreListNode> bound_holder(bound_args, xsink);
-    if (!bound_variant) {
-        assert(*xsink);
-        return QoreValue();
-    }
-    assert(bound_args);
-    // the variant that the names select must be accessible, as for a call of it (see
-    // CodeEvaluationHelper::findVariant())
-    {
-        const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(bound_variant);
-        ClassAccess va = mv->getAccess();
-        if ((va > Public && !class_ctx) || (va == Internal
-                && !qore_class_private::get(*mv->getClass())->equal(*bind_cls))) {
-            xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
-                mv->className(), bind_func->getName(), mv->getSignature()->getSignatureText());
-            return QoreValue();
-        }
-    }
-
-    // the variant called: the override of the bound variant in the class of the object (qore#5990: the names select
-    // the variant of the static type, whose override is called, as in C#), or the bound variant itself when the
-    // method called is known
-    const AbstractQoreFunctionVariant* call_variant = bound_variant;
-    if (virtual_dispatch) {
-        const qore_class_private* obj_ctx = ctx;
-        if (obj_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), obj_ctx)) {
-            obj_ctx = nullptr;
-        }
-        call_variant = qore_method_private::get(*dispatch_m)->getFunction()->runtimeFindOverride(bound_variant,
-            obj_ctx, qore_get_object_receiver_type_info(o));
-    } else if (static_cast<const MethodVariantBase*>(bound_variant)->isAbstract()) {
-        call_variant = nullptr;
-    }
-    // the call with the arguments at the positions of the parameters of the variant; a legacy AST call with its own
-    // semantic policy
-    auto eval_bound = [&](const QoreMethod& m, const AbstractQoreFunctionVariant* v) -> QoreValue {
-        return policy.isDefault()
-            ? qore_method_private::evalTmpArgs(m, xsink, rc, o, *bound_holder, ctx, v, nullptr,
-                getExplicitTypeParamInstantiation())
-            : qore_method_private::evalTmpArgs(policy, m, xsink, rc, o, *bound_holder, ctx, v, nullptr,
-                getExplicitTypeParamInstantiation());
-    };
-    if (!call_variant) {
-        // no override that can be called here: the call is resolved by position, as a call with positional arguments
-        return eval_bound(*dispatch_m, nullptr);
-    }
-    const QoreMethod* call_m = qore_method_private::resolveVariantMethod(*dispatch_m, call_variant);
-    // the functional domains of the variant, which the call does not check for a variant that it is given (see
-    // runtimeFindVariant())
-    if (qore_method_private::get(*call_m)->getFunction()->runtimeCheckVariantDomains(call_variant, xsink)) {
-        return QoreValue();
-    }
-    return eval_bound(*call_m, call_variant);
+    return qore_method_private::evalNamed(*m, xsink, rc, o, args, false, ctx, nullptr, explicit_inst,
+        *runtime_arg_names, policy);
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
@@ -781,8 +694,9 @@ void FunctionCallBase::setCallArgEvalMap(std::vector<size_t>&& source_to_param, 
     qore_list_private::get(args)->setCallArgEvalMap(std::move(source_to_param), result_size);
 }
 
-//! returns true if a class can override the variant \a v of the method \a func, which a named call binds its names to
-//! (qore#5990)
+//! returns true if a child class can have a variant of the method \a func that a named call whose names select the
+//! variant \a v in the receiver's static type would select instead (an override or an overload of it), so the call is
+//! resolved at run time on the class of the object (qore#5990)
 static bool named_call_may_call_override(const QoreFunction* func, const AbstractQoreFunctionVariant* v) {
     if (!v) {
         return false;
@@ -928,12 +842,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         if (named_args) {
             // a call whose variant is resolved at run time keeps the binding of its arguments (see
             // QoreFunction::parseFindVariantNamed())
-            // qore#5990: a named call of a method that a class can override binds its names to the variant of the
-            // receiver's static type and calls its override in the class of the object, which the call resolves at
-            // run time (AbstractMethodCallNode::execNamed()); its return type is that of the variant, which the
-            // return type of an override must be accepted by (#5838)
-            // the checks of the variant below are made, and the call is made resolved at run time after them (see
-            // virtual_named_names)
+            // qore#5990: a named call of a method that a child class can override or overload is resolved at run
+            // time on the class of the object, as the call with positional arguments that it spells out
+            // (AbstractMethodCallNode::execNamed()); the variant of the receiver's static type that the names select
+            // gives the call its checks and its return type, which the variants of a child class that a call of it can
+            // select must be accepted by (#5838); the checks of the variant below are made, and the call is made
+            // resolved at run time after them (see virtual_named_names)
             if (!named_binding.runtime_names && virtual_named_dispatch && allow_runtime_arg_names
                     && named_call_may_call_override(func, variant ? variant : named_binding.variant)) {
                 named_bound_variant = variant ? variant : named_binding.variant;
@@ -1128,7 +1042,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
     // binds its arguments by name to the variants of the method
     if (runtime_arg_names) {
         // an explicit call of the method of a class (Base::m()) is not dispatched on the class of the object
-        return execNamed(policy, self, method, method, method->getName(), nullptr, rc, xsink);
+        return execNamed(policy, self, method, method->getName(), nullptr, rc, xsink);
     }
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
@@ -1184,7 +1098,7 @@ QoreValue SelfFunctionCallNode::evalUnresolvedQualified(LexicalSemanticPolicy po
     QoreRcCallSiteHelper call_site(rc, loc);
     // a named call resolved at run time by parameter name binds its arguments by name to the variants of the method
     if (runtime_arg_names) {
-        return execNamed(policy, self, m, m, name, nullptr, rc, xsink);
+        return execNamed(policy, self, m, name, nullptr, rc, xsink);
     }
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
@@ -1223,8 +1137,9 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     // the arguments are bound by name at run time when the variants that could be selected name their parameters
     // differently (see AbstractMethodCallNode::execNamed())
     allow_runtime_arg_names = true;
-    // an unqualified call of a method of the object is dispatched on the class of the object (qore#5990)
-    if (ns.size() == 1 && !is_copy && method) {
+    // an unqualified call of a normal method of the object is resolved on the class of the object, as a call with
+    // positional arguments; a call of a static method is resolved on the class of the call (qore#5990)
+    if (ns.size() == 1 && !is_copy && method && !method->isStatic()) {
         virtual_named_dispatch = true;
     }
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
