@@ -72,6 +72,9 @@ public class HttpAsyncTarget {
             - \c dedicated: \c True when a dedicated handler manages the socket lifecycle
             - \c send_callback: Callback for chunked response data
             - \c send_timeout: Timeout for send_callback responses
+            - \c persistent_request_end: Reports the end of a WebSocket connection or SSE stream that the request
+              leaves open to @ref onPersistentRequestEnd(); a target that builds its own result for a request that
+              the server handled must keep this field of the server's result
 
         @see HttpRequestResultInfo
         @see HttpConnectionInfo
@@ -159,7 +162,9 @@ public class HttpAsyncTarget {
         when it returns (an ordinary response, or a WebSocket or SSE connection that its handler served while the
         request was handled), is not reported; neither is a connection opened by a request of a persistent HTTP/1.1
         session (see @ref HttpServer::AbstractHttpRequestHandler::isPersistent()), whose own request keeps the
-        handler thread until the session ends.  An exception raised by this method is logged and ignored.
+        handler thread until the session ends, nor an HTTP/2 or HTTP/3 SSE stream whose end cannot be detected (its
+        handler's setup returned no @ref AbstractSseConnection, or the controller supplied no stream-close hook; the
+        server logs an error for such a stream).  An exception raised by this method is logged and ignored.
 
         The end of an HTTP/2 or HTTP/3 SSE stream that the server closes is reported when the close is started, which
         can be before the stream's last frame has been sent.

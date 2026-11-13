@@ -160,8 +160,10 @@ public class AbstractSseConnection {
     }
 
     #! Runs the end callback exactly once; called when the stream has ended (see @ref setEndCallback())
-    /** The transports call it from @ref close() and @ref abort(), and @ref notifyPeerClosed() calls it; repeated
-        calls have no effect.
+    /** The transports call it from @ref close() and @ref abort(), and @ref notifyPeerClosed() and the destructor call
+        it; repeated calls have no effect.  A subclass that implements a transport must call it at the start of its
+        @ref close() and @ref abort() (before anything that can release the last reference to the object), or a
+        stream that the server ends is reported only when its peer's close is detected or the object is destroyed.
     */
     private notifyEnded() {
         *code<nothing()> cb;
