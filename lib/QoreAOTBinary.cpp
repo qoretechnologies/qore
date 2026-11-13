@@ -10342,10 +10342,21 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         static const std::vector<AOTGlobalSlotId> no_globals;
         qoreAOTClearExprSerializationError();
         // a top-level local that the default argument reads is written by its index (qore#5868)
-        writer.allow_top_level_local_ref = true;
-        bool ok = classifyAndWriteExpr(writer, dv, no_locals, no_globals,
-            writer.const_reverse_map);
-        writer.allow_top_level_local_ref = false;
+        struct TopLevelLocalRefScope {
+            QoreAOTBinaryWriter& writer;
+            bool old;
+            TopLevelLocalRefScope(QoreAOTBinaryWriter& w) : writer(w), old(w.allow_top_level_local_ref) {
+                writer.allow_top_level_local_ref = true;
+            }
+            ~TopLevelLocalRefScope() {
+                writer.allow_top_level_local_ref = old;
+            }
+        };
+        bool ok;
+        {
+            TopLevelLocalRefScope scope(writer);
+            ok = classifyAndWriteExpr(writer, dv, no_locals, no_globals, writer.const_reverse_map);
+        }
         std::string expr_error;
         bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
         if (!ok || expr_error_set || writer.position() == payload_pos) {

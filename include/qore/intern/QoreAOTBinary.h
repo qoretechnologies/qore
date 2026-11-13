@@ -451,6 +451,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v33: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
 //!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v32
 //!      variant declares none (#5803).
+//! v34: the string of a LOCAL_VARREF expression in the default argument of a parameter is "top:<index>:<name>" for a
+//!      local variable of the top level of the Program (a %modern script's `K k();` at the top level), where <index>
+//!      is the index in the Program's top-level local list and <name> the name of the variable; every other
+//!      LOCAL_VARREF string is the decimal index of a local slot.  A reader that does not know it reads the string as
+//!      the slot 0 (#5868).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -478,9 +483,11 @@ constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
 constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
 //! First format version whose user variant signatures can carry declared functional domains (see v33 above).
 constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
+//! First format version whose LOCAL_VARREF expressions of parameter defaults can name a top-level local (see v34 above).
+constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DECLARED_DOMAIN_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

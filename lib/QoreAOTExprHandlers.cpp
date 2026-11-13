@@ -1236,12 +1236,20 @@ static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
                     && !strcmp(top->lv[index]->getName(), name)) {
                 found = top->lv[index];
             } else {
-                // the last declaration of the name hides the earlier ones
-                for (unsigned i = top->size(); i > 0; --i) {
-                    if (top->lv[i - 1] && top->lv[i - 1]->getName() && !strcmp(top->lv[i - 1]->getName(), name)) {
-                        found = top->lv[i - 1];
-                        break;
+                // the index does not name the variable: the variable that has the name, if it is the only one (a
+                // name that two top-level locals have cannot be told apart here)
+                unsigned matches = 0;
+                for (unsigned i = 0; i < top->size(); ++i) {
+                    if (top->lv[i] && top->lv[i]->getName() && !strcmp(top->lv[i]->getName(), name)) {
+                        found = top->lv[i];
+                        ++matches;
                     }
+                }
+                if (matches > 1) {
+                    ctx.error = "ambiguous top-level local '";
+                    ctx.error += name;
+                    ctx.error += "'";
+                    return QoreValue();
                 }
             }
         }
