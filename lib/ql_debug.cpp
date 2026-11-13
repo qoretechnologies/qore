@@ -19234,6 +19234,15 @@ static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, Runtim
     return q_get_cancel_check_count();
 }
 
+//! returns the number of cancellation checks of the current thread that looked up its governing sandbox manager
+/** A check looks up the manager only while an interrupt is requested of a sandbox manager, so a test uses this to
+    verify that a check with no request pending makes no lookup.
+*/
+static QoreValue f_dbg_get_cancel_sandbox_lookup_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_cancel_sandbox_lookup_count();
+}
+
 //! returns the number of times a cancellation request woke a registered wait of a thread (default: the current one)
 /** A wait that a request wakes through the thread's registered condition or wakeup channel is counted once per
     request, so a test can verify which path ended a cancelled wait: a wait that only noticed the request at a
@@ -22418,6 +22427,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_check_count", f_dbg_get_cancel_check_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_cancel_sandbox_lookup_count", f_dbg_get_cancel_sandbox_lookup_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_wake_count", f_dbg_get_cancel_wake_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_cancel_in_cancellable_wait", f_dbg_cancel_in_cancellable_wait, QCF_NO_FLAGS,
