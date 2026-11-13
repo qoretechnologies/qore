@@ -257,9 +257,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
-                // a call resolved at run time by parameter name binds the names to the variants of the method of the
-                // receiver's static type (qore#5990), which is therefore saved for the call; it is still dispatched
-                // on the class of the object
+                // a call resolved at run time by parameter name keeps the method of the receiver's static type, which
+                // it is resolved on when the object is of that class (otherwise on the method of the class of the
+                // object; see AbstractMethodCallNode::execNamed())
                 if (m->getRuntimeArgNames() && !m->getMethod()) {
                     m->parseSetClassAndMethod(nqc, meth);
                 }
@@ -448,9 +448,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
     }
-    // a call resolved at run time by parameter name binds the names to the variants of the method of the receiver's
-    // static type (qore#5990), which is therefore saved also for an abstract method; it is still dispatched on the
-    // class of the object
+    // a call resolved at run time by parameter name keeps the method of the receiver's static type, also of an
+    // abstract method, which it is resolved on when the object is of that class (otherwise on the method of the
+    // class of the object; see AbstractMethodCallNode::execNamed())
     if (m->getRuntimeArgNames() && !m->getMethod()) {
         m->parseSetClassAndMethod(qc, meth);
     }

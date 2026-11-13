@@ -2868,7 +2868,6 @@ public:
             const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args)
             const;
 
-
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
             QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,

@@ -64,9 +64,9 @@ protected:
     bool has_explicit_type_args = false;
     //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
     bool allow_runtime_arg_names = false;
-    //! true for a call of a method dispatched on the class of the object (a call through an object or an
-    //! unqualified call in the class), whose named arguments are bound with the variants of the receiver's static
-    //! type and passed to the override of the variant that they select (qore#5990)
+    //! true for a call of a method resolved on the class of the object (a call through an object or an unqualified
+    //! call of a normal method in the class): a named call is resolved at run time on the class of the object, as the
+    //! positional call that it spells out (qore#5990)
     bool virtual_named_dispatch = false;
     //! the variant of the receiver's static type that the names of a named call select at parse time, whose checks
     //! are made at parse time, when a child class can have another variant that the call selects (the call is
