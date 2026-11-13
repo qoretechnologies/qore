@@ -38,6 +38,7 @@ class AOTModuleDelClosureTest inherits QUnit::Test {
         addTestCase("a module with init and del closures", \testInitAndDelClosures());
         addTestCase("the del closure runs when the module is unloaded", \testDelRuns());
         addTestCase("the del closure of a module that is imported by two programs runs once", \testDelRunsOnce());
+        addTestCase("the del closure uses the static data of its module", \testDelUsesModuleState());
 
         set_return_value(main());
     }
@@ -177,6 +178,56 @@ Program p();
 p.parse(\"%requires AotDelOnce\\nint sub f() { return AotDelOnce::value(); }\", \"p\");
 printf(\"value=%d %d\\n\", AotDelOnce::value(), p.callFunction(\"f\"));
 ", "del\n");
+    }
+
+    #! a del closure runs while the data of its module exists, as for a source module (qore#5164 ordering)
+    testDelUsesModuleState() {
+        TmpDir tmp("qore-aot-del-state-");
+        string dir = tmp.path;
+        mkdir(dir + "/mods");
+        mkdir(dir + "/srcmods");
+        string marker = dir + "/marker.txt";
+        string src = sprintf("%%modern
+module AotDelState {
+    version = \"1.0\";
+    desc = \"del closure probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM\";
+    del = sub () {
+        File f();
+        f.open2(%y, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf(\"s=%%s\\n\", AotDelState::Holder::get()));
+    };
+}
+public namespace AotDelState {
+public class Holder {
+    public { static string s = \"STATIC\"; }
+    static string get() { return Holder::s; }
+}
+}
+", marker);
+        write(dir + "/AotDelState.qm", src);
+        write(dir + "/srcmods/AotDelState.qm", src);
+        string body = "printf(\"%s\\n\", AotDelState::Holder::get());";
+        string probe_src = dir + "/probe-src.qr";
+        write(probe_src, sprintf("%%modern\n%%append-module-path %s/srcmods\n%%requires AotDelState\n%s\n", dir, body));
+        string out = run(sprintf("%s %s -b %s", env(), qore_bin, probe_src));
+        assertEq("STATIC\n", out, "source module probe output");
+        assertEq("s=STATIC\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "", "source module del closure");
+
+        foreach string opt in ("-O0", "-O3") {
+            unlink(marker);
+            string qmod = dir + "/mods/AotDelState.qmod";
+            unlink(qmod);
+            string cout = run(sprintf("%s %s --module %s --output %s %s/AotDelState.qm", env(), qcc_bin, opt, qmod,
+                dir));
+            assertTrue(is_file(qmod), "compiled with " + opt + ": " + cout);
+            list<string> result = runWithMarker(dir, "AotDelState", body);
+            assertEq("STATIC\n", result[0], "output with " + opt);
+            assertEq("s=STATIC\n", result[1], "del closure of the compiled module (" + opt + ") reads its static data: "
+                + result[0]);
+        }
     }
 
     testDelClosure() {

@@ -852,6 +852,15 @@ DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, con
  */
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 
+//! Runs the del closures of all registered AOT user modules, in the order in which source modules run theirs
+/** Called at shutdown before any module data is cleared, with the del callbacks of the source user modules, while
+    the Programs and the data of all modules still exist (see QoreModuleManager::delUser(), issue #5164): a closure
+    can use the static variables and the code of its own module and of the modules that it requires.  A module whose
+    closure has run is not run again when the module is deleted (qore_aot_module_delete()).  A module that requires
+    another module has its closure run first.
+ */
+DLLLOCAL void qore_aot_run_all_module_del_closures();
+
 //! Breaks the cycles held up by opaque references that the Programs of all registered AOT user modules own
 /** Called at shutdown while the Programs of all modules still exist, so that the destructors of the objects
     released run while the Programs of their classes exist; see QoreModuleManager::delUser()

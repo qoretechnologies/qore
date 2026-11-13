@@ -14062,6 +14062,8 @@ static void runAOTModuleDelClosure(const std::string& mod_name, const std::strin
     if (pgm) {
         ProgramThreadCountContextHelper tch(&xsink, pgm, true);
         if (!xsink) {
+            // the module's code runs in its own Program, as the init closure does
+            ProgramCallContextHelper call_ctx(pgm);
             // the unloading Program does not run the del closure on its own behalf: it runs with the module's
             // options, with the module's name and path as its context, as the init closure does
             QoreModuleLifecycleBarrierHelper lifecycle_barrier;
@@ -14250,6 +14252,50 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
     // see the same call in qore_aot_module_ns_init_impl()
     retryPendingAOTModuleInitsForProgram(pgm, xsink, !result.waitTimedOut());
     return xsink ? -1 : 0;
+}
+
+DLLLOCAL void qore_aot_run_all_module_del_closures() {
+    struct DelInfo {
+        std::string name;
+        std::string path;
+        QoreProgram* pgm;
+        std::unique_ptr<QoreAOTContext> ctx;
+        AotFunctionPtr fn;
+    };
+    std::vector<DelInfo> dels;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        for (auto& entry : aot_module_map) {
+            if (entry.second.del_ctx) {
+                dels.push_back({entry.first, entry.second.path, entry.second.pgm, std::move(entry.second.del_ctx),
+                    entry.second.del_fn});
+            }
+        }
+    }
+    // the closure of a module that requires another module runs before that of the module it requires, which it can
+    // use; a cycle (not possible for loaded modules) runs the rest in any order
+    while (!dels.empty()) {
+        size_t pick = 0;
+        for (size_t i = 0; i < dels.size(); ++i) {
+            bool required = false;
+            for (size_t j = 0; j < dels.size() && !required; ++j) {
+                if (i == j) {
+                    continue;
+                }
+                std::vector<std::string> deps;
+                if (qore_aot_get_module_dependencies(dels[j].name.c_str(), deps)) {
+                    required = std::find(deps.begin(), deps.end(), dels[i].name) != deps.end();
+                }
+            }
+            if (!required) {
+                pick = i;
+                break;
+            }
+        }
+        DelInfo d = std::move(dels[pick]);
+        dels.erase(dels.begin() + pick);
+        runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
+    }
 }
 
 DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
