@@ -3950,6 +3950,11 @@ public:
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
 
+    //! The self local resolved by computeSlotIdsAndEmbed(), including the name fallback of deserialized IR.
+    /** Immutable with the published slot map; nullptr also caches the absence of self, so calls of ordinary
+        closures do not scan every local name on every invocation.  Recomputed when slot IDs are rebuilt. */
+    LocalVar* self_local = nullptr;
+
     //! Reserve a stable local slot before full IR lowering is complete.
     /** Block-level on_exit handler compilation can compute and inherit parent
         slot IDs while the parent function is still being lowered.  Signature

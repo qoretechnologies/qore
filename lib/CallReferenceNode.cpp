@@ -229,11 +229,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue CallReferenceCallNode::evalImplInternal(Runt
     // receiver does
     QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
-    ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
-    if (!r) {
+    qore_type_t type = lv->getType();
+    if (type != NT_FUNCREF && type != NT_RUNTIME_CLOSURE) {
         qore_raise_not_call_reference(xsink, loc, *lv);
         return QoreValue();
     }
+    // An evaluated call reference is resolved, as in qore_check_call_target(); parse nodes are never values.
+    assert(dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode()));
+    auto* r = static_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
     if constexpr (LexicalInvocation) {

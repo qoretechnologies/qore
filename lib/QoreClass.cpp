@@ -5003,42 +5003,13 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
+// Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
+// Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
-        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
-    QORE_TRACE("qore_class_private::evalMethod()");
-    assert(self);
-
-    qore_object_private* self_priv = qore_object_private::get(*self);
-    // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
-    // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
-    if (self_priv->status == OS_DELETED) {
-        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-            "already been deleted", self->getClassName(), nme);
-        return QoreValue();
-    }
-
-    if (!strcmp(nme, "copy")) {
-        if (args) {
-            xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
-            return QoreValue();
-        }
-        if constexpr (Lexical) return execCopy(policy, self, xsink);
-        else return execCopy(self, xsink);
-    }
-
-    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    if (w) {
-        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
-            explicit_type_param_instantiation);
-    }
-
-    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
+        LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
     if (mi) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*self);
@@ -5074,17 +5045,55 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSe
 
     // first see if there is a pseudo-method for this
     QoreClass* qc = nullptr;
-    w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
+    const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
         return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
-    } else if (methodGate && !methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
-        return evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
+    } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
+        return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
     }
 
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
         "<object>::%s() is available (class lang: %s)", self->getClassName(), nme, nme,
         self->getClass()->getLanguage());
     return QoreValue();
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
+    QORE_TRACE("qore_class_private::evalMethod()");
+    assert(self);
+
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
+    // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
+    if (self_priv->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
+            "already been deleted", self->getClassName(), nme);
+        return QoreValue();
+    }
+
+    if (!strcmp(nme, "copy")) {
+        if (args) {
+            xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
+            return QoreValue();
+        }
+        if constexpr (Lexical) return execCopy(policy, self, xsink);
+        else return execCopy(self, xsink);
+    }
+
+    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (w) {
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
+            explicit_type_param_instantiation);
+    }
+
+    return qore_eval_missing_method<Lexical>(*this, policy, self, nme, args, class_ctx, rc, xsink);
 }
 
 QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,

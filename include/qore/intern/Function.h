@@ -855,16 +855,23 @@ public:
 
         saves current program location in case there's an exception
     */
-    /** @param n_closure the closure called, if any: the default values of its parameters are evaluated with the
-        variables that it captured (issue #5923)
-    */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            unsigned n_call_flags = 0, const QoreClosureBase* n_closure = nullptr);
+            unsigned n_call_flags = 0);
+
+    //! Closure entry: captured variables are available to default arguments (issue #5923).
+    /** Kept separate so ordinary calls do not pass an unused closure pointer on every recursion level. */
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
+            QoreObject* self, const qore_class_private* n_qc, qore_call_t n_ct,
+            bool is_copy, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeInfo* explicit_receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            unsigned n_call_flags, const QoreClosureBase* n_closure);
 
     DLLLOCAL CodeEvaluationHelper(LexicalSemanticPolicy invocation_policy, ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
@@ -1088,7 +1095,7 @@ public:
 protected:
     QoreSandboxProvenanceHelper sandbox_provenance;
     qore_call_t ct;
-    // the flags follow ct, which would otherwise be followed by padding
+    // Keep the flags together to avoid padding in every call frame.
     bool variant_needs_type_param_substitution = false;
     //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
     //! with arguments of the same types could select another variant
@@ -1100,6 +1107,15 @@ protected:
     bool restore_rtflags = false;
     //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
     bool po_override_borrowed = false;
+    bool restore_call_program_context = false;
+    //! QCEF_DEFER_DOMAIN_PO and the QRFV_* filter of the variants that the call can select (see
+    //! QoreFunction::runtimeFindVariant()); with QCEF_DEFER_DOMAIN_PO, the switch of the runtime parse options to
+    //! the called Program is deferred until *after* argument evaluation, variant resolution and the
+    //! functional-domain (dom=...) check, so that a deliberate cross-Program QoreProgram::callFunction() evaluates
+    //! the dom check against the CALLER's parse options (the cross-Program privilege model); for everything else
+    //! (direct calls, method calls, call references, closures) the switch happens before the dom check, so the
+    //! check runs against the target/creation Program's options
+    unsigned call_flags;
     const char* name;
     ExceptionSink* xsink;
     RuntimeConfig& rc;
@@ -1115,15 +1131,8 @@ protected:
     */
     const name_vec_t* arg_names;
     QoreListNodeEvalOptionalRefHolder tmp;
-    //! QCEF_DEFER_DOMAIN_PO and the QRFV_* filter of the variants that the call can select (see
-    //! QoreFunction::runtimeFindVariant()); with QCEF_DEFER_DOMAIN_PO, the switch of the runtime parse options to
-    //! the called Program is deferred until *after* argument evaluation, variant resolution and the
-    //! functional-domain (dom=...) check, so that a deliberate cross-Program QoreProgram::callFunction() evaluates
-    //! the dom check against the CALLER's parse options (the cross-Program privilege model); for everything else
-    //! (direct calls, method calls, call references, closures) the switch happens before the dom check, so the
-    //! check runs against the target/creation Program's options
-    unsigned call_flags;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
+    //! The explicit receiver type, or the object's type after init(); no separate copy is needed.
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
@@ -1148,15 +1157,17 @@ protected:
     RuntimeParseOptionsOverrideHelper module_po_override;
     QoreProgram* exec_pgm = nullptr;
     QoreProgram* old_call_program_context = nullptr;
-    const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
     QoreTypeParamInstantiation type_param_instantiation;
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
-    q_rt_flags_t old_rtflags = 0;
-    bool restore_call_program_context = false;
-    //! the closure called, if any, whose captured variables its default values are evaluated with (issue #5923)
-    const QoreClosureBase* closure = nullptr;
+    // Argument preparation uses the closure's captured variables (issue #5923).  Only after preparation has
+    // finished does init() save the runtime flags and set restore_rtflags; no default value is evaluated after
+    // that transition.  Share the storage for these disjoint phases of the call rather than enlarge every frame.
+    union {
+        const QoreClosureBase* closure = nullptr;
+        q_rt_flags_t old_rtflags;
+    };
 
 #ifdef DEBUG
     //! the resolved variant, recorded once init() has committed to actually running the call

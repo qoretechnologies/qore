@@ -533,6 +533,10 @@ protected:
     template <bool LexicalInvocation>
     DLLLOCAL QoreValue evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue evalReusableTmpArgs(QoreFunction* func, QoreProgram* call_pgm, unsigned call_flags,
+        RuntimeConfig& rc, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
     //! evaluates a named call whose variant is resolved at run time by parameter name
