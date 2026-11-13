@@ -1636,16 +1636,30 @@ private:
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
 
-    //! Publishes the locals to the runtime local stack and releases the native code's own references to them before
-    //! handlers run out of line (see the definition); the caller reloads the local caches eagerly afterwards
+    //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
     void publishLocalsForHandlers(llvm::Module& module);
 
-    //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first
-    //! (see publishLocalsForHandlers())
-    void releaseLocalReloadStorage(llvm::Module& module);
+    //! Records the call that runs handlers out of line, around which finalizeHandlerSites() releases and reloads the
+    //! reload storage of the locals that the handlers can assign
+    /** @param reload true if the locals whose storage is released are reloaded right after the call; false if the
+        caller reloads every local itself
+    */
+    void recordHandlerSite(llvm::CallInst* call, bool reload);
 
-    //! Reloads the caches of the locals whose reload storage releaseLocalReloadStorage() released, after the handlers
-    void reloadHandlerLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);
+    //! Emits the release before and the reload after each call recorded by recordHandlerSite(), once the function is
+    //! lowered and its reload storage is known
+    void finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func);
+
+    //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first,
+    //! at the builder's insertion point, and returns the locals released, last declared first
+    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module);
+
+    //! a call that runs handlers out of line (see recordHandlerSite())
+    struct HandlerSite {
+        llvm::CallInst* call;
+        bool reload;
+    };
+    std::vector<HandlerSite> handler_sites;
 
     //! true if the reload storage of the local is released for handlers run out of line (see handler_locals)
     bool releasesReloadStorageForHandlers(const void* key) const;

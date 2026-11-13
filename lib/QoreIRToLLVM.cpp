@@ -3964,9 +3964,9 @@ std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const 
     return keys;
 }
 
-void QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
+std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
     if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
-        return;
+        return {};
     }
     // A local's reload tracker holds a reference to the value of its native cache, and its deferred slot one to the
     // value that the cache held before (see ensureLocalCacheFresh()); either can be the last reference to its value,
@@ -3990,8 +3990,9 @@ void QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
             keys.insert({entry.first, true});
         }
     }
+    std::vector<const void*> released = getLocalsInReverseDeclarationOrder(keys);
     size_t count = 0;
-    for (const void* key : getLocalsInReverseDeclarationOrder(keys)) {
+    for (const void* key : released) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
         }
@@ -4004,6 +4005,7 @@ void QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
             release(tracker_it->second);
         }
     }
+    return released;
 }
 
 bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
@@ -4018,18 +4020,52 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
     return canReloadLocalFromRuntime(key, true);
 }
 
-void QoreIRToLLVM::reloadHandlerLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
-    if (!handler_locals_known) {
-        reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+void QoreIRToLLVM::recordHandlerSite(llvm::CallInst* call, bool reload) {
+    if (has_on_block_exit_handlers) {
+        handler_sites.push_back({call, reload});
+    }
+}
+
+void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func) {
+    if (handler_sites.empty()) {
         return;
     }
-    // eagerly: code can read a local's native cache without the stale check (fused local operations), and the
-    // reference that backed the cache was released
-    for (const void* key : getLocalsInReverseDeclarationOrder(local_allocas)) {
-        if (releasesReloadStorageForHandlers(key)) {
-            reloadLocalFromRuntime(key, module, llvm_func, true);
+    // The references that the native code holds to the locals that the handlers reference (their reload storage) are
+    // released before the handlers run, so that the variable on the runtime stack holds the only reference that the
+    // frame has, and a handler that assigns or removes a local releases the value it replaces right away (qore#5942).
+    // The storage released is the storage that the function has once it is lowered: code lowered after a site can
+    // run before it, and a site creates no storage of its own, which every later flush of the function's statements
+    // would rotate.  A local without reload storage borrows its cache from the variable, as before.  The locals
+    // released are reloaded eagerly after the handlers: code can read a local's native cache without the stale check
+    // (fused local operations), and the reference that backed the cache was released.
+    llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
+    for (const HandlerSite& site : handler_sites) {
+        builder->SetInsertPoint(site.call);
+        std::vector<const void*> released = releaseLocalReloadStorage(module);
+        if (!site.reload || released.empty()) {
+            continue;
+        }
+        llvm::Instruction* next = site.call->getNextNode();
+        assert(next);
+        builder->SetInsertPoint(next);
+        for (const void* key : released) {
+            // only a local whose cache was backed by its tracker is reloaded, into its cache and its tracker, which
+            // the release left NOTHING, so that nothing is rotated through its deferred slot; reloadLocalFromRuntime()
+            // would create the storage that a local lacks, after the exit cleanup of the function that releases it
+            // was emitted.  A local with only a deferred slot borrows its cache from the variable, as before.
+            auto tracker_it = local_reload_trackers.find(key);
+            auto alloca_it = local_allocas.find(key);
+            if (tracker_it == local_reload_trackers.end() || alloca_it == local_allocas.end()) {
+                continue;
+            }
+            llvm::Value* reloaded = emitLocalCacheLoad(key, *builder, module);
+            builder->CreateStore(reloaded, alloca_it->second.storage());
+            builder->CreateStore(reloaded, tracker_it->second);
+            markLocalCacheFresh(key, llvm_func);
         }
     }
+    builder->restoreIP(saved_ip);
+    handler_sites.clear();
 }
 
 void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
@@ -4038,13 +4074,9 @@ void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
     }
     // Handlers run out of line read and assign the locals that they reference on the runtime local stack (a local
     // that a handler references is never IR-only, see QoreIRFunction::computeIROnlyLocals()), and find them there by
-    // their LocalVar, innermost frame first: the stack gets the current values, and the references that the native
-    // code holds to the locals that the handlers reference (their reload storage) are released, so that the variable
-    // holds the only reference that the frame has, and a handler that assigns or removes a local releases the value
-    // it replaces right away, as the AST and IR interpreters do (qore#5942).  The caller reloads those locals' caches
-    // eagerly after the handlers (reloadHandlerLocalsFromRuntime()), before any code reads them.
+    // their LocalVar, innermost frame first.  The native code's own references to them are released before the
+    // handler call that the caller records with recordHandlerSite() (see finalizeHandlerSites()).
     syncLocalsToRuntimeForHandlers(module);
-    releaseLocalReloadStorage(module);
 }
 
 llvm::BasicBlock* QoreIRToLLVM::beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count) {
@@ -4080,7 +4112,8 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     publishLocalsForHandlers(module);
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    builder->CreateCall(helper, {obe_saved_count, xsink_arg});
+    // every local is reloaded below
+    recordHandlerSite(builder->CreateCall(helper, {obe_saved_count, xsink_arg}), false);
     // On-block-exit handlers execute user code and can mutate AST-visible/AOT
     // body locals through the runtime local stack.  Refresh eagerly here:
     // fused local ops can read allocas directly, so a lazy epoch alone is not
@@ -13282,6 +13315,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // publishLocalsForHandlers())
     handler_locals.clear();
     handler_locals_known = has_on_block_exit_handlers && func.collectHandlerLocals(handler_locals);
+    handler_sites.clear();
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
     catch_entry_blocks.clear();
@@ -15618,6 +15652,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             builder->SetInsertPoint(saved_insert, saved_ip);
         }
     }
+
+    // the release and reload of the locals' reload storage around the handlers run out of line, now that the
+    // function's reload storage is known
+    finalizeHandlerSites(module, llvm_func);
 
     finalizeIteratorReleases(module, llvm_func);
 
@@ -22198,9 +22236,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // through the runtime only if one is still registered (see emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     publishLocalsForHandlers(module);
-                    builder->CreateCall(helper, {saved_count, xsink_arg});
-                    // the locals whose reload storage was released before the handlers ran are reloaded at once
-                    reloadHandlerLocalsFromRuntime(module, llvm_func);
+                    // the locals whose reload storage is released before the handlers run are reloaded right after
+                    // them (see finalizeHandlerSites())
+                    recordHandlerSite(builder->CreateCall(helper, {saved_count, xsink_arg}), true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute through the AST path and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths: the instruction that
@@ -35343,9 +35381,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     publishLocalsForHandlers(module);
-                    builder->CreateCall(helper, {saved_count, xsink_arg, builder->getInt1(false)});
-                    // the locals whose reload storage was released before the handlers ran are reloaded at once
-                    reloadHandlerLocalsFromRuntime(module, llvm_func);
+                    // the locals whose reload storage is released before the handlers run are reloaded right after
+                    // them (see finalizeHandlerSites())
+                    recordHandlerSite(builder->CreateCall(helper, {saved_count, xsink_arg, builder->getInt1(false)}),
+                        true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
