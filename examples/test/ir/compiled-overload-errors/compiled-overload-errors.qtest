@@ -44,7 +44,7 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
             "assigned", "named", "named-runtime", "named-runtime-methods", "named-virtual-dispatch", "access-control",
-            "or-nothing-casts", "override-returns", "named-background", "named-aot-text");
+            "or-nothing-casts", "override-returns", "named-background", "named-aot-text", "generic-method-overrides");
     }
 
     private {

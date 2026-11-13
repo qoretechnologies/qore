@@ -970,18 +970,69 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
         return false;
     }
 
+    // the type parameters of generic methods belong to each signature: they correspond by position, so the type
+    // parameters of both signatures are given those of this signature, which normalizes both alike (qore#6018)
+    const UserSignature* ua = declaresTypeParameters() ? dynamic_cast<const UserSignature*>(this) : nullptr;
+    const UserSignature* ub = sig.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&sig) : nullptr;
+    QoreTypeParamInstantiation a_inst, b_inst;
+    if (ua || ub) {
+        if (!ua || !ub || ua->getTypeParameterCount() != ub->getTypeParameterCount()) {
+            return false;
+        }
+        a_inst.owner = ua;
+        b_inst.owner = ub;
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            a_inst.type_args.push_back(ua->getTypeParameterType(i));
+        }
+        b_inst.type_args = a_inst.type_args;
+        // the type parameters accept the same types: the same bounds
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            if (!QoreTypeInfo::equal(
+                    qore_substitute_type_params_if_needed(ua->getTypeParameterBoundTypeInfo(i), receiver, &a_inst),
+                    qore_substitute_type_params_if_needed(ub->getTypeParameterBoundTypeInfo(i), receiver, &b_inst))) {
+                return false;
+            }
+        }
+    }
+
     // the types of a generic class's abstract method are those of the specialization that the class inherits
-    auto sig_type = [receiver] (const QoreTypeInfo* ti) {
-        return receiver ? qore_substitute_type_params_if_needed(ti, receiver) : ti;
+    auto sig_type = [receiver, ub, &b_inst] (const QoreTypeInfo* ti) {
+        return (receiver || ub) ? qore_substitute_type_params_if_needed(ti, receiver, ub ? &b_inst : nullptr) : ti;
+    };
+    auto this_type = [ua, &a_inst] (const QoreTypeInfo* ti) {
+        return ua ? qore_substitute_type_params_if_needed(ti, nullptr, &a_inst) : ti;
+    };
+    // a type parameter of each method itself at the same position: the same type, with or without "*"
+    auto same_method_type_param = [ua, ub] (const QoreTypeInfo* ati, const QoreTypeInfo* bti, bool& same) -> bool {
+        if (!ua) {
+            return false;
+        }
+        const QoreTypeParameterTypeInfo* atp = qore_get_type_parameter_type_info(ati);
+        const QoreTypeParameterTypeInfo* btp = qore_get_type_parameter_type_info(bti);
+        if (!atp || !btp || atp->getOwnerSignature() != ua || btp->getOwnerSignature() != ub) {
+            return false;
+        }
+        same = atp->getIndex() == btp->getIndex() && atp->isOrNothing() == btp->isOrNothing();
+        return true;
     };
     const QoreTypeInfo* sig_return_type = sig_type(sig.returnTypeInfo);
 
     // return types for abstract methods must be compatible if present
-    if (sig_return_type != nothingTypeInfo) {
+    // a type parameter of each method at the same position: this signature may return it without "*" for "*" (a
+    // narrower type), as for any other return type
+    const QoreTypeParameterTypeInfo* rtp_this = ua ? qore_get_type_parameter_type_info(returnTypeInfo) : nullptr;
+    const QoreTypeParameterTypeInfo* rtp_sig = ua ? qore_get_type_parameter_type_info(sig.returnTypeInfo) : nullptr;
+    if (rtp_this && rtp_sig && rtp_this->getOwnerSignature() == ua && rtp_sig->getOwnerSignature() == ub) {
+        if (rtp_this->getIndex() != rtp_sig->getIndex() || (rtp_this->isOrNothing() && !rtp_sig->isOrNothing())) {
+            return false;
+        }
+    } else if (sig_return_type != nothingTypeInfo) {
         bool may_not_match = false;
-        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, returnTypeInfo, may_not_match);
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, this_type(returnTypeInfo),
+            may_not_match);
+        // a type parameter of a class (not of a method, whose owner is its signature)
         const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig_return_type);
-        bool raw_generic_type_param = rtpi
+        bool raw_generic_type_param = rtpi && rtpi->getOwnerClass()
             && qore_class_private::get(*rtpi->getOwnerClass())->rawConstructionDefaultsToAuto();
         if (!res || (may_not_match && !relaxed_match
                 // auto/any return types always accept any concrete return type
@@ -996,20 +1047,28 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     }
 
     for (unsigned i = 0; i < typeList.size(); ++i) {
+        bool same_param = false;
+        if (i < sig.typeList.size() && same_method_type_param(typeList[i], sig.typeList[i], same_param)) {
+            if (!same_param) {
+                return false;
+            }
+            continue;
+        }
         const QoreTypeInfo* ti = sig.typeList.size() <= i
             ? nullptr
             : sig_type(sig.typeList[i]);
+        const QoreTypeInfo* this_ti = this_type(typeList[i]);
         bool match;
         if (relaxed_match) {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,
             //    QoreTypeInfo::getName(typeList[i]), QoreTypeInfo::getName(ti),
             //    QoreTypeInfo::parseAccepts(typeList[i], ti));
-            match = QoreTypeInfo::parseAccepts(typeList[i], ti) >= QTI_WILDCARD;
+            match = QoreTypeInfo::parseAccepts(this_ti, ti) >= QTI_WILDCARD;
         } else {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,
             //    QoreTypeInfo::getName(typeList[i]), QoreTypeInfo::getName(ti),
             //    QoreTypeInfo::runtimeTypeMatch(typeList[i], ti));
-            match = QoreTypeInfo::runtimeTypeMatch(typeList[i], ti) >= QTI_NEAR;
+            match = QoreTypeInfo::runtimeTypeMatch(this_ti, ti) >= QTI_NEAR;
         }
 
         if (!match) {
